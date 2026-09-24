@@ -1,0 +1,1 @@
+bash bench/experiments/doublex2-bytearray/run-runtime.sh build/doublex2-bytearray-runtime 

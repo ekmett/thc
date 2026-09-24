@@ -1,0 +1,3 @@
+[1 of 3] Compiling SimdInt32X4ByteArray ( compiler/test-fixtures/SimdInt32X4ByteArray.hs, /home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/build/simd-int32x4-bytearray/native/SimdInt32X4ByteArray.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/compiler/test-fixtures/SimdInt32X4ByteArrayNative.hs, /home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/build/simd-int32x4-bytearray/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/build/simd-int32x4-bytearray/native/int32x4-bytearray-oracle

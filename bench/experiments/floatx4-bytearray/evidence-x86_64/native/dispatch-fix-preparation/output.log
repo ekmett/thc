@@ -1,0 +1,1 @@
+PASS floatx4-bytearray: model=6720, native=6720, stages=['pre', 'post'], sourceHashes=19, artifactHashes=9

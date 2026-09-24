@@ -1075,7 +1075,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
     init {
         if (!diagnosticUnsupported) {
-            CoreRepresentations.validateAggregates(bindings)
+            CoreRepresentations.validateAggregates(bindings, constructors)
             CoreInputCalls.validate(bindings, constructors)
         }
         val scope = Scope(FrameLayout())
@@ -1245,6 +1245,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "double" -> value.toDouble()
         "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
         "string-bytes" -> LiteralAddress.fromHex(value)
+        "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
     private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expr =
@@ -1282,7 +1283,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 ?: throw UnsupportedCore("Unresolved external binding $id")
         }
         "lit" -> Literal(literal(expr[1] as String, expr[2] as String)).let {
-            if (expr[1] in listOf("int8", "word8", "int16", "word16", "int32", "word32")) it.proven(CoreRepresentations.narrowLiteralProof(expr)) else it
+            if (expr[1] in listOf("int8", "word8", "int16", "word16", "int32", "word32")) it.proven(CoreRepresentations.narrowLiteralProof(expr))
+            else if (expr[1] == "bignat") it.proven(BigNatLiterals.proof(expr)) else it
         }
         "void" -> Literal(Unit)
         "lam" -> {
@@ -1352,6 +1354,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 arrayExpression(operation, tupleProof,
                     args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }.toTypedArray())
+            } else if (fn[0] == "prim" && VectorByteArrayOp.named(fn[1] as String) != null) {
+                val operation = VectorByteArrayOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                VectorByteArrayExpression(operation, args.map { compile(it, scope, false) }.toTypedArray())
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -1446,6 +1452,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             }
         }
         "case" -> {
+            CoreVectorMemory.readCase(expr, constructors)?.let { compileVectorReadCase(it, scope, tail) } ?: run {
             val scrutineeExpr = expr[1] as List<Any?>
             val scrutinee = compile(scrutineeExpr, scope, false)
             val local = scope.child()
@@ -1461,6 +1468,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val child = local.child(); val kind = alt[0] as String
                 val value = when (kind) {
                     "lit" -> (alt[1] as List<String>).let {
+                        if (it[0] == "bignat") throw UnsupportedCore("BigNat literal alternatives are invalid GHC Core")
                         if (it[0] in setOf("float", "double")) throw UnsupportedCore("Floating literal alternatives are invalid GHC Core")
                         literal(it[0], it[1])
                     }
@@ -1499,6 +1507,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 CaseCategory.LONG -> LongCase(scrutinee, binder, alternatives, metrics, binderProof)
                 CaseCategory.DEFAULT_ONLY -> DefaultCase(scrutinee, binder, alternatives, metrics, binderProof)
                 CaseCategory.GENERIC -> Case(scrutinee, binder, alternatives, metrics)
+            }
             }
             }
         }
@@ -1561,6 +1570,17 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         return SumCase(scrutinee, slots, arms, selected(1), selected(2),
             result.copy(evaluated = arms.all { it.representation.evaluated }))
     }
+    private fun compileVectorReadCase(read: VectorReadCase, scope: Scope, tail: Boolean): Expr {
+        val local = scope.child()
+        local.bindVoid(read.stateBinder, CoreVectorMemory.stateProof)
+        val vector = local.bind(read.vectorBinder, false, read.operation.vectorProof)
+        val operands = read.arguments.map { compile(it, scope, false) }.toTypedArray()
+        val value = VectorByteArrayExpression(read.operation, operands).located(currentSource)
+        val body = compile(read.body, local, tail)
+        // The whole tuple binder is deliberately absent from local scope.
+        // Store the vector only after all operand/State checks and the load finish.
+        return Let(intArrayOf(vector.slot), arrayOf(value), booleanArrayOf(false), body, false)
+    }
     private fun compileTupleCase(expr: List<Any?>, scrutinee: Expr, proof: CoreRepresentation, local: Scope, tail: Boolean): Expr {
         val shape = TupleShape(proof, language as thc.Language)
         val slots = IntArray(shape.width) { local.layout.bind("<tuple case $it>") }
@@ -1593,9 +1613,12 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         if (args.size != target.slots.size) throw RuntimeFault("Local join arity mismatch")
         val nodes = args.mapIndexed { index, arg ->
             val lifted = flags.getOrNull(index) as? Boolean ?: throw RuntimeFault("Missing join argument levity")
-            argument(arg, scope, lifted && !callStrict[index] && !target.entryStrict[index])
+            argument(arg, scope, lifted && !callStrict[index] && !target.entryStrict[index],
+                allowEmpty = target.proofs[index].isEmptyTuple, declaredLifted = lifted).also {
+                CoreRepresentations.requireJoinArgument(target.proofs[index], it.representation)
+            }
         }.toTypedArray()
-        val temps = IntArray(nodes.size) { scope.layout.bind("<join argument $it>") }
+        val temps = IntArray(nodes.size) { if (target.proofs[it].isEmptyTuple) -1 else scope.layout.bind("<join argument $it>") }
         return LocalJoinCall(target, nodes, temps, metrics)
     }
     private fun compileJoins(expr: List<Any?>, outer: Scope, tail: Boolean,
@@ -1603,7 +1626,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val recursive = expr[1] == true
         val shadowed = if (recursive) definitions.map { it.id }.toSet() else emptySet()
         definitions.forEach { definition ->
-            definition.parameters.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "join argument") }
+            definition.parameters.forEach {
+                val proof = CoreRepresentations.binder(it)
+                CoreRepresentations.requireJoinInput(proof)
+                if (proof.isEmptyTuple && representation(it)) throw RuntimeFault("Tuple join formal must be unlifted")
+            }
             val formals = definition.parameters.map { it["id"] as String }.toSet()
             (freeVariables(definition.body) - formals - shadowed).forEach { id ->
                 outer.locals[id]?.let { CoreRepresentations.requireScalar(it.proof, "join capture") }
@@ -1621,7 +1648,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             definition.parameters.forEachIndexed { index, parameter ->
                 val lifted = representation(parameter)
                 val proof = CoreRepresentations.binder(parameter).let { if (lifted) it.copy(evaluated = entryStrict[index]) else it }
-                scope.bind(parameter["id"] as String, !lifted && parameter["coercion"] != true, proof)
+                if (proof.isEmptyTuple) scope.bindTuple(parameter["id"] as String, proof.copy(evaluated = true), intArrayOf())
+                else scope.bind(parameter["id"] as String, !lifted && parameter["coercion"] != true, proof)
             }
             scope
         }

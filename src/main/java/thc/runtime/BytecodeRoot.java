@@ -738,6 +738,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ResizeByteArray {
+        @Specialization public static void resize(VirtualFrame frame, LocalAccessor destination,
+                Object value, long size, Object state, @Bind("$node") Node node) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            byte[] result = ManagedByteArray.resize(array, size);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class FreezeByteArray {
         @Specialization public static void freeze(VirtualFrame frame, LocalAccessor destination,
                 Object value, Object state, @Bind("$node") Node node) {
@@ -764,11 +775,42 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return kotlin.Unit.INSTANCE;
         }
     }
+    @Operation public static final class SetByteArray {
+        @Specialization public static Object set(Object value, long offset, long count, long byteValue, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            ManagedByteArray.fill(array, offset, count, byteValue);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation
+    @ConstantOperand(type = boolean.class, name = "nonOverlapping")
+    public static final class CopyMutableByteArray {
+        @Specialization public static Object copy(boolean nonOverlapping, Object source, long sourceOffset,
+                Object destination, long destinationOffset, long count, Object state) {
+            byte[] from = ManagedByteArray.require(source);
+            byte[] to = ManagedByteArray.require(destination);
+            ManagedByteArray.requireState(state);
+            ManagedByteArray.copyMutable(from, sourceOffset, to, destinationOffset, count, nonOverlapping);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
     @Operation public static final class CompareByteArrays {
         @Specialization public static long compare(Object first, long firstOffset, Object second,
                 long secondOffset, long count) {
             return ManagedByteArray.compare(ManagedByteArray.require(first), firstOffset,
                 ManagedByteArray.require(second), secondOffset, count);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class GetSizeMutableByteArray {
+        @Specialization public static void size(VirtualFrame frame, LocalAccessor destination,
+                Object value, Object state, @Bind("$node") Node node) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            long result = ManagedByteArray.size(array);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
     @Operation public static final class SizeByteArray {
@@ -803,6 +845,98 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             ManagedByteArray.requireState(state);
             long result = ManagedIntArray.read(array, index);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    public static final class IndexVector32Array {
+        @Specialization public static Int32X4 index(boolean scalarOffset, Object value, long index) {
+            return Int32X4.readArray(ManagedByteArray.require(value), index, scalarOffset);
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    public static final class ReadVector32Array {
+        @Specialization public static Int32X4 read(boolean scalarOffset, Object value, long index, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            return Int32X4.readArray(array, index, scalarOffset);
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    public static final class WriteVector32Array {
+        @Specialization public static Object write(boolean scalarOffset, Object value, long index, Int32X4 vector, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            Int32X4.writeArray(array, index, vector, scalarOffset);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    public static final class IndexVectorWord32Array {
+        @Specialization public static Word32X4 index(boolean scalarOffset, Object value, long index) {
+            return Word32X4.readArray(ManagedByteArray.require(value), index, scalarOffset);
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    public static final class ReadVectorWord32Array {
+        @Specialization public static Word32X4 read(boolean scalarOffset, Object value, long index, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            return Word32X4.readArray(array, index, scalarOffset);
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    public static final class WriteVectorWord32Array {
+        @Specialization public static Object write(boolean scalarOffset, Object value, long index, Word32X4 vector, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            Word32X4.writeArray(array, index, vector, scalarOffset);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    public static final class IndexVectorFloatArray {
+        @Specialization public static FloatX4 index(boolean scalarOffset, Object value, long index) {
+            return FloatX4.readArray(ManagedByteArray.require(value), index, scalarOffset);
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    public static final class ReadVectorFloatArray {
+        @Specialization public static FloatX4 read(boolean scalarOffset, Object value, long index, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            return FloatX4.readArray(array, index, scalarOffset);
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    public static final class WriteVectorFloatArray {
+        @Specialization public static Object write(boolean scalarOffset, Object value, long index, FloatX4 vector, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            FloatX4.writeArray(array, index, vector, scalarOffset);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    public static final class IndexVectorDoubleArray {
+        @Specialization public static DoubleX2 index(boolean scalarOffset, Object value, long index) {
+            return DoubleX2.readArray(ManagedByteArray.require(value), index, scalarOffset);
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    public static final class ReadVectorDoubleArray {
+        @Specialization public static DoubleX2 read(boolean scalarOffset, Object value, long index, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            return DoubleX2.readArray(array, index, scalarOffset);
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    public static final class WriteVectorDoubleArray {
+        @Specialization public static Object write(boolean scalarOffset, Object value, long index, DoubleX2 vector, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            DoubleX2.writeArray(array, index, vector, scalarOffset);
+            return kotlin.Unit.INSTANCE;
         }
     }
     @Operation public static final class WriteIntArray {

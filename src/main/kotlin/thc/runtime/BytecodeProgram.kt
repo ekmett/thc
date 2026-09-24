@@ -74,7 +74,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
     private class JoinRegion
     private class JoinTarget(val region: JoinRegion, val index: Int, val parameters: List<Map<String, Any?>>,
-                             val locals: List<Local>, val entryStrict: BooleanArray, val result: CoreRepresentation)
+                             val locals: List<Local?>, val entryStrict: BooleanArray, val result: CoreRepresentation)
     private class JoinEmission(val selector: BytecodeLocal?, val next: BytecodeLabel?, val labels: List<BytecodeLabel>) {
         var emittedIndex = -1
     }
@@ -152,7 +152,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
 
     init {
         if (!diagnosticUnsupported) {
-            CoreRepresentations.validateAggregates(bindings)
+            CoreRepresentations.validateAggregates(bindings, constructors)
             CoreInputCalls.validate(bindings, constructors)
         }
         val scope = Scope(FunctionContext(0))
@@ -460,6 +460,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         "double" -> value.toDouble()
         "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
         "string-bytes" -> LiteralAddress.fromHex(value)
+        "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
     private fun constant(value: Any) = ProvenExpression(Expression { it.builder.emitLoadConstant(value) },
@@ -669,22 +670,29 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     /** A join transfer is a parallel move into this activation followed by bytecode control flow. */
     private fun joinCall(target: JoinTarget, arguments: List<Expression>): Expression {
         if (arguments.size != target.parameters.size) throw UnsupportedCore("Local join is not exactly saturated")
+        arguments.forEachIndexed { index, actual ->
+            CoreRepresentations.requireJoinArgument(CoreRepresentations.binder(target.parameters[index]), actual.proof)
+        }
         return ProvenExpression(ResultExpression { e, destination ->
             val b = e.builder
             val region = e.joins[target.region] ?: throw RuntimeFault("Local join escapes its owning activation")
             b.beginBlock()
-            b.emitJoinTransfer(metrics)
             // Saving all operands first is required for swaps and mutually recursive joins.
             val temporaries = arguments.mapIndexed { index, argument ->
-                b.createLocal("join operand $index", null).also { temporary ->
+                if (target.locals[index] == null) {
+                    argument.emitTuple(e, emptyList())
+                    null
+                } else b.createLocal("join operand $index", null).also { temporary ->
                     b.beginStoreLocal(temporary)
                     argument.emit(e)
                     b.endStoreLocal()
                 }
             }
             target.locals.forEachIndexed { index, local ->
-                restoreArgument(e, local) { b.emitLoadLocal(temporaries[index]) }
+                if (local != null) restoreArgument(e, local) { b.emitLoadLocal(temporaries[index]!!) }
             }
+            // A failed operand is not a transfer. Count only after all parallel moves succeed.
+            b.emitJoinTransfer(metrics)
             if (target.index > region.emittedIndex) {
                 b.emitBranch(region.labels[target.index])
             } else {
@@ -705,7 +713,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         val definitions = CoreJoins.definitions(group) ?: throw RuntimeFault("Missing local join definitions")
         val shadowed = if (recursive) definitions.map { it.id }.toSet() else emptySet()
         definitions.forEach { definition ->
-            definition.parameters.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "join argument") }
+            definition.parameters.forEach {
+                val proof = CoreRepresentations.binder(it)
+                CoreRepresentations.requireJoinInput(proof)
+                if (proof.isEmptyTuple && representation(it)) throw RuntimeFault("Tuple join formal must be unlifted")
+            }
             val formals = definition.parameters.map { it["id"] as String }.toSet()
             if ((freeVariables(definition.body) - formals - shadowed).any { it in scope.tuples })
                 throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple (join capture)")
@@ -717,7 +729,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val parameters = definition.parameters.mapIndexed { parameterIndex, parameter ->
                 // Join formal names have lexical scope only in their own body.
                 val proof = CoreRepresentations.binder(parameter).copy(evaluated = !representation(parameter) || entryStrict[parameterIndex])
-                Local(nextLocal++, parameter["id"] as String,
+                if (proof.isEmptyTuple) null else Local(nextLocal++, parameter["id"] as String,
                     if (proof.present) proof.isLong else !representation(parameter) && parameter["coercion"] != true, proof)
             }
             JoinTarget(region, index, definition.parameters, parameters, entryStrict, definition.result).also { local.bindJoin(definition.id, it) }
@@ -725,7 +737,13 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         localJoinCount += targets.size
         val bodies = definitions.mapIndexed { index, definition ->
             val bodyScope = (if (recursive) local else scope).child()
-            targets[index].locals.forEach { bodyScope.bindLocal(it.name, it) }
+            targets[index].locals.forEachIndexed { parameterIndex, parameter ->
+                if (parameter != null) bodyScope.bindLocal(parameter.name, parameter)
+                else {
+                    val raw = definition.parameters[parameterIndex]
+                    bodyScope.bindTuple(raw["id"] as String, CoreRepresentations.binder(raw).copy(evaluated = true), emptyList())
+                }
+            }
             val body = compile(definition.body, bodyScope.withSource(sources.binding(definition.binding, scope.source)), tail)
             CoreRepresentations.requireNoVector(body.proof, "join result")
             CoreRepresentations.requireNoSum(body.proof, "join result")
@@ -743,7 +761,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val result = if (destination == null) b.createLocal("join result", null) else null
             val selector = if (recursive) b.createLocal("join selector", "primitive") else null
             val exit = b.createLabel()
-            targets.flatMap { it.locals }.forEach { e.locals[it.id] = b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
+            targets.flatMap { it.locals.filterNotNull() }.forEach { e.locals[it.id] = b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
             if (selector != null) {
                 b.beginStoreLocal(selector); b.emitLoadConstant(-1L); b.endStoreLocal()
                 b.beginWhile()
@@ -781,7 +799,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             if (result != null) b.emitLoadLocal(result)
             b.endBlock()
             e.joins.remove(region)
-            targets.flatMap { it.locals }.forEach { e.locals.remove(it.id) }
+            targets.flatMap { it.locals.filterNotNull() }.forEach { e.locals.remove(it.id) }
         }, proof.copy(evaluated = entry.proof.evaluated && bodies.all { it.proof.evaluated }))
     }
 
@@ -803,7 +821,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 } ?: throw UnsupportedCore("Unresolved external binding $id")
         }
         "lit" -> constant(literal(expr[1] as String, expr[2] as String)).let {
-            if (expr[1] in listOf("int8", "word8", "int16", "word16", "int32", "word32")) ProvenExpression(it, CoreRepresentations.narrowLiteralProof(expr)) else it
+            if (expr[1] in listOf("int8", "word8", "int16", "word16", "int32", "word32")) ProvenExpression(it, CoreRepresentations.narrowLiteralProof(expr))
+            else if (expr[1] == "bignat") ProvenExpression(it, BigNatLiterals.proof(expr)) else it
         }
         "void" -> constant(Unit)
         "lam" -> {
@@ -877,6 +896,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     operands.forEach { it.emit(e) }
                     if (operation == ArrayOp.CLONE) e.builder.endCloneArray() else e.builder.endWriteArray()
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && VectorByteArrayOp.named(fn[1] as String) != null) {
+                val operation = VectorByteArrayOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                vectorByteArray(operation, args.map { compile(it, scope, false) })
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -884,6 +907,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
                     when (operation) {
                         ByteArrayOp.NEW -> e.builder.beginNewByteArray(destination[0])
+                        ByteArrayOp.RESIZE -> e.builder.beginResizeByteArray(destination[0])
+                        ByteArrayOp.GET_SIZE_MUTABLE -> e.builder.beginGetSizeMutableByteArray(destination[0])
                         ByteArrayOp.FREEZE -> e.builder.beginFreezeByteArray(destination[0])
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD -> e.builder.beginReadIntArray(destination[0])
                         ByteArrayOp.READ_DOUBLE -> e.builder.beginReadDoubleArray(destination[0])
@@ -899,6 +924,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     operands.forEach { it.emit(e) }
                     when (operation) {
                         ByteArrayOp.NEW -> e.builder.endNewByteArray()
+                        ByteArrayOp.RESIZE -> e.builder.endResizeByteArray()
+                        ByteArrayOp.GET_SIZE_MUTABLE -> e.builder.endGetSizeMutableByteArray()
                         ByteArrayOp.FREEZE -> e.builder.endFreezeByteArray()
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD -> e.builder.endReadIntArray()
                         ByteArrayOp.READ_DOUBLE -> e.builder.endReadDoubleArray()
@@ -912,8 +939,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     when (operation) {
                         ByteArrayOp.COMPARE -> e.builder.beginCompareByteArrays()
                         ByteArrayOp.COPY -> e.builder.beginCopyByteArray()
+                        ByteArrayOp.SET -> e.builder.beginSetByteArray()
+                        ByteArrayOp.COPY_MUTABLE, ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING ->
+                            e.builder.beginCopyMutableByteArray(operation == ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING)
                         ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8 -> e.builder.beginWriteByteArray()
-                        ByteArrayOp.SIZE -> e.builder.beginSizeByteArray()
+                        ByteArrayOp.SIZE, ByteArrayOp.SIZE_MUTABLE -> e.builder.beginSizeByteArray()
                         ByteArrayOp.INDEX -> e.builder.beginIndexByteArray()
                         ByteArrayOp.INDEX_INT8 -> e.builder.beginIndexSignedByteArray()
                         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD -> e.builder.beginWriteIntArray()
@@ -934,8 +964,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     when (operation) {
                         ByteArrayOp.COMPARE -> e.builder.endCompareByteArrays()
                         ByteArrayOp.COPY -> e.builder.endCopyByteArray()
+                        ByteArrayOp.SET -> e.builder.endSetByteArray()
+                        ByteArrayOp.COPY_MUTABLE, ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING -> e.builder.endCopyMutableByteArray()
                         ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8 -> e.builder.endWriteByteArray()
-                        ByteArrayOp.SIZE -> e.builder.endSizeByteArray()
+                        ByteArrayOp.SIZE, ByteArrayOp.SIZE_MUTABLE -> e.builder.endSizeByteArray()
                         ByteArrayOp.INDEX -> e.builder.endIndexByteArray()
                         ByteArrayOp.INDEX_INT8 -> e.builder.endIndexSignedByteArray()
                         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD -> e.builder.endWriteIntArray()
@@ -1086,6 +1118,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             }
         }
         "case" -> {
+            CoreVectorMemory.readCase(expr, constructors)?.let { vectorReadCase(it, scope, tail) } ?: run {
             val local = scope.child()
             val scrutineeExpr = expr[1] as List<Any?>
             val scrutinee = force(compile(scrutineeExpr, scope, false))
@@ -1102,6 +1135,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 val child = local.child(); val kind = alt[0] as String
                 val value = when (kind) {
                     "lit" -> (alt[1] as List<String>).let {
+                        if (it[0] == "bignat") throw UnsupportedCore("BigNat literal alternatives are invalid GHC Core")
                         if (it[0] in setOf("float", "double")) throw UnsupportedCore("Floating literal alternatives are invalid GHC Core")
                         literal(it[0], it[1])
                     }
@@ -1181,6 +1215,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.endBlock()
                 e.locals.remove(binder.id)
             }, mergedProof))
+            }
             }
         }
         "con" -> {
@@ -1569,6 +1604,73 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             b.endBlock()
             fields.forEach { e.locals.remove(it.id) }
         }, result.copy(evaluated = arms.all { it.body.proof.evaluated }))
+    }
+    private fun vectorByteArray(operation: VectorByteArrayOp, operands: List<Expression>): Expression =
+        ProvenExpression(Expression { e ->
+            val b = e.builder
+            when (operation.family) {
+                VectorMemoryFamily.INT32 -> when {
+                    operation.isWrite -> b.beginWriteVector32Array(operation.scalarOffset)
+                    operation.isRead -> b.beginReadVector32Array(operation.scalarOffset)
+                    else -> b.beginIndexVector32Array(operation.scalarOffset)
+                }
+                VectorMemoryFamily.WORD32 -> when {
+                    operation.isWrite -> b.beginWriteVectorWord32Array(operation.scalarOffset)
+                    operation.isRead -> b.beginReadVectorWord32Array(operation.scalarOffset)
+                    else -> b.beginIndexVectorWord32Array(operation.scalarOffset)
+                }
+                VectorMemoryFamily.FLOAT32 -> when {
+                    operation.isWrite -> b.beginWriteVectorFloatArray(operation.scalarOffset)
+                    operation.isRead -> b.beginReadVectorFloatArray(operation.scalarOffset)
+                    else -> b.beginIndexVectorFloatArray(operation.scalarOffset)
+                }
+                VectorMemoryFamily.DOUBLE64 -> when {
+                    operation.isWrite -> b.beginWriteVectorDoubleArray(operation.scalarOffset)
+                    operation.isRead -> b.beginReadVectorDoubleArray(operation.scalarOffset)
+                    else -> b.beginIndexVectorDoubleArray(operation.scalarOffset)
+                }
+            }
+            operands.forEach { it.emit(e) }
+            when (operation.family) {
+                VectorMemoryFamily.INT32 -> when {
+                    operation.isWrite -> b.endWriteVector32Array()
+                    operation.isRead -> b.endReadVector32Array()
+                    else -> b.endIndexVector32Array()
+                }
+                VectorMemoryFamily.WORD32 -> when {
+                    operation.isWrite -> b.endWriteVectorWord32Array()
+                    operation.isRead -> b.endReadVectorWord32Array()
+                    else -> b.endIndexVectorWord32Array()
+                }
+                VectorMemoryFamily.FLOAT32 -> when {
+                    operation.isWrite -> b.endWriteVectorFloatArray()
+                    operation.isRead -> b.endReadVectorFloatArray()
+                    else -> b.endIndexVectorFloatArray()
+                }
+                VectorMemoryFamily.DOUBLE64 -> when {
+                    operation.isWrite -> b.endWriteVectorDoubleArray()
+                    operation.isRead -> b.endReadVectorDoubleArray()
+                    else -> b.endIndexVectorDoubleArray()
+                }
+            }
+        }, if (operation.isWrite) CoreVectorMemory.stateProof else operation.vectorProof)
+    private fun vectorReadCase(read: VectorReadCase, scope: Scope, tail: Boolean): Expression {
+        val operands = read.arguments.map { compile(it, scope, false) }
+        val value = vectorByteArray(read.operation, operands)
+        val local = scope.child()
+        local.bindVoid(read.stateBinder, CoreVectorMemory.stateProof)
+        val vector = bind(local, read.vectorBinder, false, read.operation.vectorProof)
+        val body = compile(read.body, local, tail)
+        // No whole-tuple local or result handoff is ever created here.
+        return LoweredCaseExpression(ProvenExpression(ResultExpression { e, destination ->
+            val b = e.builder
+            b.beginBlock()
+            e.locals[vector.id] = b.createLocal(vector.name, "object")
+            b.beginStoreLocal(e.locals.getValue(vector.id)); value.emit(e); b.endStoreLocal()
+            emitResult(body, e, destination)
+            b.endBlock()
+            e.locals.remove(vector.id)
+        }, body.proof))
     }
     private fun tupleCase(expr: List<Any?>, scrutinee: Expression, proof: CoreRepresentation, scope: Scope, tail: Boolean): Expression {
         val shape = TupleShape(proof, language)

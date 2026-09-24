@@ -12,6 +12,10 @@ python3 scripts/prepare-scalar-bitcasts.py
 python3 scripts/prepare-tag-to-enum-audit.py
 python3 scripts/prepare-unsafe-equality-audit.py
 python3 scripts/prepare-show-int.py
+python3 scripts/prepare-show-word-list.py
+python3 scripts/prepare-bignat-literals.py
+python3 scripts/prepare-narrow-literal-proofs.py
+python3 scripts/prepare-short-bytes-slices.py
 sh scripts/prepare-aggregate-frontier.sh
 python3 scripts/check-sum-layout.py --prepare
 python3 scripts/prepare-sum-result-audit.py
@@ -20,9 +24,13 @@ python3 scripts/prepare-state-tuple-audit.py
 python3 scripts/prepare-empty-tuple-input-audit.py
 python3 scripts/prepare-tuple-input-audit.py
 python3 scripts/prepare-tuple-join-audit.py
+python3 scripts/prepare-empty-join-input.py
 python3 scripts/prepare-integer-primops.py
 python3 scripts/prepare-bit-primops.py
 python3 scripts/prepare-bytearray.py
+python3 scripts/prepare-mutable-bytearrays.py
+python3 scripts/prepare-resize-bytearrays.py
+python3 scripts/prepare-mutable-bytearray-size.py
 python3 scripts/prepare-compare-byte-arrays.py
 python3 scripts/prepare-boxed-arrays.py
 python3 scripts/prepare-array-slices.py
@@ -76,6 +84,22 @@ esac
 case "$(uname -m)" in
   arm64|aarch64) python3 scripts/prepare-int32x4-multiply-audit.py --export-only ;;
   *) python3 scripts/prepare-int32x4-multiply-audit.py ;;
+esac
+case "$(uname -m)" in
+  arm64|aarch64) python3 scripts/prepare-int32x4-bytearray-audit.py --export-only ;;
+  *) python3 scripts/prepare-int32x4-bytearray-audit.py ;;
+esac
+case "$(uname -m)" in
+  arm64|aarch64) python3 scripts/prepare-word32x4-bytearray-audit.py --export-only ;;
+  *) python3 scripts/prepare-word32x4-bytearray-audit.py ;;
+esac
+case "$(uname -m)" in
+  arm64|aarch64) python3 scripts/prepare-floatx4-bytearray-audit.py --export-only ;;
+  *) python3 scripts/prepare-floatx4-bytearray-audit.py ;;
+esac
+case "$(uname -m)" in
+  arm64|aarch64) python3 scripts/prepare-doublex2-bytearray-audit.py --export-only ;;
+  *) python3 scripts/prepare-doublex2-bytearray-audit.py ;;
 esac
 python3 scripts/prepare-explicit64-primops.py
 compiler/export.sh examples/THC/Fixtures.hs compiler/test-fixtures/StrictFields.hs compiler/test-fixtures/SpeculationAudit.hs compiler/test-fixtures/RepresentationAudit.hs compiler/test-fixtures/SourceNotes.hs compiler/test-fixtures/CbvAudit.hs compiler/test-fixtures/CbvJoinAudit.hs compiler/test-fixtures/CbvCoercionAudit.hs compiler/test-fixtures/ConstructorFieldAudit.hs compiler/test-fixtures/DemandAudit.hs

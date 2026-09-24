@@ -1,0 +1,1 @@
+bash bench/experiments/floatx4-bytearray/run-runtime.sh build/floatx4-bytearray-double-family-regression 

@@ -3,9 +3,10 @@ package thc.runtime
 import com.oracle.truffle.api.frame.VirtualFrame
 
 /** GHC 9.14.1 machine-width tuple primops; each operation writes two scalar locals. */
-internal enum class TupleArithmeticOp(val primitive: String, val scalarRep: String) {
+internal enum class TupleArithmeticOp(val primitive: String, val scalarRep: String, val secondRep: String = scalarRep) {
     QUOT_REM_INT("quotRemInt#", "IntRep"), QUOT_REM_WORD("quotRemWord#", "WordRep"),
     ADD_INT_C("addIntC#", "IntRep"), SUB_INT_C("subIntC#", "IntRep"),
+    ADD_WORD_C("addWordC#", "WordRep", "IntRep"), SUB_WORD_C("subWordC#", "WordRep", "IntRep"),
     PLUS_WORD_2("plusWord2#", "WordRep"), TIMES_WORD_2("timesWord2#", "WordRep");
 
     private fun divisionDomain(left: Long, right: Long) {
@@ -15,8 +16,8 @@ internal enum class TupleArithmeticOp(val primitive: String, val scalarRep: Stri
     fun first(left: Long, right: Long): Long = when (this) {
         QUOT_REM_INT -> { divisionDomain(left, right); left / right }
         QUOT_REM_WORD -> { divisionDomain(left, right); java.lang.Long.divideUnsigned(left, right) }
-        ADD_INT_C -> left + right
-        SUB_INT_C -> left - right
+        ADD_INT_C, ADD_WORD_C -> left + right
+        SUB_INT_C, SUB_WORD_C -> left - right
         PLUS_WORD_2 -> if (java.lang.Long.compareUnsigned(left + right, left) < 0) 1L else 0L
         TIMES_WORD_2 -> Math.unsignedMultiplyHigh(left, right)
     }
@@ -25,16 +26,18 @@ internal enum class TupleArithmeticOp(val primitive: String, val scalarRep: Stri
         QUOT_REM_WORD -> { divisionDomain(left, right); java.lang.Long.remainderUnsigned(left, right) }
         ADD_INT_C -> if (((left xor (left + right)) and (right xor (left + right))) < 0) 1L else 0L
         SUB_INT_C -> if (((left xor right) and (left xor (left - right))) < 0) 1L else 0L
+        ADD_WORD_C -> if (java.lang.Long.compareUnsigned(left + right, left) < 0) 1L else 0L
+        SUB_WORD_C -> if (java.lang.Long.compareUnsigned(left, right) < 0) 1L else 0L
         PLUS_WORD_2 -> left + right
         TIMES_WORD_2 -> left * right
     }
     fun validate(arguments: List<CoreRepresentation>, lifted: List<*>, result: CoreRepresentation) {
         if (arguments.size != 2) throw RuntimeFault("Primitive arity mismatch: $primitive")
-        fun scalar(rep: CoreRepresentation): Boolean = !rep.isTuple && rep.kind == CoreKind.LONG && rep.primReps == listOf(scalarRep)
-        if (lifted != listOf(false, false) || arguments.any { !scalar(it) })
+        fun scalar(rep: CoreRepresentation, expected: String): Boolean = !rep.isAggregate && rep.kind == CoreKind.LONG && rep.primReps == listOf(expected)
+        if (lifted != listOf(false, false) || arguments.any { !scalar(it, scalarRep) })
             throw RuntimeFault("Tuple primitive argument representation mismatch: $primitive")
-        if (!result.isTuple || result.components!!.size != 2 || result.components.any { !scalar(it) } ||
-            result.primReps != listOf(scalarRep, scalarRep))
+        if (!result.isTuple || result.components!!.size != 2 || !scalar(result.components[0], scalarRep) || !scalar(result.components[1], secondRep) ||
+            result.primReps != listOf(scalarRep, secondRep))
             throw RuntimeFault("Tuple primitive result representation mismatch: $primitive")
     }
     companion object {

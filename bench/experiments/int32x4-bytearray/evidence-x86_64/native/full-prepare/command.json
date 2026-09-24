@@ -1,0 +1,11 @@
+{
+  "argv": [
+    "sh",
+    "scripts/prepare-tests.sh"
+  ],
+  "cwd": "/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb",
+  "started": 1790208683.271675,
+  "resources": [
+    "build:/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/build"
+  ]
+}

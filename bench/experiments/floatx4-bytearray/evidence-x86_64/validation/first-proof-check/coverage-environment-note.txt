@@ -1,0 +1,6 @@
+Initial manual command: python3 scripts/primop-coverage.py
+The pinned environment was not sourced for this one command.
+Output: THC requires GHC 9.14.1; found 8.8.4
+The tool stopped before inventory compilation or execution. No coverage report
+was claimed. The following corrected invocation explicitly sources the pinned
+environment. This is an environment-selection failure, not runtime evidence.

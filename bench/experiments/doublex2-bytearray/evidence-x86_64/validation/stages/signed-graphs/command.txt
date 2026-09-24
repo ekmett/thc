@@ -1,0 +1,1 @@
+bash bench/experiments/int32x4-bytearray/run-runtime.sh build/int32x4-bytearray-double-family-regression 

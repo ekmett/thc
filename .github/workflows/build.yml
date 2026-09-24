@@ -46,7 +46,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -116,6 +116,14 @@ jobs:
           assert proof['nativeRows'] == 4882 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
           proof = json.loads(Path('build/simd-int32x4-multiply/provenance.json').read_text())
           assert proof['nativeRows'] == 1722 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
+          proof = json.loads(Path('build/simd-int32x4-bytearray/provenance.json').read_text())
+          assert proof['nativeRows'] == 9666 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
+          proof = json.loads(Path('build/simd-word32x4-bytearray/provenance.json').read_text())
+          assert proof['nativeRows'] == 9666 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
+          proof = json.loads(Path('build/simd-floatx4-bytearray/provenance.json').read_text())
+          assert proof['nativeRows'] == 6720 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
+          proof = json.loads(Path('build/simd-doublex2-bytearray/provenance.json').read_text())
+          assert proof['nativeRows'] == 4384 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
           PY
       - name: Test opt-in dense handoff
         env:
@@ -143,6 +151,7 @@ jobs:
           python3 scripts/test-sum-layout.py
           python3 scripts/test-core-sums.py
           python3 scripts/test-tuple-inputs.py
+          python3 scripts/test-empty-join-inputs.py
           python3 scripts/test-library-frontier.py
           python3 scripts/test-sequence-model.py
           python3 scripts/test-core-vectors.py
@@ -155,6 +164,14 @@ jobs:
           python3 scripts/test-scalar-bitcasts.py
           python3 scripts/test-word32x4-model.py
           python3 scripts/test-int32x4-multiply-model.py
+          python3 scripts/test-int32x4-bytearray-model.py
+          python3 scripts/test-core-vector-memory.py
+          python3 scripts/test-word32x4-bytearray-model.py
+          python3 scripts/test-core-word32-vector-memory.py
+          python3 scripts/test-floatx4-bytearray-model.py
+          python3 scripts/test-core-float-vector-memory.py
+          python3 scripts/test-doublex2-bytearray-model.py
+          python3 scripts/test-core-double-vector-memory.py
           python3 scripts/test-core-bytearrays.py
           python3 scripts/test-core-arrays.py
           python3 scripts/test-address-fields.py
@@ -167,7 +184,14 @@ jobs:
           python3 scripts/test-int16-array-model.py
           python3 scripts/test-int8-array-model.py
           python3 scripts/test-show-int-model.py
+          python3 scripts/test-show-word-list-model.py
+          python3 scripts/test-bignat-literals.py
+          python3 scripts/test-narrow-literal-proofs.py
+          python3 scripts/test-short-bytes-slices-model.py
           python3 scripts/test-array-slice-model.py
+          python3 scripts/test-mutable-bytearray-model.py
+          python3 scripts/test-resize-bytearrays.py
+          python3 scripts/test-mutable-bytearray-size.py
           python3 scripts/test-primop-coverage.py
       - name: Check benchmark power provenance
         run: python3 tools/test-compare-map-runtimes.py
@@ -201,9 +225,28 @@ jobs:
             build/floating/oracle.tsv
             build/floating-tuple/
             build/empty-tuple-input/
+            build/empty-join-input/
             build/tuple-input/
             build/sqrt/
             build/tag-to-enum/
+            build/mutable-bytearray-size/manifest.json
+            build/mutable-bytearray-size/*.tsv
+            build/mutable-bytearray-size/*.audit.json
+            build/mutable-bytearray-size/NativeMutableByteArraySize.hs
+            build/mutable-bytearray-size/*-core/
+            build/mutable-bytearray-size/native/mutable-bytearray-size-oracle
+            build/resize-bytearrays/manifest.json
+            build/resize-bytearrays/*.tsv
+            build/resize-bytearrays/*.audit.json
+            build/resize-bytearrays/NativeResizeByteArrays.hs
+            build/resize-bytearrays/*-core/
+            build/resize-bytearrays/native/resize-bytearrays-oracle
+            build/mutable-bytearrays/manifest.json
+            build/mutable-bytearrays/*.tsv
+            build/mutable-bytearrays/*.audit.json
+            build/mutable-bytearrays/NativeMutableByteArrays.hs
+            build/mutable-bytearrays/*-core/
+            build/mutable-bytearrays/native/mutable-bytearrays-oracle
             build/array-slices/manifest.json
             build/array-slices/*.tsv
             build/array-slices/*.audit.json
@@ -217,6 +260,36 @@ jobs:
             build/show-int/boot/core/
             build/show-int/boot/boot-provenance.json
             build/show-int/native/show-int-oracle
+            build/narrow-literal-proofs/manifest.json
+            build/narrow-literal-proofs/oracle.tsv
+            build/narrow-literal-proofs/*-audit.json
+            build/narrow-literal-proofs/*-core/
+            build/narrow-literal-proofs/native/narrow-literal-oracle
+            build/bignat-literals/manifest.json
+            build/bignat-literals/*.tsv
+            build/bignat-literals/*.audit.json
+            build/bignat-literals/*-core/
+            build/bignat-literals/boot/core/
+            build/bignat-literals/boot/boot-provenance.json
+            build/bignat-literals/native/bignat-literal-oracle
+            build/show-word-list/manifest.json
+            build/show-word-list/*.tsv
+            build/show-word-list/*.audit.json
+            build/show-word-list/*-core/
+            build/show-word-list/boot/core/
+            build/show-word-list/boot/boot-provenance.json
+            build/show-word-list/cstring/core/
+            build/show-word-list/cstring/boot-provenance.json
+            build/show-word-list/native/show-word-list-oracle
+            build/short-bytes-slices/manifest.json
+            build/short-bytes-slices/*.tsv
+            build/short-bytes-slices/*.audit.json
+            build/short-bytes-slices/*-core/
+            build/short-bytes-slices/list/core/
+            build/short-bytes-slices/list/boot-provenance.json
+            build/short-bytes-slices/cstring/core/
+            build/short-bytes-slices/cstring/boot-provenance.json
+            build/short-bytes-slices/native/short-bytes-slices-oracle
             build/unsafe-equality/
             build/test-results/
             build/aggregate-frontier.json
@@ -319,6 +392,10 @@ jobs:
             build/simd-word16x8/
             build/simd-word32x4/
             build/simd-int32x4-multiply/
+            build/simd-int32x4-bytearray/
+            build/simd-word32x4-bytearray/
+            build/simd-floatx4-bytearray/
+            build/simd-doublex2-bytearray/
             build/signed-narrow-primops/manifest.json
             build/signed-narrow-primops/oracle.tsv
             build/signed-narrow-primops/*.audit.json

@@ -1,0 +1,23 @@
+{
+  "acceptedCaptureCount": 16,
+  "nativeRows": 9666,
+  "suiteCounts": {
+    "direct-proof-green": 3,
+    "focused-default": 14,
+    "full-default": 515,
+    "full-dense": 515,
+    "direct-proof-red": 2,
+    "first/direct-proof-green": 2,
+    "first/focused-default": 14,
+    "first/full-default": 515,
+    "first/full-dense": 515
+  },
+  "unsignedLaneExtensions": 32,
+  "packedStoreLanes": 32,
+  "physicalPackedMemoryInstructions": 16,
+  "installedTargetComparisons": 1152,
+  "rawGraphsRehashed": true,
+  "compactGraphContentsRehashed": true,
+  "junitArchivesMatchOriginals": true,
+  "directProofRedFailuresPreserved": true
+}

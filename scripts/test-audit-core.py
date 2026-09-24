@@ -396,7 +396,7 @@ class AuditTest(unittest.TestCase):
     def test_tuple_arithmetic_requires_exact_logical_results_and_scalar_arguments(self):
         for name, contract in CAP['tuplePrimitives'].items():
             scalar = dict(LONG, primReps=[contract['arguments'][0]])
-            proof = tuple_rep(scalar, scalar)
+            proof = tuple_rep(*(dict(LONG, primReps=[rep]) for rep in contract["result"]))
             module = tuple_fixture(proof)
             call = module['bindings'][0]['expr'][2][1]
             call[:] = ['app', ['prim', name],
@@ -429,6 +429,28 @@ class AuditTest(unittest.TestCase):
     def test_tuple_arithmetic_first_class_values_remain_unsupported(self):
         for name in CAP['tuplePrimitives']:
             self.assertIn('primitive-arity', {i['code'] for i in run(['prim', name])['issues']})
+
+    def test_word_carry_result_fields_cannot_be_swapped_or_relabelled(self):
+        word = dict(LONG, primReps=['WordRep'])
+        for name in ('addWordC#', 'subWordC#'):
+            proof = tuple_rep(word, LONG)
+            module = tuple_fixture(proof)
+            call = module['bindings'][0]['expr'][2][1]
+            call[:] = ['app', ['prim', name], [['lit', 'word', '1', dict(rep=word)]] * 2,
+                       [False, False], False, False, dict(rep=proof)]
+            self.assertTrue(run_tuple(module)['accepted'])
+            for fields in [('IntRep', 'WordRep'), ('WordRep', 'WordRep'), ('IntRep', 'IntRep'),
+                           ('WordRep', 'Int64Rep'), ('Word64Rep', 'IntRep')]:
+                changed = copy.deepcopy(module)
+                bad = changed['bindings'][0]['expr'][2][1]
+                bad[6]['rep'] = tuple_rep(*(dict(LONG, primReps=[rep]) for rep in fields))
+                report = run_tuple(changed)
+                self.assertFalse(report['accepted'], (name, fields))
+                self.assertIn('primitive-representation', {i['code'] for i in report['issues']})
+            for flag in (tuple_rep(LONG), dict(kind='void', evaluated=True, primReps=[]), dict(LONG, kind='unknown')):
+                changed = copy.deepcopy(module)
+                changed['bindings'][0]['expr'][2][1][6]['rep'] = tuple_rep(word, flag)
+                self.assertFalse(run_tuple(changed)['accepted'], (name, flag))
 
     def test_exact_tuple_join_results_include_zero_arity_binders(self):
         for zero in (False, True):
@@ -792,13 +814,15 @@ class EmptyTupleInputTests(unittest.TestCase):
         self.assertFalse(report['accepted'])
         self.assertIn('aggregate-shape', {i['code'] for i in report['issues']})
 
-    def test_join_formals_and_ordinary_empty_let_values_stay_rejected(self):
+    def test_exact_empty_join_formals_are_separately_gated_and_ordinary_empty_lets_stay_rejected(self):
         module = self.fixture([self.empty])
         worker = module['bindings'].pop()
         worker.update(joinValueArity=1, joinResultRep=LONG, info=dict(joinArity=1))
         call = module['bindings'][0]['expr']
         module['bindings'][0]['expr'] = ['let', False, [worker], call, dict(rep=LONG)]
-        self.assertFalse(self.audit(module)['accepted'])
+        self.assertTrue(self.audit(module)['accepted'])
+        disabled = dict(CAP, aggregateJoinInputs=[])
+        self.assertFalse(audit_core.Audit([('join', module)], disabled).run(['root'])['accepted'])
         module = self.fixture()
         value = module['bindings'][0]['expr'][2][0]
         local = dict(bind('e', value, False), rep=self.empty)

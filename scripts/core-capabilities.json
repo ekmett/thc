@@ -7,6 +7,7 @@
   "externalBindings": [],
   "tagToEnum": "concrete-nullary-family",
   "literalKinds": [
+    "bignat",
     "float",
     "double",
     "int",
@@ -107,6 +108,18 @@
   "strictLiftedFields": true,
   "dataToTag": "concrete-algebraic-family-64",
   "primitives": {
+    "indexWord32X4Array#": 2,
+    "indexWord32ArrayAsWord32X4#": 2,
+    "readWord32X4Array#": 3,
+    "readWord32ArrayAsWord32X4#": 3,
+    "writeWord32X4Array#": 4,
+    "writeWord32ArrayAsWord32X4#": 4,
+    "indexInt32X4Array#": 2,
+    "indexInt32ArrayAsInt32X4#": 2,
+    "readInt32X4Array#": 3,
+    "readInt32ArrayAsInt32X4#": 3,
+    "writeInt32X4Array#": 4,
+    "writeInt32ArrayAsInt32X4#": 4,
     "quotWord#": 2,
     "remWord#": 2,
     "gtWord#": 2,
@@ -410,12 +423,30 @@
     "plusFloatX4#": 2,
     "minusFloatX4#": 2,
     "timesFloatX4#": 2,
+    "indexFloatX4Array#": 2,
+    "indexFloatArrayAsFloatX4#": 2,
+    "readFloatX4Array#": 3,
+    "readFloatArrayAsFloatX4#": 3,
+    "writeFloatX4Array#": 4,
+    "writeFloatArrayAsFloatX4#": 4,
+    "indexDoubleX2Array#": 2,
+    "indexDoubleArrayAsDoubleX2#": 2,
+    "readDoubleX2Array#": 3,
+    "readDoubleArrayAsDoubleX2#": 3,
+    "writeDoubleX2Array#": 4,
+    "writeDoubleArrayAsDoubleX2#": 4,
     "newByteArray#": 2,
+    "resizeMutableByteArray#": 3,
+    "getSizeofMutableByteArray#": 2,
+    "sizeofMutableByteArray#": 1,
     "writeWord8Array#": 4,
     "unsafeFreezeByteArray#": 2,
     "sizeofByteArray#": 1,
     "indexWord8Array#": 2,
     "copyByteArray#": 6,
+    "setByteArray#": 5,
+    "copyMutableByteArray#": 6,
+    "copyMutableByteArrayNonOverlapping#": 6,
     "compareByteArrays#": 5,
     "sqrtFloat#": 1,
     "sqrtDouble#": 1,
@@ -463,11 +494,13 @@
     "readInt8Array#": 3,
     "writeInt8Array#": 4,
     "indexInt8Array#": 2,
-    "readWord8Array#": 3
+    "readWord8Array#": 3,
+    "addWordC#": 2,
+    "subWordC#": 2
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
-    "Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Aggregate captures, heap fields, ordinary let bindings and join arguments/captures remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums, vectors, addresses and unresolved leaves cannot appear in tuple inputs.",
+    "Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Aggregate captures, heap fields, ordinary let bindings and join captures remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums, vectors, addresses and unresolved leaves cannot appear in tuple inputs.",
     "Binary unboxed sum results and immediate cases support exact machine Int/Word, Float, Double, known reference, void and tuple payloads. Nested sums, width-changing payload casts, vector/address or unknown leaves, sum inputs/captures/heap fields/local lets/joins/host results remain unsupported."
   ],
   "aggregateInputs": [
@@ -478,6 +511,7 @@
     "unboxed-tuple",
     "unboxed-sum"
   ],
+  "aggregateJoinInputs": ["empty-unboxed-tuple"],
   "aggregateJoinResults": [
     "unboxed-tuple"
   ],
@@ -529,6 +563,14 @@
     }
   ],
   "tuplePrimitives": {
+    "addWordC#": {
+      "arguments": ["WordRep", "WordRep"],
+      "result": ["WordRep", "IntRep"]
+    },
+    "subWordC#": {
+      "arguments": ["WordRep", "WordRep"],
+      "result": ["WordRep", "IntRep"]
+    },
     "quotRemInt#": {
       "arguments": [
         "IntRep",
@@ -591,6 +633,70 @@
     }
   },
   "managedByteArrayPrimitives": {
+    "getSizeofMutableByteArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "aggregate": "unboxed-tuple", "primReps": ["IntRep"],
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "long", "primReps": ["IntRep"] }
+        ]
+      }
+    },
+    "sizeofMutableByteArray#": {
+      "arguments": [{ "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] }],
+      "result": { "kind": "long", "primReps": ["IntRep"] }
+    },
+    "resizeMutableByteArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "aggregate": "unboxed-tuple",
+        "primReps": ["BoxedRep (Just Unlifted)"],
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] }
+        ]
+      }
+    },
+    "setByteArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": { "kind": "void", "primReps": [] }
+    },
+    "copyMutableByteArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": { "kind": "void", "primReps": [] }
+    },
+    "copyMutableByteArrayNonOverlapping#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": { "kind": "void", "primReps": [] }
+    },
     "compareByteArrays#": {
       "arguments": [
         { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },

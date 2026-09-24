@@ -113,6 +113,18 @@ four primitive int fields and explicit zero-extension to Long scalar lanes.
 The [signed Int32X4 multiplication slice](docs/int32x4-multiply.md) completes
 the seven-operation signed family with wrapping low-32-bit products and signed
 lane observations, without widening vector calling conventions.
+The [Int32X4 ByteArray slice](docs/int32x4-bytearray.md) adds six managed packed
+index/read/write operations with vector- or scalar-element offsets and bounded
+immediate local destructuring of mutable reads.
+The [Word32X4 ByteArray slice](docs/word32x4-bytearray.md) adds the six unsigned
+counterparts, with high-bit native checks and packed loads that zero-extend all
+four observed lanes.
+The [FloatX4 ByteArray slice](docs/floatx4-bytearray.md) adds six floating
+counterparts with exact raw-bit movement, immediate State/vector reads and
+verified packed caller-array loads/stores on both backends.
+The [DoubleX2 ByteArray slice](docs/doublex2-bytearray.md) adds the six binary64
+counterparts with two-lane raw-bit witnesses and 16-byte or 8-byte offset units,
+without expanding vector transport.
 
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
 concrete Float/Double leaves, local join results and zero-width State# components.
@@ -128,6 +140,10 @@ lazy reference storage and exact State sequencing on both backends.
 [Managed ByteArray operations](docs/bytearrays.md) execute genuine ShortByteString
 pack/length/unpack/uncons and public comparison/prefix/suffix operations, with ordered writes,
 contained ranges and native/model checks on both backends.
+[Mutable byte-array resize](docs/resize-bytearrays.md) preserves prefixes in direct
+managed byte storage and checks exact State/reference tuple results.
+[Mutable size queries](docs/mutable-bytearray-size.md) return typed Long lengths,
+with State sequencing for the effectful query and separate stable-reference pure semantics.
 [Int-array operations](docs/int-arrays.md) extend the same byte storage to
 public `UArray`/`STUArray` examples with native-endian, full-width values.
 [Double-array operations](docs/double-arrays.md) add typed floating storage,

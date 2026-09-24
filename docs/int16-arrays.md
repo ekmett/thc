@@ -100,7 +100,7 @@ the signed64 wrap of `raw-32768` or `raw+65535`.
 
 ## Preparation and evidence limits
 
-With the pinned environment and shared build resource gate, run:
+With the pinned environment, run:
 
 ```sh
 python3 scripts/test-int16-array-model.py

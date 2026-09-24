@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "compiler/export.sh",
+    "/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/compiler/test-fixtures/SimdInt32X4ByteArray.hs"
+  ],
+  "environment": {
+    "THC_CORE_OUT": "/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/build/simd-int32x4-bytearray/pre-core",
+    "THC_GHC_OUT": "/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/build/simd-int32x4-bytearray/pre-ghc",
+    "THC_SOURCE_NOTES": "true"
+  },
+  "log": "/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/build/simd-int32x4-bytearray/prepare-run-lepxnlg8/2.log"
+}

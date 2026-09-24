@@ -97,7 +97,7 @@ class ByteArrayContracts(unittest.TestCase):
 
     def test_lexical_reference_cannot_be_relabelled_by_an_occurrence(self):
         for name in ('writeWord8Array#', 'unsafeFreezeByteArray#', 'sizeofByteArray#', 'indexWord8Array#',
-                     'readIntArray#', 'writeIntArray#', 'indexIntArray#', 'copyByteArray#',
+                     'readIntArray#', 'writeIntArray#', 'indexIntArray#', 'copyByteArray#', 'setByteArray#', 'copyMutableByteArray#', 'copyMutableByteArrayNonOverlapping#',
                      'readDoubleArray#', 'writeDoubleArray#', 'indexDoubleArray#',
                      'readInt32Array#', 'writeInt32Array#', 'indexInt32Array#',
                      'readWord32Array#', 'writeWord32Array#', 'indexWord32Array#',
@@ -111,6 +111,24 @@ class ByteArrayContracts(unittest.TestCase):
             parameter['rep']['primReps'] = ['BoxedRep (Just Lifted)']
             report = check(module)
             self.assertIn('scalar-representation', {i['code'] for i in report['issues']}, name)
+
+    def test_mutable_memory_requires_exact_int_operands_and_scalar_state(self):
+        for name in ('setByteArray#', 'copyMutableByteArray#', 'copyMutableByteArrayNonOverlapping#'):
+            positions=(1,2,3) if name=='setByteArray#' else (1,3,4)
+            for index in positions:
+                for bad in ('Word8Rep','Int8Rep','WordRep','Int64Rep'):
+                    module,app=fixture(name)
+                    app[2][index][2]['rep']['primReps']=[bad]
+                    self.assertIn('primitive-representation',{x['code'] for x in check(module)['issues']},(name,index,bad))
+            for index in ((0,) if name=='setByteArray#' else (0,2)):
+                module,app=fixture(name)
+                app[2][index][2]['rep']['primReps']=['BoxedRep (Just Lifted)']
+                self.assertIn('primitive-representation',{x['code'] for x in check(module)['issues']},(name,index))
+            for result in (False,True):
+                module,app=fixture(name)
+                proof=app[6]['rep'] if result else app[2][-1][2]['rep']
+                proof.update(kind='unknown',aggregate='unboxed-tuple',components=[])
+                self.assertIn('primitive-representation',{x['code'] for x in check(module)['issues']},(name,result))
 
     def test_int_array_requires_machine_int_not_same_width_word_or_int64(self):
         for name in ('readIntArray#', 'writeIntArray#', 'indexIntArray#'):

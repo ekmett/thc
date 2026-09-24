@@ -1,0 +1,1 @@
+python3 build/check-int32x4-memory-retained-failure.py build/int32x4-memory-reader-correction/retained-failure.json 

@@ -1,0 +1,944 @@
+{
+  "validation": "build/double-memory-validation",
+  "modes": {
+    "full-default": {
+      "tests": 545,
+      "suites": 112,
+      "featureTests": {
+        "thc.runtime.DoubleVectorMemoryProofTest": 6,
+        "thc.runtime.DoubleVectorStorageTest": 4,
+        "thc.runtime.SimdDoubleByteArrayTest": 5
+      },
+      "xml": [
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.AggregateFrontierTest.xml",
+          "sha256": "171c53674cbcc530328d390d8ff0604c4bfdf035ea67c6155d4ee2549521afc0"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.AggregateLayoutTest.xml",
+          "sha256": "e0008a3c309b92d6a7a525b81684ab9e1f2819c0932484970869d332c29f3475"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.BloomHeaderTest.xml",
+          "sha256": "499c2017471c53d7075191517467cb5a025e565a388ccef630e2190ae374892d"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.BytecodeBackendTest.xml",
+          "sha256": "e1c8ed05e809a0992614af5b3e375e91686c4a2a7c8617dbac06bbad2f0b9d70"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.BytecodeCoreProofTest.xml",
+          "sha256": "eeb48daa587b642141a3118fe39068d0704340652bee0575d21baeb32504f88a"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.BytecodeSourceNotesTest.xml",
+          "sha256": "709551700be6abc8c601e10a087c5524132b9675de874221ecc2de6b4a5f6255"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.CStringTest.xml",
+          "sha256": "fbddf20e75ef3567a9a85b5e52e17a72b0a3e49644acde9665d7b1b31b3884d9"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.CasePrimitiveTest.xml",
+          "sha256": "f7a0f70d858ce9dc38aee388edc7073d08e3365c341fe6e72aab78a208c873ba"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.CoreLinkerTest.xml",
+          "sha256": "2e99e9d61ed1c6ee0e36e6c89a1c286817c74f65e98e72c90bbeacb6e19a13ee"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.CoverageCorpusTest.xml",
+          "sha256": "79f2f804bd333bc3496ead855c7e4548c9858629cff354b2e30c819fbc90f5bc"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.DiagnosticModeTest.xml",
+          "sha256": "ddd977d72418e7e8a5e223abe25d555236e804d57de47ac7dd866c17f0859231"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.FramesTest.xml",
+          "sha256": "a0d18aab5660282e36dec5d6e7049321a9db24ca76cb5a959e14098ee11bc9b1"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.GuestExceptionsTest.xml",
+          "sha256": "a17f95a4a39b3588a0e1eba69af1389e96d1c2269aa0841e0c989609ee7945b1"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.Int16LiteralTest.xml",
+          "sha256": "d97ed1d551a93db72225ccb625b6d1d9f38e48241a694890d3fb5f4672840894"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.Int32LiteralTest.xml",
+          "sha256": "7215b5aa0f46d0a191606408998994f67c31d261085f403a9c718a7b260ac636"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.Int64ConversionTest.xml",
+          "sha256": "4b81b5635b1d148226a04a3efd0f66c4aba8a698b69a7e8df7542df5182677e1"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.IntegerPrimopsTest.xml",
+          "sha256": "d90dd65cc58d5640508bc23c3ff3e279f8e7976980b88d18184d1d0ef6698462"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.JsonWriterTest.xml",
+          "sha256": "2310b56f2e3868f547e461e7d02c67d20ab97e9aa0df9283819e2f6ccf80c839"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.NarrowWordPrimitiveTest.xml",
+          "sha256": "cb0f1bab6fc166f871663d49537c019ce5e0fcaee5955f3a76942e5a023bc9be"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.RealCoreCallDemandTest.xml",
+          "sha256": "10d883323cc3d5afceb278d6693963cff40a50d8651a0bca0abf5f3c9b3233db"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.RealCoreEntryContractTest.xml",
+          "sha256": "4136cadfcf74c9f3c9cf0df63cd5689792844270b5c4af12b5c1cddb4bdf68e2"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.RealCoreJoinTest.xml",
+          "sha256": "36cfac64a990c0e45095cc2d22e70bcec9bb3bb64d723eb72759756cdca5f5b9"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.RuntimeTest.xml",
+          "sha256": "6c13150145d320434720424a384de4be86d0e141db0e38c0bd6458366db89706"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.SelfTailProfileTest.xml",
+          "sha256": "cd6301351f3804eacb1fb2f8f79aa73ed8a64cf3e80db16f16975f3e78f0fdf0"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.SignedNarrowPrimopsTest.xml",
+          "sha256": "bc25b36816623c177ad40a099161e604b4b9edc5567814c127a3a3434ff11dbb"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.StrictFieldsTest.xml",
+          "sha256": "05920070fe3d84a47d0a4fbc637e86f939410f647318f2e4ea545a6a039d0847"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.SumLayoutMetadataTest.xml",
+          "sha256": "a1ebde39f466eb1bc3375ff2635450127461748bb507c3a842fb694fa5695960"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.TailCycleTest.xml",
+          "sha256": "c9d64db5bffac220b0d029317091e07ae5a3660516ad4348a0eb3dea1d4b3a4c"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.ThunkDispatchTest.xml",
+          "sha256": "7af945a3845304e70af4cfa24a6b0cc9c3dc7be5e56400919d37c7aeb129bbbc"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.ThunkRetentionTest.xml",
+          "sha256": "6c1d51f7caf5f3297a94891c6afa479486dc8158ff9b1e5b44718fcb9d0b91e4"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.TypedApplicationTest.xml",
+          "sha256": "37464cfd7107db4f7763ee45c9ddb100391963f29d3714545d598affdc6541cb"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.WordPrimitiveTest.xml",
+          "sha256": "a086e17d87f65152f028c677e14b4bf77c50d727e4d0f27e92d96eff955365dc"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.AstSelfCallTest.xml",
+          "sha256": "8b7878e6d0d2cd890b907f0b53f186a12a43949863d39badca209f3854bed927"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.BindingCellMetadataTest.xml",
+          "sha256": "29b87bff15b5279f486d792113946847d966fac63eae0160e35654d41ac241aa"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.BitPrimopsTest.xml",
+          "sha256": "9b6c6995f2a5199b4ca4b2cc65cb14e2178ad2453969bdc799d8e15b35495e61"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.BloomValueTest.xml",
+          "sha256": "cb5104dcf9fd919e5fec6f500bcc8e29e7a2d8dba11c180b5cf2db816084dc96"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.BoxedArrayTest.xml",
+          "sha256": "a3b2afb7405a3a908e722d062dbebb1e719588e8a71bb095edc182510a61ea82"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.BoxedLexicalProofTest.xml",
+          "sha256": "c165b238fe2849633caea226c49097d6a21f9889f45f918f0f21dbf1f4119a82"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.BoxedValueCacheTest.xml",
+          "sha256": "58c4ae7c0c74f711720de7bdeb9bdf8dc13530f60fc9e55b639bdd2507bf8287"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.ByteArrayTest.xml",
+          "sha256": "c677dddf378aeb98e6adca25abcdca574761fd8849265bb09b77461e712ec161"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.CallDemandTest.xml",
+          "sha256": "3eeadacd9298f36eb8eb928e1bf1a42312da730990b68c8f488e8adf71d4cb20"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.ClassOwnedLayoutTest.xml",
+          "sha256": "b9d59356074d3c3ef509b2b2452033bdc04df47e4ccb1d81529c98e6416a4247"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.ConstructorClassIdentityTest.xml",
+          "sha256": "506d2010302a56a18aa755ffd028d53ab277a54e13dadf5bd9a1990e914f4758"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.CoreProofJoinTest.xml",
+          "sha256": "7669f1d5cc55c117b4d78f130f0fe325c5b3acc33a86b8ca62b3c6e195fcd7ca"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.CoreSourceTest.xml",
+          "sha256": "8900ba264f7eb770a89809771ee109ccbb84f7e354e65fce9d35ed851bac2bce"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.DiagnosticTupleTest.xml",
+          "sha256": "fee475b6dc34567b0aff56d39f7abc9d84a56e5deb93fd7a2bbeb181a1036191"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.DoubleArrayNativeTest.xml",
+          "sha256": "b4874b775f16d4f8d192d7e852f922e0b8d82331170e5cc04b5d49ba96de1bc5"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.DoubleArrayTest.xml",
+          "sha256": "5007cbde3ba979121e4f9313bf85c70edf4a5ae11fc5b116ecad1acceb7a6144"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.DoubleVectorMemoryProofTest.xml",
+          "sha256": "8509e45fb17df9715c1b77da99c876a360716fceb8784afd86f1aa711d4f668c"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.DoubleVectorStorageTest.xml",
+          "sha256": "18e69b73a67ba89c08e5c5ae26c96c718fa16b628e6e4cae59f77d83d82f2490"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.EmptyArgumentRuntimeTest.xml",
+          "sha256": "513e5674200260514b40830eedf2c40b0e4040a333ccb008595de6b26294ad79"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.EmptyTupleInputNativeTest.xml",
+          "sha256": "68dd1255228b5e7938eecdcb40b6dc2e2441908592ca28d767e1a663cd2e61d9"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.EntryContractTest.xml",
+          "sha256": "9fb27a2bb785677aeb1507ce291ebbb2ac3254f64d47ffdd3f3d9dba1cb6e63b"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.EntrySelfCallTest.xml",
+          "sha256": "7ff2198b5c19965ec8b2ab37cfc3eed129866a7531b3f088597d42d1b5d7150c"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.Explicit64PrimopsTest.xml",
+          "sha256": "56ffa3c1ab33cb1949b8005d986e0e1b121d939eee7b5667ac4475d980287b88"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.FloatArrayTest.xml",
+          "sha256": "5ff2479e0675f5556e7dbe2e76da7c386292337ce3394331737d5034cd8c1e07"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.FloatVectorMemoryProofTest.xml",
+          "sha256": "4967f998fc0892aafd5c617c12fe0c7320958985c2d35fab7e5568ef383a95bf"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.FloatVectorStorageTest.xml",
+          "sha256": "51847fb9e883e4ad6db16ca84ea83699e9afbc8d7c3f11eae0b812fb68f424c5"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.FloatWordArrayNativeTest.xml",
+          "sha256": "6a17aa0436b9c5e2829b709fd9bfd675c2bf465a09040d9510bc43990875ce1b"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.FloatingPrimitiveTest.xml",
+          "sha256": "46dc5b1ff48f69eb7af2f0a96e1c8a2a82e541caf4994684d92cf757298eb902"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.FloatingTupleTest.xml",
+          "sha256": "fadfaddc4d22dfc63f3ebcd394e28f3e585fef1230ed3857d336e0807a1637d1"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.ForcedBindingTest.xml",
+          "sha256": "28068231728b93bf826cfee4c62666513a2e29a8a615bc08562f4bbd31c82c65"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.HandoffReferenceTest.xml",
+          "sha256": "f14f66587665c0787836d4d62a2f032f516ff1e741cf7736a5f82401b9a94888"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.HandoffTest.xml",
+          "sha256": "85d3ffaebf728cae5dca6b66ede4fb309960ba7f7d7a76e19eea314f7a25355d"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.HostBoundaryCompilationTest.xml",
+          "sha256": "2a194b6feefeee9288e995d7c8e1a0eddce8803aa8078a38f340a37788d5d8c2"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.HostEntryCompilationTest.xml",
+          "sha256": "020ff13656d3de394ab3656e40401e9b700aea52718e8751bce303f004b70060"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.Int16ArrayNativeTest.xml",
+          "sha256": "d71a1454b3b70cc8ffc0da7273de2139955849414ccf6c135cfb3bfde1c60da4"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.Int16ArrayTest.xml",
+          "sha256": "7790854b5921a6e83d20161e3cb7f1bc9d557c0adde5f7b82579813d1921981f"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.Int32ArrayNativeTest.xml",
+          "sha256": "30ad2885d193b9b6ab75c8c540672e1d2ba3500e0b94fbf085c2bba876634b49"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.Int32ArrayTest.xml",
+          "sha256": "8b32cf0d3029500ddb77b23514ac2acaf8cec142b66d89bf599b7d6255097315"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.Int32VectorMemoryProofTest.xml",
+          "sha256": "3cdb5d07142ec00494a97c317e3af191039fc4a2ca6dd82a00d10eb6d97bcdaf"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.Int32VectorStorageTest.xml",
+          "sha256": "375fa01ce20d6826f7eac7f5dd8d65a138584302b8675879fdd49225073d6920"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.IntArrayNativeTest.xml",
+          "sha256": "dfe45083cc421903ef88e2cf5a73975bef0914acd8efea0f5b06a81cd4d97a03"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.IntArrayTest.xml",
+          "sha256": "09772e6749e82f5f96e3e034fa5f34b555394d0f9b006dbafb4d7d40f9c8e203"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.JoinWhnfProofTest.xml",
+          "sha256": "7b02d8fd535b45b7f50471600012fdd9f93f5d72335503c4cad11b0f2e99838a"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.LeadingCaseReturnTest.xml",
+          "sha256": "6066982415f172b555434ad21ee1c659067afe4f1d7997bc40febec90bb5bc02"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.MutVarTest.xml",
+          "sha256": "36824d345eb86947c5acb89c1f1cc64318f9cb16ab982b980b7171a812beff5c"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.OperandRetentionTest.xml",
+          "sha256": "739eeb25937555d24e3138da0017daafb9723d7ebf2e9f75016b1ac497e29f0d"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.PointerEqualityTest.xml",
+          "sha256": "c727512b6957da28feea018be230dd833c4f358a47618a5cb1477cb8dc850061"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.ReferenceCaptureTest.xml",
+          "sha256": "00f7e876be5aedeb4b738756aa808277a952efc6882a8dcad9e20e00d04ba69a"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.ReferenceFieldTest.xml",
+          "sha256": "d7ab3cceec82bfe1b82ca6479771f6b98e0b41475a068f893a8acc192ab39307"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.ReferenceFormalTest.xml",
+          "sha256": "027e4ff853917cdedebfe63b37d4296dc0e1e3a39e61165ef6c2fe2910a0f20d"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.ScalarLexicalProofTest.xml",
+          "sha256": "0d0429db7cb52f3d7d2ba1edbf59892f04d63ffb999a307c1eac8400e8e1cbbf"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.ScalarPrimitiveSignatureTest.xml",
+          "sha256": "dcd935cf56bfbfea2032083e7df9ee27be00550fda3278efdccdf5fc16b2a2e1"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.SimdDoubleByteArrayTest.xml",
+          "sha256": "916b15ae891a5ffcb2f30df62699c79825648aa32c957ac3f6699294960de408"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.SimdDoubleVectorTest.xml",
+          "sha256": "ae378d77f2de793a540c872d34edf00bf92b8ffefb543f6d17e13590df31e191"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.SimdFloatByteArrayTest.xml",
+          "sha256": "ae17587607bb7310b3bb59b2705df7b973cf8c8e5820eb40a166a307ebda6073"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.SimdFloatVectorTest.xml",
+          "sha256": "d0de0c78d936d34a0549aa9a8cedb0cf11c07869e169c7aa27ce16c5f152dd54"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.SimdInt16VectorTest.xml",
+          "sha256": "a99a1f22c1bf64994583519f7b2761496b82bb2aab0a523443b81264d1cca452"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.SimdInt32ByteArrayTest.xml",
+          "sha256": "d965f042d4375563c8ac6d2291c704340b6e9432d0e13519b58638a7234d175d"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.SimdInt32MultiplyTest.xml",
+          "sha256": "6e5d465929fd54235c20ca01a2f794276a53e897ad5c5a28169a926b2b06b484"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.SimdInt32VectorTest.xml",
+          "sha256": "d90723cc74a59435ffec772a5436acbd24a9ac1c3862c0c8a64ccfe4fa36f0d5"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.SimdInt8VectorTest.xml",
+          "sha256": "25b684330518120179764ffafeeb4ce810e6b023828b628f8e99ad1e36340406"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.SimdVectorTest.xml",
+          "sha256": "249ad034f2112c660ec705134a48364fa228254169bc805e382a541392ea2591"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.SimdWord16VectorTest.xml",
+          "sha256": "8af7a71b2be77e65339c6709198c55d84bc1603998dfa8674f4286a0d394cd96"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.SimdWord32ByteArrayTest.xml",
+          "sha256": "7d603141baf08ee089a78ccf131f4d6b05512609f3d3196204dddae2a90490c3"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.SimdWord32VectorTest.xml",
+          "sha256": "ddc5207a79b349cdd253fe67a71c308043e99ebd9dd6cc5d0244038c0e112457"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.SimdWord8VectorTest.xml",
+          "sha256": "288ad072dc9ec6147d21e3891c320852ab0fc95b59af7eedbb8663b556873482"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.SourceCloneTest.xml",
+          "sha256": "ffaa010536d06a5cbd012e5a040c044de4bdde8d4294b3c7d558ed67f744ac9d"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.SqrtPrimitiveTest.xml",
+          "sha256": "0709f68daa525fae03ada71f66cc0f15f546d9bf21617905e1b076b1b29d8d42"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.StateTupleTest.xml",
+          "sha256": "49a6a0155f038aadcc625fe8c9118b0958e4da0e9f2c7aaf076403153c645d34"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.StaticShapeSafetyTest.xml",
+          "sha256": "9b0e8da6d0a15fab2eeb3bbf839f0f3bd190ba5e42fa7de95148a880fef4f17c"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.TupleArithmeticTest.xml",
+          "sha256": "6a93ade010bfb903fcb9c6cc628fa92a140c94bf1c07017e37734a59e1ea40e1"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.TupleCompletionTest.xml",
+          "sha256": "d01d1698351275b24fb3bfbb3156e3c6d6783421181368861a97e929046e6ac1"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.TupleJoinResultTest.xml",
+          "sha256": "54f59cc73b01745e95638fe203b09283bff0f65dff7f4822bcae4fab030493ab"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.TupleRepresentationTest.xml",
+          "sha256": "3f6ccb250c573cd454eeafdccd0b85517f0372dd4ebdd0db91fb0feb65228ce6"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.TupleResultTest.xml",
+          "sha256": "4517796c481bc5c72c54e391e9e7b31f754a070bece043083b2431975a3072a9"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.TypedCaseTest.xml",
+          "sha256": "56b3aebefbcc612019b983174e6b73c62b380289ba969ad12793c81cdff8b7e6"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.TypedExecutionTest.xml",
+          "sha256": "0fcaf9240cdb525a6de0c74fbc768fdf818aff537f02052cf9c10c5567b2c7cb"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.Word32VectorMemoryProofTest.xml",
+          "sha256": "fe9374b193dcece20835be93f63112bf9cf7c313fff0ecd1f162680ec5e4f6ae"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.Word32VectorStorageTest.xml",
+          "sha256": "8ae906c5d0aa623315cadcb00a993ebd9b51e1228a88ee4954b1060c422214d4"
+        },
+        {
+          "path": "build/double-memory-validation/full-default/test-results/TEST-thc.runtime.WordArrayTest.xml",
+          "sha256": "b566605ed8ab35c8cdc8596fcc993bfbb16d7c5accbb8cd084d38f67dbe32d1c"
+        }
+      ]
+    },
+    "full-dense": {
+      "tests": 545,
+      "suites": 112,
+      "featureTests": {
+        "thc.runtime.DoubleVectorMemoryProofTest": 6,
+        "thc.runtime.DoubleVectorStorageTest": 4,
+        "thc.runtime.SimdDoubleByteArrayTest": 5
+      },
+      "xml": [
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.AggregateFrontierTest.xml",
+          "sha256": "0f21e6440c4223e2edd8b432c221a3d581e09e5fbd73d6bd396070374dc88230"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.AggregateLayoutTest.xml",
+          "sha256": "80738d387c82735997ac6b87d28332df954c240285f86ee32ecffe287a1149bd"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.BloomHeaderTest.xml",
+          "sha256": "32e20e66ee8405441ecccdcae44332f8518c225ec9a7b6ff51388e329ea666a3"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.BytecodeBackendTest.xml",
+          "sha256": "f88d570a157c4c073ae9526c3447b20e98889d0875dc6c90d48e3d3b03456edf"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.BytecodeCoreProofTest.xml",
+          "sha256": "62936126f460663900538bbad53ebb1a95090ced2305e28ed3da454feda137d9"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.BytecodeSourceNotesTest.xml",
+          "sha256": "677d4d599c76a57f89a747181d1c7ea7ae573df65e23d78a7c4391026b713948"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.CStringTest.xml",
+          "sha256": "fe9859c75882d92dd2270bf51470543dc7ca10acf12162b8dbc45c499cc0cc19"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.CasePrimitiveTest.xml",
+          "sha256": "e2d4fb5761b9039aa3eeb2297b2c0465e889af98130720c58b8d0196830ddedd"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.CoreLinkerTest.xml",
+          "sha256": "563152160c99fdf7745495f1b93a953bab5509dce2cd2c47759d84ed68628199"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.CoverageCorpusTest.xml",
+          "sha256": "21ff0ebf256f3517949b2ed74078a29900766c4e536ca0c57c48b099b46c2d80"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.DiagnosticModeTest.xml",
+          "sha256": "d3a02abcb4f53120d5ba216fa623679f9d71f40c3d90aacc6030dce409df8bf6"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.FramesTest.xml",
+          "sha256": "d0430f755ddd53c13e776af1cda1ead6f2ef326939bdb3341f0e23ed0a185c17"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.GuestExceptionsTest.xml",
+          "sha256": "8b4fdaf1ab1c22018b5b7d3b3e54863d8f905ee84ec532edaa6a8e5c3dc23c5b"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.Int16LiteralTest.xml",
+          "sha256": "d5575df1de10146aea48685dbdf8488dce54caf1c0d3fb3ad887d98d9ec205b2"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.Int32LiteralTest.xml",
+          "sha256": "de67c03352d99b71ca28b702560e336885dfe3c9c76fc3d17831584e513c364e"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.Int64ConversionTest.xml",
+          "sha256": "5e988e355620780d585f5a6541dee12c1715bc9206f2f90f5fb25dc3b2052e4e"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.IntegerPrimopsTest.xml",
+          "sha256": "19541dcaff3147f236671deff0522e09bf6f3c4dae7620128141752ea086c046"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.JsonWriterTest.xml",
+          "sha256": "d0574b1cc55fca0ea3a725ff8837f8cde88e3be8fd2b9eefe56e9ca5daebedae"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.NarrowWordPrimitiveTest.xml",
+          "sha256": "b39384c3d40daadecc92023ea98c6b09aa701c34b60ce03b0928267bfcf89e4e"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.RealCoreCallDemandTest.xml",
+          "sha256": "a50e1b85a40b23a90037694ac3232d51e5b12f078783aa42617df36420022e2c"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.RealCoreEntryContractTest.xml",
+          "sha256": "0b5f1835abb5c4beead4131f433715c8e8d4ba8899532c8356371212b3d45f2c"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.RealCoreJoinTest.xml",
+          "sha256": "d1884686e12ea6a7443088ee9e2a5d3582e7deb6bbbf5cf01eb77cc83a0c4e5a"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.RuntimeTest.xml",
+          "sha256": "0fbec858cb384bdd1ada6db37a2304bb75b6e235ff3a64fcb3cacadab7cd4576"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.SelfTailProfileTest.xml",
+          "sha256": "d596655629dda4d184ad8f6f88cc67b48d1b8e5d085bd49688ab3e64abfe92bb"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.SignedNarrowPrimopsTest.xml",
+          "sha256": "390f5e84cf5b9b0bd24e50c3e56e45724566a5e9990849d2c39a9cf240f8aa3f"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.StrictFieldsTest.xml",
+          "sha256": "0951927c5f1fb21b0aff18c46ec12e4d2fe3a5f432d18a27279de1b5bbf5a4d6"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.SumLayoutMetadataTest.xml",
+          "sha256": "691a65d64c9a05471f4c1a2628510f0a8e8104698ee3207abc3537cf39460521"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.TailCycleTest.xml",
+          "sha256": "05b0de373d72794a1c30e77f6d0d747c04ff570ad8cc119fe978f8665b1bf95d"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.ThunkDispatchTest.xml",
+          "sha256": "186c3b6861261d74462784e2b230e49c66d335129b4aace1c11a22d8890f0ed1"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.ThunkRetentionTest.xml",
+          "sha256": "95bf547d79bdb403c7ce2389af49b1e51d60b358064746a40f914a30bf601748"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.TypedApplicationTest.xml",
+          "sha256": "24eae9de9b07ef17defdc7efb46a422e9ae658c9cf86219df7f57d9119087b9c"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.WordPrimitiveTest.xml",
+          "sha256": "3d7e23a266b175f03c06c567f5aaaf872d198b38e024921d57f03cf35a8154f0"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.AstSelfCallTest.xml",
+          "sha256": "4040643d3c9c9ae497894c5f4ead653fc860418895a7421696d7e4a4f428176b"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.BindingCellMetadataTest.xml",
+          "sha256": "42467e268d3a738aa5fce6cccab24f59dcba9529eccf65a3101d3fe0e93d3ae3"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.BitPrimopsTest.xml",
+          "sha256": "5b46c49c39c4a4c87a673f32155e89f2f95c712803c4d76e29f32c6c3114e78c"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.BloomValueTest.xml",
+          "sha256": "e3df9adcf713ade6ef6dea7af1cad7fea1add8e5191a09b18eebdb5409346d8b"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.BoxedArrayTest.xml",
+          "sha256": "f54af9f689a6a529a9c7faaa5b9360827f6aec56e2a8becc3a02a03ce8393330"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.BoxedLexicalProofTest.xml",
+          "sha256": "6f54aacab88ad4371597c17bdc22617f8ae6f424e224cf22f3ceca74ea0bab24"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.BoxedValueCacheTest.xml",
+          "sha256": "61fbe472419219a4d97fb47dfc4e9dc6dd704aee46abf0e49fe9bf5a6b8bea7f"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.ByteArrayTest.xml",
+          "sha256": "dc8150c7c04127d86b6a2c482a2787762852ce551929d88a5fa061462df8d78e"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.CallDemandTest.xml",
+          "sha256": "0a9abbe4e81c5d1201b2cc797264a7ab1c259519aa9cf1204746af6d9ba7abf5"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.ClassOwnedLayoutTest.xml",
+          "sha256": "85d65a081fedc7c3dfc167a79c25f19301648dac125e44e136ff2e543384e791"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.ConstructorClassIdentityTest.xml",
+          "sha256": "c4aa579ba032e25bbb51c69d83557f2803e55148c1f534283276405a7ce6ae3d"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.CoreProofJoinTest.xml",
+          "sha256": "9a122832ec6300ffd04adaf76d7d4670c00096c6b794df554637638bdd07e1da"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.CoreSourceTest.xml",
+          "sha256": "ca8ee722501370ea6e5d3b7db8b6b590f50daa5c83e8b94c4e07aba2dfd695cf"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.DiagnosticTupleTest.xml",
+          "sha256": "b3ebeb994429eda890a328c06bafa408f890499369fe5ff2e2c2c4ffa6825d23"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.DoubleArrayNativeTest.xml",
+          "sha256": "23e88d105d8e801d23ad67e9bb0a0601e94b62ef326e2e30062d83bdcf2a502a"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.DoubleArrayTest.xml",
+          "sha256": "68d19c0017c37e4c7adeb83dbce11b7c363fef9586de030d985b5ca20cb483bd"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.DoubleVectorMemoryProofTest.xml",
+          "sha256": "c111401b2ce11020c2ca2318b1e674eed14c1614d4bed9fbc369e0fa5bababe5"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.DoubleVectorStorageTest.xml",
+          "sha256": "863d94b4e7170b45269c16908ec47134ddcd8cc4cf3107b9f239d106d44c1ab2"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.EmptyArgumentRuntimeTest.xml",
+          "sha256": "7d9dc7325e621afac42307692f3d9507c0c27fe6d904c3ef8a59a2b218dcae1b"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.EmptyTupleInputNativeTest.xml",
+          "sha256": "210ce9bb19c57abad91f7fcb4732c5345ff6d3f962b562ac6f8ed02f2eb51e21"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.EntryContractTest.xml",
+          "sha256": "11d1dff7532fbbd077fac99c9c12d544f9c180c2433f8fc5bff7eba5823cc9bc"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.EntrySelfCallTest.xml",
+          "sha256": "2fc34c6f25c6895f36d8bbae1eb1045a88c0b569f6bdf6bba897e066c456d283"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.Explicit64PrimopsTest.xml",
+          "sha256": "6883f7cf75b95733f9c258ed196e608eeb6bd728b2edbd33fcffc5b27363cf94"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.FloatArrayTest.xml",
+          "sha256": "b182dab437e331a1610c27cbba780302be39048ee82942171d251f1644bdb5ee"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.FloatVectorMemoryProofTest.xml",
+          "sha256": "2a4dbfd57cf701950b50724bb4889f5760471028aa526ec591482c39d721c4cb"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.FloatVectorStorageTest.xml",
+          "sha256": "0be9415b057a4fe40fb3a06184eca1157842f65245f0e1f0f0000376899ee822"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.FloatWordArrayNativeTest.xml",
+          "sha256": "e33e0581365a82f39d1b1d9c0b544e1ce0bea86b3bc8bdaf899abe3b30baf3bc"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.FloatingPrimitiveTest.xml",
+          "sha256": "7cf406a4b433e6d9e094fa088050831f4a61c2c903e4e34eaa3054464531a3e8"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.FloatingTupleTest.xml",
+          "sha256": "46892ce9f8aa43472580f7d55a582bf59a6f58a1132a5d7f8e254e4e4bf61c8f"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.ForcedBindingTest.xml",
+          "sha256": "3f2562e70584ed6180003c9153f31e7b30bde06beaf902a0072992be28cb85b7"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.HandoffReferenceTest.xml",
+          "sha256": "56a99fe593c5bfdfce252619b8ad848bab4e1efdcef75e693b9f507be0129092"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.HandoffTest.xml",
+          "sha256": "b7eff79f4df0035a451d3417bf5f4c2e89f9597ad14e0bcbd037aa31afd90790"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.HostBoundaryCompilationTest.xml",
+          "sha256": "4d67c4a4ce5e86c6e454ba1445628cc064cedcdb495302a6fabe342676c52f8e"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.HostEntryCompilationTest.xml",
+          "sha256": "207247f85957f8d87d3ceb998d7c3844f8b22ce9aa7c35b3fe4a03bb75cf9d1a"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.Int16ArrayNativeTest.xml",
+          "sha256": "9982d95f575c730f574cf99a0b21d0a8fe6d0bb131ca26fd4e3c91b7d6b8b4bf"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.Int16ArrayTest.xml",
+          "sha256": "a7f1a82eeac7f40baa58be520f62e91dae71c0d0bb7a5a5dbccd09871fd3f498"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.Int32ArrayNativeTest.xml",
+          "sha256": "8359e31b34a876b277dadb67724e894948a5a9728cbe3ff485ecbeeb6c69dfd3"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.Int32ArrayTest.xml",
+          "sha256": "f9caa21957e1510faa2c38b55684456038cfa7da1118831a3cd449512d4fd030"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.Int32VectorMemoryProofTest.xml",
+          "sha256": "ddd5f2657b41ce6db2753962d5fc4c31c580a0287e020f713d5ba86186bcf98e"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.Int32VectorStorageTest.xml",
+          "sha256": "c950815ca59b63f21407d0e65253d892e98314734587e1523c577818a0a6bed1"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.IntArrayNativeTest.xml",
+          "sha256": "90026df67b5f0fa4f88ffe766be7288abeaabe458f9543e581c66381d0508959"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.IntArrayTest.xml",
+          "sha256": "99232fb90b624d101201721d11628e813d42e47d330c4c886fd08503d8002a00"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.JoinWhnfProofTest.xml",
+          "sha256": "d26661f8d820684a3f23e3c0eda8c38f208beaf9f171f052d0a4e622f4b73f78"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.LeadingCaseReturnTest.xml",
+          "sha256": "e3457e9d73483153799e08942e72343d86215a0f2ef0a6aa2e37e69570de259b"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.MutVarTest.xml",
+          "sha256": "d5d1ce297301d07f3559396c8edcd766cd9c1bec760466810f92da36a9c96be0"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.OperandRetentionTest.xml",
+          "sha256": "db7580b42ffedf2181c77039a5ddd57f0479a7644b8d2340ba472e84ad0c4e53"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.PointerEqualityTest.xml",
+          "sha256": "93cb736765b931f79c25b7c129ec237319870d353fb8990586acb0f38d35701f"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.ReferenceCaptureTest.xml",
+          "sha256": "c4e9a20c0cd63c24e76893ac16c41bcaa38e7892e9a084471df34927cf0f0910"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.ReferenceFieldTest.xml",
+          "sha256": "dbcc04220ba4da49ee25a67b501798d79ba7274b9458d00e91cd5811c2a43e98"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.ReferenceFormalTest.xml",
+          "sha256": "20c6539ee29868edb9c6afadc687cf079b6a53ba4bc87ab9d24c9efaf27ba158"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.ScalarLexicalProofTest.xml",
+          "sha256": "ea469ddaaee8653b70d6737def0bbda8094f5cae444c27220aa93a14a09227ad"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.ScalarPrimitiveSignatureTest.xml",
+          "sha256": "d2aa64773374833718456e0d5e8a6ed566839dc86e1a8d4ade59062c1862c8db"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.SimdDoubleByteArrayTest.xml",
+          "sha256": "cc73359114af8914a24c636ccedd7d970bff6df57437b726760a636ff93f5dae"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.SimdDoubleVectorTest.xml",
+          "sha256": "899e8d6fae2d8414557555ccd5ddff1ce0f56b011811d58b1496d34f21903d73"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.SimdFloatByteArrayTest.xml",
+          "sha256": "0b0587a179c6a840becf7fdae6ec063146168f01da3c75800c751e6a55469014"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.SimdFloatVectorTest.xml",
+          "sha256": "606d30703d233d46233b801083afb687c9ff79ad884fa9dee76574b936175d02"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.SimdInt16VectorTest.xml",
+          "sha256": "2019cb64ad3c5381a31aa4e18c05187591aaefb7cd6de712f053bfc39a84bee9"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.SimdInt32ByteArrayTest.xml",
+          "sha256": "1218bf716c5df157c19659e5b7c4eb71cd83938f37e9ab4005b33256dec11245"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.SimdInt32MultiplyTest.xml",
+          "sha256": "8331670bf428ba725c52a334f4e7e9746d332ca6a6e65ffb7eaba442c98055de"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.SimdInt32VectorTest.xml",
+          "sha256": "f45f1a9d52244440c35856549a394c86c603d5a439f672fc9246368de7881b43"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.SimdInt8VectorTest.xml",
+          "sha256": "a7296f6b65d6a4c19037180b479a809f41502a5079f838d98c87d0ee71406cd6"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.SimdVectorTest.xml",
+          "sha256": "5eb3c781e7f34f254a9ad58c07a531f860346f471da4c6f2c93bb46cc5dafba6"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.SimdWord16VectorTest.xml",
+          "sha256": "26ce04fe0dad25fbbe4ae822954e7e4427faf24734a5d5ddd61680b0db9f99e1"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.SimdWord32ByteArrayTest.xml",
+          "sha256": "f00e050dd3edbdf1f741938531f6a958c79b157882928547002e74f035d338b7"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.SimdWord32VectorTest.xml",
+          "sha256": "10f19b6e4a1c5c274afe6c0878cc898252ed61282046a43a0ad5dd718fd0be2b"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.SimdWord8VectorTest.xml",
+          "sha256": "f3e80f7af7b1fc27bc1706f8cffae6ebebab27e0a9ef3dd9bc460f5f40aa5dbf"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.SourceCloneTest.xml",
+          "sha256": "731ce79beafad4c7e3a861c01466a32569ae11bb25e331b47347e50038269d0f"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.SqrtPrimitiveTest.xml",
+          "sha256": "c0aa9a68d1879db04c810fdb29d16ef53c96a38746abd5a2a4e9087f0c033e68"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.StateTupleTest.xml",
+          "sha256": "018d5f2ce5a42b0c15426b646921ce7694e033b0693bdd2a34f45d920bf9d522"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.StaticShapeSafetyTest.xml",
+          "sha256": "c83ea8166e3146bdd504753d95f45ba9ee7ddde46b14a442c00e29f0cf2c43d2"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.TupleArithmeticTest.xml",
+          "sha256": "3643f403d24aaa2dbf8863d718db30eba98f0240d5a1edb81f946c2dd0c01a03"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.TupleCompletionTest.xml",
+          "sha256": "6930b6c17de2e313b8454bfa2c02d87dcdb337e6fcd5ff001ed5cc343b5f534b"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.TupleJoinResultTest.xml",
+          "sha256": "9b0374e34ff923900997a080c2dfdddcd796464fa49e7058bd0b58d862b59c00"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.TupleRepresentationTest.xml",
+          "sha256": "20f6dd7d18c13bb905df98e7998822cab0bb4363d719b685823d1239a0ab7f5b"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.TupleResultTest.xml",
+          "sha256": "e0bd556d98db022b4cce654c7fd8dba7bf991542d7c4f10e103b77c09ca543f9"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.TypedCaseTest.xml",
+          "sha256": "9ae3185714474b295cf9d1f66882656b28fc2498c50d4252320c55c8c3a7a09d"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.TypedExecutionTest.xml",
+          "sha256": "16f423246c716ce97428590eaf375f5c17593fc9248ccd17acf52fde603a47b0"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.Word32VectorMemoryProofTest.xml",
+          "sha256": "0ee0b4ab521139f57db28e2720934fc4e9655e920fd8e88ea36b0e61eef328b4"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.Word32VectorStorageTest.xml",
+          "sha256": "e1dd67124d3cb8afb83c225068c2fea79fe1bf50442f921f76336a19f85fe501"
+        },
+        {
+          "path": "build/double-memory-validation/full-dense/test-results/TEST-thc.runtime.WordArrayTest.xml",
+          "sha256": "e3d8ce7533a8427e7197b2d14b97f01b294bd2e8c2c1a9d812ddeeb6d9a8fa4f"
+        }
+      ]
+    }
+  },
+  "native": {
+    "provenance": {
+      "path": "/home/ekmett/ai/thc-doublex2-bytearray-01a0cdeb/build/simd-doublex2-bytearray/provenance.json",
+      "sha256": "a4bffa1cb13dbb5a883601a0ca123cd04af9cc104ec140005be81154fa0628df"
+    },
+    "sourceHashes": 20,
+    "artifactHashes": 9,
+    "ghcBinaryRehashed": true,
+    "ghcLauncherRehashed": true,
+    "rows": 4384,
+    "compiledCallsPerMode": 35072,
+    "compiledEntriesPerMode": 104704
+  },
+  "frozenGraphRuntime": {
+    "capture": "build/doublex2-bytearray-runtime",
+    "evidenceSha256": "abd45fa1ff4de2d4ad5b039116053aa57aac7f47ca4db95da20a9f1b08f9add2",
+    "readerOnlyCorrection": null,
+    "sources": 75,
+    "runtimeJars": 11,
+    "jdkFiles": 4
+  }
+}

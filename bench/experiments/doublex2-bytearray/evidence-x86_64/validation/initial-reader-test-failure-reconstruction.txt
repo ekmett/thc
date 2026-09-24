@@ -1,0 +1,32 @@
+First Double harness offline parser attempt (retained from the tool output).
+Working directory: /home/ekmett/ai/thc-doublex2-bytearray-graphs-01a0cdeb
+Command: PYTHONDONTWRITEBYTECODE=1 python3 bench/experiments/doublex2-bytearray/test-runtime-audit.py
+Exit status: 1
+Scope: synthetic/offline reader tests only; no guest/native/JVM execution.
+
+Ran 42 tests in 0.111s
+FAILED (failures=2)
+
+FAIL: test_exact_host_bloom_bookkeeping_is_not_a_guest_lane (__main__.GraphTest)
+  test-runtime-audit.py:400
+  self.assertEqual(len(result['packedStoreLanes']),4)
+  AssertionError: 2 != 4
+
+FAIL: test_double_register_and_move_are_still_exactly_128_bits (__main__.LirTest)
+  test-runtime-audit.py:434 -> runtime-audit.py:692
+  AssertionError: Wrong memory opcode, physical register, heap address or packed width
+
+Diagnosis and correction:
+- The inherited bloom test still expected four Float lanes after its synthetic
+  store graph had been correctly adapted to two Double lanes. Expected count
+  changed from four to two.
+- The renamed Double LIR positive test still generated V128_SINGLE/VMOVUPS.
+  It now generates V128_DOUBLE/VMOVUPD, tests QWORD bitwise views, and explicitly
+  rejects the previous SINGLE/VMOVUPS spelling along with scalar/wide operands.
+- The strict reader did not change in response to these two failures. No input
+  from an actual captured guest graph was replaced, and no gate was weakened.
+- The next offline run passed 44 tests (two additional historical-control test
+  methods were added); those controls are not new guest execution.
+
+This file reconstructs the concise failure record from the original tool result;
+it is not represented as a byte-for-byte shell redirection of that result.

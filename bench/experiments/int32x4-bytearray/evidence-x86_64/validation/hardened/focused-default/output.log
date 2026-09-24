@@ -1,0 +1,177 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.7.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :processResources UP-TO-DATE
+> Task :processTestResources NO-SOURCE
+> Task :kaptGenerateStubsKotlin
+
+> Task :kaptKotlin
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/build/tmp/kapt3/stubs/main/thc/runtime/BloomValue.java:7: warning: This node is a candidate for node object inlining. The memory footprint is estimated to be reduced from 24 to 5 byte(s). Add @GenerateInline(true) to enable object inlining for this node or @GenerateInline(false) to disable this warning. Also consider disabling cached node generation with @GenerateCached(false) if all usages will be inlined. This warning may be suppressed using @SuppressWarnings("truffle-inlining").
+public abstract class BloomValue extends com.oracle.truffle.api.nodes.Node {
+                ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/build/tmp/kapt3/stubs/main/thc/runtime/BloomValue.java:20: warning: The @Cached(neverDefault=true|false) property is not needed to be set. Remove the property to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+    long cachedMask, @com.oracle.truffle.api.dsl.Cached(value = "box(cachedMask)", neverDefault = true)
+                                                                                                  ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/build/tmp/kapt3/stubs/main/thc/runtime/Dispatch.java:97: warning: For this specialization with inlined cache parameters it is recommended to use the static modifier. The method should be static to avoid accidently passing the wrong node parameter to inlined cached nodes. To resolve this add the static keyword to the specialization method.  This warning may be suppressed using @SuppressWarnings("truffle-static-method").
+    @com.oracle.truffle.api.dsl.Specialization(guards = {"function.arity < argsSize"}, replaces = {"directOverapplied"})
+    ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:355: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:767: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:669: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:197: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:317: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1036: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor seventh, LocalAccessor eighth, Word16X8 value, @Bind("$node") Node node) {
+                                                                             ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1081: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor seventh, LocalAccessor eighth, Int16X8 value, @Bind("$node") Node node) {
+                                                                            ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1183: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second, DoubleX2 value, @Bind("$node") Node node) {
+                                                                                                                                 ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:614: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object reference, long index, @Bind("$node") Node node) {
+                                              ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:716: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:635: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, Object state, @Bind("$node") Node node) {
+                                            ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:558: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, Object state, @Bind("$node") Node node) {
+                                            ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1120: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor third, LocalAccessor fourth, Int32X4 value, @Bind("$node") Node node) {
+                                                                          ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:894: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Word8X16 value, @Bind("$node") Node node) {
+                                ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:297: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Closure function, @Variadic Object[] arguments, @Bind("$node") Node node,
+                                                                ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:997: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor third, LocalAccessor fourth, Word32X4 value, @Bind("$node") Node node) {
+                                                                           ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:959: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Int8X16 value, @Bind("$node") Node node) {
+                               ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:625: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                long size, Object state, @Bind("$node") Node node) {
+                                         ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:604: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object reference, Object state, @Bind("$node") Node node) {
+                                                ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:741: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:549: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, Object state, @Bind("$node") Node node) {
+                                            ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:381: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:260: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Closure function, @Variadic Object[] arguments, @Bind("$node") Node node,
+                                                                ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:795: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:839: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Int64X2 value, @Bind("$node") Node node) {
+                               ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:229: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor first, LocalAccessor second, long left, long right, @Bind("$node") Node node) {
+                                                                                  ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:577: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                long size, Object initial, Object state, @Bind("$node") Node node) {
+                                                         ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:586: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:411: warning: This operation supports uncached execution, so forcing cached is not necessary. Remove the forceCached attribute to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-force-cached").
+    @Operation(forceCached = true)
+                             ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:421: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:431: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:523: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static Object raise(Object payload, @Bind("$node") Node node) {
+                                                                   ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1153: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor third, LocalAccessor fourth, FloatX4 value, @Bind("$node") Node node) {
+                                                                          ^
+
+> Task :compileKotlin
+
+> Task :compileJava
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/build/generated/source/kapt/main/thc/runtime/BytecodeRootGen.java:30461: warning: [removal] ThreadDeath in java.lang has been deprecated and marked for removal
+                if (throwable instanceof java.lang.ThreadDeath) {
+                                                  ^
+/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/build/generated/source/kapt/main/thc/runtime/BytecodeRootGen.java:35667: warning: [removal] ThreadDeath in java.lang has been deprecated and marked for removal
+                if (throwable instanceof java.lang.ThreadDeath) {
+                                                  ^
+3 warnings
+
+> Task :classes
+> Task :jar
+> Task :startScripts
+> Task :installDist
+> Task :kaptGenerateStubsTestKotlin
+> Task :kaptTestKotlin
+> Task :compileTestKotlin
+> Task :compileTestJava NO-SOURCE
+> Task :testClasses UP-TO-DATE
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/home/ekmett/ai/thc-sequence-current-main-01a0cdeb/.gradle-user-home/caches/modules-2/files-2.1/org.graalvm.truffle/truffle-runtime/25.3.4.1/5f9818cd0413f63bdf1fe52ba4f2fc2786f4cbb7/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+
+> Task :test
+WARNING: Using incubator modules: jdk.incubator.vector
+
+Int32VectorMemoryProofTest > immediateReadCasesRejectEscapesWrongShapesAndPatternMetadata() PASSED
+
+Int32VectorMemoryProofTest > allOperationsRejectWrongArgumentsFlagsArityAndResultProofs() PASSED
+
+Int32VectorMemoryProofTest > directAstOperandsPreserveStateOrderAndDoNotPublishFailedLoads() PASSED
+
+Int32VectorMemoryProofTest > allSixExactContractsExecuteOnBothBackendsInBothLoadModes() PASSED
+
+Int32VectorMemoryProofTest > stateExpressionsRunBeforeReadOrWriteAndFailurePrecedesVectorBounds() PASSED
+
+Int32VectorStorageTest > smallArrayBoundariesAndFullWidthIndicesMatchIndependentByteModels() PASSED
+
+Int32VectorStorageTest > byteAliasesAndOverlappingStoresObserveWritesButKeepLoadedLanes() PASSED
+
+Int32VectorStorageTest > everyLaneBitAndSignedPatternsUseNativeOrderAtBothOffsetUnits() PASSED
+
+SimdInt32ByteArrayTest > preparationModeRejectsCorruptionAndNativeDowngrades() PASSED
+
+SimdInt32ByteArrayTest > nativeMemoryCoreHasExactCompiledEntriesWithInlining() PASSED
+
+SimdInt32ByteArrayTest > nativeMemoryCoreHasExactCompiledEntriesWithoutInlining() PASSED
+
+SimdInt32ByteArrayTest > genuineExportedVectorBoundariesRemainRejected() PASSED
+
+SimdInt32ByteArrayTest > publicHostTupleResultsRejectAtLoadOrTrapBeforeArgumentNormalization() PASSED
+
+[Incubating] Problems report is available at: file:///home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 22s
+12 actionable tasks: 11 executed, 1 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html

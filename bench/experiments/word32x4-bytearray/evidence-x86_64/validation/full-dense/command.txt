@@ -1,0 +1,1 @@
+env JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true scripts/gradle.sh --offline --no-daemon --max-workers=4 installDist test --rerun-tasks 

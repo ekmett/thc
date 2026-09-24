@@ -1,0 +1,1 @@
+PASS doublex2-bytearray: model=4384, native=4384, stages=['pre', 'post'], sourceHashes=20, artifactHashes=9

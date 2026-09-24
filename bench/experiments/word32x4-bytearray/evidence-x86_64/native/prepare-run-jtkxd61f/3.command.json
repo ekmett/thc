@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "compiler/export.sh",
+    "-fplugin-opt=Thc.Plugin:post-tidy",
+    "/home/ekmett/ai/thc-word32x4-bytearray-01a0cdeb/compiler/test-fixtures/SimdWord32X4ByteArray.hs"
+  ],
+  "environment": {
+    "THC_CORE_OUT": "/home/ekmett/ai/thc-word32x4-bytearray-01a0cdeb/build/simd-word32x4-bytearray/post-core",
+    "THC_GHC_OUT": "/home/ekmett/ai/thc-word32x4-bytearray-01a0cdeb/build/simd-word32x4-bytearray/post-ghc",
+    "THC_SOURCE_NOTES": "true"
+  },
+  "log": "/home/ekmett/ai/thc-word32x4-bytearray-01a0cdeb/build/simd-word32x4-bytearray/prepare-run-jtkxd61f/3.log"
+}

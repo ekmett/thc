@@ -70,6 +70,14 @@ internal object CoreInputCalls {
                     visit(expr[3] as List<Any?>, local)
                 }
                 "case" -> {
+                    val read = CoreVectorMemory.readCase(expr, constructors)
+                    if (read != null) {
+                        read.arguments.forEach { visit(it, scope) }
+                        visit(read.body, scope + mapOf(
+                            read.stateBinder to Binding(CoreVectorMemory.stateProof, null),
+                            read.vectorBinder to Binding(read.operation.vectorProof, null)))
+                        return
+                    }
                     visit(expr[1] as List<Any?>, scope)
                     val meta = CoreRepresentations.metadata(expr)
                     val binder = meta?.get("binder") as? Map<String, Any?>

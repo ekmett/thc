@@ -87,17 +87,26 @@ internal object CoreRepresentations {
         (listOf(declared) + alternatives).forEach { aggregate.refine(it) }
     }
     /** Validate every retained proof, including cold branches and unused binders. */
-    fun validateAggregates(bindings: List<Map<String, Any?>>) {
-        fun visit(value: Any?) {
+    fun validateAggregates(bindings: List<Map<String, Any?>>,
+                           constructors: Map<String, Map<String, Any?>> = emptyMap()) {
+        fun visit(value: Any?, path: List<Any>, exemptions: Set<List<Any>>) {
             when (value) {
                 is Map<*, *> -> value.forEach { (key, child) ->
-                    if (key in setOf("rep", "resultRep", "joinResultRep") && child is Map<*, *>) parse(child)
-                    visit(child)
+                    val next = path + (key ?: "<null>")
+                    if (key in setOf("rep", "resultRep", "joinResultRep") && child is Map<*, *> && next !in exemptions) parse(child)
+                    visit(child, next, exemptions)
                 }
-                is List<*> -> value.forEach(::visit)
+                is List<*> -> {
+                    // Only these structural sites are exempt: shared/equal proof maps
+                    // elsewhere (including function results) still use generic parse.
+                    val local = if (CoreVectorMemory.readCase(value, constructors) != null)
+                        exemptions + setOf(path + listOf(1, 6, "rep"), path + listOf(4, "binder", "rep"))
+                    else exemptions
+                    value.forEachIndexed { index, child -> visit(child, path + index, local) }
+                }
             }
         }
-        visit(bindings)
+        visit(bindings, emptyList(), emptySet())
     }
     /** Known host aliases and partial applications retain their remaining ABI. */
     fun knownFunctionSignature(expression: List<Any?>, bindings: List<Map<String, Any?>>): Pair<List<CoreRepresentation>, CoreRepresentation>? {
@@ -123,6 +132,17 @@ internal object CoreRepresentations {
             if (TupleShape.flatten(proof).any { it.primReps == listOf("BoxedRep Nothing") })
                 throw UnsupportedCore("Unsupported Core tuple input with unknown boxed levity")
         } else requireScalar(proof, "argument")
+    }
+    /** Joins retain logical arity; only the exact nullary tuple has no input slot. */
+    fun requireJoinInput(proof: CoreRepresentation) {
+        if (!proof.isEmptyTuple) requireScalar(proof, "join argument")
+    }
+    fun requireJoinArgument(expected: CoreRepresentation, actual: CoreRepresentation) {
+        requireJoinInput(actual)
+        if (expected.isEmptyTuple || actual.isEmptyTuple) {
+            if (!expected.isEmptyTuple || !actual.isEmptyTuple)
+                throw RuntimeFault("Local join requires matching exact empty tuple argument proof")
+        }
     }
     fun requireScalar(proof: CoreRepresentation, boundary: String) {
         requireNoVector(proof, boundary)
@@ -202,7 +222,14 @@ internal object CoreRepresentations {
         }
         return expr.getOrNull(index) as? Map<String, Any?>
     }
-    fun expression(expr: List<Any?>): CoreRepresentation = parse(metadata(expr)?.get("rep"))
+    fun expression(expr: List<Any?>): CoreRepresentation =
+        // Intrinsic literal identities must reach strict primitive validation,
+        // which runs before operand lowering, even after metadata erasure.
+        if (expr.firstOrNull() == "lit") when (expr.getOrNull(1)) {
+            "bignat" -> BigNatLiterals.proof(expr)
+            "int8", "word8", "int16", "word16", "int32", "word32" -> narrowLiteralProof(expr)
+            else -> parse(metadata(expr)?.get("rep"))
+        } else parse(metadata(expr)?.get("rep"))
     /** Narrow literals have intrinsic signed/unsigned identity, not merely a
      * Long carrier. Missing legacy metadata is fine; a contradictory proof is not. */
     fun narrowLiteralProof(expr: List<Any?>): CoreRepresentation {
@@ -212,7 +239,7 @@ internal object CoreRepresentations {
             "int32" -> "Int32Rep"; "word32" -> "Word32Rep"
             else -> throw RuntimeFault("Not a supported narrow literal: ${expr[1]}")
         }
-        val proof = expression(expr)
+        val proof = parse(metadata(expr)?.get("rep"))
         // Export-only identity rewrites retain an explicit unconstrained proof.
         // The literal still supplies its own exact representation; malformed
         // records have already failed parse(), and retained constraints must match.

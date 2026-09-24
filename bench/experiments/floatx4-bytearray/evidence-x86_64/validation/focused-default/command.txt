@@ -1,0 +1,1 @@
+scripts/gradle.sh --offline --no-daemon --max-workers=4 installDist test --tests thc.runtime.FloatVectorStorageTest --tests thc.runtime.FloatVectorMemoryProofTest --tests thc.runtime.SimdFloatByteArrayTest 
