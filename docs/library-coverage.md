@@ -240,3 +240,9 @@ slice does not close the Set/Sequence exception and Typeable frontiers above.
 and `thawArray#` with independent storage and lazy shared references. Public
 STArray construction and Array indexing are covered around the slice operations;
 ordinary public freeze/thaw remains an explicit `arrEleBottom` source frontier.
+
+Managed mutable byte storage also supports `setByteArray#`,
+`copyMutableByteArray#` and `copyMutableByteArrayNonOverlapping#`. The genuine
+public ShortByteString replicate/fold consumer and defined-domain native models
+are described in [mutable byte-array operations](mutable-bytearray-ops.md).
+The immutable-to-mutable `copyByteArray#` keeps its distinct-storage requirement.
