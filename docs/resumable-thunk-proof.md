@@ -21,9 +21,26 @@ thread-local actions are deferred during that short publication. A continuation
 from a different root, or a yield through an uncaptured caller update frame,
 fails closed instead of replaying an earlier effect or leaving a blackhole.
 
-This is a cooperative, single-root proof. It does not deliver asynchronous
-exceptions, capture arbitrary safepoint PCs, or resume nested calls and handler
-frames. The next step is to capture a caller segment when a child yields, then
-compose that segment with the child's continuation up to the thunk update or
-exception handler. Only after those boundaries preserve their live operands,
-locals and mask state can an asynchronous delivery use this mechanism.
+`CallerContinuationProofTest` adds one caller segment. A test-only Bytecode DSL
+`TryCatch` catches the dedicated internal `ThunkSuspended` signal around a
+shared child thunk and yields the caller frame. The signal is an
+`AbstractTruffleException`, never a Haskell `GuestException`; other guest
+failures are rethrown. On the cold resumption path `Force` first completes the
+child, then supplies its answer to the caller continuation. A second child
+yield leaves the caller segment parked; two callers and concurrent readers
+still observe one child effect. If the child instead finishes with a guest
+failure, the resumed caller rethrows and memoizes that failure normally.
+The caller's first invocation is explicitly compiled, and the captured frame
+retains a primitive `Long` operand that was live below the nested call and
+`TryCatch` boundary. The test-only child operation calls a distinct Truffle
+root through `IndirectCallNode`, so its force has a separate `VirtualFrame`
+and ordinary caller entries need no frame materialization. Only the yield
+captures the caller frame. The dependency-resolution path for an already
+suspended thunk is a cold Truffle boundary. Production Core lowering is still
+yield-disabled.
+
+This is a cooperative two-root proof, not `throwTo` support. It does not
+deliver asynchronous exceptions, capture arbitrary safepoint PCs, or compose
+arbitrary nested calls, Haskell handlers and mask state. An uncaptured caller
+still fails closed rather than replaying effects. The next step is a general
+caller-segment chain through those update and handler boundaries.

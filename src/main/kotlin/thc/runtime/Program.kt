@@ -13,6 +13,7 @@ import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.TruffleSafepoint
 import com.oracle.truffle.api.bytecode.ContinuationResult
 import com.oracle.truffle.api.frame.FrameDescriptor
+import com.oracle.truffle.api.frame.MaterializedFrame
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.*
 import com.oracle.truffle.api.profiles.BranchProfile
@@ -117,7 +118,10 @@ private data class MemoizedGuestFailure(val payload: Any?, val location: Node)
 /** Async delivery must carry its origin separately from its guest payload. */
 internal class AsyncThunkUnwind(val payload: Any?) : RuntimeException("Asynchronous guest unwind")
 /** A root-local bytecode yield hands the shared thunk to another evaluator. */
-internal class ThunkSuspended(val thunk: Thunk) : com.oracle.truffle.api.nodes.ControlFlowException()
+internal class ThunkSuspended(val thunk: Thunk) :
+    com.oracle.truffle.api.exception.AbstractTruffleException("Internal bytecode thunk suspension")
+/** Cold caller-segment input distinguishes a child result from its guest failure. */
+internal class ChildResume(val value: Any?, val failure: GuestException?)
 internal class Metrics(val enabled: Boolean) {
     private val thunkCounts = linkedMapOf<String, Long>()
     @CompilerDirectives.TruffleBoundary @Synchronized fun recordThunk(label: String) {
@@ -299,6 +303,13 @@ internal class Force(private val metrics: Metrics) : Node() {
                 3 -> rethrowFailure(original)
                 4 -> fault("Interrupted thunk has no resumable continuation")
             }
+            // A caller continuation yielded because its child thunk suspended.
+            // Finish the shared child before claiming the caller: while the child
+            // is still suspended, other threads may also enter this caller.
+            val observed = if (original.state == 5) original.value as? ContinuationResult else null
+            val child = (observed?.result as? ThunkSuspended)?.thunk
+            if (child === original) fault("Suspended thunk depends on itself")
+            val resumeValue = if (child != null) resumeChild(frame.materialize(), child) else Unit
             // A volatile state read alone cannot claim an unevaluated thunk:
             // another thread can enter during the single-threaded transition.
             var continuation: ContinuationResult? = null
@@ -307,7 +318,7 @@ internal class Force(private val metrics: Metrics) : Node() {
                 val claim = synchronized(original.monitor) {
                     when (original.state) {
                         0 -> { original.owner = Thread.currentThread(); original.state = 1; claimedHere = true; 0 }
-                        5 -> {
+                        5 -> if (observed == null || original.value !== observed) 3 else {
                             continuation = original.value as? ContinuationResult
                                 ?: fault("Suspended thunk has no bytecode continuation")
                             original.value = null // One owner consumes the one-shot continuation.
@@ -321,7 +332,7 @@ internal class Force(private val metrics: Metrics) : Node() {
                     }
                 }
                 when (claim) {
-                    0 -> return evaluateOwned(original, continuation)
+                    0 -> return evaluateOwned(original, continuation, resumeValue)
                     1 -> awaitOwner(original)
                     2 -> { if (metrics.enabled) metrics.incrementBlackholes(); fault("Blackhole: cyclic thunk entered while evaluating") }
                 }
@@ -334,7 +345,16 @@ internal class Force(private val metrics: Metrics) : Node() {
         }
     }
 
-    private fun evaluateOwned(thunk: Thunk, continuation: ContinuationResult?): Any? {
+    @CompilerDirectives.TruffleBoundary
+    private fun resumeChild(frame: MaterializedFrame, child: Thunk): Any? {
+        // Only a parked caller reaches this cold path. A child guest failure
+        // must reenter the caller's captured handler rather than strand its
+        // update or replay effects. Keep recursion out of ordinary JIT graphs.
+        return try { ChildResume(execute(frame, child), null) }
+        catch (failure: GuestException) { ChildResume(null, failure) }
+    }
+
+    private fun evaluateOwned(thunk: Thunk, continuation: ContinuationResult?, resumeValue: Any?): Any? {
         try {
             if (metrics.enabled && continuation == null) {
                 val target = thunk.target ?: fault("Unevaluated thunk has no body")
@@ -342,7 +362,7 @@ internal class Force(private val metrics: Metrics) : Node() {
             }
             val result = try {
                 if (continuation == null) calls.call(thunk.target ?: fault("Unevaluated thunk has no body"), thunk.environment)
-                else continuation.continueWith(Unit)
+                else continuation.continueWith(resumeValue)
             }
             catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
             if (result is ContinuationResult) {
