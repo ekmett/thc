@@ -86,14 +86,15 @@ entries Bit = zipWith makeBit [0 ..] choices
     choices = [(op, width) | (op, widths) <-
       [("popCnt", [8,16,32,64]), ("clz", [8,16,32,64]),
        ("ctz", [8,16,32,64]), ("byteSwap", [16,32,64,0]),
-       ("bitReverse", [8,16,32,64,0])], width <- widths]
+       ("bitReverse", [8,16,32,64,0]), ("narrowWord", [8,16,32])], width <- widths]
     makeBit index (op, width) =
       let suffix = if width == 0 then "Word" else show width
           actualWidth = if width == 0 then 64 else width
-          primitive = op ++ (if width == 0 then "" else show width) ++ "#"
+          name = if op == "narrowWord" then "narrow" ++ show width ++ "Word" else op ++ suffix
+          primitive = if op == "narrowWord" then name ++ "#" else op ++ (if width == 0 then "" else show width) ++ "#"
           argument = if width == 64 then "Word64Rep" else "WordRep"
           result = if width == 64 && op `elem` ["byteSwap", "bitReverse"] then "Word64Rep" else "WordRep"
-      in makeEntry index (op ++ suffix) (Just primitive) actualWidth 1 op [argument] result True
+      in makeEntry index name (Just primitive) actualWidth 1 op [argument] result True
 entries IntegerWord = zipWith makeWord [0 ..] choices
   where
     choices = [(op, 64) | op <- ["quot", "rem", "gt", "ge"]] ++
@@ -104,12 +105,25 @@ entries IntegerWord = zipWith makeWord [0 ..] choices
           arity = if op == "not" then 1 else 2
       in makeEntry index name (Just primitive) width arity op (replicate arity "WordRep") "WordRep" True
 entries SignedNarrow = zipWith makeSigned [0 ..]
-  [(op, width) | op <- ["negate", "plus", "sub", "times", "quot", "rem", "eq", "ne", "lt", "le", "gt", "ge"], width <- [8,16,32]]
+  [(op, width) | op <- ["negate", "plus", "sub", "times", "quot", "rem", "eq", "ne", "lt", "le", "gt", "ge"], width <- [8,16,32]] ++
+  zipWith makeCast [36 ..] [(direction, width) | width <- [8,16,32], direction <- ["intToWord", "wordToInt"]] ++
+  zipWith makeShift [42 ..] [(op, width) | width <- [8,16,32], op <- ["shiftL", "shiftRA"]]
   where
     makeSigned index (op, width) =
       let arity = if op == "negate" then 1 else 2
       in makeEntry index (op ++ "Int" ++ show width) (Just (op ++ "Int" ++ show width ++ "#"))
            width arity op (replicate arity "IntRep") "IntRep" False
+    makeCast index (direction, width) =
+      let signed = direction == "intToWord"
+          name = (if signed then "int" else "word") ++ show width ++
+                 "To" ++ (if signed then "Word" else "Int") ++ show width
+          argument = (if signed then "Int" else "Word") ++ show width ++ "Rep"
+          result = (if signed then "Word" else "Int") ++ show width ++ "Rep"
+      in makeEntry index name (Just (name ++ "#")) width 1 direction [argument] result signed
+    makeShift index (op, width) =
+      let name = "uncheckedShift" ++ (if op == "shiftL" then "L" else "RA") ++ "Int" ++ show width
+          rep = "Int" ++ show width ++ "Rep"
+      in makeEntry index name (Just (name ++ "#")) width 2 op [rep, "IntRep"] rep False
 entries Explicit64 = zipWith make64 [0 ..] definitions
   where
     unary name arg result op unsigned = (name, [arg], result, op, unsigned, True)
@@ -222,7 +236,11 @@ operands IntegerWord e
                           [(x,y) | x <- values, y <- [x-1,x,x+1], y >= 0, y < pow2 width])
 operands SignedNarrow e
   | entryArity e == 1 = [(x,0) | x <- Set.toAscList $ Set.union
-      (Set.fromList values) (if width == 8 then Set.fromList [-128 .. 127] else Set.empty)]
+      (Set.fromList values) (if width == 8 then Set.fromList
+        (if entryOperation e == "wordToInt" then [0 .. 255] else [-128 .. 127]) else Set.empty)]
+  | entryOperation e `elem` ["shiftL", "shiftRA"] =
+      [(x,shift) | x <- if width == 8 then [-128 .. 127] else values,
+       shift <- [0 .. toInteger width - 1]]
   | otherwise = filter defined $ Set.toAscList pairs
   where
     width = entryWidth e
@@ -743,9 +761,12 @@ preparePinnedPointers root = do
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
       "compiler/export.sh" (options ++ ["-fplugin-opt=THC.Plugin:closure=pointerRoundtrip",
         "-fplugin-opt=THC.Plugin:closure=pointerArrayRoundtrip",
-        "-fplugin-opt=THC.Plugin:closure=pointerOrder", source]) ""
+        "-fplugin-opt=THC.Plugin:closure=pointerOrder",
+        "-fplugin-opt=THC.Plugin:closure=char8Roundtrip",
+        "-fplugin-opt=THC.Plugin:closure=byte8Roundtrip", source]) ""
     _ <- run root [] "python3" ["scripts/audit-core.py", "--entry", "pointerRoundtrip",
-      "--entry", "pointerArrayRoundtrip", "--entry", "pointerOrder",
+      "--entry", "pointerArrayRoundtrip", "--entry", "pointerOrder", "--entry", "char8Roundtrip",
+      "--entry", "byte8Roundtrip",
       "--output", directory </> stage </> "audit.json",
       core </> "PinnedPointerCellsAudit.json", core </> "THC.InterfaceClosure.json"] ""
     pure ()
@@ -763,7 +784,7 @@ preparePinnedPointers root = do
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= version,
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]
-  putStrLn "pinned-pointer-cells: 7 native rows, three strict pre/post Core roots"
+  putStrLn "pinned-pointer-cells: 7 native rows, five strict pre/post Core roots"
 
 main :: IO ()
 main = do

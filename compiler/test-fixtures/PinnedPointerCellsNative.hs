@@ -13,4 +13,6 @@ main = getContents >>= mapM_ answer . lines
     answer text = case read text of
       I# raw -> putStrLn (text ++ "\t" ++ show (I# (Cells.pointerRoundtrip raw)) ++
         "\t" ++ show (I# (Cells.pointerArrayRoundtrip raw)) ++
-        "\t" ++ show (I# (Cells.pointerOrder raw)))
+        "\t" ++ show (I# (Cells.pointerOrder raw)) ++
+        "\t" ++ show (I# (Cells.char8Roundtrip raw)) ++
+        "\t" ++ show (I# (Cells.byte8Roundtrip raw)))

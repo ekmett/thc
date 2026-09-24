@@ -532,6 +532,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadInt8OffAddr {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress address, long offset, Object state, @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            long value = (byte) address.readWord8(offset);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, value);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ReadAddrOffAddr {
         @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
                 ManagedAddress address, long offset, Object state, @Bind("$node") Node node) {
@@ -1347,9 +1358,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             throw fail("Expected primitive Long");
         }
     }
-    @Operation public static final class AddressIndexChar {
-        @Specialization public static long index(ManagedAddress address, long displacement) { return address.indexChar(displacement); }
-        @Fallback public static long invalid(Object address, Object displacement) {
+    @Operation @ConstantOperand(type = boolean.class, name = "signed")
+    public static final class AddressIndexByte {
+        @Specialization public static long index(boolean signed, ManagedAddress address, long displacement) {
+            long value = address.readWord8(displacement);
+            return signed ? (byte) value : value;
+        }
+        @Fallback public static long invalid(boolean signed, Object address, Object displacement) {
             if (!(address instanceof ManagedAddress)) throw fail("Expected a managed literal Addr#");
             throw fail("Expected primitive Long");
         }
@@ -2439,6 +2454,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class QuotientNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(signedNarrow(x, shift) / signedNarrow(y, shift), shift); } }
     @Operation @ConstantOperand(type = int.class, name = "shift")
     public static final class RemainderNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(signedNarrow(x, shift) % signedNarrow(y, shift), shift); } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class ShiftLeftNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x << (int) y, shift); } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class ShiftRightNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x, shift) >> (int) y; } }
     @Operation @ConstantOperand(type = int.class, name = "shift")
     public static final class EqualNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x, shift) == signedNarrow(y, shift) ? 1L : 0L; } }
     @Operation @ConstantOperand(type = int.class, name = "shift")

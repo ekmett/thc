@@ -1345,7 +1345,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     when (operation) {
                         PinnedMemoryOp.NEW -> e.builder.beginNewPinnedByteArray(destination[0])
                         PinnedMemoryOp.NEW_ALIGNED -> e.builder.beginNewAlignedPinnedByteArray(destination[0])
-                        PinnedMemoryOp.READ -> e.builder.beginReadWord8OffAddr(destination[0])
+                        PinnedMemoryOp.READ, PinnedMemoryOp.READ_CHAR -> e.builder.beginReadWord8OffAddr(destination[0])
+                        PinnedMemoryOp.READ_INT8 -> e.builder.beginReadInt8OffAddr(destination[0])
                         PinnedMemoryOp.READ_ADDR -> e.builder.beginReadAddrOffAddr(destination[0])
                         PinnedMemoryOp.READ_ADDR_ARRAY -> e.builder.beginReadAddrArray(destination[0])
                         PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
@@ -1357,7 +1358,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     when (operation) {
                         PinnedMemoryOp.NEW -> e.builder.endNewPinnedByteArray()
                         PinnedMemoryOp.NEW_ALIGNED -> e.builder.endNewAlignedPinnedByteArray()
-                        PinnedMemoryOp.READ -> e.builder.endReadWord8OffAddr()
+                        PinnedMemoryOp.READ, PinnedMemoryOp.READ_CHAR -> e.builder.endReadWord8OffAddr()
+                        PinnedMemoryOp.READ_INT8 -> e.builder.endReadInt8OffAddr()
                         PinnedMemoryOp.READ_ADDR -> e.builder.endReadAddrOffAddr()
                         PinnedMemoryOp.READ_ADDR_ARRAY -> e.builder.endReadAddrArray()
                         PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
@@ -1396,8 +1398,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD -> e.builder.beginReadIntArray(destination[0])
                         ByteArrayOp.READ_DOUBLE -> e.builder.beginReadDoubleArray(destination[0])
                         ByteArrayOp.READ_FLOAT -> e.builder.beginReadFloatArray(destination[0])
-                        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8 ->
-                            e.builder.beginReadByteArray(operation == ByteArrayOp.READ_WORD8, destination[0])
+                        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8, ByteArrayOp.READ_CHAR ->
+                            e.builder.beginReadByteArray(operation != ByteArrayOp.READ_INT8, destination[0])
                         ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16 ->
                             e.builder.beginReadInt16Array(operation == ByteArrayOp.READ_WORD16, destination[0])
                         ByteArrayOp.READ_INT32, ByteArrayOp.READ_WORD32 ->
@@ -1413,7 +1415,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD -> e.builder.endReadIntArray()
                         ByteArrayOp.READ_DOUBLE -> e.builder.endReadDoubleArray()
                         ByteArrayOp.READ_FLOAT -> e.builder.endReadFloatArray()
-                        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8 -> e.builder.endReadByteArray()
+                        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8, ByteArrayOp.READ_CHAR -> e.builder.endReadByteArray()
                         ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16 -> e.builder.endReadInt16Array()
                         ByteArrayOp.READ_INT32, ByteArrayOp.READ_WORD32 -> e.builder.endReadInt32Array()
                         else -> error("Scalar ByteArray operation")
@@ -1425,9 +1427,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.SET -> e.builder.beginSetByteArray()
                         ByteArrayOp.COPY_MUTABLE, ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING ->
                             e.builder.beginCopyMutableByteArray(operation == ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING)
-                        ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8 -> e.builder.beginWriteByteArray()
+                        ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8, ByteArrayOp.WRITE_CHAR -> e.builder.beginWriteByteArray()
                         ByteArrayOp.SIZE, ByteArrayOp.SIZE_MUTABLE -> e.builder.beginSizeByteArray()
-                        ByteArrayOp.INDEX -> e.builder.beginIndexByteArray()
+                        ByteArrayOp.INDEX, ByteArrayOp.INDEX_CHAR -> e.builder.beginIndexByteArray()
                         ByteArrayOp.INDEX_INT8 -> e.builder.beginIndexSignedByteArray()
                         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD -> e.builder.beginWriteIntArray()
                         ByteArrayOp.INDEX_INT, ByteArrayOp.INDEX_WORD -> e.builder.beginIndexIntArray()
@@ -1449,9 +1451,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.COPY -> e.builder.endCopyByteArray()
                         ByteArrayOp.SET -> e.builder.endSetByteArray()
                         ByteArrayOp.COPY_MUTABLE, ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING -> e.builder.endCopyMutableByteArray()
-                        ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8 -> e.builder.endWriteByteArray()
+                        ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8, ByteArrayOp.WRITE_CHAR -> e.builder.endWriteByteArray()
                         ByteArrayOp.SIZE, ByteArrayOp.SIZE_MUTABLE -> e.builder.endSizeByteArray()
-                        ByteArrayOp.INDEX -> e.builder.endIndexByteArray()
+                        ByteArrayOp.INDEX, ByteArrayOp.INDEX_CHAR -> e.builder.endIndexByteArray()
                         ByteArrayOp.INDEX_INT8 -> e.builder.endIndexSignedByteArray()
                         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD -> e.builder.endWriteIntArray()
                         ByteArrayOp.INDEX_INT, ByteArrayOp.INDEX_WORD -> e.builder.endIndexIntArray()
@@ -2436,6 +2438,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "leInt8#", "leInt16#", "leInt32#" -> "LessEqualNarrowInt"
             "gtInt8#", "gtInt16#", "gtInt32#" -> "GreaterThanNarrowInt"
             "geInt8#", "geInt16#", "geInt32#" -> "GreaterEqualNarrowInt"
+            "uncheckedShiftLInt8#", "uncheckedShiftLInt16#", "uncheckedShiftLInt32#" -> "ShiftLeftNarrowInt"
+            "uncheckedShiftRAInt8#", "uncheckedShiftRAInt16#", "uncheckedShiftRAInt32#" -> "ShiftRightNarrowInt"
 
             "quotWord#" -> "QuotientUnsigned"
             "remWord#" -> "RemainderUnsigned"
@@ -2484,17 +2488,19 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "uncheckedIShiftRA#" -> "ShiftRight"
             "uncheckedIShiftRL#", "uncheckedShiftRL#" -> "ShiftRightUnsigned"
             // Match AST sign-normalized Long carriers in both conversion directions.
-            "narrow8Int#", "intToInt8#", "int8ToInt#" -> "Narrow8"
-            "narrow16Int#", "intToInt16#", "int16ToInt#" -> "Narrow16"
-            "narrow32Int#", "intToInt32#", "int32ToInt#" -> "Narrow32"
-            "wordToWord8#", "word8ToWord#", "wordToWord16#", "word16ToWord#", "wordToWord32#", "word32ToWord#" -> "NarrowWord"
+            "narrow8Int#", "intToInt8#", "int8ToInt#", "word8ToInt8#" -> "Narrow8"
+            "narrow16Int#", "intToInt16#", "int16ToInt#", "word16ToInt16#" -> "Narrow16"
+            "narrow32Int#", "intToInt32#", "int32ToInt#", "word32ToInt32#" -> "Narrow32"
+            "wordToWord8#", "word8ToWord#", "int8ToWord8#", "wordToWord16#", "word16ToWord#", "int16ToWord16#",
+            "wordToWord32#", "word32ToWord#", "int32ToWord32#",
+            "narrow8Word#", "narrow16Word#", "narrow32Word#" -> "NarrowWord"
             "int2Word#", "word2Int#", "ord#", "chr#", "intToInt64#", "int64ToInt#" -> "Identity"
             "raise#" -> "Raise"
             "plusAddr#" -> "AddressPlus"
             "eqAddr#" -> "AddressEqual"
             "neAddr#" -> "AddressNotEqual"
             "ltAddr#", "leAddr#", "gtAddr#", "geAddr#" -> "AddressOrder"
-            "indexCharOffAddr#" -> "AddressIndexChar"
+            "indexCharOffAddr#", "indexWord8OffAddr#", "indexInt8OffAddr#" -> "AddressIndexByte"
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
         val unary = operation in setOf("PopulationCountWidth", "CountLeadingZerosWidth", "CountTrailingZerosWidth", "ByteSwapWidth", "BitReverseWidth", "NegateNarrowInt", "BitNotNarrowWord", "Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount",
@@ -2516,6 +2522,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "LessEqualNarrowInt" -> b.beginLessEqualNarrowInt(intShift)
                 "GreaterThanNarrowInt" -> b.beginGreaterThanNarrowInt(intShift)
                 "GreaterEqualNarrowInt" -> b.beginGreaterEqualNarrowInt(intShift)
+                "ShiftLeftNarrowInt" -> b.beginShiftLeftNarrowInt(intShift)
+                "ShiftRightNarrowInt" -> b.beginShiftRightNarrowInt(intShift)
                 "QuotientUnsigned" -> b.beginQuotientUnsigned()
                 "RemainderUnsigned" -> b.beginRemainderUnsigned()
                 "GreaterThanUnsigned" -> b.beginGreaterThanUnsigned()
@@ -2553,7 +2561,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "ShiftLeft" -> b.beginShiftLeft(); "ShiftRight" -> b.beginShiftRight(); "ShiftRightUnsigned" -> b.beginShiftRightUnsigned()
                 "Narrow8" -> b.beginNarrow8(); "Narrow16" -> b.beginNarrow16(); "Narrow32" -> b.beginNarrow32()
                 "NarrowWord" -> b.beginNarrowWord(wordMask)
-                "Raise" -> b.beginRaise(); "AddressPlus" -> b.beginAddressPlus(); "AddressIndexChar" -> b.beginAddressIndexChar()
+                "Raise" -> b.beginRaise(); "AddressPlus" -> b.beginAddressPlus()
+                "AddressIndexByte" -> b.beginAddressIndexByte(name == "indexInt8OffAddr#")
                 "AddressEqual" -> b.beginAddressEqual(); "AddressNotEqual" -> b.beginAddressNotEqual()
                 "AddressOrder" -> b.beginAddressOrder(when (name) {
                     "ltAddr#" -> ManagedAddressOrder.LT
@@ -2576,6 +2585,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "LessEqualNarrowInt" -> b.endLessEqualNarrowInt()
                 "GreaterThanNarrowInt" -> b.endGreaterThanNarrowInt()
                 "GreaterEqualNarrowInt" -> b.endGreaterEqualNarrowInt()
+                "ShiftLeftNarrowInt" -> b.endShiftLeftNarrowInt()
+                "ShiftRightNarrowInt" -> b.endShiftRightNarrowInt()
                 "QuotientUnsigned" -> b.endQuotientUnsigned()
                 "RemainderUnsigned" -> b.endRemainderUnsigned()
                 "GreaterThanUnsigned" -> b.endGreaterThanUnsigned()
@@ -2613,7 +2624,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "ShiftLeft" -> b.endShiftLeft(); "ShiftRight" -> b.endShiftRight(); "ShiftRightUnsigned" -> b.endShiftRightUnsigned()
                 "Narrow8" -> b.endNarrow8(); "Narrow16" -> b.endNarrow16(); "Narrow32" -> b.endNarrow32()
                 "NarrowWord" -> b.endNarrowWord()
-                "Raise" -> b.endRaise(); "AddressPlus" -> b.endAddressPlus(); "AddressIndexChar" -> b.endAddressIndexChar()
+                "Raise" -> b.endRaise(); "AddressPlus" -> b.endAddressPlus(); "AddressIndexByte" -> b.endAddressIndexByte()
                 "AddressEqual" -> b.endAddressEqual(); "AddressNotEqual" -> b.endAddressNotEqual()
                 "AddressOrder" -> b.endAddressOrder()
             }
