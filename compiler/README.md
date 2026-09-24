@@ -23,6 +23,14 @@ general primop partial applications or establish support for full `bracket`.
 `cabal run exe:thc-fixtures --offline -- mask-functions` prepares the native and
 pre/post Core evidence consumed by `thc.runtime.MaskFunctionNativeTest`.
 
+Erasing GHC's genuine `lazy` identity retains representation evidence only when
+GHC `eqType` confirms the original and lowered expression have the same type.
+This preserves exact `MutVar#`/`State#` proofs inside lazy returned IO actions,
+such as the original encoding module's `mkGlobal`. It introduces no evaluation
+or strictness override and does not certify unary-class representation erasure.
+The existing `MutVarAudit` native suite exercises public IORef actions returned
+through `unsafePerformIO`, including an overwritten bottom payload.
+
 A module object carries `schema`, `ghc`, `module`, `unit`, `boundary`, `bindings`, `constructors`, and top-level `groups`. Top-level and local let bindings have `{id,name,type,lifted,arity,info,rep,expr}`. Top-level exported/external IDs use `unit:Module.occ`; private/local IDs additionally retain the GHC unique and a module namespace. A unique is not stable across recompilations. GHC units are part of identities so equal module names in different packages remain distinct.
 
 Expressions are tagged arrays:

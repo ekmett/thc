@@ -6,7 +6,9 @@ module MutVarAudit where
 
 import Control.Monad.ST (ST, runST)
 import Data.STRef
+import Data.IORef
 import GHC.Exts
+import System.IO.Unsafe (unsafePerformIO)
 
 data Box = Box Int
 
@@ -44,6 +46,23 @@ lazyRef raw = case runST (do
     modifySTRef r (\(Box n) -> Box (n + 5))
     Box value <- readSTRef r
     pure value) of I# value -> value
+
+-- As in GHC.Internal.IO.Encoding.mkGlobal, unsafePerformIO returns a lazy
+-- pair of IO actions. The retained lazy identity must not erase the exact
+-- MutVar#/State# evidence inside either action or force the stored bottom.
+{-# OPAQUE freshActions #-}
+freshActions :: a -> (IO a, a -> IO ())
+freshActions initial = unsafePerformIO $ do
+    reference <- newIORef initial
+    pure (readIORef reference, writeIORef reference)
+
+{-# OPAQUE lazyIORef #-}
+lazyIORef :: Int# -> Int#
+lazyIORef raw = case freshActions bottom of
+    (readAction, writeAction) -> case unsafePerformIO (do
+        writeAction (Box (I# raw))
+        Box value <- readAction
+        pure (value + 17)) of I# value -> value
 
 -- An already-read closure retains its value after overwriting the cell.
 {-# OPAQUE closureRef #-}
