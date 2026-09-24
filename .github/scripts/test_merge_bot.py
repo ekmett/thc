@@ -4,7 +4,7 @@ from urllib.error import HTTPError
 
 from merge_bot import (ACTIONS_APP, CHECKS, REQUIRED_STATUS, BUILD_GATE, FAST_GATE, PR_GATE,
                        build_result, main_build_health, owner_authorized,
-                       publish_run as publish_selected_run, reconcile, workflow_result)
+                       publish_run as publish_selected_run, reconcile, workflow_result, dispatch, ensure_main_checks)
 
 
 def publish_run(api, run_id):
@@ -14,7 +14,7 @@ def publish_run(api, run_id):
 
 def pull(number=1):
     return {"number": number, "state": "open", "draft": False,
-            "base": {"ref": "main", "repo": {"full_name": "ekmett/thc"}},
+            "base": {"ref": "main", "sha": "base", "repo": {"full_name": "ekmett/thc"}},
             "head": {"sha": "head", "ref": "codex/change", "repo": {"full_name": "ekmett/thc"}},
             "labels": [{"name": "auto-merge"}], "mergeable": True, "mergeable_state": "clean"}
 
@@ -583,6 +583,10 @@ class FastAPI(FakeAPI):
         self.jobs = [{"name": n, "status": "completed", "conclusion": "success"}
                      for n in sorted(FAST_GATE.checks)]
         self.full_runs = [main_build()]
+        self.main_fast_runs = [{**main_build(200), "workflow_id": 18}]
+        self.commit_parents = {"base": "parent", "merged": "base"}
+        self.dispatch_errors = {}
+        self.after_dispatch = lambda _: None
         self.full_jobs = jobs()
         self.prior_attempts = {}
         self.comparisons = {}
@@ -597,6 +601,9 @@ class FastAPI(FakeAPI):
             self.reads.append(path)
             if path == "actions/workflows/fast.yml":
                 return {"id": 18}
+            if path.startswith("commits/"):
+                sha = path.split("/")[1]
+                return {"sha": sha, "parents": [{"sha": self.commit_parents[sha]}]}
             if path in self.comparisons:
                 return self.comparisons[path]
             if path.startswith("actions/runs/"):
@@ -611,15 +618,31 @@ class FastAPI(FakeAPI):
             result["sha"] = "merged"
             self.after_merge()
             return result
-        if method == "POST" and path == "actions/workflows/build.yml/dispatches" and self.dispatch_error:
-            self.mutations.append((method, path, body))
-            raise self.dispatch_error
+        if method == "POST" and path.endswith("/dispatches"):
+            error = self.dispatch_errors.get(path)
+            if path == "actions/workflows/build.yml/dispatches":
+                error = error or self.dispatch_error
+            if error:
+                self.mutations.append((method, path, body))
+                raise error
+            result = super().call(method, path, body)
+            if body["ref"] == "main":
+                fast = path == "actions/workflows/fast.yml/dispatches"
+                runs = self.main_fast_runs if fast else self.full_runs
+                run = main_build((200 if fast else 100) + len(runs), body["inputs"]["expected_sha"],
+                                 event="workflow_dispatch", minute=2)
+                run.update(workflow_id=18 if fast else 17, status="queued", conclusion=None)
+                runs.append(run)
+            self.after_dispatch(path)
+            return result
         return super().call(method, path, body)
 
     def pages(self, path, key=None):
         if path == "actions/workflows/build.yml/runs?branch=main":
             self.on_main_runs()
             return copy.deepcopy(self.full_runs)
+        if path == "actions/workflows/fast.yml/runs?branch=main":
+            return copy.deepcopy(self.main_fast_runs)
         if path.startswith("actions/workflows/fast.yml/runs?"):
             return copy.deepcopy(self.runs)
         if path.endswith("/jobs") and int(path.split("/")[2]) >= 100:
@@ -646,7 +669,8 @@ class FastGateTest(unittest.TestCase):
         self.run_bot(api)
         self.assertEqual(api.actions, [
             ("PUT", "pulls/1/merge", {"sha": "head", "merge_method": "squash"}),
-            ("POST", "actions/workflows/build.yml/dispatches", {"ref": "main", "inputs": {"expected_sha": "merged"}})])
+            ("POST", "actions/workflows/build.yml/dispatches", {"ref": "main", "inputs": {"expected_sha": "merged"}}),
+            ("POST", "actions/workflows/fast.yml/dispatches", {"ref": "main", "inputs": {"expected_sha": "merged", "base_sha": "base"}})])
         self.assertIn("Fast checks", api.statuses[0]["description"])
         self.assertNotIn("head", api.actions[-1][2]["inputs"]["expected_sha"])
 
@@ -685,8 +709,87 @@ class FastGateTest(unittest.TestCase):
     def test_bot_authored_branch_update_dispatches_fast_exact_new_head(self):
         api = FastAPI(); api.behind = 1; self.run_bot(api)
         self.assertEqual(api.actions, [("PUT", "pulls/1/update-branch", {"expected_head_sha": "head"}),
-            ("POST", "actions/workflows/fast.yml/dispatches", {"ref": "codex/change", "inputs": {"expected_sha": "updated"}})])
+            ("POST", "actions/workflows/fast.yml/dispatches", {"ref": "codex/change", "inputs": {"expected_sha": "updated", "base_sha": "base"}})])
         self.assertEqual(api.statuses[0]["state"], "pending")
+
+    def test_missing_fast_dispatch_carries_verified_base_and_exact_head(self):
+        api = FastAPI(); api.runs = []
+        self.run_bot(api)
+        self.assertEqual(api.actions, [("POST", "actions/workflows/fast.yml/dispatches", {
+            "ref": "codex/change", "inputs": {"expected_sha": "head", "base_sha": "base"}})])
+
+    def test_fast_dispatch_rejects_changed_consent_head_base_or_ancestry(self):
+        mutations = [lambda a: a.pr.update(labels=[]), lambda a: a.pr["head"].update(sha="moved"),
+                     lambda a: a.pr["base"].update(sha="stale"), lambda a: setattr(a, "behind", 1)]
+        for mutation in mutations:
+            api = FastAPI(); original = copy.deepcopy(api.pr)
+            api.before_pr_read = lambda _: mutation(api)
+            self.assertFalse(dispatch(api, original))
+            self.assertEqual(api.mutations, [])
+
+    def test_both_missing_main_workflows_recover_independently_with_parent_base(self):
+        for failed_workflow in ("build.yml", "fast.yml"):
+            with self.subTest(failed=failed_workflow):
+                api = FastAPI(); api.prs = []; api.full_runs = []; api.main_fast_runs = []
+                path = f"actions/workflows/{failed_workflow}/dispatches"
+                error = HTTPError("", 503, "unavailable", {}, None); self.addCleanup(error.close)
+                api.dispatch_errors[path] = error
+                with self.assertRaises(HTTPError): self.run_bot(api)
+                self.assertEqual(len(api.actions), 2)
+                other = api.main_fast_runs if failed_workflow == "build.yml" else api.full_runs
+                self.assertEqual(len(other), 1)
+                api.dispatch_errors = {}; before = len(api.actions)
+                self.run_bot(api)
+                self.assertEqual([action[1] for action in api.actions[before:]], [path])
+                before = len(api.actions); self.run_bot(api)
+                self.assertEqual(len(api.actions), before)
+                fast_dispatch = next(body for _, route, body in api.actions if route.endswith("fast.yml/dispatches"))
+                self.assertEqual(fast_dispatch, {"ref": "main", "inputs": {"expected_sha": "base", "base_sha": "parent"}})
+
+    def test_failed_postmerge_fast_dispatch_recovers_without_duplicate_build(self):
+        api = FastAPI()
+        error = HTTPError("", 503, "unavailable", {}, None); self.addCleanup(error.close)
+        path = "actions/workflows/fast.yml/dispatches"
+        api.dispatch_errors[path] = error
+        with self.assertRaises(HTTPError): self.run_bot(api)
+        self.assertEqual(api.base, "merged")
+        self.assertEqual(api.actions[-2][1], "actions/workflows/build.yml/dispatches")
+        self.assertEqual(api.actions[-1][1], path)
+        api.prs = []; api.dispatch_errors = {}; before = len(api.actions)
+        self.run_bot(api)
+        self.assertEqual(api.actions[before:], [("POST", path, {
+            "ref": "main", "inputs": {"expected_sha": "merged", "base_sha": "base"}})])
+
+    def test_missing_main_fast_starts_cache_work_without_holding_green_pr(self):
+        api = FastAPI(); api.main_fast_runs = []
+        self.run_bot(api)
+        self.assertEqual(api.actions[0], ("POST", "actions/workflows/fast.yml/dispatches", {
+            "ref": "main", "inputs": {"expected_sha": "base", "base_sha": "parent"}}))
+        self.assertTrue(any(path.endswith("/merge") for _, path, _ in api.actions))
+
+    def test_pending_or_failed_main_fast_neither_duplicates_dispatch_nor_holds_pr(self):
+        for status, conclusion in (("queued", None), ("completed", "failure")):
+            api = FastAPI(); api.main_fast_runs[0].update(status=status, conclusion=conclusion)
+            self.run_bot(api)
+            self.assertTrue(any(path.endswith("/merge") for _, path, _ in api.actions))
+            dispatches = [body for _, path, body in api.actions if path.endswith("fast.yml/dispatches")]
+            self.assertEqual(dispatches, [{"ref": "main", "inputs": {"expected_sha": "merged", "base_sha": "base"}}])
+
+    def test_wrong_source_main_fast_cannot_suppress_cache_recovery(self):
+        for mutation in (lambda r: r.update(event="pull_request"), lambda r: r.update(workflow_id=17),
+                         lambda r: r.update(head_branch="feature"),
+                         lambda r: r.update(head_repository={"full_name": "outsider/thc"})):
+            api = FastAPI(); api.prs = []; mutation(api.main_fast_runs[0])
+            self.run_bot(api)
+            self.assertEqual(api.actions, [("POST", "actions/workflows/fast.yml/dispatches", {
+                "ref": "main", "inputs": {"expected_sha": "base", "base_sha": "parent"}})])
+
+    def test_main_advance_between_dispatches_does_not_seed_wrong_revision(self):
+        api = FastAPI(); api.prs = []; api.full_runs = []; api.main_fast_runs = []
+        api.after_dispatch = lambda _: setattr(api, "base", "advanced")
+        self.run_bot(api)
+        self.assertEqual(api.actions, [("POST", "actions/workflows/build.yml/dispatches", {
+            "ref": "main", "inputs": {"expected_sha": "base"}})])
 
     def test_fast_preserves_owner_head_base_and_final_attempt_checks(self):
         mutations = [lambda a: a.events[0]["actor"].update(login="collaborator"),
@@ -814,7 +917,7 @@ class FastGateTest(unittest.TestCase):
         api = FastAPI(); api.after_merge = lambda: setattr(api, "base", "maintainer-push")
         messages = self.run_bot(api)
         self.assertEqual(api.actions, [("PUT", "pulls/1/merge", {"sha": "head", "merge_method": "squash"})])
-        self.assertIn("newer push owns full Build", messages[-1])
+        self.assertIn("main advanced", messages[-1])
 
     def test_missing_main_baseline_starts_full_work_without_pretending_success(self):
         api = FastAPI(); api.full_runs = []
