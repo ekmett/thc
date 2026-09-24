@@ -2306,6 +2306,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             if (name == "plusAddr#") PlusManagedAddress(args[0], args[1])
             else IndexManagedByte(name == "indexInt8OffAddr#", args[0], args[1])
         }
+        "indexWord16OffAddr#", "indexInt16OffAddr#" -> {
+            if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
+            IndexManagedScalarAddress(if (name == "indexInt16OffAddr#") ManagedAddressRead.INT16
+                else ManagedAddressRead.WORD16, args[0], args[1])
+        }
         else -> Primitive(name, args)
     }
     private fun strictConstructorFields(id: String, arity: Int): BooleanArray {

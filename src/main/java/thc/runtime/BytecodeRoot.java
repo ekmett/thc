@@ -1431,6 +1431,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             throw fail("Expected primitive Long");
         }
     }
+    @Operation @ConstantOperand(type = ManagedAddressRead.class, name = "operation")
+    public static final class AddressIndexManagedScalar {
+        @Specialization public static long index(ManagedAddressRead operation, ManagedAddress address, long element) {
+            return operation.read(address, element);
+        }
+        @Fallback public static long invalid(ManagedAddressRead operation, Object address, Object element) {
+            if (!(address instanceof ManagedAddress)) throw fail("Expected a managed Addr#");
+            throw fail("Expected primitive Long");
+        }
+    }
     @Operation public static final class AddressEqual {
         @Specialization public static long compare(ManagedAddress left, ManagedAddress right) {
             return left.sameLocation(right) ? 1L : 0L;

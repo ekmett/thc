@@ -112,3 +112,24 @@ byte8Roundtrip raw = runRW# (\s0 ->
                 +# word2Int# (word8ToWord# unsignedRead)) #)
     } } } } }) of { (# _, I# answer #) -> answer }
   } } })
+
+-- The pinned array write supplies target-native byte order. The four Addr#
+-- reads use two-byte element offsets and preserve signed/unsigned lanes.
+{-# OPAQUE halfwordReadRoundtrip #-}
+halfwordReadRoundtrip :: Int# -> Int#
+halfwordReadRoundtrip raw = runRW# (\s0 ->
+  case newPinnedByteArray# 32# s0 of { (# s1, mutable #) ->
+  case writeInt16Array# mutable 12# (intToInt16# raw) s1 of { s2 ->
+  case unsafeFreezeByteArray# mutable s2 of { (# s3, bytes #) ->
+  case byteArrayContents# bytes of { base ->
+  case keepAlive# bytes s3 (\s4 ->
+    case readInt16OffAddr# base 12# s4 of { (# s5, signedRead #) ->
+    case readWord16OffAddr# base 12# s5 of { (# s6, unsignedRead #) ->
+    case indexInt16OffAddr# base 12# of { signedIndex ->
+    case indexWord16OffAddr# base 12# of { unsignedIndex ->
+      (# s6, I# ((int16ToInt# signedRead +# 32768#) *# 281474976710656#
+                +# (int16ToInt# signedIndex +# 32768#) *# 4294967296#
+                +# word2Int# (word16ToWord# unsignedRead) *# 65536#
+                +# word2Int# (word16ToWord# unsignedIndex)) #)
+    } } } }) of { (# _, I# answer #) -> answer }
+  } } } })

@@ -45,6 +45,8 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
     READ("readWord8OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true),
     READ_INT8("readInt8OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true),
     READ_CHAR("readCharOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true),
+    READ_WORD16("readWord16OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.WORD16),
+    READ_INT16("readInt16OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.INT16),
     READ_WORD32("readWord32OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.WORD32),
     READ_WORD("readWordOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.WORD),
     READ_INT32("readInt32OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.INT32),
@@ -168,6 +170,7 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
                 FrameAccess.write(frame, slots[offset], PinnedMemory.allocate(size, alignment))
             }
             PinnedMemoryOp.READ, PinnedMemoryOp.READ_INT8, PinnedMemoryOp.READ_CHAR,
+            PinnedMemoryOp.READ_WORD16, PinnedMemoryOp.READ_INT16,
             PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
             PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT -> {
                 val address = operands[0].executeRequiredAddress(frame)
