@@ -3,16 +3,22 @@
 
 module ProjectTests (tests) where
 
-import Data.Aeson (Value)
+import Codec.Archive.Zip (findEntryByPath, fromEntry, toArchiveOrFail)
+import Control.Exception (bracket)
 import Control.Monad (forM_)
-import System.Directory (canonicalizePath, copyFile, createDirectoryIfMissing, doesFileExist)
+import Data.Aeson (Value, eitherDecode')
+import qualified Data.ByteString.Lazy as BL
+import System.Directory (canonicalizePath, copyFile, createDirectoryIfMissing,
+                         doesFileExist, getModificationTime)
+import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.FilePath ((</>), takeDirectory)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
 
 tests :: Env -> Test
 tests env = TestLabel "three-package project native versus THC run" $ TestCase $
-  withFixture env "test/fixtures/run-project" $ \project -> do
+  withFixture env "test/fixtures/run-project" $ \project ->
+  withCache (takeDirectory project </> "cache") $ do
     let base = takeDirectory project
         output = base </> "output"
         source = project </> "dep-data/src/Answer.hs"
@@ -25,8 +31,10 @@ tests env = TestLabel "three-package project native versus THC run" $ TestCase $
                            (objects plan "install-plan")
         unit manifest identifier = one ((== identifier) . string . (`field` "id"))
                                    (objects manifest "units")
-        modulePaths manifest identifier = map (string . (`field` "path"))
-                                      (objects (unit manifest identifier) "modules")
+        bundleRef manifest identifier = let bundle = field (unit manifest identifier) "bundle" in
+          (string $ field bundle "path", string $ field bundle "sha256")
+        modulePath manifest identifier = string $ field
+          (one (const True) $ objects (unit manifest identifier) "modules") "path"
     -- The first project run must bootstrap the ordinary Cabal plugin library.
     -- Keep this source-only root private so shared compiler artifacts and other
     -- worktrees are never renamed or deleted during the test.
@@ -38,7 +46,7 @@ tests env = TestLabel "three-package project native versus THC run" $ TestCase $
     copyFile (root env </> "docs/driver.md") (sourceOnlyRoot </> "docs/driver.md")
     initiallyBuilt <- doesFileExist (sourceOnlyRoot </> "build/compiler/plugin.json")
     assertBool "source-only checkout has no plugin manifest" (not initiallyBuilt)
-    firstPaths <- forBackends env invoke output project entryOf unit modulePaths
+    firstBundles <- forBackends env invoke output project entryOf unit bundleRef modulePath
     requireFile (sourceOnlyRoot </> "build/compiler/plugin.json")
     original <- readText source
     assertContains "I# 42#" original
@@ -54,19 +62,29 @@ tests env = TestLabel "three-package project native versus THC run" $ TestCase $
                          (objects plan "install-plan")
         depId = string (field dependency "id")
     assertBool "dependency cache invalidated"
-      (modulePaths manifest depId /= lookupPaths depId firstPaths)
+      (bundleRef manifest depId /= lookupBundle depId firstBundles)
     let entry = entryOf plan
     native <- runExe env project Nothing 60 (string $ field entry "bin-file") []
     assertFailure native
 
+withCache :: FilePath -> IO a -> IO a
+withCache path action = bracket acquire restore (const action)
+  where
+    acquire = do
+      prior <- lookupEnv "THC_CACHE_HOME"
+      setEnv "THC_CACHE_HOME" path
+      pure prior
+    restore = maybe (unsetEnv "THC_CACHE_HOME") (setEnv "THC_CACHE_HOME")
+
 forBackends
   :: Env -> (String -> String -> IO Result) -> FilePath -> FilePath
-  -> (Value -> Value) -> (Value -> String -> Value) -> (Value -> String -> [FilePath])
-  -> IO [(String, [FilePath])]
-forBackends env invoke output project entryOf unit modulePaths = go Nothing
+  -> (Value -> Value) -> (Value -> String -> Value)
+  -> (Value -> String -> (FilePath, String)) -> (Value -> String -> FilePath)
+  -> IO [(String, (FilePath, String))]
+forBackends env invoke output project entryOf unit bundleRef modulePath = go Nothing
   [ ("ast", "completed"), ("bytecode", "app-run:exe:completed") ]
   where
-    go previous [] = pure (maybe [] id previous)
+    go previous [] = pure (maybe [] fst previous)
     go previous ((backend, target):remaining) = do
       result <- invoke backend target
       assertSuccess result
@@ -114,25 +132,36 @@ forBackends env invoke output project entryOf unit modulePaths = go Nothing
       assertBool "imported thunk reachable" $ any
         ((== depId ++ ":Answer.answerValue") . string . (`field` "id"))
         (objects audit "reachableBindings")
-      let paths = [(identifier, modulePaths manifest identifier)
+      let bundles = [(identifier, bundleRef manifest identifier)
                   | identifier <- [depId, helperId, bridgeId, entryId]]
+      times <- mapM (getModificationTime . fst . snd) bundles
       case previous of
         Nothing -> pure ()
-        Just before -> assertEqual "Core cache reused" before paths
-      core <- readJson (output </> one (const True) (modulePaths manifest entryId))
+        Just (before, beforeTimes) -> do
+          assertEqual "Core cache reused" before bundles
+          assertEqual "cached ZIP files were not rewritten" beforeTimes times
+      core <- readCore (fst $ bundleRef manifest entryId) (modulePath manifest entryId)
       expected <- canonicalizePath (project </> "app-run/app/Main.hs")
       assertBool "source path and content" =<< anyM
         (\file -> do
           path <- canonicalizePath (string $ field file "path")
           pure (path == expected && string (field file "content") /= ""))
         (objects core "sourceFiles")
-      go (Just paths) remaining
+      go (Just (bundles, times)) remaining
 
 moduleNames :: Value -> [String]
 moduleNames = map (string . (`field` "name")) . (`objects` "modules")
 
-lookupPaths :: String -> [(String, [FilePath])] -> [FilePath]
-lookupPaths identifier paths = maybe [] id (lookup identifier paths)
+lookupBundle :: String -> [(String, (FilePath, String))] -> (FilePath, String)
+lookupBundle identifier bundles = maybe (error "missing bundle") id (lookup identifier bundles)
+
+readCore :: FilePath -> FilePath -> IO Value
+readCore bundle member = do
+  bytes <- BL.readFile bundle
+  archive <- either fail pure (toArchiveOrFail bytes)
+  entry <- maybe (fail ("missing ZIP member " ++ member)) pure
+           (findEntryByPath member archive)
+  either fail pure (eitherDecode' $ fromEntry entry)
 
 one :: (a -> Bool) -> [a] -> a
 one predicate values = case filter predicate values of
