@@ -30,7 +30,6 @@ import System.IO (SeekMode(AbsoluteSeek), hClose, openTempFile, stderr)
 import qualified System.Posix.IO as Posix
 import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, waitForProcess)
 import THC.Driver.Cabal (PlanOptions(..))
-import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.Run (RunOptions(..))
 import THC.Driver.Zip (decodeZip, encodeZip)
 
@@ -57,8 +56,8 @@ data Bundle = Bundle { bundlePath :: FilePath, bundleHash :: String
 data ExportContext = ExportContext
   { contextCompiler :: String, contextAbi :: String, contextPlatform :: String
   , contextPluginDb :: FilePath, contextPluginUnit :: String
-  , contextPluginLibrary :: FilePath, contextOutput :: FilePath
-  , contextNative :: FilePath, contextCache :: FilePath, contextDriverHash :: String }
+  , contextPluginLibrary :: FilePath, contextNative :: FilePath
+  , contextDriverHash :: String }
 
 boundary :: String
 boundary = "optimized-Core-after-Tidy-before-CorePrep"
@@ -119,10 +118,9 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   abi <- field plan "compiler-abi"
   os <- field plan "os"
   arch <- field plan "arch"
-  cacheRoot <- coreCacheDirectory
   driverHash <- getExecutablePath >>= digestFile
   let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
-                              pluginLibrary output native cacheRoot driverHash
+                              pluginLibrary native driverHash
   records <- field plan "install-plan" :: IO [Value]
   units <- mapM readUnit records
   let byId = Map.fromList [(unitId unit, unit) | unit <- units]
@@ -246,8 +244,7 @@ exportUnit context keys unit = do
       buildInputs = object (inputFields ++ ["buildKey" .= buildKey,
                                            "exportKey" .= exportKey,
                                            "exporter" .= exporter])
-      directory = contextCache context </> "core-bundles/v1" </>
-                  (contextCompiler context ++ "-" ++ contextAbi context ++ "-" ++ contextPlatform context) </> exportKey
+      directory = contextNative context </> "cache/thc/core-bundles/v1" </> exportKey
       destination = directory </> (unitId unit ++ "-" ++ buildKey ++ ".zip")
   expected <- expectedModuleNames (componentValue component)
   createDirectoryIfMissing True directory
@@ -264,7 +261,7 @@ exportUnit context keys unit = do
 freshExport :: ExportContext -> Component -> Unit -> String -> String -> Value ->
                [String] -> FilePath -> IO Bundle
 freshExport context component unit buildKey exportKey buildInputs expected destination = do
-  let localRoot = contextOutput context </> "core/staging"
+  let localRoot = contextNative context </> "cache/thc/staging"
   createDirectoryIfMissing True localRoot
   (staging, handle) <- openTempFile localRoot "export-"
   hClose handle
