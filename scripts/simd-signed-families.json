@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "ghc": "9.14.1",
+  "scope": "wide signed local arithmetic only; no vector calling convention or heap fields",
+  "families": [
+    {"name": "Int8X32", "element": "Int8ElemRep", "laneRep": "Int8Rep", "lanes": 32, "bits": 256, "newCarrier": true, "operations": ["pack", "unpack", "broadcast", "plus", "minus", "times", "negate"]},
+    {"name": "Int8X64", "element": "Int8ElemRep", "laneRep": "Int8Rep", "lanes": 64, "bits": 512, "newCarrier": true, "operations": ["pack", "unpack", "broadcast", "plus", "minus", "times", "negate"]},
+    {"name": "Int16X16", "element": "Int16ElemRep", "laneRep": "Int16Rep", "lanes": 16, "bits": 256, "newCarrier": true, "operations": ["pack", "unpack", "broadcast", "plus", "minus", "times", "negate"]},
+    {"name": "Int16X32", "element": "Int16ElemRep", "laneRep": "Int16Rep", "lanes": 32, "bits": 512, "newCarrier": true, "operations": ["pack", "unpack", "broadcast", "plus", "minus", "times", "negate"]},
+    {"name": "Int64X4", "element": "Int64ElemRep", "laneRep": "Int64Rep", "lanes": 4, "bits": 256, "newCarrier": true, "operations": ["pack", "unpack", "broadcast", "plus", "minus", "times", "negate"]},
+    {"name": "Int64X8", "element": "Int64ElemRep", "laneRep": "Int64Rep", "lanes": 8, "bits": 512, "newCarrier": true, "operations": ["pack", "unpack", "broadcast", "plus", "minus", "times", "negate"]}
+  ]
+}
