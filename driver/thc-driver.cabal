@@ -1,7 +1,7 @@
+cabal-version: 3.0
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-cabal-version: 3.0
 name: thc-driver
 version: 0.1.0.0
 synopsis: Cabal-library configuration inspection for THC
