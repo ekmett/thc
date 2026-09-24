@@ -165,3 +165,50 @@ uncheckedShiftRLWord16 x y = word2Int# (word16ToWord# (uncheckedShiftRLWord16# (
 {-# NOINLINE uncheckedShiftRLWord32 #-}
 uncheckedShiftRLWord32 :: Int# -> Int# -> Int#
 uncheckedShiftRLWord32 x y = word2Int# (word32ToWord# (uncheckedShiftRLWord32# (wordToWord32# (int2Word# x)) y))
+
+-- One dynamic entry covers every primitive branch in each guest backend.
+-- Wrappers remain exported for their individual native and Core audits.
+{-# OPAQUE composite #-}
+composite :: Int# -> Int# -> Int# -> Int#
+composite selector x y = case selector of
+  0# -> word2Int# (quotWord# (int2Word# x) (int2Word# y))
+  1# -> word2Int# (remWord# (int2Word# x) (int2Word# y))
+  2# -> gtWord# (int2Word# x) (int2Word# y)
+  3# -> geWord# (int2Word# x) (int2Word# y)
+  4# -> word2Int# (word8ToWord# (quotWord8# (wordToWord8# (int2Word# x)) (wordToWord8# (int2Word# y))))
+  5# -> word2Int# (word16ToWord# (quotWord16# (wordToWord16# (int2Word# x)) (wordToWord16# (int2Word# y))))
+  6# -> word2Int# (word32ToWord# (quotWord32# (wordToWord32# (int2Word# x)) (wordToWord32# (int2Word# y))))
+  7# -> word2Int# (word8ToWord# (remWord8# (wordToWord8# (int2Word# x)) (wordToWord8# (int2Word# y))))
+  8# -> word2Int# (word16ToWord# (remWord16# (wordToWord16# (int2Word# x)) (wordToWord16# (int2Word# y))))
+  9# -> word2Int# (word32ToWord# (remWord32# (wordToWord32# (int2Word# x)) (wordToWord32# (int2Word# y))))
+  10# -> eqWord8# (wordToWord8# (int2Word# x)) (wordToWord8# (int2Word# y))
+  11# -> eqWord16# (wordToWord16# (int2Word# x)) (wordToWord16# (int2Word# y))
+  12# -> eqWord32# (wordToWord32# (int2Word# x)) (wordToWord32# (int2Word# y))
+  13# -> neWord8# (wordToWord8# (int2Word# x)) (wordToWord8# (int2Word# y))
+  14# -> neWord16# (wordToWord16# (int2Word# x)) (wordToWord16# (int2Word# y))
+  15# -> neWord32# (wordToWord32# (int2Word# x)) (wordToWord32# (int2Word# y))
+  16# -> gtWord8# (wordToWord8# (int2Word# x)) (wordToWord8# (int2Word# y))
+  17# -> gtWord16# (wordToWord16# (int2Word# x)) (wordToWord16# (int2Word# y))
+  18# -> gtWord32# (wordToWord32# (int2Word# x)) (wordToWord32# (int2Word# y))
+  19# -> geWord8# (wordToWord8# (int2Word# x)) (wordToWord8# (int2Word# y))
+  20# -> geWord16# (wordToWord16# (int2Word# x)) (wordToWord16# (int2Word# y))
+  21# -> geWord32# (wordToWord32# (int2Word# x)) (wordToWord32# (int2Word# y))
+  22# -> word2Int# (word8ToWord# (andWord8# (wordToWord8# (int2Word# x)) (wordToWord8# (int2Word# y))))
+  23# -> word2Int# (word16ToWord# (andWord16# (wordToWord16# (int2Word# x)) (wordToWord16# (int2Word# y))))
+  24# -> word2Int# (word32ToWord# (andWord32# (wordToWord32# (int2Word# x)) (wordToWord32# (int2Word# y))))
+  25# -> word2Int# (word8ToWord# (orWord8# (wordToWord8# (int2Word# x)) (wordToWord8# (int2Word# y))))
+  26# -> word2Int# (word16ToWord# (orWord16# (wordToWord16# (int2Word# x)) (wordToWord16# (int2Word# y))))
+  27# -> word2Int# (word32ToWord# (orWord32# (wordToWord32# (int2Word# x)) (wordToWord32# (int2Word# y))))
+  28# -> word2Int# (word8ToWord# (xorWord8# (wordToWord8# (int2Word# x)) (wordToWord8# (int2Word# y))))
+  29# -> word2Int# (word16ToWord# (xorWord16# (wordToWord16# (int2Word# x)) (wordToWord16# (int2Word# y))))
+  30# -> word2Int# (word32ToWord# (xorWord32# (wordToWord32# (int2Word# x)) (wordToWord32# (int2Word# y))))
+  31# -> word2Int# (word8ToWord# (notWord8# (wordToWord8# (int2Word# x))))
+  32# -> word2Int# (word16ToWord# (notWord16# (wordToWord16# (int2Word# x))))
+  33# -> word2Int# (word32ToWord# (notWord32# (wordToWord32# (int2Word# x))))
+  34# -> word2Int# (word8ToWord# (uncheckedShiftLWord8# (wordToWord8# (int2Word# x)) y))
+  35# -> word2Int# (word16ToWord# (uncheckedShiftLWord16# (wordToWord16# (int2Word# x)) y))
+  36# -> word2Int# (word32ToWord# (uncheckedShiftLWord32# (wordToWord32# (int2Word# x)) y))
+  37# -> word2Int# (word8ToWord# (uncheckedShiftRLWord8# (wordToWord8# (int2Word# x)) y))
+  38# -> word2Int# (word16ToWord# (uncheckedShiftRLWord16# (wordToWord16# (int2Word# x)) y))
+  39# -> word2Int# (word32ToWord# (uncheckedShiftRLWord32# (wordToWord32# (int2Word# x)) y))
+  _ -> 0#
