@@ -18,11 +18,13 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: fast-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
+  # Candidate PR events do not run tests or cancel the bot's exact-head dispatch.
+  group: fast-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}-${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'thc-bulk/') && 'candidate-pr' || 'gate' }}
   cancel-in-progress: true
 
 jobs:
   automation:
+    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'thc-bulk/')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
