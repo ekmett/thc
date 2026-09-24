@@ -2351,26 +2351,32 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = boolean.class, name = "unsigned")
+    @ConstantOperand(type = boolean.class, name = "byteOffset")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ReadInt16Array {
-        @Specialization public static void read(VirtualFrame frame, boolean unsigned, LocalAccessor destination,
+        @Specialization public static void read(VirtualFrame frame, boolean unsigned, boolean byteOffset, LocalAccessor destination,
                 Object value, long index, Object state, @Bind("$node") Node node) {
             ManagedByteArray.requireState(state);
-            long result = ManagedByteArray.readInt16Guest(value, index, unsigned);
+            long result = byteOffset ? ManagedByteArray.readInt16ByteOffsetGuest(value, index, unsigned)
+                : ManagedByteArray.readInt16Guest(value, index, unsigned);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
-    @Operation public static final class WriteInt16Array {
-        @Specialization public static Object write(Object value, long index, long integer, Object state) {
+    @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
+    public static final class WriteInt16Array {
+        @Specialization public static Object write(boolean byteOffset, Object value, long index, long integer, Object state) {
             ManagedByteArray.requireState(state);
-            ManagedByteArray.writeInt16Guest(value, index, integer);
+            if (byteOffset) ManagedByteArray.writeInt16ByteOffsetGuest(value, index, integer);
+            else ManagedByteArray.writeInt16Guest(value, index, integer);
             return kotlin.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "unsigned")
+    @ConstantOperand(type = boolean.class, name = "byteOffset")
     public static final class IndexInt16Array {
-        @Specialization public static long index(boolean unsigned, Object value, long index) {
-            return ManagedByteArray.readInt16Guest(value, index, unsigned);
+        @Specialization public static long index(boolean unsigned, boolean byteOffset, Object value, long index) {
+            return byteOffset ? ManagedByteArray.readInt16ByteOffsetGuest(value, index, unsigned)
+                : ManagedByteArray.readInt16Guest(value, index, unsigned);
         }
     }
 

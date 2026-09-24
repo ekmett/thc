@@ -127,6 +127,16 @@ internal object ManagedByteArray {
     @JvmStatic fun writeInt16Guest(value: Any?, index: Long, integer: Long) =
         if (value is ManagedAllocation) value.accessElement(index, 2, true) { ManagedInt16Array.write(it, index, integer) }
         else ManagedInt16Array.write(require(value), index, integer)
+    @JvmStatic fun readInt16ByteOffsetGuest(value: Any?, offset: Long, unsigned: Boolean): Long =
+        if (value is ManagedAllocation) value.accessByteRange(offset, 2, false) {
+            if (unsigned) ManagedInt16Array.readUnsignedByteOffset(it, offset)
+            else ManagedInt16Array.readSignedByteOffset(it, offset)
+        } else if (unsigned) ManagedInt16Array.readUnsignedByteOffset(require(value), offset)
+        else ManagedInt16Array.readSignedByteOffset(require(value), offset)
+    @JvmStatic fun writeInt16ByteOffsetGuest(value: Any?, offset: Long, integer: Long) =
+        if (value is ManagedAllocation) value.accessByteRange(offset, 2, true) {
+            ManagedInt16Array.writeByteOffset(it, offset, integer)
+        } else ManagedInt16Array.writeByteOffset(require(value), offset, integer)
     @JvmStatic fun readInt32Guest(value: Any?, index: Long, unsigned: Boolean): Long =
         if (value is ManagedAllocation) value.accessElement(index, 4, false) {
             if (unsigned) ManagedInt32Array.readUnsigned(it, index) else ManagedInt32Array.readSigned(it, index)
@@ -247,6 +257,12 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
     READ_WORD16("readWord16Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
     WRITE_WORD16("writeWord16Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Word16Rep"), emptyList())),
     INDEX_WORD16("indexWord16Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
+    READ_WORD8_AS_INT16("readWord8ArrayAsInt16#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
+    WRITE_WORD8_AS_INT16("writeWord8ArrayAsInt16#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Int16Rep"), emptyList())),
+    INDEX_WORD8_AS_INT16("indexWord8ArrayAsInt16#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
+    READ_WORD8_AS_WORD16("readWord8ArrayAsWord16#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
+    WRITE_WORD8_AS_WORD16("writeWord8ArrayAsWord16#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Word16Rep"), emptyList())),
+    INDEX_WORD8_AS_WORD16("indexWord8ArrayAsWord16#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
     READ_INT32("readInt32Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
     WRITE_INT32("writeInt32Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Int32Rep"), emptyList())),
     INDEX_INT32("indexInt32Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
@@ -276,7 +292,7 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
             READ_INT, GET_SIZE_MUTABLE -> "IntRep"; READ_DOUBLE, READ_WORD8_AS_DOUBLE -> "DoubleRep"
             READ_INT64 -> "Int64Rep"; READ_WORD64 -> "Word64Rep"
             READ_INT8 -> "Int8Rep"; READ_WORD8 -> "Word8Rep"
-            READ_INT16 -> "Int16Rep"; READ_WORD16 -> "Word16Rep"
+            READ_INT16, READ_WORD8_AS_INT16 -> "Int16Rep"; READ_WORD16, READ_WORD8_AS_WORD16 -> "Word16Rep"
             READ_INT32 -> "Int32Rep"; READ_WORD32 -> "Word32Rep"
             READ_FLOAT, READ_WORD8_AS_FLOAT -> "FloatRep"; READ_WORD, READ_CHAR -> "WordRep"; else -> BYTE_ARRAY_REP
         })
@@ -284,11 +300,13 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
             scalar(result.components[0], emptyList()) && scalar(result.components[1], payload) &&
             result.primReps == payload
         else scalar(result, when (this) {
-            WRITE_INT8, WRITE_INT16, WRITE_WORD16, WRITE, WRITE_CHAR, WRITE_INT, WRITE_DOUBLE, WRITE_INT32, WRITE_WORD32, WRITE_FLOAT, WRITE_WORD,
+            WRITE_INT8, WRITE_INT16, WRITE_WORD16, WRITE_WORD8_AS_INT16, WRITE_WORD8_AS_WORD16,
+            WRITE, WRITE_CHAR, WRITE_INT, WRITE_DOUBLE, WRITE_INT32, WRITE_WORD32, WRITE_FLOAT, WRITE_WORD,
             WRITE_WORD8_AS_DOUBLE, WRITE_WORD8_AS_FLOAT, WRITE_INT64, WRITE_WORD64, COPY, SET, COPY_MUTABLE, COPY_MUTABLE_NON_OVERLAPPING -> emptyList()
             SIZE, SIZE_MUTABLE, INDEX_INT, COMPARE -> listOf("IntRep")
             INDEX_INT8 -> listOf("Int8Rep")
-            INDEX_INT16 -> listOf("Int16Rep"); INDEX_WORD16 -> listOf("Word16Rep")
+            INDEX_INT16, INDEX_WORD8_AS_INT16 -> listOf("Int16Rep")
+            INDEX_WORD16, INDEX_WORD8_AS_WORD16 -> listOf("Word16Rep")
             INDEX_INT32 -> listOf("Int32Rep"); INDEX_WORD32 -> listOf("Word32Rep")
             INDEX_INT64 -> listOf("Int64Rep"); INDEX_WORD64 -> listOf("Word64Rep")
             INDEX_FLOAT, INDEX_WORD8_AS_FLOAT -> listOf("FloatRep"); INDEX_WORD, INDEX_CHAR -> listOf("WordRep")
@@ -336,12 +354,17 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
         ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8, ByteArrayOp.READ_CHAR -> ReadByteArrayExpression(
             operation != ByteArrayOp.READ_INT8, operands[0], operands[1], operands[2])
         ByteArrayOp.INDEX_INT8 -> IndexSignedByteArrayExpression(operands[0], operands[1])
-        ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16 -> ReadInt16ArrayExpression(
-            operation == ByteArrayOp.READ_WORD16, operands[0], operands[1], operands[2])
-        ByteArrayOp.WRITE_INT16, ByteArrayOp.WRITE_WORD16 -> WriteInt16ArrayExpression(
-            operands[0], operands[1], operands[2], operands[3])
-        ByteArrayOp.INDEX_INT16, ByteArrayOp.INDEX_WORD16 -> IndexInt16ArrayExpression(
-            operation == ByteArrayOp.INDEX_WORD16, operands[0], operands[1])
+        ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16, ByteArrayOp.READ_WORD8_AS_INT16, ByteArrayOp.READ_WORD8_AS_WORD16 ->
+            ReadInt16ArrayExpression(operation == ByteArrayOp.READ_WORD16 || operation == ByteArrayOp.READ_WORD8_AS_WORD16,
+                operation == ByteArrayOp.READ_WORD8_AS_INT16 || operation == ByteArrayOp.READ_WORD8_AS_WORD16,
+                operands[0], operands[1], operands[2])
+        ByteArrayOp.WRITE_INT16, ByteArrayOp.WRITE_WORD16, ByteArrayOp.WRITE_WORD8_AS_INT16, ByteArrayOp.WRITE_WORD8_AS_WORD16 ->
+            WriteInt16ArrayExpression(operation == ByteArrayOp.WRITE_WORD8_AS_INT16 || operation == ByteArrayOp.WRITE_WORD8_AS_WORD16,
+                operands[0], operands[1], operands[2], operands[3])
+        ByteArrayOp.INDEX_INT16, ByteArrayOp.INDEX_WORD16, ByteArrayOp.INDEX_WORD8_AS_INT16, ByteArrayOp.INDEX_WORD8_AS_WORD16 ->
+            IndexInt16ArrayExpression(operation == ByteArrayOp.INDEX_WORD16 || operation == ByteArrayOp.INDEX_WORD8_AS_WORD16,
+                operation == ByteArrayOp.INDEX_WORD8_AS_INT16 || operation == ByteArrayOp.INDEX_WORD8_AS_WORD16,
+                operands[0], operands[1])
         ByteArrayOp.READ_INT32, ByteArrayOp.READ_WORD32 -> ReadInt32ArrayExpression(
             operation == ByteArrayOp.READ_WORD32, operands[0], operands[1], operands[2])
         ByteArrayOp.WRITE_INT32, ByteArrayOp.WRITE_WORD32 -> WriteInt32ArrayExpression(
@@ -525,7 +548,7 @@ private class IndexFloatArrayExpression(private val byteOffset: Boolean, @field:
     }
 }
 
-private class ReadInt16ArrayExpression(private val unsigned: Boolean,
+private class ReadInt16ArrayExpression(private val unsigned: Boolean, private val byteOffset: Boolean,
     @field:Child private var array: Expr, @field:Child private var index: Expr,
     @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
@@ -533,12 +556,13 @@ private class ReadInt16ArrayExpression(private val unsigned: Boolean,
         val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        val value = ManagedByteArray.readInt16Guest(bytes, element, unsigned)
+        val value = if (byteOffset) ManagedByteArray.readInt16ByteOffsetGuest(bytes, element, unsigned)
+            else ManagedByteArray.readInt16Guest(bytes, element, unsigned)
         FrameAccess.writeLong(frame, slots[offset], value)
         return null
     }
 }
-private class WriteInt16ArrayExpression(@field:Child private var array: Expr,
+private class WriteInt16ArrayExpression(private val byteOffset: Boolean, @field:Child private var array: Expr,
     @field:Child private var index: Expr, @field:Child private var value: Expr,
     @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any {
@@ -546,17 +570,19 @@ private class WriteInt16ArrayExpression(@field:Child private var array: Expr,
         val element = index.executeRequiredLong(frame)
         val integer = value.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        ManagedByteArray.writeInt16Guest(bytes, element, integer)
+        if (byteOffset) ManagedByteArray.writeInt16ByteOffsetGuest(bytes, element, integer)
+        else ManagedByteArray.writeInt16Guest(bytes, element, integer)
         return Unit
     }
 }
-private class IndexInt16ArrayExpression(private val unsigned: Boolean,
+private class IndexInt16ArrayExpression(private val unsigned: Boolean, private val byteOffset: Boolean,
     @field:Child private var array: Expr, @field:Child private var index: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any = executeLong(frame)
     override fun executeLong(frame: VirtualFrame): Long {
         val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
-        return ManagedByteArray.readInt16Guest(bytes, element, unsigned)
+        return if (byteOffset) ManagedByteArray.readInt16ByteOffsetGuest(bytes, element, unsigned)
+            else ManagedByteArray.readInt16Guest(bytes, element, unsigned)
     }
 }
 
