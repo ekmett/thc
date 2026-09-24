@@ -482,7 +482,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             try {
                 if (SynchronousMasking.current(node) != callerActive)
                     throw new IllegalStateException("Captured caller lost its logical mask before Yield");
-                return new CallSegmentSuspended(suspended.getSegment(), callerActive);
+                return new CallSegmentSuspended(suspended.getSegment(), callerActive, suspended.getAsyncRequest());
             } finally {
                 // Yield skips lexical finally. Each root parks to its own entry
                 // mask, so a chain of callers unwinds to the carrier ambient.

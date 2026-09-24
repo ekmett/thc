@@ -39,6 +39,32 @@ class CallMaskSegmentsTest {
         assertEquals(true, type.getMethod("isValidLastTier").invoke(target))
     }
 
+    @Test fun parkingKeepsTheRequestEvenIfAnotherEvaluatorHasFinishedTheSegment() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            entered(context) {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val threads = Language.currentState().threads
+                val request = threads.send(Long.MIN_VALUE, "request identity")
+                val target = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+                    b.beginRoot()
+                    b.beginReturn()
+                    b.beginYield(); b.emitLoadConstant(request); b.endYield()
+                    b.endReturn()
+                    b.endRoot()
+                }.getNode(0).callTarget
+                val segment = CallSegment(Calls.target(target, arrayOf(0L)) as ContinuationResult)
+                val captured = CallSegmentSuspended(segment)
+                assertSame(request, captured.asyncRequest)
+                segment.value = 42L
+                segment.state = 2
+                val parked = BytecodeRoot.ParkCallMask.park(captured, MaskingState.UNMASKED,
+                    MaskingState.UNMASKED, Driver())
+                assertSame(request, parked.asyncRequest)
+            }
+        }
+    }
+
     /** Exactly the private Core call stages, including root-entry and call-active locals. */
     private fun maskedCaller(language: Language, callee: RootCallTarget, targetMask: MaskingState): RootCallTarget {
         val function = Closure(null, NO_PAP_ARGUMENTS, 0, callee)
