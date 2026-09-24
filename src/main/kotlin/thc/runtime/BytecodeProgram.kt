@@ -920,6 +920,16 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 CoreVectors.validate(name, args.map(CoreVectors::argumentProof), tupleProof)
                 CoreVectors.validateFlags(flags)
                 vectorPrimitive(name, args.map { compile(it, scope, false) })
+            } else if (fn[0] == "prim" && fn[1] in setOf("raiseIO#", "catch#")) {
+                val name = fn[1] as String
+                CoreSynchronousExceptions.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                tupleExpression(tupleProof) { e, destination ->
+                    if (name == "raiseIO#") e.builder.beginRaiseIO()
+                    else e.builder.beginCatchIO(tupleSlots(TupleShape(tupleProof, language), destination), metrics)
+                    operands.forEach { it.emit(e) }
+                    if (name == "raiseIO#") e.builder.endRaiseIO() else e.builder.endCatchIO()
+                }
             } else if (fn[0] == "prim" && MVarOp.named(fn[1] as String) != null) {
                 val operation = MVarOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
