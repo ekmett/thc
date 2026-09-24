@@ -1164,7 +1164,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                     b.beginStoreLocal(callerMask); b.emitCurrentMask(); b.endStoreLocal()
                                     b.beginTryCatch()
                                     b.beginInvokeIOActionCheckpoint(slots, metrics)
-                                    b.emitLoadLocal(action)
+                                    b.emitLoadLocal(action); b.emitLoadConstant(true)
                                     b.endInvokeIOActionCheckpoint()
                                     b.beginBlock()
                                     b.beginStoreLocal(suspended)
@@ -1249,9 +1249,40 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                 b.beginTryFinally(Runnable {
                                     b.beginRestoreMask(); b.emitLoadLocal(prior); b.endRestoreMask()
                                 })
-                                b.beginInvokeIOAction(slots, metrics)
-                                b.emitLoadLocal(action); b.emitLoadLocal(prior)
-                                b.endInvokeIOAction()
+                                if (checkpoint == null) {
+                                    b.beginInvokeIOAction(slots, metrics)
+                                    b.emitLoadLocal(action); b.emitLoadLocal(prior)
+                                    b.endInvokeIOAction()
+                                } else {
+                                    b.beginBlock()
+                                    val actionMask = b.createLocal("masked IO action active mask", "object")
+                                    val suspended = b.createLocal("masked IO action suspension", "object")
+                                    b.beginStoreLocal(actionMask); b.emitCurrentMask(); b.endStoreLocal()
+                                    b.beginTryCatch()
+                                    b.beginInvokeMaskedIOActionCheckpoint(slots, metrics)
+                                    b.emitLoadLocal(action); b.emitLoadLocal(prior)
+                                    b.endInvokeMaskedIOActionCheckpoint()
+                                    b.beginBlock()
+                                    b.beginStoreLocal(suspended)
+                                    b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly()
+                                    b.endStoreLocal()
+                                    b.beginResumeTupleApplication(slots)
+                                    b.emitLoadLocal(suspended)
+                                    b.beginReenterCallMask()
+                                    b.beginYield()
+                                    b.beginParkCallMask()
+                                    b.emitLoadLocal(suspended)
+                                    b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+                                    b.emitLoadLocal(actionMask)
+                                    b.endParkCallMask()
+                                    b.endYield()
+                                    b.emitLoadLocal(actionMask)
+                                    b.endReenterCallMask()
+                                    b.endResumeTupleApplication()
+                                    b.endBlock()
+                                    b.endTryCatch()
+                                    b.endBlock()
+                                }
                                 b.endTryFinally()
                             }
                         }
@@ -1451,7 +1482,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.READ_ADDR -> e.builder.beginReadAddrOffAddr(destination[0])
                         PinnedMemoryOp.READ_ADDR_ARRAY -> e.builder.beginReadAddrArray(destination[0])
                         PinnedMemoryOp.READ_WORD16, PinnedMemoryOp.READ_INT16,
-                        PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
+                        PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WIDE_CHAR, PinnedMemoryOp.READ_WORD,
                         PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT,
                         PinnedMemoryOp.READ_INT64, PinnedMemoryOp.READ_WORD64 ->
                             e.builder.beginReadManagedAddress(operation.addressRead!!, destination[0])
@@ -1466,7 +1497,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.READ_ADDR -> e.builder.endReadAddrOffAddr()
                         PinnedMemoryOp.READ_ADDR_ARRAY -> e.builder.endReadAddrArray()
                         PinnedMemoryOp.READ_WORD16, PinnedMemoryOp.READ_INT16,
-                        PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
+                        PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WIDE_CHAR, PinnedMemoryOp.READ_WORD,
                         PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT,
                         PinnedMemoryOp.READ_INT64, PinnedMemoryOp.READ_WORD64 -> e.builder.endReadManagedAddress()
                         else -> error("Scalar pinned memory operation")
@@ -1477,12 +1508,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.WRITE_ADDR -> e.builder.beginWriteAddrOffAddr()
                         PinnedMemoryOp.WRITE_ADDR_ARRAY -> e.builder.beginWriteAddrArray()
                         PinnedMemoryOp.WRITE_INT16, PinnedMemoryOp.WRITE_WORD16 -> e.builder.beginWriteWord16OffAddr()
-                        PinnedMemoryOp.WRITE_INT32, PinnedMemoryOp.WRITE_WORD32 -> e.builder.beginWriteNativeScalarOffAddr(4)
+                        PinnedMemoryOp.WRITE_INT32, PinnedMemoryOp.WRITE_WORD32,
+                        PinnedMemoryOp.WRITE_WIDE_CHAR -> e.builder.beginWriteNativeScalarOffAddr(4)
                         PinnedMemoryOp.WRITE_INT, PinnedMemoryOp.WRITE_WORD,
                         PinnedMemoryOp.WRITE_INT64, PinnedMemoryOp.WRITE_WORD64 -> e.builder.beginWriteNativeScalarOffAddr(8)
                         PinnedMemoryOp.INDEX_ADDR_OFF -> e.builder.beginIndexAddrOffAddr()
                         PinnedMemoryOp.INDEX_ADDR_ARRAY -> e.builder.beginIndexAddrArray()
-                        PinnedMemoryOp.INDEX_INT32, PinnedMemoryOp.INDEX_WORD32,
+                        PinnedMemoryOp.INDEX_INT32, PinnedMemoryOp.INDEX_WORD32, PinnedMemoryOp.INDEX_WIDE_CHAR,
                         PinnedMemoryOp.INDEX_INT, PinnedMemoryOp.INDEX_WORD,
                         PinnedMemoryOp.INDEX_INT64, PinnedMemoryOp.INDEX_WORD64 ->
                             e.builder.beginIndexManagedAddress(operation.addressRead!!)
@@ -1494,12 +1526,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.WRITE_ADDR -> e.builder.endWriteAddrOffAddr()
                         PinnedMemoryOp.WRITE_ADDR_ARRAY -> e.builder.endWriteAddrArray()
                         PinnedMemoryOp.WRITE_INT16, PinnedMemoryOp.WRITE_WORD16 -> e.builder.endWriteWord16OffAddr()
-                        PinnedMemoryOp.WRITE_INT32, PinnedMemoryOp.WRITE_WORD32,
+                        PinnedMemoryOp.WRITE_INT32, PinnedMemoryOp.WRITE_WORD32, PinnedMemoryOp.WRITE_WIDE_CHAR,
                         PinnedMemoryOp.WRITE_INT, PinnedMemoryOp.WRITE_WORD,
                         PinnedMemoryOp.WRITE_INT64, PinnedMemoryOp.WRITE_WORD64 -> e.builder.endWriteNativeScalarOffAddr()
                         PinnedMemoryOp.INDEX_ADDR_OFF -> e.builder.endIndexAddrOffAddr()
                         PinnedMemoryOp.INDEX_ADDR_ARRAY -> e.builder.endIndexAddrArray()
-                        PinnedMemoryOp.INDEX_INT32, PinnedMemoryOp.INDEX_WORD32,
+                        PinnedMemoryOp.INDEX_INT32, PinnedMemoryOp.INDEX_WORD32, PinnedMemoryOp.INDEX_WIDE_CHAR,
                         PinnedMemoryOp.INDEX_INT, PinnedMemoryOp.INDEX_WORD,
                         PinnedMemoryOp.INDEX_INT64, PinnedMemoryOp.INDEX_WORD64 -> e.builder.endIndexManagedAddress()
                         else -> e.builder.endWriteWord8OffAddr()

@@ -454,7 +454,7 @@ class CoreContinuationNativeTest {
     }
 
     @Test fun nativeCoreThunkResumesThroughForcedLocal() {
-        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79"),
+        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79", "2", "0", "1"),
             File(root, "build/core-continuation/native-output.txt").readLines())
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
@@ -504,7 +504,7 @@ class CoreContinuationNativeTest {
     }
 
     @Test fun genuineCatchActionResumesOwnedTupleAcrossThreads() {
-        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79"),
+        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79", "2", "0", "1"),
             File(root, "build/core-continuation/native-output.txt").readLines())
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
@@ -660,6 +660,81 @@ class CoreContinuationNativeTest {
             assertEquals(2, handler.state)
             assertEquals(2, parent.state)
             assertEquals(3, checkpoint.visits.get(), "Neither the action nor the handler prefix replays")
+        }
+    }
+
+    @Test fun originalMaskActionsSuspendTwiceAndRestoreEachLogicalScope() {
+        assertEquals(listOf("2", "0", "1"),
+            File(root, "build/core-continuation/native-output.txt").readLines().drop(8))
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            fun number(value: Any?): Long = (value as DataValue).layout.readLong(value, 0)
+            for ((entry, expected, active) in listOf(
+                Triple("maskedCheckpointAnswer", 2L, MaskingState.MASKED_INTERRUPTIBLE),
+                Triple("unmaskedCheckpointAnswer", 0L, MaskingState.UNMASKED),
+                Triple("uninterruptibleCheckpointAnswer", 1L, MaskingState.MASKED_UNINTERRUPTIBLE))) {
+                val linked = CoreModules.reachable(module, entry, strictLink = true)
+                entered(context) {
+                    for (ordinary in listOf(Program(language, linked), BytecodeProgram(language, linked)))
+                        assertEquals(expected, number(driver.force(ordinary.entryValue(entry) as Thunk)), entry)
+                }
+                val checkpoint = BytecodeCheckpoint()
+                val program = entered(context) { BytecodeProgram(language, linked, checkpoint) }
+                entered(context) {
+                    val target = program.entryTarget(entry)
+                    assertEquals(expected, number(Calls.target(target, arrayOf(0L))))
+                    compile(target)
+                    assertEquals(expected, number(Calls.target(target, arrayOf(0L))))
+                    assertTrue(checkpoint.compiledVisits.get() > 0)
+                }
+                checkpoint.armed = true
+                val parent = entered(context) { program.entryValue(entry) as Thunk }
+                // Enter unmask# from a masked caller so its lexical prior is observable.
+                val initialMask = if (entry == "unmaskedCheckpointAnswer")
+                    MaskingState.MASKED_INTERRUPTIBLE else MaskingState.UNMASKED
+                val resumedExpected = if (entry == "unmaskedCheckpointAnswer") 200L else expected
+                entered(context) {
+                    SynchronousMasking.set(driver, initialMask)
+                    try {
+                        assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                        assertEquals(initialMask, SynchronousMasking.current(driver),
+                            "Parking $entry restores the first carrier's ambient mask")
+                        assertEquals(0, language.handoffState.get().results.depth)
+                    } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+                }
+                val first = parent.value as ContinuationResult
+                val segment = (first.result as CallSegmentSuspended).segment
+                assertEquals(active, segment.logicalMask, "$entry saves its active logical mask")
+                assertFalse(segment.caughtIOAction)
+                assertEquals(listOf(CoreKind.VOID, CoreKind.DATA),
+                    requireNotNull(segment.tupleShape).proof.components!!.map { it.kind })
+                Executors.newSingleThreadExecutor().use { pool ->
+                    val completed = pool.submit<Long> { entered(context) {
+                        SynchronousMasking.set(driver, MaskingState.MASKED_UNINTERRUPTIBLE)
+                        try {
+                            assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                            assertEquals(2, checkpoint.visits.get(), "The same action reaches its second checkpoint")
+                            assertEquals(5, segment.state)
+                            assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, SynchronousMasking.current(driver))
+                            assertEquals(0, language.handoffState.get().results.depth)
+                            val answer = number(driver.force(parent))
+                            assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, SynchronousMasking.current(driver),
+                                "Completing $entry restores the second carrier's ambient mask")
+                            assertEquals(0, language.handoffState.get().results.depth)
+                            assertEquals(0, language.handoffState.get().results.retainedReferences())
+                            answer
+                        } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+                    } }
+                    assertEquals(resumedExpected, completed.get(5, TimeUnit.SECONDS), entry)
+                }
+                assertEquals(2, segment.state)
+                assertEquals(2, parent.state)
+                assertEquals(2, checkpoint.visits.get(), "$entry never replays its first checkpoint")
+            }
         }
     }
 

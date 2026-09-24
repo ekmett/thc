@@ -57,6 +57,7 @@ python3 scripts/prepare-managed-md5.py
 "$fixture_bin" original-stdio --require-supported
 python3 scripts/prepare-pinned-addresses.py
 "$fixture_bin" pinned-pointer-cells
+"$fixture_bin" wide-char-address
 scripts/prepare-address-identity.sh
 python3 scripts/prepare-managed-address-reads.py
 "$fixture_bin" int-arrays double-arrays int32-arrays float-word-arrays int16-arrays int8-arrays

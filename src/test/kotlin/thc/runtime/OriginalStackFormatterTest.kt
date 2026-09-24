@@ -25,16 +25,16 @@ class OriginalStackFormatterTest {
     private fun hash(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     private fun hash(file: File) = hash(file.readBytes())
     private val sourceRoot = "compiler/pinned-ghc-internal/"
-    // Pin the complete path/hash catalog independently, without duplicating its 51 entries.
+    // Pin the complete path/hash catalog independently, without duplicating its 52 entries.
     // A changed exporter catalog cannot silently drop or repin a source in the fixture receipt.
     private val pinned by lazy {
         val text = contained("src/THC/Driver/Wired.hs", true).readText()
             .substringAfter("sourceHashes =").substringBefore("\ndata WiredArtifacts")
         val entries = Regex("\\(\"([^\"]+)\", \"([0-9a-f]{64})\"\\)").findAll(text)
             .map { it.groupValues[1] to it.groupValues[2] }.toList()
-        require(entries.size == 51 && entries.map { it.first }.toSet().size == 51)
+        require(entries.size == 52 && entries.map { it.first }.toSet().size == 52)
         require(hash(entries.sortedBy { it.first }.joinToString("") { (path, digest) -> "$path\u0000$digest\n" }.toByteArray()) ==
-            "38c045e6eae0e503560d9c0e31e5da49054d781a30aac388afb8809e44ab07f0")
+            "c38a02f66da9221caf742eb2129044eac958bc2202e1d2140fc1d6540d9780fe")
         entries.associate { (path, digest) -> sourceRoot + path to digest }
     }
     private val requiredInputs by lazy {
@@ -201,6 +201,30 @@ class OriginalStackFormatterTest {
         // the full Show closure: its missing Ptr/Word/Either helpers stay missing.
     }
 
+    @Test fun freshOriginalEnumWorkerResolvesClosureTypeErrorWithoutAlias() {
+        val receipt = manifest()
+        val path = sourceRoot + "GHC/Internal/Enum.hs"
+        assertEquals("e4dcf86915b01dcc732ed319fe02759858aea1534c68427826ba5f9c6908860f", hash(contained(path, true)))
+        val originals = receipt["originals"] as List<String>
+        val full = json(originals.single { it.endsWith("/GHC.Internal.Enum.json") })
+        val id = "ghc-internal:GHC.Internal.Enum.\$wtoEnumError"
+        val original = (full["bindings"] as List<Map<String, Any?>>).single { it["id"] == id }
+        assertEquals("\$wtoEnumError", original["name"])
+        val callerModule = json(originals.single { it.endsWith("/GHC.Internal.ClosureTypes.json") })
+        val caller = (callerModule["bindings"] as List<Map<String, Any?>>)
+            .single { it["id"] == "ghc-internal:GHC.Internal.ClosureTypes.\$wlvl" }
+        fun references(value: Any?): Int = when (value) {
+            is List<*> -> if (value.getOrNull(0) == "var" && value.getOrNull(1) == id) 1 else value.sumOf(::references)
+            is Map<*, *> -> value.values.sumOf(::references)
+            else -> 0
+        }
+        assertEquals(1, references(caller["expr"]), "Fresh original caller must resolve the exact Enum worker")
+        val linked = CoreModules.merge(listOf(full, callerModule))
+        assertEquals(original, (linked["bindings"] as List<Map<String, Any?>>).single { it["id"] == id })
+        // This proves source identity and resolution, not full admission of the
+        // worker's cold ErrorCall/Typeable/backtrace dependency graph.
+    }
+
     @Test fun freshOriginalUnsafeWorkerLinksWithoutAliasAndDefersItsAction() {
         val receipt = manifest()
         val full = json((receipt["originals"] as List<String>).single { it.endsWith("/GHC.Internal.IO.Unsafe.json") })
@@ -285,8 +309,8 @@ class OriginalStackFormatterTest {
         val value = manifest()
         val inputs = value["inputHashes"] as Map<String, String>
         val artifacts = value["artifactHashes"] as Map<String, String>
-        assertEquals(80, requiredInputs.size)
-        assertEquals(80, artifacts.size)
+        assertEquals(81, requiredInputs.size)
+        assertEquals(81, artifacts.size)
         for (path in requiredInputs)
             assertThrows(IllegalArgumentException::class.java, {
                 checked(value + ("inputHashes" to (inputs - path)))

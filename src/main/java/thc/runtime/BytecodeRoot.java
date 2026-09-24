@@ -1441,7 +1441,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = Metrics.class, name = "metrics")
     public static final class InvokeIOActionCheckpoint {
         @Specialization public static void run(VirtualFrame frame, BytecodeTupleSlots destination, Metrics metrics,
-                Object action,
+                Object action, boolean caughtIOAction,
                 @Bind Node node,
                 @Cached(value = "createAction(destination, metrics)", neverDefault = true) TupleDispatch actionCall,
                 @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
@@ -1466,12 +1466,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                         throw new IllegalStateException("Parked IO action did not restore its caller mask");
                     MaskingState active = parked != null ? parked : SynchronousMasking.current(node);
                     throw new CapturedCallSuspension(new CallSegment(continuation, active, callerMask,
-                            destination.getShape(), true));
+                            destination.getShape(), caughtIOAction));
                 } finally { SynchronousMasking.set(node, callerMask); }
             }
         }
         public static TupleDispatch createAction(BytecodeTupleSlots destination, Metrics metrics) {
             return new TupleDispatch(new ContinuationTupleDestination(destination), metrics, 1, false);
+        }
+        public static Force createForce(Metrics metrics) { return new Force(metrics); }
+    }
+
+    /** The private mask-action edge shares exact action capture but owns host-fault cleanup. */
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class InvokeMaskedIOActionCheckpoint {
+        @Specialization public static void run(VirtualFrame frame, BytecodeTupleSlots destination, Metrics metrics,
+                Object action, MaskingState prior, @Bind Node node,
+                @Cached(value = "createAction(destination, metrics)", neverDefault = true) TupleDispatch actionCall,
+                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
+            try {
+                InvokeIOActionCheckpoint.run(frame, destination, metrics, action, false, node, actionCall, force);
+            } catch (RuntimeException | Error failure) {
+                if (!(failure instanceof AbstractTruffleException)) SynchronousMasking.set(node, prior);
+                throw failure;
+            }
+        }
+        public static TupleDispatch createAction(BytecodeTupleSlots destination, Metrics metrics) {
+            return InvokeIOActionCheckpoint.createAction(destination, metrics);
         }
         public static Force createForce(Metrics metrics) { return new Force(metrics); }
     }

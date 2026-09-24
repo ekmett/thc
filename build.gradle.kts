@@ -107,6 +107,7 @@ tasks.withType<Test>().configureEach {
             "original-stack-formatter/run-*/originals/target-layout.json",
             "pinned-addresses/**/*.json", "pinned-addresses/*.tsv", "pinned-addresses/native/**",
             "pinned-pointer-cells/**/*.json", "pinned-pointer-cells/*.tsv", "pinned-pointer-cells/native/**",
+            "wide-char-address/**/*.json", "wide-char-address/logs/*.stdout", "wide-char-address/native/**",
             "managed-address-reads/**/*.json", "managed-address-reads/*.tsv", "managed-address-reads/native/**",
             "scalar-bitcasts/**/*.json", "scalar-bitcasts/*.tsv", "scalar-bitcasts/NativeScalarBitCast.hs", "scalar-bitcasts/native/**",
             "compare-byte-arrays/**/*.json", "compare-byte-arrays/*.tsv", "compare-byte-arrays/NativeCompareByteArrays.hs", "compare-byte-arrays/native/**",

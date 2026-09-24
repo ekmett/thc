@@ -9,7 +9,7 @@ import java.nio.ByteOrder
  * Offsets count elements, including negative offsets from a derived address. */
 internal enum class ManagedAddressRead(val width: Int, val payload: String) {
     WORD16(2, "Word16Rep"), INT16(2, "Int16Rep"),
-    WORD32(4, "Word32Rep"), WORD(8, "WordRep"), INT32(4, "Int32Rep"), INT(8, "IntRep"),
+    WORD32(4, "Word32Rep"), WIDE_CHAR(4, "WordRep"), WORD(8, "WordRep"), INT32(4, "Int32Rep"), INT(8, "IntRep"),
     WORD64(8, "Word64Rep"), INT64(8, "Int64Rep");
 
     fun read(address: ManagedAddress, elementOffset: Long): Long {
