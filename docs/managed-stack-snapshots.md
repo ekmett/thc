@@ -176,7 +176,7 @@ post-Tidy consumers pass strict audits. `OriginalStackFormatterTest` checks thos
 observations through both backends, before and immediately after explicit
 compilation, with inlining enabled and disabled.
 
-The fixture records exactly 80 source inputs and 80 artifacts from one export
+The fixture records exactly 84 source inputs and 84 artifacts from one export
 attempt. Provenance tests independently pin the upstream source catalog and
 reject omissions, changed pins and escaped paths. Focused preparation and cache
 receipts reuse this exact inventory; installed-interface symlink overlays are
@@ -203,7 +203,13 @@ real `hsc2hs`. Fresh export supplies the exact
 `ghc-internal:GHC.Internal.Heap.InfoTable.Types.$w$cshowsPrec` body, referenced
 36 times by three original `Heap.Closures` workers. The proof checks its formal
 representations and the generated `HalfWord` width against the target layout;
-it does not replace or alias the worker. Full `Show StgInfoTable` execution is
-not claimed: the source closure still lacks `Data.Either.$fShowEither`,
-`Ptr.$fShowFunPtr`, `Word.$fShowWord32`, and `Word.$fShowWord8` under the
-`ghc-internal:GHC.Internal` prefix. Adding those modules is a separate slice.
+it does not replace or alias the worker. The unchanged original `Ptr`,
+`Data.Either`, and `Word` sources now supply `Ptr.$fShowFunPtr`,
+`Data.Either.$fShowEither`, `Word.$fShowWord32`, and `Word.$fShowWord8`
+under the `ghc-internal:GHC.Internal` prefix. Availability of those exact
+bindings does not establish full `Show StgInfoTable`, ErrorCall, or decoder
+support. Strict traversal now exposes missing `Bignum.Integer.integerFromWord#`,
+`Numeric.showHex1`, `Numeric.showIntAtBase`, and `Real.$fIntegralInteger`, as
+well as the separate encoding/libdw frontier and unsupported `addr2Int#`.
+Those dependencies and cold decoder branches are not admitted by this source
+addition.
