@@ -237,10 +237,6 @@ def main():
     args = parser.parse_args()
     ghc = os.environ.get('GHC', 'ghc')
     check(subprocess.check_output([ghc, '--numeric-version'], text=True).strip() == '9.14.1', 'Requires GHC9.14.1')
-    launcher = Path(shutil.which(ghc) or ghc).resolve()
-    libdir = Path(subprocess.check_output([ghc, '--print-libdir'], text=True).strip())
-    executable = libdir.parent/'bin/ghc-9.14.1'
-    check(executable.is_file(), 'Missing actual pinned GHC executable behind launcher')
     check(sys.byteorder == BYTE_ORDER, 'This bounded corpus requires little-endian native order')
     OUT.mkdir(parents=True, exist_ok=True)
     for name in ('provenance.json', 'oracle.tsv', 'snan-expected.tsv', 'snan-oracle.tsv'):
@@ -351,9 +347,7 @@ def main():
                       sources=[record(path) for path in sources], artifacts=[record(path) for path in artifacts],
                       toolchain=dict(ghc=ghc, ghcVersion='9.14.1', architecture=platform.machine(), byteOrder=sys.byteorder,
                                      host=platform.node(), machine=platform.machine(), system=platform.platform(),
-                                     ghcInfo=subprocess.check_output([ghc, '--info'], text=True),
-                                     ghcBinaryPath=str(executable), ghcBinarySha256=hashlib.sha256(executable.read_bytes()).hexdigest(),
-                                     ghcLauncherPath=str(launcher), ghcLauncherSha256=hashlib.sha256(launcher.read_bytes()).hexdigest()),
+                                     ghcInfo=subprocess.check_output([ghc, '--info'], text=True)),
                       claim=('Six local FloatX4 ByteArray primitives; native/model, exact Core metadata and strict audits; no JVM graph claim'
                              if native_rows is not None else 'Pre-Tidy Core and byte model only; NO native/post-Tidy validation'),
                       limitations=['Little-endian 64-bit native corpus only', 'No Addr or general vector/aggregate ABI',

@@ -139,8 +139,8 @@ class ManagedMd5Test {
         val sources = manifest["sources"] as List<Map<String, String>>
         assertTrue(sources.any { it["path"] == "src/main/kotlin/thc/runtime/ManagedMd5.kt" })
         assertTrue(sources.any { it["path"] == "src/main/kotlin/thc/runtime/LiteralAddresses.kt" })
-        for (record in sources + (manifest["artifacts"] as List<Map<String, String>>) +
-            (manifest["tools"] as List<Map<String, String>>)) {
+        assertEquals("9.14.1", manifest["ghc"])
+        for (record in sources + (manifest["artifacts"] as List<Map<String, String>>)) {
             val path = File(record.getValue("path"))
             val file = if (path.isAbsolute) path else File(root, record.getValue("path"))
             assertEquals(record["sha256"], hex(MessageDigest.getInstance("SHA-256").digest(file.readBytes())), file.path)

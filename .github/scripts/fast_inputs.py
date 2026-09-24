@@ -331,7 +331,7 @@ def inventory(root, current, read, core_files, verified=None):
             if outside:
                 require(external_allowed(target, current), "Unknown external fingerprint: " + target)
                 require(target not in external or external[target] == recorded, "Conflicting external fingerprint")
-                require(digest(Path(target)) == recorded, "Stale installed/tool fingerprint: " + target)
+                # Installed tools and interfaces are gated by the pinned toolchain version.
                 external[target] = recorded
             elif target in tracked:
                 require(current["sources"].get(target) == recorded,

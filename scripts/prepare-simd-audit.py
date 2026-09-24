@@ -54,8 +54,7 @@ def main():
     commands = []
     toolchain = dict(ghcVersion=subprocess.check_output([ghc, '--numeric-version'], text=True).strip(),
         host=platform.node(), machine=platform.machine(), system=platform.platform(),
-        ghcInfo=subprocess.check_output([ghc, '--info'], text=True),
-        ghcBinarySha256=hashlib.sha256(Path(shutil.which(ghc) or ghc).resolve().read_bytes()).hexdigest())
+        ghcInfo=subprocess.check_output([ghc, '--info'], text=True))
     def run(argv, env=None):
         commands.append(dict(argv=argv, env=env or {}))
         subprocess.run(argv, cwd=ROOT, env=dict(os.environ, **(env or {})), check=True)

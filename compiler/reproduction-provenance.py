@@ -92,7 +92,7 @@ for owner in interface_owners:
     unit, module = owner.split(':', 1)
     directory = Path(output([ghc_pkg, 'field', unit, 'import-dirs', '--simple-output'])).resolve()
     interface = directory / (module.replace('.', '/') + '.dyn_hi')
-    interfaces.append(dict(record(interface), owner=owner, profile='dynamic'))
+    interfaces.append(dict(path=str(interface), owner=owner, profile='dynamic'))
 
 exporter_paths = sorted(set((root / 'compiler/THC').rglob('*.hs')) | {
     root / 'compiler/build.sh', root / 'compiler/export.sh', root / 'compiler/toolchain.sh',

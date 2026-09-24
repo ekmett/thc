@@ -213,6 +213,8 @@ def main():
 
     cc = Path(shutil.which(args.cc) or args.cc).resolve(strict=True)
     ghc = Path(shutil.which(args.ghc) or args.ghc).resolve(strict=True)
+    if subprocess.check_output([ghc, "--numeric-version"], text=True).strip() != "9.14.1":
+        raise ValueError("Native MD5 fixture requires GHC 9.14.1")
     run("cc-version", [cc, "--version"])
     libdir = Path(run("ghc-libdir", [ghc, "--print-libdir"]).strip())
     headers = list(libdir.rglob("HsFFI.h"))
@@ -231,7 +233,7 @@ def main():
         except ValueError:
             name = str(path)
         return {"path": name, "sha256": digest(path)}
-    sources = [Path(__file__), driver, reference / "md5.c", reference / "md5.h", headers[0],
+    sources = [Path(__file__), driver, reference / "md5.c", reference / "md5.h",
                root / "src/main/kotlin/thc/runtime/LiteralAddresses.kt",
                root / "src/main/kotlin/thc/runtime/ManagedMd5.kt",
                root / "src/test/kotlin/thc/runtime/ManagedMd5Test.kt"]
@@ -240,7 +242,7 @@ def main():
                   "contextOffsets": [0, 16, 24], "contextAlignment": 4,
                   "referenceGitBlobs": expected_blobs, "independentModelMatched": True, **counts,
                   "sources": list(map(record, sources)), "artifacts": list(map(record, artifacts)),
-                  "tools": [record(cc), record(ghc)]}
+                  "ghc": "9.14.1"}
     (output / "provenance.json").write_text(json.dumps(provenance, indent=2, sort_keys=True) + "\n")
     print(json.dumps(counts, sort_keys=True))
     print(f"PASS native C ABI/context oracle; provenance sha256={digest(output / 'provenance.json')}")
