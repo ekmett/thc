@@ -2,6 +2,7 @@ package thc
 
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.BytecodeConfig
+import com.oracle.truffle.api.interop.InteropLibrary
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.runtime.BytecodeProgram
@@ -68,7 +69,7 @@ class BytecodeSourceNotesTest {
             assertEquals((input + 1) * 2, execute(off, input))
             assertEquals((input + 1) * 2, execute(on, input))
         }
-        assertEquals(true, EntryValue(on, "entry", 1).invokeMember("compile", emptyArray()))
+        assertEquals(true, InteropLibrary.getUncached().invokeMember(EntryValue(on, "entry", 1), "compile"))
         assertEquals(86L, execute(on, 42L))
         assertTrue((on.diagnostics()["compiledEntries"] as Long) > 0)
         // Source-only configuration must never enable instruction tracing.
@@ -98,7 +99,7 @@ class BytecodeSourceNotesTest {
         assertEquals(offRoot.bytecodeNode.instructions.map { it.name }, onRoot.bytecodeNode.instructions.map { it.name })
         assertEquals(100_017L, execute(off, 100_000L))
         assertEquals(100_017L, execute(on, 100_000L))
-        assertEquals(true, EntryValue(on, "entry", 1).invokeMember("compile", emptyArray()))
+        assertEquals(true, InteropLibrary.getUncached().invokeMember(EntryValue(on, "entry", 1), "compile"))
         assertEquals(100_018L, execute(on, 100_001L))
         assertEquals(0L, on.diagnostics()["trampolineIterations"])
         assertEquals(1, on.diagnostics()["localJoinCount"])
