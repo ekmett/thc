@@ -184,7 +184,7 @@ class IntArrayNativeTest {
         for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
             val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
                 .joinToString("") { "%02x".format(it.toInt() and 255) }
-            assertEquals(expected, actual, "Stale Int-array fixture: $path; rerun prepare-int-arrays.py")
+            assertEquals(expected, actual, "Stale Int-array fixture: $path; regenerate the Int-array fixtures")
         }
         val rows = checkedRows(File(root, "build/int-arrays/oracle.tsv").readText()).groupBy { it.name }
         assertEquals(names.toSet(), rows.keys)

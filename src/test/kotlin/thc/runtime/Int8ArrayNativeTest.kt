@@ -203,7 +203,7 @@ class Int8ArrayNativeTest {
         for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
             val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
                 .joinToString("") { "%02x".format(it.toInt() and 255) }
-            assertEquals(expected, actual, "Stale 8-bit-array fixture: $path; rerun prepare-int8-arrays.py")
+            assertEquals(expected, actual, "Stale 8-bit-array fixture: $path; regenerate the 8-bit-array fixtures")
         }
         val rows = checkedRows(File(root, "build/int8-arrays/oracle.tsv").readText())
         val stages = manifest["stages"] as Map<String, List<String>>

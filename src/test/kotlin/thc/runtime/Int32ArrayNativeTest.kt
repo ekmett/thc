@@ -382,7 +382,7 @@ class Int32ArrayNativeTest {
         for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
             val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
                 .joinToString("") { "%02x".format(it.toInt() and 255) }
-            assertEquals(expected, actual, "Stale 32-bit-array fixture: $path; rerun prepare-int32-arrays.py")
+            assertEquals(expected, actual, "Stale 32-bit-array fixture: $path; regenerate the 32-bit-array fixtures")
         }
         val rows = checkedRows(File(root, "build/int32-arrays/oracle.tsv").readText()).groupBy { it.name }
         assertEquals(names.toSet(), rows.keys)

@@ -399,7 +399,7 @@ class FloatWordArrayNativeTest {
         for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
             val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
                 .joinToString("") { "%02x".format(it.toInt() and 255) }
-            assertEquals(expected, actual, "Stale Float/Word-array fixture: $path; rerun prepare-float-word-arrays.py")
+            assertEquals(expected, actual, "Stale Float/Word-array fixture: $path; regenerate the Float/Word-array fixtures")
         }
         val rows = verifyRows(File(root, "build/float-word-arrays/oracle.tsv").readText()).groupBy { it.first }
         assertEquals(names.toSet(), rows.keys)
