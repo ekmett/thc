@@ -9,13 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 301 | Implemented fixed numeric/character scalar forms. |
-<<<<<<< HEAD
-| Partial | 263 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 927 | No declared lowering. |
-=======
-| Partial | 267 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 923 | No declared lowering. |
->>>>>>> 3cb7e0e3
+| Partial | 269 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 921 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still

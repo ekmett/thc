@@ -86,6 +86,19 @@ Raw operand/result proofs and levity flags are checked before lowering; known
 stored or intrinsic representations cannot be disguised by occurrence metadata.
 This does not add weak pointers, finalizers or asynchronous exception semantics.
 
+The existing `pinned-pointer-cells` native fixture exercises mutable contents
+without a freeze, bidirectional array/address writes and an unlifted touch. A
+separate root touches a lifted bottom without entering it. The combined fixture
+keeps the pointer, byte and halfword observations: eleven inputs, nine roots and
+ten TSV columns including the input. Genuine pre/post Core applications retain
+their exact levity, operand and bare-State result proofs; malformed mutations
+are rejected by both loaders. New compiled checks cover both backends with
+inlining enabled and disabled, including active `runRW#` lambdas and split
+callees. They require valid targets on the first and every installed invocation,
+without post-installation settling or recompilation. Managed-only checks cover
+escaped-address lifetime, pointer-cell protection and invalid offsets; native
+tests never execute invalid pointer operations.
+
 ## Three closed foreign contracts
 
 The existing compiler exporter supplies structured `app[6].foreignCall` metadata
