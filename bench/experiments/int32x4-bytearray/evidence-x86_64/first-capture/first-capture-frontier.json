@@ -1,0 +1,2219 @@
+{
+  "claim": "All sixteen first guest/capture/parse commands passed; compiled graph acceptance FAILED.",
+  "sourceRevision": "6f9960bcf1db6de9f0fd297a45cc7aa2003d9f46",
+  "reason": "Bounds-error RuntimeFault allocation and Throwable.fillInStackTrace remained in every compiled graph.",
+  "firstCheckerError": "Residual private carrier/vector/payload reference: a!# byte[]",
+  "runtimeFix": "62ad4655b5ab56fd203bc18f8d03139e3d89d1ad",
+  "recapturePolicy": "New runtime checkpoint in a new directory; original captures/checker logs are unchanged.",
+  "originalCheck": {
+    "path": "build/int32x4-bytearray-runtime-frozen/check.log",
+    "bytes": 1098,
+    "sha256": "b667d7254705e6dc7fca697d379eeb7fe5ddae4665468c38e18ebff082cd8cae"
+  },
+  "records": [
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "entry": "vectorIndexWorker",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorIndexWorker/parsed/graph-00045.json",
+        "bytes": 1566852,
+        "sha256": "a372022bf8b753022ccd910ced66055cc82872d5f8782385e2b2183239940a8c"
+      },
+      "nodeKinds": {
+        "StartNode": 1,
+        "ConstantNode": 25,
+        "ParameterNode": 1,
+        "FrameState": 23,
+        "PiArrayNode": 1,
+        "PiNode": 6,
+        "LoadIndexedNode": 3,
+        "BoxNode$TrustedBoxedValue": 2,
+        "VirtualInstanceNode": 2,
+        "VirtualArrayNode": 4,
+        "UnboxNode": 2,
+        "OrNode": 1,
+        "ArrayLengthNode": 1,
+        "IfNode": 3,
+        "ZeroExtendNode": 2,
+        "BeginNode": 7,
+        "IntegerLessThanNode": 2,
+        "AddNode": 9,
+        "RightShiftNode": 2,
+        "UnsignedRightShiftNode": 1,
+        "LeftShiftNode": 4,
+        "NarrowNode": 1,
+        "EndNode": 3,
+        "MergeNode": 1,
+        "MonitorIdNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "MethodCallTargetNode": 1,
+        "ExceptionObjectNode": 1,
+        "FixedGuardNode": 1,
+        "IntegerBelowNode": 2,
+        "OffsetAddressNode": 1,
+        "SignExtendNode": 4,
+        "SubNode": 1,
+        "MulNode": 1,
+        "ReturnNode": 1,
+        "DeoptimizeNode": 2,
+        "StateSplitProxyNode": 1,
+        "VirtualObjectState": 6,
+        "CommitAllocationNode": 1,
+        "AllocatedObjectNode": 1,
+        "MaterializedObjectState": 1,
+        "BoxNode$AllocatingBoxNode": 1,
+        "ReadNode": 1,
+        "ReinterpretNode": 1,
+        "SimdCutNode": 4
+      },
+      "frontierNodes": [
+        {
+          "id": 699,
+          "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+          "properties": {
+            "stamp": "a java.lang.Throwable",
+            "targetMethod": "Throwable.fillInStackTrace"
+          }
+        },
+        {
+          "id": 700,
+          "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+          "properties": {
+            "stamp": "void",
+            "targetMethod": "java.lang.Throwable.fillInStackTrace(I)"
+          }
+        },
+        {
+          "id": 1953,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault",
+            "type": "thc.runtime.RuntimeFault"
+          }
+        },
+        {
+          "id": 1955,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.CommitAllocationNode",
+          "properties": {
+            "stamp": "void"
+          }
+        },
+        {
+          "id": 1956,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault"
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorIndexWorker/graphs/TruffleHotSpotCompilation-2296[lambda_bytes,_offset].bgv",
+          "bytes": 10072244,
+          "sha256": "8d759319523866e867846339e8e8835d1ec7cf33108e38709b05bc78086b9ce5"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorIndexWorker/graphs/TruffleHotSpotCompilation-2296[lambda_bytes,_offset].cfg",
+          "bytes": 4240603,
+          "sha256": "6bf81f81b0c53188b87c20d45f97c22afb9e4d269ace6f06712ca158450dd65a"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorIndexWorker/parse.command.txt",
+          "bytes": 750,
+          "sha256": "b4ead4921e7cb7ca0fbf72048a034fa3bf2ef20db5c486ee84b42c44673d9b75"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorIndexWorker/parse.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorIndexWorker/parse.log",
+          "bytes": 166,
+          "sha256": "b406162ec91742d09694d56c22dc90224feac69c49de09f3923989f324915b6e"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorIndexWorker/run.command.txt",
+          "bytes": 1006,
+          "sha256": "cc01904824be15c44e3d9e060e1b0c55fdcdc6043cfbb75183c739438b77f724"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorIndexWorker/run.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorIndexWorker/run.log",
+          "bytes": 1918,
+          "sha256": "6aeba0d0266d0cb4ab53a6ec4632c6b78a8def83dba57471f0b4df9ca80e7fb1"
+        }
+      ]
+    },
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "entry": "scalarIndexWorker",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarIndexWorker/parsed/graph-00045.json",
+        "bytes": 1551160,
+        "sha256": "69f485bad0abdf9dd263b4d7f4abc607418d410d56cb6c85b711f62dc6a396cb"
+      },
+      "nodeKinds": {
+        "StartNode": 1,
+        "ConstantNode": 24,
+        "ParameterNode": 1,
+        "FrameState": 23,
+        "PiArrayNode": 1,
+        "PiNode": 6,
+        "LoadIndexedNode": 3,
+        "BoxNode$TrustedBoxedValue": 2,
+        "VirtualInstanceNode": 2,
+        "VirtualArrayNode": 4,
+        "UnboxNode": 2,
+        "OrNode": 1,
+        "ArrayLengthNode": 1,
+        "IfNode": 3,
+        "ZeroExtendNode": 2,
+        "BeginNode": 7,
+        "IntegerLessThanNode": 2,
+        "AddNode": 9,
+        "RightShiftNode": 2,
+        "UnsignedRightShiftNode": 1,
+        "LeftShiftNode": 4,
+        "NarrowNode": 1,
+        "EndNode": 3,
+        "MergeNode": 1,
+        "MonitorIdNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "MethodCallTargetNode": 1,
+        "ExceptionObjectNode": 1,
+        "FixedGuardNode": 1,
+        "IntegerBelowNode": 2,
+        "OffsetAddressNode": 1,
+        "SignExtendNode": 4,
+        "SubNode": 1,
+        "MulNode": 1,
+        "ReturnNode": 1,
+        "DeoptimizeNode": 2,
+        "StateSplitProxyNode": 1,
+        "VirtualObjectState": 6,
+        "CommitAllocationNode": 1,
+        "AllocatedObjectNode": 1,
+        "MaterializedObjectState": 1,
+        "BoxNode$AllocatingBoxNode": 1,
+        "ReadNode": 1,
+        "ReinterpretNode": 1,
+        "SimdCutNode": 4
+      },
+      "frontierNodes": [
+        {
+          "id": 699,
+          "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+          "properties": {
+            "stamp": "a java.lang.Throwable",
+            "targetMethod": "Throwable.fillInStackTrace"
+          }
+        },
+        {
+          "id": 700,
+          "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+          "properties": {
+            "stamp": "void",
+            "targetMethod": "java.lang.Throwable.fillInStackTrace(I)"
+          }
+        },
+        {
+          "id": 1953,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault",
+            "type": "thc.runtime.RuntimeFault"
+          }
+        },
+        {
+          "id": 1955,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.CommitAllocationNode",
+          "properties": {
+            "stamp": "void"
+          }
+        },
+        {
+          "id": 1956,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault"
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarIndexWorker/graphs/TruffleHotSpotCompilation-2301[lambda_bytes,_offset].bgv",
+          "bytes": 10064199,
+          "sha256": "6b6e3d999e2036c68b2dfad16a263dbfa215a4648d16b2504b8fae5a9ee1bcb2"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarIndexWorker/graphs/TruffleHotSpotCompilation-2301[lambda_bytes,_offset].cfg",
+          "bytes": 4236221,
+          "sha256": "393857c1b540586c6506ab14085489b4e7d901a07ff774e9cd012f02273ef952"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarIndexWorker/parse.command.txt",
+          "bytes": 750,
+          "sha256": "11bfc8555f9895093ac7866c141ceb058c948912c0e0530f7b26826f6e5e70ad"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarIndexWorker/parse.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarIndexWorker/parse.log",
+          "bytes": 166,
+          "sha256": "22503f4c6b712aa79f520f002dd23886e35d08b5a6f9e72fabc80e896ace0872"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarIndexWorker/run.command.txt",
+          "bytes": 1006,
+          "sha256": "3638c8791cd8cc8187268a9b074cb935675e64499ee38fe3de1b2fb346d8d815"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarIndexWorker/run.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarIndexWorker/run.log",
+          "bytes": 1918,
+          "sha256": "826e08989cd5acdaeaed9c1a8c7429d3a2402fe08349d1ff5f739b375ed4ff6b"
+        }
+      ]
+    },
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "entry": "vectorStoreGraph",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorStoreGraph/parsed/graph-00045.json",
+        "bytes": 1397203,
+        "sha256": "cdec386d250c6fafe3441c9bc102ddcae7baac5e527fb46ec2e06f1c76002457"
+      },
+      "nodeKinds": {
+        "StartNode": 1,
+        "ConstantNode": 30,
+        "ParameterNode": 1,
+        "FrameState": 25,
+        "PiArrayNode": 1,
+        "PiNode": 11,
+        "LoadIndexedNode": 8,
+        "BoxNode$TrustedBoxedValue": 6,
+        "VirtualInstanceNode": 3,
+        "VirtualArrayNode": 4,
+        "UnboxNode": 6,
+        "OrNode": 1,
+        "NarrowNode": 5,
+        "FixedGuardNode": 2,
+        "ArrayLengthNode": 1,
+        "IfNode": 3,
+        "ZeroExtendNode": 2,
+        "IntegerBelowNode": 2,
+        "BeginNode": 7,
+        "IntegerLessThanNode": 2,
+        "AddNode": 4,
+        "RightShiftNode": 2,
+        "UnsignedRightShiftNode": 1,
+        "LeftShiftNode": 1,
+        "EndNode": 3,
+        "MergeNode": 1,
+        "MonitorIdNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "MethodCallTargetNode": 1,
+        "ExceptionObjectNode": 1,
+        "SignExtendNode": 4,
+        "OffsetAddressNode": 1,
+        "ReturnNode": 1,
+        "DeoptimizeNode": 2,
+        "ObjectEqualsNode": 1,
+        "StateSplitProxyNode": 1,
+        "VirtualObjectState": 7,
+        "CommitAllocationNode": 1,
+        "AllocatedObjectNode": 1,
+        "MaterializedObjectState": 1,
+        "SimdBroadcastNode": 1,
+        "SimdInsertNode": 3,
+        "WriteNode": 1
+      },
+      "frontierNodes": [
+        {
+          "id": 1942,
+          "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+          "properties": {
+            "stamp": "a java.lang.Throwable",
+            "targetMethod": "Throwable.fillInStackTrace"
+          }
+        },
+        {
+          "id": 1943,
+          "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+          "properties": {
+            "stamp": "void",
+            "targetMethod": "java.lang.Throwable.fillInStackTrace(I)"
+          }
+        },
+        {
+          "id": 2693,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault",
+            "type": "thc.runtime.RuntimeFault"
+          }
+        },
+        {
+          "id": 2695,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.CommitAllocationNode",
+          "properties": {
+            "stamp": "void"
+          }
+        },
+        {
+          "id": 2696,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault"
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorStoreGraph/graphs/TruffleHotSpotCompilation-2372[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].bgv",
+          "bytes": 11123844,
+          "sha256": "830eea6b5537df973316ba4946293da12865335137009bad5e8dd512f358963f"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorStoreGraph/graphs/TruffleHotSpotCompilation-2372[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].cfg",
+          "bytes": 4971097,
+          "sha256": "1be0e7710387817322540f2fba7ea2700bb337bdb1584c88f56016b26af4641b"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorStoreGraph/parse.command.txt",
+          "bytes": 773,
+          "sha256": "4ececde7846b967177a0b4ecc6561ecccbf5609821fc456ca8b212c144742881"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorStoreGraph/parse.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorStoreGraph/parse.log",
+          "bytes": 165,
+          "sha256": "5d05455bc52e41131b7c3af98a24718777a0ae3c47e823f76df36150e2a599e4"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorStoreGraph/run.command.txt",
+          "bytes": 1004,
+          "sha256": "b44ea2313ac9178dfb711b84cd746029486e77f5529a040dd520a40967ade5bb"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorStoreGraph/run.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorStoreGraph/run.log",
+          "bytes": 1935,
+          "sha256": "04a0332f022994083d30698f3aee0fe0b2c76b4c6bbee370117f191578ddd059"
+        }
+      ]
+    },
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "entry": "scalarStoreGraph",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarStoreGraph/parsed/graph-00045.json",
+        "bytes": 1397195,
+        "sha256": "91e8d649a10bc0e771e73cca1e6559431a70634139ba2e1262a9c244056db452"
+      },
+      "nodeKinds": {
+        "StartNode": 1,
+        "ConstantNode": 30,
+        "ParameterNode": 1,
+        "FrameState": 25,
+        "PiArrayNode": 1,
+        "PiNode": 11,
+        "LoadIndexedNode": 8,
+        "BoxNode$TrustedBoxedValue": 6,
+        "VirtualInstanceNode": 3,
+        "VirtualArrayNode": 4,
+        "UnboxNode": 6,
+        "OrNode": 1,
+        "NarrowNode": 5,
+        "FixedGuardNode": 2,
+        "ArrayLengthNode": 1,
+        "IfNode": 3,
+        "ZeroExtendNode": 2,
+        "IntegerBelowNode": 2,
+        "BeginNode": 7,
+        "IntegerLessThanNode": 2,
+        "AddNode": 4,
+        "RightShiftNode": 2,
+        "UnsignedRightShiftNode": 1,
+        "LeftShiftNode": 1,
+        "EndNode": 3,
+        "MergeNode": 1,
+        "MonitorIdNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "MethodCallTargetNode": 1,
+        "ExceptionObjectNode": 1,
+        "SignExtendNode": 4,
+        "OffsetAddressNode": 1,
+        "ReturnNode": 1,
+        "DeoptimizeNode": 2,
+        "ObjectEqualsNode": 1,
+        "StateSplitProxyNode": 1,
+        "VirtualObjectState": 7,
+        "CommitAllocationNode": 1,
+        "AllocatedObjectNode": 1,
+        "MaterializedObjectState": 1,
+        "SimdBroadcastNode": 1,
+        "SimdInsertNode": 3,
+        "WriteNode": 1
+      },
+      "frontierNodes": [
+        {
+          "id": 1942,
+          "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+          "properties": {
+            "stamp": "a java.lang.Throwable",
+            "targetMethod": "Throwable.fillInStackTrace"
+          }
+        },
+        {
+          "id": 1943,
+          "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+          "properties": {
+            "stamp": "void",
+            "targetMethod": "java.lang.Throwable.fillInStackTrace(I)"
+          }
+        },
+        {
+          "id": 2693,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault",
+            "type": "thc.runtime.RuntimeFault"
+          }
+        },
+        {
+          "id": 2695,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.CommitAllocationNode",
+          "properties": {
+            "stamp": "void"
+          }
+        },
+        {
+          "id": 2696,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault"
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarStoreGraph/graphs/TruffleHotSpotCompilation-2372[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].bgv",
+          "bytes": 11123914,
+          "sha256": "e57c9cd3f805df53bcbda2de2925df16fd8fc7ffa95104cd84dd1be54b05343f"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarStoreGraph/graphs/TruffleHotSpotCompilation-2372[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].cfg",
+          "bytes": 4971083,
+          "sha256": "1a5e1dc49b1661d3fa2097e52dc3d6cc77aca08a83e230d2abc391076a56ea2e"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarStoreGraph/parse.command.txt",
+          "bytes": 773,
+          "sha256": "4b5e93c8af1d797c6c541c597db3f9da28e690358a3c9f89afc49a594fc7af4f"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarStoreGraph/parse.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarStoreGraph/parse.log",
+          "bytes": 165,
+          "sha256": "d425913c3d57fd433bbd88db283603ff1a32c456359851e26f6d9565cc8a4332"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarStoreGraph/run.command.txt",
+          "bytes": 1004,
+          "sha256": "6c887e1f8568a16493e8657f12c5a603b61f2e8d4c3701d78b392bd69f87be8d"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarStoreGraph/run.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarStoreGraph/run.log",
+          "bytes": 1935,
+          "sha256": "85c5e61fbdc7888655d0e53e8b1d04f230f160092696961c628a99a1cf7b2df3"
+        }
+      ]
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "entry": "vectorIndexWorker",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorIndexWorker/parsed/graph-00045.json",
+        "bytes": 669245,
+        "sha256": "a2304c68b70fe448523445059e8b383b40395b9c76ecb32a9c1c15e9e5d7aee9"
+      },
+      "nodeKinds": {
+        "StartNode": 1,
+        "ConstantNode": 29,
+        "ParameterNode": 1,
+        "FrameState": 21,
+        "PiArrayNode": 1,
+        "PiNode": 6,
+        "LoadIndexedNode": 3,
+        "BoxNode$TrustedBoxedValue": 2,
+        "VirtualInstanceNode": 2,
+        "VirtualArrayNode": 4,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 1,
+        "ArrayLengthNode": 1,
+        "IfNode": 3,
+        "ZeroExtendNode": 2,
+        "BeginNode": 7,
+        "IntegerLessThanNode": 2,
+        "AddNode": 9,
+        "RightShiftNode": 2,
+        "UnsignedRightShiftNode": 1,
+        "LeftShiftNode": 4,
+        "NarrowNode": 1,
+        "EndNode": 3,
+        "MergeNode": 1,
+        "MonitorIdNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "MethodCallTargetNode": 1,
+        "ExceptionObjectNode": 1,
+        "FixedGuardNode": 1,
+        "IntegerBelowNode": 2,
+        "OffsetAddressNode": 1,
+        "SignExtendNode": 4,
+        "MulNode": 1,
+        "ReturnNode": 1,
+        "DeoptimizeNode": 2,
+        "StateSplitProxyNode": 1,
+        "VirtualObjectState": 9,
+        "CommitAllocationNode": 1,
+        "AllocatedObjectNode": 1,
+        "MaterializedObjectState": 1,
+        "SubNode": 1,
+        "BoxNode$AllocatingBoxNode": 1,
+        "ReadNode": 1,
+        "ReinterpretNode": 1,
+        "SimdCutNode": 4
+      },
+      "frontierNodes": [
+        {
+          "id": 539,
+          "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+          "properties": {
+            "stamp": "a java.lang.Throwable",
+            "targetMethod": "Throwable.fillInStackTrace"
+          }
+        },
+        {
+          "id": 540,
+          "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+          "properties": {
+            "stamp": "void",
+            "targetMethod": "java.lang.Throwable.fillInStackTrace(I)"
+          }
+        },
+        {
+          "id": 1837,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault",
+            "type": "thc.runtime.RuntimeFault"
+          }
+        },
+        {
+          "id": 1839,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.CommitAllocationNode",
+          "properties": {
+            "stamp": "void"
+          }
+        },
+        {
+          "id": 1840,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault"
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorIndexWorker/graphs/TruffleHotSpotCompilation-2378[lambda_bytes,_offset].bgv",
+          "bytes": 11054987,
+          "sha256": "3375eb38cfd766ef6a114803b203c80631861203834142333fd2ec23f8cbc95a"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorIndexWorker/graphs/TruffleHotSpotCompilation-2378[lambda_bytes,_offset].cfg",
+          "bytes": 4703902,
+          "sha256": "421ca40b1b286984d78dc84eb8e718f9266ad678314596d7add22093911b2047"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorIndexWorker/parse.command.txt",
+          "bytes": 760,
+          "sha256": "91f469161a493473122962cc8ef50280a288b6658cbcfdc1b357ccfb4060212b"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorIndexWorker/parse.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorIndexWorker/parse.log",
+          "bytes": 171,
+          "sha256": "7d338ed316c5dcc0d3cd18fc1c566abdf75ae6042fb8f65710fe6a8d794b5595"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorIndexWorker/run.command.txt",
+          "bytes": 1016,
+          "sha256": "abe3a44c250a124d399758738160403909a99de063e367682abfdef1e6770e22"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorIndexWorker/run.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorIndexWorker/run.log",
+          "bytes": 1985,
+          "sha256": "1e4417fc5871bae7ffe84926ed789f04ae34a608fb4fcfd6b143aed47c9d7004"
+        }
+      ]
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "entry": "scalarIndexWorker",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarIndexWorker/parsed/graph-00045.json",
+        "bytes": 661825,
+        "sha256": "2b1cb79dc8245307a008d17f78dc55e07458439da1a5ff66fd333dcc54d0ccb1"
+      },
+      "nodeKinds": {
+        "StartNode": 1,
+        "ConstantNode": 28,
+        "ParameterNode": 1,
+        "FrameState": 21,
+        "PiArrayNode": 1,
+        "PiNode": 6,
+        "LoadIndexedNode": 3,
+        "BoxNode$TrustedBoxedValue": 2,
+        "VirtualInstanceNode": 2,
+        "VirtualArrayNode": 4,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 1,
+        "ArrayLengthNode": 1,
+        "IfNode": 3,
+        "ZeroExtendNode": 2,
+        "BeginNode": 7,
+        "IntegerLessThanNode": 2,
+        "AddNode": 9,
+        "RightShiftNode": 2,
+        "UnsignedRightShiftNode": 1,
+        "LeftShiftNode": 4,
+        "NarrowNode": 1,
+        "EndNode": 3,
+        "MergeNode": 1,
+        "MonitorIdNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "MethodCallTargetNode": 1,
+        "ExceptionObjectNode": 1,
+        "FixedGuardNode": 1,
+        "IntegerBelowNode": 2,
+        "OffsetAddressNode": 1,
+        "SignExtendNode": 4,
+        "MulNode": 1,
+        "ReturnNode": 1,
+        "DeoptimizeNode": 2,
+        "StateSplitProxyNode": 1,
+        "VirtualObjectState": 9,
+        "CommitAllocationNode": 1,
+        "AllocatedObjectNode": 1,
+        "MaterializedObjectState": 1,
+        "SubNode": 1,
+        "BoxNode$AllocatingBoxNode": 1,
+        "ReadNode": 1,
+        "ReinterpretNode": 1,
+        "SimdCutNode": 4
+      },
+      "frontierNodes": [
+        {
+          "id": 539,
+          "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+          "properties": {
+            "stamp": "a java.lang.Throwable",
+            "targetMethod": "Throwable.fillInStackTrace"
+          }
+        },
+        {
+          "id": 540,
+          "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+          "properties": {
+            "stamp": "void",
+            "targetMethod": "java.lang.Throwable.fillInStackTrace(I)"
+          }
+        },
+        {
+          "id": 1838,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault",
+            "type": "thc.runtime.RuntimeFault"
+          }
+        },
+        {
+          "id": 1840,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.CommitAllocationNode",
+          "properties": {
+            "stamp": "void"
+          }
+        },
+        {
+          "id": 1841,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault"
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarIndexWorker/graphs/TruffleHotSpotCompilation-2374[lambda_bytes,_offset].bgv",
+          "bytes": 11046902,
+          "sha256": "23e2ebade217a6867ece97c62f96605b5ab904f75fa5ba53c58df7768d2ef853"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarIndexWorker/graphs/TruffleHotSpotCompilation-2374[lambda_bytes,_offset].cfg",
+          "bytes": 4700379,
+          "sha256": "92548596724a1428b4e12063c30a7d6f6317eb89749ef65c5b6ac24c6735608a"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarIndexWorker/parse.command.txt",
+          "bytes": 760,
+          "sha256": "99aa509fc7afceed44f8c9b73db3fe37e58f7f3eaea3a9151bd6917da967d853"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarIndexWorker/parse.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarIndexWorker/parse.log",
+          "bytes": 171,
+          "sha256": "bb4462d52f783c041334e4f45726bfa334be88ec6004e548d331eae5af7e9706"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarIndexWorker/run.command.txt",
+          "bytes": 1016,
+          "sha256": "f71700f591567b0ec688e27c8d6875072a1005c844761f2b7954b63181357f87"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarIndexWorker/run.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarIndexWorker/run.log",
+          "bytes": 1985,
+          "sha256": "2a3f7dc251249883e598c8e89e1a81f0154c8b7ae0f942eea366240ffe505fcf"
+        }
+      ]
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "entry": "vectorStoreGraph",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorStoreGraph/parsed/graph-00045.json",
+        "bytes": 686774,
+        "sha256": "4ea6923dae501cca07e67cb5d918ba5b470412ec77389618d57bd714233199b0"
+      },
+      "nodeKinds": {
+        "StartNode": 1,
+        "ConstantNode": 32,
+        "ParameterNode": 1,
+        "FrameState": 23,
+        "PiArrayNode": 1,
+        "PiNode": 11,
+        "LoadIndexedNode": 8,
+        "BoxNode$TrustedBoxedValue": 6,
+        "VirtualInstanceNode": 3,
+        "VirtualArrayNode": 4,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 5,
+        "NarrowNode": 5,
+        "FixedGuardNode": 2,
+        "ObjectEqualsNode": 1,
+        "ArrayLengthNode": 1,
+        "IfNode": 3,
+        "ZeroExtendNode": 2,
+        "IntegerBelowNode": 2,
+        "BeginNode": 7,
+        "IntegerLessThanNode": 2,
+        "AddNode": 4,
+        "RightShiftNode": 2,
+        "UnsignedRightShiftNode": 1,
+        "LeftShiftNode": 1,
+        "EndNode": 3,
+        "MergeNode": 1,
+        "MonitorIdNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "MethodCallTargetNode": 1,
+        "ExceptionObjectNode": 1,
+        "OffsetAddressNode": 1,
+        "ReturnNode": 1,
+        "DeoptimizeNode": 2,
+        "StateSplitProxyNode": 1,
+        "VirtualObjectState": 10,
+        "CommitAllocationNode": 1,
+        "AllocatedObjectNode": 1,
+        "MaterializedObjectState": 1,
+        "SimdBroadcastNode": 1,
+        "SimdInsertNode": 3,
+        "WriteNode": 1
+      },
+      "frontierNodes": [
+        {
+          "id": 1693,
+          "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+          "properties": {
+            "stamp": "a java.lang.Throwable",
+            "targetMethod": "Throwable.fillInStackTrace"
+          }
+        },
+        {
+          "id": 1694,
+          "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+          "properties": {
+            "stamp": "void",
+            "targetMethod": "java.lang.Throwable.fillInStackTrace(I)"
+          }
+        },
+        {
+          "id": 2326,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault",
+            "type": "thc.runtime.RuntimeFault"
+          }
+        },
+        {
+          "id": 2328,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.CommitAllocationNode",
+          "properties": {
+            "stamp": "void"
+          }
+        },
+        {
+          "id": 2329,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault"
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorStoreGraph/graphs/TruffleHotSpotCompilation-2414[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].bgv",
+          "bytes": 11377222,
+          "sha256": "66868235fec3771ae41f11354a5250385bd4097ab23d8cc9338cb4fc5de68d28"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorStoreGraph/graphs/TruffleHotSpotCompilation-2414[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].cfg",
+          "bytes": 5193149,
+          "sha256": "d53ab1fef468eaacbc128aba01a5cb1e85ae3ecde029104dc57a38d780d484f0"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorStoreGraph/parse.command.txt",
+          "bytes": 783,
+          "sha256": "2f2a053fd027ced7ced1c351ba37228875a1927441ac3f9bf1c38f5ce7d4f85a"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorStoreGraph/parse.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorStoreGraph/parse.log",
+          "bytes": 170,
+          "sha256": "968508af223197ef1a97316a0b1cc556e0b2a5c2328a0ecd4a0613b2d08f27d1"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorStoreGraph/run.command.txt",
+          "bytes": 1014,
+          "sha256": "44a352c04a11992a3f1dc2583392e3415dac60aad833bbd4e0d9fa2c71603460"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorStoreGraph/run.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorStoreGraph/run.log",
+          "bytes": 2002,
+          "sha256": "013a0da4deab9eb757b7fd4f64459535852785685b9e1c324f642b57bcf2cfa3"
+        }
+      ]
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "entry": "scalarStoreGraph",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarStoreGraph/parsed/graph-00045.json",
+        "bytes": 686766,
+        "sha256": "7da72eff0a675dc2b61d690a46851d7a2f17910dc535be6054e6afaedc4904c9"
+      },
+      "nodeKinds": {
+        "StartNode": 1,
+        "ConstantNode": 32,
+        "ParameterNode": 1,
+        "FrameState": 23,
+        "PiArrayNode": 1,
+        "PiNode": 11,
+        "LoadIndexedNode": 8,
+        "BoxNode$TrustedBoxedValue": 6,
+        "VirtualInstanceNode": 3,
+        "VirtualArrayNode": 4,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 5,
+        "NarrowNode": 5,
+        "FixedGuardNode": 2,
+        "ObjectEqualsNode": 1,
+        "ArrayLengthNode": 1,
+        "IfNode": 3,
+        "ZeroExtendNode": 2,
+        "IntegerBelowNode": 2,
+        "BeginNode": 7,
+        "IntegerLessThanNode": 2,
+        "AddNode": 4,
+        "RightShiftNode": 2,
+        "UnsignedRightShiftNode": 1,
+        "LeftShiftNode": 1,
+        "EndNode": 3,
+        "MergeNode": 1,
+        "MonitorIdNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "MethodCallTargetNode": 1,
+        "ExceptionObjectNode": 1,
+        "OffsetAddressNode": 1,
+        "ReturnNode": 1,
+        "DeoptimizeNode": 2,
+        "StateSplitProxyNode": 1,
+        "VirtualObjectState": 10,
+        "CommitAllocationNode": 1,
+        "AllocatedObjectNode": 1,
+        "MaterializedObjectState": 1,
+        "SimdBroadcastNode": 1,
+        "SimdInsertNode": 3,
+        "WriteNode": 1
+      },
+      "frontierNodes": [
+        {
+          "id": 1693,
+          "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+          "properties": {
+            "stamp": "a java.lang.Throwable",
+            "targetMethod": "Throwable.fillInStackTrace"
+          }
+        },
+        {
+          "id": 1694,
+          "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+          "properties": {
+            "stamp": "void",
+            "targetMethod": "java.lang.Throwable.fillInStackTrace(I)"
+          }
+        },
+        {
+          "id": 2327,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault",
+            "type": "thc.runtime.RuntimeFault"
+          }
+        },
+        {
+          "id": 2329,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.CommitAllocationNode",
+          "properties": {
+            "stamp": "void"
+          }
+        },
+        {
+          "id": 2330,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault"
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarStoreGraph/graphs/TruffleHotSpotCompilation-2414[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].bgv",
+          "bytes": 11377216,
+          "sha256": "bfb9b6ed50a538a182fcb1cac27aabeb3c391d7c7f41b960adb90f86f461e0cb"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarStoreGraph/graphs/TruffleHotSpotCompilation-2414[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].cfg",
+          "bytes": 5193127,
+          "sha256": "79fcb870b606b81b785a11a811a45cf79ba8f1599cdbc111ed4b353ba05da34e"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarStoreGraph/parse.command.txt",
+          "bytes": 783,
+          "sha256": "c8f52a63e6ae001f4c136d99518d66770a0aa2e5a7d836cce9ce00912dd5a390"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarStoreGraph/parse.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarStoreGraph/parse.log",
+          "bytes": 170,
+          "sha256": "3428ee4958cdcafcaead95e7fee22c88598a8730d2f271c5a81975ced3661944"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarStoreGraph/run.command.txt",
+          "bytes": 1014,
+          "sha256": "deb3a95a78c0beda5bfda8c2a0136e524d2553d9dc64effce86e208663e4c72e"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarStoreGraph/run.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarStoreGraph/run.log",
+          "bytes": 2002,
+          "sha256": "725b54f668c436ddd90fcaa0011b8280cbc45d77a146a1aac59548364651b236"
+        }
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "entry": "vectorIndexWorker",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorIndexWorker/parsed/graph-00045.json",
+        "bytes": 1566852,
+        "sha256": "a508b8d998f2da8591db3ccce2029423886f47b8c6592e8d03cd57b2b0535600"
+      },
+      "nodeKinds": {
+        "StartNode": 1,
+        "ConstantNode": 25,
+        "ParameterNode": 1,
+        "FrameState": 23,
+        "PiArrayNode": 1,
+        "PiNode": 6,
+        "LoadIndexedNode": 3,
+        "BoxNode$TrustedBoxedValue": 2,
+        "VirtualInstanceNode": 2,
+        "VirtualArrayNode": 4,
+        "UnboxNode": 2,
+        "OrNode": 1,
+        "ArrayLengthNode": 1,
+        "IfNode": 3,
+        "ZeroExtendNode": 2,
+        "BeginNode": 7,
+        "IntegerLessThanNode": 2,
+        "AddNode": 9,
+        "RightShiftNode": 2,
+        "UnsignedRightShiftNode": 1,
+        "LeftShiftNode": 4,
+        "NarrowNode": 1,
+        "EndNode": 3,
+        "MergeNode": 1,
+        "MonitorIdNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "MethodCallTargetNode": 1,
+        "ExceptionObjectNode": 1,
+        "FixedGuardNode": 1,
+        "IntegerBelowNode": 2,
+        "OffsetAddressNode": 1,
+        "SignExtendNode": 4,
+        "SubNode": 1,
+        "MulNode": 1,
+        "ReturnNode": 1,
+        "DeoptimizeNode": 2,
+        "StateSplitProxyNode": 1,
+        "VirtualObjectState": 6,
+        "CommitAllocationNode": 1,
+        "AllocatedObjectNode": 1,
+        "MaterializedObjectState": 1,
+        "BoxNode$AllocatingBoxNode": 1,
+        "ReadNode": 1,
+        "ReinterpretNode": 1,
+        "SimdCutNode": 4
+      },
+      "frontierNodes": [
+        {
+          "id": 699,
+          "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+          "properties": {
+            "stamp": "a java.lang.Throwable",
+            "targetMethod": "Throwable.fillInStackTrace"
+          }
+        },
+        {
+          "id": 700,
+          "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+          "properties": {
+            "stamp": "void",
+            "targetMethod": "java.lang.Throwable.fillInStackTrace(I)"
+          }
+        },
+        {
+          "id": 1953,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault",
+            "type": "thc.runtime.RuntimeFault"
+          }
+        },
+        {
+          "id": 1955,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.CommitAllocationNode",
+          "properties": {
+            "stamp": "void"
+          }
+        },
+        {
+          "id": 1956,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault"
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorIndexWorker/graphs/TruffleHotSpotCompilation-2296[lambda_bytes,_offset].bgv",
+          "bytes": 10072244,
+          "sha256": "519506e920b7a91d23c042b172d0efbd12ea408df3e8da318c4f7d62c14e2e21"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorIndexWorker/graphs/TruffleHotSpotCompilation-2296[lambda_bytes,_offset].cfg",
+          "bytes": 4240530,
+          "sha256": "7ee0062afe1841570cbff713d932e2793703fd99f9bea8db2bf303550b431307"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorIndexWorker/parse.command.txt",
+          "bytes": 752,
+          "sha256": "c95479a72ba8916914ca5c49006294a75366358a27ad74bd2553d4f9ecb01b71"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorIndexWorker/parse.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorIndexWorker/parse.log",
+          "bytes": 167,
+          "sha256": "5f979500a5f2350596acf64823fa1b5f3157c15bd034fbf2899ff64016a5c69f"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorIndexWorker/run.command.txt",
+          "bytes": 1008,
+          "sha256": "614de2e25d5469d3b48ede0508971379c3d7bab019c38dcdc7602c85d6e4c3b5"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorIndexWorker/run.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorIndexWorker/run.log",
+          "bytes": 1919,
+          "sha256": "2e88c52f64ac2a12db6845d19e3da1affef2e9f592167440e64f4cb21ae9f907"
+        }
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "entry": "scalarIndexWorker",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarIndexWorker/parsed/graph-00045.json",
+        "bytes": 1551160,
+        "sha256": "9655e553769a78e3d84a076e1a2a906010f15ebb2774257b39295753a1eb691f"
+      },
+      "nodeKinds": {
+        "StartNode": 1,
+        "ConstantNode": 24,
+        "ParameterNode": 1,
+        "FrameState": 23,
+        "PiArrayNode": 1,
+        "PiNode": 6,
+        "LoadIndexedNode": 3,
+        "BoxNode$TrustedBoxedValue": 2,
+        "VirtualInstanceNode": 2,
+        "VirtualArrayNode": 4,
+        "UnboxNode": 2,
+        "OrNode": 1,
+        "ArrayLengthNode": 1,
+        "IfNode": 3,
+        "ZeroExtendNode": 2,
+        "BeginNode": 7,
+        "IntegerLessThanNode": 2,
+        "AddNode": 9,
+        "RightShiftNode": 2,
+        "UnsignedRightShiftNode": 1,
+        "LeftShiftNode": 4,
+        "NarrowNode": 1,
+        "EndNode": 3,
+        "MergeNode": 1,
+        "MonitorIdNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "MethodCallTargetNode": 1,
+        "ExceptionObjectNode": 1,
+        "FixedGuardNode": 1,
+        "IntegerBelowNode": 2,
+        "OffsetAddressNode": 1,
+        "SignExtendNode": 4,
+        "SubNode": 1,
+        "MulNode": 1,
+        "ReturnNode": 1,
+        "DeoptimizeNode": 2,
+        "StateSplitProxyNode": 1,
+        "VirtualObjectState": 6,
+        "CommitAllocationNode": 1,
+        "AllocatedObjectNode": 1,
+        "MaterializedObjectState": 1,
+        "BoxNode$AllocatingBoxNode": 1,
+        "ReadNode": 1,
+        "ReinterpretNode": 1,
+        "SimdCutNode": 4
+      },
+      "frontierNodes": [
+        {
+          "id": 699,
+          "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+          "properties": {
+            "stamp": "a java.lang.Throwable",
+            "targetMethod": "Throwable.fillInStackTrace"
+          }
+        },
+        {
+          "id": 700,
+          "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+          "properties": {
+            "stamp": "void",
+            "targetMethod": "java.lang.Throwable.fillInStackTrace(I)"
+          }
+        },
+        {
+          "id": 1953,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault",
+            "type": "thc.runtime.RuntimeFault"
+          }
+        },
+        {
+          "id": 1955,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.CommitAllocationNode",
+          "properties": {
+            "stamp": "void"
+          }
+        },
+        {
+          "id": 1956,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault"
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarIndexWorker/graphs/TruffleHotSpotCompilation-2301[lambda_bytes,_offset].bgv",
+          "bytes": 10064197,
+          "sha256": "18bf19a61792009ad672c5f899809387e3abe4cc9cb777119af6b56248129870"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarIndexWorker/graphs/TruffleHotSpotCompilation-2301[lambda_bytes,_offset].cfg",
+          "bytes": 4236221,
+          "sha256": "a2e20ac027ced343f114dd66b8089ade876c44bcb5690190f01fde74a4e47eb6"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarIndexWorker/parse.command.txt",
+          "bytes": 752,
+          "sha256": "4ed7425d93375fc6010ddce132fb2e9472ba9bde3cc8903d2d6ecb50433b38fa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarIndexWorker/parse.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarIndexWorker/parse.log",
+          "bytes": 167,
+          "sha256": "4f50e806415b76e3901fe54b513a3fc9fdca0c46d45dd6a0a6ed89d1c23ecbf6"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarIndexWorker/run.command.txt",
+          "bytes": 1008,
+          "sha256": "d27dfe8b904a365a08dba356ae4966bbd1ada21319b0649030d0f57f0fe57457"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarIndexWorker/run.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarIndexWorker/run.log",
+          "bytes": 1919,
+          "sha256": "e96cfc19db717477a5c0995cda4b98f618a5e3d542c2e6416cde33b998de60d9"
+        }
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "entry": "vectorStoreGraph",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorStoreGraph/parsed/graph-00045.json",
+        "bytes": 1397203,
+        "sha256": "ef100de92c9237f98914b12d79ad2570aa40c8344d00b2de291d9c8fee623adf"
+      },
+      "nodeKinds": {
+        "StartNode": 1,
+        "ConstantNode": 30,
+        "ParameterNode": 1,
+        "FrameState": 25,
+        "PiArrayNode": 1,
+        "PiNode": 11,
+        "LoadIndexedNode": 8,
+        "BoxNode$TrustedBoxedValue": 6,
+        "VirtualInstanceNode": 3,
+        "VirtualArrayNode": 4,
+        "UnboxNode": 6,
+        "OrNode": 1,
+        "NarrowNode": 5,
+        "FixedGuardNode": 2,
+        "ArrayLengthNode": 1,
+        "IfNode": 3,
+        "ZeroExtendNode": 2,
+        "IntegerBelowNode": 2,
+        "BeginNode": 7,
+        "IntegerLessThanNode": 2,
+        "AddNode": 4,
+        "RightShiftNode": 2,
+        "UnsignedRightShiftNode": 1,
+        "LeftShiftNode": 1,
+        "EndNode": 3,
+        "MergeNode": 1,
+        "MonitorIdNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "MethodCallTargetNode": 1,
+        "ExceptionObjectNode": 1,
+        "SignExtendNode": 4,
+        "OffsetAddressNode": 1,
+        "ReturnNode": 1,
+        "DeoptimizeNode": 2,
+        "ObjectEqualsNode": 1,
+        "StateSplitProxyNode": 1,
+        "VirtualObjectState": 7,
+        "CommitAllocationNode": 1,
+        "AllocatedObjectNode": 1,
+        "MaterializedObjectState": 1,
+        "SimdBroadcastNode": 1,
+        "SimdInsertNode": 3,
+        "WriteNode": 1
+      },
+      "frontierNodes": [
+        {
+          "id": 1942,
+          "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+          "properties": {
+            "stamp": "a java.lang.Throwable",
+            "targetMethod": "Throwable.fillInStackTrace"
+          }
+        },
+        {
+          "id": 1943,
+          "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+          "properties": {
+            "stamp": "void",
+            "targetMethod": "java.lang.Throwable.fillInStackTrace(I)"
+          }
+        },
+        {
+          "id": 2693,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault",
+            "type": "thc.runtime.RuntimeFault"
+          }
+        },
+        {
+          "id": 2695,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.CommitAllocationNode",
+          "properties": {
+            "stamp": "void"
+          }
+        },
+        {
+          "id": 2696,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault"
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorStoreGraph/graphs/TruffleHotSpotCompilation-2358[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].bgv",
+          "bytes": 11123848,
+          "sha256": "b4a2867887c24d3d48adb7924ecf4116ddb5da3155ffe4a4bb97c0e8666ad419"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorStoreGraph/graphs/TruffleHotSpotCompilation-2358[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].cfg",
+          "bytes": 4971020,
+          "sha256": "f6b01e24b3fe2ffc66aad6a7d589d38ff3980f3beb6af239b3fdb126d05eb3c6"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorStoreGraph/parse.command.txt",
+          "bytes": 775,
+          "sha256": "ad00d4e87e7ff9a92d62c5d0b9b0ea4868044f563c8eb6e4c1a02a7f1923b259"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorStoreGraph/parse.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorStoreGraph/parse.log",
+          "bytes": 166,
+          "sha256": "a09ed5ae1163658ad345ea6f924f859121a0a653a954b4055e4849dc3133a66d"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorStoreGraph/run.command.txt",
+          "bytes": 1006,
+          "sha256": "e5a2051d8ff6674b37f88be957d009e2d412279e065b89adec4fa3145bf30d88"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorStoreGraph/run.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorStoreGraph/run.log",
+          "bytes": 1936,
+          "sha256": "0add034872718a8e8ff1d40205be90ebee5db13336f9e576f3adc10ba25dbf6d"
+        }
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "entry": "scalarStoreGraph",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarStoreGraph/parsed/graph-00045.json",
+        "bytes": 1397195,
+        "sha256": "c213c834fe75ac39f59e02bf24ff24aa504948c0ce197d6d50a24267ba3c7950"
+      },
+      "nodeKinds": {
+        "StartNode": 1,
+        "ConstantNode": 30,
+        "ParameterNode": 1,
+        "FrameState": 25,
+        "PiArrayNode": 1,
+        "PiNode": 11,
+        "LoadIndexedNode": 8,
+        "BoxNode$TrustedBoxedValue": 6,
+        "VirtualInstanceNode": 3,
+        "VirtualArrayNode": 4,
+        "UnboxNode": 6,
+        "OrNode": 1,
+        "NarrowNode": 5,
+        "FixedGuardNode": 2,
+        "ArrayLengthNode": 1,
+        "IfNode": 3,
+        "ZeroExtendNode": 2,
+        "IntegerBelowNode": 2,
+        "BeginNode": 7,
+        "IntegerLessThanNode": 2,
+        "AddNode": 4,
+        "RightShiftNode": 2,
+        "UnsignedRightShiftNode": 1,
+        "LeftShiftNode": 1,
+        "EndNode": 3,
+        "MergeNode": 1,
+        "MonitorIdNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "MethodCallTargetNode": 1,
+        "ExceptionObjectNode": 1,
+        "SignExtendNode": 4,
+        "OffsetAddressNode": 1,
+        "ReturnNode": 1,
+        "DeoptimizeNode": 2,
+        "ObjectEqualsNode": 1,
+        "StateSplitProxyNode": 1,
+        "VirtualObjectState": 7,
+        "CommitAllocationNode": 1,
+        "AllocatedObjectNode": 1,
+        "MaterializedObjectState": 1,
+        "SimdBroadcastNode": 1,
+        "SimdInsertNode": 3,
+        "WriteNode": 1
+      },
+      "frontierNodes": [
+        {
+          "id": 1942,
+          "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+          "properties": {
+            "stamp": "a java.lang.Throwable",
+            "targetMethod": "Throwable.fillInStackTrace"
+          }
+        },
+        {
+          "id": 1943,
+          "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+          "properties": {
+            "stamp": "void",
+            "targetMethod": "java.lang.Throwable.fillInStackTrace(I)"
+          }
+        },
+        {
+          "id": 2693,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault",
+            "type": "thc.runtime.RuntimeFault"
+          }
+        },
+        {
+          "id": 2695,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.CommitAllocationNode",
+          "properties": {
+            "stamp": "void"
+          }
+        },
+        {
+          "id": 2696,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault"
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarStoreGraph/graphs/TruffleHotSpotCompilation-2352[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].bgv",
+          "bytes": 11123920,
+          "sha256": "9b4bb769063d1e4b20b206efd8085e57fe900c9fe30f6bfcc2717f4b63038e90"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarStoreGraph/graphs/TruffleHotSpotCompilation-2352[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].cfg",
+          "bytes": 4971079,
+          "sha256": "78b3dca8890c3d9aeead7358b8c3615efee15c5ceb7ee24b64ef61ab2bcdf770"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarStoreGraph/parse.command.txt",
+          "bytes": 775,
+          "sha256": "726259fb2447e60036728c32f915e78d6ee300da404339aa333f9be8a1aef186"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarStoreGraph/parse.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarStoreGraph/parse.log",
+          "bytes": 166,
+          "sha256": "b3e1f8425e1b910dbf12069417219fb5f5d87344ea01fa875a92d02d116c7608"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarStoreGraph/run.command.txt",
+          "bytes": 1006,
+          "sha256": "23d66a96a1f4b6c3b8921c4c4236ba642d804ec79a6e7025e553bb9d6855479a"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarStoreGraph/run.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarStoreGraph/run.log",
+          "bytes": 1936,
+          "sha256": "26bdc285cb727e39f9d327b8bdc712580365062579e1d642745800f95cfc6a1c"
+        }
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "entry": "vectorIndexWorker",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorIndexWorker/parsed/graph-00045.json",
+        "bytes": 669245,
+        "sha256": "558cc20e34231151f558bcf7eca38eebc42e3ca20c1709c3ca996db406db1b6b"
+      },
+      "nodeKinds": {
+        "StartNode": 1,
+        "ConstantNode": 29,
+        "ParameterNode": 1,
+        "FrameState": 21,
+        "PiArrayNode": 1,
+        "PiNode": 6,
+        "LoadIndexedNode": 3,
+        "BoxNode$TrustedBoxedValue": 2,
+        "VirtualInstanceNode": 2,
+        "VirtualArrayNode": 4,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 1,
+        "ArrayLengthNode": 1,
+        "IfNode": 3,
+        "ZeroExtendNode": 2,
+        "BeginNode": 7,
+        "IntegerLessThanNode": 2,
+        "AddNode": 9,
+        "RightShiftNode": 2,
+        "UnsignedRightShiftNode": 1,
+        "LeftShiftNode": 4,
+        "NarrowNode": 1,
+        "EndNode": 3,
+        "MergeNode": 1,
+        "MonitorIdNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "MethodCallTargetNode": 1,
+        "ExceptionObjectNode": 1,
+        "FixedGuardNode": 1,
+        "IntegerBelowNode": 2,
+        "OffsetAddressNode": 1,
+        "SignExtendNode": 4,
+        "MulNode": 1,
+        "ReturnNode": 1,
+        "DeoptimizeNode": 2,
+        "StateSplitProxyNode": 1,
+        "VirtualObjectState": 9,
+        "CommitAllocationNode": 1,
+        "AllocatedObjectNode": 1,
+        "MaterializedObjectState": 1,
+        "SubNode": 1,
+        "BoxNode$AllocatingBoxNode": 1,
+        "ReadNode": 1,
+        "ReinterpretNode": 1,
+        "SimdCutNode": 4
+      },
+      "frontierNodes": [
+        {
+          "id": 539,
+          "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+          "properties": {
+            "stamp": "a java.lang.Throwable",
+            "targetMethod": "Throwable.fillInStackTrace"
+          }
+        },
+        {
+          "id": 540,
+          "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+          "properties": {
+            "stamp": "void",
+            "targetMethod": "java.lang.Throwable.fillInStackTrace(I)"
+          }
+        },
+        {
+          "id": 1837,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault",
+            "type": "thc.runtime.RuntimeFault"
+          }
+        },
+        {
+          "id": 1839,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.CommitAllocationNode",
+          "properties": {
+            "stamp": "void"
+          }
+        },
+        {
+          "id": 1840,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault"
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorIndexWorker/graphs/TruffleHotSpotCompilation-2354[lambda_bytes,_offset].bgv",
+          "bytes": 11054983,
+          "sha256": "7f5f92aa97ae4aa88415d137d267e2cd95e5c32e5f2dc6363abea2f83598ab9f"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorIndexWorker/graphs/TruffleHotSpotCompilation-2354[lambda_bytes,_offset].cfg",
+          "bytes": 4704226,
+          "sha256": "b74ef69d377ecec6bc7cf53800b1d88be64b22891c2082f7f605a1f421779e1b"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorIndexWorker/parse.command.txt",
+          "bytes": 762,
+          "sha256": "53a25ebf99726457f9e8669bb17d2f976675b085decec3143cb6a278e55422c2"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorIndexWorker/parse.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorIndexWorker/parse.log",
+          "bytes": 172,
+          "sha256": "01275eae965bc5634f81a69dd0f2e73dcd8775aad4e083cddd133151f6dfacbd"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorIndexWorker/run.command.txt",
+          "bytes": 1018,
+          "sha256": "fa88c83e39f66d204aa8732b6722e49ee59ec3ee05a5a9eb42fff968a4731a48"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorIndexWorker/run.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorIndexWorker/run.log",
+          "bytes": 1986,
+          "sha256": "f9e5d6ad1350a512209273eb7ed157c7664c7e9326a99f7d5a78e9d8ddbcfb47"
+        }
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "entry": "scalarIndexWorker",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarIndexWorker/parsed/graph-00045.json",
+        "bytes": 661825,
+        "sha256": "d50889cb0dede48fe411a36c2f29b2af01c437f1163d6e77ab8514a31cd99e10"
+      },
+      "nodeKinds": {
+        "StartNode": 1,
+        "ConstantNode": 28,
+        "ParameterNode": 1,
+        "FrameState": 21,
+        "PiArrayNode": 1,
+        "PiNode": 6,
+        "LoadIndexedNode": 3,
+        "BoxNode$TrustedBoxedValue": 2,
+        "VirtualInstanceNode": 2,
+        "VirtualArrayNode": 4,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 1,
+        "ArrayLengthNode": 1,
+        "IfNode": 3,
+        "ZeroExtendNode": 2,
+        "BeginNode": 7,
+        "IntegerLessThanNode": 2,
+        "AddNode": 9,
+        "RightShiftNode": 2,
+        "UnsignedRightShiftNode": 1,
+        "LeftShiftNode": 4,
+        "NarrowNode": 1,
+        "EndNode": 3,
+        "MergeNode": 1,
+        "MonitorIdNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "MethodCallTargetNode": 1,
+        "ExceptionObjectNode": 1,
+        "FixedGuardNode": 1,
+        "IntegerBelowNode": 2,
+        "OffsetAddressNode": 1,
+        "SignExtendNode": 4,
+        "MulNode": 1,
+        "ReturnNode": 1,
+        "DeoptimizeNode": 2,
+        "StateSplitProxyNode": 1,
+        "VirtualObjectState": 9,
+        "CommitAllocationNode": 1,
+        "AllocatedObjectNode": 1,
+        "MaterializedObjectState": 1,
+        "SubNode": 1,
+        "BoxNode$AllocatingBoxNode": 1,
+        "ReadNode": 1,
+        "ReinterpretNode": 1,
+        "SimdCutNode": 4
+      },
+      "frontierNodes": [
+        {
+          "id": 539,
+          "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+          "properties": {
+            "stamp": "a java.lang.Throwable",
+            "targetMethod": "Throwable.fillInStackTrace"
+          }
+        },
+        {
+          "id": 540,
+          "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+          "properties": {
+            "stamp": "void",
+            "targetMethod": "java.lang.Throwable.fillInStackTrace(I)"
+          }
+        },
+        {
+          "id": 1838,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault",
+            "type": "thc.runtime.RuntimeFault"
+          }
+        },
+        {
+          "id": 1840,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.CommitAllocationNode",
+          "properties": {
+            "stamp": "void"
+          }
+        },
+        {
+          "id": 1841,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault"
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarIndexWorker/graphs/TruffleHotSpotCompilation-2373[lambda_bytes,_offset].bgv",
+          "bytes": 11046907,
+          "sha256": "6a5d511d00cd901078de8f5a43160c9cb3ca902fe50bff3dc937b3bc18f61c75"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarIndexWorker/graphs/TruffleHotSpotCompilation-2373[lambda_bytes,_offset].cfg",
+          "bytes": 4700460,
+          "sha256": "3c995f01ce1ecfbfc91731b37c97c4991ec927e9a24e824a0175f0577d065093"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarIndexWorker/parse.command.txt",
+          "bytes": 762,
+          "sha256": "ce6744d5ab220e241d85d7e032559d2ebcfd9e478ec26e93d98b3c3d88df340f"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarIndexWorker/parse.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarIndexWorker/parse.log",
+          "bytes": 172,
+          "sha256": "b82ac92c98a1db5c04f68a9e01c8f6f1e059e4d9c58b92461a0c2239b47237ac"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarIndexWorker/run.command.txt",
+          "bytes": 1018,
+          "sha256": "d59a63d3c70e9a097a0b5b19b71513d20597a3062d14779e0dc7ce3ceefb0b2f"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarIndexWorker/run.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarIndexWorker/run.log",
+          "bytes": 1986,
+          "sha256": "7edf5c38d8a815456f86f0bf1afa47c6b80523f5a9e0c1a805b2e1bf6323360e"
+        }
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "entry": "vectorStoreGraph",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorStoreGraph/parsed/graph-00045.json",
+        "bytes": 686774,
+        "sha256": "da507db12b5c9fafad3416f353c5408ae211e47245b1b676fc07362f06664c7c"
+      },
+      "nodeKinds": {
+        "StartNode": 1,
+        "ConstantNode": 32,
+        "ParameterNode": 1,
+        "FrameState": 23,
+        "PiArrayNode": 1,
+        "PiNode": 11,
+        "LoadIndexedNode": 8,
+        "BoxNode$TrustedBoxedValue": 6,
+        "VirtualInstanceNode": 3,
+        "VirtualArrayNode": 4,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 5,
+        "NarrowNode": 5,
+        "FixedGuardNode": 2,
+        "ObjectEqualsNode": 1,
+        "ArrayLengthNode": 1,
+        "IfNode": 3,
+        "ZeroExtendNode": 2,
+        "IntegerBelowNode": 2,
+        "BeginNode": 7,
+        "IntegerLessThanNode": 2,
+        "AddNode": 4,
+        "RightShiftNode": 2,
+        "UnsignedRightShiftNode": 1,
+        "LeftShiftNode": 1,
+        "EndNode": 3,
+        "MergeNode": 1,
+        "MonitorIdNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "MethodCallTargetNode": 1,
+        "ExceptionObjectNode": 1,
+        "OffsetAddressNode": 1,
+        "ReturnNode": 1,
+        "DeoptimizeNode": 2,
+        "StateSplitProxyNode": 1,
+        "VirtualObjectState": 10,
+        "CommitAllocationNode": 1,
+        "AllocatedObjectNode": 1,
+        "MaterializedObjectState": 1,
+        "SimdBroadcastNode": 1,
+        "SimdInsertNode": 3,
+        "WriteNode": 1
+      },
+      "frontierNodes": [
+        {
+          "id": 1693,
+          "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+          "properties": {
+            "stamp": "a java.lang.Throwable",
+            "targetMethod": "Throwable.fillInStackTrace"
+          }
+        },
+        {
+          "id": 1694,
+          "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+          "properties": {
+            "stamp": "void",
+            "targetMethod": "java.lang.Throwable.fillInStackTrace(I)"
+          }
+        },
+        {
+          "id": 2326,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault",
+            "type": "thc.runtime.RuntimeFault"
+          }
+        },
+        {
+          "id": 2328,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.CommitAllocationNode",
+          "properties": {
+            "stamp": "void"
+          }
+        },
+        {
+          "id": 2329,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault"
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorStoreGraph/graphs/TruffleHotSpotCompilation-2387[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].bgv",
+          "bytes": 11377221,
+          "sha256": "0b20d621e212ebfbda122791e6914d75d63a27c602870a44afee9fed903550dc"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorStoreGraph/graphs/TruffleHotSpotCompilation-2387[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].cfg",
+          "bytes": 5192879,
+          "sha256": "15c42e51828f92f8ac98d435fb904ffe22392da148abe7633dd6d2412fbed5a7"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorStoreGraph/parse.command.txt",
+          "bytes": 785,
+          "sha256": "28e76810b9137cb0152f015639d63c707b8543c91ae75b0f0606f7742dcf4769"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorStoreGraph/parse.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorStoreGraph/parse.log",
+          "bytes": 171,
+          "sha256": "e7e3ad574b4961a669313fdce9a69cbeb029002b2ba49e9d7799805776d50f2c"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorStoreGraph/run.command.txt",
+          "bytes": 1016,
+          "sha256": "4c167a23d8e9c8d6358dda80cd23badcafa3584a1af6f543c69a53e149d05fd2"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorStoreGraph/run.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorStoreGraph/run.log",
+          "bytes": 2003,
+          "sha256": "a82ffe90a459584be002c5da09013e2d450c39fb38a27c579659d28cd95d22c4"
+        }
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "entry": "scalarStoreGraph",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarStoreGraph/parsed/graph-00045.json",
+        "bytes": 686766,
+        "sha256": "c40f7e28855f3a075d3bcd8e63b9aaf882fd4cfb6992ab41465ac4c141064267"
+      },
+      "nodeKinds": {
+        "StartNode": 1,
+        "ConstantNode": 32,
+        "ParameterNode": 1,
+        "FrameState": 23,
+        "PiArrayNode": 1,
+        "PiNode": 11,
+        "LoadIndexedNode": 8,
+        "BoxNode$TrustedBoxedValue": 6,
+        "VirtualInstanceNode": 3,
+        "VirtualArrayNode": 4,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 5,
+        "NarrowNode": 5,
+        "FixedGuardNode": 2,
+        "ObjectEqualsNode": 1,
+        "ArrayLengthNode": 1,
+        "IfNode": 3,
+        "ZeroExtendNode": 2,
+        "IntegerBelowNode": 2,
+        "BeginNode": 7,
+        "IntegerLessThanNode": 2,
+        "AddNode": 4,
+        "RightShiftNode": 2,
+        "UnsignedRightShiftNode": 1,
+        "LeftShiftNode": 1,
+        "EndNode": 3,
+        "MergeNode": 1,
+        "MonitorIdNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "MethodCallTargetNode": 1,
+        "ExceptionObjectNode": 1,
+        "OffsetAddressNode": 1,
+        "ReturnNode": 1,
+        "DeoptimizeNode": 2,
+        "StateSplitProxyNode": 1,
+        "VirtualObjectState": 10,
+        "CommitAllocationNode": 1,
+        "AllocatedObjectNode": 1,
+        "MaterializedObjectState": 1,
+        "SimdBroadcastNode": 1,
+        "SimdInsertNode": 3,
+        "WriteNode": 1
+      },
+      "frontierNodes": [
+        {
+          "id": 1693,
+          "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+          "properties": {
+            "stamp": "a java.lang.Throwable",
+            "targetMethod": "Throwable.fillInStackTrace"
+          }
+        },
+        {
+          "id": 1694,
+          "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+          "properties": {
+            "stamp": "void",
+            "targetMethod": "java.lang.Throwable.fillInStackTrace(I)"
+          }
+        },
+        {
+          "id": 2327,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault",
+            "type": "thc.runtime.RuntimeFault"
+          }
+        },
+        {
+          "id": 2329,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.CommitAllocationNode",
+          "properties": {
+            "stamp": "void"
+          }
+        },
+        {
+          "id": 2330,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "properties": {
+            "stamp": "a!# thc.runtime.RuntimeFault"
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarStoreGraph/graphs/TruffleHotSpotCompilation-2404[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].bgv",
+          "bytes": 11377217,
+          "sha256": "a5ce31ce51a415904d609b2075af5c743240d5916ee25c3e5a32f6784be07c42"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarStoreGraph/graphs/TruffleHotSpotCompilation-2404[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].cfg",
+          "bytes": 5193127,
+          "sha256": "9a87b4b0a9cba79fe1e562660b8bba631767ecf284c6794b3741562daf540012"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarStoreGraph/parse.command.txt",
+          "bytes": 785,
+          "sha256": "7feefe4fc84f079dafbf4b885de3f47a673063f944ff8e488ccc5f810aedac73"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarStoreGraph/parse.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarStoreGraph/parse.log",
+          "bytes": 171,
+          "sha256": "f91becb7c87c4c30746178914609f74789e14cdaa7ce82e059e1373d092f863b"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarStoreGraph/run.command.txt",
+          "bytes": 1016,
+          "sha256": "cf02282fe3d2ad083ff7bca853982e3360e8de4346ecf568b038451724bac777"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarStoreGraph/run.exit-status.txt",
+          "bytes": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarStoreGraph/run.log",
+          "bytes": 2003,
+          "sha256": "6b4192f268ed0b34db379fcf65196e7ffa829fff8dee4799e51ceabcdb55ad26"
+        }
+      ]
+    }
+  ]
+}

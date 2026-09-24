@@ -1,0 +1,862 @@
+{
+  "validation": "build/int32x4-memory-validation-hardened",
+  "modes": {
+    "full-default": {
+      "tests": 500,
+      "suites": 103,
+      "featureTests": {
+        "thc.runtime.Int32VectorMemoryProofTest": 5,
+        "thc.runtime.Int32VectorStorageTest": 3,
+        "thc.runtime.SimdInt32ByteArrayTest": 5
+      },
+      "xml": [
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.AggregateFrontierTest.xml",
+          "sha256": "7b6ff474cfed4b9a6e31a975e4b34eb5579f26ef6e5ecc943e40a13997464d39"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.AggregateLayoutTest.xml",
+          "sha256": "2412343dd319a9545dde02beb553a3150a54872dadc2010d34380d47471e6c3e"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.BloomHeaderTest.xml",
+          "sha256": "5528b790be9973cb4706b549db21a69a66448799c0a07c009f8ffe7050ac7c6b"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.BytecodeBackendTest.xml",
+          "sha256": "1ccb1ebc568f4e3be1b9b141c5418d0d2385a587bf381879fe9586cf1e95d729"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.BytecodeCoreProofTest.xml",
+          "sha256": "f796d746bccd230a32bbac4b2e040100b5293ea8b7a632a3fbb7ebc1cf73ba58"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.BytecodeSourceNotesTest.xml",
+          "sha256": "adfd0d09dc1dc8a5247090e293de646624a3ae07c3835df22ddb4bdacfad121c"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.CStringTest.xml",
+          "sha256": "0b28cc20e40fc290fb4465d96d6cf93938901707661a93f02431ba1865148ade"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.CasePrimitiveTest.xml",
+          "sha256": "86ed547fddde339ff705fe9fd71fcab70c7786077f4b55abb2d74fe6964badd2"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.CoreLinkerTest.xml",
+          "sha256": "bc7257259989794aaf43a75f69202dd79152363b441549a84e32b68269de5c34"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.CoverageCorpusTest.xml",
+          "sha256": "b797d2dcf33417a6f4e425f296e15b5205657b6e02eeb5b81fd358225b99bfad"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.DiagnosticModeTest.xml",
+          "sha256": "7250c7709719871a73bafec3ff12a4ea7e09d12350081e220696711ffcaf03be"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.FramesTest.xml",
+          "sha256": "b6e9245510fd0c388e7d438f4b1038acdf5eafd82695028371172e1163c100df"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.GuestExceptionsTest.xml",
+          "sha256": "1b2f98b03c82b3409830ca527c76241638eee663541e5a6dfdec4d82124124eb"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.Int16LiteralTest.xml",
+          "sha256": "a31fd42f835ac2e535cd7f5e494505cda35658387f1fddeee0c96580401299e3"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.Int32LiteralTest.xml",
+          "sha256": "f0a5dd4ff45037fd55927466adde0c9c379a26a61996790c5b958b4ff243c452"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.Int64ConversionTest.xml",
+          "sha256": "0ad45d7db70aed6f1765438c22ace09db9285eea1af713e20cca2f932d7e4c03"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.IntegerPrimopsTest.xml",
+          "sha256": "5b6dda241ec77c709d70f1251910979bd3454836f28a719641800b597145e886"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.JsonWriterTest.xml",
+          "sha256": "86691d50dcc426825d24c7a437607b91dd620885b9b2fca31aa081ab0060c5d5"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.NarrowWordPrimitiveTest.xml",
+          "sha256": "2d3eb3016cd8e353cd9458a5b8a8150933092a2cc0836faffcd419c9523c1023"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.RealCoreCallDemandTest.xml",
+          "sha256": "61c9a50ea2dd3253b4e8547813c3c5487fdea32dd589419643456e6fe5b542f1"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.RealCoreEntryContractTest.xml",
+          "sha256": "ff6b67f2c5317a2f2aaf6572bbc681336d0ef704645896368acfa654e6b49a53"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.RealCoreJoinTest.xml",
+          "sha256": "a4500d976c549c25d1b47f2f63639fc4e5a22f0aa657edfc26b4834897bb6277"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.RuntimeTest.xml",
+          "sha256": "e800479153e2e47855c5d63392673a4d46c867c2612ffd30669c6bc68aef8228"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.SelfTailProfileTest.xml",
+          "sha256": "41f630f3c901e94fde5b6e39ffc3a5ea19f2b4d3c847d2e4c2be98f1e89542df"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.SignedNarrowPrimopsTest.xml",
+          "sha256": "707121274847ede80f7e20b44299306f0b4cf1485216c613a3d0ceee7919c96b"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.StrictFieldsTest.xml",
+          "sha256": "32e722dacc25a513df8354fedc9fb04b50c4b6b86c03b22422a9e8f3d90af059"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.SumLayoutMetadataTest.xml",
+          "sha256": "ea7428e0014140d6bb4f2027807a36cc855de5295d65aa546294e0b8d797226b"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.TailCycleTest.xml",
+          "sha256": "8e712ffcf71b6423255e1dac942418201c1b21cf91b2559256afdff89af9f05b"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.ThunkDispatchTest.xml",
+          "sha256": "2c795636b2625f16916a0ae2ce41c62e7e5cfdd91f6110daff1ebad555c5168e"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.ThunkRetentionTest.xml",
+          "sha256": "4351d2e39e42450804a3a9e3cd72328bc35309fe8f5598d039a1888957cf6734"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.TypedApplicationTest.xml",
+          "sha256": "3de5c1a312857a604232498bd7da3af7fdd49f4bff88617ac446a3a8580e8253"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.WordPrimitiveTest.xml",
+          "sha256": "1e3b870cd486e057a7c6ab6b6409a30f8110259470e7664fb32bc958ba6d01ec"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.AstSelfCallTest.xml",
+          "sha256": "4eb3466fb3bd64abdd03722c185a11515ac61a2a0d4aa0cdc005c389e4e8f0b0"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.BindingCellMetadataTest.xml",
+          "sha256": "9f606fb7bf50e7893c740b72f3e0af3155af507eeabe94a77d09b1dbef53a682"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.BitPrimopsTest.xml",
+          "sha256": "4c08986b52af96c5242130338599033d5fadfd2952a07fba4304b7e353145d6a"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.BloomValueTest.xml",
+          "sha256": "ef86df4d3ff0ed4b755126215c226d3ee9fe2ef6b875bf5dc74926f30458c505"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.BoxedArrayTest.xml",
+          "sha256": "f46182978a82c519c4c44ac99f8aeb57588e4d8850b47ac7f0059039cb4df4ec"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.BoxedLexicalProofTest.xml",
+          "sha256": "950814c5723bc6efd8b8c480fe630d89d3d15655070cf89843a2aa0ac35e1306"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.BoxedValueCacheTest.xml",
+          "sha256": "0119ccb53ecbff2f802fc8fb2553feb2f06ec0535bb6dd333291f5b417665faf"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.ByteArrayTest.xml",
+          "sha256": "3b65fae555dc344cd956b727eef7a1936d5a582e11699b8e14d076733a2fc452"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.CallDemandTest.xml",
+          "sha256": "b02a390279f744ddb4bf2d483389612e4f22152c6ede4b76b229d6e0b0a37de9"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.ClassOwnedLayoutTest.xml",
+          "sha256": "e28884dd08a2a7bab2ee9c9ef0d8cf21614ae254fe63fa2857eda249eb50946d"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.ConstructorClassIdentityTest.xml",
+          "sha256": "4b457ccf9ca7d4d1c4e60dfec2311a5a92cb9cb624932c50671ba728368bedf3"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.CoreProofJoinTest.xml",
+          "sha256": "6fae886d030d6fe3ad703790aaa5c370064ac466567299fd2222036dbf4199f3"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.CoreSourceTest.xml",
+          "sha256": "2ac303a8abf30c4c16fcc22e6969c29d4d8c50ff3bc93abaf32ffd508c8448f6"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.DiagnosticTupleTest.xml",
+          "sha256": "0b30780470101c8c661d30aebc3ec73d8546369cbddc8d3d4c64bfb1e446a356"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.DoubleArrayNativeTest.xml",
+          "sha256": "beff6b80eff047210380d1d060166297e2515627b56c498cd35919aaa2bd4531"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.DoubleArrayTest.xml",
+          "sha256": "2118d23abbf96a6070b45f8dd4164556b62e99e85f306ed57f4fe2ee55c41e9a"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.EmptyArgumentRuntimeTest.xml",
+          "sha256": "bd1689af81def09e0e27f7ac7e713a29d5876f4b272e3d74ac970239f0120109"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.EmptyTupleInputNativeTest.xml",
+          "sha256": "ca2f2a82ea47e01cfc1f70b6cdd1538b11753d2cad0e3a212e51dfacebfb37b6"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.EntryContractTest.xml",
+          "sha256": "0185fcba87f3bb310f180f998639b6dba7e2df61f013e1690a9067ae71736974"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.EntrySelfCallTest.xml",
+          "sha256": "386d677c46a735741e5093d2945c22f4845852c874767fb00e70d71eaa1579d1"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.Explicit64PrimopsTest.xml",
+          "sha256": "a81636f687905002706a766879278cb238e767c409d87ea311fc99e8ea1803c3"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.FloatArrayTest.xml",
+          "sha256": "e68fb0f2763743d2385f36dda5f5afe49e93c860bd618dcc460842e009680456"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.FloatWordArrayNativeTest.xml",
+          "sha256": "c7d60eab54e9a84983f49a5f3273e285a503f517fa2b5bb94187048240946de8"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.FloatingPrimitiveTest.xml",
+          "sha256": "5b50ae7e6a7b715d1dc3b38c42e38e7a67e7f1a00c44554316103e007382a236"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.FloatingTupleTest.xml",
+          "sha256": "0555f909b1429393ca3b70c5201d6c22d26bad857b2f76e665105b0bcec6a8eb"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.ForcedBindingTest.xml",
+          "sha256": "f220ba61e5c8b03777f89c5d356e19c61eed949fa016ece40b28ebf377e61021"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.HandoffReferenceTest.xml",
+          "sha256": "76110b1c30f92d4d1d92665a60691f39028d09655f0a7dc431f77af2f13a199f"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.HandoffTest.xml",
+          "sha256": "243d90cbc5c72b92a4c7316b123bcafb0e091db8ca158703db04abdbe2a03a30"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.HostBoundaryCompilationTest.xml",
+          "sha256": "325a93560a3ae9f6ce0f5d2fffb66307180478f93c33289c8ce2ee94d147908b"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.HostEntryCompilationTest.xml",
+          "sha256": "6e0cfe18724d0680192c4b641243bc05e6b10dac58cdc547d2ae9a585acbd2f6"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.Int16ArrayNativeTest.xml",
+          "sha256": "6ce1bd4c0a5d02d26e6b09d123a9a73c22509b10795c43d0ee52ce91ba8fa640"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.Int16ArrayTest.xml",
+          "sha256": "92e5fb53aa3ae95b25e722cf3ee854998617ecee094eb26dee22235dcdc35909"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.Int32ArrayNativeTest.xml",
+          "sha256": "df992ff3f60e68d80a77ffd4627a9e9f2b4c0e16aabcea04e8afa80e3838d28e"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.Int32ArrayTest.xml",
+          "sha256": "94a630b758d9305a6f49285c32658abb4bad45861600ea6ac23a2026d49a2809"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.Int32VectorMemoryProofTest.xml",
+          "sha256": "dd6c7ba4f073d816893bb5b73b4f4c7b94e6271a3117a46f7a4b16a617c33629"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.Int32VectorStorageTest.xml",
+          "sha256": "c50ac59dca0c3fc9383d23a91b930c94623868d52dc9fe017a40c522cc75b6e7"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.IntArrayNativeTest.xml",
+          "sha256": "2ee17d7310e6f443e3ee802b47d7262b92a47d9496566ac8014f2bbac189382f"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.IntArrayTest.xml",
+          "sha256": "5e500e0df4c6096a3a61645d16f512378cb5b24d6a2e887dcf32feebadb467f4"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.JoinWhnfProofTest.xml",
+          "sha256": "d5d8523ec92227ec3638540365d970b92b4503f0615be1cc9e6cd3864a43062c"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.LeadingCaseReturnTest.xml",
+          "sha256": "8f3867ce23eaf6c0f29885cc9ff3445c048fb0d3ba6c2aae62dd6c6460178134"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.MutVarTest.xml",
+          "sha256": "699833b417526cd562c93ecb0fcb4e8770ca983fea839896dc8585d3414a3460"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.OperandRetentionTest.xml",
+          "sha256": "a1496ed46ae15e08145272ed01709b069b84e70e2db87da1a97a902259e55a1e"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.PointerEqualityTest.xml",
+          "sha256": "2902f562586e6c6031be15a1cd5210796ac49291f20991806c68f5d12171bc29"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.ReferenceCaptureTest.xml",
+          "sha256": "a5fa8a722c2de0191ef92c4771551dda3d9991f0052de6fa580b4881617b651c"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.ReferenceFieldTest.xml",
+          "sha256": "9b3d9fc082de743bcd53e50c671180f8baac43b68b32cd003fef28e76d00bd2d"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.ReferenceFormalTest.xml",
+          "sha256": "156e90da7802b11ee82d1d4717441c661235bd5d0a9cc1e5f3a80d181ac1cff1"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.ScalarLexicalProofTest.xml",
+          "sha256": "9633fee05e0677e0f7b4a42fd89bfef71f00d0555ee3c7a1c1bace480dd3208d"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.ScalarPrimitiveSignatureTest.xml",
+          "sha256": "6971425375853fe9a34a8975b1d44b554a8f8ea3e6a3d1ab6f712e85616ddc00"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.SimdDoubleVectorTest.xml",
+          "sha256": "8d309a5ec5920cb9cb2d50c1db656b8b9489c423c9cdb572698af693732e595f"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.SimdFloatVectorTest.xml",
+          "sha256": "3863077f30f2e107ad515337f47bdf2fb5b8ba9677aa95ffa83c8abe57cb2ab9"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.SimdInt16VectorTest.xml",
+          "sha256": "073f931d7dddbd2ccedac5f223a8dd73ee6090d262c4cf89e8d19fd3ceee5e2e"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.SimdInt32ByteArrayTest.xml",
+          "sha256": "ea066718da0cb3f8d9f62f1b6aad689f96158731bf5ec978fd1d5cd5779f39c5"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.SimdInt32MultiplyTest.xml",
+          "sha256": "96417609adb422c47b34d290965256ebb74cb5f139fdc448478e1bc116f41e63"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.SimdInt32VectorTest.xml",
+          "sha256": "ce037d2a497cc190c6053b6c5c47f17cc0075320acf4d3783c0122adf498df50"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.SimdInt8VectorTest.xml",
+          "sha256": "d16672c13ac1f5d4c152575d8ffcf714d5a9dfb6918af0b2864986dcc3e8d203"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.SimdVectorTest.xml",
+          "sha256": "040e4a7ef95fdb9e38eedda6a7ae20cb9bbb1e61cf5c33f8759c8f1cf3c663a5"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.SimdWord16VectorTest.xml",
+          "sha256": "2a6463852e00abdd1522dab6ea9648e77249302423ea339894b0c30b052c015e"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.SimdWord32VectorTest.xml",
+          "sha256": "ca7adc17fbbc5fc087c29d9e7232a95268e236de3257d0239c53233f88bad1a9"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.SimdWord8VectorTest.xml",
+          "sha256": "965970f628e98a4223bf92bbb349241888e79ab6a19256fbe4d1b38a7ae6a3db"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.SourceCloneTest.xml",
+          "sha256": "c9fd7402390304143bccb542c2ed95522fb9fddfbede5aa26eaa717e2c46fb31"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.SqrtPrimitiveTest.xml",
+          "sha256": "b876724765d80a9c19f3e229098dab29dcc64ccc6d38e003f298ce19d0c81134"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.StateTupleTest.xml",
+          "sha256": "61358dbb5c423d99353988373942dad4f44395ca5f6b7cadceb87c33387527af"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.StaticShapeSafetyTest.xml",
+          "sha256": "3902b468694ad7015487b884de486fd719e85fc1b70ba9847aa94376738e8dc6"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.TupleArithmeticTest.xml",
+          "sha256": "581088694664964ffcbb868b6cff8a03a47e8df09a208ad6d6b7e8d4757b80d6"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.TupleCompletionTest.xml",
+          "sha256": "0ee2a4fc0d8ce7aa07426b32d5ef7c8293c79ca65d2e9c3a6309f2115dc3f06f"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.TupleJoinResultTest.xml",
+          "sha256": "606365a98b5a9f3c81ac4f325284063e19c1224faf9ab22ff152a100a26119a0"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.TupleRepresentationTest.xml",
+          "sha256": "07376cc048bc712d5afc5e7abd7b2b4b1db3b35a65bfdcb25dcb2273738741e3"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.TupleResultTest.xml",
+          "sha256": "7334cdf189a91feb0589570819ed95af1610cbaf84629a95c4041603df52413c"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.TypedCaseTest.xml",
+          "sha256": "eb86594665a00f56d18f8a389e1135c5927961b07f8b79536d845cdb105c1fa1"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.TypedExecutionTest.xml",
+          "sha256": "ca7e0bb2a4b5a10fccbf1f27fb90ce5cff8e04b15e0fa28421652e48c6a6f00e"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-default/test-results/TEST-thc.runtime.WordArrayTest.xml",
+          "sha256": "baf7bcc03ef42825ee8de1ef9bd08db2ad04a85b75a89eb0c04b9208694b38e8"
+        }
+      ]
+    },
+    "full-dense": {
+      "tests": 500,
+      "suites": 103,
+      "featureTests": {
+        "thc.runtime.Int32VectorMemoryProofTest": 5,
+        "thc.runtime.Int32VectorStorageTest": 3,
+        "thc.runtime.SimdInt32ByteArrayTest": 5
+      },
+      "xml": [
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.AggregateFrontierTest.xml",
+          "sha256": "cc907221b977fa2c434ce618cdd7acada024569c85db7767096cb9c50f15d8ef"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.AggregateLayoutTest.xml",
+          "sha256": "94747530ab9f4f68ec4dbf2a810f0384750b6caf86cae10e5097e181a30be275"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.BloomHeaderTest.xml",
+          "sha256": "7752bf2c16ff82ca87d98e1981767a8f394a9a68919450b34e03ceadbc770bb6"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.BytecodeBackendTest.xml",
+          "sha256": "e5dc4b6238809ab0fbc109c3ba7deabe779ed286d993a45db2d2b66176d83894"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.BytecodeCoreProofTest.xml",
+          "sha256": "5414c39c0c16b84ba5c32020fe66b540a1247a12cceeda74d1f290640f569194"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.BytecodeSourceNotesTest.xml",
+          "sha256": "c6b4e59178fafc491d899b22a33b2bff83d63a49b84cd2d5a1f4f3451aabe843"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.CStringTest.xml",
+          "sha256": "809e075f3c9f7778ebe812dbe5133373b88a5404a291083b3bd96c6a65a4cf3a"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.CasePrimitiveTest.xml",
+          "sha256": "373df3678cdb71a4da0b6ecfe589f18e5988d2f99c939e103f03da00e89fe150"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.CoreLinkerTest.xml",
+          "sha256": "19f7e30e425edf7cad3679b5ed02a5f3d1232dc883f80d751cbe881f9803b973"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.CoverageCorpusTest.xml",
+          "sha256": "8e78d31d53e10ef4c3fbb70db9a3905f937fec7543ec6ec5b118176a0b95b2b3"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.DiagnosticModeTest.xml",
+          "sha256": "1d70d5bee9ecf4fb42dabd005160db9c18b813f1abc07484b6696d1bfb7b11af"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.FramesTest.xml",
+          "sha256": "66307646f1c8fb335fe066ccd657cb816cc487267801facf03bb632f124ade99"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.GuestExceptionsTest.xml",
+          "sha256": "2906103e0a1173c4cdd8d7dbaa82009482e6f7b6177cc3d7b2a094b0b150b545"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.Int16LiteralTest.xml",
+          "sha256": "60564f0448493a655e5a7029c8c0c679e1764597b974e4c25aae3052995b467d"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.Int32LiteralTest.xml",
+          "sha256": "837dbca02f0a11f1eafa785e36e53a13c845801caf5d14661b443b7b445ae8e8"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.Int64ConversionTest.xml",
+          "sha256": "119aab8eb4c5492ab9a3e5596791cfa07c1cfcb32f26693fb30ff4cc52d60b89"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.IntegerPrimopsTest.xml",
+          "sha256": "f7f68ad7ebef46a902fd13cde1c678fc75aeda424e660005feebe88bed2b80ce"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.JsonWriterTest.xml",
+          "sha256": "5fdbd1023b2d699e51448983b3f11c75a757ea24e821a84d65af11cb01860974"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.NarrowWordPrimitiveTest.xml",
+          "sha256": "7fabba9221818df6b02e7d3f950b96e2c35b63a81cb4961ab03586d5fc303ef6"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.RealCoreCallDemandTest.xml",
+          "sha256": "68c79ce701ff3b88f380ef28e348a909e1de2851e928f7216d9b74941fbe4684"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.RealCoreEntryContractTest.xml",
+          "sha256": "883bd606222c8d32341f35aa1938015aafe9108835251cf479fb61847b34d76c"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.RealCoreJoinTest.xml",
+          "sha256": "fd39aa24eac9239783bedc289a8b734d4c65b8379886c95f538a1f22681ba2fe"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.RuntimeTest.xml",
+          "sha256": "a272b907488df03f0e71fcfa75be0e11b5ece486015daa7b9f1f6a955ec293ff"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.SelfTailProfileTest.xml",
+          "sha256": "c040df6a97227cb352d31c1a680fd1cacc5a6b2b8cf0bb1c8df37697642b18ea"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.SignedNarrowPrimopsTest.xml",
+          "sha256": "f7b04f0657fb61c6be6e02fb300fc1e2ed23dc9a1c85e36c6720bb3b3377566e"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.StrictFieldsTest.xml",
+          "sha256": "ed90250f230a3cd6eb82921bb90b036a97188c8587c8175c5a6e75dd34a59607"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.SumLayoutMetadataTest.xml",
+          "sha256": "5f0d76ec3d319030902688d1b9880077d2f030ae62f1062acc92d20481a152f8"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.TailCycleTest.xml",
+          "sha256": "f3fdc91dd5db276c6d6bc98cb42668974f4137a4c93845112cbcbe14a2e7e392"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.ThunkDispatchTest.xml",
+          "sha256": "aca2a66cc64ca9ff0a8ee04946c0045a0cd9dad136f5293b9ede984a099d1e37"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.ThunkRetentionTest.xml",
+          "sha256": "51a420bafbfae2136b7ee22c7635688496e53e6e485976b22930f3c34e902007"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.TypedApplicationTest.xml",
+          "sha256": "dffab05ed1f516f31893b8329b97558bfe44322b1f7eee01b3f344bc802e302c"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.WordPrimitiveTest.xml",
+          "sha256": "bdf1b44984054d00a2a217940aa64783d0934d68012b53103b81fc9cea4e3ba9"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.AstSelfCallTest.xml",
+          "sha256": "031ef9b17d74a4834a99063579873c9b91512f9138e13ae8db9af16e90c259d3"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.BindingCellMetadataTest.xml",
+          "sha256": "121fe0456220c4cacd2c3547c5cd45ffe22fe3cb27f4435fcf221f7d40a56647"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.BitPrimopsTest.xml",
+          "sha256": "1b26223d272477e224fd5fe5970ac66f7d61ca0893f054147a3beae9c8351200"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.BloomValueTest.xml",
+          "sha256": "96c941004e6c34fe2407d2da1ff720c0e7f0b31fc0e27bd0e93adf0211ef50f4"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.BoxedArrayTest.xml",
+          "sha256": "d61b3d29f658795d400d37a773231961f3569a1512a607e0963fe63d493c6493"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.BoxedLexicalProofTest.xml",
+          "sha256": "3cb305ff2cab2199f45ea8ca984cdd7f9ebe897fa172a7f3560dc50eeacbf082"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.BoxedValueCacheTest.xml",
+          "sha256": "9a20dff131251e42ca888e6b46340f1856b0259a973ecf80a57ccb3562260e91"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.ByteArrayTest.xml",
+          "sha256": "032afe0b68d64cb79dfc478b6a54629951caf056069dcd843b64ade79c04a536"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.CallDemandTest.xml",
+          "sha256": "9919c4b399b11556920921ac27b293727ce48a93f7229609a96a00dcdf00547b"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.ClassOwnedLayoutTest.xml",
+          "sha256": "f3a95ca4ac695b9bd81f5f0ef69b373a5083c4c9448736c0f333af2c9944c80c"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.ConstructorClassIdentityTest.xml",
+          "sha256": "accfad69f3cde3f76fe282e3e0aebaa460723dd396e72d40d1e8ef9263058141"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.CoreProofJoinTest.xml",
+          "sha256": "b0bc7cb3c06255b22608b68c7197489576e977287219a8dac4b9043f93626671"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.CoreSourceTest.xml",
+          "sha256": "3faf2de3e6e9bc7d100e1ae2924dd31eab46377d21d76243731cf6950b329de8"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.DiagnosticTupleTest.xml",
+          "sha256": "9fe2f586682c7fe375af7055c2ca2be39db346e066cc6271966159b86ecd6e8a"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.DoubleArrayNativeTest.xml",
+          "sha256": "98cdc6b0cfddd87e8f7841cce0db73fdefbc741f6596455b1ca99c4ff5a0ff3a"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.DoubleArrayTest.xml",
+          "sha256": "e1ebcf50d69b8581ebd5b3f3b80a76c3e54a68e570be053acd01389288ac1cb5"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.EmptyArgumentRuntimeTest.xml",
+          "sha256": "655e60f9dce82dff631948156e12a30bec47513d1aedfe4f912ba0841a824631"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.EmptyTupleInputNativeTest.xml",
+          "sha256": "86c389bd5ff35e7e613eec5e85062da8e9a0037502bcab5308f819d4be79f063"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.EntryContractTest.xml",
+          "sha256": "6aa9b041d4337187bf910e37bb5260dae9150c37b010372743d5e8bfca9d8a87"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.EntrySelfCallTest.xml",
+          "sha256": "6f12fa3ad0bd8bf942f50b08d153622b2bffbccc8db31d73b6492fdbfbbbc4c0"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.Explicit64PrimopsTest.xml",
+          "sha256": "a9b6e2ac7ca3fa979a3438d2836f580f963e7f39cffe035990d83257b907930f"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.FloatArrayTest.xml",
+          "sha256": "c30e0f237df92568d42a89a2a09593805dd0b1f114703eae893ca474d41d0602"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.FloatWordArrayNativeTest.xml",
+          "sha256": "921dd78fd6b2def618e3aaeaba1e9ea8340d7d15fb93caab8e26efc329615fad"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.FloatingPrimitiveTest.xml",
+          "sha256": "8e00afa608d286e714728fbb6ce538e524b0c3716ddb41d9b77aeb44e852109c"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.FloatingTupleTest.xml",
+          "sha256": "fcde1a68d3359a2663376ce538ebf3a1ad854e28c3c75b184fd29e52e53403af"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.ForcedBindingTest.xml",
+          "sha256": "bb29a99702f82e46dfac87f9f076b67e747a2c6b9aec30c743a572be1a9163b1"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.HandoffReferenceTest.xml",
+          "sha256": "9a12b0d875147f62f24096b41462bdd82ec8e598a6ce06ebe340d2c5eccefcb3"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.HandoffTest.xml",
+          "sha256": "430945f7d316d02985b7f843404124a75afd7ecc0149917706df632ecd9eab16"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.HostBoundaryCompilationTest.xml",
+          "sha256": "b3ba7b76efb492dd17ac5bed422e33fca14c88dfe8d110cc1cf5a3101469cc84"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.HostEntryCompilationTest.xml",
+          "sha256": "d8b8b5e2fb2268559fce9562f6d13d74b87782da9fd34e58396a6a4d04977ffe"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.Int16ArrayNativeTest.xml",
+          "sha256": "7822c289229af620cb8eef2d4e9f3469a610e15083cba58146e10d97f8d97c6c"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.Int16ArrayTest.xml",
+          "sha256": "f093362af1ecc055566b4ea3ad83fe07838a05919c0763b3562f1f13616eba0e"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.Int32ArrayNativeTest.xml",
+          "sha256": "0c46e10ea941feef579718681afa0b9dab8de6e9b252e155442db09bc52ec0db"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.Int32ArrayTest.xml",
+          "sha256": "c9175b583b30df59671b988d88a8ccb868cdca4bcfcd50b72ea532e0c26ee6b6"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.Int32VectorMemoryProofTest.xml",
+          "sha256": "e61b9d5ab911166d87d9d7452b3bd616b300cadd5f57479242a92926e0ef996d"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.Int32VectorStorageTest.xml",
+          "sha256": "e39f2949463fae869b882a7811d1e5373282324437bf2c0357b3614fc9a8331c"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.IntArrayNativeTest.xml",
+          "sha256": "109658fa46e82c14e8061728469858600d2dd335652d101c2199e3cf36a2a5b6"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.IntArrayTest.xml",
+          "sha256": "acc2a189d9c823c6311d91fcec667c4860aea2d448f0b6f635c1c3343740af56"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.JoinWhnfProofTest.xml",
+          "sha256": "f3ecf66c2ac936f4f4f8e9b469a6bdffd791a14517e79e3732bcc023a526daf8"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.LeadingCaseReturnTest.xml",
+          "sha256": "708b9d9ace41a5e2a9c9f985faa3976368c996ff71caf6465f8f818f08857b07"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.MutVarTest.xml",
+          "sha256": "13c0b502b506621a43eaaf9d30b486b2da8f6cf16e54e7612d6dccc4cb633be7"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.OperandRetentionTest.xml",
+          "sha256": "2e45adf2b4e34d49c0af4a75c294e4184fbd3c0ac156628487b2de802efcc4ad"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.PointerEqualityTest.xml",
+          "sha256": "ebf46070fe4f020b6f93e7acfb9afac38615181c30e2696e7be63cc45bd807b4"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.ReferenceCaptureTest.xml",
+          "sha256": "724904eeab4afcf7aca7b3a0b846803d6ad8a4c516c2b77be46be1c18f7f397e"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.ReferenceFieldTest.xml",
+          "sha256": "b8bb130227217930f81d93061bda75cb310258f1537cd296bb7f34bf3ccf3a76"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.ReferenceFormalTest.xml",
+          "sha256": "65ec42078a92de41a913d1a229572a315565a1f79cd34733263ea22b466bc9bf"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.ScalarLexicalProofTest.xml",
+          "sha256": "e7e6b26fdc138ec39d0c80698e2cbcf7de287bc7767e40949b987fe87a1c380b"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.ScalarPrimitiveSignatureTest.xml",
+          "sha256": "58344e486f524a594ffbccc5a5ee88b4152803f76a4814f44b930fe8b0889954"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.SimdDoubleVectorTest.xml",
+          "sha256": "07be0fde26c581a6701055fe4f075d68794ac89bd5704971dec0323c3535c462"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.SimdFloatVectorTest.xml",
+          "sha256": "42e287812a9d8bb7f0cd2ab866faac8e97740bd8257437ac42ef8b154f8ae38e"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.SimdInt16VectorTest.xml",
+          "sha256": "ed30f907ea3461c911352bb17d768162ef6d88329de09001b9bd147f1e5f2223"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.SimdInt32ByteArrayTest.xml",
+          "sha256": "4a856e643ec3e8f7299bdb0c8ce94780c834cdc6273f505f3970109f1c24a7a3"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.SimdInt32MultiplyTest.xml",
+          "sha256": "1d5bd0954f37f8041a02bd6541720d150810a394b62e5161ecba25d149053950"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.SimdInt32VectorTest.xml",
+          "sha256": "3e5c5cb1efe9aed7c351c42ca95980e63009f8be0394265ef7b2fb83d430fc58"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.SimdInt8VectorTest.xml",
+          "sha256": "bb882d281704db16e66ad329c90e37abdb5ae7525169c51b5d23c3bff2d71d0b"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.SimdVectorTest.xml",
+          "sha256": "2d749831f4a6d56a1e7a6de25553f1ef52d51b9a9d2213155aa54a9bc38abeb0"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.SimdWord16VectorTest.xml",
+          "sha256": "f5af9cc8117250bbdd6d584aee3712b8bfc35dde4b8a36b5497d1185806f5803"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.SimdWord32VectorTest.xml",
+          "sha256": "b5b95db3f5adee963bdbc697e4870cf7ca23c1a23dd5b3dda1d80b31f0df735f"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.SimdWord8VectorTest.xml",
+          "sha256": "c4e109f3f1cfb889df051e02c58c0655e5b557d9d1c4d5566a05d74ec6658066"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.SourceCloneTest.xml",
+          "sha256": "60a8821756eede97b0cfd5731cbaf90560a427b791a02a65422583b9bfbc0b8d"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.SqrtPrimitiveTest.xml",
+          "sha256": "820ad1e12d026e2d1a89616492bde6af275ad9b0999d0b3f9b57b56a17122bf6"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.StateTupleTest.xml",
+          "sha256": "d11bb4feab8231c391c306d28d14c43f816e4bfe57965ad9cafd3dc4d9f67f27"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.StaticShapeSafetyTest.xml",
+          "sha256": "a942dfff40cbaf8cd64211d174cec7e4eafabf76df14f0e3b015d235c2281c46"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.TupleArithmeticTest.xml",
+          "sha256": "e4a31341813302adc9f20b6d75ab74873f2425a2e24ab65e8dc1885ffeb4b3c9"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.TupleCompletionTest.xml",
+          "sha256": "99fd9434c273b5a3e38d0b3ba1bbf7f17c512f9b146379fcb032ae5301509e6e"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.TupleJoinResultTest.xml",
+          "sha256": "8260fdf9beb0c6490cf9ff027b4810461d067661ab0237c623dd801ee79208d2"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.TupleRepresentationTest.xml",
+          "sha256": "4dce242bc08c2ac8464b6f66b7ad4e2fffef0dd6b05566faad8dba0cb6417e78"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.TupleResultTest.xml",
+          "sha256": "8d218649aca3d1b5b9faeb10223eea25a712fe8680297602658b492be2c2e10d"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.TypedCaseTest.xml",
+          "sha256": "2b67602efc6a256c54d03a9802ee7b03b8f71dd7ad1cb4caaa5394f3d1c2e8a5"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.TypedExecutionTest.xml",
+          "sha256": "d035f1c940601fbb88cd6e5480d60e2f011e78fe49ce29eccad078a69cc49d7f"
+        },
+        {
+          "path": "build/int32x4-memory-validation-hardened/full-dense/test-results/TEST-thc.runtime.WordArrayTest.xml",
+          "sha256": "1d2c810774481d8e378801f3aef6ebeeac02d0932809771747598079a28e095e"
+        }
+      ]
+    }
+  },
+  "native": {
+    "provenance": {
+      "path": "/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/build/simd-int32x4-bytearray/provenance.json",
+      "sha256": "626868378f1c05decb0c6e107a9ada85b5541a38f374095c5e1b37fdae8a547b"
+    },
+    "sourceHashes": 19,
+    "artifactHashes": 7,
+    "rows": 9666,
+    "compiledCallsPerMode": 77328,
+    "compiledEntriesPerMode": 229536
+  }
+}

@@ -80,6 +80,13 @@ Pinned Graal sources in JDK `src.zip` explain this gate:
 - `LIRInstructionClass` prints their class-derived `VECTORLOAD`/`VECTORSTORE`
   opcode and separate `op` data field. The reader requires a full allocated
   XMM line with `VMOVDQU32`/`VMOVDQU`, not a mnemonic substring or comment.
+- `LIRKind.toString` marks compressed references with `_`; HotSpot address
+  lowering may use a `DWORD[_]` oop index scaled by eight alongside a QWORD
+  offset. This exact physical addressing form is accepted, not arbitrary
+  DWORD operands, virtual registers or stack-slot substitutes.
+- `ObjectState.createEscapeObjectState` replaces default-valued entries with
+  null. Omitted virtual-array entries therefore reconstruct as zero; they
+  are not unknown byte values.
 
 The durable `Int32X4` carrier is four primitive fields. The runtime loads/stores
 through transient `ByteVector.SPECIES_128` and an equal-width IntVector view;
@@ -87,9 +94,21 @@ the selected compiled paths must remove carrier/vector/private-array allocation,
 field traffic, calls and lane boxes. Caller backing memory is intentional, not
 a payload-elimination failure. Host Object-array argument reads and exact Long
 unboxes remain; index roots may allocate one public Long result, store roots
-none. The only other byte-array exception proves the full eliminated
-`FrameWithoutBoxing.indexedTags` owner/field/sibling/constant-tag/deopt-only-use
-chain. It is not permission for arbitrary virtual arrays or materialization.
+none. Eliminated `FrameWithoutBoxing.indexedTags` records require the complete
+owner/field/sibling/deopt-only-use chain. Every snapshot must agree with its
+Object/Long/Illegal tags (0/1/7), including default-zero omissions.
+Constant interpreter bytecode arrays are allowed only in the exact generated
+vector handler and `continueAt` FrameState local slots with the same receiver
+and validated frame owner. Constant IntArray destination layouts are allowed
+only in `Vector32Unpack.executeTuple`'s exact deopt parameter slot. These are
+metadata recognizers, not permission for private payload access, escaping
+references, carrier reconstruction records or materialization. Live allocation,
+field traffic and calls are rejected before checking any metadata exception.
+AST stores may additionally retain the host bloom-header Long unbox from
+argument slot zero. It must feed only a constant-mask OR and the validated
+frame's primitive slot-zero deoptimization record, matching `FunctionRoot.execute`.
+It cannot supply the address, packed lanes, result or any other frame slot;
+the ordinary offset and four lane unboxes remain separately required.
 
 ## Reproducibility and limits
 
@@ -116,3 +135,9 @@ compiler graph/LIR shape requires a reviewed, narrowly tested reader correction.
 Any eventual passing package proves only its selected paths, not throughput,
 no-spill behavior, a globally allocation-free ABI, all alignments/platforms, or
 general vector function/join/capture/constructor/tuple ABI support.
+
+The [retained x86 checkpoint](evidence-x86_64/README.md) has sixteen accepted
+packed-memory graphs after the bounds-error deoptimization fix. It also retains
+the original sixteen genuinely rejected compiled-exception graphs and both
+original checker failures. The final bloom-reader correction was offline only;
+no guest execution, runtime source or installed JAR changed for that correction.

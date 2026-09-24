@@ -1,0 +1,281 @@
+{
+  "claim": "Offline reader-only diagnostic; no new guest execution and no accepted graph claim.",
+  "reader": {
+    "path": "bench/experiments/int32x4-bytearray/runtime-audit.py",
+    "sha256": "0ee1c9ae5b5e3ed428d6d4386f79a9936f492f97aafe49044e4089a51c57826a"
+  },
+  "records": [
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "entry": "vectorIndexWorker",
+      "graphRejected": "Residual allocation/payload/call: InvokeWithExceptionNode",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorIndexWorker/parsed/graph-00045.json",
+        "sha256": "a372022bf8b753022ccd910ced66055cc82872d5f8782385e2b2183239940a8c"
+      },
+      "cfg": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorIndexWorker/graphs/TruffleHotSpotCompilation-2296[lambda_bytes,_offset].cfg",
+        "sha256": "6bf81f81b0c53188b87c20d45f97c22afb9e4d269ace6f06712ca158450dd65a"
+      },
+      "physicalPackedInstructions": [
+        "nr  410  <|@ instruction xmm0|V128_DWORD = VECTORLOAD address: [rax|QWORD + rsi|DWORD[_] * 8 + 12] size: XMM op: VMOVDQU32 <|@ <|@"
+      ]
+    },
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "entry": "scalarIndexWorker",
+      "graphRejected": "Residual allocation/payload/call: InvokeWithExceptionNode",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarIndexWorker/parsed/graph-00045.json",
+        "sha256": "69f485bad0abdf9dd263b4d7f4abc607418d410d56cb6c85b711f62dc6a396cb"
+      },
+      "cfg": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarIndexWorker/graphs/TruffleHotSpotCompilation-2301[lambda_bytes,_offset].cfg",
+        "sha256": "393857c1b540586c6506ab14085489b4e7d901a07ff774e9cd012f02273ef952"
+      },
+      "physicalPackedInstructions": [
+        "nr  410  <|@ instruction xmm0|V128_DWORD = VECTORLOAD address: [rax|QWORD + rsi|DWORD[_] * 8 + 12] size: XMM op: VMOVDQU32 <|@ <|@"
+      ]
+    },
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "entry": "vectorStoreGraph",
+      "graphRejected": "Residual allocation/payload/call: InvokeWithExceptionNode",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorStoreGraph/parsed/graph-00045.json",
+        "sha256": "cdec386d250c6fafe3441c9bc102ddcae7baac5e527fb46ec2e06f1c76002457"
+      },
+      "cfg": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-vectorStoreGraph/graphs/TruffleHotSpotCompilation-2372[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].cfg",
+        "sha256": "1be0e7710387817322540f2fba7ea2700bb337bdb1584c88f56016b26af4641b"
+      },
+      "physicalPackedInstructions": [
+        "nr  536  <|@ instruction VECTORSTORE (address: [rdx|QWORD + rsi|DWORD[_] * 8 + 12], input: xmm0|V128_DWORD) size: XMM op: VMOVDQU32 <|@ <|@"
+      ]
+    },
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "entry": "scalarStoreGraph",
+      "graphRejected": "Residual allocation/payload/call: InvokeWithExceptionNode",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarStoreGraph/parsed/graph-00045.json",
+        "sha256": "91e8d649a10bc0e771e73cca1e6559431a70634139ba2e1262a9c244056db452"
+      },
+      "cfg": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-ast-scalarStoreGraph/graphs/TruffleHotSpotCompilation-2372[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].cfg",
+        "sha256": "1a5e1dc49b1661d3fa2097e52dc3d6cc77aca08a83e230d2abc391076a56ea2e"
+      },
+      "physicalPackedInstructions": [
+        "nr  536  <|@ instruction VECTORSTORE (address: [rdx|QWORD + rsi|DWORD[_] * 8 + 12], input: xmm0|V128_DWORD) size: XMM op: VMOVDQU32 <|@ <|@"
+      ]
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "entry": "vectorIndexWorker",
+      "graphRejected": "Residual allocation/payload/call: InvokeWithExceptionNode",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorIndexWorker/parsed/graph-00045.json",
+        "sha256": "a2304c68b70fe448523445059e8b383b40395b9c76ecb32a9c1c15e9e5d7aee9"
+      },
+      "cfg": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorIndexWorker/graphs/TruffleHotSpotCompilation-2378[lambda_bytes,_offset].cfg",
+        "sha256": "421ca40b1b286984d78dc84eb8e718f9266ad678314596d7add22093911b2047"
+      },
+      "physicalPackedInstructions": [
+        "nr  404  <|@ instruction xmm0|V128_DWORD = VECTORLOAD address: [rsi|QWORD + rax|DWORD[_] * 8 + 12] size: XMM op: VMOVDQU32 <|@ <|@"
+      ]
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "entry": "scalarIndexWorker",
+      "graphRejected": "Residual allocation/payload/call: InvokeWithExceptionNode",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarIndexWorker/parsed/graph-00045.json",
+        "sha256": "2b1cb79dc8245307a008d17f78dc55e07458439da1a5ff66fd333dcc54d0ccb1"
+      },
+      "cfg": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarIndexWorker/graphs/TruffleHotSpotCompilation-2374[lambda_bytes,_offset].cfg",
+        "sha256": "92548596724a1428b4e12063c30a7d6f6317eb89749ef65c5b6ac24c6735608a"
+      },
+      "physicalPackedInstructions": [
+        "nr  404  <|@ instruction xmm0|V128_DWORD = VECTORLOAD address: [rsi|QWORD + rax|DWORD[_] * 8 + 12] size: XMM op: VMOVDQU32 <|@ <|@"
+      ]
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "entry": "vectorStoreGraph",
+      "graphRejected": "Residual allocation/payload/call: InvokeWithExceptionNode",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorStoreGraph/parsed/graph-00045.json",
+        "sha256": "4ea6923dae501cca07e67cb5d918ba5b470412ec77389618d57bd714233199b0"
+      },
+      "cfg": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-vectorStoreGraph/graphs/TruffleHotSpotCompilation-2414[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].cfg",
+        "sha256": "d53ab1fef468eaacbc128aba01a5cb1e85ae3ecde029104dc57a38d780d484f0"
+      },
+      "physicalPackedInstructions": [
+        "nr  532  <|@ instruction VECTORSTORE (address: [r9|QWORD + r13|DWORD[_] * 8 + 12], input: xmm0|V128_DWORD) size: XMM op: VMOVDQU32 <|@ <|@"
+      ]
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "entry": "scalarStoreGraph",
+      "graphRejected": "Residual allocation/payload/call: InvokeWithExceptionNode",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarStoreGraph/parsed/graph-00045.json",
+        "sha256": "7da72eff0a675dc2b61d690a46851d7a2f17910dc535be6054e6afaedc4904c9"
+      },
+      "cfg": {
+        "path": "build/int32x4-bytearray-runtime-frozen/pre-bytecode-scalarStoreGraph/graphs/TruffleHotSpotCompilation-2414[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].cfg",
+        "sha256": "79fcb870b606b81b785a11a811a45cf79ba8f1599cdbc111ed4b353ba05da34e"
+      },
+      "physicalPackedInstructions": [
+        "nr  532  <|@ instruction VECTORSTORE (address: [r9|QWORD + r13|DWORD[_] * 8 + 12], input: xmm0|V128_DWORD) size: XMM op: VMOVDQU32 <|@ <|@"
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "entry": "vectorIndexWorker",
+      "graphRejected": "Residual allocation/payload/call: InvokeWithExceptionNode",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorIndexWorker/parsed/graph-00045.json",
+        "sha256": "a508b8d998f2da8591db3ccce2029423886f47b8c6592e8d03cd57b2b0535600"
+      },
+      "cfg": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorIndexWorker/graphs/TruffleHotSpotCompilation-2296[lambda_bytes,_offset].cfg",
+        "sha256": "7ee0062afe1841570cbff713d932e2793703fd99f9bea8db2bf303550b431307"
+      },
+      "physicalPackedInstructions": [
+        "nr  410  <|@ instruction xmm0|V128_DWORD = VECTORLOAD address: [rax|QWORD + rsi|DWORD[_] * 8 + 12] size: XMM op: VMOVDQU32 <|@ <|@"
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "entry": "scalarIndexWorker",
+      "graphRejected": "Residual allocation/payload/call: InvokeWithExceptionNode",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarIndexWorker/parsed/graph-00045.json",
+        "sha256": "9655e553769a78e3d84a076e1a2a906010f15ebb2774257b39295753a1eb691f"
+      },
+      "cfg": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarIndexWorker/graphs/TruffleHotSpotCompilation-2301[lambda_bytes,_offset].cfg",
+        "sha256": "a2e20ac027ced343f114dd66b8089ade876c44bcb5690190f01fde74a4e47eb6"
+      },
+      "physicalPackedInstructions": [
+        "nr  410  <|@ instruction xmm0|V128_DWORD = VECTORLOAD address: [rax|QWORD + rsi|DWORD[_] * 8 + 12] size: XMM op: VMOVDQU32 <|@ <|@"
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "entry": "vectorStoreGraph",
+      "graphRejected": "Residual allocation/payload/call: InvokeWithExceptionNode",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorStoreGraph/parsed/graph-00045.json",
+        "sha256": "ef100de92c9237f98914b12d79ad2570aa40c8344d00b2de291d9c8fee623adf"
+      },
+      "cfg": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-ast-vectorStoreGraph/graphs/TruffleHotSpotCompilation-2358[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].cfg",
+        "sha256": "f6b01e24b3fe2ffc66aad6a7d589d38ff3980f3beb6af239b3fdb126d05eb3c6"
+      },
+      "physicalPackedInstructions": [
+        "nr  536  <|@ instruction VECTORSTORE (address: [rdx|QWORD + rsi|DWORD[_] * 8 + 12], input: xmm0|V128_DWORD) size: XMM op: VMOVDQU32 <|@ <|@"
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "entry": "scalarStoreGraph",
+      "graphRejected": "Residual allocation/payload/call: InvokeWithExceptionNode",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarStoreGraph/parsed/graph-00045.json",
+        "sha256": "c213c834fe75ac39f59e02bf24ff24aa504948c0ce197d6d50a24267ba3c7950"
+      },
+      "cfg": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-ast-scalarStoreGraph/graphs/TruffleHotSpotCompilation-2352[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].cfg",
+        "sha256": "78b3dca8890c3d9aeead7358b8c3615efee15c5ceb7ee24b64ef61ab2bcdf770"
+      },
+      "physicalPackedInstructions": [
+        "nr  536  <|@ instruction VECTORSTORE (address: [rdx|QWORD + rsi|DWORD[_] * 8 + 12], input: xmm0|V128_DWORD) size: XMM op: VMOVDQU32 <|@ <|@"
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "entry": "vectorIndexWorker",
+      "graphRejected": "Residual allocation/payload/call: InvokeWithExceptionNode",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorIndexWorker/parsed/graph-00045.json",
+        "sha256": "558cc20e34231151f558bcf7eca38eebc42e3ca20c1709c3ca996db406db1b6b"
+      },
+      "cfg": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorIndexWorker/graphs/TruffleHotSpotCompilation-2354[lambda_bytes,_offset].cfg",
+        "sha256": "b74ef69d377ecec6bc7cf53800b1d88be64b22891c2082f7f605a1f421779e1b"
+      },
+      "physicalPackedInstructions": [
+        "nr  404  <|@ instruction xmm0|V128_DWORD = VECTORLOAD address: [rsi|QWORD + rax|DWORD[_] * 8 + 12] size: XMM op: VMOVDQU32 <|@ <|@"
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "entry": "scalarIndexWorker",
+      "graphRejected": "Residual allocation/payload/call: InvokeWithExceptionNode",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarIndexWorker/parsed/graph-00045.json",
+        "sha256": "d50889cb0dede48fe411a36c2f29b2af01c437f1163d6e77ab8514a31cd99e10"
+      },
+      "cfg": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarIndexWorker/graphs/TruffleHotSpotCompilation-2373[lambda_bytes,_offset].cfg",
+        "sha256": "3c995f01ce1ecfbfc91731b37c97c4991ec927e9a24e824a0175f0577d065093"
+      },
+      "physicalPackedInstructions": [
+        "nr  404  <|@ instruction xmm0|V128_DWORD = VECTORLOAD address: [rsi|QWORD + rax|DWORD[_] * 8 + 12] size: XMM op: VMOVDQU32 <|@ <|@"
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "entry": "vectorStoreGraph",
+      "graphRejected": "Residual allocation/payload/call: InvokeWithExceptionNode",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorStoreGraph/parsed/graph-00045.json",
+        "sha256": "da507db12b5c9fafad3416f353c5408ae211e47245b1b676fc07362f06664c7c"
+      },
+      "cfg": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-vectorStoreGraph/graphs/TruffleHotSpotCompilation-2387[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].cfg",
+        "sha256": "15c42e51828f92f8ac98d435fb904ffe22392da148abe7633dd6d2412fbed5a7"
+      },
+      "physicalPackedInstructions": [
+        "nr  532  <|@ instruction VECTORSTORE (address: [r9|QWORD + r13|DWORD[_] * 8 + 12], input: xmm0|V128_DWORD) size: XMM op: VMOVDQU32 <|@ <|@"
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "entry": "scalarStoreGraph",
+      "graphRejected": "Residual allocation/payload/call: InvokeWithExceptionNode",
+      "graph": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarStoreGraph/parsed/graph-00045.json",
+        "sha256": "c40f7e28855f3a075d3bcd8e63b9aaf882fd4cfb6992ab41465ac4c141064267"
+      },
+      "cfg": {
+        "path": "build/int32x4-bytearray-runtime-frozen/post-bytecode-scalarStoreGraph/graphs/TruffleHotSpotCompilation-2404[lambda_bytes,_offset,_x0,_x1,_x2,_x3,_s0].cfg",
+        "sha256": "9a87b4b0a9cba79fe1e562660b8bba631767ecf284c6794b3741562daf540012"
+      },
+      "physicalPackedInstructions": [
+        "nr  532  <|@ instruction VECTORSTORE (address: [r9|QWORD + r13|DWORD[_] * 8 + 12], input: xmm0|V128_DWORD) size: XMM op: VMOVDQU32 <|@ <|@"
+      ]
+    }
+  ]
+}

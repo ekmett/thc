@@ -113,6 +113,9 @@ four primitive int fields and explicit zero-extension to Long scalar lanes.
 The [signed Int32X4 multiplication slice](docs/int32x4-multiply.md) completes
 the seven-operation signed family with wrapping low-32-bit products and signed
 lane observations, without widening vector calling conventions.
+The [Int32X4 ByteArray slice](docs/int32x4-bytearray.md) adds six managed packed
+index/read/write operations with vector- or scalar-element offsets and bounded
+immediate local destructuring of mutable reads.
 
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
 scalar/reference inputs, concrete Float/Double leaves, local join results and zero-width State# components;

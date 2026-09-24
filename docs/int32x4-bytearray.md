@@ -1,6 +1,6 @@
 # Bounded Int32X4 ByteArray access
 
-This work-in-progress slice implements six pinned GHC 9.14.1 operations. Existing
+This slice implements six pinned GHC 9.14.1 operations. Existing
 vector arithmetic and managed byte-array identity stay unchanged.
 
 | Operations | Offset unit | Access width |
@@ -17,6 +17,8 @@ not be vector-aligned. All sixteen bytes must fit before any access or store.
 The checked condition is `size >= 16 && index >= 0 && index <= (size - 16) / stride`,
 before multiplying or narrowing the machine-width index. Invalid writes cannot
 partially modify storage. Invalid-input native GHC behavior is not an oracle.
+An invalid range transfers to the interpreter before constructing the existing
+RuntimeFault; the compiled valid path need not allocate the bounds exception.
 
 Mutable reads require a dedicated immediate primitive-case path: one exact
 registered two-field tuple alternative, erased State binder and concrete local
@@ -82,11 +84,52 @@ strict audits, native/model TSVs and source/artifact hashes. Each stage checks
 metadata mutations. `--export-only` retains pre-Tidy/model evidence without a
 native-execution claim, matching the existing AArch64 CI path.
 
-## Development checkpoint
+## Verified checkpoint
 
-Current development evidence: the initial 306-row native probe and the expanded
-9,666-row native/model preflight pass on pinned x86. The integrated runtime
-compiles and its three direct storage tests pass. Adversarial loader tests,
-strict per-row compiled-entry/identity checks, full regressions and selected
-packed load/store graph evidence are still in progress. This is not yet a
-compiled-memory or cross-platform performance claim.
+The pinned x86 native/model corpus has 9,666 matching rows, with 19 source and
+seven artifact hashes verified. Python checks pass normally and under `-O`:
+65 auditor, 22 vector, 14 vector-memory proof, ten byte-model, nine byte-array,
+and four coverage tests. The graph reader has 30 separate adversarial tests;
+those synthetic tests are not compiler evidence.
+
+The bounds-path runtime fix and final regression checkpoint pass 501 tests in
+each of the default and dense handoff configurations, with no failures, errors
+or skips. The focused suite has fourteen tests. Its cold-failure regression
+covers 96 transitions: six operations, both backends, and eight
+invalid size/index cases. Each starts with a verified installed valid call,
+requires bounds failure to invalidate that same target without changing bytes
+or publishing a result, then checks successful recovery without recompilation.
+Each transition uses forty fixed interpreted warm calls and one requested guest
+compile, with an interpreted host bridge. Its high test-only compilation-trigger
+threshold prevents automatic compilation; it is not a compiler graph-budget
+increase or a production runtime setting change.
+Both full configurations include that regression. Their exact test identity sets
+match; the earlier 498- and 500-test checkpoints remain separately archived.
+
+The first sixteen actual-Core captures passed every semantic comparison but
+failed graph acceptance: the invalid-bounds path still constructed RuntimeFault
+and called `Throwable.fillInStackTrace` in compiled code. These failed graphs
+and original checker output are preserved, not reclassified as a success.
+The runtime now transfers to the interpreter before constructing the exception,
+matching the scalar managed-array policy. All sixteen separately recorded new
+captures pass: eight packed loads with 32 signed lane extensions, eight packed
+stores with 32 exact lane inputs, and sixteen physical XMM `VMOVDQU32` memory
+instructions. There are 1,152 installed-target comparisons, with fresh caller
+arrays, all bytes checked and identical store results. The corrected graphs have
+no live exception call/allocation or private vector/carrier/payload allocation.
+
+The new capture's first reader rejected four AST store graphs for their extra
+host bloom-header unbox. A narrow offline correction proves that slot-zero
+unbox feeds only the constant-mask OR and frame primitive-slot-zero deopt
+metadata. Offset and four lane inputs remain independently required. No guest
+was rerun, and all 75 source, eleven installed JAR and four JDK hashes were
+checked, permitting changes only to the reader and its tests. Both original
+checker failures and archived reader versions are retained.
+
+See the [hash-sealed x86 evidence](../bench/experiments/int32x4-bytearray/evidence-x86_64/README.md).
+These selected graph controls exercise immutable indexing and stores; strict
+semantic compiled-entry tests additionally cover immediate mutable reads.
+Public host Long results may still box, interpreted/deoptimized vectors may
+allocate, and graph probes do not instrument entry counters. This is not a
+throughput, globally allocation-free ABI, big-endian, AArch64 or general vector
+transport claim.
