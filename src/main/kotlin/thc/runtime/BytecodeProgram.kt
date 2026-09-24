@@ -615,6 +615,41 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         } }
     }
 
+    /** Private proof: only a directly yielding, exactly saturated scalar call is resumable. */
+    private fun checkpointedApplication(e: Emission, function: Expression, arguments: List<Expression>,
+                                        evaluatedArguments: BooleanArray) {
+        val b = e.builder
+        b.beginBlock()
+        val fn = b.createLocal("captured application function", "object")
+        val result = b.createLocal("captured application result", "object")
+        val suspended = b.createLocal("captured application suspension", "object")
+        b.beginStoreLocal(fn); requireClosure(function).emit(e); b.endStoreLocal()
+        b.beginTryCatch()
+        b.beginStoreLocal(result)
+        b.beginCaptureApplicationResult(arguments.size)
+        b.emitLoadLocal(fn)
+        b.beginApply(arguments.size, false, metrics, evaluatedArguments)
+        b.emitLoadLocal(fn)
+        arguments.forEach { it.emit(e) }
+        b.endApply()
+        b.endCaptureApplicationResult()
+        b.endStoreLocal()
+        b.beginBlock()
+        b.beginStoreLocal(suspended)
+        b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly()
+        b.endStoreLocal()
+        b.beginStoreLocal(result)
+        b.beginResumeApplication()
+        b.emitLoadLocal(suspended)
+        b.beginYield(); b.emitLoadLocal(suspended); b.endYield()
+        b.endResumeApplication()
+        b.endStoreLocal()
+        b.endBlock()
+        b.endTryCatch()
+        b.emitLoadLocal(result)
+        b.endBlock()
+    }
+
     private fun application(function: Expression, arguments: List<Expression>, scope: Scope, tail: Boolean): Expression {
         val context = scope.function
         val evaluatedArguments = arguments.map { it.proof.evaluated }.toBooleanArray()
@@ -636,6 +671,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal)
                     b.endApplyCompact()
                 }
+            } else if (checkpoint != null && !tail) {
+                checkpointedApplication(e, function, arguments, evaluatedArguments)
             } else if (!loop) {
                 b.beginApply(arguments.size, tail, metrics, evaluatedArguments)
                 requireClosure(function).emit(e)

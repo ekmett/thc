@@ -35,6 +35,134 @@ class CoreContinuationNativeTest {
         fun force(thunk: Thunk): Any? = Calls.target(callTarget, arrayOf(thunk))
     }
 
+    @Test fun nativeNonTailApplicationResumesCalleeThenCaller() {
+        assertEquals("208", File(root, "build/core-continuation/native-output.txt").readLines()[1])
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val linked = CoreModules.reachable(module, "applicationAnswer")
+                val ast = Program(language, linked)
+                val astThunk = ast.entryValue("applicationAnswer") as Thunk
+                val astTarget = astThunk.target!!
+                val astAnswer = Calls.target(ast.hostEntryTarget(0), arrayOf(astThunk)) as DataValue
+                assertEquals(208L, astAnswer.layout.readLong(astAnswer, 0))
+                compile(astTarget)
+                val compiledAst = Calls.target(astTarget, arrayOf(0L)) as DataValue
+                assertEquals(208L, compiledAst.layout.readLong(compiledAst, 0))
+                val checkpoint = BytecodeCheckpoint()
+                val program = BytecodeProgram(language, linked, checkpoint)
+                val parent = program.entryValue("applicationAnswer") as Thunk
+                val target = parent.target!!
+                val callee = program.entryTarget("delayed")
+                assertTrue(Calls.target(callee, arrayOf(0L, 7L)) is DataValue)
+                compile(callee)
+                assertTrue(Calls.target(target, arrayOf(0L)) is DataValue)
+                compile(target)
+                val compiledBefore = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                checkpoint.armed = true
+                val driver = Driver()
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                val caller = parent.value as ContinuationResult
+                val suspendedCall = (caller.result as ThunkSuspended).thunk
+                assertNotSame(parent, suspendedCall)
+                assertEquals(5, suspendedCall.state)
+                val calleeSegment = suspendedCall.value as ContinuationResult
+                assertTrue((calleeSegment.continuationRootNode.sourceRootNode as BytecodeRoot).isSelf(callee))
+                assertEquals(1, checkpoint.visits.get())
+                assertTrue(checkpoint.compiledVisits.get() > 0, "The callee checkpoint ran in installed code")
+                assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() > compiledBefore,
+                    "The Core caller entered its explicitly compiled target")
+                val result = driver.force(parent) as DataValue
+                assertEquals(208L, result.layout.readLong(result, 0))
+                assertEquals(1, checkpoint.visits.get(), "The callee must not replay its checkpoint")
+                assertEquals(2, suspendedCall.state)
+                assertEquals(2, parent.state)
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun applicationRejectsUnownedNestedRootAndActiveMask() {
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                fun checked(entry: String): Pair<BytecodeProgram, Thunk> {
+                    val program = BytecodeProgram(language, CoreModules.reachable(module, entry),
+                        BytecodeCheckpoint().also { it.armed = true })
+                    return program to (program.entryValue(entry) as Thunk)
+                }
+                val driver = Driver()
+                val (_, nested) = checked("nestedApplication")
+                val wrongRoot = assertThrows(IllegalStateException::class.java) { driver.force(nested) }
+                assertTrue(wrongRoot.message!!.contains("unrelated bytecode continuation"))
+                assertEquals(4, nested.state, "An unowned nested root cannot be replayed")
+
+                val (_, masked) = checked("applicationAnswer")
+                SynchronousMasking.set(masked.target!!.rootNode, MaskingState.MASKED_INTERRUPTIBLE)
+                try {
+                    val unsupported = assertThrows(IllegalStateException::class.java) { driver.force(masked) }
+                    assertTrue(unsupported.message!!.contains("Masked application continuation"))
+                    assertEquals(4, masked.state, "Masked suspension remains fail-closed")
+                } finally { SynchronousMasking.set(masked.target!!.rootNode, MaskingState.UNMASKED) }
+
+                val (_, malformed) = checked("applicationAnswer")
+                assertThrows(ThunkSuspended::class.java) { driver.force(malformed) }
+                val saved = malformed.value as ContinuationResult
+                assertThrows(IllegalStateException::class.java) { saved.continueWith(Unit) }
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun suspendedApplicationReturningLazyThunkFailsClosedWithoutForcingIt() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val checkpoint = BytecodeCheckpoint().also { it.armed = true }
+                val lazyEffects = AtomicInteger()
+                val lazy = Thunk(object : RootNode(null) {
+                    override fun execute(frame: VirtualFrame): Any {
+                        lazyEffects.incrementAndGet()
+                        return 7L
+                    }
+                }.callTarget, null)
+                val callee = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+                    b.beginRoot()
+                    val visited = b.createLocal("visited", "primitive")
+                    b.beginBlock()
+                    b.beginStoreLocal(visited); b.emitCheckpointArmed(checkpoint); b.endStoreLocal()
+                    b.beginYield(); b.emitLoadConstant(Unit); b.endYield()
+                    b.beginReturn(); b.emitLoadConstant(lazy); b.endReturn()
+                    b.endBlock()
+                    b.endRoot()
+                }.getNode(0).callTarget
+                val continuation = Calls.target(callee, arrayOf(0L)) as ContinuationResult
+                val function = Closure(null, NO_PAP_ARGUMENTS, 0, callee)
+                val call = assertThrows(CapturedCallSuspension::class.java) {
+                    BytecodeRoot.CaptureApplicationResult.capture(0, function, continuation, Driver())
+                }.thunk
+                val driver = Driver()
+                val failure = assertThrows(RuntimeFault::class.java) { driver.force(call) }
+                assertTrue(failure.message!!.contains("Thunk target violated WHNF convention"))
+                assertEquals(3, call.state, "The unsupported return must not replay the call")
+                assertEquals(1, checkpoint.visits.get())
+                assertEquals(0, lazy.state, "The returned lazy thunk must not be forced")
+                assertEquals(0, lazyEffects.get())
+                assertThrows(RuntimeFault::class.java) { driver.force(call) }
+                assertEquals(1, checkpoint.visits.get())
+                assertEquals(0, lazyEffects.get())
+            } finally { context.leave() }
+        }
+    }
+
     @Test fun forwardedRecursiveCellStillResumesItsCapturedChild() {
         executionContext().use { context ->
             context.initialize("thc")
@@ -93,7 +221,7 @@ class CoreContinuationNativeTest {
     }
 
     @Test fun nativeCoreThunkResumesThroughForcedLocal() {
-        assertEquals("108", File(root, "build/core-continuation/native-output.txt").readText().trim())
+        assertEquals(listOf("108", "208"), File(root, "build/core-continuation/native-output.txt").readLines())
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
         executionContext().use { context ->
@@ -188,6 +316,13 @@ class CoreContinuationNativeTest {
                 assertFalse(ordinary.bytecodeDump().contains("yield"))
                 val answer = Calls.target(ordinary.hostEntryTarget(0), arrayOf(ordinary.entryValue("sharedAnswer"))) as DataValue
                 assertEquals(108L, answer.layout.readLong(answer, 0))
+                val normalCall = BytecodeProgram(language, CoreModules.reachable(module, "applicationAnswer"))
+                val normalDump = normalCall.bytecodeDump()
+                assertFalse(normalDump.contains("yield"))
+                assertFalse(normalDump.contains("CaptureApplicationResult"))
+                val callAnswer = Calls.target(normalCall.hostEntryTarget(0),
+                    arrayOf(normalCall.entryValue("applicationAnswer"))) as DataValue
+                assertEquals(208L, callAnswer.layout.readLong(callAnswer, 0))
             } finally { context.leave() }
         }
     }

@@ -359,19 +359,19 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `divideDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `divideFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `divideFloatX8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `eqAddr#` — arity 2 — Managed literal addresses only
+- [ ] `eqAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `freezeArray#` — arity 4 — Managed lifted arrays
-- [ ] `geAddr#` — arity 2 — Managed literal addresses only
+- [ ] `geAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `getCurrentCCS#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `getMaskingState#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `getSizeofMutableByteArray#` — arity 2 — Managed byte storage
 - [ ] `getSizeofSmallMutableArray#` — arity 2 — Managed lifted arrays
-- [ ] `gtAddr#` — arity 2 — Managed literal addresses only
+- [ ] `gtAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `indexAddrArray#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `indexAddrOffAddr#` — arity 2 — Managed literal addresses only
+- [ ] `indexAddrOffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `indexArray#` — arity 2 — Managed lifted arrays
 - [ ] `indexCharArray#` — arity 2 — Managed byte storage
-- [ ] `indexCharOffAddr#` — arity 2 — Managed literal addresses only
+- [ ] `indexCharOffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `indexDoubleArray#` — arity 2 — Managed byte storage
 - [ ] `indexDoubleArrayAsDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `indexDoubleX2Array#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -393,8 +393,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexWordArray#` — arity 2 — Managed byte storage
 - [ ] `isEmptyMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `keepAlive#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `leAddr#` — arity 2 — Managed literal addresses only
-- [ ] `ltAddr#` — arity 2 — Managed literal addresses only
+- [ ] `leAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
+- [ ] `ltAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `maskAsyncExceptions#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `maskUninterruptible#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -412,7 +412,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `minusWord32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusWord64X2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `neAddr#` — arity 2 — Managed literal addresses only
+- [ ] `neAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `negateDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `negateDoubleX4#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `negateFloatX4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -446,7 +446,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `packWord32X8#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packWord64X2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packWord8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `plusAddr#` — arity 2 — Managed literal addresses only
+- [ ] `plusAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `plusDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `plusDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `plusFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits

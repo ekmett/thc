@@ -68,7 +68,7 @@ class PrimopChecklistTest(unittest.TestCase):
     def test_vector_and_address_forms_do_not_become_full_scalar_support(self):
         rows = {row['name']: row for row in self.derive()['primitives']}
         self.assertEqual('partial', rows['packInt64X2#']['status'])
-        self.assertEqual('Managed literal addresses only', rows['plusAddr#']['scope'])
+        self.assertEqual('Managed addresses with operation-specific storage restrictions', rows['plusAddr#']['scope'])
         self.assertEqual('supported', rows['+#']['status'])
 
     def test_managed_mvars_remain_partial_without_claiming_a_guest_scheduler(self):
