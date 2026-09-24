@@ -13,7 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from core_vector_memory import OPERATIONS, read_case
+from core_vector_memory import SIGNED_OPERATIONS as OPERATIONS, read_case
 from int32x4_bytearray_model import BYTE_ORDER, HELPERS, check, entries, graph_entries, model_rows, parse_rows
 
 ROOT = Path(__file__).resolve().parents[1]

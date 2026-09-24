@@ -70,6 +70,10 @@ case "$(uname -m)" in
   arm64|aarch64) python3 scripts/prepare-int32x4-bytearray-audit.py --export-only ;;
   *) python3 scripts/prepare-int32x4-bytearray-audit.py ;;
 esac
+case "$(uname -m)" in
+  arm64|aarch64) python3 scripts/prepare-word32x4-bytearray-audit.py --export-only ;;
+  *) python3 scripts/prepare-word32x4-bytearray-audit.py ;;
+esac
 python3 scripts/prepare-explicit64-primops.py
 compiler/export.sh examples/THC/Fixtures.hs compiler/test-fixtures/StrictFields.hs compiler/test-fixtures/SpeculationAudit.hs compiler/test-fixtures/RepresentationAudit.hs compiler/test-fixtures/SourceNotes.hs compiler/test-fixtures/CbvAudit.hs compiler/test-fixtures/CbvJoinAudit.hs compiler/test-fixtures/CbvCoercionAudit.hs compiler/test-fixtures/ConstructorFieldAudit.hs compiler/test-fixtures/DemandAudit.hs
 python3 scripts/check-speculation-metadata.py
