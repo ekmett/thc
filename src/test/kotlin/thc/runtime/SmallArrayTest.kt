@@ -5,7 +5,9 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.frame.FrameDescriptor
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.RootNode
 import org.graalvm.polyglot.Context
@@ -58,7 +60,7 @@ class SmallArrayTest {
             assertEquals(2, row.size)
             row[0].toLong() to row[1].toLong()
         }
-        cases.forEach { (x, expected) -> assertEquals(40 * x + 179, expected, "native model $x") }
+        cases.forEach { (x, expected) -> assertEquals(68 * x + 702, expected, "native model $x") }
         val names = SmallArrayOp.entries.map { it.primitive }.toSet()
         for ((stage, path) in manifest["stages"] as Map<String, String>) {
             val auditPath = (manifest["audits"] as Map<String, String>).getValue(stage)
@@ -118,6 +120,25 @@ class SmallArrayTest {
         assertSame(bottom, ManagedSmallArray.read(small, 0))
         assertSame(replacement, ManagedSmallArray.read(ManagedSmallArray.freeze(small), 1))
         assertSame(small, ManagedSmallArray.freeze(small))
+        val cloned = ManagedSmallArray.slice(small, 0, 2)
+        assertNotSame(small, cloned)
+        assertSame(bottom, ManagedSmallArray.read(cloned, 0))
+        ManagedSmallArray.write(cloned, 1, bottom)
+        assertSame(replacement, ManagedSmallArray.read(small, 1))
+        val destination = ManagedSmallArray.allocate(2, null)
+        ManagedSmallArray.copy(small, 0, destination, 0, 2, false)
+        assertSame(bottom, ManagedSmallArray.read(destination, 0))
+        assertSame(replacement, ManagedSmallArray.read(destination, 1))
+        ManagedSmallArray.copy(destination, 0, destination, 1, 1, true)
+        assertSame(bottom, ManagedSmallArray.read(destination, 1))
+        assertThrows(RuntimeFault::class.java) { ManagedSmallArray.copy(small, 0, small, 0, 0, false) }
+        for ((offset, count) in listOf(-1L to 0L, 0L to -1L, 2L to 1L,
+            Long.MAX_VALUE to 0L, 0L to Long.MAX_VALUE)) {
+            assertThrows(RuntimeFault::class.java) { ManagedSmallArray.slice(small, offset, count) }
+            val before = destination.elements.copyOf()
+            assertThrows(RuntimeFault::class.java) { ManagedSmallArray.copy(small, offset, destination, 0, count, false) }
+            assertArrayEquals(before, destination.elements)
+        }
         assertEquals(0, entered, "SmallArray storage must not enter lifted elements")
         assertThrows(RuntimeFault::class.java) { ManagedArray.require(small) }
         assertThrows(RuntimeFault::class.java) { ManagedSmallArray.require(ManagedArray.allocate(1, bottom)) }
@@ -127,5 +148,25 @@ class SmallArrayTest {
         }
         for (size in listOf(-1L, Int.MAX_VALUE.toLong() + 1, Long.MAX_VALUE))
             assertThrows(RuntimeFault::class.java) { ManagedSmallArray.allocate(size, bottom) }
+    }
+
+    @Test fun transferChecksStateBeforeMutating() {
+        val source = ManagedSmallArray.allocate(1, Any())
+        val original = Any()
+        val destination = ManagedSmallArray.allocate(1, original)
+        val events = mutableListOf<String>()
+        fun operand(label: String, value: Any?): Expr = object : Expr() {
+            override fun execute(frame: VirtualFrame): Any? { events += label; return value }
+        }
+        val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameDescriptor.newBuilder().build())
+        for (operation in listOf(SmallArrayOp.COPY, SmallArrayOp.COPY_MUTABLE)) {
+            events.clear()
+            val expr = smallArrayExpression(operation, CoreRepresentation.UNKNOWN, arrayOf(
+                operand("source", source), operand("from", 0L), operand("destination", destination),
+                operand("to", 0L), operand("count", 1L), operand("state", 9L)))
+            assertThrows(RuntimeFault::class.java) { expr.execute(frame) }
+            assertEquals(listOf("source", "from", "destination", "to", "count", "state"), events)
+            assertSame(original, ManagedSmallArray.read(destination, 0))
+        }
     }
 }

@@ -751,9 +751,10 @@ preparePinnedPointers root = do
     forM_ [core, ghcOut] (createDirectoryIfMissing True . (root </>))
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
       "compiler/export.sh" (options ++ ["-fplugin-opt=THC.Plugin:closure=pointerRoundtrip",
-        "-fplugin-opt=THC.Plugin:closure=pointerArrayRoundtrip", source]) ""
+        "-fplugin-opt=THC.Plugin:closure=pointerArrayRoundtrip",
+        "-fplugin-opt=THC.Plugin:closure=pointerOrder", source]) ""
     _ <- run root [] "python3" ["scripts/audit-core.py", "--entry", "pointerRoundtrip",
-      "--entry", "pointerArrayRoundtrip",
+      "--entry", "pointerArrayRoundtrip", "--entry", "pointerOrder",
       "--output", directory </> stage </> "audit.json",
       core </> "PinnedPointerCellsAudit.json", core </> "THC.InterfaceClosure.json"] ""
     pure ()
@@ -771,7 +772,7 @@ preparePinnedPointers root = do
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= version,
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]
-  putStrLn "pinned-pointer-cells: 7 native rows, strict pre/post Core"
+  putStrLn "pinned-pointer-cells: 7 native rows, three strict pre/post Core roots"
 
 main :: IO ()
 main = do

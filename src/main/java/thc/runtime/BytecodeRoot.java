@@ -10,6 +10,7 @@ import com.oracle.truffle.api.bytecode.BytecodeRootNode;
 import com.oracle.truffle.api.bytecode.BytecodeNode;
 import com.oracle.truffle.api.bytecode.LocalAccessor;
 import com.oracle.truffle.api.bytecode.ConstantOperand;
+import com.oracle.truffle.api.bytecode.ContinuationResult;
 import com.oracle.truffle.api.bytecode.GenerateBytecode;
 import com.oracle.truffle.api.bytecode.Operation;
 import com.oracle.truffle.api.bytecode.Variadic;
@@ -351,6 +352,55 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
         @Fallback public static Object malformed(LocalAccessor local, boolean cell, Object suspended, Object resumed) {
             throw new IllegalStateException("Forced-local continuation requires ChildResume");
+        }
+    }
+
+    /** Test-owned, non-tail scalar call edge. No packet is allocated on ordinary returns. */
+    @Operation
+    @ConstantOperand(type = int.class, name = "arity")
+    public static final class CaptureApplicationResult {
+        @Specialization public static Object capture(int arity, Closure function, Object result,
+                @Bind("$node") Node node) {
+            if (!(result instanceof ContinuationResult continuation)) return result;
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            Object source = continuation.getContinuationRootNode().getSourceRootNode();
+            if (function.arity != arity || !(source instanceof BytecodeRoot callee) ||
+                    !callee.isSelf(function.target) ||
+                    !(continuation.getResult() == kotlin.Unit.INSTANCE || continuation.getResult() instanceof ThunkSuspended))
+                throw new IllegalStateException("Application returned an unrelated bytecode continuation: " +
+                        "arity=" + function.arity + "/" + arity + ", source=" + source +
+                        ", target=" + function.target.getRootNode() + ", yielded=" + continuation.getResult());
+            if (SynchronousMasking.current(node) != MaskingState.UNMASKED)
+                throw new IllegalStateException("Masked application continuation has no logical mask segment");
+            // This private, cold call segment begins already suspended. It has no
+            // original body to replay: only the captured Truffle frame can resume.
+            Thunk call = new Thunk(function.target, null);
+            call.setTarget(null);
+            call.setValue(continuation);
+            call.setState(5);
+            throw new CapturedCallSuspension(call);
+        }
+    }
+
+    @Operation
+    public static final class CallSuspensionOnly {
+        @Specialization public static ThunkSuspended capture(AbstractTruffleException failure) {
+            if (failure instanceof CapturedCallSuspension captured) return new ThunkSuspended(captured.getThunk());
+            throw failure;
+        }
+    }
+
+    @Operation
+    public static final class ResumeApplication {
+        @Specialization public static Object resume(ThunkSuspended suspended, ChildResume resumed) {
+            if (resumed.getFailure() != null) throw resumed.getFailure();
+            Thunk call = suspended.getThunk();
+            if (call.getState() != 2 || call.getValue() != resumed.getValue() || resumed.getValue() instanceof ContinuationResult)
+                throw new IllegalStateException("Application continuation lost its call update");
+            return resumed.getValue();
+        }
+        @Fallback public static Object malformed(Object suspended, Object resumed) {
+            throw new IllegalStateException("Application continuation requires ChildResume");
         }
     }
 
@@ -1284,6 +1334,18 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = ManagedAddressOrder.class, name = "order")
+    public static final class AddressOrder {
+        @Specialization public static long compare(ManagedAddressOrder order,
+                ManagedAddress left, ManagedAddress right) {
+            return order.accepts(left.compareWithinAllocation(right)) ? 1L : 0L;
+        }
+        @Fallback public static long invalid(ManagedAddressOrder order, Object left, Object right) {
+            throw fail("Expected managed Addr# operands");
+        }
+    }
+
+    @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class NewMVar {
         @Specialization public static void create(VirtualFrame frame, LocalAccessor destination,
@@ -1523,6 +1585,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             TupleResultsKt.requireVoidCarrier(state);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
                     ManagedSmallArray.size(array));
+        }
+    }
+    @Operation public static final class CloneSmallArray {
+        @Specialization public static Object clone(Object reference, long offset, long count) {
+            return ManagedSmallArray.slice(ManagedSmallArray.require(reference), offset, count);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class CopySmallArraySlice {
+        @Specialization public static void clone(VirtualFrame frame, LocalAccessor destination,
+                Object reference, long offset, long count, Object state, @Bind("$node") Node node) {
+            SmallArrayStorage array = ManagedSmallArray.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    ManagedSmallArray.slice(array, offset, count));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = boolean.class, name = "mutableSource")
+    public static final class TransferSmallArray {
+        @Specialization public static Object copy(boolean mutableSource, Object source, long sourceOffset,
+                Object destination, long destinationOffset, long count, Object state) {
+            SmallArrayStorage from = ManagedSmallArray.require(source);
+            SmallArrayStorage to = ManagedSmallArray.require(destination);
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedSmallArray.copy(from, sourceOffset, to, destinationOffset, count, mutableSource);
+            return kotlin.Unit.INSTANCE;
         }
     }
 

@@ -9,8 +9,7 @@ data Box = Box Int#
 
 {-# OPAQUE delayed #-}
 delayed :: Int# -> Box
-delayed input = runRW# (\state ->
-  case noDuplicate# state of _ -> Box (input +# 1#))
+delayed input = case noDuplicate# realWorld# of _ -> Box (input +# 1#)
 
 {-# OPAQUE checkpointValue #-}
 checkpointValue :: Box
@@ -20,6 +19,21 @@ checkpointValue = case noDuplicate# realWorld# of _ -> Box 8#
 {-# OPAQUE uncaptured #-}
 uncaptured :: Box
 uncaptured = delayed 7#
+
+-- Work remains after this saturated call, so its caller must retain a segment.
+{-# OPAQUE applicationAnswer #-}
+applicationAnswer :: Int
+applicationAnswer = case delayed 7# of Box result -> I# (200# +# result)
+
+-- A nested lambda owns this yield, not the directly called function root.
+{-# OPAQUE nestedDelayed #-}
+nestedDelayed :: Int# -> Box
+nestedDelayed input = runRW# (\state ->
+  case noDuplicate# state of _ -> Box (input +# 1#))
+
+{-# OPAQUE nestedApplication #-}
+nestedApplication :: Int
+nestedApplication = case nestedDelayed 7# of Box result -> I# (200# +# result)
 
 {-# OPAQUE sharedAnswer #-}
 sharedAnswer :: Int

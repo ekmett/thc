@@ -7,4 +7,6 @@ import CoreContinuationAudit
 import GHC.Exts
 
 main :: IO ()
-main = print sharedAnswer
+main = do
+  print sharedAnswer
+  print applicationAnswer
