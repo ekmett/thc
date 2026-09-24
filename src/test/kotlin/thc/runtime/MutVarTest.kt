@@ -15,6 +15,9 @@ import thc.*
 import java.io.File
 import java.math.BigInteger
 import java.security.MessageDigest
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class MutVarTest {
     private val root = File(System.getProperty("thc.projectRoot"))
@@ -155,7 +158,62 @@ class MutVarTest {
         assertThrows(RuntimeFault::class.java) { ManagedMutVar.require(arrayOf(first)) }
         val field = ManagedMutVar::class.java.getDeclaredField("value")
         assertFalse(java.lang.reflect.Modifier.isFinal(field.modifiers))
+        assertTrue(java.lang.reflect.Modifier.isVolatile(field.modifiers), "MutVar writes must publish to other threads")
         assertNull(field.getAnnotation(com.oracle.truffle.api.CompilerDirectives.CompilationFinal::class.java))
+    }
+
+    private class PublishedValue {
+        var sequence = 0
+        var complement = 0
+    }
+
+    @Test fun concurrentReadersSeeCompletePublishedValuesInWriteOrder() {
+        fun value(sequence: Int) = PublishedValue().apply {
+            this.sequence = sequence
+            complement = sequence.inv()
+        }
+        val reference = ManagedMutVar(value(0))
+        val done = Any()
+        val start = CountDownLatch(1)
+        val firstRead = CountDownLatch(2)
+        val workers = Executors.newFixedThreadPool(3)
+        try {
+            val readers = List(2) {
+                workers.submit<Int> {
+                    start.await()
+                    var previous = 0
+                    var sawWrite = false
+                    while (true) {
+                        val current = reference.value
+                        if (current === done) break
+                        val published = current as PublishedValue
+                        assertEquals(published.sequence.inv(), published.complement,
+                            "Reader observed a partially published value")
+                        assertTrue(published.sequence >= previous, "A reader went backward in the write order")
+                        previous = published.sequence
+                        if (previous > 0 && !sawWrite) {
+                            sawWrite = true
+                            firstRead.countDown()
+                        }
+                        Thread.onSpinWait()
+                    }
+                    assertTrue(sawWrite, "Reader missed every published write")
+                    previous
+                }
+            }
+            val writer = workers.submit {
+                start.await()
+                reference.value = value(1)
+                assertTrue(firstRead.await(10, TimeUnit.SECONDS), "Readers did not observe the first write")
+                for (sequence in 2..25_000) reference.value = value(sequence)
+                reference.value = done
+            }
+            start.countDown()
+            writer.get(10, TimeUnit.SECONDS)
+            readers.forEach { it.get(10, TimeUnit.SECONDS) }
+        } finally {
+            workers.shutdownNow()
+        }
     }
 
     @Test fun stateFailurePrecedesMutationAndTuplePublication() {
