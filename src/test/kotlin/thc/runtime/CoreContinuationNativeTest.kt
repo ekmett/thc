@@ -39,11 +39,22 @@ class CoreContinuationNativeTest {
         @Child private var force = Force(Metrics(true))
         override fun execute(frame: VirtualFrame): Any? = force.execute(frame, frame.arguments[0])
         fun force(thunk: Thunk): Any? = Calls.target(callTarget, arrayOf(thunk))
+        fun deliver(boundary: Any, child: CallSegment, payload: Any?, afterClaim: (() -> Unit)? = null): Any? =
+            force.deliverAtCapturedIOHandler(boundary, child, payload, afterClaim)
     }
 
     private fun <T> entered(context: Context, action: () -> T): T {
         context.enter()
         try { return action() } finally { context.leave() }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun linkedWithPayload(module: Map<String, Any?>, entry: String): Map<String, Any?> {
+        val action = CoreModules.reachable(module, entry)
+        val payload = CoreModules.reachable(module, "asyncPayload")
+        val bindings = ((action["bindings"] as List<Map<String, Any?>>) +
+            (payload["bindings"] as List<Map<String, Any?>>)).distinctBy { it["id"] }
+        return action + ("bindings" to bindings)
     }
 
     private fun callSegmentCaller(language: Language, segment: CallSegment): RootCallTarget {
@@ -443,7 +454,7 @@ class CoreContinuationNativeTest {
     }
 
     @Test fun nativeCoreThunkResumesThroughForcedLocal() {
-        assertEquals(listOf("108", "208", "42", "77"), File(root, "build/core-continuation/native-output.txt").readLines())
+        assertEquals(listOf("108", "208", "42", "77", "43"), File(root, "build/core-continuation/native-output.txt").readLines())
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
         executionContext().use { context ->
@@ -492,7 +503,7 @@ class CoreContinuationNativeTest {
     }
 
     @Test fun genuineCatchActionResumesOwnedTupleAcrossThreads() {
-        assertEquals(listOf("108", "208", "42", "77"),
+        assertEquals(listOf("108", "208", "42", "77", "43"),
             File(root, "build/core-continuation/native-output.txt").readLines())
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
@@ -575,6 +586,192 @@ class CoreContinuationNativeTest {
                 assertEquals(visits, checkpoint.visits.get(), "The action prefix must not replay")
                 assertEquals(if (name == "catchActionFailure") 3 else 2, segment.state)
                 assertEquals(2, thunk.state)
+            }
+        }
+    }
+
+    @Test fun privateDeliveryCutsOriginalCatchAndLeavesItsActionShared() {
+        assertEquals("42", File(root, "build/core-continuation/native-output.txt").readLines()[2])
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            val checkpoint = BytecodeCheckpoint()
+            val program = entered(context) { BytecodeProgram(language, linkedWithPayload(module, "catchActionAnswer"), checkpoint) }
+            val payload = entered(context) { driver.force(program.entryValue("asyncPayload") as Thunk) as DataValue }
+            assertEquals(7L, payload.layout.readLong(payload, 0))
+            entered(context) {
+                val target = program.entryTarget("catchActionAnswer")
+                assertEquals(42L, (Calls.target(target, arrayOf(0L)) as DataValue).let { it.layout.readLong(it, 0) })
+                compile(target)
+                assertEquals(42L, (Calls.target(target, arrayOf(0L)) as DataValue).let { it.layout.readLong(it, 0) })
+            }
+            checkpoint.armed = true
+            val parent = entered(context) { program.entryValue("catchActionAnswer") as Thunk }
+            val compiledBefore = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+            val child = entered(context) {
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                ((parent.value as ContinuationResult).result as CallSegmentSuspended).segment
+            }
+            assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() > compiledBefore,
+                "The captured original catch caller entered installed bytecode")
+            assertTrue(child.caughtIOAction)
+            assertEquals(5, child.state)
+            Executors.newSingleThreadExecutor().use { pool ->
+                val delivered = pool.submit<Long> { entered(context) {
+                    SynchronousMasking.set(driver, MaskingState.MASKED_UNINTERRUPTIBLE)
+                    try {
+                        val answer = driver.deliver(parent, child, payload) as DataValue
+                        assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, SynchronousMasking.current(driver))
+                        answer.layout.readLong(answer, 0)
+                    } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+                } }
+                assertEquals(107L, delivered.get(5, TimeUnit.SECONDS), "The original catch# handler sees the lazy async payload")
+            }
+            assertEquals(2, parent.state)
+            assertEquals(5, child.state, "Delivery must leave the shared action continuation parked")
+            entered(context) {
+                assertEquals(107L, (driver.force(parent) as DataValue).let { it.layout.readLong(it, 0) })
+                val observer = Thunk(callSegmentCaller(language, child), null)
+                assertSame(observer, assertThrows(ThunkSuspended::class.java) { driver.force(observer) }.thunk)
+                assertSame(observer, assertThrows(ThunkSuspended::class.java) { driver.force(observer) }.thunk)
+                assertTrue(driver.force(observer) is HandoffStorage)
+                assertEquals(0, language.handoffState.get().results.depth)
+                assertEquals(0, language.handoffState.get().results.retainedReferences())
+            }
+            assertEquals(2, child.state)
+            assertEquals(2, checkpoint.visits.get(), "The action's two checkpoints execute once each")
+        }
+    }
+
+    @Test fun committedCatchCutSurvivesIndependentChildCompletionBeforeHandlerResume() {
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            val checkpoint = BytecodeCheckpoint().also { it.armed = true }
+            val program = entered(context) { BytecodeProgram(language, linkedWithPayload(module, "catchActionAnswer"), checkpoint) }
+            val payload = entered(context) { driver.force(program.entryValue("asyncPayload") as Thunk) as DataValue }
+            val parent = entered(context) { program.entryValue("catchActionAnswer") as Thunk }
+            val child = entered(context) {
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                ((parent.value as ContinuationResult).result as CallSegmentSuspended).segment
+            }
+            val observer = entered(context) { Thunk(callSegmentCaller(language, child), null) }
+            Executors.newSingleThreadExecutor().use { deliveryPool ->
+                val delivered = deliveryPool.submit<Long> { entered(context) {
+                    val answer = driver.deliver(parent, child, payload) {
+                        assertEquals(1, parent.state, "The parent cut is committed before the observer runs")
+                        Executors.newSingleThreadExecutor().use { observerPool ->
+                            val finished = observerPool.submit<Unit> { entered(context) {
+                                repeat(2) {
+                                    assertSame(observer, assertThrows(ThunkSuspended::class.java) { driver.force(observer) }.thunk)
+                                }
+                                assertTrue(driver.force(observer) is HandoffStorage)
+                                assertEquals(0, language.handoffState.get().results.depth)
+                            } }
+                            finished.get(5, TimeUnit.SECONDS)
+                        }
+                        assertEquals(2, child.state, "The shared child completed before handler continuation")
+                    } as DataValue
+                    answer.layout.readLong(answer, 0)
+                } }
+                assertEquals(107L, delivered.get(5, TimeUnit.SECONDS))
+            }
+            assertEquals(2, parent.state)
+            assertEquals(2, child.state)
+            assertEquals(2, checkpoint.visits.get(), "The shared action prefix is never replayed")
+        }
+    }
+
+    @Test fun nestedOriginalCatchCutsNearestHandlerAndKeepsInnerActionResumable() {
+        assertEquals("43", File(root, "build/core-continuation/native-output.txt").readLines()[4])
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            entered(context) {
+                val linked = CoreModules.reachable(module, "nestedCatchAction")
+                for (program in listOf(Program(language, linked), BytecodeProgram(language, linked))) {
+                    val answer = driver.force(program.entryValue("nestedCatchAction") as Thunk) as DataValue
+                    assertEquals(43L, answer.layout.readLong(answer, 0), "Native and ordinary guest catch agree")
+                }
+            }
+            val checkpoint = BytecodeCheckpoint().also { it.armed = true }
+            val program = entered(context) { BytecodeProgram(language, linkedWithPayload(module, "nestedCatchAction"), checkpoint) }
+            val payload = entered(context) { driver.force(program.entryValue("asyncPayload") as Thunk) as DataValue }
+            val parent = entered(context) { program.entryValue("nestedCatchAction") as Thunk }
+            val (outer, inner) = entered(context) {
+                SynchronousMasking.set(driver, MaskingState.MASKED_INTERRUPTIBLE)
+                try {
+                    assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                    assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(driver))
+                    val outer = ((parent.value as ContinuationResult).result as CallSegmentSuspended).segment
+                    val inner = ((outer.value as ContinuationResult).result as CallSegmentSuspended).segment
+                    assertTrue(outer.caughtIOAction && inner.caughtIOAction)
+                    assertThrows(RuntimeFault::class.java) { driver.deliver(parent, inner, payload) }
+                    assertEquals(5, parent.state, "The outer handler cannot steal the inner action")
+                    outer to inner
+                } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+            }
+            Executors.newSingleThreadExecutor().use { pool ->
+                val delivered = pool.submit<Any?> { entered(context) {
+                    SynchronousMasking.set(driver, MaskingState.MASKED_UNINTERRUPTIBLE)
+                    try {
+                        val answer = driver.deliver(outer, inner, payload)
+                        assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, SynchronousMasking.current(driver))
+                        answer
+                    } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+                } }
+                assertTrue(delivered.get(5, TimeUnit.SECONDS) is HandoffStorage)
+            }
+            assertEquals(2, outer.state)
+            assertEquals(5, inner.state)
+            entered(context) {
+                SynchronousMasking.set(driver, MaskingState.MASKED_INTERRUPTIBLE)
+                try {
+                    val answer = driver.force(parent) as DataValue
+                    assertEquals(78L, answer.layout.readLong(answer, 0),
+                        "The inner handler adds 70 and outer action adds 1; outer handler would add 1000")
+                    assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(driver))
+                } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+                val observer = Thunk(callSegmentCaller(language, inner), null)
+                assertSame(observer, assertThrows(ThunkSuspended::class.java) { driver.force(observer) }.thunk)
+                assertTrue(driver.force(observer) is HandoffStorage)
+                assertEquals(0, language.handoffState.get().results.depth)
+                assertEquals(0, language.handoffState.get().results.retainedReferences())
+            }
+            assertEquals(2, inner.state)
+            assertEquals(2, parent.state)
+            assertEquals(1, checkpoint.visits.get(), "The inner action checkpoint executes only once")
+        }
+    }
+
+    @Test fun ordinaryCatchCannotAcceptPrivateAsyncOrigin() {
+        val payload = Any()
+        val delivered = CapturedAsyncDelivery(payload)
+        assertSame(delivered, assertThrows(CapturedAsyncDelivery::class.java) {
+            BytecodeRoot.RequireGuestFailure.payload(delivered)
+        })
+        assertSame(payload, BytecodeRoot.RequireCaughtIOFailure.payload(delivered))
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            entered(context) {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val linked = CoreModules.reachable(module, "nestedCatchAction")
+                val ordinary = BytecodeProgram(language, linked).bytecodeDump()
+                val private = BytecodeProgram(language, linked, BytecodeCheckpoint()).bytecodeDump()
+                assertTrue(ordinary.contains("RequireGuestFailure"))
+                assertFalse(ordinary.contains("RequireCaughtIOFailure"))
+                assertTrue(private.contains("RequireCaughtIOFailure"))
             }
         }
     }

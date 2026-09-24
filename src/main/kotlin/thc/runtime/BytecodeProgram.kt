@@ -1190,7 +1190,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                 b.beginBlock()
                                 val payload = b.createLocal("caught exception payload", "object")
                                 b.beginStoreLocal(payload)
-                                b.beginRequireGuestFailure(); b.emitLoadException(); b.endRequireGuestFailure()
+                                if (checkpoint == null) {
+                                    b.beginRequireGuestFailure(); b.emitLoadException(); b.endRequireGuestFailure()
+                                } else {
+                                    b.beginRequireCaughtIOFailure(); b.emitLoadException(); b.endRequireCaughtIOFailure()
+                                }
                                 b.endStoreLocal()
                                 val prior = b.createLocal("handler caller mask", "object")
                                 b.beginStoreLocal(prior); b.emitEnterHandlerMask(); b.endStoreLocal()

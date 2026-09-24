@@ -51,7 +51,7 @@ non-suspending nested call still explicitly compiles; only the cold path
 allocates mask metadata.
 
 These boundaries are enabled only by the private test control. Other force,
-tuple, mask, and handler edges do not yet capture caller segments.
+tuple, mask, and handler edges may still lack captured caller segments.
 There is no general async delivery, `throwTo`, or replay of an interrupted
 effectful right-hand side.
 
@@ -77,9 +77,22 @@ for the successful action and 77 for a caught `raiseIO#`. Repeated suspension
 does not replay the action prefix, and another host thread can complete the
 shared action before the catch caller resumes.
 
-The ordinary `checkpoint == null` path retains the original `InvokeIOAction`
-and emits no Yield or private tuple dispatch. The private proof captures only
-the directly invoked action root and its exact result shape. Handler-body
-suspension, arbitrary nested calls, general aggregate applications, and
-delivery of an asynchronous exception remain unsupported; uncaptured edges
-fail closed. The diagnostic stack snapshot is not a resumable continuation.
+The private handler cut now also reaches that original GHC `catch#` frame. It
+claims a saved caller only when its Yield signal names the exact parked
+`CallSegment` created inside a caught IO action. A cold, action-bound token
+enters the saved continuation; `ResumeIOAction` verifies that token and raises
+a distinct private async-origin signal. Only the checkpointed catch extractor
+admits it. Ordinary `checkpoint == null` still emits the original
+`InvokeIOAction` and `RequireGuestFailure`, without Yield or private tuple
+dispatch, and rejects this signal.
+
+An original nested `catch#` fixture returns 43 normally under native GHC,
+AST, and bytecode. Cutting at its inner handler with a boxed 7 yields 78
+(inner handler adds 70, outer action adds 1), rather than the outer handler's
+1007. The inner action remains parked and later completes from its saved frame
+without replaying its checkpoint. The tests also reject a wrong parent/child
+pair and preserve each host carrier's ambient mask across the handler cut.
+This is deterministic, in-process proof control; it does not admit production
+`throwTo`, arbitrary suspension inside a handler body, or uncaptured nested
+call edges. Such edges still fail closed. The diagnostic stack snapshot is
+not a resumable continuation.

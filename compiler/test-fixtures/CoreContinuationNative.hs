@@ -12,3 +12,4 @@ main = do
   print applicationAnswer
   print catchActionAnswer
   print catchActionFailure
+  print nestedCatchAction

@@ -1387,7 +1387,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                         throw new IllegalStateException("Parked IO action did not restore its caller mask");
                     MaskingState active = parked != null ? parked : SynchronousMasking.current(node);
                     throw new CapturedCallSuspension(new CallSegment(continuation, active, callerMask,
-                            destination.getShape()));
+                            destination.getShape(), true));
                 } finally { SynchronousMasking.set(node, callerMask); }
             }
         }
@@ -1410,6 +1410,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 throw new IllegalStateException("IO action continuation lost its tuple update");
             destination.consume(frame, node, owned);
         }
+        @Specialization public static void deliver(BytecodeTupleSlots destination,
+                CallSegmentSuspended suspended, PrivateIOUnwind delivery) {
+            CallSegment segment = suspended.getSegment();
+            if (delivery.getAction() != segment || !segment.getCaughtIOAction() ||
+                    segment.getTupleShape() != destination.getShape())
+                throw new IllegalStateException("Async delivery requires the exact captured catch# action");
+            throw new CapturedAsyncDelivery(delivery.getPayload());
+        }
         @Fallback public static void malformed(BytecodeTupleSlots destination, Object suspended, Object resumed) {
             throw new IllegalStateException("IO action continuation requires an owned ChildResume tuple");
         }
@@ -1420,6 +1428,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object payload(AbstractTruffleException failure) {
             if (failure instanceof GuestException guest) return guest.getPayload();
             throw failure;
+        }
+    }
+
+    /** Only the private captured catch# path may handle an async-origin payload. */
+    @Operation public static final class RequireCaughtIOFailure {
+        @Specialization public static Object payload(AbstractTruffleException failure) {
+            if (failure instanceof CapturedAsyncDelivery delivered) return delivered.getPayload();
+            return RequireGuestFailure.payload(failure);
         }
     }
 

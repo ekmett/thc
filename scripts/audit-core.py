@@ -66,7 +66,12 @@ class Audit:
                 key = constructor.get('id')
                 if not isinstance(key, str):
                     self.issue('constructor-id', None, source, 'Constructor lacks a string id')
-                elif key in self.constructors and self.constructors[key] != constructor:
+                # GHC can alpha-rename quantified variables in the diagnostic
+                # pretty-printed type between modules. Keep every runtime and
+                # exporter metadata field exact, including unknown future keys.
+                elif key in self.constructors and {
+                        name: value for name, value in self.constructors[key].items() if name != 'type'
+                    } != {name: value for name, value in constructor.items() if name != 'type'}:
                     self.issue('inconsistent-constructor', None, source, key)
                 else:
                     self.constructors[key] = constructor
