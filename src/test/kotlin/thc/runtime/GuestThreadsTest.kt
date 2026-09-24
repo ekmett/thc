@@ -200,4 +200,54 @@ class GuestThreadsTest {
         val request = threads.send(id.get(), "no-op")
         assertEquals(AsyncRequestState.TARGET_FINISHED, request.state)
     }
+
+    @Test fun wakeFailureAfterClaimCannotRevokeSendOrResumedSend() {
+        for (resumed in listOf(false, true)) {
+            val masks = ThreadLocal.withInitial { MaskingState.UNMASKED }
+            val pollAllowed = CountDownLatch(1)
+            val claimed = CountDownLatch(1)
+            val acknowledge = CountDownLatch(1)
+            val ready = CountDownLatch(1)
+            val seen = AtomicReference<AsyncRequest>()
+            val wakeCount = AtomicInteger()
+            val threads = GuestThreads(masks) {
+                if (!resumed || wakeCount.incrementAndGet() == 2) {
+                    pollAllowed.countDown()
+                    assertTrue(claimed.await(5, TimeUnit.SECONDS))
+                    throw IllegalStateException("Wake failed after target claim")
+                }
+            }
+            val id = AtomicLong()
+            val target = Thread {
+                id.set(threads.enterCurrent())
+                ready.countDown()
+                try {
+                    assertTrue(pollAllowed.await(5, TimeUnit.SECONDS))
+                    seen.set(threads.poll(node))
+                    claimed.countDown()
+                    assertTrue(acknowledge.await(5, TimeUnit.SECONDS))
+                    seen.get().acknowledge()
+                } finally { threads.leaveCurrent() }
+            }
+            target.start()
+            try {
+                assertTrue(ready.await(5, TimeUnit.SECONDS))
+                val request = if (resumed) {
+                    threads.send(id.get(), "resumed").also {
+                        assertTrue(threads.pause(it))
+                        threads.resume(it)
+                    }
+                } else threads.send(id.get(), "sent")
+                assertSame(request, seen.get())
+                assertEquals(AsyncRequestState.CLAIMED, request.state)
+                acknowledge.countDown()
+                target.join(5000)
+                assertFalse(target.isAlive)
+                assertEquals(AsyncRequestState.ACKNOWLEDGED, request.state)
+            } finally {
+                acknowledge.countDown()
+                target.join(5000)
+            }
+        }
+    }
 }

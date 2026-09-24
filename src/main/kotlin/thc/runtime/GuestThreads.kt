@@ -158,8 +158,10 @@ internal class GuestThreads internal constructor(
             return false
         if (state == AsyncRequestState.ACKNOWLEDGED && request.state != AsyncRequestState.CLAIMED)
             error("Async request was not claimed by its target")
-        if (state == AsyncRequestState.FAILED && request.state !in setOf(
-                AsyncRequestState.PENDING, AsyncRequestState.CLAIMED)) return false
+        // A wake can fail after the target has independently claimed the request.
+        // Claim commits delivery; a late wake failure must not revoke its ACK.
+        if (state == AsyncRequestState.FAILED && request.state != AsyncRequestState.PENDING)
+            return false
         if (queued) target.queue.remove(request)
         if (target.claimed === request) target.claimed = null
         target.pending = target.claimed == null && target.queue.isNotEmpty()
