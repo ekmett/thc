@@ -448,7 +448,8 @@ internal class TailCallRepeatingNode(val descriptor: FrameDescriptor, private va
             arguments[0] = 0L
             dispatch.call(target, arguments)
         }
-        frame.setObject(FrameLayout.TAIL_RESULT, result)
+        frame.setObject(FrameLayout.TAIL_RESULT,
+            if (result is com.oracle.truffle.api.bytecode.ContinuationResult) TailYield(result, target) else result)
         false
     } catch (tail: TailCall) {
         setNext(frame, tail)
