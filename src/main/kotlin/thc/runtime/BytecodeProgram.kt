@@ -784,7 +784,6 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             } else if (fn[0] == "prim" && VectorByteArrayOp.named(fn[1] as String) != null) {
                 val operation = VectorByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
-                CoreVectorMemory.validateDirectAnnotations(operation, args, CoreRepresentations.metadata(expr)?.get("rep"))
                 vectorByteArray(operation, args.map { compile(it, scope, false) })
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!
