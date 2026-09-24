@@ -291,6 +291,25 @@ class PolyglotFFITest {
         }
     }
 
+    @Test fun javascriptImportDoesNotCaptureBareGlobalsOrLoseMethodReceiver() {
+        context().use { context ->
+            context.initialize("thc")
+            context.enter()
+            try {
+                context.eval("js", "globalThis.a0 = x => x + 7")
+                for (source in listOf("a0", "\\u0061\\u0030")) {
+                    val target = javascriptRoot(source, listOf("IntRep"), "IntRep").callTarget
+                    assertEquals(18L, Calls.target(target, arrayOf<Any?>(11L, Unit)) as Long,
+                        "import source $source must resolve the global function")
+                }
+                context.eval("js", "globalThis.obj = { base: 40, add(x) { return this.base + x; } }")
+                val method = javascriptRoot("globalThis.obj.add", listOf("IntRep"), "IntRep").callTarget
+                assertEquals(51L, Calls.target(method, arrayOf<Any?>(11L, Unit)) as Long,
+                    "method import must retain its JavaScript receiver")
+            } finally { context.leave() }
+        }
+    }
+
     @Test fun javascriptImportRejectsMalformedInputsAndResults() {
         context().use { context ->
             context.initialize("thc")
