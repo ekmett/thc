@@ -9,6 +9,7 @@ license: UPL-1.0 AND BSD-3-Clause
 
 executable completed
   main-is: Main.hs
+  other-modules: Answer
   hs-source-dirs: app
   build-depends: base >= 4.22 && < 4.23
   default-language: Haskell2010

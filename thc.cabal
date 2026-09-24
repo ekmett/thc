@@ -18,6 +18,7 @@ extra-source-files:
   test/run_integration.py
   test/fixtures/run-pure/run-pure.cabal
   test/fixtures/run-pure/app/Main.hs
+  test/fixtures/run-pure/app/Answer.hs
   test/fixtures/tiny/tiny-fixture.cabal
   test/fixtures/tiny/words/Words.hs
   test/fixtures/tiny/src/Greeting.hs
