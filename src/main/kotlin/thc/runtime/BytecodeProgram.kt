@@ -384,6 +384,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             source?.let { BytecodeSources.end(b) }
         }.getNode(0)
         root.setLabel(label)
+        root.configureAsync(enableAsync)
         root.configureEntry(context.entryStrict, context.captureLayout != null)
         root.configureInput(context.inputLayout)
         root.configureTypedInput(context.typedInput)

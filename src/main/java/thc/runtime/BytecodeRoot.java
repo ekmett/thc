@@ -31,6 +31,9 @@ import thc.Language;
         defaultUncachedThreshold = "0", boxingEliminationTypes = {long.class, float.class, double.class, boolean.class})
 public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode {
     private String label = "bytecode";
+    @CompilerDirectives.CompilationFinal private boolean asyncEnabled;
+    public final void configureAsync(boolean enabled) { asyncEnabled = enabled; }
+    public final boolean isAsyncEnabled() { return asyncEnabled; }
     @CompilerDirectives.CompilationFinal private LocalAccessor typedBloom;
     public final void configureTypedBloom(LocalAccessor bloom) { typedBloom = bloom; }
 
