@@ -91,7 +91,7 @@ class HandoffLayout(language: Language, val id: Int, val reps: List<String>) {
     }
 }
 
-/** Owned by the language instance (EXCLUSIVE contexts), never a global loader cache. */
+/** Owned by Language.State so separate contexts never share mutable layout interning. */
 internal class HandoffLayouts(private val language: Language) {
     val enabled = java.lang.Boolean.getBoolean(HANDOFF_PROPERTY)
     private val layouts = HashMap<List<String>, HandoffLayout>()
