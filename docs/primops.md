@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 304 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 878 | No declared lowering. |
+| Partial | 316 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 866 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -440,6 +440,10 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexWord8Array#` — arity 2 — Managed byte storage
 - [ ] `indexWord8ArrayAsDouble#` — arity 2 — Managed byte storage
 - [ ] `indexWord8ArrayAsFloat#` — arity 2 — Managed byte storage
+- [ ] `indexWord8ArrayAsInt16#` — arity 2 — Managed byte storage
+- [ ] `indexWord8ArrayAsInt32#` — arity 2 — Managed byte storage
+- [ ] `indexWord8ArrayAsWord16#` — arity 2 — Managed byte storage
+- [ ] `indexWord8ArrayAsWord32#` — arity 2 — Managed byte storage
 - [ ] `indexWord8OffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `indexWordArray#` — arity 2 — Managed byte storage
 - [ ] `indexWordOffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
@@ -561,6 +565,10 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readWord8Array#` — arity 3 — Managed byte storage
 - [ ] `readWord8ArrayAsDouble#` — arity 3 — Managed byte storage
 - [ ] `readWord8ArrayAsFloat#` — arity 3 — Managed byte storage
+- [ ] `readWord8ArrayAsInt16#` — arity 3 — Managed byte storage
+- [ ] `readWord8ArrayAsInt32#` — arity 3 — Managed byte storage
+- [ ] `readWord8ArrayAsWord16#` — arity 3 — Managed byte storage
+- [ ] `readWord8ArrayAsWord32#` — arity 3 — Managed byte storage
 - [ ] `readWord8OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readWordArray#` — arity 3 — Managed byte storage
 - [ ] `readWordOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
@@ -658,6 +666,10 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeWord8Array#` — arity 4 — Managed byte storage
 - [ ] `writeWord8ArrayAsDouble#` — arity 4 — Managed byte storage
 - [ ] `writeWord8ArrayAsFloat#` — arity 4 — Managed byte storage
+- [ ] `writeWord8ArrayAsInt16#` — arity 4 — Managed byte storage
+- [ ] `writeWord8ArrayAsInt32#` — arity 4 — Managed byte storage
+- [ ] `writeWord8ArrayAsWord16#` — arity 4 — Managed byte storage
+- [ ] `writeWord8ArrayAsWord32#` — arity 4 — Managed byte storage
 - [ ] `writeWord8OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeWordArray#` — arity 4 — Managed byte storage
 - [ ] `writeWordOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
@@ -896,14 +908,10 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexWord8ArrayAsAddr#` — arity 2
 - [ ] `indexWord8ArrayAsChar#` — arity 2
 - [ ] `indexWord8ArrayAsInt#` — arity 2
-- [ ] `indexWord8ArrayAsInt16#` — arity 2
-- [ ] `indexWord8ArrayAsInt32#` — arity 2
 - [ ] `indexWord8ArrayAsInt64#` — arity 2
 - [ ] `indexWord8ArrayAsStablePtr#` — arity 2
 - [ ] `indexWord8ArrayAsWideChar#` — arity 2
 - [ ] `indexWord8ArrayAsWord#` — arity 2
-- [ ] `indexWord8ArrayAsWord16#` — arity 2
-- [ ] `indexWord8ArrayAsWord32#` — arity 2
 - [ ] `indexWord8ArrayAsWord64#` — arity 2
 - [ ] `indexWord8ArrayAsWord8X16#` — arity 2
 - [ ] `indexWord8ArrayAsWord8X32#` — arity 2
@@ -1259,14 +1267,10 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readWord8ArrayAsAddr#` — arity 3
 - [ ] `readWord8ArrayAsChar#` — arity 3
 - [ ] `readWord8ArrayAsInt#` — arity 3
-- [ ] `readWord8ArrayAsInt16#` — arity 3
-- [ ] `readWord8ArrayAsInt32#` — arity 3
 - [ ] `readWord8ArrayAsInt64#` — arity 3
 - [ ] `readWord8ArrayAsStablePtr#` — arity 3
 - [ ] `readWord8ArrayAsWideChar#` — arity 3
 - [ ] `readWord8ArrayAsWord#` — arity 3
-- [ ] `readWord8ArrayAsWord16#` — arity 3
-- [ ] `readWord8ArrayAsWord32#` — arity 3
 - [ ] `readWord8ArrayAsWord64#` — arity 3
 - [ ] `readWord8ArrayAsWord8X16#` — arity 3
 - [ ] `readWord8ArrayAsWord8X32#` — arity 3
@@ -1509,14 +1513,10 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeWord8ArrayAsAddr#` — arity 4
 - [ ] `writeWord8ArrayAsChar#` — arity 4
 - [ ] `writeWord8ArrayAsInt#` — arity 4
-- [ ] `writeWord8ArrayAsInt16#` — arity 4
-- [ ] `writeWord8ArrayAsInt32#` — arity 4
 - [ ] `writeWord8ArrayAsInt64#` — arity 4
 - [ ] `writeWord8ArrayAsStablePtr#` — arity 4
 - [ ] `writeWord8ArrayAsWideChar#` — arity 4
 - [ ] `writeWord8ArrayAsWord#` — arity 4
-- [ ] `writeWord8ArrayAsWord16#` — arity 4
-- [ ] `writeWord8ArrayAsWord32#` — arity 4
 - [ ] `writeWord8ArrayAsWord64#` — arity 4
 - [ ] `writeWord8ArrayAsWord8X16#` — arity 4
 - [ ] `writeWord8ArrayAsWord8X32#` — arity 4
