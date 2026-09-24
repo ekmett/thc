@@ -63,7 +63,7 @@ Run preparation with the pinned GHC 9.14.1 environment:
 python3 scripts/test-int32-array-model.py
 python3 scripts/prepare-int32-arrays.py
 python3 scripts/test-core-bytearrays.py
-scripts/gradle.sh test --tests 'thc.runtime.Int32Array*' --tests 'thc.Int32LiteralTest'
+./gradlew test --tests 'thc.runtime.Int32Array*' --tests 'thc.Int32LiteralTest'
 ```
 
 The preparer regenerates real pre/post-Tidy Core and the native

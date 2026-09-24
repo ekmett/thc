@@ -25,6 +25,7 @@ import zlib
 SCHEMA = 1
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 SELF = ".github/scripts/fast_inputs.py"
+COMPILER_BUILD_INPUTS = ("thc.cabal", "cabal.project", "Setup.hs", "Makefile")
 # These are the runtime files actually fingerprinted by prepare-tests.sh's
 # preparers. An additional recorded runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
@@ -177,7 +178,7 @@ def toolchain(root):
 def identity(root):
     tracked = tracked_files(root)
     sources = {name for name in tracked if name.startswith(("compiler/", "scripts/", "examples/", "src/main/resources/"))}
-    sources.update((SELF, *RUNTIME_INPUTS))
+    sources.update((SELF, *RUNTIME_INPUTS, *COMPILER_BUILD_INPUTS))
     require(all(name in tracked for name in sources), "Cache helper/runtime inputs must be tracked")
     require("scripts/prepare-tests.sh" in sources and "compiler/export-boot.py" in sources
             and "examples/coverage.json" in sources, "Incomplete authoritative source set")
@@ -229,7 +230,8 @@ def allowed_payload(name, pins):
     if len(parts) < 3 or parts[0] != "build":
         return False
     if parts[1] == "compiler":
-        return len(parts) == 3 and bool(re.fullmatch(r"libHSthc-core-plugin-[\w.-]+\.(so|dylib)", parts[2]))
+        return len(parts) == 3 and (parts[2] == "plugin.json" or
+            bool(re.fullmatch(r"libHSthc-[\w.-]+\.(so|dylib)", parts[2])))
     if parts[1] not in BUILD_DIRS or any(p in ("test-results", "reports", "classes", ".gradle") for p in parts):
         return False
     # Fixture inputs and recorded native objects only, not arbitrary executable

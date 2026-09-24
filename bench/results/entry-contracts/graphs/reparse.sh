@@ -4,7 +4,7 @@ set -euo pipefail
 PUBLISH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$PUBLISH/../../../.." && pwd)"
 cd "$ROOT"
-. scripts/java-home.sh
+make --no-print-directory -s check-java
 [[ $# == 1 ]] || { echo 'Usage: reparse.sh NEW_OUTPUT_DIRECTORY' >&2; exit 2; }
 [[ ! -e "$1" ]] || { echo 'Choose a new output directory.' >&2; exit 2; }
 mkdir -p "$1/tools"

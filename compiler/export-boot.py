@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Export a bounded real boot-library frontier; never synthesize missing bodies."""
 import argparse
 import hashlib
@@ -7,8 +10,8 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
-import sys
 import urllib.request
+from plugin import read as read_plugin
 
 ghc = os.environ.get('GHC', 'ghc')
 ghc_pkg = os.environ.get('GHC_PKG', 'ghc-pkg')
@@ -17,6 +20,8 @@ if subprocess.check_output([ghc, '--numeric-version'], text=True).strip() != '9.
 if subprocess.check_output([ghc_pkg, '--version'], text=True).strip() != 'GHC package manager version 9.14.1':
     raise SystemExit('THC requires ghc-pkg 9.14.1')
 root = Path(__file__).resolve().parent.parent
+subprocess.run([str(root / 'compiler/build.sh')], cwd=root, check=True)
+plugin_info = read_plugin(root)
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--build-dir', type=Path, default=root / 'build/map',
                     help='Private output directory (default: build/map)')
@@ -96,8 +101,8 @@ if args.frontier == 'bignum':
     common += ['-I' + str(source_root / 'include')]
 for name in boot_modules:
     subprocess.run(common + [str(source_root / 'GHC/Internal' / (name + '.hs-boot'))], cwd=root, check=True)
-plugin = ['-O2', '-dcore-lint', '-package-db', str(root / 'build/compiler/package.conf.d'),
-          '-package', 'thc-core-plugin', '-fplugin=THC.Plugin',
+plugin = ['-O2', '-dcore-lint', '-package-db', plugin_info['packageDb'],
+          '-plugin-package-id', plugin_info['unitId'], '-fplugin=THC.Plugin',
           '-fplugin-opt=THC.Plugin:' + str(build / 'boot-core'), '-fplugin-opt=THC.Plugin:post-tidy']
 if (os.environ.get('THC_SOURCE_NOTES') or 'true') == 'true':
     plugin += ['-g', '-fplugin-opt=THC.Plugin:source-notes']
@@ -106,14 +111,13 @@ if args.frontier in ('lists', 'show', 'bignum'):
     # its Semigroup instance, into the Base unit being rebuilt. Load the already
     # compiled plugin directly so the installed Base interface cannot introduce
     # duplicate class instances into this compilation. Source remains unchanged.
-    suffix = 'dylib' if sys.platform == 'darwin' else 'so'
-    library = root / 'build/compiler' / ('libHSthc-core-plugin-0.1-ghc9.14.1.' + suffix)
     options = [str(build / 'boot-core'), 'post-tidy']
     plugin = ['-O2', '-dcore-lint']
     if (os.environ.get('THC_SOURCE_NOTES') or 'true') == 'true':
         plugin += ['-g']
         options += ['source-notes']
-    plugin += ['-fplugin-library=' + str(library) + ';thc-core-plugin-0.1;THC.Plugin;' + json.dumps(options)]
+    plugin += ['-fplugin-library=' + plugin_info['sharedLibrary'] + ';' +
+               plugin_info['unitId'] + ';THC.Plugin;' + json.dumps(options)]
 for name in source_modules:
     subprocess.run(common + plugin + [str(source_root / 'GHC/Internal' / (name + '.hs'))], cwd=root, check=True)
     shutil.copyfile(build / 'boot-core' / ('GHC.Internal.' + name.replace('/', '.') + '.json'),

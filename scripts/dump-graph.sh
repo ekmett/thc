@@ -5,7 +5,7 @@ cd "$ROOT"
 ENTRY="${1:-sumLoop}"
 BASE="${2:-10000}"
 OUT="${3:-$ROOT/work/graphs/$ENTRY-$(date +%Y%m%d-%H%M%S)}"
-. "$ROOT/scripts/java-home.sh"
+make --no-print-directory -s -C "$ROOT" check-java
 THC_JDK="$JAVA_HOME"
 mkdir -p "$OUT" build/graph-tools
 OUT="$(cd "$OUT" && pwd)"

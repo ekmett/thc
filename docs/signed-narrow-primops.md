@@ -49,7 +49,7 @@ GHC/GraalVM environment:
 ```sh
 compiler/build.sh
 python3 scripts/prepare-signed-narrow-primops.py
-scripts/gradle.sh test --tests thc.SignedNarrowPrimopsTest
+./gradlew test --tests thc.SignedNarrowPrimopsTest
 ```
 
 The initial macOS AArch64 run on GHC 9.14.1 and GraalVM 25.3.4.1 passed all three

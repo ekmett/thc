@@ -30,6 +30,6 @@ same gates and normal compilation thresholds.
 
 Reproduce preparation with `python3 scripts/prepare-mutable-bytearray-size.py`, the
 model/proof checks with `python3 scripts/test-mutable-bytearray-size.py`, and the focused
-JVM tests with `scripts/gradle.sh --no-daemon test --tests thc.runtime.MutableByteArraySizeTest`.
+JVM tests with `./gradlew --no-daemon test --tests thc.runtime.MutableByteArraySizeTest`.
 For dense handoff use `JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true` and selected-task
 `test --rerun` with the same test filter. No public Text closure or shrink support is claimed.

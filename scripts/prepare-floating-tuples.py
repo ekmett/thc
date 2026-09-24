@@ -97,8 +97,18 @@ def main():
         def run(argv, env=None):
             commands.append(dict(argv=argv, environment=env or {}))
             subprocess.run(argv, cwd=ROOT, env=dict(os.environ, **(env or {})), check=True)
-        if not (ROOT / 'build/compiler/package.conf.d').is_dir():
+        plugin_manifest = ROOT / 'build/compiler/plugin.json'
+        try:
+            plugin = json.loads(plugin_manifest.read_text())
+            plugin_ready = (plugin['schema'] == 1 and plugin['unitId'] and
+                            Path(plugin['packageDb']).is_dir() and
+                            Path(plugin['sharedLibrary']).is_file())
+        except (FileNotFoundError, KeyError, TypeError, ValueError):
+            plugin_ready = False
+        if not plugin_ready:
             run(['compiler/build.sh'])
+        plugin = json.loads(plugin_manifest.read_text())
+        check(plugin['schema'] == 1 and plugin['unitId'] and plugin['sharedLibrary'], 'Invalid plugin manifest')
         run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-icompiler/test-fixtures',
              '-odir', str(OUT / 'native'), '-hidir', str(OUT / 'native'), '-o', str(OUT / 'native/oracle'), str(NATIVE)])
         for filename, arguments in [('oracle.tsv', []), ('bits.tsv', ['bits'])]:
@@ -113,9 +123,11 @@ def main():
                  *[part for entry in ENTRIES for part in ('--entry', entry)], '--output', str(OUT / f'{stage}-audit.json')])
             inventory(stage)
         sources = [FIXTURE, NATIVE, Path(__file__).resolve(), ROOT / 'compiler/build.sh', ROOT / 'compiler/export.sh',
-                   ROOT / 'compiler/toolchain.sh', *sorted((ROOT / 'compiler/THC').glob('*.hs')), *audit_inputs()]
+                   ROOT / 'compiler/toolchain.sh', *sorted((ROOT / 'compiler/THC').glob('*.hs')), *audit_inputs(),
+                   ROOT / 'thc.cabal', ROOT / 'cabal.project']
         artifacts = [p for folder in ('native', 'pre-core', 'post-core') for p in sorted((OUT / folder).rglob('*')) if p.is_file()]
-        artifacts += [OUT / 'oracle.tsv', OUT / 'bits.tsv', *[OUT / f'{stage}-audit.json' for stage in STAGES]]
+        artifacts += [OUT / 'oracle.tsv', OUT / 'bits.tsv', *[OUT / f'{stage}-audit.json' for stage in STAGES],
+                      plugin_manifest, Path(plugin['sharedLibrary'])]
         provenance.write_text(json.dumps(dict(schema=1, recordedAtUtc=datetime.now(timezone.utc).isoformat(),
             commands=commands, ghcInfo=subprocess.check_output([ghc, '--info'], text=True),
             sources=[record(p) for p in sources], artifacts=[record(p) for p in artifacts],

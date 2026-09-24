@@ -129,7 +129,7 @@ def gradle_command(selection):
     require(classes and len(set(classes)) == len(classes), "Empty/duplicate selected classes")
     require(all(isinstance(c, str) and re.fullmatch(r"[A-Za-z_][\w.$]*", c) for c in classes),
             "Invalid selected class name")
-    argv = ["scripts/gradle.sh", "--daemon", "--max-workers=4", "--build-cache",
+    argv = ["./gradlew", "--daemon", "--max-workers=4", "--build-cache",
             "--init-script", ".github/scripts/fast_ci.init.gradle", "test", "--rerun"]
     if selection["mode"] == "narrow":
         require(selection["junit"]["patterns"] == classes, "Narrow patterns must name entire selected classes")

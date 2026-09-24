@@ -1,34 +1,20 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 set -eu
 cd "$(dirname "$0")/.."
 root=$(pwd)
+selected_ghc=${GHC-}
+selected_ghc_pkg=${GHC_PKG-}
 . "$root/compiler/toolchain.sh"
-out="$root/build/compiler"
-mkdir -p "$out"
-case "$(uname -s)" in Darwin) suffix=dylib ;; *) suffix=so ;; esac
-"$GHC" --make -O1 -dynamic -shared -fPIC -package ghc -package bytestring -package directory -package filepath -package containers \
-  -this-unit-id thc-core-plugin-0.1 -hisuf dyn_hi -osuf dyn_o -icompiler -odir "$out" -hidir "$out" \
-  compiler/THC/Plugin.hs -o "$out/libHSthc-core-plugin-0.1-ghc$version.$suffix"
-if [ ! -d "$out/package.conf.d" ]; then
-  "$GHC_PKG" init "$out/package.conf.d"
+set -- build lib:thc --offline
+if [ -n "$selected_ghc" ] && [ "$(command -v "$GHC")" != "$(command -v ghc)" ]; then
+  set -- "$@" --with-compiler="$GHC"
 fi
-depends=""
-for pkg in ghc base bytestring directory filepath containers; do
-  pkg_id=$("$GHC_PKG" field "$pkg" id --simple-output)
-  depends="$depends $pkg_id"
-done
-cat > "$out/thc-core-plugin.conf" <<CONF
-name: thc-core-plugin
-version: 0.1
-id: thc-core-plugin-0.1
-key: thc-core-plugin-0.1
-exposed: True
-exposed-modules: THC.Plugin
-import-dirs: $out
-library-dirs: $out
-dynamic-library-dirs: $out
-hs-libraries: HSthc-core-plugin-0.1
-depends: $depends
-CONF
-"$GHC_PKG" --package-db "$out/package.conf.d" update --force "$out/thc-core-plugin.conf"
-printf '%s\n' "Built THC Core plugin in $out"
+if [ -n "$selected_ghc_pkg" ] && [ "$(command -v "$GHC_PKG")" != "$(command -v ghc-pkg)" ]; then
+  set -- "$@" --with-hc-pkg="$GHC_PKG"
+fi
+"${CABAL:-cabal}" "$@"
+python3 compiler/plugin.py --publish --ghc-pkg "$GHC_PKG" >/dev/null
+printf '%s\n' "Built THC Core plugin with Cabal"

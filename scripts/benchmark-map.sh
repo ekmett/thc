@@ -3,7 +3,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-. "$ROOT/scripts/java-home.sh"
+make --no-print-directory -s -C "$ROOT" check-java
 THC_JAVA="$JAVA_HOME/bin/java"
 OUT="${1:-$ROOT/bench/results/map}"
 BASE="${THC_MAP_INPUT:-10000}"

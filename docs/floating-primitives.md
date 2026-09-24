@@ -56,7 +56,7 @@ generated inputs and CI retains their evidence. The focused checks are:
 ```sh
 compiler/build.sh
 python3 scripts/prepare-floating-audit.py
-scripts/gradle.sh --no-daemon test --tests thc.runtime.FloatingPrimitiveTest
+./gradlew --no-daemon test --tests thc.runtime.FloatingPrimitiveTest
 python3 scripts/test-audit-core.py
 ```
 

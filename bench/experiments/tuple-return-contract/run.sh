@@ -4,7 +4,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
 RUNTIME="${THC_RUNTIME_ROOT:-$ROOT}"
 OUT="${1:-$ROOT/build/tuple-return-contract}"
-if [[ -z "${JAVA_HOME:-}" ]]; then source "$ROOT/scripts/java-home.sh"; fi
+make --no-print-directory -s -C "$ROOT" check-java
 [[ -d "$RUNTIME/build/install/thc/lib" ]] || { echo "Build installDist first, or set THC_RUNTIME_ROOT to a built THC checkout." >&2; exit 1; }
 mkdir -p "$OUT/classes"
 OUT="$(cd "$OUT" && pwd)"

@@ -47,7 +47,7 @@ silently canonicalize quiet-NaN payloads or zero signs to pass.
 python3 scripts/prepare-double-arrays.py
 python3 scripts/test-double-array-model.py
 python3 scripts/test-core-bytearrays.py
-scripts/gradle.sh test --tests 'thc.runtime.DoubleArray*'
+./gradlew test --tests 'thc.runtime.DoubleArray*'
 ```
 
 The manifest under `build/double-arrays` records source/artifact hashes, native

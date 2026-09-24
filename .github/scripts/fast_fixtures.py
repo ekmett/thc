@@ -14,10 +14,15 @@ import re
 MANIFEST = Path(".github/scripts/fast-fixtures.json")
 STAMP_DIR = Path("build/fast/fixtures")
 COMMON_SOURCES = (
+    "thc.cabal",
+    "cabal.project",
+    "Setup.hs",
+    "Makefile",
     "compiler/THC/**/*.hs",
     "compiler/build.sh",
     "compiler/export.sh",
     "compiler/toolchain.sh",
+    "compiler/plugin.py",
     "scripts/audit-core.py",
     "scripts/core_*.py",
     "scripts/core-capabilities.json",

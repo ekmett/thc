@@ -16,6 +16,14 @@ root = Path(__file__).resolve().parent.parent
 build = root / 'build/map'
 ghc = os.environ.get('GHC', 'ghc')
 ghc_pkg = os.environ.get('GHC_PKG', 'ghc-pkg')
+plugin_manifest_path = root / 'build/compiler/plugin.json'
+plugin = json.loads(plugin_manifest_path.read_text())
+if plugin.get('schema') != 1 or not all(plugin.get(key) for key in
+                                        ('unitId', 'packageDb', 'sharedLibrary', 'cabalSharedLibrary')):
+    raise SystemExit('Invalid Cabal plugin manifest')
+plugin_library = Path(plugin['sharedLibrary'])
+if not plugin_library.is_file() or not Path(plugin['packageDb']).is_dir():
+    raise SystemExit('Cabal plugin manifest points to missing build products')
 
 def output(command):
     return subprocess.check_output(command, text=True).strip()
@@ -85,12 +93,13 @@ for owner in interface_owners:
 
 exporter_paths = sorted(set((root / 'compiler/THC').rglob('*.hs')) | {
     root / 'compiler/build.sh', root / 'compiler/export.sh', root / 'compiler/toolchain.sh',
-    root / 'compiler/export-map.sh', root / 'compiler/export-boot.py', Path(__file__).resolve(),
+    root / 'compiler/export-map.sh', root / 'compiler/export-boot.py', root / 'compiler/plugin.py',
+    root / 'thc.cabal', root / 'cabal.project', Path(__file__).resolve(),
 })
-# Explicit flag recipes use $ROOT placeholders. Script hashes above remain the
-# executable specification, including ordering, environment and output paths.
+# The loader flags use the actual Cabal unit and package DB, rather than an
+# invented package record. Script hashes remain the executable specification.
 shared_export = ['--make', '-no-link', '-O2', '-dynamic', '-fforce-recomp', '-dcore-lint',
-                 '-package-db', '$ROOT/build/compiler/package.conf.d', '-package', 'thc-core-plugin',
+                 '-package-db', plugin['packageDb'], '-plugin-package-id', plugin['unitId'],
                  '-fplugin=THC.Plugin', '-i$ROOT/examples']
 # Existing-bundle supplements describe the actual files, even if today's driver
 # default differs from the setting used to produce them.
@@ -102,16 +111,14 @@ source_note_flags = ['-g', '-fplugin-opt=THC.Plugin:source-notes'] if source_not
 boot_common = ['-c', '-dynamic', '-fforce-recomp', '-this-unit-id', 'ghc-internal', '-package', 'ghc-internal',
                '-odir', '$ROOT/build/map/boot-ghc', '-hidir', '$ROOT/build/map/boot-ghc']
 recipes = {
-    'pluginBuild': ['--make', '-O1', '-dynamic', '-shared', '-fPIC', '-package', 'ghc', '-package', 'bytestring',
-                    '-package', 'directory', '-package', 'filepath', '-package', 'containers', '-this-unit-id', 'thc-core-plugin-0.1',
-                    '-hisuf', 'dyn_hi', '-osuf', 'dyn_o', '-icompiler', '-odir', '$ROOT/build/compiler',
-                    '-hidir', '$ROOT/build/compiler', 'compiler/THC/Plugin.hs', '-o', '$ROOT/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.{dylib,so}'],
+    'pluginBuildDriver': ['compiler/build.sh'],
     'mapSource': shared_export + ['-fplugin-opt=THC.Plugin:$ROOT/build/map/core', '-odir', '$ROOT/build/map/ghc',
                   '-hidir', '$ROOT/build/map/ghc', '-i$ROOT/vendor/containers-0.8/src', '-I$ROOT/vendor/containers-0.8/include',
                   '-fplugin-opt=THC.Plugin:closure=mapAggregate'] + source_note_flags + ['examples/THC/MapWorkload.hs'],
     'bootSignatures': boot_common + ['$ROOT/vendor/ghc-9.14.1/{GHC/Internal/Exception/Type.hs-boot,GHC/Internal/Exception.hs-boot}'],
-    'bootSources': boot_common + ['-O2', '-dcore-lint', '-package-db', '$ROOT/build/compiler/package.conf.d',
-                    '-package', 'thc-core-plugin', '-fplugin=THC.Plugin', '-fplugin-opt=THC.Plugin:$ROOT/build/map/boot-core',
+    'bootSources': boot_common + ['-O2', '-dcore-lint', '-package-db', plugin['packageDb'],
+                    '-plugin-package-id', plugin['unitId'], '-fplugin=THC.Plugin',
+                    '-fplugin-opt=THC.Plugin:$ROOT/build/map/boot-core',
                     '-fplugin-opt=THC.Plugin:post-tidy'] + source_note_flags + ['$ROOT/vendor/ghc-9.14.1/GHC/Internal/{CString,Err}.hs'],
     'installedInterfaceRoot': shared_export + ['-fplugin-opt=THC.Plugin:$ROOT/build/map/interface-core',
                     '-odir', '$ROOT/build/map/interface-ghc', '-hidir', '$ROOT/build/map/interface-ghc',
@@ -135,6 +142,7 @@ result = {
     'bundle': {'manifest': record(manifest), 'originalProvenance': record(build / 'provenance.json'), 'modules': [record(p) for p in modules]},
     'sources': [record(p) for p in sorted(source_paths)],
     'exporters': [record(p) for p in exporter_paths],
+    'exporterArtifacts': [record(plugin_manifest_path), record(plugin_library)],
     'sourceNotes': {'driverDefault': True, 'bundleContainsMetadata': source_notes_exported,
                     'requestedForFreshExport': source_notes_requested if args.fresh_export else None},
     'compilerFlagRecipes': recipes,
@@ -142,7 +150,7 @@ result = {
     'compilerFlagEncoding': 'SHA256 of UTF-8 JSON with sorted keys and compact separators',
     'installedInterfaces': interfaces,
     'interfaceCoverage': 'All dynamic interface files owning executable Core/DFun unfoldings actually included in this bundle. Does not cover every transitive type/rule interface consulted during source optimization.',
-    'sourceCoverage': 'All supplied main-unit source modules, containers include files/archive/package metadata/license, boot source inputs, interface root and GHC license. GHC package source and boot source hashes are also pinned by the export drivers.',
+    'sourceCoverage': 'All supplied main-unit source modules, containers include files/archive/package metadata/license, root Cabal plugin declaration/project, boot source inputs, interface root and GHC license. GHC package source and boot source hashes are also pinned by the export drivers.',
     'license': {'url': 'https://raw.githubusercontent.com/ghc/ghc/ghc-9.14.1-release/libraries/ghc-internal/LICENSE', **record(license_path)},
 }
 out = build / 'reproduction-provenance.json'

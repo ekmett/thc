@@ -1,6 +1,6 @@
 # GHC Core exporter, prototype schema 1
 
-`./compiler/build.sh` builds a dynamically loaded plugin against **GHC 9.14.1** using only packages shipped with GHC. `./compiler/export.sh examples/THC/Fixtures.hs` compiles the Haskell modules with `-O2 -g -dcore-lint` and exports `build/core/THC.Prim.json` and `build/core/THC.Fixtures.json`. GHC still produces native object/interface files in `build/ghc`; this is useful for checking that the same source is valid GHC Haskell. The THC runtime evaluates the exported expression trees.
+The root `thc.cabal` builds `THC.Plugin` as the `thc` library against **GHC 9.14.1**, using only packages shipped with GHC. `cabal build` builds it alongside the driver; `compiler/build.sh` remains a convenience wrapper for fixture scripts. `./compiler/export.sh examples/THC/Fixtures.hs` compiles the Haskell modules with `-O2 -g -dcore-lint` and exports `build/core/THC.Prim.json` and `build/core/THC.Fixtures.json`. GHC still produces native object/interface files in `build/ghc`; this is useful for checking that the same source is valid GHC Haskell. The THC runtime evaluates the exported expression trees.
 
 The plugin appends `CoreDoPluginPass` to `installCoreToDos`. This observes the **optimized Core pipeline's final `ModGuts`, before Tidy/CorePrep/STG**. The ordinary GHC optimization passes run first. This is executable tree export directly from the GHC API; the runtime never parses a Core pretty dump.
 
@@ -97,7 +97,7 @@ The runtime selects a root and checks the reachable definitions; it must fail cl
 
 `export.sh` uses `--make` so imported **source modules** are exported too, and accepts normal additional GHC flags. It does not recover full executable optimized Core for preinstalled library packages from `.hi` files. Boot-library source compilation and package closure extraction are still required for general Haskell programs.
 
-Environment overrides: `GHC` and `GHC_PKG` select the compiler and package-manager executables (both must report 9.14.1); `THC_CORE_OUT` and `THC_GHC_OUT` choose export and object directories. `THC_SOURCE_NOTES=false` opts out of the default source metadata and `-g` for source and boot exports. The plugin uses a local package database in `build/compiler/package.conf.d`; it does not modify the user's global GHC package database.
+Environment overrides: `GHC` and `GHC_PKG` select the compiler and package-manager executables (both must report 9.14.1); `THC_CORE_OUT` and `THC_GHC_OUT` choose export and object directories. `THC_SOURCE_NOTES=false` opts out of the default source metadata and `-g` for source and boot exports. The exporter discovers the plugin's unit ID and local package database from Cabal's build metadata. Original boot-library exports load that compiled library directly to avoid importing plugin interfaces into the GHC unit being rebuilt. No global GHC package registration is needed.
 
 The compiler-only speculation regression runs as part of `scripts/try.sh`. To run it without building the JVM runtime:
 
@@ -130,7 +130,7 @@ To supplement an existing measured bundle without recompiling or rewriting its C
 
 ## Fresh-checkout build
 
-Use GHC/ghc-pkg 9.14.1, Python 3.12 or later, and GraalVM 25.3.4.1 with JDK 25. Set `JAVA_HOME` explicitly; scripts never borrow another checkout's JDK. `scripts/try.sh` builds the exporter, generates the real fixture and CString exports required by the JVM tests, creates the native oracle, then runs tests and assembles the application. Gradle downloads dependencies normally; append `--offline` only after populating the cache. `THC_GRADLE_USER_HOME` overrides `GRADLE_USER_HOME`, which otherwise defaults to the project's `.gradle-user-home`.
+Use GHC/ghc-pkg 9.14.1, Python 3.12 or later, and GraalVM 25.3.4.1 with JDK 25. Set `JAVA_HOME` explicitly; scripts never borrow another checkout's JDK. `scripts/try.sh` builds the exporter, generates the real fixture and CString exports required by the JVM tests, creates the native oracle, then runs tests and assembles the application. Gradle downloads dependencies normally; append `--offline` only after populating the cache. `make` uses the project's `.gradle-user-home` cache unless `GRADLE_USER_HOME` is set; direct `./gradlew` calls use Gradle's normal environment and defaults.
 
 `scripts/try-map.sh` is also self-contained: it prepares the same test inputs, exports the Map bundle, checks capability gaps, and compares native/guest results. The current known gaps require the explicit diagnostic invocation `THC_DIAGNOSTIC_UNSUPPORTED=true scripts/try-map.sh`; the default strict invocation intentionally stops at the audit. CI runs both entrypoints on Linux and macOS, with pinned compiler/runtime versions and the compatibility audit retained as an artifact.
 

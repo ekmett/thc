@@ -299,7 +299,7 @@ def full_tests(out, name, flags):
         for flag in flags:
             if flag == '-XX:+UseCompactObjectHeaders': compact = True
             elif flag == '-XX:-UseCompactObjectHeaders': compact = False
-        run(out, [root / 'scripts/gradle.sh', '--no-daemon',
+        run(out, [root / 'gradlew', '-p', root, '--no-daemon',
                   '-Pthc.compactObjectHeaders=' + str(compact).lower(), 'test', '--rerun'],
             name + '-full-tests', 1500, {'JAVA_TOOL_OPTIONS': ' '.join(flags)})
     finally:

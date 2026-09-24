@@ -2,3 +2,4 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 packages: .
+shared: True

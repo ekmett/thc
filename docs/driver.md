@@ -22,28 +22,28 @@ cabal-install 3.16. The driver links the Cabal libraries bundled with GHC.
 From the repository root:
 
 ```sh
-cabal build thc
+cabal build
 cabal run thc -- --help
 cabal run thc -- plan-package test/fixtures/tiny/tiny-fixture.cabal \
   --dist-dir "$PWD/build/tiny-plan" --enable-tests --enable-benchmarks
 
 python3 test/test_driver.py \
-  --driver "$(cabal list-bin thc)" \
+  --driver "$(cabal list-bin exe:thc)" \
   --scratch "$PWD/build/driver-tests"
 ```
 
-To exercise `run`, first build the plugin and JVM launcher from the repository
-root using the pinned GHC and GraalVM JDK 25:
+The same Cabal build produces the `thc` library containing `THC.Plugin` and the
+driver executable. `thc run` locates the plugin through Cabal's build metadata.
+`make` builds both the JVM launcher and the Haskell components:
 
 ```sh
 export JAVA_HOME=/path/to/graalvm-jdk-25
-compiler/build.sh
-scripts/gradle.sh installDist --offline
+make
 cabal run thc -- run test/fixtures/run-pure/run-pure.cabal \
   --exe completed --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
 
 python3 test/run_integration.py \
-  --driver "$(cabal list-bin thc)" \
+  --driver "$(cabal list-bin exe:thc)" \
   --runtime "$PWD/build/install/thc/bin/thc" \
   --thc-root "$PWD" --scratch "$PWD/build/run-integration"
 ```
