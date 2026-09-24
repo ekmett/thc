@@ -11,7 +11,7 @@ library bridge
   other-modules: Paths_app_run
   autogen-modules: Paths_app_run
   hs-source-dirs: src
-  build-depends: base >=4.22 && <4.23, dep-data
+  build-depends: base >=4.22 && <4.23, dep-data, th-helper, template-haskell >=2.24 && <2.25
   default-language: Haskell2010
 executable completed
   main-is: Main.hs

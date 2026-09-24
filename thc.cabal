@@ -22,6 +22,8 @@ extra-source-files:
   test/fixtures/run-project/cabal.project
   test/fixtures/run-project/dep-data/dep-data.cabal
   test/fixtures/run-project/dep-data/src/Answer.hs
+  test/fixtures/run-project/th-helper/th-helper.cabal
+  test/fixtures/run-project/th-helper/src/THHelper.hs
   test/fixtures/run-project/app-run/app-run.cabal
   test/fixtures/run-project/app-run/src/Bridge.hs
   test/fixtures/run-project/app-run/app/Main.hs

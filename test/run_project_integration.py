@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Native/Cabal versus THC execution across two packages and an internal library."""
+"""Native/Cabal versus THC across three packages, TH and an internal library."""
 
 import argparse
 import json
@@ -47,7 +47,7 @@ def unit(manifest, identifier):
 def exercise(driver, runtime, thc_root, scratch):
     with tempfile.TemporaryDirectory(prefix="thc-project-", dir=scratch) as temporary:
         root = Path(temporary).resolve()
-        project = root / 'three components "café"'
+        project = root / 'four components "café"'
         shutil.copytree(FIXTURE, project)
         output = root / "output"
         source = project / "dep-data/src/Answer.hs"
@@ -66,25 +66,31 @@ def exercise(driver, runtime, thc_root, scratch):
             diagnostics = json.loads(result.stderr.splitlines()[-1])
             require(diagnostics["backend"] == backend and
                     diagnostics["unsupportedTraps"] == 0 and
+                    diagnostics["thunkEvaluations"] == 1 and
                     diagnostics["thunkEvaluationsByLabel"].get("answerValue") == 1,
                     diagnostics)
             plan, entry = plan_entry(output)
             native = checked([entry["bin-file"]], cwd=project)
             require(native.returncode == 0 and native.stdout == result.stdout, native)
             dep = next(item for item in plan["install-plan"] if item.get("pkg-name") == "dep-data")
+            helper = next(item for item in plan["install-plan"] if item.get("pkg-name") == "th-helper")
             bridge = next(item for item in plan["install-plan"]
                           if item.get("component-name") == "lib:bridge")
             require(dep["flags"]["recent"] is True and
-                    dep["id"] in bridge["depends"] and
+                    dep["id"] in bridge["depends"] and helper["id"] in bridge["depends"] and
                     bridge["id"] in entry["depends"], (dep, bridge, entry))
             build_info = json.loads(Path(dep["build-info"]).read_text())
             arguments = build_info["components"][0]["compiler-args"]
             require("-optP-DPROJECT_RECENT" in arguments, arguments)
+            bridge_info = json.loads(Path(bridge["build-info"]).read_text())
+            require(helper["id"] in bridge_info["components"][0]["compiler-args"], bridge_info)
             manifest = json.loads((output / "packages.json").read_text())
             require(manifest["format"] == "thc-core-packages" and
                     manifest["schema"] == 1, manifest)
             require({module["name"] for module in unit(manifest, bridge["id"])["modules"]}
                     == {"Bridge", "Paths_app_run"}, manifest)
+            require({module["name"] for module in unit(manifest, helper["id"])["modules"]}
+                    == {"THHelper"}, manifest)
             require({module["name"] for module in unit(manifest, entry["id"])["modules"]}
                     == {"Main"}, manifest)
             audit = json.loads((output / "audit.json").read_text())
@@ -92,7 +98,7 @@ def exercise(driver, runtime, thc_root, scratch):
                     any(item["id"] == dep["id"] + ":Answer.answerValue"
                         for item in audit["reachableBindings"]), audit)
             paths = {identifier: tuple(module["path"] for module in unit(manifest, identifier)["modules"])
-                     for identifier in (dep["id"], bridge["id"], entry["id"])}
+                     for identifier in (dep["id"], helper["id"], bridge["id"], entry["id"])}
             if manifest_paths is not None:
                 require(paths == manifest_paths, (paths, manifest_paths))
             manifest_paths = paths
@@ -128,7 +134,7 @@ def main():
     args.scratch.mkdir(parents=True, exist_ok=True)
     exercise(args.driver.resolve(), args.runtime.resolve(), args.thc_root.resolve(),
              args.scratch.resolve())
-    print("PASS: Cabal project units, CPP/autogen, native and THC AST/bytecode execution")
+    print("PASS: three Cabal packages, Template Haskell, CPP/autogen and native versus THC execution")
 
 
 if __name__ == "__main__":
