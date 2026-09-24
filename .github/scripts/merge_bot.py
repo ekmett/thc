@@ -23,6 +23,7 @@ BULK_LIMIT = 4
 BULK_FILE_LIMIT = 100
 BOT_LOGIN = "github-actions[bot]"
 RETEST_MARKER = "#thc-solo-retest-after-"
+CI_SKIP = re.compile(r"\[ci skip\]", re.IGNORECASE)
 CHECKS = {"build (ubuntu-latest)", "build (macos-latest)", "automation"} | {
     f"library ({os}, {backend}, handoff={handoff})"
     for os in ("ubuntu-latest", "macos-latest")
@@ -110,11 +111,13 @@ def complete_attempt(api, run, gate, current=True):
 
 
 def workflow_result(api, sha, gate, events=("push", "pull_request", "workflow_dispatch", "merge_group"),
-                    after_id=0):
+                    after_id=0, *, head_branch=None):
     workflow = api.call("GET", f"actions/workflows/{gate.workflow}")
     runs = [run for run in api.pages(f"actions/workflows/{gate.workflow}/runs?head_sha={sha}", "workflow_runs")
             if run["head_sha"] == sha and run["workflow_id"] == workflow["id"] and run["id"] > after_id
-            and run["event"] in events]
+            and run["event"] in events
+            and (head_branch is None or (run.get("head_branch") == head_branch
+                 and (run.get("head_repository") or {}).get("full_name") == api.repo))]
     if not runs:
         return "missing", None
     # An older-ID rerun can supersede a newer run. Any active exact-head run
@@ -188,9 +191,38 @@ def main_build_health(api):
     return "success", snapshot
 
 
+def skip_declaration(api, pr):
+    """Trust the requested marker, never infer it from the changed files."""
+    if pr["head"]["ref"].startswith(BULK_PREFIX):
+        return None  # A combined candidate must always test its full composition.
+    if CI_SKIP.search(pr.get("title") or ""):
+        return "PR title"
+    sha = pr["head"]["sha"]
+    try:
+        commit = api.call("GET", f"commits/{sha}")
+    except HTTPError as error:
+        if error.code != 404:
+            raise
+        error.close()
+        return None
+    if commit["sha"] != sha:
+        raise RuntimeError("Head commit changed during CI-skip inspection")
+    return "head commit" if CI_SKIP.search(commit["commit"]["message"]) else None
+
+
+def skipped_main_commit(api, sha):
+    commit = api.call("GET", f"commits/{sha}")
+    if commit["sha"] != sha:
+        raise RuntimeError("Main commit changed during CI-skip inspection")
+    return bool(CI_SKIP.search(commit["commit"]["message"]))
+
+
 def ensure_main_checks(api, sha, report, base_sha=None):
     # GITHUB_TOKEN merges suppress both ordinary push workflows. Recover each
     # missing workflow independently; an existing failed run is never retried.
+    if skipped_main_commit(api, sha):
+        report(f"main {sha}: [ci skip] declared; no automatic Build/Fast dispatch")
+        return
     failure = None
     for gate in (BUILD_GATE, FAST_GATE):
         try:
@@ -242,6 +274,22 @@ def publish_result(api, sha, state, run, gate=PR_GATE):
         "description": {"success": f"All required {gate.name} jobs passed",
                         "pending": f"Waiting for the current {gate.name} attempt",
                         "failure": f"{gate.name} failed or omitted a required job"}[state],
+    })
+
+
+def publish_skip_result(api, pr, source):
+    sha = pr["head"]["sha"]
+    target = f"https://github.com/{api.repo}/pull/{pr['number']}"
+    description = f"Fast checks skipped by [ci skip] in {source}"
+    existing = next((status for status in api.pages(f"commits/{sha}/statuses")
+                     if status["context"].casefold() == REQUIRED_STATUS.casefold()), None)
+    if (existing and existing["state"] == "success"
+            and (existing.get("creator") or {}).get("login") == BOT_LOGIN
+            and existing.get("target_url") == target and existing.get("description") == description):
+        return
+    api.call("POST", f"statuses/{sha}", {
+        "context": REQUIRED_STATUS, "state": "success", "target_url": target,
+        "description": description,
     })
 
 
@@ -305,13 +353,13 @@ def solo_retest_cutoff(api, sha):
 
 def mark_solo_retest(api, sha, candidate_sha):
     previous = solo_retest_marker(api, sha)
-    if previous is not None and previous[1] == candidate_sha:
-        return
     workflow = api.call("GET", "actions/workflows/fast.yml")
     runs = api.pages(f"actions/workflows/fast.yml/runs?head_sha={sha}", "workflow_runs")
     cutoff = max((run["id"] for run in runs if run["head_sha"] == sha
                   and run["workflow_id"] == workflow["id"]), default=0)
     cutoff = max(cutoff, previous[0] if previous else 0)
+    if previous is not None and previous == (cutoff, candidate_sha):
+        return
     api.call("POST", f"statuses/{sha}", {
         "context": REQUIRED_STATUS, "state": "pending",
         "target_url": f"https://github.com/{api.repo}/actions/workflows/fast.yml{RETEST_MARKER}{cutoff}-{candidate_sha}",
@@ -328,6 +376,8 @@ def dispatch(api, pr, gate=PR_GATE, label=LABEL):
         if (not still_authorized(api, fresh, label) or fresh["head"]["sha"] != pr["head"]["sha"]
                 or fresh["base"]["sha"] != base
                 or api.call("GET", f"compare/{base}...{fresh['head']['sha']}")["behind_by"]):
+            return False
+        if skip_declaration(api, fresh):
             return False
         inputs["base_sha"] = base
         pr = fresh
@@ -423,6 +473,8 @@ def select_bulk(api, candidates, base):
         if (not still_authorized(api, pr, BULK_LABEL) or pr["base"]["sha"] != base
                 or pr["mergeable"] is not True):
             continue
+        if skip_declaration(api, pr):
+            continue  # Declared docs go through the guarded solo skip path.
         comparison = api.call("GET", f"compare/{base}...{pr['head']['sha']}")
         if not comparison["ahead_by"]:
             continue
@@ -457,6 +509,43 @@ def discard_candidate(api, pr, report, reason):
             raise
         error.close()
     report(f"bulk #{pr['number']}: {reason}; candidate closed")
+    cancel_retired_candidate_checks(api, pr, report)
+
+
+def cancel_retired_candidate_checks(api, pr, report):
+    """Best-effort cleanup of this retired candidate's own active Fast runs."""
+    if (candidate_manifest(pr) is None
+            or (pr["head"].get("repo") or {}).get("full_name") != api.repo):
+        return
+    branch, sha = pr["head"]["ref"], pr["head"]["sha"]
+    active = ("queued", "in_progress", "waiting", "pending")
+    try:
+        workflow = api.call("GET", "actions/workflows/fast.yml")
+        def matching(item):
+            return (item["workflow_id"] == workflow["id"]
+                    and item["head_sha"] == sha
+                    and item.get("head_branch") == branch
+                    and (item.get("head_repository") or {}).get("full_name") == api.repo
+                    and item["event"] in ("pull_request", "workflow_dispatch")
+                    and item["status"] in active)
+        runs = api.pages(f"actions/workflows/fast.yml/runs?head_sha={sha}", "workflow_runs")
+        for run in runs:
+            if not matching(run):
+                continue
+            try:
+                fresh = api.call("GET", f"actions/runs/{run['id']}")
+                if (not matching(fresh) or fresh["id"] != run["id"]
+                        or fresh["run_attempt"] != run["run_attempt"]):
+                    continue
+                api.call("POST", f"actions/runs/{run['id']}/cancel")
+                report(f"bulk #{pr['number']}: cancelled retired candidate Fast run {run['id']}")
+            except HTTPError as error:
+                error.close()
+                report(f"bulk #{pr['number']}: retired candidate Fast cancellation unavailable "
+                       f"(HTTP {error.code})")
+    except HTTPError as error:
+        error.close()
+        report(f"bulk #{pr['number']}: retired candidate Fast lookup unavailable (HTTP {error.code})")
 
 
 def create_candidate(api, members, base, report):
@@ -523,6 +612,65 @@ def fallback_to_solo(api, manifest):
     return True
 
 
+def defer_component_checks(api, candidate, manifest, combined_run, report):
+    """The verified combined run replaces still-active individual Fast runs.
+
+    Preserve a retest cutoff before cancellation. If the batch is abandoned,
+    normal reconciliation can start fresh solo checks instead of treating the
+    deliberate cancellation as a test failure or reusing an older green run.
+    No individual PR receives a successful status from this operation.
+    """
+    workflow = api.call("GET", "actions/workflows/fast.yml")
+    for part in manifest["components"]:
+        member = component_state(api, part, manifest["base"])
+        if member is None:
+            return
+        def matching(run):
+            return (run["workflow_id"] == workflow["id"]
+                    and run["head_sha"] == part["sha"]
+                    and run.get("head_branch") == member["head"]["ref"]
+                    and (run.get("head_repository") or {}).get("full_name") == api.repo
+                    and run["event"] in ("pull_request", "workflow_dispatch")
+                    and run["status"] in ("queued", "in_progress", "waiting", "pending"))
+        runs = api.pages(f"actions/workflows/fast.yml/runs?head_sha={part['sha']}", "workflow_runs")
+        for run in runs:
+            if not matching(run):
+                continue
+            fresh_run = api.call("GET", f"actions/runs/{run['id']}")
+            if (not matching(fresh_run) or fresh_run["id"] != run["id"]
+                    or fresh_run["run_attempt"] != run["run_attempt"]):
+                continue
+            fresh = api.call("GET", f"pulls/{candidate['number']}")
+            combined = api.call("GET", f"actions/runs/{combined_run['id']}")
+            if (fresh["state"] != "open" or candidate_manifest(fresh) != manifest
+                    or combined["status"] not in ("queued", "in_progress", "waiting", "pending")
+                    or combined.get("head_branch") != fresh["head"]["ref"]
+                    or (combined.get("head_repository") or {}).get("full_name") != api.repo
+                    or any(combined[key] != combined_run[key] for key in
+                           ("id", "workflow_id", "head_sha", "event", "run_attempt"))
+                    or api.call("GET", "branches/main")["commit"]["sha"] != manifest["base"]
+                    or candidate_ref(api, fresh["head"]["ref"]) != manifest["head"]
+                    or any(component_state(api, item, manifest["base"]) is None
+                           for item in manifest["components"])):
+                return
+            previous = solo_retest_marker(api, part["sha"])
+            if previous is None or previous[0] < run["id"]:
+                api.call("POST", f"statuses/{part['sha']}", {
+                    "context": REQUIRED_STATUS, "state": "pending",
+                    "target_url": (f"https://github.com/{api.repo}/actions/workflows/fast.yml"
+                                   f"{RETEST_MARKER}{run['id']}-{manifest['head']}"),
+                    "description": f"Individual Fast checks deferred to batch #{candidate['number']}"})
+            try:
+                api.call("POST", f"actions/runs/{run['id']}/cancel")
+                report(f"#{part['number']}: cancelled duplicate Fast run {run['id']}; "
+                       f"batch #{candidate['number']} tests the composition")
+            except HTTPError as error:
+                if error.code not in (403, 409):
+                    raise
+                error.close()
+                report(f"#{part['number']}: duplicate Fast cancellation refused (HTTP {error.code})")
+
+
 def reconcile_bulk(api, candidates, report):
     bot_prs = [pr for pr in candidates if (pr.get("user") or {}).get("login") == BOT_LOGIN
                and pr["head"]["ref"].startswith(BULK_PREFIX)]
@@ -536,8 +684,10 @@ def reconcile_bulk(api, candidates, report):
         expected = [part["sha"] for part in manifest["components"]]
         base = manifest["base"]
         sha = pr["head"]["sha"]
-        state, run = workflow_result(api, sha, FAST_GATE, ("workflow_dispatch",))
-        swapping = state == "failure" and run["conclusion"] == "failure"
+        state, run = workflow_result(api, sha, FAST_GATE, ("workflow_dispatch",),
+                                     head_branch=pr["head"]["ref"])
+        swapping = state == "failure" and (run["conclusion"] == "failure"
+                    or (run["conclusion"] in ("cancelled", "timed_out") and run["run_attempt"] >= 3))
         try:
             chain = bulk_chain(api, base, sha, expected)
         except (KeyError, ValueError):
@@ -554,6 +704,7 @@ def reconcile_bulk(api, candidates, report):
                 report(f"bulk #{pr['number']}: dispatched combined Fast checks")
             return True
         if state == "pending":
+            defer_component_checks(api, pr, manifest, run, report)
             report(f"bulk #{pr['number']}: combined Fast checks pending")
             return True
         if state == "failure":
@@ -572,6 +723,11 @@ def reconcile_bulk(api, candidates, report):
                         raise
                     error.close()
                     report(f"bulk #{pr['number']}: retry already pending or refused (HTTP {error.code})")
+            elif run["conclusion"] in ("cancelled", "timed_out"):
+                if fallback_to_solo(api, manifest):
+                    discard_candidate(api, pr, report, "combined retries exhausted; components moved to solo")
+                    return False
+                discard_candidate(api, pr, report, "component changed before solo fallback")
             else:
                 report(f"bulk #{pr['number']}: infrastructure result {run['conclusion']}; manual rerun needed")
             return True
@@ -580,7 +736,8 @@ def reconcile_bulk(api, candidates, report):
             report(f"bulk #{pr['number']}: full main Build health is {health}; promotion paused")
             return True
         fresh = api.call("GET", f"pulls/{pr['number']}")
-        final_state, final_run = workflow_result(api, sha, FAST_GATE, ("workflow_dispatch",))
+        final_state, final_run = workflow_result(api, sha, FAST_GATE, ("workflow_dispatch",),
+                                                 head_branch=pr["head"]["ref"])
         if (fresh["head"]["sha"] != sha or fresh["mergeable_state"] not in ("clean", "unstable")
                 or api.call("GET", "branches/main")["commit"]["sha"] != base
                 or candidate_ref(api, pr["head"]["ref"]) != sha
@@ -635,6 +792,10 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
     # Events can be coalesced by workflow concurrency. Recover gate publication
     # for every PR, including forks and manually merged/unlabelled work.
     for candidate in candidates:
+        skipped = skip_declaration(api, candidate) if gate == FAST_GATE else None
+        if skipped:
+            publish_skip_result(api, candidate, skipped)
+            continue
         events = (("workflow_dispatch",) if candidate["head"]["ref"].startswith(BULK_PREFIX)
                   else ("push", "pull_request", "workflow_dispatch", "merge_group"))
         state, run = workflow_result(api, candidate["head"]["sha"], gate, events,
@@ -655,7 +816,8 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
         label = LABEL if LABEL in {item["name"] for item in pr["labels"]} else BULK_LABEL
         if not still_authorized(api, pr, label):
             continue
-        if bulk_busy and label == BULK_LABEL:
+        skip_source = skip_declaration(api, pr) if gate == FAST_GATE else None
+        if bulk_busy and label == BULK_LABEL and not skip_source:
             continue
         sha = pr["head"]["sha"]
         if pr["mergeable"] is False:
@@ -680,6 +842,19 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
             if not still_authorized(api, fresh, label) or fresh["head"]["sha"] != sha:
                 report(f"#{number}: changed while inspecting; waiting")
                 continue
+            if skip_source and skip_declaration(api, fresh) != skip_source:
+                report(f"#{number}: [ci skip] declaration changed before branch update; waiting")
+                continue
+            if skip_source == "head commit":
+                # GitHub's update-branch merge commit may replace the tagged
+                # head message. Keep the owner's declaration in the PR title.
+                title = fresh["title"]
+                api.call("PATCH", path, {"title": title + " [ci skip]"})
+                fresh = api.call("GET", path)
+                if (not still_authorized(api, fresh, label) or fresh["head"]["sha"] != sha
+                        or not CI_SKIP.search(fresh["title"])):
+                    report(f"#{number}: title or head changed during skip preservation; waiting")
+                    continue
             updated_branch = True
             try:
                 api.call("PUT", f"{path}/update-branch", {"expected_head_sha": sha})
@@ -713,7 +888,11 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
                 if updated["head"]["sha"] != sha:
                     # Token-authored pushes don't start ordinary push CI.
                     # Dispatch is explicit and verifies the expected commit.
-                    if dispatch(api, updated, gate, label):
+                    new_skip = skip_declaration(api, updated) if gate == FAST_GATE else None
+                    if new_skip:
+                        publish_skip_result(api, updated, new_skip)
+                        report(f"#{number}: updated against main; [ci skip] retained on new head")
+                    elif dispatch(api, updated, gate, label):
                         report(f"#{number}: updated against main and dispatched {gate.name}")
                     else:
                         report(f"#{number}: changed before dispatch; waiting")
@@ -722,8 +901,11 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
                 report(f"#{number}: branch update pending; a later run will dispatch {gate.name}")
             continue
         cutoff = solo_retest_cutoff(api, sha) or 0
-        state, run = workflow_result(api, sha, gate, after_id=cutoff)
-        if run:
+        state, run = (("success", None) if skip_source else
+                      workflow_result(api, sha, gate, after_id=cutoff))
+        if skip_source:
+            publish_skip_result(api, pr, skip_source)
+        elif run:
             publish_result(api, sha, state, run, gate)
         if state == "failure":
             report(f"#{number}: checks failed; waiting for a fix or manual rerun")
@@ -737,7 +919,7 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
             else:
                 report(f"#{number}: waiting for required checks ({state})")
             continue
-        if bulk_busy:
+        if bulk_busy and not skip_source:
             report(f"#{number}: waiting for checked bulk candidate before solo merge")
             continue
         if gate == FAST_GATE:
@@ -760,13 +942,26 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
         if fresh["mergeable_state"] not in ("clean", "unstable"):
             report(f"#{number}: GitHub merge state is {fresh['mergeable_state']}")
             continue
-        final_state, final_run = workflow_result(api, sha, gate, after_id=cutoff)
-        if (final_state != "success" or final_run["id"] != run["id"]
-                or final_run["run_attempt"] != run["run_attempt"]):
-            if final_run:
-                publish_result(api, sha, final_state, final_run, gate)
-            report(f"#{number}: {gate.name} changed before merging; waiting")
+        final_skip = skip_declaration(api, fresh) if gate == FAST_GATE else None
+        if final_skip != skip_source:
+            if final_skip:
+                publish_skip_result(api, fresh, final_skip)
+            else:
+                changed_state, changed_run = workflow_result(api, sha, gate, after_id=cutoff)
+                publish_result(api, sha, "pending" if changed_state == "missing" else changed_state,
+                               changed_run, gate)
+            report(f"#{number}: [ci skip] declaration changed before merging; waiting")
             return
+        if final_skip:
+            publish_skip_result(api, fresh, final_skip)
+        else:
+            final_state, final_run = workflow_result(api, sha, gate, after_id=cutoff)
+            if (final_state != "success" or final_run["id"] != run["id"]
+                    or final_run["run_attempt"] != run["run_attempt"]):
+                if final_run:
+                    publish_result(api, sha, final_state, final_run, gate)
+                report(f"#{number}: {gate.name} changed before merging; waiting")
+                return
         if (gate == FAST_GATE
                 and main_build_snapshot(completed_main_attempts(api)) != health_snapshot):
             # A full result may have arrived during the final consent/Fast
@@ -775,7 +970,12 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
             report(f"#{number}: full main Build changed before merging; waiting")
             return
         try:
-            result = api.call("PUT", f"{path}/merge", {"sha": sha, "merge_method": "squash"})
+            merge = {"sha": sha, "merge_method": "squash"}
+            if final_skip:
+                title = fresh["title"]
+                merge["commit_title"] = (CI_SKIP.sub("[ci skip]", title, count=1)
+                                          if CI_SKIP.search(title) else title + " [ci skip]")
+            result = api.call("PUT", f"{path}/merge", merge)
         except HTTPError as error:
             if error.code in (405, 409):
                 report(f"#{number}: merge requirements changed; GitHub refused the merge")

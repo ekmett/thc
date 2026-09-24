@@ -48,6 +48,21 @@ def git(root, *args):
     return subprocess.check_output(["git", "-C", str(root), *args], text=True).strip()
 
 
+def selection_base(root, requested, env):
+    if (env.get("GITHUB_EVENT_NAME") != "workflow_dispatch"
+            or not env.get("GITHUB_REF", "").startswith("refs/heads/thc-bulk/")):
+        return requested
+    head = git(root, "rev-parse", "HEAD")
+    require(SHA.fullmatch(head), "Bulk candidate has no exact checked-out commit")
+    try:
+        bases = git(root, "merge-base", "--all", "HEAD", "refs/remotes/origin/main").splitlines()
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError("Bulk candidate needs an available origin/main merge base") from error
+    require(len(bases) == 1 and SHA.fullmatch(bases[0]), "Bulk candidate has no unique origin/main merge base")
+    require(bases[0] != head, "Bulk candidate has no changes since origin/main")
+    return bases[0]
+
+
 class Recorder:
     def __init__(self, root, directory):
         self.root, self.directory = root, directory
@@ -210,12 +225,14 @@ def identify(recorder, identity_path):
 
 
 def execute(recorder, base, head, identity_path):
+    selected_base = selection_base(recorder.root, base, os.environ)
     _, output = recorder.command("select", [sys.executable, ".github/scripts/fast_select.py",
-                                "--base", base, "--head", head], capture=True)
+                                "--base", selected_base, "--head", head], capture=True)
     selection = json.loads(output)
     write_json(recorder.directory / "selection.json", selection)
     gradle_command(selection)  # Fail closed before preparing or running anything.
     recorder.data["selection"] = {key: selection[key] for key in ("mode", "reasons")}
+    recorder.data.update(requestedBase=base, selectionBase=selected_base)
     # Check generated documentation against the actual pinned GHC API on hits
     # as well as misses. Keep this fresh report separate from cached provenance.
     recorder.command("primop-checklist", [sys.executable, "scripts/primop-coverage.py",

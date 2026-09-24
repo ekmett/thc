@@ -6,8 +6,8 @@ import unittest
 from urllib.error import HTTPError
 
 from merge_bot import (ACTIONS_APP, CHECKS, REQUIRED_STATUS, BUILD_GATE, FAST_GATE, PR_GATE,
-                       BULK_LABEL, BULK_PREFIX, bulk_chain, candidate_manifest,
-                       mark_solo_retest, solo_retest_cutoff,
+                       BULK_LABEL, BULK_PREFIX, bulk_chain, candidate_manifest, select_bulk,
+                       discard_candidate, mark_solo_retest, solo_retest_cutoff,
                        build_result, main_build_health, owner_authorized,
                        publish_run as publish_selected_run, reconcile, workflow_result, dispatch, ensure_main_checks)
 
@@ -18,7 +18,7 @@ def publish_run(api, run_id):
 
 
 def pull(number=1):
-    return {"number": number, "state": "open", "draft": False,
+    return {"number": number, "title": "A change", "state": "open", "draft": False,
             "base": {"ref": "main", "sha": "base", "repo": {"full_name": "ekmett/thc"}},
             "head": {"sha": "head", "ref": "codex/change", "repo": {"full_name": "ekmett/thc"}},
             "labels": [{"name": "auto-merge"}], "mergeable": True, "mergeable_state": "clean"}
@@ -67,6 +67,10 @@ class FakeAPI:
     def call(self, method, path, body=None):
         if method != "GET":
             self.mutations.append((method, path, body))
+            if method == "PATCH" and path.startswith("pulls/"):
+                target = next(p for p in self.prs if p["number"] == int(path.split("/")[1]))
+                target.update(body)
+                return copy.deepcopy(target)
             if path.startswith("statuses/"):
                 self.statuses.insert(0, {**body, "sha": path.split("/")[1],
                                          "creator": {"login": "github-actions[bot]"}})
@@ -599,6 +603,7 @@ class FastAPI(FakeAPI):
         self.full_runs = [main_build()]
         self.main_fast_runs = [{**main_build(200), "workflow_id": 18}]
         self.commit_parents = {"base": "parent", "merged": "base"}
+        self.commit_messages = {}
         self.dispatch_errors = {}
         self.after_dispatch = lambda _: None
         self.full_jobs = jobs()
@@ -617,7 +622,8 @@ class FastAPI(FakeAPI):
                 return {"id": 18}
             if path.startswith("commits/"):
                 sha = path.split("/")[1]
-                return {"sha": sha, "parents": [{"sha": self.commit_parents[sha]}]}
+                return {"sha": sha, "parents": [{"sha": self.commit_parents.get(sha, "base")}],
+                        "commit": {"message": self.commit_messages.get(sha, "ordinary commit")}}
             if path in self.comparisons:
                 return self.comparisons[path]
             if path.startswith("actions/runs/"):
@@ -630,6 +636,7 @@ class FastAPI(FakeAPI):
         if method == "PUT" and path.endswith("/merge"):
             result = super().call(method, path, body)
             result["sha"] = "merged"
+            self.commit_messages["merged"] = body.get("commit_title", "ordinary merge")
             self.after_merge()
             return result
         if method == "POST" and path.endswith("/dispatches"):
@@ -731,6 +738,82 @@ class FastGateTest(unittest.TestCase):
         self.run_bot(api)
         self.assertEqual(api.actions, [("POST", "actions/workflows/fast.yml/dispatches", {
             "ref": "codex/change", "inputs": {"expected_sha": "head", "base_sha": "base"}})])
+
+    def test_title_tag_skips_pr_and_postmerge_ci_with_explicit_status(self):
+        api = FastAPI(); api.runs = []
+        api.pr["title"] = "Clarify docs [CI SKIP]"
+        self.run_bot(api)
+        self.assertEqual(api.actions, [("PUT", "pulls/1/merge", {
+            "sha": "head", "merge_method": "squash", "commit_title": "Clarify docs [ci skip]"})])
+        self.assertEqual(api.statuses[0]["state"], "success")
+        self.assertEqual(api.statuses[0]["description"], "Fast checks skipped by [ci skip] in PR title")
+        self.assertEqual(api.statuses[0]["target_url"], "https://github.com/ekmett/thc/pull/1")
+        self.assertNotIn("actions/workflows/fast.yml/dispatches", [path for _, path, _ in api.actions])
+
+    def test_head_commit_tag_survives_squash_and_skips_main_dispatch(self):
+        api = FastAPI(); api.runs = []
+        api.commit_messages["head"] = "Document interface [ci skip]\n\nDetails"
+        self.run_bot(api)
+        self.assertEqual(api.actions, [("PUT", "pulls/1/merge", {
+            "sha": "head", "merge_method": "squash", "commit_title": "A change [ci skip]"})])
+        self.assertIn("[ci skip]", api.commit_messages["merged"])
+        self.assertEqual(api.statuses[0]["description"], "Fast checks skipped by [ci skip] in head commit")
+        before = len(api.actions)
+        api.prs = []
+        self.run_bot(api)
+        self.assertEqual(len(api.actions), before)
+
+    def test_head_only_tag_survives_bot_branch_update_without_fast(self):
+        api = FastAPI(); api.runs = []; api.behind = 1
+        api.commit_messages["head"] = "Document interface [ci skip]"
+        self.run_bot(api)
+        self.assertEqual(api.actions, [
+            ("PATCH", "pulls/1", {"title": "A change [ci skip]"}),
+            ("PUT", "pulls/1/update-branch", {"expected_head_sha": "head"})])
+        self.assertEqual(api.pr["head"]["sha"], "updated")
+        self.assertEqual(api.statuses[0]["state"], "success")
+        self.assertIn("PR title", api.statuses[0]["description"])
+        self.run_bot(api)
+        self.assertIn(("PUT", "pulls/1/merge", {
+            "sha": "updated", "merge_method": "squash", "commit_title": "A change [ci skip]"}),
+            api.actions)
+        self.assertFalse(any(path.endswith("/dispatches") for _, path, _ in api.actions))
+
+    def test_removed_title_tag_retires_skip_status_before_merge(self):
+        api = FastAPI(); api.runs = []
+        api.pr["title"] = "Docs [ci skip]"
+        api.before_pr_read = lambda count: api.pr.update(title="Docs") if count == 2 else None
+        messages = self.run_bot(api)
+        self.assert_no_merge(api)
+        self.assertEqual(api.statuses[0]["state"], "pending")
+        self.assertIn("declaration changed", messages[-1])
+
+    def test_edited_title_revokes_prior_skip_status_for_same_head(self):
+        api = FastAPI(); api.runs = []
+        api.pr.update(title="Docs [ci skip]", labels=[])
+        self.run_bot(api)
+        self.assertEqual(api.statuses[0]["state"], "success")
+        api.pr["title"] = "Docs"
+        self.run_bot(api)
+        self.assertEqual(api.statuses[0]["state"], "pending")
+        self.assertTrue(api.statuses[0]["target_url"].endswith("fast.yml"))
+
+    def test_skip_status_does_not_require_merge_label_or_file_inspection(self):
+        api = FastAPI(); api.runs = []
+        api.pr.update(title="Docs [ci skip]", labels=[])
+        api.pr["head"]["repo"]["full_name"] = "fork/thc"
+        self.run_bot(api)
+        self.assertEqual(api.actions, [])
+        self.assertEqual(api.statuses[0]["state"], "success")
+
+    def test_skip_workflows_have_metadata_trigger_and_title_gate(self):
+        from pathlib import Path
+        workflows = Path(__file__).parents[1] / "workflows"
+        merge = (workflows / "merge.yml").read_text()
+        fast = (workflows / "fast.yml").read_text()
+        self.assertIn("pull_request_target:", merge)
+        self.assertIn("opened, synchronize, edited", merge)
+        self.assertIn("!contains(github.event.pull_request.title, '[ci skip]')", fast)
 
     def test_missing_fast_runs_dispatch_all_current_heads_in_one_pass(self):
         api = FastAPI(); api.runs = []
@@ -1052,7 +1135,8 @@ class BulkAPI(FastAPI):
             return {"object": {"sha": self.refs[branch]}}
         if method == "GET" and path.startswith("commits/") and path.split("/")[1] in self.parents:
             sha = path.split("/")[1]
-            return {"sha": sha, "parents": [{"sha": parent} for parent in self.parents[sha]]}
+            return {"sha": sha, "parents": [{"sha": parent} for parent in self.parents[sha]],
+                    "commit": {"message": self.commit_messages.get(sha, "Batch PR")}}
         if method == "GET" and path.startswith("compare/"):
             head = path.split("...")[-1]
             return {"ahead_by": 1, "behind_by": self.behind.get(head, 0) if isinstance(self.behind, dict) else self.behind,
@@ -1103,7 +1187,7 @@ class BulkAPI(FastAPI):
         if method == "PATCH" and path.startswith("pulls/"):
             self.mutations.append((method, path, body))
             target = next(pr for pr in self.prs if pr["number"] == int(path.split("/")[1]))
-            target["state"] = body["state"]
+            target.update(body)
             return copy.deepcopy(target)
         if method == "DELETE" and path.startswith("git/refs/heads/"):
             self.mutations.append((method, path, body))
@@ -1113,6 +1197,11 @@ class BulkAPI(FastAPI):
             self.mutations.append((method, path, body))
             run = next(run for run in self.runs if run["id"] == int(path.split("/")[2]))
             run.update(run_attempt=run["run_attempt"] + 1, status="in_progress", conclusion=None)
+            return None
+        if method == "POST" and path.startswith("actions/runs/") and path.endswith("/cancel"):
+            self.mutations.append((method, path, body))
+            run = next(run for run in self.runs if run["id"] == int(path.split("/")[2]))
+            run.update(status="completed", conclusion="cancelled")
             return None
         if method == "PUT" and path == "pulls/3/merge":
             self.mutations.append((method, path, body))
@@ -1132,6 +1221,7 @@ class BulkAPI(FastAPI):
     def finish_fast(self, conclusion="success"):
         candidate = self.prs[2]
         self.runs.append({**build(3), "workflow_id": 18, "event": "workflow_dispatch",
+                          "head_repository": {"full_name": self.repo},
                           "head_branch": candidate["head"]["ref"], "head_sha": candidate["head"]["sha"],
                           "conclusion": conclusion})
 
@@ -1141,6 +1231,243 @@ class BulkMergeTest(unittest.TestCase):
         messages = []
         reconcile(api, messages.append, lambda _: None)
         return messages
+
+    def pending_batch(self):
+        api = BulkAPI()
+        self.run_bot(api)
+        api.finish_fast()
+        api.runs[-1].update(status="queued", conclusion=None)
+        return api
+
+    def add_member_run(self, api, run_id=10, **changes):
+        run = {**build(run_id), "workflow_id": 18, "head_sha": api.first_sha,
+               "head_branch": "feature/first", "head_repository": {"full_name": api.repo},
+               "status": "queued", "conclusion": None, **changes}
+        api.runs.append(run)
+        return run
+
+    def retire(self, api):
+        messages = []
+        discard_candidate(api, api.prs[2], messages.append, "test retirement")
+        return messages
+
+    def test_retired_candidate_cancels_its_active_fast_runs_only(self):
+        api = self.pending_batch()
+        candidate = api.prs[2]
+        api.runs.append({**api.runs[0], "id": 4, "event": "pull_request"})
+        self.add_member_run(api)
+        messages = self.retire(api)
+        self.assertEqual(api.prs[2]["state"], "closed")
+        self.assertNotIn(candidate["head"]["ref"], api.refs)
+        self.assertEqual([path for _, path, _ in api.actions if path.endswith("/cancel")],
+                         ["actions/runs/3/cancel", "actions/runs/4/cancel"])
+        self.assertEqual(api.runs[2]["status"], "queued")  # Member check is independent.
+        self.assertTrue(any("cancelled retired candidate Fast run 3" in line for line in messages))
+
+    def test_retired_candidate_ignores_other_or_completed_runs(self):
+        changes = ({"workflow_id": 17}, {"head_sha": "9" * 40},
+                   {"head_branch": "thc-bulk/other"},
+                   {"head_repository": {"full_name": "fork/thc"}},
+                   {"head_repository": None}, {"event": "push"},
+                   {"status": "completed", "conclusion": "success"})
+        for change in changes:
+            with self.subTest(change=change):
+                api = self.pending_batch()
+                api.runs[0].update(change)
+                self.retire(api)
+                self.assertFalse(any(path.endswith("/cancel") for _, path, _ in api.actions))
+
+    def test_retired_candidate_rechecks_run_and_attempt_before_cancel(self):
+        for change in ({"status": "completed", "conclusion": "success"},
+                       {"run_attempt": 2}, {"head_sha": "9" * 40},
+                       {"head_branch": "thc-bulk/other"},
+                       {"head_repository": {"full_name": "fork/thc"}}):
+            with self.subTest(change=change):
+                api = self.pending_batch()
+                original = api.call
+                def call(method, path, body=None):
+                    if method == "GET" and path == "actions/runs/3":
+                        api.runs[0].update(change)
+                    return original(method, path, body)
+                api.call = call
+                self.retire(api)
+                self.assertFalse(any(path.endswith("/cancel") for _, path, _ in api.actions))
+
+    def test_retired_candidate_cancel_refusal_does_not_change_solo_retest(self):
+        api = self.pending_batch()
+        original = api.call
+        error = HTTPError("", 409, "already completed", {}, None)
+        self.addCleanup(error.close)
+        def call(method, path, body=None):
+            if method == "POST" and path == "actions/runs/3/cancel":
+                raise error
+            return original(method, path, body)
+        api.call = call
+        messages = self.retire(api)
+        self.assertEqual(api.prs[2]["state"], "closed")
+        self.assertIsNone(solo_retest_cutoff(api, api.first_sha))
+        self.assertTrue(any("cancellation unavailable (HTTP 409)" in line for line in messages))
+
+    def test_pending_batch_replaces_individual_fast_without_green_status(self):
+        for status in ("queued", "in_progress", "waiting", "pending"):
+            api = self.pending_batch()
+            self.add_member_run(api, status=status)
+            self.run_bot(api)
+            self.assertIn(("POST", "actions/runs/10/cancel", None), api.actions)
+            self.assertEqual(solo_retest_cutoff(api, api.first_sha), 10)
+            self.assertFalse(any(item["sha"] == api.first_sha and item["state"] == "success"
+                                 for item in api.statuses))
+            marker = next(i for i, (_, path, body) in enumerate(api.mutations)
+                          if path == f"statuses/{api.first_sha}" and "solo-retest" in body["target_url"])
+            cancel = api.mutations.index(("POST", "actions/runs/10/cancel", None))
+            self.assertLess(marker, cancel)
+            self.assertEqual(api.runs[0]["status"], "queued")  # Combined run remains live.
+
+    def test_only_exact_member_fast_runs_are_cancelled(self):
+        for changes in ({"workflow_id": 17}, {"head_sha": "9" * 40},
+                        {"head_branch": "other"}, {"head_repository": {"full_name": "fork/thc"}},
+                        {"head_repository": None}, {"event": "push"}, {"event": "merge_group"},
+                        {"status": "completed", "conclusion": "failure"},
+                        {"status": "completed", "conclusion": "success"}):
+            with self.subTest(changes=changes):
+                api = self.pending_batch(); self.add_member_run(api, **changes)
+                self.run_bot(api)
+                self.assertFalse(any(path.endswith("/cancel") for _, path, _ in api.actions))
+                self.assertIsNone(solo_retest_cutoff(api, api.first_sha))
+
+    def test_member_dispatch_can_be_replaced_but_missing_combined_run_cannot(self):
+        api = self.pending_batch(); self.add_member_run(api, event="workflow_dispatch")
+        self.run_bot(api)
+        self.assertIn(("POST", "actions/runs/10/cancel", None), api.actions)
+        api = BulkAPI(); self.add_member_run(api)
+        self.run_bot(api)
+        self.assertFalse(any(path.endswith("/cancel") for _, path, _ in api.actions))
+
+    def test_run_completion_or_rerun_during_inspection_is_not_cancelled(self):
+        for changes in ({"status": "completed", "conclusion": "success"}, {"run_attempt": 2}):
+            api = self.pending_batch(); member = self.add_member_run(api)
+            original = api.call
+            def call(method, path, body=None):
+                if method == "GET" and path == "actions/runs/10":
+                    member.update(changes)
+                return original(method, path, body)
+            api.call = call
+            self.run_bot(api)
+            self.assertFalse(any(path.endswith("/cancel") for _, path, _ in api.actions))
+
+    def test_changed_batch_or_member_before_cancellation_is_left_alone(self):
+        for mutation in (lambda a: setattr(a, "base", "9" * 40),
+                         lambda a: a.prs[0]["head"].update(sha="9" * 40),
+                         lambda a: a.prs[0].update(labels=[]),
+                         lambda a: a.prs[1].update(labels=[]),
+                         lambda a: a.prs[2].update(state="closed"),
+                         lambda a: a.runs[0].update(status="completed", conclusion="failure"),
+                         lambda a: a.runs[0].update(status="completed", conclusion="cancelled"),
+                         lambda a: a.runs[0].update(run_attempt=2),
+                         lambda a: a.refs.update({a.prs[2]["head"]["ref"]: "9" * 40})):
+            api = self.pending_batch(); self.add_member_run(api)
+            original = api.call
+            def call(method, path, body=None):
+                if method == "GET" and path == "actions/runs/10":
+                    mutation(api)
+                return original(method, path, body)
+            api.call = call
+            self.run_bot(api)
+            self.assertFalse(any(path.endswith("/cancel") for _, path, _ in api.actions))
+
+    def test_late_duplicate_advances_cutoff_without_repeated_cancellation(self):
+        api = self.pending_batch(); self.add_member_run(api)
+        self.run_bot(api); self.run_bot(api)
+        self.assertEqual(api.actions.count(("POST", "actions/runs/10/cancel", None)), 1)
+        self.add_member_run(api, run_id=12)
+        self.run_bot(api)
+        self.assertEqual(solo_retest_cutoff(api, api.first_sha), 12)
+        self.assertIn(("POST", "actions/runs/12/cancel", None), api.actions)
+
+    def test_wrong_branch_or_repository_combined_run_cannot_cancel_or_merge(self):
+        for status, conclusion in (("queued", None), ("completed", "success")):
+            for changes in ({"head_branch": "feature/unrelated"},
+                            {"head_repository": {"full_name": "fork/thc"}},
+                            {"head_repository": None}):
+                api = self.pending_batch(); self.add_member_run(api)
+                api.runs[0].update(status=status, conclusion=conclusion, **changes)
+                self.run_bot(api)
+                self.assertFalse(any(path.endswith(("/cancel", "/merge")) for _, path, _ in api.actions))
+
+    def test_abandoned_batch_restarts_solo_after_deliberate_cancellation(self):
+        api = self.pending_batch(); self.add_member_run(api)
+        self.run_bot(api)
+        api.prs[1]["labels"] = []
+        self.run_bot(api)  # Invalid candidate is discarded.
+        self.assertIn(("POST", "actions/runs/3/cancel", None), api.actions)
+        self.run_bot(api)  # Remaining member receives a fresh individual run.
+        self.assertIn(("POST", "actions/workflows/fast.yml/dispatches", {
+            "ref": "feature/first", "inputs": {"expected_sha": api.first_sha, "base_sha": api.base_sha}}),
+            api.actions)
+        self.assertFalse(any(path.endswith("/merge") for _, path, _ in api.actions))
+
+    def test_failed_batch_still_requires_fresh_solo_after_cancellation(self):
+        api = self.pending_batch(); self.add_member_run(api)
+        self.run_bot(api)
+        api.runs[0].update(status="completed", conclusion="failure")
+        self.run_bot(api)
+        self.assertEqual([label["name"] for label in api.prs[0]["labels"]], ["auto-merge"])
+        self.assertEqual(solo_retest_cutoff(api, api.first_sha), 10)
+        self.assertIn(("POST", "actions/workflows/fast.yml/dispatches", {
+            "ref": "feature/first", "inputs": {"expected_sha": api.first_sha, "base_sha": api.base_sha}}),
+            api.actions)
+
+    def test_exhausted_combined_retries_restore_fresh_solo_checks(self):
+        for conclusion in ("cancelled", "timed_out"):
+            api = self.pending_batch(); self.add_member_run(api)
+            self.run_bot(api)
+            api.runs[0].update(status="completed", conclusion=conclusion, run_attempt=3)
+            self.run_bot(api)
+            self.assertEqual(api.prs[2]["state"], "closed")
+            self.assertEqual([label["name"] for label in api.prs[0]["labels"]], ["auto-merge"])
+            self.assertIn(("POST", "actions/workflows/fast.yml/dispatches", {
+                "ref": "feature/first", "inputs": {"expected_sha": api.first_sha, "base_sha": api.base_sha}}),
+                api.actions)
+
+    def test_interrupted_exhausted_retry_fallback_finishes_label_swap(self):
+        api = self.pending_batch(); self.add_member_run(api)
+        self.run_bot(api)
+        api.runs[0].update(status="completed", conclusion="timed_out", run_attempt=3)
+        api.call("POST", "issues/1/labels", {"labels": ["auto-merge"]})
+        self.run_bot(api)
+        self.assertEqual([label["name"] for label in api.prs[0]["labels"]], ["auto-merge"])
+        self.assertTrue(owner_authorized(api, 1))
+        self.assertEqual(api.prs[2]["state"], "closed")
+
+    def test_batch_failure_advances_deferred_cutoff_past_late_individual_green(self):
+        api = self.pending_batch(); self.add_member_run(api)
+        self.run_bot(api)
+        self.add_member_run(api, run_id=12, status="completed", conclusion="success")
+        api.runs[0].update(status="completed", conclusion="failure")
+        self.run_bot(api)
+        self.assertEqual(solo_retest_cutoff(api, api.first_sha), 12)
+        self.assertFalse(any(path.endswith("/merge") for _, path, _ in api.actions))
+        self.assertIn(("POST", "actions/workflows/fast.yml/dispatches", {
+            "ref": "feature/first", "inputs": {"expected_sha": api.first_sha, "base_sha": api.base_sha}}),
+            api.actions)
+
+    def test_finished_during_cancel_is_recoverable_and_unexpected_errors_surface(self):
+        for code in (403, 409, 503):
+            api = self.pending_batch(); self.add_member_run(api)
+            original = api.call
+            error = HTTPError("", code, "cancel", {}, None)
+            self.addCleanup(error.close)
+            def call(method, path, body=None):
+                if method == "POST" and path == "actions/runs/10/cancel":
+                    raise error
+                return original(method, path, body)
+            api.call = call
+            if code == 503:
+                with self.assertRaises(HTTPError): self.run_bot(api)
+            else:
+                messages = self.run_bot(api)
+                self.assertTrue(any("cancellation refused" in line for line in messages))
+            self.assertEqual(solo_retest_cutoff(api, api.first_sha), 10)
 
     def test_disjoint_bulk_heads_form_one_checked_candidate(self):
         api = BulkAPI()
@@ -1154,6 +1481,60 @@ class BulkMergeTest(unittest.TestCase):
         dispatches = [body for _, path, body in api.actions if path == "actions/workflows/fast.yml/dispatches"]
         self.assertEqual(dispatches, [{"ref": candidate["head"]["ref"], "inputs": {
             "expected_sha": candidate["head"]["sha"], "base_sha": api.base_sha}}])
+
+    def test_tagged_bulk_member_takes_solo_skip_and_untagged_member_is_not_green(self):
+        api = BulkAPI()
+        api.prs[0]["title"] = "Docs [ci skip]"
+        self.run_bot(api)
+        self.assertEqual(len(api.prs), 2)  # No candidate can inherit a member's skip.
+        self.assertEqual([status["state"] for status in api.statuses if status["sha"] == api.first_sha],
+                         ["success"])
+        self.assertEqual(next(status["state"] for status in api.statuses if status["sha"] == api.second_sha),
+                         "pending")
+        self.assertIn(("PUT", "pulls/1/merge", {
+            "sha": api.first_sha, "merge_method": "squash", "commit_title": "Docs [ci skip]"}), api.actions)
+
+    def test_tagged_bulk_member_does_not_wait_for_unrelated_candidate(self):
+        api = BulkAPI(); self.run_bot(api)
+        candidate = api.prs[2]
+        docs = pull(4)
+        docs["base"]["sha"] = api.base_sha
+        docs["head"].update(sha="9" * 40, ref="feature/docs")
+        docs["title"] = "Docs [ci skip]"
+        docs["labels"] = [{"name": BULK_LABEL}]
+        api.prs.append(docs)
+        api.events_by_pr[4] = [{"id": 4, "event": "labeled", "label": {"name": BULK_LABEL},
+                                "actor": {"login": "ekmett"}}]
+        self.run_bot(api)
+        self.assertIn(("PUT", "pulls/4/merge", {
+            "sha": "9" * 40, "merge_method": "squash", "commit_title": "Docs [ci skip]"}),
+            api.actions)
+        self.assertFalse(any(status["sha"] == candidate["head"]["sha"] and status["state"] == "success"
+                             for status in api.statuses))
+
+    def test_mixed_bulk_selection_keeps_two_untagged_members_in_candidate(self):
+        api = BulkAPI()
+        api.prs[0]["title"] = "Docs [ci skip]"
+        third = pull(3)
+        third["base"]["sha"] = api.base_sha
+        third["head"].update(sha="9" * 40, ref="feature/third")
+        third["labels"] = [{"name": BULK_LABEL}]
+        api.prs.append(third)
+        api.events_by_pr[3] = [{"id": 3, "event": "labeled", "label": {"name": BULK_LABEL},
+                                "actor": {"login": "ekmett"}}]
+        api.files[3] = [{"filename": "third.txt", "status": "modified"}]
+        self.assertEqual([pr["number"] for pr in select_bulk(api, api.prs, api.base_sha)], [2, 3])
+
+    def test_existing_candidate_still_requires_combined_fast_when_member_later_tags(self):
+        api = BulkAPI(); self.run_bot(api)
+        api.prs[0]["title"] = "Docs [ci skip]"
+        candidate = api.prs[2]
+        self.assertFalse(any(status["sha"] == candidate["head"]["sha"] and status["state"] == "success"
+                             for status in api.statuses))
+        api.finish_fast()
+        self.run_bot(api)
+        self.assertIn(("PUT", "pulls/3/merge", {"sha": candidate["head"]["sha"],
+                                                  "merge_method": "merge"}), api.actions)
 
     def test_success_promotes_exact_checked_ancestry(self):
         api = BulkAPI(); self.run_bot(api); api.finish_fast()
