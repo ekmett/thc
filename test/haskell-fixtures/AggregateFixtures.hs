@@ -18,7 +18,7 @@ import System.FilePath ((</>), takeExtension)
 import Text.Read (readMaybe)
 
 directNames, callNames :: [String]
-directNames = ["quotRemInt", "quotRemWord", "addIntC", "subIntC", "plusWord2", "timesWord2", "addWordC", "subWordC"]
+directNames = ["quotRemInt", "quotRemWord", "addIntC", "subIntC", "plusWord2", "timesWord2", "addWordC", "subWordC", "timesInt2"]
 callNames = ["addWordCall", "subWordCall"]
 
 prepareAggregate :: FilePath -> String -> IO Bool
@@ -36,7 +36,8 @@ signed64 value = let residue = value `mod` pow2 64 in
 -- neighboring bits. The JVM suites check every native result with BigInteger.
 values :: [Integer]
 values = Set.toAscList $ Set.fromList $
-  [-pow2 63, -pow2 63 + 1, pow2 63 - 2, pow2 63 - 1, -4097, -1, 0, 1, 4097] ++
+  [-pow2 63, -pow2 63 + 1, pow2 63 - 2, pow2 63 - 1, -4097, -1, 0, 1, 4097,
+   -3037000500, -3037000499, 3037000499, 3037000500] ++
   [signed64 (sign * pow2 bit + delta) | bit <- [1,7,8,15,16,31,32,62,63],
     sign <- [-1,1], delta <- [-1,0,1]] ++
   take 32 (map (signed64 . toInteger) (iterate xorshift (9141 :: Integer)))
@@ -71,7 +72,7 @@ oracleDriver = unlines $
   ["{-# LANGUAGE MagicHash #-}", "module Main where",
    "import GHC.Exts (Int(I#), Int#)", "import qualified TupleArithmeticAudit as P",
    "emit :: String -> (Int# -> Int# -> Int# -> Int#) -> Int -> Int -> IO ()",
-   "emit n f x@(I# a) y@(I# b) = putStrLn (n ++ \"\\t\" ++ show x ++ \"\\t\" ++ show y ++ \"\\t\" ++ show (I# (f a b 0#)) ++ \"\\t\" ++ show (I# (f a b 1#)))",
+   "emit n f x@(I# a) y@(I# b) = putStrLn (n ++ \"\\t\" ++ show x ++ \"\\t\" ++ show y ++ \"\\t\" ++ show (I# (f a b 0#)) ++ \"\\t\" ++ show (I# (f a b 1#)) ++ if n == \"timesInt2\" then \"\\t\" ++ show (I# (f a b 2#)) else \"\")",
    "dispatch :: [String] -> IO ()", "dispatch [name,x,y] = case name of"] ++
   ["  " ++ show name ++ " -> emit name P." ++ name ++ " (read x) (read y)" | name <- directNames ++ callNames] ++
   ["  _ -> error \"unknown primitive\"", "dispatch _ = error \"invalid input\"",
@@ -80,9 +81,9 @@ oracleDriver = unlines $
 verifyRows :: [(String,Integer,Integer)] -> String -> IO Int
 verifyRows expected output = do
   let parse line = case splitTab (takeWhile (/= '\r') line) of
-        [name,x,y,a,b] -> do
+        name:x:y:fields | length fields == (if name == "timesInt2" then 3 else 2) -> do
           xx <- readInteger x; yy <- readInteger y
-          _ <- readInteger a; _ <- readInteger b
+          _ <- traverse readInteger fields
           pure (name,xx,yy)
         _ -> Nothing
   actual <- maybe (die "Malformed native tuple arithmetic row") pure (traverse parse (lines output))
@@ -155,4 +156,4 @@ prepareTupleArithmetic root = do
      "stages" .= (["pre","post"] :: [String]), "nativeRows" .= counts,
      "excludedDivisionInputs" .= ("zero divisors and quotRemInt# minBound / -1; no numeric oracle claimed" :: String),
      "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes])
-  putStrLn ("tuple-arithmetic: 8 primitives and 2 mixed-result calls, " ++ show counts ++ " native rows")
+  putStrLn ("tuple-arithmetic: 9 primitives and 2 mixed-result calls, " ++ show counts ++ " native rows")

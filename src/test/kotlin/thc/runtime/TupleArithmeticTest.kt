@@ -18,7 +18,7 @@ import java.security.MessageDigest
 
 class TupleArithmeticTest {
     private val root = File(System.getProperty("thc.projectRoot"))
-    private val names = listOf("quotRemInt", "quotRemWord", "addIntC", "subIntC", "plusWord2", "timesWord2", "addWordC", "subWordC")
+    private val names = listOf("quotRemInt", "quotRemWord", "addIntC", "subIntC", "plusWord2", "timesWord2", "addWordC", "subWordC", "timesInt2")
     private fun module(stage: String = "pre") = Json.parse(File(root,
         "build/tuple-arithmetic/$stage-core/TupleArithmeticAudit.json").readText()) as Map<String, Any?>
     private fun context() = Context.newBuilder("thc").allowExperimentalOptions(true)
@@ -40,35 +40,41 @@ class TupleArithmeticTest {
             assertEquals(expected, actual, "Stale tuple arithmetic fixture: $path")
         }
     }
-    private data class Row(val name: String, val x: Long, val y: Long, val first: Long, val second: Long)
-    private fun mathematical(row: Row): Pair<Long, Long> {
+    private data class Row(val name: String, val x: Long, val y: Long, val fields: List<Long>)
+    private fun mathematical(row: Row): List<Long> {
         val modulus = BigInteger.ONE.shiftLeft(64)
         val x = BigInteger.valueOf(row.x); val y = BigInteger.valueOf(row.y)
         val unsignedX = x.mod(modulus); val unsignedY = y.mod(modulus)
         return when (row.name) {
-            "quotRemInt" -> (x / y).toLong() to (x % y).toLong()
-            "quotRemWord" -> (unsignedX / unsignedY).toLong() to (unsignedX % unsignedY).toLong()
+            "quotRemInt" -> listOf((x / y).toLong(), (x % y).toLong())
+            "quotRemWord" -> listOf((unsignedX / unsignedY).toLong(), (unsignedX % unsignedY).toLong())
+            "timesInt2" -> {
+                val result = x * y
+                listOf(if (result < BigInteger.valueOf(Long.MIN_VALUE) || result > BigInteger.valueOf(Long.MAX_VALUE)) 1L else 0L,
+                    result.shiftRight(64).toLong(), result.toLong())
+            }
             "addIntC", "subIntC" -> {
                 val result = if (row.name == "addIntC") x + y else x - y
-                result.toLong() to if (result < BigInteger.valueOf(Long.MIN_VALUE) || result > BigInteger.valueOf(Long.MAX_VALUE)) 1L else 0L
+                listOf(result.toLong(), if (result < BigInteger.valueOf(Long.MIN_VALUE) || result > BigInteger.valueOf(Long.MAX_VALUE)) 1L else 0L)
             }
             "addWordC", "subWordC" -> {
                 val result = if (row.name == "addWordC") unsignedX + unsignedY else unsignedX - unsignedY
-                result.toLong() to if (result.signum() < 0 || result >= modulus) 1L else 0L
+                listOf(result.toLong(), if (result.signum() < 0 || result >= modulus) 1L else 0L)
             }
             else -> {
                 val result = if (row.name == "plusWord2") unsignedX + unsignedY else unsignedX * unsignedY
-                result.shiftRight(64).toLong() to result.toLong()
+                listOf(result.shiftRight(64).toLong(), result.toLong())
             }
         }
     }
     @Test fun nativeFieldsAndUnboundedModelAgreeInBothBackendsAndInstalledCode() {
         checkHashes()
         val rows = File(root, "build/tuple-arithmetic/oracle.tsv").readLines().map {
-            val r = it.split('\t'); Row(r[0], r[1].toLong(), r[2].toLong(), r[3].toLong(), r[4].toLong())
+            val r = it.split('\t'); Row(r[0], r[1].toLong(), r[2].toLong(), r.drop(3).map(String::toLong))
         }
         assertEquals(names.toSet(), rows.map { it.name }.toSet())
-        for (row in rows) assertEquals(mathematical(row), row.first to row.second, "Native $row")
+        assertEquals(rows.size, rows.map { Triple(it.name, it.x, it.y) }.toSet().size)
+        for (row in rows) assertEquals(mathematical(row), row.fields, "Native $row")
         for (stage in listOf("pre", "post")) for (backend in listOf("ast", "bytecode")) context().use { context ->
             context.initialize("thc"); context.enter()
             try {
@@ -81,10 +87,10 @@ class TupleArithmeticTest {
                 val host = program.hostEntryTarget(3)
                 val entries = names.associateWith { program.entryValue(it) }
                 fun check(row: Row) {
-                    for (field in 0L..1L) assertEquals(if (field == 0L) row.first else row.second,
-                        Calls.target(host, arrayOf(entries.getValue(row.name), arrayOf(row.x, row.y, field))), "$stage/$backend/$row/$field")
+                    for ((field, expected) in row.fields.withIndex()) assertEquals(expected,
+                        Calls.target(host, arrayOf(entries.getValue(row.name), arrayOf(row.x, row.y, field.toLong()))), "$stage/$backend/$row/$field")
                 }
-                // Establish the final host dispatch before warming individual roots. Eight
+                // Establish the final host dispatch before warming individual roots. Nine
                 // targets replace its three-entry direct cache with indirect calls; with
                 // handoff enabled this changes empty arguments to the ordinary packet.
                 // Each root must see that packet during warmup, before we compile it.
@@ -93,7 +99,7 @@ class TupleArithmeticTest {
                 bindings.forEach { compile(program.entryTarget(it["id"] as String)) }
                 val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                 rows.asReversed().forEach(::check)
-                assertEquals(2L * rows.size, (program.diagnostics().getValue("compiledEntries") as Number).toLong() - before,
+                assertEquals(rows.sumOf { it.fields.size.toLong() }, (program.diagnostics().getValue("compiledEntries") as Number).toLong() - before,
                     "$stage/$backend: every checked field must enter installed guest code")
                 bindings.forEach { valid(program.entryTarget(it["id"] as String)) }
                 assertEquals(0L, language.handoffState.get().results.allocations, "Saturated primitive expressions need no tuple carrier")
@@ -112,6 +118,16 @@ class TupleArithmeticTest {
         "primReps" to (proof as Map<String, Any?>)["primReps"], "components" to listOf(proof))
     @Test fun exactPrimitiveShapesAndSaturationAreRequired() {
         val mutations = listOf<(MutableList<Any?>) -> Unit>(
+            { app -> val rep = (app[6] as MutableMap<String, Any?>)["rep"] as MutableMap<String, Any?>
+                val last = (rep["components"] as MutableList<MutableMap<String, Any?>>).last()
+                val wrong = if (last["primReps"] == listOf("IntRep")) "WordRep" else "IntRep"
+                last["primReps"] = listOf(wrong)
+                val flattened = rep["primReps"] as MutableList<Any?>; flattened[flattened.lastIndex] = wrong },
+            { app -> val rep = (app[6] as MutableMap<String, Any?>)["rep"] as MutableMap<String, Any?>
+                (rep["components"] as MutableList<Any?>).removeLast(); (rep["primReps"] as MutableList<Any?>).removeLast() },
+            { app -> val rep = (app[6] as MutableMap<String, Any?>)["rep"] as MutableMap<String, Any?>
+                (rep["components"] as MutableList<Any?>).add((rep["components"] as List<*>).last())
+                (rep["primReps"] as MutableList<Any?>).add((rep["primReps"] as List<*>).last()) },
             { app -> val rep = (app[6] as MutableMap<String, Any?>)["rep"] as MutableMap<String, Any?>
                 val children = rep["components"] as MutableList<Any?>; children[0] = wrap(children[0]) },
             { app -> (app[6] as MutableMap<String, Any?>).remove("rep") },

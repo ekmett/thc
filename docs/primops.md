@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 316 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 866 | No declared lowering. |
+| Partial | 317 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 865 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -591,6 +591,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `timesFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesFloatX8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesInt16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `timesInt2#` — arity 2 — Exact tuple arithmetic
 - [ ] `timesInt32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesInt32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesInt32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -1368,7 +1369,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `timesFloatX16#` — arity 2
 - [ ] `timesInt16X16#` — arity 2
 - [ ] `timesInt16X32#` — arity 2
-- [ ] `timesInt2#` — arity 2
 - [ ] `timesInt64X4#` — arity 2
 - [ ] `timesInt64X8#` — arity 2
 - [ ] `timesInt8X32#` — arity 2
