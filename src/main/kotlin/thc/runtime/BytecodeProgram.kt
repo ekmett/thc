@@ -359,6 +359,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 b.beginBlock()
                 e.continueLabel = b.createLabel()
             }
+            if (enableAsync) emitAsyncPoll(e)
             val tuple = context.tuple
             if (tuple != null) {
                 val result = List(tuple.width) { b.createLocal("tuple result $it", null) }
@@ -371,6 +372,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             }
             if (context.mayLoop) {
                 b.emitLabel(e.continueLabel!!)
+                if (enableAsync) emitAsyncPoll(e)
                 b.endBlock()
                 b.endWhile()
                 // The loop condition is true; retain an explicit terminating operation for the builder.
@@ -390,6 +392,77 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         root.configureTupleResult(context.tuple)
         roots += root
         return root.callTarget
+    }
+
+    /** The cold Yield carries the exact bytecode frame; ordinary polls allocate no packet. */
+    private fun emitAsyncPoll(e: Emission) {
+        val b = e.builder
+        b.beginBlock()
+        val request = b.createLocal("pending async request", "object")
+        val active = b.createLocal("async logical mask", "object")
+        b.beginIfThen()
+        b.emitPollAsync(request)
+        b.beginBlock()
+        b.beginStoreLocal(active); b.emitCurrentMask(); b.endStoreLocal()
+        b.beginReenterCallMask()
+        b.beginYield()
+        b.beginParkAsyncMask()
+        b.emitLoadLocal(request)
+        b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+        b.endParkAsyncMask()
+        b.endYield()
+        b.emitLoadLocal(active)
+        b.endReenterCallMask()
+        b.endBlock()
+        b.endIfThen()
+        b.endBlock()
+    }
+
+    /** Blocking MVar operands are evaluated once; only an uncommitted cell request is retried. */
+    private fun emitBlockingMVar(e: Emission, operands: List<Expression>,
+                                 result: Boolean, operation: (List<BytecodeLocal>) -> Unit) {
+        val b = e.builder
+        b.beginBlock()
+        val values = operands.mapIndexed { index, operand ->
+            b.createLocal("MVar operand $index", null).also {
+                b.beginStoreLocal(it); operand.emit(e); b.endStoreLocal()
+            }
+        }
+        val retry = b.createLocal("MVar request pending", "primitive")
+        val request = b.createLocal("MVar async request", "object")
+        val active = b.createLocal("MVar logical mask", "object")
+        val discard = b.createLocal("MVar resume value", "object")
+        b.beginStoreLocal(retry); b.emitLoadConstant(true); b.endStoreLocal()
+        b.beginWhile()
+        b.emitLoadLocal(retry)
+        b.beginBlock()
+        b.beginTryCatch()
+        b.beginBlock()
+        operation(values)
+        b.beginStoreLocal(retry); b.emitLoadConstant(false); b.endStoreLocal()
+        b.endBlock()
+        b.beginBlock()
+        b.beginStoreLocal(request)
+        b.beginAsyncBlockedOnly(); b.emitLoadException(); b.endAsyncBlockedOnly()
+        b.endStoreLocal()
+        b.beginStoreLocal(active); b.emitCurrentMask(); b.endStoreLocal()
+        b.beginStoreLocal(discard)
+        b.beginReenterCallMask()
+        b.beginYield()
+        b.beginParkAsyncMask()
+        b.emitLoadLocal(request)
+        b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+        b.endParkAsyncMask()
+        b.endYield()
+        b.emitLoadLocal(active)
+        b.endReenterCallMask()
+        b.endStoreLocal()
+        b.endBlock()
+        b.endTryCatch()
+        b.endBlock()
+        b.endWhile()
+        if (result) b.emitLoadConstant(Unit)
+        b.endBlock()
     }
 
     /** Choose checked reference identities while emitting code, never by a guest-time enum switch. */
@@ -748,6 +821,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         if (tail) context.mayLoop = true
         return evaluated(Expression { e ->
             val b = e.builder
+            if (enableAsync) emitAsyncPoll(e)
             val reentryResult = if (tail) {
                 b.beginBlock()
                 b.createLocal("tail result", null).also { b.beginStoreLocal(it) }
@@ -1393,9 +1467,16 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
                 operation.validate(operands.map { it.proof }, flags, tupleProof)
                 if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
+                    if (enableAsync && operation in setOf(MVarOp.TAKE, MVarOp.READ)) {
+                        emitBlockingMVar(e, operands, false) { values ->
+                            e.builder.beginReadMVar(destination[0], operation == MVarOp.TAKE, true)
+                            values.forEach(e.builder::emitLoadLocal)
+                            e.builder.endReadMVar()
+                        }
+                    } else {
                     when (operation) {
                         MVarOp.NEW -> e.builder.beginNewMVar(destination[0])
-                        MVarOp.TAKE, MVarOp.READ -> e.builder.beginReadMVar(destination[0], operation == MVarOp.TAKE)
+                        MVarOp.TAKE, MVarOp.READ -> e.builder.beginReadMVar(destination[0], operation == MVarOp.TAKE, false)
                         MVarOp.TRY_TAKE, MVarOp.TRY_READ ->
                             e.builder.beginTryReadMVar(destination[0], destination[1], operation == MVarOp.TRY_TAKE)
                         MVarOp.TRY_PUT -> e.builder.beginTryPutMVar(destination[0])
@@ -1411,8 +1492,17 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         MVarOp.IS_EMPTY -> e.builder.endIsEmptyMVar()
                         else -> error("Not a tuple MVar operation")
                     }
+                    }
                 } else ProvenExpression(Expression { e ->
-                    e.builder.beginPutMVar(); operands.forEach { it.emit(e) }; e.builder.endPutMVar()
+                    if (enableAsync && operation == MVarOp.PUT) {
+                        emitBlockingMVar(e, operands, true) { values ->
+                            e.builder.beginPutMVar(true)
+                            values.forEach(e.builder::emitLoadLocal)
+                            e.builder.endPutMVar()
+                        }
+                    } else {
+                        e.builder.beginPutMVar(false); operands.forEach { it.emit(e) }; e.builder.endPutMVar()
+                    }
                 }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && MutVarOp.named(fn[1] as String) != null) {
                 val operation = MutVarOp.named(fn[1] as String)!!

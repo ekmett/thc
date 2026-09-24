@@ -377,7 +377,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class CaptureApplicationResult {
         @Specialization public static Object capture(int arity, Closure function, Object result, MaskingState callerMask,
                 @Bind("$node") Node node) {
-            if (!(result instanceof ContinuationResult continuation)) {
+            TailYield tail = result instanceof TailYield yielded ? yielded : null;
+            ContinuationResult continuation = tail == null
+                    ? result instanceof ContinuationResult resumed ? resumed : null : tail.getContinuation();
+            if (continuation == null) {
                 if (SynchronousMasking.current(node) != callerMask) {
                     SynchronousMasking.set(node, callerMask);
                     throw new IllegalStateException("Completed application did not restore its caller mask");
@@ -388,12 +391,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             try {
                 Object source = continuation.getContinuationRootNode().getSourceRootNode();
                 if (function.arity != arity || !(source instanceof BytecodeRoot callee) ||
-                        !callee.isSelf(function.target) ||
-                        !(continuation.getResult() == kotlin.Unit.INSTANCE || continuation.getResult() instanceof ThunkSuspended ||
-                                continuation.getResult() instanceof CallSegmentSuspended))
+                        !callee.isSelf(tail == null ? function.target : tail.getTarget()) ||
+                        !AsyncContinuations.isYieldMarker(continuation.getResult()))
                     throw new IllegalStateException("Application returned an unrelated bytecode continuation: " +
                             "arity=" + function.arity + "/" + arity + ", source=" + source +
-                            ", target=" + function.target.getRootNode() + ", yielded=" + continuation.getResult());
+                            ", target=" + (tail == null ? function.target : tail.getTarget()).getRootNode() +
+                            ", yielded=" + continuation.getResult());
                 MaskingState parked = continuation.getResult() instanceof CallSegmentSuspended suspended
                         ? suspended.getParkedActiveMask() : null;
                 if (parked != null && SynchronousMasking.current(node) != callerMask)
@@ -412,6 +415,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class CurrentMask {
         @Specialization public static MaskingState read(@Bind("$node") Node node) {
             return SynchronousMasking.current(node);
+        }
+    }
+
+    /** Poll only at a bytecode cut whose locals and operand stack can be resumed. */
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "request")
+    public static final class PollAsync {
+        @Specialization public static boolean poll(VirtualFrame frame, LocalAccessor request,
+                @Bind Node node) {
+            AsyncRequest pending = GuestThreads.pollCurrent(node, false);
+            if (pending == null) return false;
+            request.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, pending);
+            return true;
+        }
+    }
+
+    @Operation public static final class ParkAsyncMask {
+        @Specialization public static AsyncRequest park(AsyncRequest request, MaskingState rootEntry,
+                @Bind Node node) {
+            SynchronousMasking.set(node, rootEntry);
+            return request;
+        }
+    }
+
+    @Operation public static final class AsyncBlockedOnly {
+        @Specialization public static AsyncRequest request(AbstractTruffleException failure) {
+            if (failure instanceof AsyncBlocked blocked) return blocked.getRequest();
+            throw failure;
         }
     }
 
@@ -1139,10 +1170,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             ContinuationResult continuation = yielded.getContinuation();
             Object source = continuation.getContinuationRootNode().getSourceRootNode();
             if (function.arity != arity || !(source instanceof BytecodeRoot callee) ||
-                    !callee.isSelf(function.target) || !callee.hasTupleResult(destination.getShape()) ||
-                    !(continuation.getResult() == kotlin.Unit.INSTANCE ||
-                            continuation.getResult() instanceof ThunkSuspended ||
-                            continuation.getResult() instanceof CallSegmentSuspended))
+                    (!yielded.getTail() && !callee.isSelf(function.target)) ||
+                    !callee.hasTupleResult(destination.getShape()) ||
+                    !AsyncContinuations.isYieldMarker(continuation.getResult()))
                 throw new IllegalStateException("Tuple application returned an unrelated continuation");
             MaskingState parked = continuation.getResult() instanceof CallSegmentSuspended suspended
                     ? suspended.getParkedActiveMask() : null;
@@ -1514,10 +1544,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                     ContinuationResult continuation = yielded.getContinuation();
                     Object source = continuation.getContinuationRootNode().getSourceRootNode();
                     if (closure.arity != 1 || !(source instanceof BytecodeRoot callee) ||
-                            !callee.isSelf(closure.target) || !callee.hasTupleResult(destination.getShape()) ||
-                            !(continuation.getResult() == kotlin.Unit.INSTANCE ||
-                                    continuation.getResult() instanceof ThunkSuspended ||
-                                    continuation.getResult() instanceof CallSegmentSuspended))
+                            (!yielded.getTail() && !callee.isSelf(closure.target)) ||
+                            !callee.hasTupleResult(destination.getShape()) ||
+                            !AsyncContinuations.isYieldMarker(continuation.getResult()))
                         throw new IllegalStateException("IO action returned an unrelated tuple continuation");
                     MaskingState parked = continuation.getResult() instanceof CallSegmentSuspended suspended
                             ? suspended.getParkedActiveMask() : null;
@@ -1670,10 +1699,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                     ContinuationResult continuation = yielded.getContinuation();
                     Object source = continuation.getContinuationRootNode().getSourceRootNode();
                     if (closure == null || closure.arity != 2 || !(source instanceof BytecodeRoot callee) ||
-                            !callee.isSelf(closure.target) || !callee.hasTupleResult(destination.getShape()) ||
-                            !(continuation.getResult() == kotlin.Unit.INSTANCE ||
-                                    continuation.getResult() instanceof ThunkSuspended ||
-                                    continuation.getResult() instanceof CallSegmentSuspended))
+                            (!yielded.getTail() && !callee.isSelf(closure.target)) ||
+                            !callee.hasTupleResult(destination.getShape()) ||
+                            !AsyncContinuations.isYieldMarker(continuation.getResult()))
                         throw new IllegalStateException("IO handler returned an unrelated tuple continuation");
                     MaskingState parked = continuation.getResult() instanceof CallSegmentSuspended suspended
                             ? suspended.getParkedActiveMask() : null;
@@ -1821,12 +1849,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = boolean.class, name = "remove")
+    @ConstantOperand(type = boolean.class, name = "async")
     public static final class ReadMVar {
-        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination, boolean remove,
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination, boolean remove, boolean async,
                 Object value, Object state, @Bind("$node") Node node) {
             ManagedMVar cell = ManagedMVar.require(value);
             TupleResultsKt.requireVoidCarrier(state);
-            Object result = remove ? cell.take(node) : cell.read(node);
+            Object result = remove ? cell.take(node, async) : cell.read(node, async);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
@@ -1845,12 +1874,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             destination.setObject(bytecode, frame, result.getValue());
         }
     }
-    @Operation public static final class PutMVar {
-        @Specialization public static Object put(Object reference, Object value, Object state,
+    @Operation
+    @ConstantOperand(type = boolean.class, name = "async")
+    public static final class PutMVar {
+        @Specialization public static Object put(boolean async, Object reference, Object value, Object state,
                 @Bind("$node") Node node) {
             ManagedMVar cell = ManagedMVar.require(reference);
             TupleResultsKt.requireVoidCarrier(state);
-            cell.put(value, node);
+            cell.put(value, node, async);
             return kotlin.Unit.INSTANCE;
         }
     }
