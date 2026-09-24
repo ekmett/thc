@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """Independent signed64 byte and IEEE formulas, never floating raw-bit equality."""
 import collections
+import copy
+import gzip
+import hashlib
+import importlib.util
+import json
+from pathlib import Path
 import struct
 import unittest
 import doublex2_bytearray_model as model
@@ -30,6 +36,54 @@ def graph_bits(values):
 
 
 class ModelTest(unittest.TestCase):
+    def test_genuine_pre_post_family_controls_keep_exact_rejection_profiles(self):
+        root = Path(__file__).resolve().parent.parent
+        retained = root/'bench/experiments/doublex2-bytearray/evidence-x86_64/captures/doublex2'
+        provenance = json.loads(gzip.decompress((retained/'input-provenance.json.gz').read_bytes()))['core']
+        hashes = {item['path']: item['sha256'] for item in provenance['artifacts']}
+        def load(name, path):
+            spec = importlib.util.spec_from_file_location(name, path)
+            module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+            return module
+        prepare = load('double_memory_prepare', root/'scripts/prepare-doublex2-bytearray-audit.py')
+        auditor = load('double_memory_auditor', root/'scripts/audit-core.py')
+        capabilities = json.loads((root/'scripts/core-capabilities.json').read_text())
+        inputs = []
+        for stage in ('pre', 'post'):
+            path = retained/f'{stage}-core.json.gz'
+            raw = gzip.decompress(path.read_bytes())
+            relative = f'build/simd-doublex2-bytearray/{stage}-core/SimdDoubleX2ByteArray.json'
+            self.assertEqual(hashlib.sha256(raw).hexdigest(), hashes[relative])
+            inputs.append((stage, path, json.loads(raw)))
+            # ARM preparation supplies fresh pre-Tidy Core; the retained
+            # native export supplies both stages even in source-only checks.
+            fresh = root/relative
+            if fresh.exists():
+                inputs.append((stage, fresh, json.loads(fresh.read_text())))
+        for stage, path, module in inputs:
+            with self.subTest(stage=stage, path=str(path)):
+                prepare.inventory(module, stage)
+                original = copy.deepcopy(module)
+                for family in ('vector', 'scalar'):
+                    for operation in ('Index', 'Read', 'Write'):
+                        report = auditor.Audit([(str(path), module)], capabilities).run([family+operation+'Case'])
+                        self.assertTrue(report['accepted'])
+                        self.assertEqual(report['issues'], [])
+                        self.assertEqual(report['missingGlobals'], [])
+                for element in ('Int32ElemRep', 'Word32ElemRep', 'FloatElemRep', 'Int64ElemRep'):
+                    controls = prepare.family_controls(module, path, auditor, capabilities, element)
+                    self.assertEqual(len(controls), 6)
+                    for name, control in controls.items():
+                        report = control['report']
+                        self.assertFalse(report['accepted'])
+                        self.assertEqual(report['missingGlobals'], [])
+                        expected = {'malformed-expression': 1}
+                        if name.endswith('Index'):
+                            expected.update({'vector-shape': 1, 'aggregate-shape': 1})
+                        self.assertEqual(collections.Counter(issue['code'] for issue in report['issues']), expected)
+                        self.assertEqual(len(report['issues']), 3 if name.endswith('Index') else 1)
+                self.assertEqual(module, original, 'Negative controls must not mutate genuine Core')
+
     def test_exact_domain_and_unique_signed_long_keys(self):
         rows = model.model_rows()
         self.assertEqual(len(rows), 4384)
