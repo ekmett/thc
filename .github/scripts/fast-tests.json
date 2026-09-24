@@ -230,7 +230,23 @@
     "examples/THC/Fixtures.hs": {
       "junit": [
         "thc.RuntimeTest",
+        "thc.BytecodeBackendTest",
+        "thc.SelfTailProfileTest"
+      ],
+      "python": []
+    },
+    "examples/THC/MapWorkload.hs": {
+      "junit": [
+        "thc.RuntimeTest",
         "thc.BytecodeBackendTest"
+      ],
+      "python": []
+    },
+    "examples/THC/Prim.hs": {
+      "junit": [
+        "thc.RuntimeTest",
+        "thc.BytecodeBackendTest",
+        "thc.SelfTailProfileTest"
       ],
       "python": []
     },

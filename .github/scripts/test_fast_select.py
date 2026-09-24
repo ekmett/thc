@@ -471,14 +471,14 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_fixture_owners_match_the_preparation_manifest(self):
         fixture = json.loads(Path(__file__).with_name("fast-fixtures.json").read_text())
         owners = self.policy["owners"]
-        shared = {"examples/THC/Prim.hs"}  # Shared Core used beyond RuntimeTest.
+        native_only = {"examples/NativeOracle.hs", "examples/THC/MapWorkload.hs",
+                       "scripts/native-oracle.sh"}
         for name, group in fixture["groups"].items():
             for path in group["sources"]:
                 with self.subTest(group=name, path=path):
-                    if path in shared:
-                        self.assertNotIn(path, owners)
-                    else:
-                        self.assertEqual(set(group["junit"]), set(owners[path]["junit"]))
+                    expected = ({"thc.RuntimeTest", "thc.BytecodeBackendTest"} if path in native_only
+                                else set(group["junit"]))
+                    self.assertEqual(expected, set(owners[path]["junit"]))
         self.assertEqual({"thc.runtime.BitPrimopsTest", "thc.IntegerPrimopsTest",
                           "thc.SignedNarrowPrimopsTest"},
                          set(owners["src/test/kotlin/thc/PrimopTestContext.kt"]["junit"]))
