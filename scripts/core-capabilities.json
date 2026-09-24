@@ -85,6 +85,7 @@
     "Word32Rep",
     "Int64Rep",
     "Word64Rep",
+    "AddrRep",
     "BoxedRep (Just Lifted)",
     "BoxedRep (Just Unlifted)"
   ],

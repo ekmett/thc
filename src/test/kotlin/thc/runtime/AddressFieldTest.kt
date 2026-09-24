@@ -2,7 +2,11 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.frame.FrameDescriptor
+import com.oracle.truffle.api.frame.FrameSlotKind
+import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
@@ -156,7 +160,47 @@ class AddressFieldTest {
             released(language)
         }
     }
-    @Test fun contradictoryFieldProofsAndAggregateAddressBoundariesStayRejected() = withLanguage { language ->
+    @Test fun tupleAddressesKeepTheirManagedCarrierAndReleaseResultLoans() = withLanguage { language ->
+        val tuple = mapOf("kind" to "unknown", "aggregate" to "unboxed-tuple", "components" to listOf(address, long),
+            "primReps" to listOf("AddrRep", "IntRep"), "evaluated" to true)
+        val shape = TupleShape(CoreRepresentations.parse(tuple), language)
+        val builder = FrameDescriptor.newBuilder()
+        val slots = IntArray(4) { builder.addSlot(FrameSlotKind.Illegal, "address tuple $it", null) }
+        val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), builder.build())
+        val literal = LiteralAddress.fromHex("4100")
+        fun field(value: Any?) = object : Expr() {
+            init { representation = CoreRepresentations.parse(address) }
+            override fun execute(frame: VirtualFrame): Any? = value
+        }
+        val number = object : Expr() {
+            init { representation = CoreRepresentations.parse(long) }
+            override fun execute(frame: VirtualFrame): Any = 17L
+            override fun executeLong(frame: VirtualFrame): Long = 17L
+        }
+        TupleConstruct(shape, arrayOf(field(literal), number)).executeTuple(frame, slots, 0)
+        val result = shape.finish(frame, slots)
+        assertSame(TupleComplete, result)
+        assertEquals(1, language.handoffState.get().results.retainedReferences())
+        shape.consume(frame, result, slots, 2)
+        assertSame(literal, frame.getObject(slots[2]))
+        assertEquals(17L, frame.getLong(slots[3]))
+        released(language)
+        for (bad in listOf(null, 0L, Any(), byteArrayOf(65), java.nio.ByteBuffer.allocateDirect(8))) {
+            assertThrows(RuntimeFault::class.java) { TupleConstruct(shape, arrayOf(field(bad), number)).executeTuple(frame, slots, 0) }
+            val forged = shape.layout.create()
+            shape.layout.setObject(forged, 0, bad)
+            shape.layout.setLong(forged, 1, 17L)
+            assertThrows(RuntimeFault::class.java) { shape.consume(frame, forged, slots, 2) }
+            val pool = language.handoffState.get().results
+            val loan = pool.acquire(shape.layout)
+            shape.layout.setObject(loan, 0, bad)
+            shape.layout.setLong(loan, 1, 17L)
+            pool.complete(loan)
+            assertThrows(RuntimeFault::class.java) { shape.consume(frame, TupleComplete, slots, 2) }
+            released(language)
+        }
+    }
+    @Test fun contradictoryFieldProofsAndAddressSumsStayRejected() = withLanguage { language ->
         val original=constructor()
         for(bad in listOf(
             original+("fieldTypes" to listOf(address+("kind" to "unknown"),long,lazy)),
@@ -171,7 +215,7 @@ class AddressFieldTest {
             }
         }
         val tuple=mapOf("kind" to "unknown","aggregate" to "unboxed-tuple","components" to listOf(address),"primReps" to listOf("AddrRep"),"evaluated" to true)
-        assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(tuple) }
+        assertTrue(CoreRepresentations.parse(tuple).isTuple)
         // GHC places both AddrRep and IntRep payloads in the shared WordSlot;
         // the runtime still rejects address payloads before creating a carrier.
         val sum=mapOf("kind" to "unknown","aggregate" to "unboxed-sum","alternatives" to listOf(address,long),
