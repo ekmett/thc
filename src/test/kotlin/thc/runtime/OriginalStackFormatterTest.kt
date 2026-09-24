@@ -25,16 +25,16 @@ class OriginalStackFormatterTest {
     private fun hash(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     private fun hash(file: File) = hash(file.readBytes())
     private val sourceRoot = "compiler/pinned-ghc-internal/"
-    // Pin the complete path/hash catalog independently, without duplicating its 57 entries.
+    // Pin the complete path/hash catalog independently, without duplicating its 60 entries.
     // A changed exporter catalog cannot silently drop or repin a source in the fixture receipt.
     private val pinned by lazy {
         val text = contained("src/THC/Driver/Wired.hs", true).readText()
             .substringAfter("sourceHashes =").substringBefore("\ndata WiredArtifacts")
         val entries = Regex("\\(\"([^\"]+)\", \"([0-9a-f]{64})\"\\)").findAll(text)
             .map { it.groupValues[1] to it.groupValues[2] }.toList()
-        require(entries.size == 57 && entries.map { it.first }.toSet().size == 57)
+        require(entries.size == 60 && entries.map { it.first }.toSet().size == 60)
         require(hash(entries.sortedBy { it.first }.joinToString("") { (path, digest) -> "$path\u0000$digest\n" }.toByteArray()) ==
-            "c2c7f0ccd2058579bc0f2513ecf34e37279f2a3ef5ff48b0bb659176c24d705c")
+            "e343d55afb16e76675803770ed3ed3c3f91f55408f4f9da17dceac12f9f367c2")
         entries.associate { (path, digest) -> sourceRoot + path to digest }
     }
     private val requiredInputs by lazy {
@@ -198,7 +198,7 @@ class OriginalStackFormatterTest {
         assertEquals(listOf("type HalfWord' = Word${wordBytes * 4}"),
             generatedText.lines().filter { it.startsWith("type HalfWord' = ") })
         // This is source identity/target preprocessing evidence, not execution of
-        // the full Show closure: its missing Ptr/Word/Either helpers stay missing.
+        // the full Show closure, whose other source/runtime dependencies remain separate.
     }
 
     @Test fun freshOriginalEncodingSourcesResolveTheirExactStackCallers() {
@@ -251,6 +251,45 @@ class OriginalStackFormatterTest {
         assertEquals(original, (linked["bindings"] as List<Map<String, Any?>>).single { it["id"] == id })
         // This proves source identity and resolution, not full admission of the
         // worker's cold ErrorCall/Typeable/backtrace dependency graph.
+    }
+
+    @Test fun freshOriginalShowHelpersResolveExactHeapInfoTableReferences() {
+        val receipt = manifest()
+        val paths = receipt["originals"] as List<String>
+        val modules = listOf("Ptr", "Data.Either", "Word", "Heap.InfoTable.Types").associateWith { name ->
+            json(paths.single { it.endsWith("/GHC.Internal.$name.json") })
+        }
+        val merged = (CoreModules.merge(modules.values.toList())["bindings"] as List<Map<String, Any?>>)
+            .associateBy { it["id"] as String }
+        val cases = listOf(
+            Triple("Ptr", "\$fShowFunPtr", "\$w\$cshowsPrec"),
+            Triple("Data.Either", "\$fShowEither", "\$fShowStgInfoTable3"),
+            Triple("Word", "\$fShowWord32", "\$fShowStgInfoTable4"),
+            Triple("Word", "\$fShowWord8", "\$fShowStgInfoTable5"))
+        for ((module, name, callerName) in cases) {
+            val id = "ghc-internal:GHC.Internal.$module.$name"
+            val original = (modules.getValue(module)["bindings"] as List<Map<String, Any?>>).single { it["id"] == id }
+            assertEquals(name, original["name"])
+            assertEquals(original, merged.getValue(id), "Merge must preserve the actual source binding")
+            val proof = original["rep"] as Map<*, *>
+            assertEquals(listOf("BoxedRep (Just Lifted)"), proof["primReps"])
+            assertEquals(if (module == "Data.Either") "closure" else "data", proof["kind"])
+            val expression = original["expr"] as List<*>
+            assertEquals(if (module == "Data.Either") "lam" else "app", expression[0])
+            if (module != "Data.Either") {
+                assertEquals(listOf("con", "ghc-internal:GHC.Internal.Show.C:Show"),
+                    (expression[1] as List<*>).take(2))
+            }
+            fun references(value: Any?): Int = when (value) {
+                is List<*> -> if (value.getOrNull(0) == "var" && value.getOrNull(1) == id) 1 else value.sumOf(::references)
+                is Map<*, *> -> value.values.sumOf(::references)
+                else -> 0
+            }
+            val caller = merged.getValue("ghc-internal:GHC.Internal.Heap.InfoTable.Types.$callerName")
+            assertEquals(1, references(caller["expr"]), "Original caller must name the exact helper: $id")
+        }
+        // These four identities now resolve. No claim that the whole Show/error
+        // closure links or executes: Numeric, Integer, encoding and FFI remain separate.
     }
 
     @Test fun freshOriginalUnsafeWorkerLinksWithoutAliasAndDefersItsAction() {
@@ -337,8 +376,8 @@ class OriginalStackFormatterTest {
         val value = manifest()
         val inputs = value["inputHashes"] as Map<String, String>
         val artifacts = value["artifactHashes"] as Map<String, String>
-        assertEquals(86, requiredInputs.size)
-        assertEquals(85, artifacts.size)
+        assertEquals(89, requiredInputs.size)
+        assertEquals(88, artifacts.size)
         for (path in requiredInputs)
             assertThrows(IllegalArgumentException::class.java, {
                 checked(value + ("inputHashes" to (inputs - path)))

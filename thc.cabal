@@ -28,6 +28,7 @@ extra-source-files:
   compiler/pinned-ghc-internal/GHC/Internal/CString.hs
   compiler/pinned-ghc-internal/GHC/Internal/ClosureTypes.hs
   compiler/pinned-ghc-internal/GHC/Internal/Control/Monad/Fail.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Data/Either.hs
   compiler/pinned-ghc-internal/GHC/Internal/Data/Maybe.hs
   compiler/pinned-ghc-internal/GHC/Internal/Data/OldList.hs
   compiler/pinned-ghc-internal/GHC/Internal/Data/Typeable/Internal.hs
@@ -66,6 +67,7 @@ extra-source-files:
   compiler/pinned-ghc-internal/GHC/Internal/Ix.hs
   compiler/pinned-ghc-internal/GHC/Internal/List.hs
   compiler/pinned-ghc-internal/GHC/Internal/Num.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/Ptr.hs
   compiler/pinned-ghc-internal/GHC/Internal/Real.hs-boot
   compiler/pinned-ghc-internal/GHC/Internal/Show.hs
   compiler/pinned-ghc-internal/GHC/Internal/Stack.hs
@@ -77,6 +79,7 @@ extra-source-files:
   compiler/pinned-ghc-internal/GHC/Internal/Stack/Decode.hs
   compiler/pinned-ghc-internal/GHC/Internal/Stack/Types.hs
   compiler/pinned-ghc-internal/GHC/Internal/Types.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Word.hs
   compiler/pinned-ghc-internal/LICENSE
   compiler/pinned-ghc-internal/include/WordSize.h
   test/fixtures/run-fail-frontier/cabal.project
@@ -204,6 +207,8 @@ executable thc-fixtures
     ContinuationFixtures
     FixtureSupport
     WordFloatingFixtures
+    FloatingAddressFixtures
+    Explicit64ArrayFixtures
     FusedFloatingFixtures
     OriginalStdioFixtures
     SmallArrayFixtures

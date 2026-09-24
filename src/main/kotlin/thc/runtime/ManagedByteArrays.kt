@@ -212,6 +212,12 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
     READ_INT("readIntArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
     WRITE_INT("writeIntArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("IntRep"), emptyList())),
     INDEX_INT("indexIntArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
+    READ_INT64("readInt64Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
+    WRITE_INT64("writeInt64Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Int64Rep"), emptyList())),
+    INDEX_INT64("indexInt64Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
+    READ_WORD64("readWord64Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
+    WRITE_WORD64("writeWord64Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Word64Rep"), emptyList())),
+    INDEX_WORD64("indexWord64Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
     READ_DOUBLE("readDoubleArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
     WRITE_DOUBLE("writeDoubleArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("DoubleRep"), emptyList())),
     INDEX_DOUBLE("indexDoubleArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
@@ -250,6 +256,7 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
             throw RuntimeFault("ByteArray primitive argument representation mismatch: $primitive")
         val payload = listOf(when (this) {
             READ_INT, GET_SIZE_MUTABLE -> "IntRep"; READ_DOUBLE -> "DoubleRep"
+            READ_INT64 -> "Int64Rep"; READ_WORD64 -> "Word64Rep"
             READ_INT8 -> "Int8Rep"; READ_WORD8 -> "Word8Rep"
             READ_INT16 -> "Int16Rep"; READ_WORD16 -> "Word16Rep"
             READ_INT32 -> "Int32Rep"; READ_WORD32 -> "Word32Rep"
@@ -259,11 +266,13 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
             scalar(result.components[0], emptyList()) && scalar(result.components[1], payload) &&
             result.primReps == payload
         else scalar(result, when (this) {
-            WRITE_INT8, WRITE_INT16, WRITE_WORD16, WRITE, WRITE_CHAR, WRITE_INT, WRITE_DOUBLE, WRITE_INT32, WRITE_WORD32, WRITE_FLOAT, WRITE_WORD, COPY, SET, COPY_MUTABLE, COPY_MUTABLE_NON_OVERLAPPING -> emptyList()
+            WRITE_INT8, WRITE_INT16, WRITE_WORD16, WRITE, WRITE_CHAR, WRITE_INT, WRITE_DOUBLE, WRITE_INT32, WRITE_WORD32, WRITE_FLOAT, WRITE_WORD,
+            WRITE_INT64, WRITE_WORD64, COPY, SET, COPY_MUTABLE, COPY_MUTABLE_NON_OVERLAPPING -> emptyList()
             SIZE, SIZE_MUTABLE, INDEX_INT, COMPARE -> listOf("IntRep")
             INDEX_INT8 -> listOf("Int8Rep")
             INDEX_INT16 -> listOf("Int16Rep"); INDEX_WORD16 -> listOf("Word16Rep")
             INDEX_INT32 -> listOf("Int32Rep"); INDEX_WORD32 -> listOf("Word32Rep")
+            INDEX_INT64 -> listOf("Int64Rep"); INDEX_WORD64 -> listOf("Word64Rep")
             INDEX_FLOAT -> listOf("FloatRep"); INDEX_WORD, INDEX_CHAR -> listOf("WordRep")
             INDEX_DOUBLE -> listOf("DoubleRep"); else -> listOf("Word8Rep")
         })
@@ -288,9 +297,12 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
         ByteArrayOp.SIZE, ByteArrayOp.SIZE_MUTABLE -> SizeByteArrayExpression(operands[0])
         ByteArrayOp.GET_SIZE_MUTABLE -> GetSizeMutableByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.INDEX, ByteArrayOp.INDEX_CHAR -> IndexByteArrayExpression(operands[0], operands[1])
-        ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD -> ReadIntArrayExpression(operands[0], operands[1], operands[2])
-        ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD -> WriteIntArrayExpression(operands[0], operands[1], operands[2], operands[3])
-        ByteArrayOp.INDEX_INT, ByteArrayOp.INDEX_WORD -> IndexIntArrayExpression(operands[0], operands[1])
+        ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD, ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64 ->
+            ReadIntArrayExpression(operands[0], operands[1], operands[2])
+        ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD, ByteArrayOp.WRITE_INT64, ByteArrayOp.WRITE_WORD64 ->
+            WriteIntArrayExpression(operands[0], operands[1], operands[2], operands[3])
+        ByteArrayOp.INDEX_INT, ByteArrayOp.INDEX_WORD, ByteArrayOp.INDEX_INT64, ByteArrayOp.INDEX_WORD64 ->
+            IndexIntArrayExpression(operands[0], operands[1])
         ByteArrayOp.READ_DOUBLE -> ReadDoubleArrayExpression(operands[0], operands[1], operands[2])
         ByteArrayOp.WRITE_DOUBLE -> WriteDoubleArrayExpression(operands[0], operands[1], operands[2], operands[3])
         ByteArrayOp.INDEX_DOUBLE -> IndexDoubleArrayExpression(operands[0], operands[1])

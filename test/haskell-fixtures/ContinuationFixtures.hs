@@ -41,6 +41,14 @@ prepareCoreContinuation root = do
        "--entry", "tupleRaiseAnswer", "--output", base </> "tuple-raise-audit.json"] ""
   _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
        "--entry", "catchHandlerAnswer", "--output", base </> "handler-audit.json"] ""
+  mapM_ (\(entry, report) -> run root [] "python3"
+      ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
+       "--entry", entry, "--output", base </> report] "")
+      [("maskedCheckpointAnswer", "masked-audit.json"),
+       ("unmaskedCheckpointAnswer", "unmasked-audit.json"),
+       ("uninterruptibleCheckpointAnswer", "uninterruptible-audit.json")]
+  _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
+       "--entry", "forceNonlocalAnswer", "--output", base </> "force-value-audit.json"] ""
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   version <- run root [] ghc ["--numeric-version"] ""
   unless (takeWhile (/= '\n') version == "9.14.1") (die "core-continuation requires GHC 9.14.1")
@@ -48,5 +56,6 @@ prepareCoreContinuation root = do
        "-hidir", base </> "native", "-o", base </> "native-oracle",
        "compiler/test-fixtures/CoreContinuationNative.hs", source] ""
   native <- run root [] (base </> "native-oracle") [] ""
-  unless (native == "108\n208\n42\n77\n43\n114\n114\n79\n") (die "core-continuation native oracle expected 108, 208, 42, 77, 43, 114, 114 and 79")
+  unless (native == "108\n208\n42\n77\n43\n114\n114\n79\n2\n0\n1\n208\n")
+    (die "core-continuation native oracle disagreed with checkpoint results")
   writeFile (base </> "native-output.txt") native

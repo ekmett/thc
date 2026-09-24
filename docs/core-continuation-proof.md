@@ -121,3 +121,45 @@ tag 2 and native GHC, AST, ordinary bytecode, and compiled checkpointed
 bytecode agree on 79. The enclosing lexical mask restore runs only after the
 resumed handler completes: a second `getMaskingState#` after `catch#` must
 observe the original unmasked state. General async delivery remains gated.
+
+The three original GHC masking primops now use the same exact action-root and
+recursive tuple capture only under the private checkpoint. Their actions are
+not tagged as caught `catch#` actions, so private handler delivery cannot use
+them. Each action suspends at two `noDuplicate#` checkpoints; cold segments
+retain the active logical mask (interruptible, unmasked, or uninterruptible)
+across a second host carrier while both carriers recover their ambient mask.
+`getMaskingState#` inside each action observes GHC tags 2, 0, and 1, and a
+second query after the primop observes the restored outer mask. Native GHC,
+AST, ordinary bytecode, and the compiled checkpoint caller agree. A separate
+private run begins `unmaskAsyncExceptions#` with a masked caller and observes
+the masked state restored after cross-thread completion. The
+checkpoint-null path still invokes the original action operation directly;
+general async delivery remains disabled.
+
+A private nonlocal `ForceValue` edge now saves its already-evaluated operand in
+a typed-profiled bytecode local before entering a child thunk. A yielded child
+is resumed only when its identity matches that saved operand; the completed
+answer or guest failure then flows through the existing cold worklist. A
+genuine GHC global application is demanded by a separate case after a parent
+checkpoint. Its non-tail callee yields twice, and another host carrier
+finishes the same global without replaying the parent's prefix or either
+child checkpoint. Numeric Long, Float, and Double results retain primitive
+local tags; wrong-child and malformed resumes fail closed. The ordinary
+`checkpoint == null` `ForceValue` operation is unchanged. A selector function
+that returns a lazy argument still enters it to satisfy the runtime's WHNF
+call-result convention; that deeper call is not admitted by this edge.
+
+The private original `catch#` cut can now carry a context-owned request bound
+to the exact parked parent and child continuations. Cancellation wins only
+while the request is pending; claiming the parent commits it, and the sender
+is acknowledged only when the saved original handler extracts the async-origin
+payload. A host unwind before that extraction fails the request and leaves
+the parent fail-closed; context disposal wakes pending senders. The request
+is independent of the host carrier, so another thread may perform the cut.
+If another evaluator completes or reparks the parent first, an attempted
+delivery fails the stale request and leaves that newer result untouched. This
+private token needs an explicit delivery attempt; notifying requests when a
+logical guest target completes is future scheduler work.
+This is still a private proof API: there is no guest task scheduler, safepoint
+submission, production checkpoint, or `throwTo` admission. At most one request
+per captured parent is admitted until the earlier request terminates.

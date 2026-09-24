@@ -142,3 +142,55 @@ catchHandlerAnswer =
               realWorld# of
     (# s6, Box result #) -> case getMaskingState# s6 of
       (# _, outside #) -> I# (result +# 100# *# outside)
+
+-- Each original mask primop owns a two-checkpoint IO action. A mask query
+-- after the action proves the enclosing restoration is delayed until exit.
+{-# OPAQUE maskedCheckpointAnswer #-}
+maskedCheckpointAnswer :: Int
+maskedCheckpointAnswer =
+  case maskAsyncExceptions# (\s0 -> case noDuplicate# s0 of { s1 ->
+    case noDuplicate# s1 of { s2 -> case getMaskingState# s2 of
+      (# s3, inside #) -> (# s3, Box inside #) } }) realWorld# of
+    (# s4, Box inside #) -> case getMaskingState# s4 of
+      (# _, outside #) -> I# (inside +# 100# *# outside)
+
+{-# OPAQUE unmaskedCheckpointAnswer #-}
+unmaskedCheckpointAnswer :: Int
+unmaskedCheckpointAnswer =
+  case unmaskAsyncExceptions# (\s0 -> case noDuplicate# s0 of { s1 ->
+    case noDuplicate# s1 of { s2 -> case getMaskingState# s2 of
+      (# s3, inside #) -> (# s3, Box inside #) } }) realWorld# of
+    (# s4, Box inside #) -> case getMaskingState# s4 of
+      (# _, outside #) -> I# (inside +# 100# *# outside)
+
+{-# OPAQUE uninterruptibleCheckpointAnswer #-}
+uninterruptibleCheckpointAnswer :: Int
+uninterruptibleCheckpointAnswer =
+  case maskUninterruptible# (\s0 -> case noDuplicate# s0 of { s1 ->
+    case noDuplicate# s1 of { s2 -> case getMaskingState# s2 of
+      (# s3, inside #) -> (# s3, Box inside #) } }) realWorld# of
+    (# s4, Box inside #) -> case getMaskingState# s4 of
+      (# _, outside #) -> I# (inside +# 100# *# outside)
+
+{-# OPAQUE delayedTwice #-}
+delayedTwice :: Int# -> Box
+delayedTwice input = case noDuplicate# realWorld# of { s1 ->
+  case noDuplicate# s1 of _ -> Box (input +# 1#) }
+
+-- A global application is a nonlocal, lazy operand of the outer case.
+{-# OPAQUE delayedTwiceGlobal #-}
+delayedTwiceGlobal :: Box
+delayedTwiceGlobal = case delayedTwice 6# of Box result -> Box (result +# 1#)
+
+{-# OPAQUE delayedTwiceWarm #-}
+delayedTwiceWarm :: Box
+delayedTwiceWarm = case delayedTwice 8# of Box result -> Box (result +# 1#)
+
+{-# OPAQUE forceNonlocalAnswer #-}
+forceNonlocalAnswer :: Int
+forceNonlocalAnswer =
+  case noDuplicate# realWorld# of { s0 ->
+    case getMaskingState# s0 of
+      (# _, mask #) -> case mask of
+        0# -> case delayedTwiceGlobal of Box result -> I# (200# +# result)
+        _ -> case delayedTwiceWarm of Box result -> I# (200# +# result) }

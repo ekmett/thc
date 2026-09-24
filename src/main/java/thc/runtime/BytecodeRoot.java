@@ -274,6 +274,22 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         public static Force createForce(Metrics metrics) { return new Force(metrics); }
     }
 
+    /** A cold nonlocal force resumes only the thunk saved before entering it. */
+    @Operation public static final class ResumeForcedValue {
+        @Specialization public static Object resume(Thunk saved, ThunkSuspended suspended, ChildResume resumed) {
+            Thunk child = suspended.getThunk();
+            if (saved != child)
+                throw new IllegalStateException("Forced-value continuation lost its saved child");
+            if (resumed.getFailure() != null) throw resumed.getFailure();
+            if (child.getState() != 2 || child.getValue() != resumed.getValue())
+                throw new IllegalStateException("Forced-value continuation lost its child update");
+            return resumed.getValue();
+        }
+        @Fallback public static Object malformed(Object saved, Object suspended, Object resumed) {
+            throw new IllegalStateException("Forced-value continuation requires its exact saved thunk and ChildResume");
+        }
+    }
+
     /** A successful force updates this activation's mutable binding, not its final capture property. */
     @Operation(forceCached = true)
     @ConstantOperand(type = Metrics.class, name = "metrics")
@@ -589,6 +605,49 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             ManagedByteArray.requireState(state);
             long value = operation.read(address, offset);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, value);
+        }
+    }
+
+    @Operation @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadFloatOffAddr {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress address, long index, Object state, @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            destination.setFloat(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                FloatingAddresses.readFloat(address, index));
+        }
+    }
+    @Operation @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadDoubleOffAddr {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress address, long index, Object state, @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            destination.setDouble(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                FloatingAddresses.readDouble(address, index));
+        }
+    }
+    @Operation public static final class IndexFloatOffAddr {
+        @Specialization public static float read(ManagedAddress address, long index) {
+            return FloatingAddresses.readFloat(address, index);
+        }
+    }
+    @Operation public static final class IndexDoubleOffAddr {
+        @Specialization public static double read(ManagedAddress address, long index) {
+            return FloatingAddresses.readDouble(address, index);
+        }
+    }
+    @Operation public static final class WriteFloatOffAddr {
+        @Specialization public static Object write(ManagedAddress address, long index, float value, Object state) {
+            ManagedByteArray.requireState(state);
+            FloatingAddresses.writeFloat(address, index, value);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation public static final class WriteDoubleOffAddr {
+        @Specialization public static Object write(ManagedAddress address, long index, double value, Object state) {
+            ManagedByteArray.requireState(state);
+            FloatingAddresses.writeDouble(address, index, value);
+            return kotlin.Unit.INSTANCE;
         }
     }
 
@@ -1441,7 +1500,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = Metrics.class, name = "metrics")
     public static final class InvokeIOActionCheckpoint {
         @Specialization public static void run(VirtualFrame frame, BytecodeTupleSlots destination, Metrics metrics,
-                Object action,
+                Object action, boolean caughtIOAction,
                 @Bind Node node,
                 @Cached(value = "createAction(destination, metrics)", neverDefault = true) TupleDispatch actionCall,
                 @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
@@ -1466,12 +1525,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                         throw new IllegalStateException("Parked IO action did not restore its caller mask");
                     MaskingState active = parked != null ? parked : SynchronousMasking.current(node);
                     throw new CapturedCallSuspension(new CallSegment(continuation, active, callerMask,
-                            destination.getShape(), true));
+                            destination.getShape(), caughtIOAction));
                 } finally { SynchronousMasking.set(node, callerMask); }
             }
         }
         public static TupleDispatch createAction(BytecodeTupleSlots destination, Metrics metrics) {
             return new TupleDispatch(new ContinuationTupleDestination(destination), metrics, 1, false);
+        }
+        public static Force createForce(Metrics metrics) { return new Force(metrics); }
+    }
+
+    /** The private mask-action edge shares exact action capture but owns host-fault cleanup. */
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class InvokeMaskedIOActionCheckpoint {
+        @Specialization public static void run(VirtualFrame frame, BytecodeTupleSlots destination, Metrics metrics,
+                Object action, MaskingState prior, @Bind Node node,
+                @Cached(value = "createAction(destination, metrics)", neverDefault = true) TupleDispatch actionCall,
+                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
+            try {
+                InvokeIOActionCheckpoint.run(frame, destination, metrics, action, false, node, actionCall, force);
+            } catch (RuntimeException | Error failure) {
+                if (!(failure instanceof AbstractTruffleException)) SynchronousMasking.set(node, prior);
+                throw failure;
+            }
+        }
+        public static TupleDispatch createAction(BytecodeTupleSlots destination, Metrics metrics) {
+            return InvokeIOActionCheckpoint.createAction(destination, metrics);
         }
         public static Force createForce(Metrics metrics) { return new Force(metrics); }
     }
@@ -1495,7 +1576,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             if (delivery.getAction() != segment || !segment.getCaughtIOAction() ||
                     segment.getTupleShape() != destination.getShape())
                 throw new IllegalStateException("Async delivery requires the exact captured catch# action");
-            throw new CapturedAsyncDelivery(delivery.getPayload());
+            throw new CapturedAsyncDelivery(delivery.getPayload(), delivery.getRequest());
         }
         @Fallback public static void malformed(BytecodeTupleSlots destination, Object suspended, Object resumed) {
             throw new IllegalStateException("IO action continuation requires an owned ChildResume tuple");
@@ -1532,7 +1613,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     /** Only the private captured catch# path may handle an async-origin payload. */
     @Operation public static final class RequireCaughtIOFailure {
         @Specialization public static Object payload(AbstractTruffleException failure) {
-            if (failure instanceof CapturedAsyncDelivery delivered) return delivered.getPayload();
+            if (failure instanceof CapturedAsyncDelivery delivered) {
+                if (delivered.getRequest() != null) delivered.getRequest().acknowledge();
+                return delivered.getPayload();
+            }
             return RequireGuestFailure.payload(failure);
         }
     }

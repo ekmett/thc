@@ -787,6 +787,20 @@
       ],
       "result": "WordRep"
     },
+    "indexDoubleOffAddr#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "indexFloatOffAddr#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "FloatRep"
+    },
     "indexInt16OffAddr#": {
       "arguments": [
         "AddrRep",
@@ -821,6 +835,13 @@
         "IntRep"
       ],
       "result": "IntRep"
+    },
+    "indexWideCharOffAddr#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "WordRep"
     },
     "indexWord16OffAddr#": {
       "arguments": [

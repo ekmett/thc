@@ -525,6 +525,8 @@
     "readIntOffAddr#": 3,
     "readInt64OffAddr#": 3,
     "readWord64OffAddr#": 3,
+    "readFloatOffAddr#": 3,
+    "readDoubleOffAddr#": 3,
     "readAddrOffAddr#": 3,
     "indexAddrOffAddr#": 2,
     "indexInt32OffAddr#": 2,
@@ -534,6 +536,8 @@
     "indexWordOffAddr#": 2,
     "indexInt64OffAddr#": 2,
     "indexWord64OffAddr#": 2,
+    "indexFloatOffAddr#": 2,
+    "indexDoubleOffAddr#": 2,
     "indexAddrArray#": 2,
     "readAddrArray#": 3,
     "writeWord8OffAddr#": 4,
@@ -547,6 +551,8 @@
     "writeWordOffAddr#": 4,
     "writeInt64OffAddr#": 4,
     "writeWord64OffAddr#": 4,
+    "writeFloatOffAddr#": 4,
+    "writeDoubleOffAddr#": 4,
     "writeCharOffAddr#": 4,
     "writeAddrOffAddr#": 4,
     "writeAddrArray#": 4,
@@ -610,6 +616,12 @@
     "tryReadMVar#": 2,
     "tryPutMVar#": 3,
     "isEmptyMVar#": 2,
+    "readInt64Array#": 3,
+    "writeInt64Array#": 4,
+    "indexInt64Array#": 2,
+    "readWord64Array#": 3,
+    "writeWord64Array#": 4,
+    "indexWord64Array#": 2,
     "readIntArray#": 3,
     "writeIntArray#": 4,
     "indexIntArray#": 2,
@@ -1118,6 +1130,24 @@
         ]
       }
     },
+    "readFloatOffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "unknown", "aggregate": "unboxed-tuple", "primReps": ["FloatRep"],
+        "components": [{"kind": "void", "primReps": []}, {"kind": "float", "primReps": ["FloatRep"]}]}
+    },
+    "readDoubleOffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "unknown", "aggregate": "unboxed-tuple", "primReps": ["DoubleRep"],
+        "components": [{"kind": "void", "primReps": []}, {"kind": "double", "primReps": ["DoubleRep"]}]}
+    },
     "readAddrOffAddr#": {
       "arguments": [
         {"kind": "address", "primReps": ["AddrRep"]},
@@ -1188,6 +1218,20 @@
       ],
       "result": {"kind": "long", "primReps": ["Word64Rep"]}
     },
+    "indexFloatOffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]}
+      ],
+      "result": {"kind": "float", "primReps": ["FloatRep"]}
+    },
+    "indexDoubleOffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]}
+      ],
+      "result": {"kind": "double", "primReps": ["DoubleRep"]}
+    },
     "indexAddrArray#": {
       "arguments": [
         {"kind": "object", "primReps": ["BoxedRep (Just Unlifted)"]},
@@ -1223,6 +1267,24 @@
         {"kind": "object", "primReps": ["BoxedRep (Just Unlifted)"]},
         {"kind": "long", "primReps": ["IntRep"]},
         {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "void", "primReps": []}
+    },
+    "writeFloatOffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "float", "primReps": ["FloatRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "void", "primReps": []}
+    },
+    "writeDoubleOffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "double", "primReps": ["DoubleRep"]},
         {"kind": "void", "primReps": []}
       ],
       "result": {"kind": "void", "primReps": []}
@@ -1891,6 +1953,188 @@
         { "kind": "long", "primReps": ["IntRep"] }
       ],
       "result": { "kind": "long", "primReps": ["IntRep"] }
+    },
+    "readInt64Array#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "Int64Rep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "Int64Rep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeInt64Array#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "Int64Rep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexInt64Array#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "Int64Rep"
+        ]
+      }
+    },
+    "readWord64Array#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "Word64Rep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "Word64Rep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord64Array#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "Word64Rep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord64Array#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "Word64Rep"
+        ]
+      }
     },
     "newByteArray#": {
       "arguments": [

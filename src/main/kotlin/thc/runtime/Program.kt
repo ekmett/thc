@@ -131,10 +131,12 @@ private data class MemoizedGuestFailure(val payload: Any?, val location: Node)
 /** Async delivery must carry its origin separately from its guest payload. */
 internal class AsyncThunkUnwind(val payload: Any?) : RuntimeException("Asynchronous guest unwind")
 /** Cold committed cut for one exact original catch# action, never supplied by Core. */
-internal class PrivateIOUnwind(val action: CallSegment, val payload: Any?) :
+internal class PrivateIOUnwind @JvmOverloads constructor(
+    val action: CallSegment, val payload: Any?, val request: CapturedAsyncRequest? = null) :
     RuntimeException("Private captured IO-handler unwind", null, false, false)
 /** Private origin tag; only checkpointed catch# may unwrap it for its handler. */
-internal class CapturedAsyncDelivery(val payload: Any?) :
+internal class CapturedAsyncDelivery @JvmOverloads constructor(
+    val payload: Any?, val request: CapturedAsyncRequest? = null) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
         "Private captured IO-handler delivery", null, 0, null)
 /** A root-local bytecode yield hands the shared thunk to another evaluator. */
@@ -378,10 +380,28 @@ internal class Force(private val metrics: Metrics) : Node() {
         }
     }
 
+    /** Private request cut; the token names a logical continuation rather than a host carrier. */
+    internal fun deliverAtCapturedIOHandler(request: CapturedAsyncRequest,
+                                            afterClaim: (() -> Unit)? = null): Any? {
+        try {
+            val answer = deliverAtCapturedIOHandler(request.parent, request.child, request.payload, afterClaim, request)
+            if (request.state != CapturedRequestState.ACKNOWLEDGED)
+                throw IllegalStateException("Captured handler returned without acknowledging delivery")
+            return answer
+        } catch (failure: Throwable) {
+            // An observer may have completed or reparked the parent after submit.
+            // The exact-cut check then fails before ownership is claimed; do not
+            // leave the sender pending or disturb the observer's result.
+            request.fail()
+            throw failure
+        }
+    }
+
     /** Private test cut at a captured original catch# frame; its action remains shared. */
     @CompilerDirectives.TruffleBoundary
     internal fun deliverAtCapturedIOHandler(original: Any, child: CallSegment, payload: Any?,
-                                            afterClaim: (() -> Unit)? = null): Any? {
+                                            afterClaim: (() -> Unit)? = null,
+                                            request: CapturedAsyncRequest? = null): Any? {
         fun exact(saved: ContinuationResult?): Boolean =
             saved != null && saved.continuationRootNode.sourceRootNode is BytecodeRoot &&
             (saved.result as? CallSegmentSuspended)?.segment === child &&
@@ -394,6 +414,8 @@ internal class Force(private val metrics: Metrics) : Node() {
                         val saved = original.value as? ContinuationResult
                         if (original.state != 5 || !exact(saved))
                             fault("Async IO handler cut requires the exact parked action")
+                        if (request != null && !request.commit(original, child))
+                            fault("Async IO handler cut requires a pending request for this continuation")
                         original.value = null
                         original.owner = Thread.currentThread()
                         original.state = 1
@@ -403,9 +425,10 @@ internal class Force(private val metrics: Metrics) : Node() {
                     // The captured parent commits this cut. An independent observer may
                     // complete the shared child before its handler continuation runs.
                     afterClaim?.invoke()
-                    evaluateOwned(original, continuation, PrivateIOUnwind(child, payload))
+                    evaluateOwned(original, continuation, PrivateIOUnwind(child, payload, request))
                 } catch (failure: Throwable) {
                     if (claimed) suspendOwned(original)
+                    if (claimed) request?.fail()
                     throw failure
                 }
             }
@@ -417,6 +440,8 @@ internal class Force(private val metrics: Metrics) : Node() {
                         val saved = original.value as? ContinuationResult
                         if (original.state != 5 || !exact(saved))
                             fault("Async IO handler cut requires the exact parked action")
+                        if (request != null && !request.commit(original, child))
+                            fault("Async IO handler cut requires a pending request for this continuation")
                         mask = original.logicalMask
                         original.value = null
                         original.owner = Thread.currentThread()
@@ -425,9 +450,10 @@ internal class Force(private val metrics: Metrics) : Node() {
                         checkNotNull(saved)
                     }
                     afterClaim?.invoke()
-                    evaluateCallSegment(original, continuation, mask, PrivateIOUnwind(child, payload))
+                    evaluateCallSegment(original, continuation, mask, PrivateIOUnwind(child, payload, request))
                 } catch (failure: Throwable) {
                     if (claimed) suspendCallOwned(original)
+                    if (claimed) request?.fail()
                     throw failure
                 }
             }
@@ -2008,6 +2034,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     TupleShape(tupleProof, language), function, stateArgument, false, metrics)
                 else Application(function, stateArgument, false, metrics)
                 KeepAliveExpression(kept, state, action, tupleProof)
+            } else if (fn[0] == "prim" && FloatingAddressOp.named(fn[1] as String) != null) {
+                val operation = FloatingAddressOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                FloatingAddressExpression(operation, tupleProof, args.map { compile(it, scope, false) }.toTypedArray())
             } else if (fn[0] == "prim" && PinnedMemoryOp.named(fn[1] as String) != null) {
                 val operation = PinnedMemoryOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

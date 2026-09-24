@@ -34,6 +34,8 @@ fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
 "$fixture_bin" integer
 "$fixture_bin" bit
 "$fixture_bin" word-floating
+"$fixture_bin" floating-address
+"$fixture_bin" explicit64-arrays
 "$fixture_bin" fused-floating
 "$fixture_bin" original-stack
 "$fixture_bin" original-stack-formatter

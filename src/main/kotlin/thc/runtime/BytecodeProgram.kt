@@ -455,7 +455,35 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.endBlock()
                     }
                 } else {
-                    b.beginForceValue(metrics); value.emit(e); b.endForceValue()
+                    if (checkpoint == null) {
+                        b.beginForceValue(metrics); value.emit(e); b.endForceValue()
+                    } else {
+                        val operand = b.createLocal("saved force operand", null)
+                        val result = b.createLocal("forced value result", null)
+                        val suspended = b.createLocal("forced value suspension", "object")
+                        b.beginBlock()
+                        // Evaluate the producer once, before any child ownership is claimed.
+                        b.beginStoreLocal(operand); value.emit(e); b.endStoreLocal()
+                        b.beginTryCatch()
+                        b.beginStoreLocal(result)
+                        b.beginForceValue(metrics); b.emitLoadLocal(operand); b.endForceValue()
+                        b.endStoreLocal()
+                        b.beginBlock()
+                        b.beginStoreLocal(suspended)
+                        b.beginSuspensionOnly(); b.emitLoadException(); b.endSuspensionOnly()
+                        b.endStoreLocal()
+                        b.beginStoreLocal(result)
+                        b.beginResumeForcedValue()
+                        b.emitLoadLocal(operand)
+                        b.emitLoadLocal(suspended)
+                        b.beginYield(); b.emitLoadLocal(suspended); b.endYield()
+                        b.endResumeForcedValue()
+                        b.endStoreLocal()
+                        b.endBlock()
+                        b.endTryCatch()
+                        b.emitLoadLocal(result)
+                        b.endBlock()
+                    }
                 }
             }
         }).let { sourced(ProvenExpression(it, value.proof.copy(evaluated = true)), value.source) }
@@ -1164,7 +1192,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                     b.beginStoreLocal(callerMask); b.emitCurrentMask(); b.endStoreLocal()
                                     b.beginTryCatch()
                                     b.beginInvokeIOActionCheckpoint(slots, metrics)
-                                    b.emitLoadLocal(action)
+                                    b.emitLoadLocal(action); b.emitLoadConstant(true)
                                     b.endInvokeIOActionCheckpoint()
                                     b.beginBlock()
                                     b.beginStoreLocal(suspended)
@@ -1249,9 +1277,40 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                 b.beginTryFinally(Runnable {
                                     b.beginRestoreMask(); b.emitLoadLocal(prior); b.endRestoreMask()
                                 })
-                                b.beginInvokeIOAction(slots, metrics)
-                                b.emitLoadLocal(action); b.emitLoadLocal(prior)
-                                b.endInvokeIOAction()
+                                if (checkpoint == null) {
+                                    b.beginInvokeIOAction(slots, metrics)
+                                    b.emitLoadLocal(action); b.emitLoadLocal(prior)
+                                    b.endInvokeIOAction()
+                                } else {
+                                    b.beginBlock()
+                                    val actionMask = b.createLocal("masked IO action active mask", "object")
+                                    val suspended = b.createLocal("masked IO action suspension", "object")
+                                    b.beginStoreLocal(actionMask); b.emitCurrentMask(); b.endStoreLocal()
+                                    b.beginTryCatch()
+                                    b.beginInvokeMaskedIOActionCheckpoint(slots, metrics)
+                                    b.emitLoadLocal(action); b.emitLoadLocal(prior)
+                                    b.endInvokeMaskedIOActionCheckpoint()
+                                    b.beginBlock()
+                                    b.beginStoreLocal(suspended)
+                                    b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly()
+                                    b.endStoreLocal()
+                                    b.beginResumeTupleApplication(slots)
+                                    b.emitLoadLocal(suspended)
+                                    b.beginReenterCallMask()
+                                    b.beginYield()
+                                    b.beginParkCallMask()
+                                    b.emitLoadLocal(suspended)
+                                    b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+                                    b.emitLoadLocal(actionMask)
+                                    b.endParkCallMask()
+                                    b.endYield()
+                                    b.emitLoadLocal(actionMask)
+                                    b.endReenterCallMask()
+                                    b.endResumeTupleApplication()
+                                    b.endBlock()
+                                    b.endTryCatch()
+                                    b.endBlock()
+                                }
                                 b.endTryFinally()
                             }
                         }
@@ -1438,6 +1497,33 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     kept.emit(e); state.emit(e); function.emit(e)
                     e.builder.endKeepAlive()
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && FloatingAddressOp.named(fn[1] as String) != null) {
+                val operation = FloatingAddressOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.map { compile(it, scope, false) }
+                if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
+                    if (operation.floating) e.builder.beginReadFloatOffAddr(destination[0])
+                    else e.builder.beginReadDoubleOffAddr(destination[0])
+                    operands.forEach { it.emit(e) }
+                    if (operation.floating) e.builder.endReadFloatOffAddr()
+                    else e.builder.endReadDoubleOffAddr()
+                } else ProvenExpression(Expression { e ->
+                    if (operation.write) {
+                        if (operation.floating) e.builder.beginWriteFloatOffAddr()
+                        else e.builder.beginWriteDoubleOffAddr()
+                    } else {
+                        if (operation.floating) e.builder.beginIndexFloatOffAddr()
+                        else e.builder.beginIndexDoubleOffAddr()
+                    }
+                    operands.forEach { it.emit(e) }
+                    if (operation.write) {
+                        if (operation.floating) e.builder.endWriteFloatOffAddr()
+                        else e.builder.endWriteDoubleOffAddr()
+                    } else {
+                        if (operation.floating) e.builder.endIndexFloatOffAddr()
+                        else e.builder.endIndexDoubleOffAddr()
+                    }
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && PinnedMemoryOp.named(fn[1] as String) != null) {
                 val operation = PinnedMemoryOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -1516,7 +1602,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.RESIZE -> e.builder.beginResizeByteArray(destination[0])
                         ByteArrayOp.GET_SIZE_MUTABLE -> e.builder.beginGetSizeMutableByteArray(destination[0])
                         ByteArrayOp.FREEZE -> e.builder.beginFreezeByteArray(destination[0])
-                        ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD -> e.builder.beginReadIntArray(destination[0])
+                        ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD,
+                        ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64 -> e.builder.beginReadIntArray(destination[0])
                         ByteArrayOp.READ_DOUBLE -> e.builder.beginReadDoubleArray(destination[0])
                         ByteArrayOp.READ_FLOAT -> e.builder.beginReadFloatArray(destination[0])
                         ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8, ByteArrayOp.READ_CHAR ->
@@ -1533,7 +1620,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.RESIZE -> e.builder.endResizeByteArray()
                         ByteArrayOp.GET_SIZE_MUTABLE -> e.builder.endGetSizeMutableByteArray()
                         ByteArrayOp.FREEZE -> e.builder.endFreezeByteArray()
-                        ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD -> e.builder.endReadIntArray()
+                        ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD,
+                        ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64 -> e.builder.endReadIntArray()
                         ByteArrayOp.READ_DOUBLE -> e.builder.endReadDoubleArray()
                         ByteArrayOp.READ_FLOAT -> e.builder.endReadFloatArray()
                         ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8, ByteArrayOp.READ_CHAR -> e.builder.endReadByteArray()
@@ -1552,8 +1640,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.SIZE, ByteArrayOp.SIZE_MUTABLE -> e.builder.beginSizeByteArray()
                         ByteArrayOp.INDEX, ByteArrayOp.INDEX_CHAR -> e.builder.beginIndexByteArray()
                         ByteArrayOp.INDEX_INT8 -> e.builder.beginIndexSignedByteArray()
-                        ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD -> e.builder.beginWriteIntArray()
-                        ByteArrayOp.INDEX_INT, ByteArrayOp.INDEX_WORD -> e.builder.beginIndexIntArray()
+                        ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD,
+                        ByteArrayOp.WRITE_INT64, ByteArrayOp.WRITE_WORD64 -> e.builder.beginWriteIntArray()
+                        ByteArrayOp.INDEX_INT, ByteArrayOp.INDEX_WORD,
+                        ByteArrayOp.INDEX_INT64, ByteArrayOp.INDEX_WORD64 -> e.builder.beginIndexIntArray()
                         ByteArrayOp.WRITE_DOUBLE -> e.builder.beginWriteDoubleArray()
                         ByteArrayOp.INDEX_DOUBLE -> e.builder.beginIndexDoubleArray()
                         ByteArrayOp.WRITE_FLOAT -> e.builder.beginWriteFloatArray()
@@ -1576,8 +1666,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.SIZE, ByteArrayOp.SIZE_MUTABLE -> e.builder.endSizeByteArray()
                         ByteArrayOp.INDEX, ByteArrayOp.INDEX_CHAR -> e.builder.endIndexByteArray()
                         ByteArrayOp.INDEX_INT8 -> e.builder.endIndexSignedByteArray()
-                        ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD -> e.builder.endWriteIntArray()
-                        ByteArrayOp.INDEX_INT, ByteArrayOp.INDEX_WORD -> e.builder.endIndexIntArray()
+                        ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD,
+                        ByteArrayOp.WRITE_INT64, ByteArrayOp.WRITE_WORD64 -> e.builder.endWriteIntArray()
+                        ByteArrayOp.INDEX_INT, ByteArrayOp.INDEX_WORD,
+                        ByteArrayOp.INDEX_INT64, ByteArrayOp.INDEX_WORD64 -> e.builder.endIndexIntArray()
                         ByteArrayOp.WRITE_DOUBLE -> e.builder.endWriteDoubleArray()
                         ByteArrayOp.INDEX_DOUBLE -> e.builder.endIndexDoubleArray()
                         ByteArrayOp.WRITE_FLOAT -> e.builder.endWriteFloatArray()
