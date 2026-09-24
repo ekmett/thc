@@ -183,7 +183,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private fun bindingIndex(name: String): Int = indices[name] ?: names[name]?.singleOrNull()
         ?: names.entries.singleOrNull { it.key.substringAfterLast('.') == name }?.value?.singleOrNull()
         ?: throw RuntimeFault("Unknown or ambiguous entry $name")
-    override fun hostEntryTarget(arity: Int): RootCallTarget = hostEntries.getOrPut(arity) { EntryRoot(language, arity, metrics).callTarget }
+    @Synchronized override fun hostEntryTarget(arity: Int): RootCallTarget =
+        hostEntries.getOrPut(arity) { EntryRoot(language, arity, metrics).callTarget }
     override fun entryValue(name: String): Any? = globals.getValue(bindings[bindingIndex(name)]["id"] as String).read()
     override fun entryTarget(name: String): RootCallTarget {
         var value = entryValue(name)
@@ -195,7 +196,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         "sourceNotesEnabled" to sources.enabled, "sourceSpanCount" to sources.spanCount,
         "sourceRootCount" to roots.count { it.bytecodeNode.hasSourceInformation() && it.sourceSection != null }, "localJoinCount" to localJoinCount,
         "localJoinTransfers" to metrics.localJoinTransfers,
-        "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkEvaluationsByLabel.toMap(),
+        "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkCountsSnapshot(),
         "compiledEntries" to metrics.compiledEntries, "leadingCaseReturns" to metrics.leadingCaseReturns, "thunkEvaluations" to metrics.thunkEvaluations,
         "thunkHits" to metrics.thunkHits, "blackholes" to metrics.blackholes, "directCacheMisses" to metrics.directCacheMisses,
         "indirectCalls" to metrics.indirectCalls, "tailBounces" to metrics.tailBounces,

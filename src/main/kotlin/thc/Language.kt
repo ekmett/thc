@@ -132,8 +132,15 @@ object CoreModules {
 class Language : TruffleLanguage<Language.State>() {
     internal val handoffLayouts = thc.runtime.HandoffLayouts(this)
     internal val handoffState = locals.createContextThreadLocal { _, _ -> thc.runtime.HandoffState() }
-    class State
-    override fun createContext(env: Env): State = State()
+    // Context admission is one-way. Active compiled code is invalidated when a
+    // second guest thread enters; thunk claims remain atomic across the edge.
+    internal val singleThreadedAssumption = Truffle.getRuntime().createAssumption("THC single-threaded context")
+    class State(val env: Env)
+    override fun createContext(env: Env): State = State(env)
+    override fun isThreadAccessAllowed(thread: Thread, singleThreaded: Boolean): Boolean = true
+    override fun initializeMultiThreading(context: State) {
+        singleThreadedAssumption.invalidate("A second guest thread entered the context")
+    }
     @Suppress("UNCHECKED_CAST")
     override fun parse(request: ParsingRequest): CallTarget {
         val input = Json.parse(request.source.characters.toString()) as Map<String, Any?>

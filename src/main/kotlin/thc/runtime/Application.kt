@@ -79,13 +79,13 @@ internal abstract class DispatchCallTarget : Node() {
     @Specialization(replaces = ["direct"])
     fun indirect(target: CallTarget, arguments: Array<Any?>, metrics: Metrics,
                  @Cached("create()") call: IndirectCallNode): Any? {
-        if (metrics.enabled) metrics.indirectCalls++
+        if (metrics.enabled) metrics.incrementIndirectCalls()
         return Calls.indirect(call, target, arguments)
     }
 
     companion object {
         @JvmStatic fun createDirect(target: CallTarget, metrics: Metrics): DirectCallNode {
-            if (metrics.enabled) metrics.directCacheMisses++
+            if (metrics.enabled) metrics.incrementDirectCacheMisses()
             return DirectCallNode.create(target)
         }
     }
@@ -122,14 +122,14 @@ internal abstract class DispatchThunkTarget : Node() {
     @Specialization(replaces = ["direct"])
     fun indirect(target: RootCallTarget, environment: CapturedFrame?, metrics: Metrics,
                  @Cached("create()") call: IndirectCallNode): Any? {
-        if (metrics.enabled) metrics.indirectCalls++
+        if (metrics.enabled) metrics.incrementIndirectCalls()
         return if (environment != null) Calls.indirect(call, target, arrayOf(0L, environment))
         else Calls.indirect(call, target, arrayOf(0L))
     }
 
     companion object {
         @JvmStatic fun createDirect(target: RootCallTarget, metrics: Metrics): DirectCallNode {
-            if (metrics.enabled) metrics.directCacheMisses++
+            if (metrics.enabled) metrics.incrementDirectCacheMisses()
             return DirectCallNode.create(target)
         }
     }
@@ -205,7 +205,7 @@ internal abstract class Dispatch(
     @Specialization(guards = ["function.arity > argsSize"])
     fun underapplied(frame: VirtualFrame, function: Closure, arguments: Array<Any?>): Any? {
         if ((function.target.rootNode as? GuestRoot)?.typedInput != null) return typed(frame, function, arguments)
-        if (metrics.enabled) metrics.papAllocations++
+        if (metrics.enabled) metrics.incrementPapAllocations()
         ArgumentLayout.validate(function, argumentLayout, 0, argsSize)
         return function.papCompact(arguments, 0, arguments.size, argsSize)
     }
@@ -268,7 +268,7 @@ internal abstract class GenericDispatch : Node() {
                 if ((function.target.rootNode as? GuestRoot)?.typedInput != null)
                     return typed.execute(frame, function, arguments, offset)
                 if (underapplied.profile(node, function.arity > remaining)) {
-                    if (metrics.enabled) metrics.papAllocations++
+                    if (metrics.enabled) metrics.incrementPapAllocations()
                     return function.papCompact(arguments, physicalOffset, arguments.size - physicalOffset, remaining)
                 }
                 val count = function.arity
@@ -333,7 +333,7 @@ internal class TailCheck(private val metrics: Metrics) : Node() {
 
     private fun bounce(target: RootCallTarget, arguments: Array<Any?>): Nothing {
         bounceProfile.enter()
-        if (metrics.enabled) metrics.tailBounces++
+        if (metrics.enabled) metrics.incrementTailBounces()
         throw TailCall(target, arguments)
     }
 }
@@ -350,7 +350,7 @@ internal class DirectCallerNode(val target: RootCallTarget, private val metrics:
     private val normalProfile = BranchProfile.create()
     private val tailProfile = BranchProfile.create()
 
-    init { if (metrics.enabled) metrics.directCacheMisses++ }
+    init { if (metrics.enabled) metrics.incrementDirectCacheMisses() }
 
     fun call(frame: VirtualFrame, arguments: Array<Any?>, tailCall: Boolean): Any? {
         entryArguments.execute(frame, arguments)
@@ -388,7 +388,7 @@ internal class IndirectCallerNode(private val metrics: Metrics) : Node() {
 
     fun call(frame: VirtualFrame, target: RootCallTarget, arguments: Array<Any?>, tailCall: Boolean): Any? {
         entryArguments.execute(frame, target, arguments)
-        if (metrics.enabled) metrics.indirectCalls++
+        if (metrics.enabled) metrics.incrementIndirectCalls()
         if (tailCall) {
             tailCheck.check(frame, target, arguments)
             return Calls.indirect(callNode, target, arguments)
@@ -429,7 +429,7 @@ internal class TailCallRepeatingNode(val descriptor: FrameDescriptor, private va
     }
 
     override fun executeRepeating(frame: VirtualFrame): Boolean = try {
-        if (metrics.enabled) metrics.trampolineIterations++
+        if (metrics.enabled) metrics.incrementTrampolineIterations()
         val target = frame.getObject(FrameLayout.TAIL_FUNCTION) as RootCallTarget
         val transfer = frame.getObject(FrameLayout.TAIL_ARGUMENTS) as TailCall
         val arguments = transfer.args

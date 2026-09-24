@@ -57,7 +57,7 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
         // Clear only after every parallel move succeeds; no join body reads
         // these scratch slots, including when control enters a different join.
         for (temporary in temporaries) if (temporary >= 0) frame.clear(temporary)
-        if (metrics.enabled) metrics.localJoinTransfers++
+        if (metrics.enabled) metrics.incrementLocalJoinTransfers()
         throw target.jump
     }
     override fun executeLong(frame: VirtualFrame): Long = execute(frame)

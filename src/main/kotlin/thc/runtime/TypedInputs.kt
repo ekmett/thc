@@ -335,14 +335,14 @@ private class InputCallArm(private val source: InputSource, private val count: I
     init {
         ArgumentLayout.validate(root.inputLayout, prefixCount, source.layout, start, minOf(arity, count))
         if (arity <= count) checkInputResult(root, destination, arity == count)
-        if (metrics.enabled) metrics.directCacheMisses++
+        if (metrics.enabled) metrics.incrementDirectCacheMisses()
     }
     fun matches(function: Closure): Boolean = function.target === target && function.arity == arity &&
         function.suppliedCount == prefixCount && (function.environment != null) == hasEnvironment
     fun execute(frame: VirtualFrame, function: Closure, values: Array<Any?>?): Any? {
         if (arity > count) {
             if (destination != null) fault("Aggregate result application is under-saturated")
-            if (metrics.enabled) metrics.papAllocations++
+            if (metrics.enabled) metrics.incrementPapAllocations()
             return if (input != null) typedPap(function, input, source, frame, this, values, start, count, prefixCount, arity)
             else legacyPap(frame, this, function, source, values, start, count)
         }
@@ -383,7 +383,7 @@ internal class GenericInputCall(private val source: InputSource, private val cou
             validateGenericInput(root, function.suppliedCount, source.layout, offset, used, destination, function.arity == remaining, function.arity > remaining)
             if (function.arity > remaining) {
                 if (destination != null) fault("Aggregate result application is under-saturated")
-                if (metrics.enabled) metrics.papAllocations++
+                if (metrics.enabled) metrics.incrementPapAllocations()
                 return if (input != null) genericTypedPap(function, input, source, frame, this, values, count + start, offset, remaining)
                     else legacyGenericPap(frame, this, function, source, values, count + start, offset, remaining)
             }
@@ -392,7 +392,7 @@ internal class GenericInputCall(private val source: InputSource, private val cou
             val result = if (input == null) {
                 legacy.call(frame, target, scalarPacket(frame, this, function, source, values, offset, function.arity, count + start), isTail)
             } else {
-                if (metrics.enabled) metrics.indirectCalls++
+                if (metrics.enabled) metrics.incrementIndirectCalls()
                 try {
                     val storage = prepareGenericInput(frame, this, function, input, source, values, count + start, offset, function.arity, force)
                     val generation = storage.generation
@@ -437,7 +437,7 @@ private fun checkTypedTail(frame: VirtualFrame, node: Node, target: com.oracle.t
     val targetRoot = target.rootNode as GuestRoot
     val mask = source?.bloom(frame) ?: 0L
     if (source == null || mask and targetRoot.mask == targetRoot.mask) {
-        if (metrics.enabled) { metrics.tailBounces++; targetRoot.typedInput!!.state().tailTransfers++ }
+        if (metrics.enabled) { metrics.incrementTailBounces(); targetRoot.typedInput!!.state().tailTransfers++ }
         // A tail transfer deliberately materializes this carrier in a control
         // exception. It remains unpooled, but is no longer an inline-only input.
         if (loan.inputMode == 2) loan.inputMode = 3
