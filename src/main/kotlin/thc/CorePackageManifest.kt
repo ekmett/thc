@@ -3,13 +3,106 @@
 
 package thc
 
+import java.io.ByteArrayInputStream
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
+import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
 
 /** Exact post-Tidy Core artifacts from separate, Cabal-planned GHC units. */
 object CorePackageManifest {
     private const val boundary = "optimized-Core-after-Tidy-before-CorePrep"
+    private val sha256 = Regex("[0-9a-f]{64}")
+
+    private fun digest(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes)
+        .joinToString("") { "%02x".format(it) }
+
+    private fun safeRelative(path: String): Boolean = path.isNotEmpty() && !path.startsWith('/') &&
+        !path.matches(Regex("^[A-Za-z]:.*")) && !path.contains('\\') && path.none { it.code < 32 } &&
+        path.split('/').all { it.isNotEmpty() && it != "." && it != ".." }
+
+    private fun artifact(root: Path, relative: String): ByteArray {
+        val raw = Path.of(relative)
+        require(relative.isNotEmpty() && !raw.isAbsolute && raw.none { it.toString() == ".." }) {
+            "Package module path must stay inside manifest root: $relative"
+        }
+        val file = root.resolve(raw).toRealPath()
+        require(file.startsWith(root)) { "Package module path escapes manifest root: $relative" }
+        return Files.readAllBytes(file)
+    }
+
+    private fun bundle(id: String, record: Map<String, Any?>,
+                       modules: List<*>): Map<String, ByteArray> {
+        val location = record["path"] as? String ?: error("Missing ZIP bundle path for $id")
+        val expected = record["sha256"] as? String ?: error("Missing ZIP bundle SHA-256 for $id")
+        require(record.keys == setOf("path", "sha256") && expected.matches(sha256)) {
+            "Invalid ZIP bundle reference for $id"
+        }
+        val path = Path.of(location)
+        require(path.isAbsolute) { "ZIP bundle path must be absolute for $id: $location" }
+        val file = path.toRealPath()
+        // Verify and unzip the same bytes. No race with a concurrent cache rewrite
+        // can substitute documents after the archive hash has been checked.
+        val bytes = Files.readAllBytes(file)
+        require(digest(bytes) == expected) { "Core ZIP bundle hash mismatch: $id at $location" }
+        val entries = linkedMapOf<String, ByteArray>()
+        // ZipInputStream validates each member's CRC, but does not inspect the
+        // central directory. Check it too so truncated indexes fail closed.
+        val centralNames = try {
+            val names = ZipFile(file.toFile()).use { archive ->
+                archive.entries().asSequence().map { it.name }.toList()
+            }
+            ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    require(!entry.isDirectory && safeRelative(entry.name)) { "Invalid ZIP entry in $id: ${entry.name}" }
+                    require(!entries.containsKey(entry.name)) { "Duplicate ZIP entry in $id: ${entry.name}" }
+                    entries[entry.name] = zip.readBytes()
+                    zip.closeEntry()
+                }
+            }
+            names
+        } catch (failure: IOException) {
+            throw IllegalArgumentException("Invalid ZIP bundle for $id at $location", failure)
+        }
+        val inventory = modules.map { item ->
+            val module = item as? Map<*, *> ?: error("Invalid module record in GHC unit $id")
+            val name = module["path"] as? String ?: error("Missing module path in $id")
+            require(safeRelative(name) && name != "manifest.json") { "Invalid ZIP module path in $id: $name" }
+            name
+        }
+        val index = Json.parse(entries.getValue("manifest.json").toString(Charsets.UTF_8)) as? Map<*, *>
+            ?: error("Invalid ZIP manifest in $id")
+        require(index["format"] == "thc-core-bundle" && index["schema"] == 1L && index["unit"] == id &&
+            (index["buildKey"] as? String)?.matches(sha256) == true &&
+            (index["exportKey"] as? String)?.matches(sha256) == true && index["modules"] == modules) {
+            "ZIP manifest does not match package unit $id"
+        }
+        val buildInputs = index["buildInputs"]
+        if (index.containsKey("buildInputs")) {
+            val reference = buildInputs as? Map<*, *> ?: error("Invalid build inputs in ZIP manifest for $id")
+            require(reference.keys == setOf("path", "sha256") && reference["path"] == "inplace-manifest.json" &&
+                (reference["sha256"] as? String)?.matches(sha256) == true) {
+                "Invalid build inputs reference in ZIP manifest for $id"
+            }
+            val inputBytes = entries["inplace-manifest.json"] ?: error("Missing build inputs in ZIP bundle for $id")
+            val record = Json.parse(inputBytes.toString(Charsets.UTF_8)) as? Map<*, *>
+            require(digest(inputBytes) == reference["sha256"] && record?.get("format") == "thc-core-build-inputs" &&
+                record["schema"] == 1L && record["unit"] == id &&
+                record["buildKey"] == index["buildKey"] && record["exportKey"] == index["exportKey"]) {
+                "Invalid build inputs record in ZIP bundle for $id"
+            }
+        }
+        val expectedEntries = (inventory + "manifest.json" +
+            (if (buildInputs == null) emptyList() else listOf("inplace-manifest.json"))).toSet()
+        require(inventory.distinct().size == inventory.size && entries.keys == expectedEntries) {
+            "ZIP entries differ from declared modules in $id"
+        }
+        require(centralNames == entries.keys.toList()) { "ZIP central directory differs from entries in $id" }
+        return entries
+    }
 
     @Suppress("UNCHECKED_CAST")
     internal fun appendModules(destination: StringBuilder, manifestPath: String) {
@@ -34,25 +127,23 @@ object CorePackageManifest {
                 "Invalid dependencies for GHC unit $id"
             }
             val modules = unit["modules"] as? List<*> ?: error("Missing module list for GHC unit $id")
+            val bundle = if (unit.containsKey("bundle"))
+                this.bundle(id, unit["bundle"] as? Map<String, Any?> ?: error("Invalid ZIP bundle for $id"), modules)
+                else null
             for (item in modules) {
                 val module = item as? Map<String, Any?> ?: error("Invalid module record in GHC unit $id")
                 val name = module["name"] as? String ?: error("Missing module name in GHC unit $id")
                 require(name.isNotEmpty() && seenModules.add(id to name)) { "Duplicate GHC module: $id:$name" }
                 require(module["boundary"] == boundary) { "Package module must be post-Tidy: $id:$name" }
                 val relative = module["path"] as? String ?: error("Missing path for $id:$name")
-                val raw = Path.of(relative)
-                require(relative.isNotEmpty() && !raw.isAbsolute && raw.none { it.toString() == ".." }) {
-                    "Package module path must stay inside manifest root: $relative"
-                }
-                val artifact = root.resolve(raw).toRealPath()
-                require(artifact.startsWith(root)) { "Package module path escapes manifest root: $relative" }
+                if (bundle != null) require(safeRelative(relative)) { "Invalid ZIP module path: $relative" }
                 val expected = module["sha256"] as? String ?: error("Missing SHA-256 for $id:$name")
-                require(expected.matches(Regex("[0-9a-f]{64}"))) { "Invalid SHA-256 for $id:$name" }
+                require(expected.matches(sha256)) { "Invalid SHA-256 for $id:$name" }
                 // Hash and embed the same bytes: a concurrent rewrite cannot
                 // substitute an unchecked module between validation and load.
-                val bytes = Files.readAllBytes(artifact)
-                val actual = MessageDigest.getInstance("SHA-256").digest(bytes)
-                    .joinToString("") { "%02x".format(it) }
+                val bytes = if (bundle == null) artifact(root, relative)
+                    else bundle[relative] ?: error("Missing ZIP module in $id: $relative")
+                val actual = digest(bytes)
                 require(actual == expected) { "Core package artifact hash mismatch: $id:$name at $relative" }
                 val text = bytes.toString(Charsets.UTF_8)
                 val source = Json.parse(text) as? Map<String, Any?>

@@ -56,8 +56,7 @@ def bundle_modules(path, unit, records):
             with ZipFile(stream) as archive:
                 infos = archive.infolist()
                 names = [info.filename for info in infos]
-                expected = {'manifest.json', *(item['path'] for item in records)}
-                if (len(names) != len(set(names)) or set(names) != expected or
+                if ('manifest.json' not in names or len(names) != len(set(names)) or
                         any(not zip_member(name) or info.is_dir() or
                             (info.create_system == 3 and
                              stat.S_IFMT(info.external_attr >> 16) == stat.S_IFLNK)
@@ -71,6 +70,27 @@ def bundle_modules(path, unit, records):
                         not isinstance(inner.get('exportKey'), str) or not SHA256.fullmatch(inner['exportKey']) or
                         inner.get('modules') != records):
                     raise ValueError(f'{path}: bundle manifest disagrees with unit {unit["id"]}')
+                expected = {'manifest.json', *(item['path'] for item in records)}
+                if 'buildInputs' in inner:
+                    ref = inner['buildInputs']
+                    if (not isinstance(ref, dict) or set(ref) != {'path', 'sha256'} or
+                            ref['path'] != 'inplace-manifest.json' or
+                            not isinstance(ref['sha256'], str) or not SHA256.fullmatch(ref['sha256'])):
+                        raise ValueError(f'{path}: invalid build-inputs reference for {unit["id"]}')
+                    expected.add(ref['path'])
+                if set(names) != expected:
+                    raise ValueError(f'{path}: duplicate, unsafe, missing, or extra ZIP entry in {archive_path}')
+                if 'buildInputs' in inner:
+                    inputs = archive.read('inplace-manifest.json')
+                    if hashlib.sha256(inputs).hexdigest() != inner['buildInputs']['sha256']:
+                        raise ValueError(f'{path}: build-inputs hash mismatch for {unit["id"]}')
+                    record = strict_json(inputs.decode('utf-8'))
+                    if (not isinstance(record, dict) or record.get('format') != 'thc-core-build-inputs' or
+                            type(record.get('schema')) is not int or record['schema'] != 1 or
+                            record.get('unit') != unit['id'] or
+                            record.get('buildKey') != inner['buildKey'] or
+                            record.get('exportKey') != inner['exportKey']):
+                        raise ValueError(f'{path}: build-inputs record disagrees with unit {unit["id"]}')
                 return [(str(archive_path) + '!/' + item['path'], archive.read(item['path']))
                         for item in records]
     except (BadZipFile, RuntimeError, EOFError, zlib.error) as error:

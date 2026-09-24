@@ -37,16 +37,22 @@ class PackageManifestTest(unittest.TestCase):
                                         ghc='9.14.1', units=units)) + '\n')
         return path
 
-    def bundled(self, unit, members=None, inner=None):
+    def bundled(self, unit, members=None, inner=None, build_inputs=None, input_hash=None):
         module = unit['modules'][0]
         data = (self.root / module['path']).read_bytes()
         module['path'] = 'core/' + module['name'] + '.json'
         contents = {module['path']: data} if members is None else members
         inner = inner or dict(format='thc-core-bundle', schema=1, unit=unit['id'],
                               buildKey='a' * 64, exportKey='b' * 64, modules=unit['modules'])
+        if build_inputs is not None:
+            input_bytes = json.dumps(build_inputs).encode()
+            inner['buildInputs'] = dict(path='inplace-manifest.json',
+                                        sha256=input_hash or hashlib.sha256(input_bytes).hexdigest())
         bundle = self.root / 'bundle.zip'
         with ZipFile(bundle, 'w') as archive:
             archive.writestr('manifest.json', json.dumps(inner))
+            if build_inputs is not None:
+                archive.writestr('inplace-manifest.json', input_bytes)
             for name, value in contents.items():
                 archive.writestr(name, value)
         unit['bundle'] = dict(path=str(bundle), sha256=hashlib.sha256(bundle.read_bytes()).hexdigest())
@@ -119,6 +125,17 @@ class PackageManifestTest(unittest.TestCase):
                    '--package-manifest', str(path), '--entry', 'first:Shared.entry']
         result = subprocess.run(command, text=True, capture_output=True, check=True)
         self.assertTrue(json.loads(result.stdout)['accepted'])
+
+    def test_bundle_validates_optional_build_inputs_without_rebuilding_them(self):
+        unit = self.unit('first')
+        inputs = dict(format='thc-core-build-inputs', schema=1, unit='first',
+                      buildKey='a' * 64, exportKey='b' * 64,
+                      nativeArtifacts=[dict(path='native/lib.a', sha256='c' * 64)])
+        path = self.bundled(unit, build_inputs=inputs)
+        self.assertEqual(1, len(core_package_manifest.load(path)))
+        unit = self.unit('first')
+        with self.assertRaisesRegex(ValueError, 'build-inputs hash mismatch'):
+            core_package_manifest.load(self.bundled(unit, build_inputs=inputs, input_hash='0' * 64))
 
     def test_bundle_hash_inventory_members_and_core_identity_fail_closed(self):
         unit = self.unit('first')

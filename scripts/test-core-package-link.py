@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import zipfile
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -54,6 +55,24 @@ def manifest_module(unit, name):
     path = artifact(unit, name)
     return dict(name=name, boundary=BOUNDARY, path=str(path.relative_to(OUT)),
                 sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+
+
+def bundled_unit(unit):
+    name = unit['modules'][0]['name']
+    core = artifact(unit['id'], name)
+    member = f'core/{name}.json'
+    module = dict(unit['modules'][0], path=member)
+    index = dict(format='thc-core-bundle', schema=1, unit=unit['id'],
+                 buildKey=hashlib.sha256(('build:' + unit['id']).encode()).hexdigest(),
+                 exportKey=hashlib.sha256(('export:' + unit['id']).encode()).hexdigest(),
+                 modules=[module])
+    archive = OUT / 'cache' / (unit['id'] + '.zip')
+    archive.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED) as zip_out:
+        zip_out.writestr('manifest.json', json.dumps(index, sort_keys=True))
+        zip_out.write(core, member)
+    return dict(unit, modules=[module], bundle=dict(path=str(archive),
+                sha256=hashlib.sha256(archive.read_bytes()).hexdigest()))
 
 
 def main():
@@ -115,6 +134,19 @@ def main():
         diagnostics = json.loads(result.stderr.splitlines()[-1])
         if result.stdout.strip() != native or diagnostics['backend'] != backend or diagnostics['compiledEntries'] < 1:
             raise RuntimeError(f'{backend} failed compiled native comparison: {result.stdout!r}, {diagnostics!r}')
+    bundled = OUT / 'bundled-packages.json'
+    bundled.write_text(json.dumps(dict(document, units=[bundled_unit(unit) for unit in document['units']]), indent=2) + '\n')
+    bundled_audit = OUT / 'bundled-audit.json'
+    run([sys.executable, ROOT / 'scripts/audit-core.py', '--package-manifest', bundled,
+         '--entry', ENTRY, '--output', bundled_audit])
+    if not json.loads(bundled_audit.read_text())['accepted']:
+        raise RuntimeError('Strict bundled package audit did not accept exact cross-unit closure')
+    for backend in ('ast', 'bytecode'):
+        result = run([runtime, '@' + str(bundled), ENTRY, '5', '--compile'],
+                     env=dict(os.environ, THC_BACKEND=backend))
+        diagnostics = json.loads(result.stderr.splitlines()[-1])
+        if result.stdout.strip() != native or diagnostics['backend'] != backend or diagnostics['compiledEntries'] < 1:
+            raise RuntimeError(f'{backend} bundled Core failed compiled native comparison: {result.stdout!r}, {diagnostics!r}')
     # A declared dependency with no supplied Core body cannot be treated as a
     # native fallback for a reachable guest binding.
     missing_manifest = OUT / 'missing-dependency.json'
