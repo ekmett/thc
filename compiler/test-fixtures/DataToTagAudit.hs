@@ -1,4 +1,6 @@
 {-# LANGUAGE MagicHash, UnliftedDatatypes, StandaloneKindSignatures #-}
+-- Retain dataToTagSmall# to test its primitive and unsupported family frontiers.
+{-# OPTIONS_GHC -Wno-deprecations #-}
 module DataToTagAudit where
 
 import GHC.Exts

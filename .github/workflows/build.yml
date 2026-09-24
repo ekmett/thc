@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 name: Build
 on:
   push:
@@ -61,6 +64,7 @@ jobs:
       - uses: haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d # v2
         with:
           ghc-version: '9.14.1'
+          cabal-version: '3.16.0.0'
           cabal-update: false
       - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
         with:
@@ -74,6 +78,7 @@ jobs:
         run: |
           test "$(ghc --numeric-version)" = 9.14.1
           test "$(ghc-pkg --version)" = 'GHC package manager version 9.14.1'
+          test "$(cabal --numeric-version)" = 3.16.0.0
           python3 - <<'PY'
           import os
           from pathlib import Path
@@ -94,6 +99,22 @@ jobs:
           python3 compiler/test-javascript-ffi.py
           scripts/javascript-demo.sh
           scripts/gradle.sh polyglotTest
+      - name: Build and exercise the Cabal driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          cabal build thc --offline -fdevelopment
+          cabal run thc --offline -fdevelopment -- --help
+          driver="$(cabal list-bin exe:thc --offline -fdevelopment)"
+          test -x "$driver"
+          mkdir -p build/driver-tests build/run-integration
+          python3 test/test_driver.py --driver "$driver" --scratch "$PWD/build/driver-tests"
+          python3 -O test/test_driver.py --driver "$driver" --scratch "$PWD/build/driver-tests"
+          python3 test/run_integration.py \
+            --driver "$driver" \
+            --runtime "$PWD/build/install/thc/bin/thc" \
+            --thc-root "$PWD" \
+            --scratch "$PWD/build/run-integration"
       - name: Preserve default test results
         if: always()
         shell: bash

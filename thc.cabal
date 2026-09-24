@@ -1,0 +1,54 @@
+cabal-version: 3.0
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+name: thc
+version: 0.1.0.0
+synopsis: Haskell on Truffle/Graal
+license: UPL-1.0 AND BSD-3-Clause
+license-files: LICENSE, LICENSE.txt
+author: Edward Kmett
+maintainer: Edward Kmett
+category: Development
+description: A Cabal-library-backed driver for building and running Haskell on Truffle/Graal.
+extra-source-files:
+  README.md
+  docs/driver.md
+  test/test_driver.py
+  test/run_integration.py
+  test/fixtures/run-pure/run-pure.cabal
+  test/fixtures/run-pure/app/Main.hs
+  test/fixtures/tiny/tiny-fixture.cabal
+  test/fixtures/tiny/words/Words.hs
+  test/fixtures/tiny/src/Greeting.hs
+  test/fixtures/tiny/src/Platform/Linux.hs
+  test/fixtures/tiny/src/Platform/Other.hs
+  test/fixtures/tiny/loud/Message.hs
+  test/fixtures/tiny/quiet/Message.hs
+  test/fixtures/tiny/app/Main.hs
+  test/fixtures/tiny/test/Main.hs
+build-type: Simple
+
+flag development
+  description: Treat compiler warnings as errors
+  default: False
+  manual: True
+
+executable thc
+  main-is: Main.hs
+  hs-source-dirs: app, src
+  other-modules:
+    THC.Driver.Cabal
+    THC.Driver.Json
+    THC.Driver.Run
+  build-depends:
+    base >= 4.22 && < 4.23,
+    Cabal == 3.16.*, Cabal-syntax == 3.16.*,
+    bytestring >= 0.12.2 && < 0.13,
+    directory >= 1.3.10 && < 1.4,
+    filepath >= 1.5.4 && < 1.6,
+    process >= 1.6.26 && < 1.7
+  default-language: Haskell2010
+  ghc-options: -Wall
+  if flag(development)
+    ghc-options: -Werror

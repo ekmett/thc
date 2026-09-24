@@ -3,7 +3,8 @@
 The intended interface is `thc build`, `thc run` and `thc repl` inside an ordinary
 Cabal project. A limited `thc run` now builds and executes a selected executable
 whose `Main.main :: IO ()` passes the strict Core audit; see the
-[driver instructions](../driver/README.md). General `thc build` and `thc repl`
+[driver instructions](driver.md). Build the driver with `cabal build thc` at the
+repository root and invoke it with `cabal run thc -- ...`. General `thc build` and `thc repl`
 remain planned.
 
 The goal is to run those projects with no unimplemented paths in their complete
