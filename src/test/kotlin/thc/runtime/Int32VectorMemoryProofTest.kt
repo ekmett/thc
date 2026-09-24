@@ -1,10 +1,13 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.frame.FrameDescriptor
 import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.nodes.DirectCallNode
+import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -94,7 +97,8 @@ class Int32VectorMemoryProofTest {
     }
     private fun withLanguage(action: (Language) -> Unit) = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
-        .option("engine.CompilationFailureAction", "Throw").build().use { context ->
+        .option("engine.CompilationFailureAction", "Throw").option("engine.SingleTierCompilationThreshold", "10000000")
+        .build().use { context ->
             context.initialize("thc"); context.enter()
             try { action(TruffleLanguage.LanguageReference.create(Language::class.java).get(null)) } finally { context.leave() }
         }
@@ -250,6 +254,73 @@ class Int32VectorMemoryProofTest {
                 }
             }
         }
+    }
+
+    @Test fun installedGuestBoundsFailuresDeoptimizeWithoutEffectsAndRecover() {
+        var transitions = 0
+        for (backend in listOf("ast", "bytecode")) for (operation in VectorByteArrayOp.entries) {
+            val stride = if (operation.scalarOffset) 4 else 16
+            val invalid = listOf(0 to 0L, 15 to 0L, 40 to -1L, 40 to Long.MIN_VALUE, 40 to Long.MAX_VALUE,
+                40 to (1L shl 32), 40 to (Int.MAX_VALUE.toLong() + 1), 40 to ((40L - 16) / stride + 1))
+            for ((size, index) in invalid) withLanguage { language ->
+                val label = "$backend/${operation.primitive}/size=$size/index=$index"
+                val p = program(language, backend, fixture(operation), false)
+                val host = p.hostEntryTarget(3)
+                val original = p.entryTarget("root")
+                fun active(): RootCallTarget {
+                    val calls = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
+                        .filter { it.callTarget === original }
+                    assertEquals(1, calls.size, "$label selected guest call")
+                    return calls.single().currentCallTarget as RootCallTarget
+                }
+                fun valid(target: RootCallTarget) = target.javaClass.getMethod("isValidLastTier").invoke(target) == true
+                fun count() = (p.diagnostics().getValue("compiledEntries") as Number).toLong()
+                fun validCall(phase: String) {
+                    val bytes = ByteArray(40) { (it * 47 + 129).toByte() }
+                    val expectedBytes = bytes.copyOf()
+                    if (operation.isWrite) storeModel(expectedBytes, stride)
+                    assertEquals(expected(expectedBytes, stride), invoke(p, bytes, 1), "$label/$phase")
+                    assertArrayEquals(expectedBytes, bytes, "$label/$phase backing bytes")
+                    released(language)
+                }
+                // Fixed profiling only: fresh storage on every invocation, then one
+                // compilation. Keep the host bridge interpreted so the guest owns
+                // the compiled bounds failure and its invalidation.
+                repeat(40) { validCall("warm/$it") }
+                val target = active()
+                assertEquals(0L, count(), "$label no automatic compiled entries")
+                assertFalse(valid(target), "$label no automatic installation")
+                target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                assertTrue(valid(target), "$label installed guest")
+                val before = count()
+                validCall("installed")
+                assertEquals(before + 1, count(), "$label exact compiled guest entry")
+                assertSame(target, active(), "$label active installed identity")
+                assertTrue(valid(target), "$label installed immediately before invalid input")
+                assertFalse(valid(host), "$label host bridge remains interpreted")
+
+                val bytes = ByteArray(size) { (it * 19 + 83).toByte() }
+                val unchanged = bytes.copyOf()
+                val sentinel = Any(); var published: Any? = sentinel
+                val error = assertThrows(RuntimeFault::class.java, { published = invoke(p, bytes, index) }, label)
+                assertEquals("Int32X4 ByteArray# range outside its backing storage", error.message, label)
+                assertSame(sentinel, published, "$label no failed result publication")
+                assertArrayEquals(unchanged, bytes, "$label no partial memory effects")
+                released(language)
+                assertSame(target, active(), "$label same target after failure")
+                assertFalse(valid(target), "$label bounds failure invalidates installed guest")
+
+                val afterFailure = count()
+                validCall("recovery")
+                assertEquals(afterFailure, count(), "$label recovery without recompilation")
+                assertSame(target, active(), "$label recovery target identity")
+                assertFalse(valid(target), "$label no recovery recompilation")
+                for (counter in listOf("unsupportedTraps", "blackholes"))
+                    assertEquals(0L, (p.diagnostics().getValue(counter) as Number).toLong(), "$label/$counter")
+                transitions++
+            }
+        }
+        assertEquals(96, transitions)
     }
 
     @Test fun directAstOperandsPreserveStateOrderAndDoNotPublishFailedLoads() {
