@@ -869,6 +869,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    private static void runMaskAction(VirtualFrame frame, Object action, Object state,
+            TupleDispatch actionCall, Force force, MaskingState target) {
+        TupleResultsKt.requireVoidCarrier(state);
+        MaskingState prior = SynchronousMasking.current(force);
+        SynchronousMasking.set(force, target);
+        try {
+            actionCall.execute(frame, RequireClosure.require(force.execute(frame, action)),
+                    new Object[]{kotlin.Unit.INSTANCE});
+        } finally {
+            SynchronousMasking.set(force, prior);
+        }
+    }
+
     @Operation(forceCached = true)
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = Metrics.class, name = "metrics")
@@ -877,20 +890,52 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 Object action, Object state,
                 @Cached(value = "createAction(destination, metrics)", neverDefault = true) TupleDispatch actionCall,
                 @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
-            TupleResultsKt.requireVoidCarrier(state);
-            MaskingState prior = SynchronousMasking.current(force);
-            SynchronousMasking.set(force, MaskingState.UNMASKED);
-            try {
-                actionCall.execute(frame, RequireClosure.require(force.execute(frame, action)),
-                        new Object[]{kotlin.Unit.INSTANCE});
-            } finally {
-                SynchronousMasking.set(force, prior);
-            }
+            runMaskAction(frame, action, state, actionCall, force, MaskingState.UNMASKED);
         }
         public static TupleDispatch createAction(BytecodeTupleSlots destination, Metrics metrics) {
             return new TupleDispatch(destination, metrics, 1, false);
         }
         public static Force createForce(Metrics metrics) { return new Force(metrics); }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class MaskAsyncExceptions {
+        @Specialization public static void run(VirtualFrame frame, BytecodeTupleSlots destination, Metrics metrics,
+                Object action, Object state,
+                @Cached(value = "createAction(destination, metrics)", neverDefault = true) TupleDispatch actionCall,
+                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
+            runMaskAction(frame, action, state, actionCall, force, MaskingState.MASKED_INTERRUPTIBLE);
+        }
+        public static TupleDispatch createAction(BytecodeTupleSlots destination, Metrics metrics) {
+            return new TupleDispatch(destination, metrics, 1, false);
+        }
+        public static Force createForce(Metrics metrics) { return new Force(metrics); }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class MaskUninterruptible {
+        @Specialization public static void run(VirtualFrame frame, BytecodeTupleSlots destination, Metrics metrics,
+                Object action, Object state,
+                @Cached(value = "createAction(destination, metrics)", neverDefault = true) TupleDispatch actionCall,
+                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
+            runMaskAction(frame, action, state, actionCall, force, MaskingState.MASKED_UNINTERRUPTIBLE);
+        }
+        public static TupleDispatch createAction(BytecodeTupleSlots destination, Metrics metrics) {
+            return new TupleDispatch(destination, metrics, 1, false);
+        }
+        public static Force createForce(Metrics metrics) { return new Force(metrics); }
+    }
+
+    /** Force already grants each suspended thunk one evaluator across guest threads. */
+    @Operation public static final class NoDuplicate {
+        @Specialization public static Object preserve(Object state) {
+            TupleResultsKt.requireVoidCarrier(state);
+            return kotlin.Unit.INSTANCE;
+        }
     }
 
     @Operation public static final class AddressPlus {

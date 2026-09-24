@@ -16,7 +16,8 @@ class SynchronousExceptionsNativeTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = File(root, "build/synchronous-exceptions")
     private val supported = listOf("preciseCatch", "actionHeadCatch", "ignoredBottomPayload", "nestedRethrow",
-        "unusedHandler", "lazyResultBoundary", "restoreAndRethrow", "handlerMaskState")
+        "unusedHandler", "lazyResultBoundary", "restoreAndRethrow", "handlerMaskState",
+        "maskNested", "maskRethrowRestore", "noDuplicateProbe")
 
     private fun compile(target: RootCallTarget) {
         target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
@@ -36,7 +37,7 @@ class SynchronousExceptionsNativeTest {
         val inputs = (manifest["inputs"] as List<*>).map { (it as Number).toLong() }
         val cases = File(directory, "oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
         assertEquals(169, inputs.size)
-        assertEquals(8 * inputs.size, cases.values.sumOf { it.size })
+        assertEquals(supported.size * inputs.size, cases.values.sumOf { it.size })
         for (stage in listOf("pre", "post")) {
             @Suppress("UNCHECKED_CAST")
             val paths = (manifest["stages"] as Map<String, List<String>>).getValue(stage)

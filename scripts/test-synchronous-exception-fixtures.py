@@ -22,9 +22,11 @@ def application(name):
             return dict(kind='void', primReps=[], evaluated=True)
         return dict(kind='closure' if role == 'closure' else 'data',
                     primReps=['BoxedRep (Just Lifted)'], evaluated=False)
-    roles = {'catch#': ['closure', 'closure', 'state'], 'raiseIO#': ['boxed', 'state'], 'raise#': ['boxed']}[name]
+    roles = {'catch#': ['closure', 'closure', 'state'], 'raiseIO#': ['boxed', 'state'], 'raise#': ['boxed'],
+             'maskAsyncExceptions#': ['closure', 'state'], 'maskUninterruptible#': ['closure', 'state'],
+             'unmaskAsyncExceptions#': ['closure', 'state'], 'noDuplicate#': ['state']}[name]
     args = [['var', str(index), dict(rep=proof(role))] for index, role in enumerate(roles)]
-    result = proof('boxed') if name == 'raise#' else dict(
+    result = proof('boxed') if name == 'raise#' else proof('state') if name == 'noDuplicate#' else dict(
         kind='unknown', aggregate='unboxed-tuple', components=[proof('state'), proof('boxed')],
         primReps=['BoxedRep (Just Lifted)'], evaluated=False)
     return ['app', ['prim', name], args, [role != 'state' for role in roles], False, False, dict(rep=result)]
@@ -38,7 +40,8 @@ def audit_report(name):
 
 class ContractAndModelTests(unittest.TestCase):
     def test_observed_lifted_contracts(self):
-        for name in ('catch#', 'raiseIO#', 'raise#'):
+        for name in ('catch#', 'raiseIO#', 'raise#', 'maskAsyncExceptions#',
+                     'maskUninterruptible#', 'unmaskAsyncExceptions#', 'noDuplicate#'):
             with self.subTest(name=name):
                 self.assertEqual(recipe.validate_contract(application(name))['primitive'], name)
 
@@ -106,7 +109,7 @@ class ContractAndModelTests(unittest.TestCase):
         self.assertEqual(recipe.mathematical('preciseCatch', 2**63 - 1), -2**63 + 16)
         self.assertEqual(recipe.mathematical('restoreAndRethrow', -2**63), 41)
         self.assertEqual(recipe.mathematical('restoreAndRethrow', 2**63 - 1), -217)
-        expected = [17, 19, 23, 87, 31, 37, 41, 34]
+        expected = [17, 19, 23, 87, 31, 37, 41, 34, 212, 7, 5]
         self.assertEqual([recipe.mathematical(name, 0) for name in recipe.ENTRIES], expected)
         self.assertTrue(all(recipe.mathematical('handlerMaskState', x) == 34 for x in recipe.input_vectors()))
         self.assertEqual(len(recipe.input_vectors()), 169)
@@ -115,7 +118,7 @@ class ContractAndModelTests(unittest.TestCase):
 
     def test_native_rows_require_every_entry_input_once_and_correct_results(self):
         valid = '\n'.join(f'{name}\t0\t{recipe.mathematical(name, 0)}' for name in recipe.ENTRIES) + '\n'
-        self.assertEqual(len(recipe.validate_rows(valid, [0])), 8)
+        self.assertEqual(len(recipe.validate_rows(valid, [0])), len(recipe.ENTRIES))
         rows = valid.splitlines()
         for bad in ('', valid + rows[0] + '\n', valid.replace('preciseCatch\t0\t17', 'preciseCatch\t0\t18'),
                     valid.replace('preciseCatch\t0\t17', 'preciseCatch\t1\t18'),
@@ -191,7 +194,7 @@ class ProvenanceTests(unittest.TestCase):
                         inputs=recipe.input_vectors(), installedArtifactsHashed=False,
                         inputHashes=recipe.hash_files(recipe.source_inputs(self.root), self.root),
                         artifactHashes=recipe.hash_files(artifacts, self.root), stages=stages,
-                        auditStatus=statuses, plugin=plugin, nativeRows=1352)
+                        auditStatus=statuses, plugin=plugin, nativeRows=len(recipe.ENTRIES) * len(recipe.input_vectors()))
         self.save(manifest)
         return manifest
 

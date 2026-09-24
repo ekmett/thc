@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 244 | Implemented fixed numeric/character scalar forms. |
-| Partial | 209 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 1038 | No declared lowering. |
+| Partial | 216 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 1031 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -310,6 +310,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `broadcastWord64X2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `broadcastWord8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `byteArrayContents#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `catch#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `cloneArray#` — arity 3 — Managed lifted arrays
 - [ ] `compareByteArrays#` — arity 5 — Managed byte storage
 - [ ] `copyByteArray#` — arity 6 — Managed byte storage
@@ -322,6 +323,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `divideFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `divideFloatX8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `freezeArray#` — arity 4 — Managed lifted arrays
+- [ ] `getMaskingState#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `getSizeofMutableByteArray#` — arity 2 — Managed byte storage
 - [ ] `indexArray#` — arity 2 — Managed lifted arrays
 - [ ] `indexCharOffAddr#` — arity 2 — Managed literal addresses only
@@ -345,6 +347,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexWordArray#` — arity 2 — Managed byte storage
 - [ ] `isEmptyMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `keepAlive#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `maskAsyncExceptions#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `maskUninterruptible#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -376,6 +380,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `newMVar#` — arity 1 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `newMutVar#` — arity 2 — Managed lazy reference cells
 - [ ] `newPinnedByteArray#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `noDuplicate#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packDoubleX4#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packFloatX4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -412,6 +417,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `quotRemInt#` — arity 2 — Exact tuple arithmetic
 - [ ] `quotRemWord#` — arity 2 — Exact tuple arithmetic
 - [ ] `raise#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `raiseIO#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `readArray#` — arity 3 — Managed lifted arrays
 - [ ] `readDoubleArray#` — arity 3 — Managed byte storage
 - [ ] `readDoubleArrayAsDoubleX2#` — arity 3 — Specialized lowering; see capability and coverage limits
@@ -463,6 +469,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `tryPutMVar#` — arity 3 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `tryReadMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `tryTakeMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
+- [ ] `unmaskAsyncExceptions#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `unpackDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `unpackDoubleX4#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `unpackFloatX4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -564,7 +571,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `casIntArray#` — arity 5
 - [ ] `casMutVar#` — arity 4
 - [ ] `casSmallArray#` — arity 5
-- [ ] `catch#` — arity 3
 - [ ] `catchRetry#` — arity 3
 - [ ] `catchSTM#` — arity 3
 - [ ] `clearCCS#` — arity 2
@@ -665,7 +671,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `getApStackVal#` — arity 2
 - [ ] `getCCSOf#` — arity 2
 - [ ] `getCurrentCCS#` — arity 2
-- [ ] `getMaskingState#` — arity 1
 - [ ] `getSizeofSmallMutableArray#` — arity 2
 - [ ] `getSpark#` — arity 1
 - [ ] `gtAddr#` — arity 2
@@ -881,8 +886,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `ltAddr#` — arity 2
 - [ ] `makeStableName#` — arity 2
 - [ ] `makeStablePtr#` — arity 2
-- [ ] `maskAsyncExceptions#` — arity 2
-- [ ] `maskUninterruptible#` — arity 2
 - [ ] `maxDouble#` — arity 2
 - [ ] `maxDoubleX2#` — arity 2
 - [ ] `maxDoubleX4#` — arity 2
@@ -985,7 +988,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `newPromptTag#` — arity 1
 - [ ] `newSmallArray#` — arity 3
 - [ ] `newTVar#` — arity 2
-- [ ] `noDuplicate#` — arity 1
 - [ ] `numSparks#` — arity 1
 - [ ] `packDoubleX8#` — arity 1
 - [ ] `packFloatX16#` — arity 1
@@ -1078,7 +1080,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `quotWord8X32#` — arity 2
 - [ ] `quotWord8X64#` — arity 2
 - [ ] `raiseDivZero#` — arity 1
-- [ ] `raiseIO#` — arity 2
 - [ ] `raiseOverflow#` — arity 1
 - [ ] `raiseUnderflow#` — arity 1
 - [ ] `readAddrArray#` — arity 3
@@ -1352,7 +1353,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `uncheckedShiftRLInt16#` — arity 2
 - [ ] `uncheckedShiftRLInt32#` — arity 2
 - [ ] `uncheckedShiftRLInt8#` — arity 2
-- [ ] `unmaskAsyncExceptions#` — arity 2
 - [ ] `unpackClosure#` — arity 1
 - [ ] `unpackDoubleX8#` — arity 1
 - [ ] `unpackFloatX16#` — arity 1

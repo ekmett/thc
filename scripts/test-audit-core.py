@@ -771,7 +771,9 @@ class AuditTest(unittest.TestCase):
         state = dict(kind='void', primReps=[], evaluated=True)
         for name, args, result in (
                 ('getMaskingState#', [state], tuple_rep(state, LONG)),
-                ('unmaskAsyncExceptions#', [CLOSURE, state], tuple_rep(state, REFERENCE))):
+                ('unmaskAsyncExceptions#', [CLOSURE, state], tuple_rep(state, REFERENCE)),
+                ('maskAsyncExceptions#', [CLOSURE, state], tuple_rep(state, REFERENCE)),
+                ('maskUninterruptible#', [CLOSURE, state], tuple_rep(state, REFERENCE))):
             good = ['app', ['prim', name], [[*var('operand'), dict(rep=copy.deepcopy(rep))] for rep in args],
                     [rep is not state for rep in args], False, False, dict(rep=copy.deepcopy(result))]
             self.assertNotIn('primitive-representation', {issue['code'] for issue in run(good)['issues']})
@@ -785,6 +787,22 @@ class AuditTest(unittest.TestCase):
                     bad[-1]['rep']['components'][1] = REFERENCE if name == 'getMaskingState#' else LONG
                 with self.subTest(name=name, field=field):
                     self.assertIn('primitive-representation', {issue['code'] for issue in run(bad)['issues']})
+
+    def test_no_duplicate_requires_exact_state_carrier(self):
+        state = dict(kind='void', primReps=[], evaluated=True)
+        good = ['app', ['prim', 'noDuplicate#'], [[*var('token'), dict(rep=copy.deepcopy(state))]],
+                [False], False, False, dict(rep=copy.deepcopy(state))]
+        self.assertNotIn('primitive-representation', {issue['code'] for issue in run(good)['issues']})
+        for field in ('argument', 'flags', 'result'):
+            bad = copy.deepcopy(good)
+            if field == 'argument':
+                bad[2][0][-1]['rep'] = LONG
+            elif field == 'flags':
+                bad[3][0] = True
+            else:
+                bad[-1]['rep'] = LONG
+            with self.subTest(field=field):
+                self.assertIn('primitive-representation', {issue['code'] for issue in run(bad)['issues']})
 
     def test_floating_tuple_leaves_preserve_exact_proofs_and_reject_literal_alternatives(self):
         for kind, register in [('float', 'FloatRep'), ('double', 'DoubleRep')]:

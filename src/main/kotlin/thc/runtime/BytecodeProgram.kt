@@ -921,7 +921,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 CoreVectors.validate(name, args.map(CoreVectors::argumentProof), tupleProof)
                 CoreVectors.validateFlags(flags)
                 vectorPrimitive(name, args.map { compile(it, scope, false) })
-            } else if (fn[0] == "prim" && fn[1] in setOf("raiseIO#", "catch#", "getMaskingState#", "unmaskAsyncExceptions#")) {
+            } else if (fn[0] == "prim" && fn[1] in setOf("raiseIO#", "catch#", "getMaskingState#",
+                    "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#")) {
                 val name = fn[1] as String
                 CoreSynchronousExceptions.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
@@ -930,6 +931,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         "raiseIO#" -> e.builder.beginRaiseIO()
                         "catch#" -> e.builder.beginCatchIO(tupleSlots(TupleShape(tupleProof, language), destination), metrics)
                         "getMaskingState#" -> e.builder.beginGetMaskingState(destination[0])
+                        "maskAsyncExceptions#" -> e.builder.beginMaskAsyncExceptions(
+                            tupleSlots(TupleShape(tupleProof, language), destination), metrics)
+                        "maskUninterruptible#" -> e.builder.beginMaskUninterruptible(
+                            tupleSlots(TupleShape(tupleProof, language), destination), metrics)
                         else -> e.builder.beginUnmaskAsyncExceptions(tupleSlots(TupleShape(tupleProof, language), destination), metrics)
                     }
                     operands.forEach { it.emit(e) }
@@ -937,9 +942,17 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         "raiseIO#" -> e.builder.endRaiseIO()
                         "catch#" -> e.builder.endCatchIO()
                         "getMaskingState#" -> e.builder.endGetMaskingState()
+                        "maskAsyncExceptions#" -> e.builder.endMaskAsyncExceptions()
+                        "maskUninterruptible#" -> e.builder.endMaskUninterruptible()
                         else -> e.builder.endUnmaskAsyncExceptions()
                     }
                 }
+            } else if (fn[0] == "prim" && fn[1] == "noDuplicate#") {
+                CoreNoDuplicate.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operand = argument(args[0], scope, false)
+                ProvenExpression(Expression { e ->
+                    e.builder.beginNoDuplicate(); operand.emit(e); e.builder.endNoDuplicate()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && MVarOp.named(fn[1] as String) != null) {
                 val operation = MVarOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

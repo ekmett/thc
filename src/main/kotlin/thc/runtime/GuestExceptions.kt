@@ -30,7 +30,8 @@ internal object CoreSynchronousExceptions {
             "raiseIO#" -> arguments.size == 2 && boxed(arguments[0]) && state(arguments[1]) && flags == listOf(true, false)
             "catch#" -> arguments.size == 3 && closure(arguments[0]) && closure(arguments[1]) &&
                 state(arguments[2]) && flags == listOf(true, true, false)
-            "unmaskAsyncExceptions#" -> arguments.size == 2 && closure(arguments[0]) && state(arguments[1]) &&
+            "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#" ->
+                arguments.size == 2 && closure(arguments[0]) && state(arguments[1]) &&
                 flags == listOf(true, false)
             "getMaskingState#" -> arguments.size == 1 && state(arguments[0]) && flags == listOf(false)
             else -> false
@@ -121,7 +122,7 @@ internal class GetMaskingState(@field:Child private var state: Expr, proof: Core
     }
 }
 
-internal class UnmaskAsyncExceptions(private val shape: TupleShape,
+internal class MaskAction(private val shape: TupleShape, private val target: MaskingState,
     @field:Child private var action: Expr, @field:Child private var state: Expr,
     private val metrics: Metrics) : Expr() {
     @Child private var force = Force(metrics)
@@ -129,7 +130,7 @@ internal class UnmaskAsyncExceptions(private val shape: TupleShape,
     @field:CompilationFinal(dimensions = 1) private var destinationSlots: IntArray? = null
     @CompilationFinal private var destinationOffset = -1
     init { representation = shape.proof.copy(evaluated = true) }
-    override fun execute(frame: VirtualFrame): Nothing = fault("unmaskAsyncExceptions# requires a tuple destination")
+    override fun execute(frame: VirtualFrame): Nothing = fault("mask action requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         requireVoidCarrier(state.execute(frame))
         if (actionCall == null) {
@@ -144,11 +145,34 @@ internal class UnmaskAsyncExceptions(private val shape: TupleShape,
         }
         check(destinationSlots === slots && destinationOffset == offset)
         val prior = SynchronousMasking.current(this)
-        SynchronousMasking.set(this, MaskingState.UNMASKED)
+        // These are raw GHC primops: maskAsyncExceptions# deliberately sets
+        // interruptible masking even inside maskUninterruptible#.
+        SynchronousMasking.set(this, target)
         try {
             actionCall!!.execute(frame, requireClosure(force.execute(frame, action.execute(frame))), arrayOf(Unit))
         } finally { SynchronousMasking.set(this, prior) }
         return null
+    }
+}
+
+/** noDuplicate# is satisfied by Force's atomic, exclusive ownership of every thunk.
+ * THC never clones an active guest stack, and an escaped owner remains fail-closed
+ * rather than restarting effects. An explicit function call is not a duplicated
+ * evaluation of a suspension. */
+internal object CoreNoDuplicate {
+    fun validate(arguments: List<CoreRepresentation>, flags: List<*>, result: CoreRepresentation) {
+        fun state(proof: CoreRepresentation) = !proof.isAggregate && !proof.isVector &&
+            proof.kind == CoreKind.VOID && proof.primReps == emptyList<String>()
+        if (arguments.size != 1 || !state(arguments[0]) || flags != listOf(false) || !state(result))
+            throw RuntimeFault("noDuplicate#: exact State# input and result required")
+    }
+}
+
+internal class NoDuplicate(@field:Child private var state: Expr, proof: CoreRepresentation) : Expr() {
+    init { representation = proof.copy(evaluated = true) }
+    override fun execute(frame: VirtualFrame): Any {
+        requireVoidCarrier(state.execute(frame))
+        return Unit
     }
 }
 
