@@ -6,6 +6,8 @@ package thc.runtime
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Json
+import java.io.File
+import java.security.MessageDigest
 
 class StdioHostAbiTest {
     private fun document(): Map<String, Any?> = StdioHostAbi::class.java.getResourceAsStream("/thc/native/stdio-host-abi.json")!!.use {
@@ -18,6 +20,8 @@ class StdioHostAbiTest {
 
     @Test fun actualProbeLoadsWithoutNativeAccessAndMapsPrivateCategoriesToCValues() {
         val document = document(); val raw = document["errno"] as Map<*, *>
+        val source = File(System.getProperty("thc.projectRoot"), "src/main/c/stdio-abi-probe.c").readBytes()
+        assertEquals(OriginalStdioChecks.hex(MessageDigest.getInstance("SHA-256").digest(source)), document["sourceSha256"])
         val abi = parse(document)
         for ((kind, name) in listOf(1L to "ENOENT", 2L to "EACCES", 3L to "EEXIST", 4L to "EBADF",
             5L to "EINVAL", 6L to "EIO", 7L to "ENOTSUP", 8L to "EBUSY", 9L to "EISDIR"))
@@ -40,5 +44,36 @@ class StdioHostAbiTest {
             assertThrows(RuntimeFault::class.java) { parse(original + ("errno" to (errors + ("EBADF" to wrong)))) }
         assertThrows(RuntimeFault::class.java) { parse(original + ("errno" to (errors - "EBADF"))) }
         assertThrows(RuntimeFault::class.java) { parse(original + ("errno" to (errors + ("extra" to 1)))) }
+    }
+
+    @Test fun everyProbeFieldRequiresAnExactIntegerAndClosedFieldSet() {
+        val original = document()
+        for (section in listOf("widths", "errno")) {
+            val fields = original[section] as Map<*, *>
+            for (name in fields.keys) {
+                for (wrong in listOf(null, true, false, 4.0, "8", -1, 0, 1L shl 31))
+                    assertThrows(RuntimeFault::class.java, {
+                        parse(original + (section to (fields + (name to wrong))))
+                    }, "$section/$name/$wrong")
+                assertThrows(RuntimeFault::class.java) { parse(original + (section to (fields - name))) }
+            }
+            for (wrong in listOf(null, emptyList<Any?>(), emptyMap<String, Any?>(), fields + ("extra" to 1)))
+                assertThrows(RuntimeFault::class.java) { parse(original + (section to wrong)) }
+        }
+        for (wrong in listOf(null, emptyList<Any?>(), emptyMap<String, Any?>()))
+            assertThrows(RuntimeFault::class.java) { parse(wrong) }
+    }
+
+    @Test fun compilerTargetsMustMatchTheRuntimePlatformWithoutX32OrMuslAliases() {
+        for ((system, architecture, target) in listOf(
+            Triple("Linux", "amd64", "x86_64-unknown-linux-gnu"), Triple("Linux", "arm64", "aarch64-unknown-linux-gnu"),
+            Triple("Darwin", "x86_64", "x86_64-apple-darwin25"), Triple("Darwin", "aarch64", "arm64-apple-darwin25"))) {
+            val value = document() + mapOf("system" to system, "architecture" to architecture, "target" to target)
+            assertDoesNotThrow { StdioHostAbi.parse(value, system, architecture) }
+            for (wrong in listOf("x86_64-unknown-linux-gnux32", "x86_64-unknown-linux-musl", "aarch64", "wasm32-wasi"))
+                assertThrows(RuntimeFault::class.java) { StdioHostAbi.parse(value + ("target" to wrong), system, architecture) }
+            assertThrows(RuntimeFault::class.java) { StdioHostAbi.parse(value, "Windows", architecture) }
+            assertThrows(RuntimeFault::class.java) { StdioHostAbi.parse(value, system, "riscv64") }
+        }
     }
 }

@@ -85,14 +85,16 @@ NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate",
 # results as well as the semantic Core/oracle data. Admit only the reviewed 144
 # cases and two export stages, not a general log/text/executable suffix rule.
 ORIGINAL_STDIO_OUTPUTS = frozenset("build/original-stdio/" + name for name in (
-    "manifest.json", "expected.json", "oracle.json", "native/original-stdio-oracle",
+    "manifest.json", "oracle.json", "native/original-stdio-oracle",
     *(f"results/{index}.txt" for index in range(144)),
     *(f"logs/{label}.{suffix}"
       for label in ("ghc-version", "ghc-info", "native-build", "pre-export", "post-export",
-                    *(f"native-{index:03}" for index in range(144)))
+                    *(f"native-{index:03}" for index in range(144)),
+                    *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in
+                      ("originalWrite", "originalSafeWrite", "originalWriteErrno", "originalSafeWriteErrno")))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post")
-      for name in ("core/OriginalStdioAudit.json", "core/THC.InterfaceClosure.json", "proofs.json",
+      for name in ("core/OriginalStdioAudit.json", "core/THC.InterfaceClosure.json",
                    "originalWrite.audit.json", "originalSafeWrite.audit.json",
                    "originalWriteErrno.audit.json", "originalSafeWriteErrno.audit.json")),
 ))
