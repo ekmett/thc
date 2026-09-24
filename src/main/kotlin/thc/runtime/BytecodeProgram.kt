@@ -998,24 +998,64 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 CoreSynchronousExceptions.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
                 tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
                     when (name) {
-                        "raiseIO#" -> e.builder.beginRaiseIO()
-                        "catch#" -> e.builder.beginCatchIO(tupleSlots(TupleShape(tupleProof, language), destination), metrics)
-                        "getMaskingState#" -> e.builder.beginGetMaskingState(destination[0])
-                        "maskAsyncExceptions#" -> e.builder.beginMaskAsyncExceptions(
-                            tupleSlots(TupleShape(tupleProof, language), destination), metrics)
-                        "maskUninterruptible#" -> e.builder.beginMaskUninterruptible(
-                            tupleSlots(TupleShape(tupleProof, language), destination), metrics)
-                        else -> e.builder.beginUnmaskAsyncExceptions(tupleSlots(TupleShape(tupleProof, language), destination), metrics)
-                    }
-                    operands.forEach { it.emit(e) }
-                    when (name) {
-                        "raiseIO#" -> e.builder.endRaiseIO()
-                        "catch#" -> e.builder.endCatchIO()
-                        "getMaskingState#" -> e.builder.endGetMaskingState()
-                        "maskAsyncExceptions#" -> e.builder.endMaskAsyncExceptions()
-                        "maskUninterruptible#" -> e.builder.endMaskUninterruptible()
-                        else -> e.builder.endUnmaskAsyncExceptions()
+                        "raiseIO#" -> {
+                            b.beginRaiseIO(); operands.forEach { it.emit(e) }; b.endRaiseIO()
+                        }
+                        "getMaskingState#" -> {
+                            b.beginGetMaskingState(destination[0]); operands[0].emit(e); b.endGetMaskingState()
+                        }
+                        else -> {
+                            // All operands and the State# check precede the protected
+                            // action, exactly as in the original synchronous primop.
+                            val action = b.createLocal("IO action", "object")
+                            b.beginStoreLocal(action); operands[0].emit(e); b.endStoreLocal()
+                            val handler = if (name == "catch#") b.createLocal("IO handler", "object").also {
+                                b.beginStoreLocal(it); operands[1].emit(e); b.endStoreLocal()
+                            } else null
+                            b.beginRequireIOState()
+                            operands[if (handler == null) 1 else 2].emit(e)
+                            b.endRequireIOState()
+                            val slots = tupleSlots(TupleShape(tupleProof, language), destination)
+                            if (handler != null) {
+                                b.beginTryCatch()
+                                b.beginInvokeIOAction(slots, metrics)
+                                b.emitLoadLocal(action); b.emitLoadNull()
+                                b.endInvokeIOAction()
+                                b.beginBlock()
+                                val payload = b.createLocal("caught exception payload", "object")
+                                b.beginStoreLocal(payload)
+                                b.beginRequireGuestFailure(); b.emitLoadException(); b.endRequireGuestFailure()
+                                b.endStoreLocal()
+                                val prior = b.createLocal("handler caller mask", "object")
+                                b.beginStoreLocal(prior); b.emitEnterHandlerMask(); b.endStoreLocal()
+                                b.beginTryFinally(Runnable {
+                                    b.beginRestoreMask(); b.emitLoadLocal(prior); b.endRestoreMask()
+                                })
+                                b.beginInvokeIOHandler(slots, metrics)
+                                b.emitLoadLocal(handler); b.emitLoadLocal(payload); b.emitLoadLocal(prior)
+                                b.endInvokeIOHandler()
+                                b.endTryFinally()
+                                b.endBlock()
+                                b.endTryCatch()
+                            } else {
+                                val target = when (name) {
+                                    "maskAsyncExceptions#" -> MaskingState.MASKED_INTERRUPTIBLE
+                                    "maskUninterruptible#" -> MaskingState.MASKED_UNINTERRUPTIBLE
+                                    else -> MaskingState.UNMASKED
+                                }
+                                val prior = b.createLocal("mask caller state", "object")
+                                b.beginStoreLocal(prior); b.emitEnterMask(target); b.endStoreLocal()
+                                b.beginTryFinally(Runnable {
+                                    b.beginRestoreMask(); b.emitLoadLocal(prior); b.endRestoreMask()
+                                })
+                                b.beginInvokeIOAction(slots, metrics)
+                                b.emitLoadLocal(action); b.emitLoadLocal(prior)
+                                b.endInvokeIOAction()
+                                b.endTryFinally()
+                            }
+                        }
                     }
                 }
             } else if (fn[0] == "prim" && fn[1] == "noDuplicate#") {
