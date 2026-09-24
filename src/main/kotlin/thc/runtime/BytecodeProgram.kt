@@ -1087,6 +1087,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             }
             if (next != null) {
                 b.emitLabel(next)
+                if (enableAsync) emitAsyncPoll(e)
                 b.endBlock()
                 b.endWhile()
             }
