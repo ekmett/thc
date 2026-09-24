@@ -56,33 +56,43 @@ class SignedNarrowPrimopsTest {
         verifyHashes(manifest)
         val entries = manifest["entries"] as List<Map<String, Any?>>
         assertEquals(36, entries.size)
+        assertEquals("signedNarrowDispatch", manifest["compositeEntry"])
+        assertEquals((0 until entries.size).toList(), entries.map { (it["selector"] as Number).toInt() })
         val modules = (manifest["modules"] as List<String>).map { Json.parse(File(root, it).readText()) }
         val rows = File(root, "build/signed-narrow-primops/oracle.tsv").readLines()
             .map { it.split('\t') }.groupBy { it[0] }
         assertEquals(entries.map { it["name"] }.toSet(), rows.keys)
-        for (entry in entries) {
+        val cases = entries.associate { entry ->
             val name = entry["name"] as String
             val width = (entry["width"] as Number).toInt()
             val arity = (entry["arity"] as Number).toInt()
-            val cases = rows.getValue(name).map { listOf(it[1].toLong(), it[2].toLong(), it[3].toLong()) }
-            for ((left, right, native) in cases)
+            val operationCases = rows.getValue(name).map { listOf(it[1].toLong(), it[2].toLong(), it[3].toLong()) }
+            for ((left, right, native) in operationCases) {
+                if (arity == 1) assertEquals(0L, right, "Unary native oracle row for $name")
                 assertEquals(mathematical(name, width, left, right), native, "Native $name($left, $right)")
-            for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
-                val function = context.eval("thc", Json.stringify(mapOf("modules" to modules,
-                    "entry" to name, "backend" to backend, "instrument" to true)))
-                fun check(row: List<Long>) {
-                    val args = if (arity == 1) arrayOf(row[0]) else arrayOf(row[0], row[1])
-                    assertEquals(row[2], function.execute(*args).asLong(), "$backend $name(${row[0]}, ${row[1]})")
-                }
-                cases.forEach(::check)
-                assertTrue(function.invokeMember("compile").asBoolean(), "$backend $name installation")
-                val before = count(function, "compiledEntries")
-                cases.asReversed().forEach(::check)
-                assertEquals(cases.size.toLong(), count(function, "compiledEntries") - before,
-                    "$backend $name every native row must enter installed guest code")
-                assertEquals(0L, count(function, "unsupportedTraps"))
-                assertEquals(0L, count(function, "blackholes"))
             }
+            name to operationCases
+        }
+        assertEquals((manifest["nativeRows"] as Number).toLong(), cases.values.sumOf { it.size.toLong() })
+        for (backend in listOf("ast", "bytecode")) primopTestContext().use { context ->
+            val function = context.eval("thc", Json.stringify(mapOf("modules" to modules,
+                "entry" to manifest["compositeEntry"], "backend" to backend, "instrument" to true)))
+            fun check(entry: Map<String, Any?>, row: List<Long>) {
+                val name = entry["name"] as String
+                val selector = (entry["selector"] as Number).toInt()
+                assertEquals(row[2], function.execute(selector, row[0], row[1]).asLong(),
+                    "$backend $name(${row[0]}, ${row[1]})")
+            }
+            for (entry in entries) for (row in cases.getValue(entry["name"] as String)) check(entry, row)
+            assertEquals(0L, count(function, "compiledEntries"), "$backend must remain interpreted before explicit compile")
+            assertTrue(function.invokeMember("compile").asBoolean(), "$backend composite installation")
+            val before = count(function, "compiledEntries")
+            for (entry in entries.asReversed()) for (row in cases.getValue(entry["name"] as String).asReversed())
+                check(entry, row)
+            assertEquals(cases.values.sumOf { it.size.toLong() }, count(function, "compiledEntries") - before,
+                "$backend every native row must enter the installed composite guest root")
+            assertEquals(0L, count(function, "unsupportedTraps"))
+            assertEquals(0L, count(function, "blackholes"))
         }
     }
 

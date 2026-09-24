@@ -476,6 +476,9 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         root = args.root.resolve()
+        if args.command == "restore":
+            # A known miss needs no scan of the installed GHC libraries.
+            require(args.bundle.is_file() and not args.bundle.is_symlink(), "Bundle missing or linked")
         current = identity(root)  # Never trust identity supplied by a producer.
         if args.command == "key":
             args.output.parent.mkdir(parents=True, exist_ok=True)

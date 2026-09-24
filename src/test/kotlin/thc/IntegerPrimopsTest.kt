@@ -56,33 +56,50 @@ class IntegerPrimopsTest {
         verifyHashes(manifest)
         val entries = manifest["entries"] as List<Map<String, Any?>>
         assertEquals(40, entries.size)
+        val composite = manifest["composite"] as Map<String, Any?>
+        assertEquals("composite", composite["name"])
+        assertEquals(3, (composite["arity"] as Number).toInt())
+        assertEquals(0, (composite["selectorArgument"] as Number).toInt())
+        assertEquals(entries.map { it["name"] }, composite["selectorOrder"])
+        assertEquals((0 until entries.size).toList(), entries.map { (it["selector"] as Number).toInt() })
         val modules = (manifest["modules"] as List<String>).map { Json.parse(File(root, it).readText()) }
         val rows = File(root, "build/integer-primops/oracle.tsv").readLines()
             .map { it.split('\t') }.groupBy { it[0] }
         assertEquals(entries.map { it["name"] }.toSet(), rows.keys)
+        val casesByName = entries.associate { entry ->
+            val name = entry["name"] as String
+            name to rows.getValue(name).map { listOf(it[1].toLong(), it[2].toLong(), it[3].toLong()) }
+        }
         for (entry in entries) {
             val name = entry["name"] as String
             val width = (entry["width"] as Number).toInt()
-            val arity = (entry["arity"] as Number).toInt()
-            val cases = rows.getValue(name).map { listOf(it[1].toLong(), it[2].toLong(), it[3].toLong()) }
-            for ((left, right, native) in cases)
+            for ((left, right, native) in casesByName.getValue(name))
                 assertEquals(mathematical(name, width, left, right), native, "Native $name($left, $right)")
-            for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
-                val function = context.eval("thc", Json.stringify(mapOf("modules" to modules,
-                    "entry" to name, "backend" to backend, "instrument" to true)))
-                fun check(row: List<Long>) {
-                    val args = if (arity == 1) arrayOf(row[0]) else arrayOf(row[0], row[1])
-                    assertEquals(row[2], function.execute(*args).asLong(), "$backend $name(${row[0]}, ${row[1]})")
-                }
-                // Exercise every sign-bit transition, all-ones value, valid shift count
-                // and zero/nonzero remainder in both interpreted and compiled execution.
-                repeat(4) { cases.take(8).forEach(::check) }
-                cases.forEach(::check)
-                assertTrue(function.invokeMember("compile").asBoolean(), "$backend $name installation")
+        }
+        for (backend in listOf("ast", "bytecode")) primopTestContext().use { context ->
+            val function = context.eval("thc", Json.stringify(mapOf("modules" to modules,
+                "entry" to composite["name"], "backend" to backend, "instrument" to true)))
+            fun check(entry: Map<String, Any?>, row: List<Long>) {
+                val name = entry["name"] as String
+                val selector = (entry["selector"] as Number).toLong()
+                assertEquals(row[2], function.execute(selector, row[0], row[1]).asLong(),
+                    "$backend $name(${row[0]}, ${row[1]})")
+            }
+            // Warm every selector arm and every native row before the one explicit
+            // compilation. Each row is then repeated through installed guest code.
+            for (entry in entries) {
+                val cases = casesByName.getValue(entry["name"] as String)
+                cases.forEach { check(entry, it) }
+            }
+            assertEquals(0L, count(function, "compiledEntries"), "$backend warm phase")
+            assertTrue(function.invokeMember("compile").asBoolean(), "$backend composite installation")
+            for (entry in entries) {
+                val name = entry["name"] as String
+                val cases = casesByName.getValue(name)
                 val before = count(function, "compiledEntries")
-                cases.asReversed().forEach(::check)
-                // The real wrapper contains only primitives, so exactly one guest root
-                // entry per call proves that every oracle row reached installed code.
+                cases.asReversed().forEach { check(entry, it) }
+                // One composite guest root entry per call proves that every
+                // oracle row reached installed code after compilation.
                 assertEquals(cases.size.toLong(), count(function, "compiledEntries") - before,
                     "$backend $name every native row must enter compiled code")
                 assertEquals(0L, count(function, "unsupportedTraps"), "$backend $name")

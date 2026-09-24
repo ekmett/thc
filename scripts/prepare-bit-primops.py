@@ -30,6 +30,8 @@ def entries():
                                argumentRep='Word64Rep' if explicit64 else 'WordRep',
                                resultRep='Word64Rep' if explicit64 and operation in ('byteSwap', 'bitReverse') else 'WordRep',
                                definedResultBits=(width or 64) if operation in ('byteSwap', 'bitReverse') else 64))
+    for selector, entry in enumerate(result):
+        entry['index'] = selector
     return result
 
 
@@ -79,13 +81,23 @@ def main():
         core = BUILD / (stage + '-core')
         env = dict(os.environ, THC_CORE_OUT=str(core), THC_GHC_OUT=str(BUILD / (stage + '-ghc')))
         options = ['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []
-        run([ROOT / 'compiler/export.sh', *options,
+        run([ROOT / 'compiler/export.sh', *options, '-fplugin-opt=THC.Plugin:closure=bitPrimops',
              *['-fplugin-opt=THC.Plugin:closure=' + e['name'] for e in operations], SOURCE], env=env)
         paths = sorted(core.glob('*.json'))
         modules = [(str(p.relative_to(ROOT)), json.loads(p.read_text())) for p in paths]
         stages[stage] = [p for p, _ in modules]
         artifacts.extend(stages[stage])
-        apps = [app for _, module in modules for app in applications(module)]
+        composite = audit.Audit(modules, capabilities).run(['bitPrimops'])
+        assert composite['accepted'], (stage, composite)
+        assert {e['primitive'] for e in operations} <= {p['name'] for p in composite['primitives']}, (stage, composite)
+        # Every operation belongs to this root, rather than a separately compiled wrapper.
+        assert len(composite['reachableBindings']) == 1, (stage, composite['reachableBindings'])
+        binding_id = composite['reachableBindings'][0]['id']
+        binding = next(b for _, module in modules for b in module['bindings'] if b['id'] == binding_id)
+        apps = list(applications(binding['expr']))
+        composite_path = BUILD / f'{stage}-composite.audit.json'
+        composite_path.write_text(json.dumps(composite, indent=2) + '\n')
+        artifacts.append(str(composite_path.relative_to(ROOT)))
         for entry in operations:
             report = audit.Audit(modules, capabilities).run([entry['name']])
             assert report['accepted'], (entry['name'], report)
@@ -133,6 +145,7 @@ def main():
     artifacts += ['build/bit-primops/oracle.tsv', 'build/bit-primops/NativeBitPrimops.hs']
     hashes = lambda paths: {p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in paths}
     manifest.write_text(json.dumps(dict(schema=1, ghc='9.14.1', entries=operations, stages=stages,
+        compositeEntry='bitPrimops',
         nativeRows=len(rows), nativeResultPolicy='Mask only GHC-defined bits; THC checks canonical zero upper bits directly',
         inputHashes=hashes(inputs), artifactHashes=hashes(artifacts)), indent=2) + '\n')
     print(f'Prepared {len(operations)} scalar bit primops / {len(rows)} native oracle rows / pre+post Core')

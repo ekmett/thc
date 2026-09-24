@@ -265,6 +265,33 @@ class FastInputTests(unittest.TestCase):
                                           "--bundle", str(self.bundle)]))
         self.assertIn("MISS:", stderr.getvalue())
 
+    def test_cli_known_restore_miss_does_not_scan_the_toolchain(self):
+        directory = self.temp_root / "directory"; directory.mkdir()
+        linked = self.temp_root / "linked"
+        target = self.temp_root / "target"; target.write_bytes(b"not a bundle")
+        linked.symlink_to(target)
+        for bundle in (self.bundle, directory, linked):
+            with self.subTest(bundle=bundle), patch.object(cache, "identity") as identify, \
+                    patch("sys.stderr", io.StringIO()) as stderr:
+                self.assertEqual(1, cache.main(["restore", "--root", str(self.root),
+                    "--identity", str(self.temp_root / "not-needed.json"), "--bundle", str(bundle)]))
+                identify.assert_not_called()
+                self.assertIn("Bundle missing or linked", stderr.getvalue())
+
+    def test_cli_restore_candidate_still_requires_fresh_identity(self):
+        self.pack()
+        identity_file = self.temp_root / "identity.json"
+        identity_file.write_text(json.dumps(self.current))
+        command = ["restore", "--root", str(self.root), "--identity", str(identity_file),
+                   "--bundle", str(self.bundle)]
+        with patch.object(cache, "identity", wraps=cache.identity) as identify, patch("sys.stderr", io.StringIO()):
+            self.assertEqual(0, cache.main(command))
+            identify.assert_called_once_with(self.root)
+        self.put("scripts/prepare-tests.sh", "changed after the key step")
+        with patch.object(cache, "identity", wraps=cache.identity) as identify, patch("sys.stderr", io.StringIO()):
+            self.assertEqual(1, cache.main(command))
+            identify.assert_called_once_with(self.root)
+
     def test_payload_scope_has_no_runtime_or_test_outputs(self):
         pins = cache.vendor_pins(self.root)
         self.assertTrue(cache.allowed_payload("build/unsafe-equality/api/predicate", pins))

@@ -40,16 +40,29 @@ def main():
                 for op in ('quot', 'rem', 'eq', 'ne', 'gt', 'ge', 'and', 'or', 'xor',
                            'not', 'uncheckedShiftL', 'uncheckedShiftRL')
                 for width in (8, 16, 32)]
+    for selector, entry in enumerate(entries):
+        entry['selector'] = selector
     core = BUILD / 'core'
     env = dict(os.environ, THC_CORE_OUT=str(core), THC_GHC_OUT=str(BUILD / 'ghc'))
     run([ROOT / 'compiler/export.sh', *['-fplugin-opt=THC.Plugin:closure=' + e['name']
-                                      for e in entries], SOURCE], env=env)
+                                      for e in entries], '-fplugin-opt=THC.Plugin:closure=composite',
+         SOURCE], env=env)
     spec = importlib.util.spec_from_file_location('core_audit', ROOT / 'scripts/audit-core.py')
     audit = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(audit)
     paths = sorted(core.glob('*.json'))
     modules = [(str(p.relative_to(ROOT)), json.loads(p.read_text())) for p in paths]
     capabilities = json.loads((ROOT / 'scripts/core-capabilities.json').read_text())
+    composite_report = audit.Audit(modules, capabilities).run(['composite'])
+    assert composite_report['accepted'], composite_report
+    assert composite_report['summary']['reachableBindings'] == 1, composite_report['reachableBindings']
+    required = {entry['primitive'] for entry in entries}
+    retained = {primitive['name'] for primitive in composite_report['primitives']}
+    assert required <= retained, sorted(required - retained)
+    composite_id = composite_report['roots'][0]
+    assert all(any(use['owner'] == composite_id for use in primitive['uses'])
+               for primitive in composite_report['primitives'] if primitive['name'] in required), composite_id
+    (BUILD / 'composite.audit.json').write_text(json.dumps(composite_report, indent=2) + '\n')
     driver = ['{-# LANGUAGE MagicHash #-}', 'module Main where',
               'import GHC.Exts (Int(I#), Int#)', 'import qualified IntegerPrimopsAudit as P',
               'emit1 :: String -> (Int# -> Int#) -> Int -> IO ()',
@@ -109,9 +122,13 @@ def main():
     inputs = [SOURCE, 'scripts/prepare-integer-primops.py', 'scripts/core-capabilities.json', 'src/main/resources/thc/scalar-primop-signatures.json',
               'scripts/audit-core.py', 'compiler/build.sh', 'compiler/export.sh', 'compiler/toolchain.sh']
     inputs += [str(p.relative_to(ROOT)) for p in (ROOT / 'compiler/THC').glob('*.hs')]
-    artifacts = [str(p.relative_to(ROOT)) for p in paths] + ['build/integer-primops/oracle.tsv']
+    artifacts = [str(p.relative_to(ROOT)) for p in paths] + [
+        'build/integer-primops/oracle.tsv', 'build/integer-primops/composite.audit.json']
     hashes = lambda items: {p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in items}
-    manifest.write_text(json.dumps(dict(schema=1, entries=entries, modules=[p for p, _ in modules],
+    manifest.write_text(json.dumps(dict(schema=1, entries=entries,
+                                       composite=dict(name='composite', arity=3, selectorArgument=0,
+                                                      selectorOrder=[entry['name'] for entry in entries]),
+                                       modules=[p for p, _ in modules],
                                        inputHashes=hashes(inputs), artifactHashes=hashes(artifacts)),
                                    indent=2) + '\n')
     print(f'Prepared {len(entries)} scalar integer primops / {len(rows)} native oracle rows')
