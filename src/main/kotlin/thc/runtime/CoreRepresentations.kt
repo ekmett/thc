@@ -29,7 +29,7 @@ internal data class CoreRepresentation(
     fun referenceCarrier(): Class<*>? = if (!evaluated) null else when (kind) {
         CoreKind.DATA -> DataValue::class.java
         CoreKind.CLOSURE -> Closure::class.java
-        CoreKind.ADDRESS -> LiteralAddress::class.java
+        CoreKind.ADDRESS -> ManagedAddress::class.java
         else -> null
     }
     fun refine(other: CoreRepresentation): CoreRepresentation {

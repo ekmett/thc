@@ -86,7 +86,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class PolyglotEval {
         @Specialization
         public static void apply(VirtualFrame frame, LocalAccessor destination,
-                LiteralAddress language, LiteralAddress source, LiteralAddress name, Object state,
+                ManagedAddress language, ManagedAddress source, ManagedAddress name, Object state,
                 @Cached(value = "createAccess()", neverDefault = true) PolyglotAccess access, @Bind("$node") Node node) {
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
                     access.eval(language, source, name, state));
@@ -99,7 +99,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class PolyglotReadMember {
         @Specialization
         public static void apply(VirtualFrame frame, LocalAccessor destination,
-                Object value, LiteralAddress name, Object state,
+                Object value, ManagedAddress name, Object state,
                 @Cached(value = "createAccess()", neverDefault = true) PolyglotAccess access, @Bind("$node") Node node) {
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
                     access.readMember(frame, value, name, state));
@@ -512,8 +512,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     public static final class RequireAddress {
-        @Specialization public static LiteralAddress require(Object value) {
-            if (value instanceof LiteralAddress address) return address;
+        @Specialization public static ManagedAddress require(Object value) {
+            if (value instanceof ManagedAddress address) return address;
             throw fail("Expected a managed literal Addr#");
         }
     }
@@ -702,16 +702,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation public static final class AddressPlus {
-        @Specialization public static LiteralAddress plus(LiteralAddress address, long displacement) { return address.plus(displacement); }
-        @Fallback public static LiteralAddress invalid(Object address, Object displacement) {
-            if (!(address instanceof LiteralAddress)) throw fail("Expected a managed literal Addr#");
+        @Specialization public static ManagedAddress plus(ManagedAddress address, long displacement) { return address.plus(displacement); }
+        @Fallback public static ManagedAddress invalid(Object address, Object displacement) {
+            if (!(address instanceof ManagedAddress)) throw fail("Expected a managed literal Addr#");
             throw fail("Expected primitive Long");
         }
     }
     @Operation public static final class AddressIndexChar {
-        @Specialization public static long index(LiteralAddress address, long displacement) { return address.indexChar(displacement); }
+        @Specialization public static long index(ManagedAddress address, long displacement) { return address.indexChar(displacement); }
         @Fallback public static long invalid(Object address, Object displacement) {
-            if (!(address instanceof LiteralAddress)) throw fail("Expected a managed literal Addr#");
+            if (!(address instanceof ManagedAddress)) throw fail("Expected a managed literal Addr#");
             throw fail("Expected primitive Long");
         }
     }

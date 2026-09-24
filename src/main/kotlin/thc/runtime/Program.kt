@@ -151,7 +151,7 @@ internal abstract class Expr : Node() {
     open fun executeDataValue(frame: VirtualFrame): DataValue = RuntimeTypesGen.expectDataValue(execute(frame))
 
     @Throws(UnexpectedResultException::class)
-    open fun executeAddress(frame: VirtualFrame): LiteralAddress = RuntimeTypesGen.expectLiteralAddress(execute(frame))
+    open fun executeAddress(frame: VirtualFrame): ManagedAddress = RuntimeTypesGen.expectManagedAddress(execute(frame))
 
     /** Primitive consumers reject an unexpected value; forwarding nodes preserve it. */
     fun executeRequiredLong(frame: VirtualFrame): Long = try { executeLong(frame) }
@@ -163,13 +163,13 @@ internal abstract class Expr : Node() {
     fun executeRequiredDataValue(frame: VirtualFrame): DataValue = try { executeDataValue(frame) }
     catch (_: UnexpectedResultException) { fault("Expected constructor value") }
 
-    fun executeRequiredAddress(frame: VirtualFrame): LiteralAddress = try { executeAddress(frame) }
+    fun executeRequiredAddress(frame: VirtualFrame): ManagedAddress = try { executeAddress(frame) }
     catch (_: UnexpectedResultException) { fault("Expected a managed literal Addr#") }
 }
 private class Literal(private val value: Any?) : Expr() {
     init { representation = CoreRepresentation(when (value) {
         is Long -> CoreKind.LONG; is Float -> CoreKind.FLOAT; is Double -> CoreKind.DOUBLE
-        is LiteralAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
+        is ManagedAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
     }, evaluated = true) }
     override fun execute(frame: VirtualFrame) = value
     override fun executeLong(frame: VirtualFrame) = RuntimeTypesGen.expectLong(value)
@@ -199,9 +199,9 @@ internal class LocalRead(private val slot: Int, private val cell: Boolean = true
         if (!cell && representation.evaluated && representation.kind == CoreKind.CLOSURE)
             RuntimeTypesGen.expectClosure(frame.getObject(slot)) else super.executeClosure(frame)
 
-    override fun executeAddress(frame: VirtualFrame): LiteralAddress =
+    override fun executeAddress(frame: VirtualFrame): ManagedAddress =
         if (!cell && representation.evaluated && representation.kind == CoreKind.ADDRESS)
-            RuntimeTypesGen.expectLiteralAddress(frame.getObject(slot)) else super.executeAddress(frame)
+            RuntimeTypesGen.expectManagedAddress(frame.getObject(slot)) else super.executeAddress(frame)
 
     /** Recursive captures retain their cell identity until the whole group is published. */
     fun writeForced(frame: VirtualFrame, original: Thunk, result: Any?) {
@@ -344,15 +344,15 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
         }
     }
     @CompilationFinal private var genericAddress = false
-    override fun executeAddress(frame: VirtualFrame): LiteralAddress {
+    override fun executeAddress(frame: VirtualFrame): ManagedAddress {
         if (value.representation.evaluated || value.representation.isLong) return value.executeAddress(frame)
-        if (value.representation.kind == CoreKind.ADDRESS || genericAddress) return RuntimeTypesGen.expectLiteralAddress(forceResult(frame, value.execute(frame)))
+        if (value.representation.kind == CoreKind.ADDRESS || genericAddress) return RuntimeTypesGen.expectManagedAddress(forceResult(frame, value.execute(frame)))
         return try { value.executeAddress(frame) }
         catch (unexpected: UnexpectedResultException) {
             // The exception already invalidated compiled code. Widen once, and
             // force its saved result without evaluating the child a second time.
             genericAddress = true
-            RuntimeTypesGen.expectLiteralAddress(forceResult(frame, unexpected.result))
+            RuntimeTypesGen.expectManagedAddress(forceResult(frame, unexpected.result))
         }
     }
 }
@@ -426,7 +426,7 @@ private class Let(@field:CompilationFinal(dimensions = 1) private val slots: Int
         initialize(frame)
         return body.executeDataValue(frame)
     }
-    override fun executeAddress(frame: VirtualFrame): LiteralAddress {
+    override fun executeAddress(frame: VirtualFrame): ManagedAddress {
         initialize(frame)
         return body.executeAddress(frame)
     }
@@ -574,7 +574,7 @@ private open class Case(scrutinee: Expr, protected val binderSlot: Int,
         return (fallback ?: fault("Non-exhaustive Core case")).body.executeDataValue(frame)
     }
 
-    @ExplodeLoop override fun executeAddress(frame: VirtualFrame): LiteralAddress {
+    @ExplodeLoop override fun executeAddress(frame: VirtualFrame): ManagedAddress {
         prepare(frame)
         var fallback: Alternative? = null
         for (alt in alternatives) {
@@ -626,7 +626,7 @@ private class DefaultCase(scrutinee: Expr, binder: Int, alternatives: Array<Alte
     override fun executeDouble(frame: VirtualFrame): Double { prepare(frame); return alternatives.last().body.executeDouble(frame) }
     override fun executeClosure(frame: VirtualFrame): Closure { prepare(frame); return alternatives.last().body.executeClosure(frame) }
     override fun executeDataValue(frame: VirtualFrame): DataValue { prepare(frame); return alternatives.last().body.executeDataValue(frame) }
-    override fun executeAddress(frame: VirtualFrame): LiteralAddress { prepare(frame); return alternatives.last().body.executeAddress(frame) }
+    override fun executeAddress(frame: VirtualFrame): ManagedAddress { prepare(frame); return alternatives.last().body.executeAddress(frame) }
 }
 private class Construct(private val layout: DataLayout,
                         @field:Children private var fields: Array<Expr>) : Expr() {
@@ -1244,7 +1244,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "float" -> value.toFloat()
         "double" -> value.toDouble()
         "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
-        "string-bytes" -> LiteralAddress.fromHex(value)
+        "string-bytes" -> ManagedAddress.fromHex(value)
         "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
@@ -1713,7 +1713,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         }
         "plusAddr#", "indexCharOffAddr#" -> {
             if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
-            if (name == "plusAddr#") PlusLiteralAddress(args[0], args[1]) else IndexLiteralChar(args[0], args[1])
+            if (name == "plusAddr#") PlusManagedAddress(args[0], args[1]) else IndexLiteralChar(args[0], args[1])
         }
         else -> Primitive(name, args)
     }

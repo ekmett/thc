@@ -373,7 +373,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             local.directDouble -> { b.beginToDouble(); value(); b.endToDouble() }
             reference == DataValue::class.java -> { b.beginRequireData(); value(); b.endRequireData() }
             reference == Closure::class.java -> { b.beginRequireClosure(); value(); b.endRequireClosure() }
-            reference == LiteralAddress::class.java -> { b.beginRequireAddress(); value(); b.endRequireAddress() }
+            reference == ManagedAddress::class.java -> { b.beginRequireAddress(); value(); b.endRequireAddress() }
             else -> value()
         }
         b.endStoreLocal()
@@ -459,14 +459,14 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         "float" -> value.toFloat()
         "double" -> value.toDouble()
         "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
-        "string-bytes" -> LiteralAddress.fromHex(value)
+        "string-bytes" -> ManagedAddress.fromHex(value)
         "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
     private fun constant(value: Any) = ProvenExpression(Expression { it.builder.emitLoadConstant(value) },
         CoreRepresentation(when (value) {
             is Long -> CoreKind.LONG; is Float -> CoreKind.FLOAT; is Double -> CoreKind.DOUBLE
-            is LiteralAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
+            is ManagedAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
         }, evaluated = true))
     private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expression {
         val source = sources.expression(expr, scope.source)

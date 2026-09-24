@@ -167,7 +167,7 @@ internal class SumCase(@Child private var scrutinee: Expr,
         if (second < 0) fault("Non-exhaustive unboxed sum case")
         return alternatives[second].executeDataValue(frame)
     }
-    override fun executeAddress(frame: VirtualFrame): LiteralAddress {
+    override fun executeAddress(frame: VirtualFrame): ManagedAddress {
         if (prepare(frame)) {
             if (first < 0) fault("Non-exhaustive unboxed sum case")
             return alternatives[first].executeAddress(frame)

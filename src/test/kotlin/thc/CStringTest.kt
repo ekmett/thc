@@ -4,19 +4,19 @@ import org.graalvm.polyglot.PolyglotException
 import org.graalvm.polyglot.Value
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
-import thc.runtime.LiteralAddress
+import thc.runtime.ManagedAddress
 import thc.runtime.RuntimeFault
 import java.io.File
 
 class CStringTest {
     @Test fun literalStoragePreservesUnsignedBytesEmbeddedNulsAndImplicitTerminator() {
-        val address = LiteralAddress.fromHex("ff800041")
+        val address = ManagedAddress.fromHex("ff800041")
         assertEquals(255L, address.indexChar(0))
         assertEquals(128L, address.indexChar(1))
         assertEquals(0L, address.indexChar(2))
         assertEquals(65L, address.indexChar(3))
         assertEquals(0L, address.indexChar(4), "GHC static literals append one NUL byte")
-        assertEquals(0L, LiteralAddress.fromHex("").indexChar(0))
+        assertEquals(0L, ManagedAddress.fromHex("").indexChar(0))
         assertSame(address, address.plus(0))
         val shifted = address.plus(3)
         assertEquals(65L, shifted.indexChar(0))
@@ -26,7 +26,7 @@ class CStringTest {
     }
 
     @Test fun literalAddressBoundsRejectOverflowAndForeignMemoryAccess() {
-        val address = LiteralAddress.fromHex("41")
+        val address = ManagedAddress.fromHex("41")
         for (offset in listOf(-1L, 2L, Long.MIN_VALUE, Long.MAX_VALUE)) {
             assertThrows(RuntimeFault::class.java) { address.indexChar(offset) }
         }
@@ -38,7 +38,7 @@ class CStringTest {
         assertThrows(RuntimeFault::class.java) { onePast.indexChar(0) }
         assertThrows(RuntimeFault::class.java) { onePast.plus(Long.MAX_VALUE) }
         for (hex in listOf("0", "gg", "0z")) {
-            assertThrows(RuntimeFault::class.java) { LiteralAddress.fromHex(hex) }
+            assertThrows(RuntimeFault::class.java) { ManagedAddress.fromHex(hex) }
         }
     }
 
