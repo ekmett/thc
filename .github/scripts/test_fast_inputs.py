@@ -40,7 +40,12 @@ class FastInputTests(unittest.TestCase):
     def test_formatter_catalog_and_exact_artifact_admission(self):
         project = Path(__file__).resolve().parents[2]
         modules, pins = cache.wired_catalog(project)
-        self.assertEqual((43, 55), (len(modules), len(pins)))
+        self.assertEqual((47, 60), (len(modules), len(pins)))
+        handle_boot = 'GHC/Internal/IO/Handle/Types.hs-boot'
+        self.assertIn(handle_boot, pins)
+        self.assertIn('  compiler/pinned-ghc-internal/' + handle_boot + '\n', (project / 'thc.cabal').read_text())
+        boot = (project / cache.WIRED_SOURCE).read_text().split('bootSources =', 1)[1].split('moduleSources ::', 1)[0]
+        self.assertLess(boot.index('"' + handle_boot + '"'), boot.index('"GHC/Internal/IO/Exception.hs-boot"'))
         self.assertEqual('GHC.Internal.Enum', modules['GHC/Internal/Enum.hs'])
         self.assertLess(list(modules).index('GHC/Internal/Show.hs'), list(modules).index('GHC/Internal/Enum.hs'))
         self.assertLess(list(modules).index('GHC/Internal/Enum.hs'), list(modules).index('GHC/Internal/ClosureTypes.hs'))
@@ -50,10 +55,18 @@ class FastInputTests(unittest.TestCase):
             self.assertLess(list(modules).index(path), list(modules).index('GHC/Internal/Heap/InfoTable/Types.hsc'))
         self.assertIn('  compiler/pinned-ghc-internal/GHC/Internal/Enum.hs\n',
                       (project / 'thc.cabal').read_text())
+        for source in ('ForeignPtr.hs', 'Foreign/C/String/Encoding.hs', 'IO/Encoding/UTF8.hs', 'IO/Encoding.hs'):
+            path = 'GHC/Internal/' + source
+            self.assertIn(path, modules)
+            if source == 'IO/Encoding.hs':
+                self.assertLess(list(modules).index('GHC/Internal/IO/Handle/Types.hs'), list(modules).index(path))
+            else:
+                self.assertLess(list(modules).index(path), list(modules).index('GHC/Internal/InfoProv/Types.hsc'))
+            self.assertIn('  compiler/pinned-ghc-internal/' + path + '\n', (project / 'thc.cabal').read_text())
         for name, expected in pins.items():
             self.assertEqual(expected, cache.digest(project / 'compiler/pinned-ghc-internal' / name), name)
         files = cache.original_stack_formatter_files(project)
-        self.assertEqual(84, len(files))
+        self.assertEqual(88, len(files))
         self.assertIn('build/original-stack-formatter/manifest.json', DECLARED_REQUIRED)
         for attempt in ('run-1', 'run-42'):
             for suffix in files:
