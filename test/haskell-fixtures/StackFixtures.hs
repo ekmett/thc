@@ -11,7 +11,7 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.Map.Strict as Map
 import Data.List (sort)
 import FixtureSupport (CommandResult (..), hashFile, hashes, runLogged, writeJson)
-import System.Directory (copyFile, createDirectoryIfMissing, doesFileExist, listDirectory, renameFile)
+import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, renameFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>))
@@ -20,13 +20,8 @@ entries :: [String]
 entries = ["captureOriginal", "decodeOriginal", "renderOriginal", "peekOriginalInfoTable",
            "lookupOriginalIPE", "peekOriginalInfoProv"]
 
--- Existing post-Tidy source exports, never relabelled as newly exported Core.
-retained :: [(String, String)]
-retained =
-  [("GHC.Internal.Stack.CloneStack", "d0733836485a57ebc40a4ae52ce77319e4dbc44f617cbd396335ae977e5810e4"),
-   ("GHC.Internal.Stack.Decode", "c3762b0e2ed8bb2bb50b748144fcc7da01dec204c0cc48adade79962e8b35c42"),
-   ("GHC.Internal.InfoProv.Types", "63fe524cfd81c88ebd4f835c8718a30b86828c9e53549a2c001cbffac5ab2d1e"),
-   ("GHC.Internal.Heap.InfoTable", "1065f91361835bb3cf0cf2547ee320c59ba542e65e26ef2ec55c297cdcf9855a")]
+proofResource :: FilePath
+proofResource = "compiler/test-fixtures/OriginalStackProof.json"
 
 prepareOriginalStack :: FilePath -> IO ()
 prepareOriginalStack root = do
@@ -71,26 +66,19 @@ prepareOriginalStack root = do
      "-odir", root </> native, "-hidir", root </> native, root </> driver, "-o", root </> executable]
   nativeRun <- run "native-invariants" [] (root </> executable) []
 
-  sourceRoot <- lookupEnv "THC_STACK_RETAINED_ROOT" >>= maybe
-    (die "Set THC_STACK_RETAINED_ROOT to the preserved source-exports directory; native/fresh export logs are retained") pure
-  createDirectoryIfMissing True (root </> directory </> "retained")
-  copies <- forM retained $ \(name, expected) -> do
-    let original = sourceRoot </> name </> name ++ ".json"
-        destination = directory </> "retained" </> name ++ ".json"
-    actual <- hashFile original
-    unless (actual == expected) (die ("Retained original source hash mismatch: " ++ original))
-    copyFile original (root </> destination)
-    pure (destination, object ["module" .= name, "originalPath" .= original,
-      "path" .= destination, "sha256" .= expected,
-      "exporterRevision" .= ("62e3400c5b889d3971cb4047709c408fd270255f" :: String),
-      "ghcSourceRevision" .= ("902339d332fb4ce2b3c87dcac1ee6495d41ad886" :: String),
-      "fresh" .= False])
-
   let commands = [version, revision] ++ [r | (_, _, r) <- stages] ++ [compile, nativeRun]
-      artifacts = concat [paths | (_, paths, _) <- stages] ++ map fst copies ++ [executable] ++
+      artifacts = concat [paths | (_, paths, _) <- stages] ++ [executable] ++
         concatMap commandArtifacts commands
       sources = [source, driver, "test/haskell-fixtures/StackFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "compiler/export.sh", "compiler/build.sh", "compiler/toolchain.sh", "compiler/THC/Plugin.hs"]
+        "test/haskell-fixtures/Main.hs", "thc.cabal", proofResource,
+        "compiler/export.sh", "compiler/build.sh", "compiler/toolchain.sh", "compiler/THC/Plugin.hs",
+        "compiler/THC/CBV.hs", "compiler/THC/Demands.hs", "compiler/THC/Sources.hs", "compiler/THC/Wired.hs", "compiler/plugin.py",
+        "compiler/pinned-ghc-internal/LICENSE"] ++ map ("compiler/pinned-ghc-internal/" ++)
+        ["GHC/Internal/Stack/CloneStack.hs", "GHC/Internal/Stack/Decode.hs",
+         "GHC/Internal/InfoProv/Types.hsc", "GHC/Internal/Heap/InfoTable.hsc"]
+  proofHash <- hashFile (root </> proofResource)
+  unless (proofHash == "db63661c12a6ecb757697e759fcb95e4d51f3689619bdb7682a041788eb41d4f")
+    (die "Original stack proof resource changed; review its original-source provenance")
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object
@@ -98,8 +86,8 @@ prepareOriginalStack root = do
      "entries" .= entries, "thcRevision" .= BS.unpack (BS.takeWhile (/= '\n') (commandStdout revision)),
      "ghc" .= object ["path" .= ghc, "version" .= ("9.14.1" :: String), "installedArtifactsHashed" .= False],
      "stages" .= Map.fromList [(stage, paths) | (stage, paths, _) <- stages],
-     "retained" .= map snd copies, "nativeOutput" .= (logs </> "native-invariants.stdout"),
-     "sources" .= sourceHashes, "artifacts" .= artifactHashes,
+     "proofResource" .= proofResource, "nativeOutput" .= (logs </> "native-invariants.stdout"),
+     "inputHashes" .= sourceHashes, "artifactHashes" .= artifactHashes,
      "commands" .= map commandRecord commands,
      "limit" .= ("Native invariants only; retained source contracts include unsupported cold getters. No guest Decode success or native/JVM frame equivalence." :: String)]
   putStrLn ("Original source consumer and native shape evidence: " ++ manifest)
