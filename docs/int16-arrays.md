@@ -103,16 +103,15 @@ the signed64 wrap of `raw-32768` or `raw+65535`.
 With the pinned environment, run:
 
 ```sh
-python3 scripts/test-int16-array-model.py
-python3 scripts/prepare-int16-arrays.py
+cabal run exe:thc-fixtures --offline -- int16-arrays
+./gradlew test --tests thc.runtime.Int16ArrayNativeTest
 ```
 
-Preparation regenerates original pre/post-Tidy Core, requires strict all-branch
-acceptance, and compiles `NativeInt16Array.hs`. Under `build/int16-arrays`, it
-records Core, per-entry audits, the native executable, `oracle.tsv`,
-`expected.tsv`, `literal-oracle.tsv`, and `manifest.json`. The manifest includes
-the source/artifact hashes, exact primitive counts, native byte order, installed
-array package and toolchain information, and actual-root proofs.
+Preparation regenerates pre/post-Tidy Core and compiles `NativeInt16Array.hs`.
+Under `build/int16-arrays`, it records Core, the native executable, `oracle.tsv`,
+`literal-oracle.tsv`, and `manifest.json`. The manifest includes source/artifact
+hashes, native byte order, input domains, and toolchain information. JVM tests
+check the Core primitives and actual root structure directly.
 
 The six array entries use 403 full-width input seeds each: 2,418 native/model
 rows. Inputs cover all 64 machine bit positions and neighbors, signed16/wrap

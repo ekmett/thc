@@ -44,14 +44,14 @@ the pinned JDK permits copies and returns to quiet them. The tests do not
 silently canonicalize quiet-NaN payloads or zero signs to pass.
 
 ```sh
-python3 scripts/prepare-double-arrays.py
-python3 scripts/test-double-array-model.py
+cabal run exe:thc-fixtures --offline -- double-arrays
+./gradlew test --tests thc.runtime.DoubleArrayNativeTest
 python3 scripts/test-core-bytearrays.py
 ./gradlew test --tests 'thc.runtime.DoubleArray*'
 ```
 
 The manifest under `build/double-arrays` records source/artifact hashes, native
-byte order, exact input domain and pre/post-Tidy strict dependency audits. JVM
+byte order and exact input domain. JVM
 tests compare every row on both backends with guest inlining enabled and
 disabled. Every post-compilation call must make the exact expected compiled
 entry increment (two for public roots, three with a retained helper). Each entry

@@ -48,10 +48,8 @@
         "scripts/test-core-float-vector-memory.py",
         "scripts/test-core-sums.py",
         "scripts/test-core-vectors.py",
-        "scripts/test-double-array-model.py",
         "scripts/test-doublex2-bytearray-model.py",
         "scripts/test-doublex2-model.py",
-        "scripts/test-float-word-array-model.py",
         "scripts/test-floatx4-bytearray-model.py",
         "scripts/test-floatx4-model.py",
         "scripts/test-scalar-bitcasts.py",
@@ -89,10 +87,8 @@
         "scripts/test-core-float-vector-memory.py",
         "scripts/test-core-sums.py",
         "scripts/test-core-vectors.py",
-        "scripts/test-double-array-model.py",
         "scripts/test-doublex2-bytearray-model.py",
         "scripts/test-doublex2-model.py",
-        "scripts/test-float-word-array-model.py",
         "scripts/test-floatx4-bytearray-model.py",
         "scripts/test-floatx4-model.py",
         "scripts/test-scalar-bitcasts.py",
@@ -193,16 +189,26 @@
       "python": []
     },
     "compiler/test-fixtures/IoMainPapAudit.hs": {
-      "junit": ["thc.runtime.IoMainPapNativeTest"],
-      "python": ["scripts/test-audit-core.py"]
+      "junit": [
+        "thc.runtime.IoMainPapNativeTest"
+      ],
+      "python": [
+        "scripts/test-audit-core.py"
+      ]
     },
     "compiler/test-fixtures/IoMainPapNative.hs": {
-      "junit": ["thc.runtime.IoMainPapNativeTest"],
+      "junit": [
+        "thc.runtime.IoMainPapNativeTest"
+      ],
       "python": []
     },
     "scripts/prepare-io-main-pap.py": {
-      "junit": ["thc.runtime.IoMainPapNativeTest"],
-      "python": ["scripts/test-audit-core.py"]
+      "junit": [
+        "thc.runtime.IoMainPapNativeTest"
+      ],
+      "python": [
+        "scripts/test-audit-core.py"
+      ]
     },
     "app/Main.hs": {
       "junit": [],
@@ -295,23 +301,38 @@
       "python": []
     },
     "compiler/test-fixtures/CBVAudit.hs": {
-      "junit": ["thc.RealCoreEntryContractTest"],
+      "junit": [
+        "thc.RealCoreEntryContractTest"
+      ],
       "python": []
     },
     "compiler/test-fixtures/CBVJoinAudit.hs": {
-      "junit": ["thc.RealCoreEntryContractTest"],
+      "junit": [
+        "thc.RealCoreEntryContractTest"
+      ],
       "python": []
     },
     "compiler/test-fixtures/CBVCoercionAudit.hs": {
-      "junit": ["thc.RealCoreEntryContractTest", "thc.runtime.ScalarLexicalProofTest", "thc.runtime.BoxedLexicalProofTest", "thc.runtime.ScalarPrimitiveSignatureTest"],
+      "junit": [
+        "thc.RealCoreEntryContractTest",
+        "thc.runtime.ScalarLexicalProofTest",
+        "thc.runtime.BoxedLexicalProofTest",
+        "thc.runtime.ScalarPrimitiveSignatureTest"
+      ],
       "python": []
     },
     "compiler/test-fixtures/DataToTagAudit.hs": {
-      "junit": ["thc.runtime.DataToTagTest"],
-      "python": ["scripts/test-core-data-tags.py"]
+      "junit": [
+        "thc.runtime.DataToTagTest"
+      ],
+      "python": [
+        "scripts/test-core-data-tags.py"
+      ]
     },
     "compiler/test-fixtures/DemandAudit.hs": {
-      "junit": ["thc.RealCoreEntryContractTest"],
+      "junit": [
+        "thc.RealCoreEntryContractTest"
+      ],
       "python": []
     },
     "compiler/test-fixtures/Explicit64PrimopsAudit.hs": {
@@ -322,16 +343,22 @@
       "python": []
     },
     "compiler/test-fixtures/Int8ArrayAudit.hs": {
-      "junit": ["thc.runtime.Int8ArrayNativeTest"],
-      "python": ["scripts/test-int8-array-model.py"]
+      "junit": [
+        "thc.runtime.Int8ArrayNativeTest"
+      ],
+      "python": []
     },
     "compiler/test-fixtures/Int16ArrayAudit.hs": {
-      "junit": ["thc.runtime.Int16ArrayNativeTest"],
-      "python": ["scripts/test-int16-array-model.py"]
+      "junit": [
+        "thc.runtime.Int16ArrayNativeTest"
+      ],
+      "python": []
     },
     "compiler/test-fixtures/Int32ArrayAudit.hs": {
-      "junit": ["thc.runtime.Int32ArrayNativeTest"],
-      "python": ["scripts/test-int32-array-model.py"]
+      "junit": [
+        "thc.runtime.Int32ArrayNativeTest"
+      ],
+      "python": []
     },
     "compiler/test-fixtures/IntegerPrimopsAudit.hs": {
       "junit": [
@@ -340,8 +367,12 @@
       "python": []
     },
     "compiler/test-fixtures/MutableByteArraySizeAudit.hs": {
-      "junit": ["thc.runtime.MutableByteArraySizeTest"],
-      "python": ["scripts/test-mutable-bytearray-size.py"]
+      "junit": [
+        "thc.runtime.MutableByteArraySizeTest"
+      ],
+      "python": [
+        "scripts/test-mutable-bytearray-size.py"
+      ]
     },
     "compiler/test-fixtures/SignedNarrowPrimopsAudit.hs": {
       "junit": [
@@ -395,23 +426,33 @@
       "python": []
     },
     "examples/THC/Unboxed8Arrays.hs": {
-      "junit": ["thc.runtime.Int8ArrayNativeTest"],
-      "python": ["scripts/test-int8-array-model.py"]
+      "junit": [
+        "thc.runtime.Int8ArrayNativeTest"
+      ],
+      "python": []
     },
     "examples/THC/Unboxed16Arrays.hs": {
-      "junit": ["thc.runtime.Int16ArrayNativeTest"],
-      "python": ["scripts/test-int16-array-model.py"]
+      "junit": [
+        "thc.runtime.Int16ArrayNativeTest"
+      ],
+      "python": []
     },
     "examples/THC/Unboxed32Arrays.hs": {
-      "junit": ["thc.runtime.Int32ArrayNativeTest"],
-      "python": ["scripts/test-int32-array-model.py"]
+      "junit": [
+        "thc.runtime.Int32ArrayNativeTest"
+      ],
+      "python": []
     },
     "scripts/check-cbv-metadata.py": {
-      "junit": ["thc.RealCoreEntryContractTest"],
+      "junit": [
+        "thc.RealCoreEntryContractTest"
+      ],
       "python": []
     },
     "scripts/check-demand-metadata.py": {
-      "junit": ["thc.RealCoreEntryContractTest"],
+      "junit": [
+        "thc.RealCoreEntryContractTest"
+      ],
       "python": []
     },
     "scripts/native-oracle.sh": {
@@ -423,36 +464,44 @@
       "python": []
     },
     "scripts/generate-simd-families.py": {
-      "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
-      "python": ["scripts/test-simd-families.py"]
+      "junit": [
+        "thc.runtime.SimdCapabilitySmokeTest"
+      ],
+      "python": [
+        "scripts/test-simd-families.py"
+      ]
     },
     "scripts/prepare-data-to-tag.py": {
-      "junit": ["thc.runtime.DataToTagTest"],
-      "python": ["scripts/test-core-data-tags.py"]
-    },
-    "scripts/prepare-int8-arrays.py": {
-      "junit": ["thc.runtime.Int8ArrayNativeTest"],
-      "python": ["scripts/test-int8-array-model.py"]
-    },
-    "scripts/prepare-int16-arrays.py": {
-      "junit": ["thc.runtime.Int8ArrayNativeTest", "thc.runtime.Int16ArrayNativeTest"],
-      "python": ["scripts/test-int8-array-model.py", "scripts/test-int16-array-model.py"]
-    },
-    "scripts/prepare-int32-arrays.py": {
-      "junit": ["thc.runtime.Int32ArrayNativeTest"],
-      "python": ["scripts/test-int32-array-model.py"]
+      "junit": [
+        "thc.runtime.DataToTagTest"
+      ],
+      "python": [
+        "scripts/test-core-data-tags.py"
+      ]
     },
     "scripts/prepare-mutable-bytearray-size.py": {
-      "junit": ["thc.runtime.MutableByteArraySizeTest"],
-      "python": ["scripts/test-mutable-bytearray-size.py"]
+      "junit": [
+        "thc.runtime.MutableByteArraySizeTest"
+      ],
+      "python": [
+        "scripts/test-mutable-bytearray-size.py"
+      ]
     },
     "scripts/prepare-simd-capability-smoke.py": {
-      "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
-      "python": ["scripts/test-simd-families.py"]
+      "junit": [
+        "thc.runtime.SimdCapabilitySmokeTest"
+      ],
+      "python": [
+        "scripts/test-simd-families.py"
+      ]
     },
     "scripts/prepare-simd-families.py": {
-      "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
-      "python": ["scripts/test-simd-families.py"]
+      "junit": [
+        "thc.runtime.SimdCapabilitySmokeTest"
+      ],
+      "python": [
+        "scripts/test-simd-families.py"
+      ]
     },
     "scripts/prepare-tuple-input-audit.py": {
       "junit": [
@@ -461,12 +510,20 @@
       "python": []
     },
     "scripts/simd-families.json": {
-      "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
-      "python": ["scripts/test-simd-families.py"]
+      "junit": [
+        "thc.runtime.SimdCapabilitySmokeTest"
+      ],
+      "python": [
+        "scripts/test-simd-families.py"
+      ]
     },
     "scripts/simd_family_model.py": {
-      "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
-      "python": ["scripts/test-simd-families.py"]
+      "junit": [
+        "thc.runtime.SimdCapabilitySmokeTest"
+      ],
+      "python": [
+        "scripts/test-simd-families.py"
+      ]
     },
     "src/test/kotlin/thc/PrimopTestContext.kt": {
       "junit": [

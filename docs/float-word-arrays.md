@@ -84,19 +84,18 @@ S64(3*before + 16*first + 20*second
 
 The Haskell checksum separately weights post-write reads and immutable
 indices (5+11 and 7+13). Its primitive-count gate requires all those operations.
-Python uses explicit integer/byte storage, with a separate shift/mask test for
+The JVM model uses explicit integer/byte storage, with a separate shift/mask test for
 both endiannesses; it performs no host floating-point expected-value arithmetic.
 
 ## Preparation and proof boundary
 
-Run `python3 scripts/test-float-word-array-model.py`, then
-`python3 scripts/prepare-float-word-arrays.py` with the pinned toolchain and
-the shared resource gate. Preparation regenerates real optimized pre/post-Tidy
-Core, runs all-branch strict audits for all seven entries at both stages,
-compiles `NativeFloatWordArray.hs`, and compares 3,165 native rows against
-independent models. It writes `build/float-word-arrays/manifest.json`,
-`oracle.tsv`, and `expected.tsv`, with source/artifact hashes, exact primitive
-counts, per-entry input domains, and recorded native byte order.
+Run `cabal run exe:thc-fixtures --offline -- float-word-arrays`, then
+`./gradlew test --tests thc.runtime.FloatWordArrayNativeTest` with the pinned
+toolchain. Preparation regenerates optimized pre/post-Tidy Core and 3,165 native
+rows. JVM tests compare every row with independent models and inspect the Core
+primitive occurrences and call structure directly. The producer writes
+`build/float-word-arrays/manifest.json` and `oracle.tsv`, with artifact hashes,
+per-entry input domains, and recorded native byte order.
 
 All fourteen strict root audits accept after the six selected capabilities are
 present, with zero missing globals. Each public/alias root has one reachable
