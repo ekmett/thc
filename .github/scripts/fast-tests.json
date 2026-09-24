@@ -590,6 +590,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.CoreContinuationNativeTest",
         "thc.runtime.PinnedPointerCellsTest",
         "thc.runtime.OriginalStdioNativeTest",
         "thc.runtime.OriginalStackConsumerProofTest",
@@ -604,6 +605,10 @@
         "thc.runtime.DoubleArrayNativeTest",
         "thc.runtime.FloatWordArrayNativeTest"
       ],
+      "python": []
+    },
+    "test/haskell-fixtures/ContinuationFixtures.hs": {
+      "junit": ["thc.runtime.CoreContinuationNativeTest"],
       "python": []
     },
     "src/test/kotlin/thc/NumericPrimopCoreEvidence.kt": {

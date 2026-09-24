@@ -87,6 +87,19 @@
         "compiler/test-fixtures/SynchronousExceptionsNative.hs"
       ]
     },
+    "core-continuation": {
+      "junit": ["thc.runtime.CoreContinuationNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "core-continuation"]}],
+      "outputs": ["build/core-continuation"],
+      "sources": [
+        "test/haskell-fixtures/ContinuationFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal",
+        "compiler/test-fixtures/CoreContinuationAudit.hs",
+        "compiler/test-fixtures/CoreContinuationNative.hs"
+      ]
+    },
     "io-main-pap": {
       "junit": ["thc.runtime.IoMainPapNativeTest"],
       "commands": [{"argv": ["python3", "scripts/prepare-io-main-pap.py"]}],
