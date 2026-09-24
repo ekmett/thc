@@ -39,6 +39,17 @@ class TargetLayout private constructor(
     )
 
     companion object {
+        // Exact current Wired.moduleSources HSC inventory. Bundle tests derive
+        // receipts from the producer catalog so additions cannot drift silently.
+        private val generatedSourcePaths = setOf(
+            "GHC/Internal/Heap/Constants.hsc",
+            "GHC/Internal/Heap/InfoTable/Types.hsc",
+            "GHC/Internal/Heap/InfoTable.hsc",
+            "GHC/Internal/Stack/Constants.hsc",
+            "GHC/Internal/InfoProv/Types.hsc",
+            "GHC/Internal/Stack/CCS.hsc",
+            "GHC/Internal/ExecutionStack/Internal.hsc",
+        )
         private val numbers = setOf(
             "infoTableBytes", "infoTablePtrsOffset", "infoTablePtrsBytes",
             "infoTableNptrsOffset", "infoTableNptrsBytes", "infoTableTypeOffset",
@@ -180,13 +191,13 @@ class TargetLayout private constructor(
             }
             val generated = index["generatedSources"] as? List<*>
                 ?: error("Missing generated GHC source receipts")
-            require(generated.size == 6 && generated.all { item ->
+            require(generated.size == generatedSourcePaths.size && generated.all { item ->
                 val source = item as? Map<*, *> ?: return@all false
                 val path = source["path"] as? String
                 val sha = source["sha256"] as? String
-                source.keys == setOf("path", "sha256") && path?.endsWith(".hsc") == true &&
+                source.keys == setOf("path", "sha256") && path in generatedSourcePaths &&
                     sha?.matches(Regex("[0-9a-f]{64}")) == true
-            } && generated.map { (it as Map<*, *>)["path"] }.distinct().size == 6) {
+            } && generated.map { (it as Map<*, *>)["path"] }.toSet() == generatedSourcePaths) {
                 "Invalid generated GHC source receipts"
             }
             return fromParts(inputs["compiler"] as? Map<*, *> ?: error("Missing target compiler"),
