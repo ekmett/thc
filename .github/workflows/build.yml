@@ -96,6 +96,7 @@ jobs:
         run: |
           set -euo pipefail
           cabal build thc --offline -fdevelopment
+          cabal run thc --offline -fdevelopment -- --help
           driver="$(cabal list-bin exe:thc --offline -fdevelopment)"
           test -x "$driver"
           mkdir -p build/driver-tests build/run-integration
