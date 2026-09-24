@@ -312,6 +312,18 @@
       "junit": ["thc.runtime.NarrowByteOffsetTest"],
       "python": []
     },
+    "compiler/test-fixtures/ThreadAsyncAudit.hs": {
+      "junit": ["thc.runtime.ThreadAsyncNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/ThreadAsyncNative.hs": {
+      "junit": ["thc.runtime.ThreadAsyncNativeTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/ThreadAsyncFixtures.hs": {
+      "junit": ["thc.runtime.ThreadAsyncNativeTest"],
+      "python": []
+    },
     "compiler/test-fixtures/PinnedPointerCellsNative.hs": {
       "junit": ["thc.runtime.PinnedPointerCellsTest"],
       "python": []
@@ -715,6 +727,7 @@
         "thc.runtime.WordFloatingTest",
         "thc.runtime.OriginalStackFormatterTest",
         "thc.runtime.CoreContinuationNativeTest",
+        "thc.runtime.ThreadAsyncNativeTest",
         "thc.runtime.SmallArrayTest",
         "thc.runtime.PinnedPointerCellsTest",
         "thc.runtime.WideCharAddressTest",
