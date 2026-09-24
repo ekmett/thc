@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 301 | Implemented fixed numeric/character scalar forms. |
-| Partial | 265 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 925 | No declared lowering. |
+| Partial | 267 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 923 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -599,6 +599,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeFloatArrayAsFloatX4#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeFloatX4Array#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeInt16Array#` — arity 4 — Managed byte storage
+- [ ] `writeInt16OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeInt32Array#` — arity 4 — Managed byte storage
 - [ ] `writeInt32ArrayAsInt32X4#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeInt32X4Array#` — arity 4 — Specialized lowering; see capability and coverage limits
@@ -608,6 +609,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeMutVar#` — arity 3 — Managed lazy reference cells
 - [ ] `writeSmallArray#` — arity 4 — Managed lifted arrays
 - [ ] `writeWord16Array#` — arity 4 — Managed byte storage
+- [ ] `writeWord16OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeWord32Array#` — arity 4 — Managed byte storage
 - [ ] `writeWord32ArrayAsWord32X4#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeWord32X4Array#` — arity 4 — Specialized lowering; see capability and coverage limits
@@ -1412,7 +1414,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeInt16ArrayAsInt16X16#` — arity 4
 - [ ] `writeInt16ArrayAsInt16X32#` — arity 4
 - [ ] `writeInt16ArrayAsInt16X8#` — arity 4
-- [ ] `writeInt16OffAddr#` — arity 4
 - [ ] `writeInt16OffAddrAsInt16X16#` — arity 4
 - [ ] `writeInt16OffAddrAsInt16X32#` — arity 4
 - [ ] `writeInt16OffAddrAsInt16X8#` — arity 4
@@ -1468,7 +1469,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeWord16ArrayAsWord16X16#` — arity 4
 - [ ] `writeWord16ArrayAsWord16X32#` — arity 4
 - [ ] `writeWord16ArrayAsWord16X8#` — arity 4
-- [ ] `writeWord16OffAddr#` — arity 4
 - [ ] `writeWord16OffAddrAsWord16X16#` — arity 4
 - [ ] `writeWord16OffAddrAsWord16X32#` — arity 4
 - [ ] `writeWord16OffAddrAsWord16X8#` — arity 4

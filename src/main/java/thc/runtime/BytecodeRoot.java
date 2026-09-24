@@ -602,6 +602,15 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    public static final class WriteWord16OffAddr {
+        @Specialization public static Object write(ManagedAddress address, long offset, long value, Object state) {
+            ManagedByteArray.requireState(state);
+            address.writeWord16(offset, value);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+
+    @Operation
     public static final class WriteAddrOffAddr {
         @Specialization public static Object write(ManagedAddress address, long offset,
                 ManagedAddress value, Object state) {

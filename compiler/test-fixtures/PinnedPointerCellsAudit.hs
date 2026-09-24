@@ -133,3 +133,29 @@ halfwordReadRoundtrip raw = runRW# (\s0 ->
                 +# word2Int# (word16ToWord# unsignedIndex)) #)
     } } } }) of { (# _, I# answer #) -> answer }
   } } } })
+
+-- Two native-endian halfword stores occupy bytes 16..17 and 24..25. A
+-- retained address at bytes 8..15 proves both writes are disjoint from the
+-- managed pointer cell; byte observations make the layout independently visible.
+{-# OPAQUE halfwordWriteRoundtrip #-}
+halfwordWriteRoundtrip :: Int# -> Int#
+halfwordWriteRoundtrip raw = runRW# (\s0 ->
+  case newPinnedByteArray# 32# s0 of { (# s1, mutable #) ->
+  case unsafeFreezeByteArray# mutable s1 of { (# s2, bytes #) ->
+  case byteArrayContents# bytes of { base ->
+  case keepAlive# bytes s2 (\s3 ->
+    case writeAddrOffAddr# base 1# (plusAddr# base 24#) s3 of { s4 ->
+    case writeInt16OffAddr# base 12# (intToInt16# raw) s4 of { s5 ->
+    case writeWord16OffAddr# base 8# (wordToWord16# (int2Word# (raw +# 32768#))) s5 of { s6 ->
+    case readAddrOffAddr# base 1# s6 of { (# s7, target #) ->
+    case indexWord8Array# bytes 16# of { a ->
+    case indexWord8Array# bytes 17# of { b ->
+    case indexWord8Array# bytes 24# of { c ->
+    case indexWord8Array# bytes 25# of { d ->
+      (# s7, I# (eqAddr# target (plusAddr# base 24#) *# 4294967296#
+        +# word2Int# (word8ToWord# a) *# 16777216#
+        +# word2Int# (word8ToWord# b) *# 65536#
+        +# word2Int# (word8ToWord# c) *# 256#
+        +# word2Int# (word8ToWord# d)) #)
+    } } } } } } } }) of { (# _, I# answer #) -> answer }
+  } } })
