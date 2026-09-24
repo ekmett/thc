@@ -1,6 +1,8 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.CoreZipBundleTest",
+    "thc.CoreLinkerTest",
     "thc.runtime.HandoffTest",
     "thc.runtime.HostEntryCompilationTest",
     "thc.runtime.SimdFamiliesTest",
