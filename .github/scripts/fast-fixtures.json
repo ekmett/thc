@@ -14,6 +14,12 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "fused-floating": {
+      "junit": ["thc.runtime.FusedFloatingTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "fused-floating"]}],
+      "outputs": ["build/fused-floating"],
+      "sources": ["test/haskell-fixtures/FusedFloatingFixtures.hs", "compiler/test-fixtures/FloatingAudit.hs", "compiler/test-fixtures/FloatingAuditNative.hs"]
+    },
     "word-floating": {
       "junit": ["thc.runtime.WordFloatingTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "word-floating"]}],

@@ -8,9 +8,9 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Supported | 301 | Implemented fixed numeric/character scalar forms. |
+| Supported | 309 | Implemented fixed numeric/character scalar forms. |
 | Partial | 275 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 915 | No declared lowering. |
+| Missing | 907 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -127,6 +127,14 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `fabsFloat#` — arity 1
 - [x] `float2Double#` — arity 1
 - [x] `float2Int#` — arity 1
+- [x] `fmaddDouble#` — arity 3
+- [x] `fmaddFloat#` — arity 3
+- [x] `fmsubDouble#` — arity 3
+- [x] `fmsubFloat#` — arity 3
+- [x] `fnmaddDouble#` — arity 3
+- [x] `fnmaddFloat#` — arity 3
+- [x] `fnmsubDouble#` — arity 3
+- [x] `fnmsubFloat#` — arity 3
 - [x] `geChar#` — arity 2
 - [x] `geFloat#` — arity 2
 - [x] `geInt16#` — arity 2
@@ -723,35 +731,27 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `fetchXorIntArray#` — arity 4
 - [ ] `fetchXorWordAddr#` — arity 3
 - [ ] `finalizeWeak#` — arity 2
-- [ ] `fmaddDouble#` — arity 3
 - [ ] `fmaddDoubleX2#` — arity 3
 - [ ] `fmaddDoubleX4#` — arity 3
 - [ ] `fmaddDoubleX8#` — arity 3
-- [ ] `fmaddFloat#` — arity 3
 - [ ] `fmaddFloatX16#` — arity 3
 - [ ] `fmaddFloatX4#` — arity 3
 - [ ] `fmaddFloatX8#` — arity 3
-- [ ] `fmsubDouble#` — arity 3
 - [ ] `fmsubDoubleX2#` — arity 3
 - [ ] `fmsubDoubleX4#` — arity 3
 - [ ] `fmsubDoubleX8#` — arity 3
-- [ ] `fmsubFloat#` — arity 3
 - [ ] `fmsubFloatX16#` — arity 3
 - [ ] `fmsubFloatX4#` — arity 3
 - [ ] `fmsubFloatX8#` — arity 3
-- [ ] `fnmaddDouble#` — arity 3
 - [ ] `fnmaddDoubleX2#` — arity 3
 - [ ] `fnmaddDoubleX4#` — arity 3
 - [ ] `fnmaddDoubleX8#` — arity 3
-- [ ] `fnmaddFloat#` — arity 3
 - [ ] `fnmaddFloatX16#` — arity 3
 - [ ] `fnmaddFloatX4#` — arity 3
 - [ ] `fnmaddFloatX8#` — arity 3
-- [ ] `fnmsubDouble#` — arity 3
 - [ ] `fnmsubDoubleX2#` — arity 3
 - [ ] `fnmsubDoubleX4#` — arity 3
 - [ ] `fnmsubDoubleX8#` — arity 3
-- [ ] `fnmsubFloat#` — arity 3
 - [ ] `fnmsubFloatX16#` — arity 3
 - [ ] `fnmsubFloatX4#` — arity 3
 - [ ] `fnmsubFloatX8#` — arity 3

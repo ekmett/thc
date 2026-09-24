@@ -2,11 +2,12 @@
 
 THC supports a bounded scalar `Float#`/`Double#` foundation in both the AST and
 bytecode backends. It includes floating literals, primitive locals, constructor
-fields and closure captures, scalar arguments/results, and 66 primops:
+fields and closure captures, scalar arguments/results, and 74 primops:
 
 | Family | Float# | Double# |
 | --- | --- | --- |
 | Arithmetic | `plusFloat#`, `minusFloat#`, `timesFloat#`, `divideFloat#`, `negateFloat#` | `+##`, `-##`, `*##`, `/##`, `negateDouble#` |
+| Fused multiply/add | `fmaddFloat#`, `fmsubFloat#`, `fnmaddFloat#`, `fnmsubFloat#` | `fmaddDouble#`, `fmsubDouble#`, `fnmaddDouble#`, `fnmsubDouble#` |
 | Square root | `sqrtFloat#` | `sqrtDouble#` |
 | Scalar math | `fabsFloat#`, `expFloat#`, `expm1Float#`, `logFloat#`, `log1pFloat#`, `sinFloat#`, `cosFloat#`, `powerFloat#` | `fabsDouble#`, `expDouble#`, `expm1Double#`, `logDouble#`, `log1pDouble#`, `sinDouble#`, `cosDouble#`, `**##` |
 | Trigonometric and hyperbolic | `tanFloat#`, `asinFloat#`, `acosFloat#`, `atanFloat#`, `sinhFloat#`, `coshFloat#`, `tanhFloat#` | `tanDouble#`, `asinDouble#`, `acosDouble#`, `atanDouble#`, `sinhDouble#`, `coshDouble#`, `tanhDouble#` |
@@ -38,6 +39,21 @@ inlining enabled/disabled. Its input domain includes 2^24/2^53, both sides of
 2^63, max Word, and even/odd midpoint neighbors; exact Word/Float/Double proofs
 and unary arities have negative controls. Preparation is wired into full and
 focused CI; no installed GHC artifacts are hashed.
+
+The fused variants implement `x*y+z`, `x*y-z`, `-x*y+z`, and `-x*y-z`,
+respectively, with one nearest/even rounding using the corresponding Java
+`Math.fma` overload. Negations apply to operands, not the rounded result;
+binary32 never goes through a binary64 intermediate. These signs match pinned
+GHC `902339d332fb4ce2b3c87dcac1ee6495d41ad886`, `primops.txt.pp:1465–1532`.
+`cabal run exe:thc-fixtures -- fused-floating` reuses `FloatingAudit` and its
+native driver (`--fused`), with no additional ISA flags. The 12,304 native rows
+cover signed zeros, subnormals, overflow rescue, cancellation, halfway rounding,
+infinities and NaNs. `FusedFloatingTest` independently rounds exact integer
+products/sums; NaN results are compared by classification, not payload or sign.
+Both Core stages/backends and inlining modes check the first installed call,
+exactly two compiled guest entries per scalar observer call, target validity
+and empty handoff loans. Separate mutation controls reject non-fused arithmetic,
+Double-mediated Float rounding, malformed ternary proofs and incomplete receipts.
 
 Generic function call packets and root returns still use the existing Object
 ABI. Non-inlined floating calls can therefore allocate wrapper objects. The
