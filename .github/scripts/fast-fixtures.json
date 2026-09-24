@@ -4,6 +4,7 @@
     "thc.runtime.HandoffTest",
     "thc.runtime.HostEntryCompilationTest",
     "thc.runtime.SimdFamiliesTest",
+    "thc.ScalarPrimopModelTest",
     "thc.runtime.IoMainBoundaryTest",
     "thc.runtime.TypedInputScalarSourceTest"
   ],

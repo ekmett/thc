@@ -488,6 +488,16 @@
       ],
       "python": []
     },
+    "src/test/kotlin/thc/ScalarPrimopModel.kt": {
+      "junit": [
+        "thc.ScalarPrimopModelTest",
+        "thc.runtime.BitPrimopsTest",
+        "thc.IntegerPrimopsTest",
+        "thc.SignedNarrowPrimopsTest",
+        "thc.runtime.Explicit64PrimopsTest"
+      ],
+      "python": []
+    },
     "compiler/putstrln/Main.hs": {
       "junit": [],
       "python": [

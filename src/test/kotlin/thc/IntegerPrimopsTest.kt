@@ -9,7 +9,6 @@ import org.graalvm.polyglot.Value
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.io.File
-import java.math.BigInteger
 import java.security.MessageDigest
 
 /** Actual GHC primops, unsigned mathematical results and installed guest code. */
@@ -31,27 +30,7 @@ class IntegerPrimopsTest {
     }
 
     private fun mathematical(name: String, width: Int, left: Long, right: Long): Long {
-        val modulus = BigInteger.ONE.shiftLeft(width)
-        val mask = modulus - BigInteger.ONE
-        val x = BigInteger.valueOf(left).mod(modulus)
-        val y = BigInteger.valueOf(right).mod(modulus)
-        fun bit(condition: Boolean) = if (condition) BigInteger.ONE else BigInteger.ZERO
-        val value = when (name.substringBefore("Word")) {
-            "quot" -> x / y
-            "rem" -> x % y
-            "eq" -> bit(x == y)
-            "ne" -> bit(x != y)
-            "gt" -> bit(x > y)
-            "ge" -> bit(x >= y)
-            "and" -> x.and(y)
-            "or" -> x.or(y)
-            "xor" -> x.xor(y)
-            "not" -> x.xor(mask)
-            "uncheckedShiftL" -> x.shiftLeft(right.toInt()).and(mask)
-            "uncheckedShiftRL" -> x.shiftRight(right.toInt())
-            else -> error("Unknown integer primop $name")
-        }
-        return value.toLong()
+        return ScalarPrimopModel.scalar(name.substringBefore("Word"), width, true, left, right)
     }
 
     @Test fun realCoreAgreesWithNativeAndUnsignedModelBeforeAndAfterCompilation() {
