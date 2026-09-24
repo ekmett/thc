@@ -173,6 +173,7 @@ jobs:
           python3 scripts/test-int8-array-model.py
           python3 scripts/test-show-int-model.py
           python3 scripts/test-show-word-list-model.py
+          python3 scripts/test-short-bytes-slices-model.py
           python3 scripts/test-array-slice-model.py
           python3 scripts/test-mutable-bytearray-model.py
           python3 scripts/test-primop-coverage.py
@@ -240,6 +241,15 @@ jobs:
             build/show-word-list/cstring/core/
             build/show-word-list/cstring/boot-provenance.json
             build/show-word-list/native/show-word-list-oracle
+            build/short-bytes-slices/manifest.json
+            build/short-bytes-slices/*.tsv
+            build/short-bytes-slices/*.audit.json
+            build/short-bytes-slices/*-core/
+            build/short-bytes-slices/list/core/
+            build/short-bytes-slices/list/boot-provenance.json
+            build/short-bytes-slices/cstring/core/
+            build/short-bytes-slices/cstring/boot-provenance.json
+            build/short-bytes-slices/native/short-bytes-slices-oracle
             build/unsafe-equality/
             build/test-results/
             build/aggregate-frontier.json
