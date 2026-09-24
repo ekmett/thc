@@ -28,7 +28,7 @@ HEX = re.compile(r"[0-9a-f]{64}\Z")
 SELF = ".github/scripts/fast_inputs.py"
 # These are the runtime files actually fingerprinted by prepare-tests.sh's
 # preparers. An additional recorded runtime source fails closed until reviewed.
-RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/CoreVectorMemory.kt",
+RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/java/thc/runtime/DoubleX2.java")
 MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 boxed-arrays bytearray compare-byte-arrays data-to-tag double-arrays
@@ -61,9 +61,9 @@ REQUIRED = tuple(sorted({
     "build/map/core/GHC.InterfaceClosure.json",
     "build/map/boot-core/GHC.Internal.CString.json",
     *(f"build/core/{n}.json" for n in ("StrictFields", "SpeculationAudit",
-      "RepresentationAudit", "SourceNotes", "CbvAudit", "CbvJoinAudit",
-      "CbvCoercionAudit", "ConstructorFieldAudit", "DemandAudit")),
-    *(f"build/cbv-post-core/{n}.json" for n in ("CbvAudit", "CbvJoinAudit", "CbvCoercionAudit")),
+      "RepresentationAudit", "SourceNotes", "CBVAudit", "CBVJoinAudit",
+      "CBVCoercionAudit", "ConstructorFieldAudit", "DemandAudit")),
+    *(f"build/cbv-post-core/{n}.json" for n in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
     "build/source-core/SourceNotes.json", "build/source-core/RepresentationAudit.json",
 }))
 BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["floating", "corpus",

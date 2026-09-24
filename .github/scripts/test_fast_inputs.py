@@ -141,6 +141,23 @@ class FastInputTests(unittest.TestCase):
         self.write_manifest()
         with self.assertRaises(cache.CacheMiss): self.pack()
 
+    def test_renamed_runtime_provenance_is_keyed_and_old_path_is_not_aliased(self):
+        for name in cache.RUNTIME_INPUTS:
+            self.manifest["inputHashes"][name] = self.current["sources"][name]
+        self.write_manifest()
+        manifest = self.pack(); self.remove_payload(manifest)
+        cache.restore(self.root, self.current, self.bundle)
+        self.manifest["inputHashes"]["src/main/kotlin/thc/runtime/CoreVectorMemory.kt"] = "a" * 64
+        self.write_manifest()
+        with self.assertRaises(cache.CacheMiss):
+            cache.inventory(self.root, self.current, lambda name: (self.root / name).read_bytes(), [])
+
+    def test_old_cbv_payload_cannot_satisfy_renamed_required_core(self):
+        self.put("build/core/CbvAudit.json", json.dumps({"module": "CbvAudit", "bindings": []}))
+        with patch.object(cache, "REQUIRED", ("build/core/CBVAudit.json",)):
+            with self.assertRaises(cache.CacheMiss): self.pack()
+        self.assertFalse(self.bundle.exists())
+
     def test_original_list_records_absolute_paths_and_external_interfaces(self):
         interface = Path(self.tc["ghcLibdir"]) / "pkg/Foo.dyn_hi"
         interface.parent.mkdir(parents=True); interface.write_bytes(b"actual interface")
@@ -304,6 +321,31 @@ class FastInputTests(unittest.TestCase):
         self.put(".ghc.environment.x86_64-linux-9.14.1","package-id changed")
         with patch.dict(os.environ,{},clear=True),patch.object(cache,"command",return_value=""),self.assertRaises(cache.CacheMiss):
             cache.check_package_scope(self.root,"ghc-pkg")
+
+
+class RenamedInputContractTests(unittest.TestCase):
+    def test_recorded_runtime_and_compiler_sources_use_actual_published_paths(self):
+        root = Path(__file__).resolve().parents[2]
+        self.assertEqual(("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
+                          "src/main/java/thc/runtime/DoubleX2.java"), cache.RUNTIME_INPUTS)
+        with patch.object(cache, "toolchain", return_value={}):
+            sources = cache.identity(root)["sources"]
+        for name in (*cache.RUNTIME_INPUTS, *("compiler/THC/" + name + ".hs" for name in
+                                             ("CBV", "Demands", "Plugin", "Sources", "Wired"))):
+            self.assertIn(name, sources)
+            self.assertEqual(cache.digest(root / name), sources[name])
+        self.assertNotIn("src/main/kotlin/thc/runtime/CoreVectorMemory.kt", sources)
+        self.assertFalse(any(name.startswith("compiler/Thc/") for name in sources))
+
+    def test_required_cbv_modules_match_renamed_genuine_fixture_declarations(self):
+        root = Path(__file__).resolve().parents[2]
+        expected = {f"build/{folder}/{module}.json" for folder in ("core", "cbv-post-core")
+                    for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")}
+        self.assertEqual(expected, {name for name in cache.REQUIRED if "CBV" in name})
+        self.assertFalse(any("Cbv" in name for name in cache.REQUIRED))
+        for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit"):
+            source = (root / "compiler/test-fixtures" / (module + ".hs")).read_text()
+            self.assertRegex(source, r"(?m)^module " + module + r"\b")
 
 
 if __name__ == "__main__":
