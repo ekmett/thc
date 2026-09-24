@@ -24,6 +24,10 @@ POLICY = ".github/scripts/fast-tests.json"
 CAPABILITIES = "scripts/core-capabilities.json"
 PROGRAM = "src/main/kotlin/thc/runtime/Program.kt"
 BYTECODE_PROGRAM = "src/main/kotlin/thc/runtime/BytecodeProgram.kt"
+BYTECODE_ROOT = "src/main/java/thc/runtime/BytecodeRoot.java"
+SCALAR_SIGNATURES = "src/main/resources/thc/scalar-primop-signatures.json"
+LEGACY_PRIMOP_FAMILIES = {"bit-primops", "integer-primops", "signed-narrow-primops", "explicit64-primops"}
+EXACT_PRIMOP_FAMILIES = {"fused-floating", "address-index16"}
 POLYGLOT_TEST_ROOT = "src/polyglotTest/"
 HASKELL_TESTS = {"driver-tests": "test/haskell-driver/Main.hs"}
 POLYGLOT_EXACT_INPUTS = {
@@ -325,6 +329,9 @@ def standalone_python_test(source):
 
 def primop_family(name):
     """Only names exercised by the pinned, independent native primop oracles."""
+    contract = exact_scalar_contract(name)
+    if contract:
+        return contract[0]
     if re.fullmatch(r"(?:(?:popCnt|clz|ctz)(?:8|16|32|64)|byteSwap(?:16|32|64)?|bitReverse(?:8|16|32|64)?)#", name):
         return "bit-primops"
     if re.fullmatch(r"(?:(?:quot|rem|gt|ge)Word|(?:quot|rem|eq|ne|gt|ge|and|or|xor|not|uncheckedShiftL|uncheckedShiftRL)Word(?:8|16|32))#", name):
@@ -336,9 +343,36 @@ def primop_family(name):
     return None
 
 
+def exact_scalar_contract(name):
+    match = re.fullmatch(r"(?:fmadd|fmsub|fnmadd|fnmsub)(Float|Double)#", name)
+    if match:
+        rep = match[1] + "Rep"
+        return "fused-floating", {"arguments": [rep] * 3, "result": rep}
+    match = re.fullmatch(r"index(Int|Word)16OffAddr#", name)
+    if match:
+        return "address-index16", {"arguments": ["AddrRep", "IntRep"], "result": match[1] + "16Rep"}
+    return None
+
+
+def unique_json(source):
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            if key in result:
+                raise ValueError("Duplicate contract key")
+            result[key] = value
+        return result
+    return json.loads(source, object_pairs_hook=pairs)
+
+
+def same_json(left, right):
+    # Python equality conflates True/1 and 64.0/64; those are contract edits.
+    return json.dumps(left, sort_keys=True, allow_nan=False) == json.dumps(right, sort_keys=True, allow_nan=False)
+
+
 def additive_capability_families(before, after):
     """Allow only new, known primop entries; all other contract edits widen."""
-    old, new = json.loads(before), json.loads(after)
+    old, new = unique_json(before), unique_json(after)
     if not isinstance(old, dict) or not isinstance(new, dict):
         return None
     prior, current = old.get("primitives"), new.get("primitives")
@@ -347,11 +381,141 @@ def additive_capability_families(before, after):
     additions = current.keys() - prior.keys()
     if not additions or any(primop_family(name) is None or type(current[name]) is not int for name in additions):
         return None
+    if any(exact_scalar_contract(name) and current[name] != len(exact_scalar_contract(name)[1]["arguments"])
+           for name in additions):
+        return None
     reduced = dict(new)
     reduced["primitives"] = {name: value for name, value in current.items() if name not in additions}
-    if reduced != old:
+    if not same_json(reduced, old):
         return None
     return {primop_family(name) for name in additions}
+
+
+def additive_signature_families(before, after):
+    old, new = unique_json(before), unique_json(after)
+    header = {"schema": 1, "ghc": "9.14.1", "targetWordSize": 64,
+              "signatureSource": "GHC.Builtin.PrimOps.primOpSig / GHC.Types.RepType.typePrimRep_maybe"}
+    if any(not isinstance(value, dict) or set(value) != {*header, "primitives"}
+           or type(value["schema"]) is not int or type(value["targetWordSize"]) is not int
+           or any(value[key] != expected for key, expected in header.items())
+           or not isinstance(value["primitives"], dict) for value in (old, new)):
+        return None
+    prior, current = old["primitives"], new["primitives"]
+    additions = current.keys() - prior.keys()
+    if not additions or any(not exact_scalar_contract(name) or current[name] != exact_scalar_contract(name)[1]
+                            for name in additions):
+        return None
+    if not same_json({name: value for name, value in current.items() if name not in additions}, prior):
+        return None
+    return {exact_scalar_contract(name)[0] for name in additions}
+
+
+def exact_source_bundles(path):
+    """Reviewed whole additions, not a Kotlin/Java parser or filename exemption.
+
+    Each piece is constrained to an existing region. In particular, FMA arity
+    classification and all address validation/storage code are NOT removable.
+    """
+    floating = "    private fun floatingPrimitive(name: String, args: List<Expression>): Expression? {\n"
+    primitive = "    private fun primitive(name: String, args: List<Expression>): Expression {\n"
+    scalar_end = "    // BEGIN GENERATED SIMD FAMILIES\n"
+    variants = (("fmadd", "FMAdd", "x, y, z"), ("fmsub", "FMSub", "x, y, -z"),
+                ("fnmadd", "FNMAdd", "-x, y, z"), ("fnmsub", "FNMSub", "-x, y, -z"))
+    if path == BYTECODE_PROGRAM:
+        for width in ("Float", "Double"):
+            names = [width + operation for _, operation, _ in variants]
+            pieces = []
+            for name, operation, _ in variants:
+                pieces.append((f'            "{name}{width}#" -> "{width}{operation}"\n',
+                               floating, "            else -> return null\n"))
+            pieces.append(('            ' + ', '.join('"' + name + '"' for name in names) +
+                           ' -> CoreKind.' + width.upper() + '\n',
+                           "        val kind = when (operation) {\n", "            else -> CoreKind.LONG\n"))
+            for phase in ("begin", "end"):
+                start = ("            val b = e.builder\n            when (operation) {\n" if phase == "begin" else
+                         "            args.forEach { it.emit(e) }\n            when (operation) {\n")
+                end = "            args.forEach { it.emit(e) }\n" if phase == "begin" else None
+                pieces.extend((f'                "{name}" -> b.{phase}{name}()\n', start, end) for name in names)
+            yield "fused-floating", floating, primitive, pieces
+        yield "address-index16", primitive, scalar_end, [
+            ('            "indexWord16OffAddr#", "indexInt16OffAddr#" -> "AddressIndexManagedScalar"\n',
+             "        val operation = when (scalar64PrimitiveOperation(name)) {\n", "            else -> throw UnsupportedCore"),
+            ('                "AddressIndexManagedScalar" -> b.beginAddressIndexManagedScalar(\n'
+             '                    if (name == "indexInt16OffAddr#") ManagedAddressRead.INT16 else ManagedAddressRead.WORD16)\n',
+             "            val b = e.builder\n            when (operation) {\n", "            args.forEach { it.emit(e) }\n"),
+            ('                "AddressIndexManagedScalar" -> b.endAddressIndexManagedScalar()\n',
+             "            args.forEach { it.emit(e) }\n            when (operation) {\n", None)]
+    elif path == PROGRAM:
+        yield "address-index16", "    private fun primitive(name: String, args: Array<Expr>): Expr =", "    private fun strictConstructorFields(", [(
+            '        "indexWord16OffAddr#", "indexInt16OffAddr#" -> {\n'
+            '            if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")\n'
+            '            IndexManagedScalarAddress(if (name == "indexInt16OffAddr#") ManagedAddressRead.INT16\n'
+            '                else ManagedAddressRead.WORD16, args[0], args[1])\n'
+            '        }\n', None, None)]
+    elif path == BYTECODE_ROOT:
+        for width in ("Float", "Double"):
+            scalar = width.lower()
+            for _, operation, arguments in variants:
+                name = width + operation
+                piece = (f'    @Operation public static final class {name} {{ @Specialization public static {scalar} '
+                         f'apply({scalar} x, {scalar} y, {scalar} z) {{ return Math.fma({arguments}); }} }}\n')
+                yield "fused-floating", None, None, [(piece, None, None)]
+        yield "address-index16", None, None, [(
+            '    @Operation @ConstantOperand(type = ManagedAddressRead.class, name = "operation")\n'
+            '    public static final class AddressIndexManagedScalar {\n'
+            '        @Specialization public static long index(ManagedAddressRead operation, ManagedAddress address, long element) {\n'
+            '            return operation.read(address, element);\n'
+            '        }\n'
+            '        @Fallback public static long invalid(ManagedAddressRead operation, Object address, Object element) {\n'
+            '            if (!(address instanceof ManagedAddress)) throw fail("Expected a managed Addr#");\n'
+            '            throw fail("Expected primitive Long");\n'
+            '        }\n'
+            '    }\n', None, None)]
+
+
+def exact_additive_source_families(path, before, after):
+    def region(source, start, end):
+        if start is not None and source.count(start) != 1:
+            return None
+        offset = 0 if start is None else source.index(start)
+        if end is not None and source[offset:].count(end) != 1:
+            return None
+        return source[offset:] if end is None else source[offset:source.index(end, offset)]
+    reduced, families = after, set()
+    for family, start, end, pieces in exact_source_bundles(path):
+        old, new = region(before, start, end), region(after, start, end)
+        if old is None or new is None:
+            continue
+        if any(piece in before or after.count(piece) != 1 for piece, _, _ in pieces):
+            continue
+        valid = True
+        for piece, left, right in pieces:
+            scoped = region(new, left, right)
+            prior = region(old, left, right)
+            if scoped is None or prior is None or piece not in scoped:
+                valid = False
+                break
+            # A differently spelled/body-edited old arm or class is not a new
+            # operation. Count identities, not only exact template occurrences.
+            labels = re.findall(r'"([A-Za-z0-9]+#?)"', piece.split("->", 1)[0]) if "->" in piece else []
+            declarations = re.findall(r"\bclass (\w+)", piece)
+            if (any('"' + label + '"' in prior for label in labels) or
+                    any(re.search(r"\bclass " + name + r"\b", code_only(before)) for name in declarations)):
+                valid = False
+                break
+            offset = after.index(piece)
+            masked = code_only(after)
+            if masked[offset:offset + len(piece)] != code_only(piece):
+                valid = False
+                break
+            if path == BYTECODE_ROOT and masked[:offset].count("{") - masked[:offset].count("}") != 1:
+                valid = False
+                break
+        if valid:
+            for piece, _, _ in pieces:
+                reduced = reduced.replace(piece, "", 1)
+            families.add(family)
+    return families if families and reduced == before else None
 
 
 def additive_program_families(before, after):
@@ -390,7 +554,7 @@ def additive_program_families(before, after):
                             else {"8": "56", "16": "48", "32": "32"}).get(width[1] if width else "")
                 if match[2] != expected or family != ("integer-primops" if start == word else "signed-narrow-primops"):
                     return None
-            elif primitive < 0 or start <= primitive or family is None:
+            elif primitive < 0 or start <= primitive or family not in LEGACY_PRIMOP_FAMILIES:
                 return None
             elif start == arity and match[2] not in ("1", "2"):
                 return None
@@ -430,7 +594,7 @@ def additive_bytecode_families(before, after):
             return None
         for name in re.findall(r'"([A-Za-z0-9]+#)"', match[1]):
             family = primop_family(name)
-            if family is None:
+            if family not in LEGACY_PRIMOP_FAMILIES:
                 return None
             families.add(family)
     return families
@@ -545,7 +709,7 @@ def select(repo, base_ref, head_ref):
         if any(not isinstance(path, str) or not path or path.startswith("/") or ".." in PurePosixPath(path).parts
                or path in policy["leafSources"] for path in policy["owners"]):
             raise SelectionError("invalid owner path")
-        if set(policy["primopFamilies"]) != {"bit-primops", "integer-primops", "signed-narrow-primops", "explicit64-primops"}:
+        if set(policy["primopFamilies"]) != LEGACY_PRIMOP_FAMILIES | EXACT_PRIMOP_FAMILIES:
             raise SelectionError("incomplete primop families")
         if any(not isinstance(path, str) or not path.startswith(".github/") for path in policy["automation"]):
             raise SelectionError("invalid automation path")
@@ -624,12 +788,16 @@ def select(repo, base_ref, head_ref):
                 affected_junit.update(group["junit"])
                 affected_python.update(group["python"])
                 affected_haskell.update(group.get("haskell", []))
-            elif policy and base and record["status"] == "M" and path in (CAPABILITIES, PROGRAM, BYTECODE_PROGRAM):
+            elif policy and base and record["status"] == "M" and path in (CAPABILITIES, SCALAR_SIGNATURES, PROGRAM, BYTECODE_PROGRAM, BYTECODE_ROOT):
                 try:
                     before = git(repo, "show", base + ":" + path).decode("utf-8")
-                    families = (additive_capability_families(before, text(path)) if path == CAPABILITIES
-                                else additive_program_families(before, text(path)) if path == PROGRAM
-                                else additive_bytecode_families(before, text(path)))
+                    after = text(path)
+                    families = (additive_capability_families(before, after) if path == CAPABILITIES
+                                else additive_signature_families(before, after) if path == SCALAR_SIGNATURES
+                                else exact_additive_source_families(path, before, after))
+                    if not families and path in (PROGRAM, BYTECODE_PROGRAM):
+                        families = (additive_program_families(before, after) if path == PROGRAM
+                                    else additive_bytecode_families(before, after))
                     if not families:
                         widen("shared-primop-registry-change", path)
                     else:

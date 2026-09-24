@@ -28,6 +28,21 @@ if __name__ == "__main__": unittest.main()
 '''
 
 
+def exact_source_pair(path, family):
+    """Project additions from real current code, never a pretend operation body."""
+    after = (Path(__file__).resolve().parents[2] / path).read_text()
+    before = after
+    for owner, _, _, pieces in select.exact_source_bundles(path):
+        if owner == family:
+            for piece, _, _ in pieces:
+                if before.count(piece) != 1:
+                    raise AssertionError("Reviewed addition no longer matches actual source: " + piece)
+                before = before.replace(piece, "", 1)
+    if before == after:
+        raise AssertionError("No actual additions projected")
+    return before, after
+
+
 class FastSelectionTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -45,7 +60,8 @@ class FastSelectionTest(unittest.TestCase):
                                    "scripts/prepare-family.py": affected,
                                    "src/test/kotlin/example/SharedContext.kt": affected},
                            primopFamilies={name: affected for name in
-                                           ("bit-primops", "integer-primops", "signed-narrow-primops", "explicit64-primops")},
+                                           ("bit-primops", "integer-primops", "signed-narrow-primops", "explicit64-primops",
+                                            "fused-floating", "address-index16")},
                            automation={name: dict(junit=[], python=["scripts/test-other.py"]) for name in
                                        (select.SCRIPT, select.POLICY, ".github/scripts/test_fast_select.py",
                                         ".github/workflows/fast.yml", ".github/scripts/fast_ci.py")})
@@ -310,6 +326,84 @@ private val text = "class FakeString { @Test }"
                 self.commit()
                 self.full("unmapped-source-or-configuration")
 
+    def test_exact_additive_families_save_full_runs_with_real_committed_inventory(self):
+        project = Path(__file__).resolve().parents[2]
+        policy = json.loads((project / select.POLICY).read_text())
+        files = select.tree(project, select.resolve(project, "HEAD"))
+        for name in ("src/test/kotlin/example/SmokeTest.kt", "src/test/kotlin/example/LeafTest.kt",
+                     "src/test/kotlin/example/OtherTest.kt", "src/polyglotTest/kotlin/example/PolyglotTest.kt",
+                     "scripts/test-smoke.py", "scripts/test-other.py"):
+            (self.repo / name).unlink()
+        # Actual test consumers and policy, not a reduced test inventory chosen
+        # to make the reported savings look larger.
+        for path in files:
+            if (select.junit_source(path) or select.polyglot_junit_source(path) or select.python_test(path)
+                    or path in policy["leafSources"] or path in select.HASKELL_TESTS.values()
+                    or path in (select.POLICY, select.SCRIPT)):
+                self.write(path, (project / path).read_text())
+        fixtures = json.loads((project / ".github/scripts/fast-fixtures.json").read_text())
+        owners = {name: group for group, data in fixtures["groups"].items() for name in data["junit"]}
+        owners.update({name: None for name in fixtures["fixtureFreeJunit"]})
+        signatures = json.loads((project / select.SCALAR_SIGNATURES).read_text())
+        capabilities = json.loads((project / select.CAPABILITIES).read_text())
+        for family, paths, count, groups in (
+                ("fused-floating", (select.BYTECODE_PROGRAM, select.BYTECODE_ROOT), 4,
+                 {"runtime-core-native", "fused-floating"}),
+                ("address-index16", (select.PROGRAM, select.BYTECODE_PROGRAM, select.BYTECODE_ROOT), 5,
+                 {"runtime-core-native", "pinned-pointer-cells", "managed-address-reads"})):
+            with self.subTest(family=family):
+                pairs = {path: exact_source_pair(path, family) for path in paths}
+                for path, actual in ((select.CAPABILITIES, capabilities), (select.SCALAR_SIGNATURES, signatures)):
+                    prior = copy.deepcopy(actual)
+                    prior["primitives"] = {name: entry for name, entry in prior["primitives"].items()
+                                           if select.primop_family(name) != family}
+                    pairs[path] = (json.dumps(prior), json.dumps(actual))
+                for path, (before, _) in pairs.items():
+                    self.write(path, before)
+                base = self.commit()
+                for path, (_, after) in pairs.items():
+                    self.write(path, after)
+                self.commit()
+                result = self.plan(base=base)
+                self.assertEqual("narrow", result["mode"], result["reasons"])
+                self.assertFalse(result["polyglot"]["required"])
+                self.assertEqual(count, result["junit"]["count"])
+                self.assertEqual(groups, {owners[name] for name in result["junit"]["classes"] if owners[name]})
+                self.assertEqual(sorted(policy["primopFamilies"][family]["junit"]), result["affected"]["junit"])
+                # With the new guards disabled these same committed diffs hit
+                # the existing shared/unmapped registry full-suite fallback.
+                with mock.patch.object(select, "exact_additive_source_families", return_value=None), \
+                     mock.patch.object(select, "additive_signature_families", return_value=None):
+                    broad = self.full("shared-primop-registry-change", base=base)
+                print(f"ADDITIVE {family}: JVM {broad['junit']['count']} -> {count}; "
+                      f"Python {broad['python']['count']} -> {result['python']['count']}; "
+                      f"preparation full -> {len(groups)} groups")
+                # A changed test remains selected, and any shared-source edit
+                # still wins over otherwise admitted additive paths.
+                self.write("src/test/kotlin/example/OtherTest.kt", kotlin("OtherTest", "@Test fun changed() {}"))
+                self.commit()
+                self.assertIn("example.OtherTest", self.plan(base=base)["affected"]["junit"])
+                self.write(select.BYTECODE_PROGRAM, pairs[select.BYTECODE_PROGRAM][1] + "\n// shared change\n")
+                self.commit()
+                self.full("shared-primop-registry-change", base=base)
+                for path, (_, after) in pairs.items():
+                    self.write(path, after)
+                for path in ("src/main/kotlin/thc/runtime/ManagedAddressReads.kt", "src/main/kotlin/thc/runtime/PinnedMemory.kt"):
+                    self.write(path, "// changed shared validation or storage\n")
+                    self.commit()
+                    self.full("unmapped-source-or-configuration", base=base)
+                    (self.repo / path).unlink()
+                if family == "fused-floating":
+                    leaf = "src/main/kotlin/thc/runtime/FloatingPrimitives.kt"
+                    self.write(leaf, (project / leaf).read_text() + "\n// leaf change\n")
+                    self.commit()
+                    complete = self.plan(base=base)
+                    self.assertEqual("narrow", complete["mode"], complete["reasons"])
+                    self.assertLessEqual(set(policy["leafSources"][leaf]["junit"]), set(complete["affected"]["junit"]))
+                    self.assertEqual(25, len(policy["leafSources"][leaf]["junit"]))
+                    self.write(leaf, (project / leaf).read_text())
+                (self.repo / "src/test/kotlin/example/OtherTest.kt").unlink()
+
     def test_automation_changes_use_control_tests_and_smoke(self):
         for path in (".github/workflows/fast.yml", ".github/scripts/fast_ci.py"):
             with self.subTest(path=path):
@@ -563,6 +657,112 @@ private val text = "class FakeString { @Test }"
         self.assertEqual(sorted(expected), result["affected"]["junit"])
         self.assertEqual(12, result["junit"]["count"])  # Nine affected + three smoke.
         self.assertEqual(sorted({"scripts/test-core-data-tags.py", "scripts/test-core-bytearrays.py"}), result["affected"]["python"])
+
+
+class ExactAdditiveGuardTest(unittest.TestCase):
+    def test_reviewed_source_blocks_match_current_code_and_reject_shared_changes(self):
+        for family, paths in (("fused-floating", (select.BYTECODE_PROGRAM, select.BYTECODE_ROOT)),
+                              ("address-index16", (select.PROGRAM, select.BYTECODE_PROGRAM, select.BYTECODE_ROOT))):
+            for path in paths:
+                with self.subTest(family=family, path=path):
+                    before, after = exact_source_pair(path, family)
+                    self.assertEqual({family}, select.exact_additive_source_families(path, before, after))
+                    for changed in (after + "\n// mixed shared edit\n", after.replace("Primitive arity mismatch", "new arity")
+                                    if path != select.BYTECODE_ROOT else after.replace("class BytecodeRoot", "class OtherRoot")):
+                        self.assertIsNone(select.exact_additive_source_families(path, before, changed))
+                    self.assertIsNone(select.exact_additive_source_families(path, after, before))
+                    self.assertIsNone(select.exact_additive_source_families(path, after, after))
+
+    def test_wrong_width_result_begin_end_and_duplicate_or_relocated_blocks_fail_closed(self):
+        cases = {
+            "fused-floating": {
+                select.BYTECODE_PROGRAM: (("b.beginFloatFMAdd()", "b.beginDoubleFMAdd()"),
+                                          ("b.endFloatFMAdd()", "b.endFloatFMSub()"),
+                                          ('"FloatFNMSub" -> CoreKind.FLOAT', '"FloatFNMSub" -> CoreKind.DOUBLE')),
+                select.BYTECODE_ROOT: (("float x, float y, float z", "double x, float y, float z"),
+                                      ("return Math.fma(x, y, z);", "return x * y + z;")),
+            },
+            "address-index16": {
+                select.PROGRAM: (("ManagedAddressRead.INT16", "ManagedAddressRead.INT32"),
+                                 ("else ManagedAddressRead.WORD16, args[0], args[1]", "else ManagedAddressRead.WORD16, args[1], args[0]")),
+                select.BYTECODE_PROGRAM: (("b.endAddressIndexManagedScalar()", "b.endAddressIndexByte()"),
+                                          ("ManagedAddressRead.WORD16)", "ManagedAddressRead.INT16)")),
+                select.BYTECODE_ROOT: (("operation.read(address, element)", "operation.read(address, 0)"),
+                                      ("static long index(ManagedAddressRead", "static double index(ManagedAddressRead")),
+            },
+        }
+        for family, paths in cases.items():
+            for path, mutations in paths.items():
+                before, after = exact_source_pair(path, family)
+                for original, replacement in mutations:
+                    with self.subTest(family=family, path=path, mutation=original):
+                        self.assertIn(original, after)
+                        self.assertIsNone(select.exact_additive_source_families(path, before, after.replace(original, replacement)))
+                piece = next(pieces[0][0] for owner, _, _, pieces in select.exact_source_bundles(path) if owner == family)
+                for changed in (after.replace(piece, piece * 2), after.replace(piece, "") + piece,
+                                after.replace(piece, "/*\n" + piece + "*/\n")):
+                    self.assertIsNone(select.exact_additive_source_families(path, before, changed))
+                # Same old dispatch/class identity with a different body cannot
+                # be relabelled as an entirely new addition.
+                old_piece = piece.replace("->", "-> ").replace("@Specialization", "@Specialization ")
+                self.assertIsNone(select.exact_additive_source_families(
+                    path, after.replace(piece, old_piece), after.replace(piece, piece + old_piece)))
+
+    def test_exact_contract_names_arities_and_representation_widths(self):
+        project = Path(__file__).resolve().parents[2]
+        actual = json.loads((project / select.SCALAR_SIGNATURES).read_text())
+        names = {stem + width + "#" for stem in ("fmadd", "fmsub", "fnmadd", "fnmsub") for width in ("Float", "Double")}
+        names |= {"indexInt16OffAddr#", "indexWord16OffAddr#"}
+        for name in names:
+            with self.subTest(name=name):
+                family, contract = select.exact_scalar_contract(name)
+                self.assertEqual(actual["primitives"][name], contract)
+                prior = copy.deepcopy(actual); del prior["primitives"][name]
+                self.assertEqual({family}, select.additive_signature_families(json.dumps(prior), json.dumps(actual)))
+                cap = {"primitives": {name: len(contract["arguments"])}}
+                self.assertEqual({family}, select.additive_capability_families('{"primitives":{}}', json.dumps(cap)))
+                for arity in (0, 1, 4, True):
+                    cap["primitives"][name] = arity
+                    self.assertIsNone(select.additive_capability_families('{"primitives":{}}', json.dumps(cap)))
+                for malformed in ({"arguments": contract["arguments"], "result": "WordRep"},
+                                  {"arguments": ["IntRep"] * len(contract["arguments"]), "result": contract["result"]},
+                                  {**contract, "extra": True}, {"result": contract["result"]}):
+                    changed = copy.deepcopy(actual); changed["primitives"][name] = malformed
+                    self.assertIsNone(select.additive_signature_families(json.dumps(prior), json.dumps(changed)))
+        for unsupported in ("fmaddInt#", "fmaddFloatX4#", "indexInt32OffAddr#", "readInt16OffAddr#", "writeWord16OffAddr#"):
+            self.assertIsNone(select.exact_scalar_contract(unsupported))
+            self.assertIsNone(select.additive_capability_families('{"primitives":{}}', json.dumps({"primitives": {unsupported: 2}})))
+
+    def test_contract_edits_deletions_duplicates_and_malformed_headers_fail_closed(self):
+        project = Path(__file__).resolve().parents[2]
+        after = json.loads((project / select.SCALAR_SIGNATURES).read_text())
+        before = copy.deepcopy(after); del before["primitives"]["fmaddFloat#"]
+        for mutate in (lambda value: value.update(targetWordSize=32), lambda value: value.update(targetWordSize=64.0),
+                       lambda value: value.update(schema=True),
+                       lambda value: value["primitives"].pop("plusFloat#"),
+                       lambda value: value["primitives"]["plusFloat#"].update(result="DoubleRep")):
+            changed = copy.deepcopy(after); mutate(changed)
+            self.assertIsNone(select.additive_signature_families(json.dumps(before), json.dumps(changed)))
+        for function, old, new in ((select.additive_capability_families, '{"primitives":{}}', '{"primitives":{"fmaddFloat#":2,"fmaddFloat#":3}}'),
+                                   (select.additive_signature_families, json.dumps(before), json.dumps(after).replace('"schema": 1', '"schema": 0,"schema": 1'))):
+            with self.assertRaises(ValueError):
+                function(old, new)
+        for changed in (True, 1.0):
+            self.assertIsNone(select.additive_capability_families(
+                '{"primitives":{"old#":1}}', json.dumps({"primitives": {"old#": changed, "fmaddFloat#": 3}})))
+
+    def test_original_fma_shared_arity_change_is_not_an_additive_dispatch(self):
+        before, after = exact_source_pair(select.BYTECODE_PROGRAM, "fused-floating")
+        old_arity = before.replace('if (args.size != if (fused) 3 else if (unary) 1 else 2)',
+                                   'if (args.size != if (unary) 1 else 2)')
+        self.assertNotEqual(before, old_arity)
+        self.assertIsNone(select.exact_additive_source_families(select.BYTECODE_PROGRAM, old_arity, after))
+
+    def test_new_families_cannot_escape_into_loose_legacy_arm_guards(self):
+        before = 'private class Primitive(\nval arity = when (operation) {\n    else -> 0\n}\n'
+        self.assertIsNone(select.additive_program_families(before, before.replace('    else ->', '    "fmaddFloat#" -> 1\n    else ->')))
+        before = 'val operation = when (scalar64PrimitiveOperation(name)) {\n    "old#" -> "Existing"\n    else -> throw UnsupportedCore("unknown")\n}\n'
+        self.assertIsNone(select.additive_bytecode_families(before, before.replace('    else ->', '    "indexInt16OffAddr#" -> "Existing"\n    else ->')))
 
 
 class PrimitiveFamilyPolicyTest(unittest.TestCase):

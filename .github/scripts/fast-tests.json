@@ -164,6 +164,14 @@
     }
   },
   "primopFamilies": {
+    "fused-floating": {
+      "junit": ["thc.runtime.FusedFloatingTest"],
+      "python": ["scripts/test-audit-core.py", "scripts/test-primop-coverage.py"]
+    },
+    "address-index16": {
+      "junit": ["thc.runtime.PinnedPointerCellsTest", "thc.runtime.ManagedAddressReadTest"],
+      "python": ["scripts/test-audit-core.py", "scripts/test-primop-coverage.py", "scripts/test-pinned-addresses.py", "scripts/test-core-bytearrays.py"]
+    },
     "explicit64-primops": {
       "junit": [
         "thc.runtime.Explicit64PrimopsTest"
