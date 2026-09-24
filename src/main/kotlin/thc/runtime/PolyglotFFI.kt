@@ -82,10 +82,10 @@ internal class PolyglotAccess : Node() {
     @Child private var numbers = InteropLibrary.getFactory().createDispatched(3)
 
     @TruffleBoundary
-    private fun parse(language: LiteralAddress, source: LiteralAddress, name: LiteralAddress) =
+    private fun parse(language: ManagedAddress, source: ManagedAddress, name: ManagedAddress) =
         Language.currentState(this).env.parsePublic(Source.newBuilder(language.utf8(), source.utf8(), name.utf8()).build())
 
-    fun eval(language: LiteralAddress, source: LiteralAddress, name: LiteralAddress, state: Any?): ForeignValue {
+    fun eval(language: ManagedAddress, source: ManagedAddress, name: ManagedAddress, state: Any?): ForeignValue {
         requireVoidCarrier(state)
         val owner = Language.currentState(this)
         val value = evalCall.call(parse(language, source, name))
@@ -98,7 +98,7 @@ internal class PolyglotAccess : Node() {
         return handle.receiver
     }
 
-    fun readMember(frame: VirtualFrame, value: Any?, name: LiteralAddress, state: Any?): ForeignValue {
+    fun readMember(frame: VirtualFrame, value: Any?, name: ManagedAddress, state: Any?): ForeignValue {
         requireVoidCarrier(state)
         val receiver = receiver(frame, value)
         return try {

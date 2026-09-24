@@ -122,7 +122,7 @@ class TypedCaseTest {
     @Test fun defaultOnlyCasesForwardConcreteReferencesAndForceSharedScrutineeOnce() = each { _, _, p ->
         val value = call(p, "make", Long.MIN_VALUE)
         val function = p.entryValue("plus")
-        val literal = LiteralAddress.fromHex("41ff")
+        val literal = ManagedAddress.fromHex("41ff")
         repeat(30) {
             assertSame(value, call(p, "dataIdentity", value))
             assertSame(function, call(p, "functionIdentity", function))

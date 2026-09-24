@@ -221,7 +221,7 @@ class PolyglotFFITest {
         assertThrows(RuntimeFault::class.java) { CorePolyglot.validate(spoofedHead, false) }
     }
 
-    private fun address(text: String): LiteralAddress = LiteralAddress.fromHex(
+    private fun address(text: String): ManagedAddress = ManagedAddress.fromHex(
         text.encodeToByteArray().joinToString("") { "%02x".format(it.toInt() and 0xff) })
 
     private inner class AccessRoot(language: Language) : RootNode(language) {

@@ -100,14 +100,14 @@ class AddressFieldTest {
     }
     @Test fun knownAddressStorageIsFinalAndPreciseEvenWithoutOptionalFieldTypes() = withLanguage { language ->
         for(typed in listOf(true,false)) {
-            val fields=CoreFields(constructor(typed)); assertEquals(LiteralAddress::class.java,fields.referenceTypes[0])
+            val fields=CoreFields(constructor(typed)); assertEquals(ManagedAddress::class.java,fields.referenceTypes[0])
             val layout=DataLayout(language,"Record$typed","Record",fields.storage,fields.referenceTypes)
-            val address=LiteralAddress.fromHex("41ff0042").plus(1); val untouched=Any()
+            val address=ManagedAddress.fromHex("41ff0042").plus(1); val untouched=Any()
             val value=layout.create(arrayOf(address,17L,untouched))
             assertSame(address,layout.read(value,0)); assertSame(untouched,layout.read(value,2))
-            assertEquals(255L,(layout.read(value,0) as LiteralAddress).indexChar(0))
+            assertEquals(255L,(layout.read(value,0) as ManagedAddress).indexChar(0))
             val stored=value.javaClass.declaredFields.sortedBy { it.name }
-            assertEquals(listOf(LiteralAddress::class.java,java.lang.Long.TYPE,Any::class.java),stored.map { it.type })
+            assertEquals(listOf(ManagedAddress::class.java,java.lang.Long.TYPE,Any::class.java),stored.map { it.type })
             assertTrue(stored.all { Modifier.isFinal(it.modifiers) }); assertSame(layout,value.layout)
             for(fake in listOf(null,0L,Any(),byteArrayOf(65),java.nio.ByteBuffer.allocateDirect(8)))
                 assertThrows(RuntimeFault::class.java) { layout.create(arrayOf(fake,17L,untouched)) }
@@ -117,7 +117,7 @@ class AddressFieldTest {
         for(typed in listOf(true,false)) for(backend in listOf("ast","bytecode")) {
             val program=program(language,module(typed),backend)
             fun call(value: Any?)=Calls.target(program.hostEntryTarget(1),arrayOf(program.entryValue("entry"),arrayOf(value)))
-            val address=LiteralAddress.fromHex("ff0041")
+            val address=ManagedAddress.fromHex("ff0041")
             val result=call(address) as DataValue
             assertSame(address,result.layout.read(result,0));assertEquals(17L,result.layout.readLong(result,1))
             val bottom=program.entryValue("bottom") as Thunk
@@ -134,7 +134,7 @@ class AddressFieldTest {
     }
     @Test fun constructorPartialApplicationRetainsAddressAndDefersLazyPayload() = withLanguage { language ->
         for(backend in listOf("ast","bytecode")) {
-            val program=program(language,module(true,partial=true),backend); val address=LiteralAddress.fromHex("41")
+            val program=program(language,module(true,partial=true),backend); val address=ManagedAddress.fromHex("41")
             val pap=Calls.target(program.hostEntryTarget(1),arrayOf(program.entryValue("entry"),arrayOf(address))) as Closure
             assertSame(address,pap.supplied[0]); assertEquals(17L,pap.supplied[1])
             val bottom=program.entryValue("bottom") as Thunk; assertEquals(0,bottom.state)
@@ -156,10 +156,10 @@ class AddressFieldTest {
             for(offset in listOf(-1L,3L,Long.MIN_VALUE,Long.MAX_VALUE))
                 assertThrows(RuntimeFault::class.java) { call(offset) }
             val pap=call(1L) as Closure
-            assertEquals(0L,(pap.supplied[0] as LiteralAddress).indexChar(0))
+            assertEquals(0L,(pap.supplied[0] as ManagedAddress).indexChar(0))
             val bottom=program.entryValue("bottom") as Thunk
             val result=Calls.target(program.hostEntryTarget(1),arrayOf(pap,arrayOf(bottom))) as DataValue
-            assertEquals(0L,(result.layout.read(result,0) as LiteralAddress).indexChar(0));assertEquals(0,bottom.state)
+            assertEquals(0L,(result.layout.read(result,0) as ManagedAddress).indexChar(0));assertEquals(0,bottom.state)
             released(language)
         }
     }
@@ -170,7 +170,7 @@ class AddressFieldTest {
         val builder = FrameDescriptor.newBuilder()
         val slots = IntArray(4) { builder.addSlot(FrameSlotKind.Illegal, "address tuple $it", null) }
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), builder.build())
-        val literal = LiteralAddress.fromHex("4100")
+        val literal = ManagedAddress.fromHex("4100")
         fun field(value: Any?) = object : Expr() {
             init { representation = CoreRepresentations.parse(address) }
             override fun execute(frame: VirtualFrame): Any? = value

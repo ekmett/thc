@@ -13,6 +13,7 @@ import argparse
 from collections import deque
 import json
 import core_data_tags
+import core_md5_foreign
 from pathlib import Path
 import sys
 
@@ -357,6 +358,23 @@ class Audit:
                 return formals[count:]
         return None
 
+    def known_function_signature(self, expression, seen=frozenset()):
+        """Resolve an exact continuation result through known lambda/global/PAP heads."""
+        if not isinstance(expression, list) or not expression:
+            return None
+        if expression[0] == 'lam':
+            metadata = expression[3] if len(expression) > 3 and isinstance(expression[3], dict) else {}
+            return [binder.get('rep') for binder in expression[1]], metadata.get('resultRep')
+        if expression[0] == 'var':
+            key = expression[1]
+            if key not in seen:
+                return self.known_function_signature(self.bindings.get(key, {}).get('expr'), seen | {key})
+        if expression[0] == 'app':
+            signature = self.known_function_signature(expression[1], seen)
+            if signature is not None and len(expression[2]) < len(signature[0]):
+                return signature[0][len(expression[2]):], signature[1]
+        return None
+
     @staticmethod
     def literal_rep(expr):
         # Signed/unsigned 8-, 16- and 32-bit literals retain exact identity.
@@ -496,12 +514,32 @@ class Audit:
         check(signature['result'], result, 'rep')
 
     def polyglot_call(self, expr, bound, owner, path):
-        """Accept only an exact, saturated GHC FCallId application in the v1 ABI."""
+        """Accept only closed MD5 or exact saturated polyglot FCallId applications."""
         function, arguments = expr[1:3]
         metadata = expr[6] if len(expr) > 6 and isinstance(expr[6], dict) else {}
         call = metadata.get('foreignCall')
         if call is None:
             return False
+
+        target = call.get('target') if isinstance(call, dict) else None
+        symbol = target.get('symbol') if isinstance(target, dict) else None
+        if isinstance(symbol, str) and symbol in core_md5_foreign.OPERATIONS:
+            try:
+                core_md5_foreign.validate(metadata, [self.expression_rep(arg) for arg in arguments],
+                                          expr[3], self.expression_rep(expr))
+                head = self.expression_rep(function)
+                if (len(function) != 3 or function[0] != 'var' or not isinstance(function[1], str) or
+                        not function[1] or function[1] in bound or function[1] in self.bindings or
+                        not isinstance(head, dict) or set(head) != {'kind', 'primReps', 'evaluated'} or
+                        head['kind'] != 'closure' or head['primReps'] != ['BoxedRep (Just Lifted)'] or
+                        head['evaluated'] is not True):
+                    raise ValueError('Unresolved declared foreign variable required')
+                if symbol not in self.cap.get('managedForeignCalls', []):
+                    raise ValueError('Managed MD5 foreign-call capability disabled')
+                self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path))
+            except ValueError as error:
+                self.issue('foreign-call', owner, path, str(error))
+            return True
 
         def reject(detail):
             self.issue('foreign-call', owner, path, detail)
@@ -883,7 +921,35 @@ class Audit:
                         valid = array_role(proof, result)
                     if not valid:
                         self.issue('primitive-representation', owner, path, function[1] + ': exact Array result required')
-                bytearray_primitive = self.cap.get('managedByteArrayPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
+                if function[0] == 'prim' and function[1] == 'keepAlive#':
+                    def kept_reference(rep):
+                        return (isinstance(rep, dict) and 'aggregate' not in rep and not is_vector(rep) and
+                                rep.get('kind') in ('object', 'data', 'closure') and rep.get('primReps') in (
+                                    ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)']))
+                    def state_rep(rep):
+                        return (isinstance(rep, dict) and 'aggregate' not in rep and not is_vector(rep) and
+                                rep.get('kind') == 'void' and rep.get('primReps') == [])
+                    actual = [self.expression_rep(a) for a in arguments]
+                    valid = (len(actual) == 3 and kept_reference(actual[0]) and state_rep(actual[1]) and
+                             kept_reference(actual[2]) and actual[2].get('kind') in ('object', 'closure') and
+                             actual[2].get('primReps') == ['BoxedRep (Just Lifted)'] and
+                             flags == [actual[0]['primReps'] == ['BoxedRep (Just Lifted)'], False, True])
+                    if not valid:
+                        self.issue('primitive-representation', owner, path, 'keepAlive#: exact reference, State and continuation required')
+                    if (not isinstance(proof, dict) or is_vector(proof) or
+                            ('aggregate' not in proof and (proof.get('primReps') is None or proof.get('kind') == 'unknown'))):
+                        self.issue('primitive-representation', owner, path, 'keepAlive#: exact supported result required')
+                    signature = self.known_function_signature(arguments[2]) if len(arguments) == 3 else None
+                    if signature is not None:
+                        formals, returned = signature
+                        if not formals or not state_rep(formals[0]):
+                            self.issue('primitive-representation', owner, path, 'keepAlive#: State continuation input required')
+                        elif len(formals) == 1:
+                            self.compare_shapes(proof, returned, owner, path + '/continuation-result', component=True)
+                        elif not kept_reference(proof) or proof.get('primReps') != ['BoxedRep (Just Lifted)']:
+                            self.issue('primitive-representation', owner, path, 'keepAlive#: partial continuation returns a lifted function')
+                bytearray_primitive = (self.cap.get('managedByteArrayPrimitives', {}).get(function[1]) or
+                                       self.cap.get('managedPinnedMemoryPrimitives', {}).get(function[1])) if function[0] == 'prim' else None
                 if bytearray_primitive is not None:
                     def exact(actual, expected):
                         return (isinstance(actual, dict) and actual.get('kind') == expected['kind'] and

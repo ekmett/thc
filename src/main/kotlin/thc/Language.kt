@@ -14,6 +14,7 @@ import thc.runtime.Metrics
 import com.oracle.truffle.api.CallTarget
 import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.TruffleSafepoint
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.interop.InteropLibrary
 import com.oracle.truffle.api.interop.InvalidArrayIndexException
@@ -29,6 +30,9 @@ import thc.runtime.CoreRepresentations
 import thc.runtime.CoreRepresentation
 import thc.runtime.IoMainRoot
 import java.io.File
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.FutureTask
+import java.util.concurrent.atomic.AtomicReference
 
 object CoreModules {
     @Suppress("UNCHECKED_CAST")
@@ -138,7 +142,7 @@ object CoreModules {
 
 @TruffleLanguage.Registration(id = "thc", name = "Turbo Haskell Compiler", version = "0.1-experiment",
     characterMimeTypes = ["application/x-thc-core"], defaultMimeType = "application/x-thc-core",
-    contextPolicy = TruffleLanguage.ContextPolicy.EXCLUSIVE)
+    dependentLanguages = ["llvm"], contextPolicy = TruffleLanguage.ContextPolicy.EXCLUSIVE)
 class Language : TruffleLanguage<Language.State>() {
     // Layout interning belongs to a context even when the language instance is shared.
     internal val handoffLayouts: thc.runtime.HandoffLayouts get() = currentState(null).handoffLayouts
@@ -157,13 +161,38 @@ class Language : TruffleLanguage<Language.State>() {
         internal fun markMultithreaded() {
             singleThreadedAssumption.invalidate("A second guest thread entered the context")
         }
+        private val nativeCbits = AtomicReference<FutureTask<thc.runtime.SulongCbits>?>()
+        @CompilerDirectives.TruffleBoundary
+        internal fun cbits(): thc.runtime.SulongCbits {
+            if (!env.isNativeAccessAllowed)
+                throw thc.runtime.RuntimeFault("C bitcode requires native access for the Sulong runtime")
+            var task = nativeCbits.get()
+            if (task == null) {
+                val candidate = FutureTask { thc.runtime.SulongCbits(env) }
+                if (nativeCbits.compareAndSet(null, candidate)) {
+                    task = candidate
+                    candidate.run() // Parsing LLVM can execute guest code; never hold a cache lock here.
+                } else task = nativeCbits.get()
+            }
+            return try {
+                val selected = task!!
+                if (selected.isDone) selected.get()
+                else TruffleSafepoint.setBlockedThreadInterruptibleFunction(null,
+                    TruffleSafepoint.InterruptibleFunction<FutureTask<thc.runtime.SulongCbits>, thc.runtime.SulongCbits> {
+                        waiting -> waiting.get()
+                    }, selected)
+            } catch (failure: ExecutionException) {
+                nativeCbits.compareAndSet(task, null)
+                throw (failure.cause ?: failure)
+            }
+        }
     }
     override fun createContext(env: Env): State = State(env, this)
     override fun initializeThread(context: State, thread: Thread) = context.noteThread(thread)
     override fun initializeMultiThreading(context: State) = context.markMultithreaded()
     companion object {
         private val contexts = ContextReference.create(Language::class.java)
-        @JvmStatic fun currentState(node: Node?): State = contexts.get(node)
+        @JvmStatic fun currentState(node: Node? = null): State = contexts.get(node)
     }
     @Suppress("UNCHECKED_CAST")
     override fun parse(request: ParsingRequest): CallTarget {

@@ -268,7 +268,7 @@ class BytecodeBackendTest {
         }
     }
 
-    @Test fun managedLiteralAddressesPreserveUnsignedBytesNulsAndBoundsAfterCompilation() {
+    @Test fun managedManagedAddressesPreserveUnsignedBytesNulsAndBoundsAfterCompilation() {
         val shifted = primitive("plusAddr#", listOf("lit", "string-bytes", "ff4100"), variable("input"))
         val body = primitive("indexCharOffAddr#", shifted, integer(0))
         executionContext().use { context ->

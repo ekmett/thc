@@ -154,6 +154,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: List<Local>)
 
     init {
+        CoreMd5Foreign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(bindings, constructors)
             CoreInputCalls.validate(bindings, constructors)
@@ -376,7 +377,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             local.directDouble -> { b.beginToDouble(); value(); b.endToDouble() }
             reference == DataValue::class.java -> { b.beginRequireData(); value(); b.endRequireData() }
             reference == Closure::class.java -> { b.beginRequireClosure(); value(); b.endRequireClosure() }
-            reference == LiteralAddress::class.java -> { b.beginRequireAddress(); value(); b.endRequireAddress() }
+            reference == ManagedAddress::class.java -> { b.beginRequireAddress(); value(); b.endRequireAddress() }
             else -> value()
         }
         b.endStoreLocal()
@@ -462,14 +463,14 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         "float" -> value.toFloat()
         "double" -> value.toDouble()
         "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
-        "string-bytes" -> LiteralAddress.fromHex(value)
+        "string-bytes" -> ManagedAddress.fromHex(value)
         "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
     private fun constant(value: Any) = ProvenExpression(Expression { it.builder.emitLoadConstant(value) },
         CoreRepresentation(when (value) {
             is Long -> CoreKind.LONG; is Float -> CoreKind.FLOAT; is Double -> CoreKind.DOUBLE
-            is LiteralAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
+            is ManagedAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
         }, evaluated = true))
     private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expression {
         val source = sources.expression(expr, scope.source)
@@ -841,8 +842,26 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
             val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
             val javascript = CoreJavaScript.validate(expr, defined)
-            val polyglot = if (javascript == null) CorePolyglot.validate(expr, defined) else null
-            if (javascript != null) {
+            val md5 = if (javascript == null) CoreMd5Foreign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
+            val polyglot = if (javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
+            if (md5 != null) {
+                CoreMd5Foreign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val operands = args.map { compile(it, scope, false) }
+                tupleExpression(tupleProof) { e, _ ->
+                    when (md5) {
+                        Md5ForeignOp.INIT -> e.builder.beginMd5Init()
+                        Md5ForeignOp.UPDATE -> e.builder.beginMd5Update()
+                        Md5ForeignOp.FINAL -> e.builder.beginMd5Final()
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (md5) {
+                        Md5ForeignOp.INIT -> e.builder.endMd5Init()
+                        Md5ForeignOp.UPDATE -> e.builder.endMd5Update()
+                        Md5ForeignOp.FINAL -> e.builder.endMd5Final()
+                    }
+                }
+            } else if (javascript != null) {
                 val operands = args.map { argument(it, scope, false) }
                 tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
@@ -974,6 +993,47 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 val operation = VectorByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 vectorByteArray(operation, args.map { compile(it, scope, false) })
+            } else if (fn[0] == "prim" && fn[1] == "keepAlive#") {
+                CoreKeepAlive.validate(args.map(CoreRepresentations::expression), flags, tupleProof,
+                    args.getOrNull(2)?.let { CoreRepresentations.knownFunctionSignature(it, bindings) })
+                val kept = argument(args[0], scope, flags[0] as Boolean)
+                val state = compile(args[1], scope, false)
+                // Force the continuation only after validating State, inside the fence.
+                val function = argument(args[2], scope, true)
+                if (tupleProof.isAggregate) tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginKeepAliveTuple(tupleSlots(TupleShape(tupleProof, language), destination), metrics)
+                    kept.emit(e); state.emit(e); function.emit(e)
+                    e.builder.endKeepAliveTuple()
+                } else ProvenExpression(Expression { e ->
+                    e.builder.beginKeepAlive(metrics)
+                    kept.emit(e); state.emit(e); function.emit(e)
+                    e.builder.endKeepAlive()
+                }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && PinnedMemoryOp.named(fn[1] as String) != null) {
+                val operation = PinnedMemoryOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.map { compile(it, scope, false) }
+                if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
+                    when (operation) {
+                        PinnedMemoryOp.NEW -> e.builder.beginNewPinnedByteArray(destination[0])
+                        PinnedMemoryOp.NEW_ALIGNED -> e.builder.beginNewAlignedPinnedByteArray(destination[0])
+                        PinnedMemoryOp.READ -> e.builder.beginReadWord8OffAddr(destination[0])
+                        else -> error("Scalar pinned memory operation")
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (operation) {
+                        PinnedMemoryOp.NEW -> e.builder.endNewPinnedByteArray()
+                        PinnedMemoryOp.NEW_ALIGNED -> e.builder.endNewAlignedPinnedByteArray()
+                        PinnedMemoryOp.READ -> e.builder.endReadWord8OffAddr()
+                        else -> error("Scalar pinned memory operation")
+                    }
+                } else ProvenExpression(Expression { e ->
+                    if (operation == PinnedMemoryOp.CONTENTS) e.builder.beginByteArrayContents()
+                    else e.builder.beginWriteWord8OffAddr()
+                    operands.forEach { it.emit(e) }
+                    if (operation == PinnedMemoryOp.CONTENTS) e.builder.endByteArrayContents()
+                    else e.builder.endWriteWord8OffAddr()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

@@ -1,0 +1,57 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+package thc.runtime
+
+import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.interop.InteropLibrary
+import com.oracle.truffle.api.source.Source
+import org.graalvm.polyglot.io.ByteSequence
+import java.lang.ref.WeakReference
+import java.util.WeakHashMap
+
+/** Context-owned original C code and allocation views. No process addresses escape. */
+internal class SulongCbits(env: TruffleLanguage.Env) {
+    private val interop = InteropLibrary.getUncached()
+    private fun load(env: TruffleLanguage.Env, name: String): Any {
+        val bytes = SulongCbits::class.java.getResourceAsStream("/thc/cbits/$name.bc")?.use { it.readBytes() }
+            ?: fault("Missing compiled original C resource: $name")
+        return env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(bytes), "$name.bc").build()).call()
+    }
+    init {
+        val manifest = SulongCbits::class.java.getResourceAsStream("/thc/cbits/manifest.json")?.use {
+            thc.Json.parse(it.reader().readText()) as Map<*, *>
+        } ?: fault("Missing original C build manifest")
+        val system = System.getProperty("os.name").let { if (it.startsWith("Mac")) "Darwin" else it }
+        fun architecture(value: String) = when (value.lowercase()) {
+            "arm64" -> "aarch64"
+            "amd64" -> "x86_64"
+            else -> value
+        }
+        if (manifest["system"] != system || architecture(manifest["architecture"] as String) != architecture(System.getProperty("os.arch")))
+            fault("Original C bitcode does not match this runtime platform")
+    }
+    private val library = load(env, "md5")
+    private val init = interop.readMember(library, "thc_md5_init")
+    private val update = interop.readMember(library, "thc_md5_update")
+    private val finish = interop.readMember(library, "thc_md5_final")
+    // Arrays have identity equality. Both sides are weak: a cached view must not
+    // keep its weak key alive. A live LLVM pointer strongly retains its view.
+    private val buffers = WeakHashMap<ByteArray, WeakReference<CbitsBuffer>>()
+
+    @Synchronized internal fun buffer(address: ManagedAddress): CbitsBuffer {
+        val bytes = address.cbitsBacking()
+        return buffers[bytes]?.get() ?: CbitsBuffer(bytes, address.cbitsWritable()).also {
+            buffers[bytes] = WeakReference(it)
+        }
+    }
+    fun init(context: ManagedAddress) {
+        interop.execute(init, buffer(context), context.cbitsOffset())
+    }
+    fun update(context: ManagedAddress, input: ManagedAddress, length: Int) {
+        interop.execute(update, buffer(context), context.cbitsOffset(), buffer(input), input.cbitsOffset(), length)
+    }
+    fun finish(output: ManagedAddress, context: ManagedAddress) {
+        interop.execute(finish, buffer(output), output.cbitsOffset(), buffer(context), context.cbitsOffset())
+    }
+}
