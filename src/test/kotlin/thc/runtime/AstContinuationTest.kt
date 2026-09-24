@@ -26,7 +26,8 @@ class AstContinuationTest {
         "primReps" to listOf("BoxedRep (Just Lifted)"), "components" to listOf(stateRep, dataRep), "evaluated" to false)
 
     private fun directMVarModule(wrap: Boolean = false, strict: Boolean = false,
-                                 caseLiteral: Boolean = false, casePayload: Boolean = false): Map<String, Any?> {
+                                 caseLiteral: Boolean = false, casePayload: Boolean = false,
+                                 wrongCaseResult: Boolean = false): Map<String, Any?> {
         val cell = listOf("var", "cell", mapOf("rep" to mvarRep))
         val state = listOf("void", mapOf("rep" to stateRep))
         val read = listOf("app", listOf("prim", "takeMVar#"), listOf(cell, state),
@@ -47,7 +48,7 @@ class AstContinuationTest {
             mapOf("id" to "cell", "name" to "cell", "lifted" to false, "coercion" to false, "rep" to mvarRep),
             mapOf("id" to "state", "name" to "state", "lifted" to false, "coercion" to false, "rep" to stateRep))
         val lambda = listOf("lam", parameters, body, mapOf("resultRep" to when {
-            caseLiteral -> longRep; casePayload -> dataRep; else -> tupleRep },
+            wrongCaseResult || casePayload -> dataRep; caseLiteral -> longRep; else -> tupleRep },
             "entryStrict" to listOf(strict, false)))
         return mapOf("bindings" to listOf(mapOf("id" to "direct", "name" to "direct",
             "lifted" to true, "expr" to lambda)), "instrument" to true,
@@ -73,6 +74,10 @@ class AstContinuationTest {
                     Program(language, directMVarModule(casePayload = true), true)
                 }
                 assertTrue(lazyBranch.message!!.contains("direct"))
+                val wrongRoute = assertThrows(RuntimeFault::class.java) {
+                    Program(language, directMVarModule(caseLiteral = true, wrongCaseResult = true), true)
+                }
+                assertTrue(wrongRoute.message!!.contains("direct"))
             } finally { context.leave() }
         }
     }
