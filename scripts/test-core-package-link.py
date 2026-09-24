@@ -136,6 +136,11 @@ def main():
             raise RuntimeError(f'{backend} failed compiled native comparison: {result.stdout!r}, {diagnostics!r}')
     bundled = OUT / 'bundled-packages.json'
     bundled.write_text(json.dumps(dict(document, units=[bundled_unit(unit) for unit in document['units']]), indent=2) + '\n')
+    bundled_audit = OUT / 'bundled-audit.json'
+    run([sys.executable, ROOT / 'scripts/audit-core.py', '--package-manifest', bundled,
+         '--entry', ENTRY, '--output', bundled_audit])
+    if not json.loads(bundled_audit.read_text())['accepted']:
+        raise RuntimeError('Strict bundled package audit did not accept exact cross-unit closure')
     for backend in ('ast', 'bytecode'):
         result = run([runtime, '@' + str(bundled), ENTRY, '5', '--compile'],
                      env=dict(os.environ, THC_BACKEND=backend))

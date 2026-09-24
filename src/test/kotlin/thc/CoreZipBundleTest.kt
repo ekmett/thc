@@ -58,21 +58,37 @@ class CoreZipBundleTest {
 
     private fun unit(id: String, source: ByteArray = module(id),
                      omit: Boolean = false, extra: Boolean = false,
-                     innerUnit: String = id): Map<String, Any?> {
+                     innerUnit: String = id, inputs: ByteArray? = null): Map<String, Any?> {
         val core = "core/Shared.json"
         val inventory = listOf(mapOf("name" to "Shared", "boundary" to boundary,
             "path" to core, "sha256" to hash(source)))
-        val index = Json.stringify(mapOf("format" to "thc-core-bundle", "schema" to 1,
+        val indexFields = mutableMapOf<String, Any>("format" to "thc-core-bundle", "schema" to 1,
             "unit" to innerUnit, "buildKey" to "0".repeat(64), "exportKey" to "1".repeat(64),
-            "modules" to inventory)).toByteArray()
+            "modules" to inventory)
+        if (inputs != null) indexFields["buildInputs"] = mapOf("path" to "inplace-manifest.json", "sha256" to hash(inputs))
+        val index = Json.stringify(indexFields).toByteArray()
         val entries = listOf("manifest.json" to index) +
             (if (omit) emptyList() else listOf(core to source)) +
+            (if (inputs == null) emptyList() else listOf("inplace-manifest.json" to inputs)) +
             (if (extra) listOf("extra.json" to source) else emptyList())
         val archive = temporary.resolve("$id.zip")
         Files.write(archive, zipped(entries))
         return mapOf("id" to id, "depends" to emptyList<String>(),
             "bundle" to mapOf("path" to archive.toString(), "sha256" to hash(Files.readAllBytes(archive))),
             "modules" to inventory)
+    }
+
+    @Test fun nativeBuildInputsAreVerifiedWhenPresent() {
+        fun inputs(buildKey: String) = Json.stringify(mapOf("format" to "thc-core-build-inputs",
+            "schema" to 1, "unit" to "pkg-a", "buildKey" to buildKey,
+            "exportKey" to "1".repeat(64))).toByteArray()
+        val good = manifest(listOf(unit("pkg-a", inputs = inputs("0".repeat(64)))))
+        val request = Json.parse(CoreModules.request(listOf("@$good"), "pkg-a:Shared.entry")) as Map<*, *>
+        assertEquals(1, (request["modules"] as List<*>).size)
+        val bad = manifest(listOf(unit("pkg-a", inputs = inputs("f".repeat(64)))))
+        assertTrue(assertThrows(RuntimeException::class.java) {
+            CoreModules.request(listOf("@$bad"), "pkg-a:Shared.entry")
+        }.message!!.contains("build inputs record"))
     }
 
     private fun manifest(units: List<Map<String, Any?>>): Path = temporary.resolve("packages.json").also {
@@ -106,6 +122,13 @@ class CoreZipBundleTest {
         assertTrue(rejected().message!!.contains("hash mismatch"))
         Files.write(archive, valid)
 
+        val truncated = valid.copyOf(valid.size - 10)
+        Files.write(archive, truncated)
+        manifest(listOf(original + ("bundle" to mapOf("path" to archive.toString(),
+            "sha256" to hash(truncated)))))
+        rejected()
+        Files.write(archive, valid)
+
         val changedCore = zipped(unzip(valid).map { (name, bytes) ->
             name to if (name == "core/Shared.json") "{}".toByteArray() else bytes
         })
@@ -121,8 +144,14 @@ class CoreZipBundleTest {
         check(unit("pkg-a", innerUnit = "pkg-b"))
         check(unit("pkg-a", source = module("pkg-b")))
         val module = (unit("pkg-a")["modules"] as List<Map<String, Any?>>).single()
+        val reference = original["bundle"] as Map<*, *>
+        check(original + ("bundle" to null))
+        check(original + ("bundle" to (reference + ("path" to "pkg-a.zip"))))
+        check(original + ("bundle" to (reference + ("unused" to true))))
         check(unit("pkg-a") + ("modules" to listOf(module + ("sha256" to "f".repeat(64)))))
         check(unit("pkg-a") + ("modules" to listOf(module + ("path" to "../Shared.json"))))
+        check(unit("pkg-a") + ("modules" to listOf(module + ("path" to "C:Shared.json"))))
+        check(unit("pkg-a") + ("modules" to listOf(module + ("path" to "core/\nShared.json"))))
         check(unit("pkg-a") + ("modules" to listOf(module, module)))
     }
 
