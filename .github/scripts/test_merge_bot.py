@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 import copy
 import unittest
 from urllib.error import HTTPError
@@ -66,6 +67,10 @@ class FakeAPI:
     def call(self, method, path, body=None):
         if method != "GET":
             self.mutations.append((method, path, body))
+            if method == "PATCH" and path.startswith("pulls/"):
+                target = next(p for p in self.prs if p["number"] == int(path.split("/")[1]))
+                target.update(body)
+                return copy.deepcopy(target)
             if path.startswith("statuses/"):
                 self.statuses.insert(0, {**body, "sha": path.split("/")[1],
                                          "creator": {"login": "github-actions[bot]"}})
@@ -758,6 +763,22 @@ class FastGateTest(unittest.TestCase):
         self.run_bot(api)
         self.assertEqual(len(api.actions), before)
 
+    def test_head_only_tag_survives_bot_branch_update_without_fast(self):
+        api = FastAPI(); api.runs = []; api.behind = 1
+        api.commit_messages["head"] = "Document interface [ci skip]"
+        self.run_bot(api)
+        self.assertEqual(api.actions, [
+            ("PATCH", "pulls/1", {"title": "A change [ci skip]"}),
+            ("PUT", "pulls/1/update-branch", {"expected_head_sha": "head"})])
+        self.assertEqual(api.pr["head"]["sha"], "updated")
+        self.assertEqual(api.statuses[0]["state"], "success")
+        self.assertIn("PR title", api.statuses[0]["description"])
+        self.run_bot(api)
+        self.assertIn(("PUT", "pulls/1/merge", {
+            "sha": "updated", "merge_method": "squash", "commit_title": "A change [ci skip]"}),
+            api.actions)
+        self.assertFalse(any(path.endswith("/dispatches") for _, path, _ in api.actions))
+
     def test_removed_title_tag_retires_skip_status_before_merge(self):
         api = FastAPI(); api.runs = []
         api.pr["title"] = "Docs [ci skip]"
@@ -1166,7 +1187,7 @@ class BulkAPI(FastAPI):
         if method == "PATCH" and path.startswith("pulls/"):
             self.mutations.append((method, path, body))
             target = next(pr for pr in self.prs if pr["number"] == int(path.split("/")[1]))
-            target["state"] = body["state"]
+            target.update(body)
             return copy.deepcopy(target)
         if method == "DELETE" and path.startswith("git/refs/heads/"):
             self.mutations.append((method, path, body))
@@ -1229,6 +1250,24 @@ class BulkMergeTest(unittest.TestCase):
                          "pending")
         self.assertIn(("PUT", "pulls/1/merge", {
             "sha": api.first_sha, "merge_method": "squash", "commit_title": "Docs [ci skip]"}), api.actions)
+
+    def test_tagged_bulk_member_does_not_wait_for_unrelated_candidate(self):
+        api = BulkAPI(); self.run_bot(api)
+        candidate = api.prs[2]
+        docs = pull(4)
+        docs["base"]["sha"] = api.base_sha
+        docs["head"].update(sha="9" * 40, ref="feature/docs")
+        docs["title"] = "Docs [ci skip]"
+        docs["labels"] = [{"name": BULK_LABEL}]
+        api.prs.append(docs)
+        api.events_by_pr[4] = [{"id": 4, "event": "labeled", "label": {"name": BULK_LABEL},
+                                "actor": {"login": "ekmett"}}]
+        self.run_bot(api)
+        self.assertIn(("PUT", "pulls/4/merge", {
+            "sha": "9" * 40, "merge_method": "squash", "commit_title": "Docs [ci skip]"}),
+            api.actions)
+        self.assertFalse(any(status["sha"] == candidate["head"]["sha"] and status["state"] == "success"
+                             for status in api.statuses))
 
     def test_mixed_bulk_selection_keeps_two_untagged_members_in_candidate(self):
         api = BulkAPI()

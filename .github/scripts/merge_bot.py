@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Merge opted-in PRs using GitHub's required checks and expected-head guard.
 
 Run only from trusted main. PR contents are data and are never checked out here.
@@ -709,7 +710,7 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
         if not still_authorized(api, pr, label):
             continue
         skip_source = skip_declaration(api, pr) if gate == FAST_GATE else None
-        if bulk_busy and label == BULK_LABEL:
+        if bulk_busy and label == BULK_LABEL and not skip_source:
             continue
         sha = pr["head"]["sha"]
         if pr["mergeable"] is False:
@@ -734,6 +735,19 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
             if not still_authorized(api, fresh, label) or fresh["head"]["sha"] != sha:
                 report(f"#{number}: changed while inspecting; waiting")
                 continue
+            if skip_source and skip_declaration(api, fresh) != skip_source:
+                report(f"#{number}: [ci skip] declaration changed before branch update; waiting")
+                continue
+            if skip_source == "head commit":
+                # GitHub's update-branch merge commit may replace the tagged
+                # head message. Keep the owner's declaration in the PR title.
+                title = fresh["title"]
+                api.call("PATCH", path, {"title": title + " [ci skip]"})
+                fresh = api.call("GET", path)
+                if (not still_authorized(api, fresh, label) or fresh["head"]["sha"] != sha
+                        or not CI_SKIP.search(fresh["title"])):
+                    report(f"#{number}: title or head changed during skip preservation; waiting")
+                    continue
             updated_branch = True
             try:
                 api.call("PUT", f"{path}/update-branch", {"expected_head_sha": sha})
@@ -767,7 +781,11 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
                 if updated["head"]["sha"] != sha:
                     # Token-authored pushes don't start ordinary push CI.
                     # Dispatch is explicit and verifies the expected commit.
-                    if dispatch(api, updated, gate, label):
+                    new_skip = skip_declaration(api, updated) if gate == FAST_GATE else None
+                    if new_skip:
+                        publish_skip_result(api, updated, new_skip)
+                        report(f"#{number}: updated against main; [ci skip] retained on new head")
+                    elif dispatch(api, updated, gate, label):
                         report(f"#{number}: updated against main and dispatched {gate.name}")
                     else:
                         report(f"#{number}: changed before dispatch; waiting")
@@ -794,7 +812,7 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
             else:
                 report(f"#{number}: waiting for required checks ({state})")
             continue
-        if bulk_busy:
+        if bulk_busy and not skip_source:
             report(f"#{number}: waiting for checked bulk candidate before solo merge")
             continue
         if gate == FAST_GATE:
