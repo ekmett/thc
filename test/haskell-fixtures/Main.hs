@@ -768,7 +768,7 @@ preparePinnedPointers root = do
   unless (version == "9.14.1") (die "Pinned pointer fixture requires GHC 9.14.1")
   _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint",
     "-i./compiler/test-fixtures", "-odir", native, "-hidir", native, driver, "-o", binary] ""
-  oracle <- run root [] (root </> binary) [] (unlines (map show ([0,1,17,127,255,256,-1] :: [Int])))
+  oracle <- run root [] (root </> binary) [] (unlines (map show ([0,1,17,127,255,256,-1,32767,32768,65535,-32768] :: [Int])))
   writeFile (root </> directory </> "oracle.tsv") oracle
   forM_ ["pre", "post"] $ \stage -> do
     let core = directory </> stage </> "core"
@@ -780,10 +780,11 @@ preparePinnedPointers root = do
         "-fplugin-opt=THC.Plugin:closure=pointerArrayRoundtrip",
         "-fplugin-opt=THC.Plugin:closure=pointerOrder",
         "-fplugin-opt=THC.Plugin:closure=char8Roundtrip",
-        "-fplugin-opt=THC.Plugin:closure=byte8Roundtrip", source]) ""
+        "-fplugin-opt=THC.Plugin:closure=byte8Roundtrip",
+        "-fplugin-opt=THC.Plugin:closure=halfwordWriteRoundtrip", source]) ""
     _ <- run root [] "python3" ["scripts/audit-core.py", "--entry", "pointerRoundtrip",
       "--entry", "pointerArrayRoundtrip", "--entry", "pointerOrder", "--entry", "char8Roundtrip",
-      "--entry", "byte8Roundtrip",
+      "--entry", "byte8Roundtrip", "--entry", "halfwordWriteRoundtrip",
       "--output", directory </> stage </> "audit.json",
       core </> "PinnedPointerCellsAudit.json", core </> "THC.InterfaceClosure.json"] ""
     pure ()
@@ -801,7 +802,7 @@ preparePinnedPointers root = do
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= version,
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]
-  putStrLn "pinned-pointer-cells: 7 native rows, five strict pre/post Core roots"
+  putStrLn "pinned-pointer-cells: 11 native rows, six strict pre/post Core roots"
 
 main :: IO ()
 main = do
