@@ -14,7 +14,7 @@ import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Bits ((.&.), (.|.), xor, shiftL, shiftR)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
-import Data.List (isPrefixOf, sort)
+import Data.List (isPrefixOf, isSuffixOf, sort)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Data.String (fromString)
@@ -23,7 +23,7 @@ import Foreign.Marshal.Alloc (alloca)
 import Foreign.Ptr (Ptr, castPtr)
 import Foreign.Storable (peek, poke)
 import Numeric (showHex)
-import System.Directory (createDirectoryIfMissing, doesFileExist, getCurrentDirectory, listDirectory, removeFile)
+import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getCurrentDirectory, listDirectory, removeFile)
 import System.Environment (getArgs, getEnvironment, lookupEnv)
 import System.Exit (ExitCode (..), die)
 import System.FilePath ((</>), takeExtension)
@@ -636,6 +636,15 @@ prepareArray root spec = do
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
   when present (removeFile manifest)
+  staleExpected <- doesFileExist (output </> "expected.tsv")
+  when staleExpected (removeFile (output </> "expected.tsv"))
+  forM_ ["pre", "post"] $ \stage -> do
+    let stageDir = output </> stage
+    stagePresent <- doesDirectoryExist stageDir
+    when stagePresent $ do
+      oldReports <- listDirectory stageDir
+      forM_ (filter (isSuffixOf ".audit.json") oldReports) $ \file ->
+        removeFile (stageDir </> file)
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   version <- run root [] ghc ["--numeric-version"] ""
