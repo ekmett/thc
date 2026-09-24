@@ -14,9 +14,15 @@ prepareCoreContinuation :: FilePath -> IO ()
 prepareCoreContinuation root = do
   let base = root </> "build/core-continuation"
       source = "compiler/test-fixtures/CoreContinuationAudit.hs"
+      lazySource = "compiler/test-fixtures/LazyIOCallbackAudit.hs"
   mapM_ (createDirectoryIfMissing True . (base </>)) ["core", "ghc", "native"]
   _ <- run root [("THC_CORE_OUT", base </> "core"), ("THC_GHC_OUT", base </> "ghc")]
-       "compiler/export.sh" [source] ""
+       "compiler/export.sh" [source, lazySource] ""
+  mapM_ (\(entry, report) -> run root [] "python3"
+      ["scripts/audit-core.py", base </> "core/LazyIOCallbackAudit.json",
+       "--entry", entry, "--output", base </> report] "")
+      [("catchLazyActionHead", "lazy-action-audit.json"),
+       ("catchLazyHandlerHead", "lazy-handler-audit.json")]
   _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
        "--entry", "sharedAnswer", "--output", base </> "audit.json"] ""
   _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
@@ -66,3 +72,9 @@ prepareCoreContinuation root = do
   unless (native == "108\n208\n42\n77\n43\n114\n114\n79\n2\n0\n1\n208\n208\n209\n209\n")
     (die "core-continuation native oracle disagreed with checkpoint results")
   writeFile (base </> "native-output.txt") native
+  _ <- run root [] ghc ["-O2", "-i./compiler/test-fixtures", "-odir", base </> "native",
+       "-hidir", base </> "native", "-o", base </> "lazy-native-oracle",
+       "compiler/test-fixtures/LazyIOCallbackNative.hs", lazySource] ""
+  lazyNative <- run root [] (base </> "lazy-native-oracle") [] ""
+  unless (lazyNative == "42\n77\n") (die "lazy IO callback heads disagree with native GHC")
+  writeFile (base </> "lazy-native-output.txt") lazyNative

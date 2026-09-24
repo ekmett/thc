@@ -317,7 +317,9 @@
         "test/haskell-fixtures/Main.hs",
         "thc.cabal",
         "compiler/test-fixtures/CoreContinuationAudit.hs",
-        "compiler/test-fixtures/CoreContinuationNative.hs"
+        "compiler/test-fixtures/CoreContinuationNative.hs",
+        "compiler/test-fixtures/LazyIOCallbackAudit.hs",
+        "compiler/test-fixtures/LazyIOCallbackNative.hs"
       ]
     },
     "thread-async": {

@@ -636,6 +636,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     private fun requireClosure(value: Expression) = Expression { e ->
         e.builder.beginRequireClosure(); force(value).emit(e); e.builder.endRequireClosure()
     }
+    private fun forceSavedCallback(e: Emission, slot: BytecodeLocal, proof: CoreRepresentation) {
+        // The Java invoke operation cannot capture a suspension raised while
+        // forcing its own callback operand. Enter the enclosing catch/mask
+        // scope first, then use the bytecode force path and its resumable yield.
+        val saved = ProvenExpression(Expression { it.builder.emitLoadLocal(slot) },
+            proof.copy(evaluated = false))
+        force(saved).emit(e)
+    }
     private fun delay(expr: List<Any?>, scope: Scope, label: String): Expression {
         val fn = function(label, emptyList(), expr, scope)
         (fn.target.rootNode as GuestRoot).tupleResult?.let { CoreRepresentations.requireScalar(it.proof, "thunk") }
@@ -1467,7 +1475,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                 b.beginTryCatch()
                                 if (!resumable) {
                                     b.beginInvokeIOAction(slots, metrics)
-                                    b.emitLoadLocal(action); b.emitLoadNull()
+                                    forceSavedCallback(e, action, operands[0].proof); b.emitLoadNull()
                                     b.endInvokeIOAction()
                                 } else {
                                     b.beginBlock()
@@ -1476,7 +1484,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                     b.beginStoreLocal(callerMask); b.emitCurrentMask(); b.endStoreLocal()
                                     b.beginTryCatch()
                                     b.beginInvokeIOActionCheckpoint(slots, metrics)
-                                    b.emitLoadLocal(action); b.emitLoadConstant(true)
+                                    forceSavedCallback(e, action, operands[0].proof); b.emitLoadConstant(true)
                                     b.endInvokeIOActionCheckpoint()
                                     b.beginBlock()
                                     b.beginStoreLocal(suspended)
@@ -1515,7 +1523,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                 })
                                 if (!resumable) {
                                     b.beginInvokeIOHandler(slots, metrics)
-                                    b.emitLoadLocal(handler); b.emitLoadLocal(payload); b.emitLoadLocal(prior)
+                                    forceSavedCallback(e, handler, operands[1].proof)
+                                    b.emitLoadLocal(payload); b.emitLoadLocal(prior)
                                     b.endInvokeIOHandler()
                                 } else {
                                     b.beginBlock()
@@ -1524,7 +1533,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                     b.beginStoreLocal(handlerMask); b.emitCurrentMask(); b.endStoreLocal()
                                     b.beginTryCatch()
                                     b.beginInvokeIOHandlerCheckpoint(slots, metrics)
-                                    b.emitLoadLocal(handler); b.emitLoadLocal(payload); b.emitLoadLocal(prior)
+                                    forceSavedCallback(e, handler, operands[1].proof)
+                                    b.emitLoadLocal(payload); b.emitLoadLocal(prior)
                                     b.endInvokeIOHandlerCheckpoint()
                                     b.beginBlock()
                                     b.beginStoreLocal(suspended)
@@ -1563,7 +1573,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                 })
                                 if (!resumable) {
                                     b.beginInvokeIOAction(slots, metrics)
-                                    b.emitLoadLocal(action); b.emitLoadLocal(prior)
+                                    forceSavedCallback(e, action, operands[0].proof); b.emitLoadLocal(prior)
                                     b.endInvokeIOAction()
                                 } else {
                                     b.beginBlock()
@@ -1572,7 +1582,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                     b.beginStoreLocal(actionMask); b.emitCurrentMask(); b.endStoreLocal()
                                     b.beginTryCatch()
                                     b.beginInvokeMaskedIOActionCheckpoint(slots, metrics)
-                                    b.emitLoadLocal(action); b.emitLoadLocal(prior)
+                                    forceSavedCallback(e, action, operands[0].proof); b.emitLoadLocal(prior)
                                     b.endInvokeMaskedIOActionCheckpoint()
                                     b.beginBlock()
                                     b.beginStoreLocal(suspended)
@@ -1858,17 +1868,36 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     args.getOrNull(2)?.let { CoreRepresentations.knownFunctionSignature(it, bindings) })
                 val kept = argument(args[0], scope, flags[0] as Boolean)
                 val state = compile(args[1], scope, false)
-                // Force the continuation only after validating State, inside the fence.
                 val function = argument(args[2], scope, true)
+                fun emitKeepAlive(e: Emission, destination: List<BytecodeLocal>?) {
+                    val b = e.builder
+                    b.beginBlock()
+                    val reference = b.createLocal("kept alive reference", "object")
+                    val stateLocal = b.createLocal("keepAlive state", "object")
+                    b.beginStoreLocal(reference); kept.emit(e); b.endStoreLocal()
+                    b.beginStoreLocal(stateLocal); state.emit(e); b.endStoreLocal()
+                    // The State# check precedes continuation forcing. A bytecode
+                    // finally owns the fence even when that force yields or fails
+                    // before the Java KeepAlive operation can be entered.
+                    b.beginRequireIOState(); b.emitLoadLocal(stateLocal); b.endRequireIOState()
+                    b.beginTryFinally(Runnable {
+                        b.beginReachabilityFence(); b.emitLoadLocal(reference); b.endReachabilityFence()
+                    })
+                    val result = if (destination == null) b.createLocal("keepAlive result", null) else null
+                    if (result != null) b.beginStoreLocal(result)
+                    if (destination != null) b.beginKeepAliveTuple(tupleSlots(TupleShape(tupleProof, language), destination), metrics)
+                    else b.beginKeepAlive(metrics)
+                    b.emitLoadLocal(reference); b.emitLoadLocal(stateLocal); force(function).emit(e)
+                    if (destination != null) b.endKeepAliveTuple() else b.endKeepAlive()
+                    if (result != null) b.endStoreLocal()
+                    b.endTryFinally()
+                    if (result != null) b.emitLoadLocal(result)
+                    b.endBlock()
+                }
                 if (tupleProof.isAggregate) tupleExpression(tupleProof) { e, destination ->
-                    e.builder.beginKeepAliveTuple(tupleSlots(TupleShape(tupleProof, language), destination), metrics)
-                    kept.emit(e); state.emit(e); function.emit(e)
-                    e.builder.endKeepAliveTuple()
-                } else ProvenExpression(Expression { e ->
-                    e.builder.beginKeepAlive(metrics)
-                    kept.emit(e); state.emit(e); function.emit(e)
-                    e.builder.endKeepAlive()
-                }, tupleProof.copy(evaluated = true))
+                    emitKeepAlive(e, destination)
+                } else ProvenExpression(Expression { e -> emitKeepAlive(e, null) },
+                    tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && FloatingAddressOp.named(fn[1] as String) != null) {
                 val operation = FloatingAddressOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

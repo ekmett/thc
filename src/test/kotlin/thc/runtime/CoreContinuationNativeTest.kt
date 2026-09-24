@@ -637,6 +637,34 @@ class CoreContinuationNativeTest {
         }
     }
 
+    @Test fun lazyOriginalActionAndHandlerHeadsSuspendInsideTheirCatchScopes() {
+        val oracle = File(root, "build/core-continuation/lazy-native-output.txt").readLines()
+        assertEquals(listOf("42", "77"), oracle)
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/LazyIOCallbackAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            for ((name, expected) in listOf("catchLazyHandlerHead" to 77L, "catchLazyActionHead" to 42L)) {
+                val linked = CoreModules.reachable(module, name, strictLink = true)
+                val checkpoint = BytecodeCheckpoint().also { it.armed = true }
+                val program = entered(context) { BytecodeProgram(language, linked, checkpoint) }
+                val parent = entered(context) { program.entryValue(name) as Thunk }
+                entered(context) {
+                    assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                    assertEquals(1, checkpoint.visits.get(), "$name head checkpoint")
+                    assertEquals(5, parent.state, "$name must retain its captured bytecode frame")
+                    val answer = driver.force(parent) as DataValue
+                    assertEquals(expected, answer.layout.readLong(answer, 0), name)
+                    assertEquals(1, checkpoint.visits.get(), "$name head prefix must not replay")
+                    assertEquals(2, parent.state, "$name must publish completion")
+                    assertEquals(0, language.handoffState.get().results.depth)
+                }
+            }
+        }
+    }
+
     @Test fun genuineCatchActionResumesOwnedTupleAcrossThreads() {
         assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79", "2", "0", "1", "208", "208", "209", "209"),
             File(root, "build/core-continuation/native-output.txt").readLines())

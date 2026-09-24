@@ -1119,6 +1119,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** Fence a saved keepAlive# reference even if forcing its continuation yields or throws. */
+    @Operation public static final class ReachabilityFence {
+        @Specialization public static void fence(Object kept) {
+            java.lang.ref.Reference.reachabilityFence(kept);
+        }
+    }
+
     /** Invoke exactly one logical State argument, with a fence after real return/throw. */
     @Operation(forceCached = true)
     @ConstantOperand(type = Metrics.class, name = "metrics")

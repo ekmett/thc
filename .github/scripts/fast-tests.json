@@ -778,6 +778,14 @@
       "junit": ["thc.runtime.CoreContinuationNativeTest"],
       "python": []
     },
+    "compiler/test-fixtures/LazyIOCallbackAudit.hs": {
+      "junit": ["thc.runtime.CoreContinuationNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/LazyIOCallbackNative.hs": {
+      "junit": ["thc.runtime.CoreContinuationNativeTest"],
+      "python": []
+    },
     "test/haskell-fixtures/FusedFloatingFixtures.hs": {
       "junit": ["thc.runtime.FusedFloatingTest"],
       "python": []
