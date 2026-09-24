@@ -444,7 +444,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         b.endBlock()
         b.beginBlock()
         b.beginStoreLocal(request)
-        b.beginAsyncBlockedOnly(); b.emitLoadException(); b.endAsyncBlockedOnly()
+        b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly()
         b.endStoreLocal()
         b.beginStoreLocal(active); b.emitCurrentMask(); b.endStoreLocal()
         b.beginStoreLocal(discard)
@@ -1462,6 +1462,78 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     e.builder.beginGetCurrentCCS(destination[0])
                     state.emit(e)
                     e.builder.endGetCurrentCCS()
+                }
+            } else if (fn[0] == "prim" && fn[1] in listOf("fork#", "myThreadId#", "killThread#")) {
+                val name = fn[1] as String
+                CoreGuestThreads.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                if (name == "killThread#") {
+                    if (!enableAsync) throw UnsupportedCore("killThread# requires resumable bytecode async delivery")
+                    ProvenExpression(Expression { e ->
+                        val b = e.builder
+                        b.beginBlock()
+                        val values = operands.mapIndexed { index, operand ->
+                            b.createLocal("killThread operand $index", null).also {
+                                b.beginStoreLocal(it); operand.emit(e); b.endStoreLocal()
+                            }
+                        }
+                        val sent = b.createLocal("killThread sent request", "object")
+                        b.beginStoreLocal(sent)
+                        b.beginThreadPrimitive(BytecodeRoot.ThreadPrimitiveKind.BEGIN_KILL)
+                        values.forEach(b::emitLoadLocal)
+                        b.endThreadPrimitive()
+                        b.endStoreLocal()
+                        val retry = b.createLocal("killThread wait pending", "primitive")
+                        val incoming = b.createLocal("killThread incoming request", "object")
+                        val active = b.createLocal("killThread logical mask", "object")
+                        val discard = b.createLocal("killThread resume value", "object")
+                        b.beginStoreLocal(retry); b.emitLoadConstant(true); b.endStoreLocal()
+                        b.beginWhile()
+                        b.emitLoadLocal(retry)
+                        b.beginBlock()
+                        b.beginTryCatch()
+                        b.beginBlock()
+                        b.beginStoreLocal(discard)
+                        b.beginThreadPrimitive(BytecodeRoot.ThreadPrimitiveKind.FINISH_KILL)
+                        b.emitLoadLocal(sent); b.emitLoadConstant(Unit); b.emitLoadConstant(Unit)
+                        b.endThreadPrimitive()
+                        b.endStoreLocal()
+                        b.beginStoreLocal(retry); b.emitLoadConstant(false); b.endStoreLocal()
+                        b.endBlock()
+                        b.beginBlock()
+                        b.beginStoreLocal(incoming)
+                        b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly()
+                        b.endStoreLocal()
+                        b.beginStoreLocal(active); b.emitCurrentMask(); b.endStoreLocal()
+                        b.beginStoreLocal(discard)
+                        b.beginReenterCallMask()
+                        b.beginYield()
+                        b.beginParkAsyncMask()
+                        b.emitLoadLocal(incoming)
+                        b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+                        b.endParkAsyncMask()
+                        b.endYield()
+                        b.emitLoadLocal(active)
+                        b.endReenterCallMask()
+                        b.endStoreLocal()
+                        b.endBlock()
+                        b.endTryCatch()
+                        b.endBlock()
+                        b.endWhile()
+                        emitAsyncPoll(e) // Self-target delivery occurs only after enqueue.
+                        b.emitLoadConstant(Unit)
+                        b.endBlock()
+                    }, tupleProof.copy(evaluated = true))
+                } else tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    b.beginStoreLocal(destination[0])
+                    b.beginThreadPrimitive(if (name == "fork#") BytecodeRoot.ThreadPrimitiveKind.FORK
+                        else BytecodeRoot.ThreadPrimitiveKind.MY)
+                    if (name == "fork#") operands[0].emit(e) else b.emitLoadConstant(Unit)
+                    operands.last().emit(e)
+                    b.emitLoadConstant(Unit)
+                    b.endThreadPrimitive()
+                    b.endStoreLocal()
                 }
             } else if (fn[0] == "prim" && MVarOp.named(fn[1] as String) != null) {
                 val operation = MVarOp.named(fn[1] as String)!!
