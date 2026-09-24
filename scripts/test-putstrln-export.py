@@ -5,6 +5,7 @@
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import putstrln_export as recipe
 from putstrln_inventory import inventory
@@ -111,6 +112,84 @@ class RecipeTests(unittest.TestCase):
         generated.write_text("-- changed output\n")
         with self.assertRaisesRegex(ValueError, "Changed"):
             recipe.generated_sources(manifest, self.root)
+
+    def test_fresh_plugin_binds_binary_sources_and_capability(self):
+        source = self.root / "repo/compiler/THC/Plugin.hs"
+        source.parent.mkdir(parents=True)
+        source.write_text("-- unit fixture without foreign metadata\n")
+
+        def fake_compiler(argv, cwd, log):
+            # Synthetic unit-test bytes, never admitted to a real export run.
+            Path(argv[argv.index("-o") + 1]).write_bytes(b"unit test plugin")
+            self.assertIn("-fforce-recomp", argv)
+            self.assertIn("-clear-package-db", argv)
+            return {"exit": 0, "argv": argv, "cwd": str(cwd), "log": str(log)}
+
+        tools = {"ghc": "unit-test-ghc", "compilerPackageFlags": ["-clear-package-db"]}
+        directory = self.root / "build/plugin"
+        with patch.object(recipe, "run", side_effect=fake_compiler):
+            record = recipe.build_plugin(self.root / "repo", directory, tools)
+            with self.assertRaisesRegex(ValueError, "fresh"):
+                recipe.build_plugin(self.root / "repo", directory, tools)
+        self.assertFalse(record["foreignMetadataExporterAvailable"])
+        source.write_text('"foreignCall" -- a different current checkout\n')
+        recipe.verify_plugin(record)  # Capability follows the built snapshot, not this new source.
+        record["foreignMetadataExporterAvailable"] = True
+        with self.assertRaisesRegex(ValueError, "capability"):
+            recipe.verify_plugin(record)
+        record["foreignMetadataExporterAvailable"] = False
+        binary = Path(record["binary"])
+        binary.write_bytes(b"stale replacement")
+        with self.assertRaisesRegex(ValueError, "binary"):
+            recipe.verify_plugin(record)
+        binary.write_bytes(b"unit test plugin")
+        snapshot = Path(next(iter(record["sourceHashes"])))
+        snapshot.write_text("-- changed captured source\n")
+        with self.assertRaisesRegex(ValueError, "provenance input"):
+            recipe.verify_plugin(record)
+        with patch.object(recipe, "run", side_effect=fake_compiler):
+            rebuilt = recipe.build_plugin(self.root / "repo", self.root / "build/rebuilt", tools)
+        self.assertTrue(rebuilt["foreignMetadataExporterAvailable"])
+
+    def test_toolchain_rejects_other_installation_and_binds_package_queries(self):
+        bindir = self.root / "a/bin"
+        bindir.mkdir(parents=True)
+        other = self.root / "b/bin"
+        other.mkdir(parents=True)
+        for directory in (bindir, other):
+            for name in ("ghc", "ghc-pkg", "hsc2hs"):
+                path = directory / name
+                path.write_text("unit fixture")
+                path.chmod(0o755)
+        libdir = self.root / "a/lib"
+        database = libdir / "package.conf.d"
+        database.mkdir(parents=True)
+        values = {"--numeric-version": "9.14.1", "--version": "GHC package manager version 9.14.1",
+                  "--print-libdir": str(libdir), "--print-global-package-db": str(database), "--info": "[]"}
+        with patch.object(recipe, "output", side_effect=lambda argv: values[argv[-1]]):
+            tools = recipe.toolchain(str(bindir / "ghc"))
+            self.assertIn("--global-package-db=" + str(database), tools["packageQuery"])
+            self.assertEqual(tools["compilerPackageFlags"][-1], str(database))
+            with self.assertRaisesRegex(ValueError, "bindir"):
+                recipe.toolchain(str(bindir / "ghc"), str(other / "ghc-pkg"))
+        with self.assertRaisesRegex(ValueError, "bindir"):
+            recipe.sibling_tool(tools["ghc"], str(other / "hsc2hs"), "hsc2hs")
+        include = libdir / "include"
+        include.mkdir()
+        with patch.object(recipe, "output", return_value=str(include)) as query:
+            self.assertEqual(recipe.package_dirs(tools, "rts", "include-dirs"), [include])
+            self.assertEqual(query.call_args.args[0][:4], tools["packageQuery"])
+        with patch.object(recipe, "output", return_value=str(other)), self.assertRaisesRegex(ValueError, "libdir"):
+            recipe.package_dirs(tools, "rts", "include-dirs")
+
+    def test_auditor_and_recipe_hashes_reject_changed_inputs(self):
+        script = self.root / "audit-core.py"
+        script.write_text("# unit fixture\n")
+        hashes = {str(script): recipe.digest(script)}
+        recipe.verify_hashes(hashes)
+        script.write_text("# changed auditor\n")
+        with self.assertRaisesRegex(ValueError, "provenance input"):
+            recipe.verify_hashes(hashes)
 
 
 if __name__ == "__main__":

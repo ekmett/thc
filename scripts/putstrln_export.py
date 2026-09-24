@@ -72,20 +72,39 @@ def source_checkout(path):
     return path
 
 
-def toolchain(ghc, pkg):
+def sibling_tool(ghc, requested, name):
+    path = Path(shutil.which(requested or str(Path(ghc).parent / name)) or "")
+    require(path.is_file(), "Missing selected GHC's sibling tool: " + name)
+    path = path.resolve()
+    require(path.parent == Path(ghc).resolve().parent, "Tool is not from selected GHC's bindir: " + str(path))
+    return str(path)
+
+
+def toolchain(ghc, pkg=None):
+    executable = shutil.which(ghc)
+    require(executable, "Missing GHC executable: " + ghc)
+    ghc = str(Path(executable).resolve())
+    pkg = sibling_tool(ghc, pkg, "ghc-pkg")
     require(output([ghc, "--numeric-version"]) == "9.14.1", "Expected GHC 9.14.1")
     require(output([pkg, "--version"]) == "GHC package manager version 9.14.1",
             "Expected ghc-pkg 9.14.1 from the same installation")
-    return {"ghc": shutil.which(ghc) or ghc, "ghcPkg": shutil.which(pkg) or pkg,
+    libdir = Path(output([ghc, "--print-libdir"])).resolve()
+    database = Path(output([ghc, "--print-global-package-db"])).resolve()
+    require(database.is_dir() and database.is_relative_to(libdir), "GHC global package database is outside its libdir")
+    return {"ghc": ghc, "ghcPkg": pkg,
             "ghcVersion": "9.14.1", "ghcInfo": output([ghc, "--info"]),
-            "libdir": output([ghc, "--print-libdir"]),
+            "libdir": str(libdir), "globalPackageDatabase": str(database),
+            "packageQuery": [pkg, "--global", "--no-user-package-db", "--global-package-db=" + str(database)],
+            "compilerPackageFlags": ["-package-env", "-", "-clear-package-db", "-package-db", str(database)],
             "installedArtifactsHashed": False}
 
 
-def package_dirs(pkg, package, field):
+def package_dirs(tools, package, field):
     paths = [Path(p).resolve() for p in shlex.split(output(
-        [pkg, "field", package, field, "--simple-output"]))]
+        tools["packageQuery"] + ["field", package, field, "--simple-output"]))]
     require(paths and all(p.is_dir() for p in paths), "Missing installed " + field)
+    require(all(p.is_relative_to(Path(tools["libdir"])) for p in paths),
+            "Installed package path is outside selected GHC's libdir: " + field)
     return paths
 
 
@@ -103,6 +122,64 @@ def run(argv, cwd, log):
     record["exit"] = result.returncode
     write(log.with_suffix(".command.json"), record)
     print(f"{log.name}: exit {result.returncode}", flush=True)
+    return record
+
+
+def verify_hashes(hashes):
+    for path, expected in hashes.items():
+        require(digest(path) == expected, "Changed provenance input: " + path)
+
+
+def recipe_hashes(root):
+    paths = [root / "scripts" / name for name in (
+        "putstrln_export.py", "putstrln_hsc.py", "putstrln_inventory.py",
+        "audit-core.py", "core-capabilities.json",
+    )]
+    paths += sorted((root / "scripts").glob("core_*.py"))
+    paths += sorted((root / "src/main/resources/thc").glob("*.json"))
+    return {str(path): digest(path) for path in paths}
+
+
+def verify_plugin(record):
+    require(record["exit"] == 0, "Plugin build did not succeed")
+    verify_hashes(record["sourceHashes"])
+    require(digest(record["binary"]) == record["binarySha256"], "Changed recipe-owned plugin binary")
+    capability = any('"foreignCall"' in Path(path).read_text() for path in record["sourceHashes"])
+    require(capability == record["foreignMetadataExporterAvailable"], "Plugin capability differs from built sources")
+
+
+def build_plugin(root, directory, tools):
+    """Compile only fresh source snapshots/objects; never trust a supplied DSO."""
+    require(not directory.exists(), "Plugin build directory must be fresh")
+    directory.mkdir(parents=True)
+    source_root = directory / "source"
+    originals, snapshots = {}, {}
+    for source in sorted((root / "compiler/THC").rglob("*.hs")):
+        target = source_root / source.relative_to(root / "compiler")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(source.read_bytes())
+        snapshots[str(target)] = digest(target)
+        originals[str(source)] = snapshots[str(target)]
+    require((source_root / "THC/Plugin.hs").is_file(), "Missing plugin source entry")
+    suffix = "dylib" if sys.platform == "darwin" else "so"
+    binary = directory / f"libHSthc-core-plugin-0.1-ghc9.14.1.{suffix}"
+    # Same compiler/build.sh compilation flags, with forced fresh outputs and
+    # direct-library loading; no registration/package database is required.
+    argv = [tools["ghc"], "--make", "-fforce-recomp", "-O1", "-dynamic", "-shared", "-fPIC"]
+    argv += tools["compilerPackageFlags"]
+    for package in ("ghc", "bytestring", "directory", "filepath", "containers"):
+        argv += ["-package", package]
+    argv += ["-this-unit-id", "thc-core-plugin-0.1", "-hisuf", "dyn_hi", "-osuf", "dyn_o",
+             "-i", "-i" + str(source_root), "-odir", str(directory), "-hidir", str(directory),
+             str(source_root / "THC/Plugin.hs"), "-o", str(binary)]
+    record = {"binary": str(binary), "originalSourceHashes": originals, "sourceHashes": snapshots,
+              "foreignMetadataExporterAvailable": any('"foreignCall"' in Path(p).read_text() for p in snapshots)}
+    write(directory / "provenance.json", record)
+    record.update(run(argv, directory, directory / "build.log"))
+    if record["exit"] == 0:
+        record["binarySha256"] = digest(binary)
+    write(directory / "provenance.json", record)
+    verify_plugin(record)
     return record
 
 
@@ -219,8 +296,7 @@ def main():
     parser.add_argument("--ghc-source", required=True, type=Path)
     parser.add_argument("--out", type=Path, default=ROOT / "build/putstrln-source-only")
     parser.add_argument("--ghc", default=os.environ.get("GHC", "ghc"))
-    parser.add_argument("--ghc-pkg", default=os.environ.get("GHC_PKG", "ghc-pkg"))
-    parser.add_argument("--plugin", type=Path, help="Built THC plugin library (default: build/compiler)")
+    parser.add_argument("--ghc-pkg", default=os.environ.get("GHC_PKG"), help="Must be selected GHC's sibling (default: select it)")
     parser.add_argument("--generated-manifest", type=Path)
     parser.add_argument("--rounds", type=int, default=8)
     parser.add_argument("--max-modules", type=int, default=30)
@@ -233,17 +309,22 @@ def main():
     tools = toolchain(args.ghc, args.ghc_pkg)
     require(not out.is_relative_to(source) and not out.is_relative_to(Path(tools["libdir"]).resolve()),
             "Output must be outside the original source and installed toolchain")
-    installed_dirs = package_dirs(args.ghc_pkg, "ghc-internal", "import-dirs")
+    installed_dirs = package_dirs(tools, "ghc-internal", "import-dirs")
     require(len(installed_dirs) == 1, "Expected one installed ghc-internal interface root")
     installed = installed_dirs[0]
-    suffix = "dylib" if sys.platform == "darwin" else "so"
-    plugin = (args.plugin or ROOT / f"build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.{suffix}").resolve()
-    require(plugin.is_file(), "Build the plugin first with compiler/build.sh")
     generated = generated_sources(args.generated_manifest, source)
     if args.generated_manifest:
         generation = read(args.generated_manifest)
-        require(generation["ghcInfo"] == tools["ghcInfo"], "hsc2hs used a different GHC configuration")
+        for key in ("ghcInfo", "libdir", "globalPackageDatabase", "packageQuery"):
+            require(generation.get(key) == tools[key], "hsc2hs used a different or unbound GHC configuration: " + key)
+        require(generation.get("template") == str(Path(tools["libdir"]) / "template-hsc.h"), "hsc2hs template is not bound to selected GHC")
+        sibling_tool(tools["ghc"], generation["hsc2hs"], "hsc2hs")
+        expected_includes = package_dirs(tools, "ghc-internal", "include-dirs") + package_dirs(tools, "rts", "include-dirs")
+        require(generation["includeDirectories"] == [str(p) for p in expected_includes], "hsc2hs used different installed headers")
     out.mkdir(parents=True)
+    provenance_inputs = recipe_hashes(ROOT)
+    plugin_build = build_plugin(ROOT, out / "plugin", tools)
+    plugin = Path(plugin_build["binary"])
     overlay = out / "overlay"
     create_overlay(installed, overlay)
     tracked = output(["git", "-C", str(source), "ls-files", "-z", "libraries/ghc-internal/src"]).split("\0")
@@ -252,12 +333,15 @@ def main():
     source_files.update({name: Path(r["output"]) for name, r in generated.items()})
     state = {"recipe": "source-only-installed-interface-inputs", "sourceCommit": GHC_COMMIT,
              "sourceRoot": str(source), "thcRevision": output(["git", "-C", str(ROOT), "rev-parse", "HEAD"]),
-             "toolchain": tools, "plugin": str(plugin), "installedInterfaces": str(installed),
+             "toolchain": tools, "pluginBuild": plugin_build, "recipeInputHashes": provenance_inputs,
+             "installedInterfaces": str(installed),
              "compiled": {}, "failed": {}, "bootSources": {},
-             "foreignMetadataExporterAvailable": '"foreignCall"' in (ROOT / "compiler/THC/Plugin.hs").read_text()}
+             "foreignMetadataExporterAvailable": plugin_build["foreignMetadataExporterAvailable"]}
+    if args.generated_manifest:
+        state["generatedManifest"] = {"path": str(args.generated_manifest.resolve()), "sha256": digest(args.generated_manifest)}
     write(out / "export-state.json", state)
-    include = package_dirs(args.ghc_pkg, "ghc-internal", "include-dirs")
-    common = [args.ghc, "-c", "-dynamic", "-fforce-recomp", "-XHaskell2010"]
+    include = package_dirs(tools, "ghc-internal", "include-dirs")
+    common = [tools["ghc"], "-c", "-dynamic", "-fforce-recomp", "-XHaskell2010"] + tools["compilerPackageFlags"]
     internal = ["-XNoImplicitPrelude", "-this-unit-id", "ghc-internal", "-package", "ghc-internal", "-i" + str(overlay),
                 "-hidir", str(overlay), "-odir", str(out / "boot-objects")]
     internal += ["-I" + str(p) for p in include + [source / "libraries/ghc-internal/include"]]
@@ -305,12 +389,14 @@ def main():
         flags = ["-O2", "-fignore-interface-pragmas", "-dcore-lint", "-g", "-odir", str(own),
                  "-fplugin-library=" + str(plugin) + ";thc-core-plugin-0.1;THC.Plugin;" + json.dumps(options)]
         try:
+            verify_plugin(plugin_build)
             if application:
                 result = run(common + ["-hidir", str(own)] + flags + [str(compile_path)], ROOT, out / "logs/Main.log")
             else:
                 with isolated_interface(installed, overlay, Path(*module.split(".")), own):
                     result = with_boot(common + internal + flags + [str(compile_path)], out / "logs" / (module + ".log"))
             record.update(result)
+            verify_plugin(plugin_build)
             if record["exit"] == 0:
                 record.update(validate_export(target, module, roots))
         except ValueError as error:
@@ -321,6 +407,7 @@ def main():
 
     require(compile_module("Main", ROOT / "compiler/putstrln/Main.hs", {"main"}, application=True),
             "Main export failed; retained command/log and partial artifacts")
+    verify_hashes(provenance_inputs)
     sys.path.insert(0, str(ROOT / "scripts"))
     spec = importlib.util.spec_from_file_location("core_audit", ROOT / "scripts/audit-core.py")
     audit = importlib.util.module_from_spec(spec)
@@ -331,6 +418,7 @@ def main():
         write(out / "merged-core.json", merged)
         write(out / "merge-provenance.json", provenance)
         report = audit.Audit([(str(out / "merged-core.json"), merged)], caps).run(["main:Main.main"], io_main=True)
+        verify_hashes(provenance_inputs)
         write(out / f"audit-round-{iteration:02d}.json", report)
         write(out / "latest-audit.json", report)
         print(json.dumps({"round": iteration, **report["summary"],

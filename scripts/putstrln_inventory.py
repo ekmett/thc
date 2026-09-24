@@ -7,7 +7,7 @@ from collections import Counter, defaultdict
 import json
 from pathlib import Path
 
-from putstrln_export import digest, read, require, write
+from putstrln_export import ROOT, digest, read, recipe_hashes, require, verify_hashes, verify_plugin, write
 
 
 def inventory(core, audit, metadata_available):
@@ -57,6 +57,15 @@ def main():
     parser.add_argument("directory", type=Path)
     args = parser.parse_args()
     state = read(args.directory / "export-state.json")
+    require("recipeInputHashes" in state and "pluginBuild" in state, "Old export lacks bound plugin provenance; create a fresh export")
+    verify_hashes(state["recipeInputHashes"])
+    require(recipe_hashes(ROOT) == state["recipeInputHashes"], "Inventory must use the recorded recipe/auditor checkout and inputs")
+    verify_plugin(state["pluginBuild"])
+    require(state["foreignMetadataExporterAvailable"] == state["pluginBuild"]["foreignMetadataExporterAvailable"],
+            "Inventory capability differs from the built plugin")
+    if "generatedManifest" in state:
+        manifest = state["generatedManifest"]
+        require(digest(manifest["path"]) == manifest["sha256"], "Changed hsc2hs provenance manifest")
     require(sorted(state["compiled"]) == state["auditedModules"], "Export stopped after compilation but before a matching audit")
     require(digest(args.directory / "merged-core.json") == state["mergedSha256"] and
             digest(args.directory / "latest-audit.json") == state["auditSha256"], "Changed merged/audited snapshot")
@@ -79,6 +88,7 @@ def main():
     core, audit = (read(args.directory / name) for name in ("merged-core.json", "latest-audit.json"))
     result = inventory(core, audit, state["foreignMetadataExporterAvailable"])
     result.update(thcRevision=state["thcRevision"], ghcSourceRevision=state["sourceCommit"],
+                  pluginBuild=state["pluginBuild"], recipeInputHashes=state["recipeInputHashes"],
                   successfulSourceModules=sorted(state["compiled"]), failedSourceModules=state["failed"],
                   requestedNextModules=state["requestedNextModules"], recipe=state["recipe"])
     write(args.directory / "frontier-summary.json", result)

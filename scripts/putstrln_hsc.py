@@ -10,7 +10,7 @@ import shlex
 import shutil
 import subprocess
 
-from putstrln_export import GHC_COMMIT, GHC_TAG, HSC_MODULES, ROOT, digest, output, package_dirs, require, run, source_checkout, toolchain, write
+from putstrln_export import GHC_COMMIT, GHC_TAG, HSC_MODULES, ROOT, digest, output, package_dirs, require, run, sibling_tool, source_checkout, toolchain, write
 
 
 def main():
@@ -18,15 +18,18 @@ def main():
     parser.add_argument("--ghc-source", required=True, type=Path)
     parser.add_argument("--out", type=Path, default=ROOT / "build/putstrln-generated")
     parser.add_argument("--ghc", default=os.environ.get("GHC", "ghc"))
-    parser.add_argument("--ghc-pkg", default=os.environ.get("GHC_PKG", "ghc-pkg"))
-    parser.add_argument("--hsc2hs", default=os.environ.get("HSC2HS", "hsc2hs"))
+    parser.add_argument("--ghc-pkg", default=os.environ.get("GHC_PKG"), help="Must be selected GHC's sibling (default: select it)")
+    parser.add_argument("--hsc2hs", default=os.environ.get("HSC2HS"), help="Must be selected GHC's sibling (default: select it)")
     parser.add_argument("--module", action="append", choices=HSC_MODULES, help="Default: all seven modules")
     args = parser.parse_args()
     source = source_checkout(args.ghc_source)
     provenance = toolchain(args.ghc, args.ghc_pkg)
     info = dict(ast.literal_eval(provenance["ghcInfo"]))
     require(info.get("Host platform") == info.get("Target platform"), "This native hsc2hs recipe does not support cross compilation")
-    includes = package_dirs(args.ghc_pkg, "ghc-internal", "include-dirs") + package_dirs(args.ghc_pkg, "rts", "include-dirs")
+    includes = package_dirs(provenance, "ghc-internal", "include-dirs") + package_dirs(provenance, "rts", "include-dirs")
+    hsc = sibling_tool(provenance["ghc"], args.hsc2hs, "hsc2hs")
+    template = Path(provenance["libdir"]) / "template-hsc.h"
+    require(template.is_file(), "Missing selected GHC's hsc2hs template")
     cc = info["C compiler command"]
     require(shutil.which(cc), "Missing installed GHC's configured C compiler: " + cc)
     out = args.out.resolve()
@@ -35,8 +38,9 @@ def main():
     require(not out.exists(), "Use a fresh generation output directory; preserve previous evidence")
     out.mkdir(parents=True)
     provenance.update(sourceCommit=GHC_COMMIT, sourceTag=GHC_TAG, sourceRepository="https://github.com/ghc/ghc.git",
-                      sourceRoot=str(source), hsc2hs=shutil.which(args.hsc2hs) or args.hsc2hs,
-                      hsc2hsVersion=output([args.hsc2hs, "--version"]),
+                      sourceRoot=str(source), hsc2hs=hsc, template=str(template),
+                      hsc2hsVersion=output([hsc, "--version"]),
+                      generatorSourceHashes={str(path): digest(path) for path in (Path(__file__).resolve(), ROOT / "scripts/putstrln_export.py")},
                       cCompiler=cc, cCompilerTarget=output([cc, "-dumpmachine"]),
                       includeDirectories=[str(p) for p in includes],
                       recipe="Original hsc2hs input; installed template/configuration/RTS headers; native sizeof/offsetof",
@@ -47,7 +51,7 @@ def main():
         original = (source / "libraries/ghc-internal/src" / relative).with_suffix(".hsc")
         generated = (out / relative).with_suffix(".hs")
         generated.parent.mkdir(parents=True, exist_ok=True)
-        argv = [args.hsc2hs, "--verbose", "--keep-files", "--cc=" + cc]
+        argv = [hsc, "--verbose", "--keep-files", "--cc=" + cc, "--template=" + str(template)]
         argv += ["--cflag=" + flag for flag in shlex.split(info["C compiler flags"])]
         argv += ["-I" + str(p) for p in includes]
         argv += ["--output=" + str(generated), str(original)]

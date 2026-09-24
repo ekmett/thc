@@ -17,13 +17,14 @@ Installed toolchain artifacts are neither modified nor hashed.
 ## Reproduce a bounded export
 
 Set `GHC_SOURCE` to the official source checkout. Put the pinned toolchain on
-`PATH`, or set `GHC`, `GHC_PKG`, and `HSC2HS` to its executables. Set `RESOURCE_RUN`
+`PATH`, or set `GHC` to its executable. The recipe selects sibling `ghc-pkg` and
+`hsc2hs` tools; explicit `GHC_PKG`/`HSC2HS` or CLI overrides must resolve to the
+same installation's bindir. Set `RESOURCE_RUN`
 to your host's shared `resource_run.py`; reserve this checkout's build directory
 for compiler work. The gate is a host resource policy, not a THC dependency.
 From the THC repository root:
 
 ```sh
-python3 "$RESOURCE_RUN" --build-dir "$PWD/build" -- compiler/build.sh
 python3 "$RESOURCE_RUN" --build-dir "$PWD/build" -- \
   python3 scripts/putstrln_hsc.py --ghc-source "$GHC_SOURCE"
 python3 "$RESOURCE_RUN" --build-dir "$PWD/build" -- \
@@ -43,7 +44,7 @@ The research closure used `--rounds 20 --max-modules 140`; that is an optional
 larger experiment, not a default test or a guarantee for another plugin revision.
 Module limits exclude Main. The last round always audits the exact admitted set.
 
-The packaged recipe was checked on base `f72f924` with six policy/provenance unit
+The packaged recipe was checked on base `f72f924` with policy/provenance unit
 tests, all seven actual hsc2hs generations, and a three-library-module export
 (Main, CString, System.IO, Handle.Text). That bounded export had 403 supplied / 48
 reachable bindings, 29 missing globals and 64 strict audit issues. All compiler
@@ -51,8 +52,15 @@ attempts admitted to it passed lint, dependency interfaces were restored, and no
 ordinary imported interface bodies were admitted. The full 112-module research
 closure was not rebuilt for this packaging change.
 
-Build the plugin from the same checkout as the scripts. `--plugin` allows a
-different build-directory location, not an unchecked different compiler plugin.
+Every export builds its own plugin under `out/plugin` using snapshots of this
+checkout's `compiler/THC/*.hs`, forced fresh objects and the configured GHC.
+There is no external `--plugin` option and no package registration. The recipe
+records the exact source and binary hashes, command and exit, and checks the
+captured sources/binary before and after use and again during inventory. A stale
+binary or capability flag from another checkout is not accepted. The recorded
+Git revision identifies the checkout; captured hashes identify the actual inputs,
+including any local changes. Auditor/helper scripts, capability/signature data,
+and recipe scripts are also hashed and verified for a coherent audit snapshot.
 The state records tool paths, GHC configuration, source revision/hashes, requested
 and matched roots, commands, exits, exported JSON hashes, and configuration-only
 copies. `latest-audit.json` keeps the strict existing auditor's actual verdict;
@@ -105,8 +113,15 @@ InfoProv.Types, Heap.Constants, Heap.InfoTable.Types, Heap.InfoTable, Stack.CCS,
 and Stack.Constants. It uses GHC's configured C compiler and installed
 ghc-internal/RTS headers; verbose command logs and native sizeof/offsetof probe
 inputs are retained. Cross compilation is explicitly unsupported. The manifest
-records the GHC configuration, input/output hashes and each exit status; export
-checks that manifest against the selected source and GHC configuration.
+records the GHC configuration, generator source hashes, input/output hashes and
+each exit status; export checks that manifest against the selected source and GHC
+configuration. Package queries explicitly use GHC's `--print-global-package-db`,
+not ghc-pkg's default database. Compilations clear the package stack and use that
+database without a user package environment. Include/import directories must be
+inside the selected GHC libdir. The sibling hsc2hs receives that libdir's explicit
+`template-hsc.h`; a same-version executable or manifest from another installation
+does not establish matching layouts. Earlier manifests without this binding are
+rejected. No installed artifacts are hashed.
 
 In the research x86_64 Linux nonprofiling build, words were eight bytes,
 tables-next-to-code was enabled, `StgInfoTable` was 16 bytes, and `USE_LIBDW` was
@@ -125,7 +140,10 @@ that structured metadata. Its source export and strict audit still work, but
 falsely suggest that no foreign calls exist. This change does not implement or
 cherry-pick FFI support. With the metadata exporter present, inventory preserves
 full declaration shapes and owner paths, not just symbol names. A plugin source
-feature check records that prerequisite; it is not itself an ABI verification.
+feature check on the actual captured plugin-build sources records that
+prerequisite; it is not itself an ABI verification. Inventory verifies those
+source hashes and the resulting binary, rather than inspecting an unrelated
+current `Plugin.hs` next to an arbitrary prebuilt library.
 
 The completed research snapshot had 112 successful library source modules, zero
 failed modules, 42,046 supplied bindings, 5,041 reachable bindings, and no missing
