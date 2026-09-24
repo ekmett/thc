@@ -57,6 +57,7 @@ python3 scripts/prepare-managed-mvars.py --refresh
 rm -rf -- build/synchronous-exceptions
 python3 scripts/prepare-synchronous-exceptions.py
 "$fixture_bin" core-continuation
+"$fixture_bin" live-async
 python3 scripts/prepare-managed-md5.py
 "$fixture_bin" original-stdio --require-supported
 python3 scripts/prepare-pinned-addresses.py

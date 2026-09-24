@@ -171,7 +171,7 @@ internal class ManagedMVar {
                         // completed take/put always returns its answer; only an
                         // uncommitted request can be retried by the continuation.
                         check(cancel())
-                        throw AsyncBlocked(interruption, checkpoint!!)
+                        throw AsyncBlocked(interruption, checkpoint)
                     }
                     completed.await()
                 }
