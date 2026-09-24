@@ -23,12 +23,13 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "6301dad696d8347720baeea398505a2204666f76bf2f3eaeaa6ea61e3c18c6ee"
+FULL_PREPARATION_PLAN = "bf2ab148ea6f424895007d41d8add5f6273c0c800104bfde6d649efee32db796"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
-    "build/io-main-pap", "build/managed-mvars", "build/simd-capability-smoke",
+    "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native", "build/pinned-addresses", "build/simd-capability-smoke",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
-    "build/io-main-pap/provenance.json", "build/managed-mvars/manifest.json",
+    "build/io-main-pap/provenance.json", "build/managed-mvars/manifest.json", "build/managed-md5-native/provenance.json",
+    "build/pinned-addresses/manifest.json",
     "build/simd-capability-smoke/manifest.json",
     # The SIMD smoke exporter consumes this generated Haskell fixture. Check
     # both Haskell outputs without hashing unrelated JVM code generation.
