@@ -47,7 +47,7 @@ class ManagedStackFrame internal constructor(
 class ManagedStackSnapshot private constructor(frames: List<ManagedStackFrame>) {
     val frames: List<ManagedStackFrame> = immutableStackList(frames)
 
-    /** Source-only rendering for an explicit library adapter, not native frame decoding. */
+    /** Source-only JVM diagnostics; GHC's own formatter consumes the compatibility layer. */
     fun renderLines(): List<String> = immutableStackList(frames.map { frame ->
         val location = frame.location
         val position = if (location == null || !location.available) "<source unavailable>" else

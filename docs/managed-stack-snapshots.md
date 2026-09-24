@@ -10,7 +10,7 @@ Each frame contains a copied function label, a detached source location, its
 location-selection kind, nested source sections, and available Core source
 notes. Source-section end columns are inclusive; Core notes retain GHC's
 original exclusive end coordinates. Missing source metadata remains explicit.
-`renderLines()` gives a small source-only rendering for a future library adapter.
+`renderLines()` gives a small source-only rendering for JVM diagnostics.
 The returned frame, section, note and line lists are unmodifiable.
 
 The current frame uses the explicit capture node. Older frames use their own
@@ -35,10 +35,11 @@ Truffle iterator exposes, not a historical call log or a one-to-one GHC stack.
 
 This is capture infrastructure only. It does not enable a GHC primop or foreign
 symbol, attach snapshots to exceptions, emulate `StgStack`/info-table/IPE memory,
-capture remote threads, or freeze backtrace configuration. A future explicit
-library adapter can retain the `StackSnapshot#` object representation while
-rendering genuine guest-source records instead of invoking native-layout
-decoders. Stack annotations and context ownership checks at that adapter boundary
+capture remote threads, or freeze backtrace configuration. The GHC compatibility
+layer must implement the original primitive and foreign-call protocols: GHC may
+have already inlined its stack decoder or formatter into a dependency. A managed
+stack image will expose captured provenance to that unchanged Haskell code.
+Stack annotations and context ownership checks at that runtime boundary
 are separate work; this snapshot deliberately retains no guest payloads.
 
 `ManagedStackSnapshotTest` exercises synthetic Core through real AST and bytecode
