@@ -7,6 +7,10 @@ import GHC.Exts
 
 data Box = Box Int#
 
+{-# OPAQUE asyncPayload #-}
+asyncPayload :: Box
+asyncPayload = Box 7#
+
 {-# OPAQUE delayed #-}
 delayed :: Int# -> Box
 delayed input = case noDuplicate# realWorld# of _ -> Box (input +# 1#)
@@ -40,6 +44,18 @@ catchActionFailure :: Int
 catchActionFailure =
   case catch# (\s0 -> case noDuplicate# s0 of s1 -> raiseIO# (Box 7#) s1)
               (\(Box value) s2 -> (# s2, Box (value +# 70#) #)) realWorld# of
+    (# _, Box result #) -> I# result
+
+-- The inner handler is the nearest continuation cut. Its action can later
+-- resume from the same saved checkpoint after the handler has completed.
+{-# OPAQUE nestedCatchAction #-}
+nestedCatchAction :: Int
+nestedCatchAction =
+  case catch# (\s0 ->
+         case catch# (\s1 -> case noDuplicate# s1 of s2 -> (# s2, Box 42# #))
+                     (\(Box inner) s3 -> (# s3, Box (inner +# 70#) #)) s0 of
+           (# s4, Box innerResult #) -> (# s4, Box (innerResult +# 1#) #))
+              (\(Box outer) s5 -> (# s5, Box (outer +# 1000#) #)) realWorld# of
     (# _, Box result #) -> I# result
 
 -- A nested lambda owns this yield, not the directly called function root.
