@@ -90,7 +90,7 @@ runPackage opts target = do
       cpp = if null (cppOptions info) then [] else "-cpp" : map ("-optP" ++) (cppOptions info)
       packages = concat [["-package-id", prettyShow unit] | (unit, _) <- componentPackageDeps clbi]
       exportArgs = ["-hide-all-packages", "-no-user-package-db", "-package-env", "-",
-                    "-fplugin-opt=Thc.Plugin:closure=main"] ++
+                    "-fplugin-opt=THC.Plugin:closure=main"] ++
                    packages ++ concatMap (\directory -> ["-i" ++ directory]) dirs ++
                    extensions ++ cpp ++ hcOptions GHC info ++ [source]
   checked True (thcRoot </> "compiler/export.sh") exportArgs thcRoot environment
