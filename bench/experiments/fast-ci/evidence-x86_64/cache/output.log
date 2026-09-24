@@ -1,0 +1,12 @@
+thc-fast-inputs-v1-c2008b63573b790c2b0d6bccfb05d395f98ba1510af0f7ac9c7f010449d11b4c
+real 1.72
+user 1.39
+sys 0.33
+PACKED 976 native/Core input files; no JVM outcomes
+real 4.92
+user 4.35
+sys 0.56
+HIT thc-fast-inputs-v1-c2008b63573b790c2b0d6bccfb05d395f98ba1510af0f7ac9c7f010449d11b4c: verified 976 fixture files; tests must run
+real 4.58
+user 4.00
+sys 0.58

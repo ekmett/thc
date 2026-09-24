@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.HostEntryCompilationTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-24T05:04:06.144Z" hostname="eak-quartus" time="0.033">
+  <properties/>
+  <testcase name="bytecodeHostCompilationFollowsTheActiveSplit()" classname="thc.runtime.HostEntryCompilationTest" time="0.017"/>
+  <testcase name="astHostCompilationFollowsTheActiveSplit()" classname="thc.runtime.HostEntryCompilationTest" time="0.015"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

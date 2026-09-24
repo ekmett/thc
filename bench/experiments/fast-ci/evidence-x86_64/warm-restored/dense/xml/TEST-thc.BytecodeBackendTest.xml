@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.BytecodeBackendTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-24T05:03:55.491Z" hostname="eak-quartus" time="3.863">
+  <properties/>
+  <testcase name="unsupportedCodeRejectsAtLoadOrTrapsOnlyWhenTheDiagnosticBranchIsEntered()" classname="thc.BytecodeBackendTest" time="0.529"/>
+  <testcase name="backendSelectionAndMutableProgramStateAreIsolatedWithinASharedEngine()" classname="thc.BytecodeBackendTest" time="0.153"/>
+  <testcase name="allExportedFixturesMatchNativeGhcBeforeAndAfterCompilation()" classname="thc.BytecodeBackendTest" time="1.906"/>
+  <testcase name="managedLiteralAddressesPreserveUnsignedBytesNulsAndBoundsAfterCompilation()" classname="thc.BytecodeBackendTest" time="0.027"/>
+  <testcase name="coldRaiseKeepsItsBottomPayloadLazyAndMemoizesTheGuestFailure()" classname="thc.BytecodeBackendTest" time="0.021"/>
+  <testcase name="unusedBottomStaysLazyAndFailedThunksAreNotReentered()" classname="thc.BytecodeBackendTest" time="0.059"/>
+  <testcase name="strictConstructorWorkersForceOnlyAtFullSaturationIncludingColdCompiledPaths()" classname="thc.BytecodeBackendTest" time="0.09"/>
+  <testcase name="sharingPartialAndOverapplicationPreserveTheirSemantics()" classname="thc.BytecodeBackendTest" time="0.237"/>
+  <testcase name="aSelfTailCallThroughAPapRestoresBothItsPrefixAndNewArguments()" classname="thc.BytecodeBackendTest" time="0.111"/>
+  <testcase name="compiledBaseCasesCanGrowIntoLongSelfMutualAndCapturedLoops()" classname="thc.BytecodeBackendTest" time="0.632"/>
+  <testcase name="wideArgumentsCapturesAndConstructorFieldsPreserveEveryOperand()" classname="thc.BytecodeBackendTest" time="0.077"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
