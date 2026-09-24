@@ -93,11 +93,23 @@ bitReverse64 x = word2Int# (word64ToWord# (bitReverse64# (wordToWord64# (int2Wor
 bitReverseWord :: Int# -> Int#
 bitReverseWord x = word2Int# (bitReverse# (int2Word# x))
 
+{-# OPAQUE narrow8Word #-}
+narrow8Word :: Int# -> Int#
+narrow8Word x = word2Int# (narrow8Word# (int2Word# x))
+
+{-# OPAQUE narrow16Word #-}
+narrow16Word :: Int# -> Int#
+narrow16Word x = word2Int# (narrow16Word# (int2Word# x))
+
+{-# OPAQUE narrow32Word #-}
+narrow32Word :: Int# -> Int#
+narrow32Word x = word2Int# (narrow32Word# (int2Word# x))
+
 -- Run every bit operation in one compiled function. Each mismatch sets its own
 -- bit, so failures cannot cancel and the caller can identify the operation.
 {-# OPAQUE bitPrimops #-}
-bitPrimops :: Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int#
-bitPrimops x e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14 e15 e16 e17 e18 e19 e20 =
+bitPrimops :: Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int#
+bitPrimops x e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14 e15 e16 e17 e18 e19 e20 e21 e22 e23 =
   let c0 = uncheckedIShiftL# ((word2Int# (popCnt8# (int2Word# x))) /=# e0) 0#
       c1 = uncheckedIShiftL# ((word2Int# (popCnt16# (int2Word# x))) /=# e1) 1#
       c2 = uncheckedIShiftL# ((word2Int# (popCnt32# (int2Word# x))) /=# e2) 2#
@@ -119,6 +131,10 @@ bitPrimops x e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14 e15 e16 e17 e18 e
       c18 = uncheckedIShiftL# ((word2Int# (bitReverse32# (int2Word# x))) /=# e18) 18#
       c19 = uncheckedIShiftL# ((word2Int# (word64ToWord# (bitReverse64# (wordToWord64# (int2Word# x))))) /=# e19) 19#
       c20 = uncheckedIShiftL# ((word2Int# (bitReverse# (int2Word# x))) /=# e20) 20#
+      c21 = uncheckedIShiftL# ((word2Int# (narrow8Word# (int2Word# x))) /=# e21) 21#
+      c22 = uncheckedIShiftL# ((word2Int# (narrow16Word# (int2Word# x))) /=# e22) 22#
+      c23 = uncheckedIShiftL# ((word2Int# (narrow32Word# (int2Word# x))) /=# e23) 23#
   in c0 `orI#` c1 `orI#` c2 `orI#` c3 `orI#` c4 `orI#` c5 `orI#` c6
      `orI#` c7 `orI#` c8 `orI#` c9 `orI#` c10 `orI#` c11 `orI#` c12 `orI#` c13
      `orI#` c14 `orI#` c15 `orI#` c16 `orI#` c17 `orI#` c18 `orI#` c19 `orI#` c20
+     `orI#` c21 `orI#` c22 `orI#` c23

@@ -179,6 +179,30 @@ int32ToWord32 x = word2Int# (word32ToWord# (int32ToWord32# (intToInt32# x)))
 word32ToInt32 :: Int# -> Int#
 word32ToInt32 x = int32ToInt# (word32ToInt32# (wordToWord32# (int2Word# x)))
 
+{-# NOINLINE uncheckedShiftLInt8 #-}
+uncheckedShiftLInt8 :: Int# -> Int# -> Int#
+uncheckedShiftLInt8 x n = int8ToInt# (uncheckedShiftLInt8# (intToInt8# x) n)
+
+{-# NOINLINE uncheckedShiftRAInt8 #-}
+uncheckedShiftRAInt8 :: Int# -> Int# -> Int#
+uncheckedShiftRAInt8 x n = int8ToInt# (uncheckedShiftRAInt8# (intToInt8# x) n)
+
+{-# NOINLINE uncheckedShiftLInt16 #-}
+uncheckedShiftLInt16 :: Int# -> Int# -> Int#
+uncheckedShiftLInt16 x n = int16ToInt# (uncheckedShiftLInt16# (intToInt16# x) n)
+
+{-# NOINLINE uncheckedShiftRAInt16 #-}
+uncheckedShiftRAInt16 :: Int# -> Int# -> Int#
+uncheckedShiftRAInt16 x n = int16ToInt# (uncheckedShiftRAInt16# (intToInt16# x) n)
+
+{-# NOINLINE uncheckedShiftLInt32 #-}
+uncheckedShiftLInt32 :: Int# -> Int# -> Int#
+uncheckedShiftLInt32 x n = int32ToInt# (uncheckedShiftLInt32# (intToInt32# x) n)
+
+{-# NOINLINE uncheckedShiftRAInt32 #-}
+uncheckedShiftRAInt32 :: Int# -> Int# -> Int#
+uncheckedShiftRAInt32 x n = int32ToInt# (uncheckedShiftRAInt32# (intToInt32# x) n)
+
 {-# OPAQUE signedNarrowDispatch #-}
 signedNarrowDispatch :: Int# -> Int# -> Int# -> Int#
 signedNarrowDispatch operation x y = case operation of
@@ -224,4 +248,10 @@ signedNarrowDispatch operation x y = case operation of
   39# -> int16ToInt# (word16ToInt16# (wordToWord16# (int2Word# x)))
   40# -> word2Int# (word32ToWord# (int32ToWord32# (intToInt32# x)))
   41# -> int32ToInt# (word32ToInt32# (wordToWord32# (int2Word# x)))
+  42# -> int8ToInt# (uncheckedShiftLInt8# (intToInt8# x) y)
+  43# -> int8ToInt# (uncheckedShiftRAInt8# (intToInt8# x) y)
+  44# -> int16ToInt# (uncheckedShiftLInt16# (intToInt16# x) y)
+  45# -> int16ToInt# (uncheckedShiftRAInt16# (intToInt16# x) y)
+  46# -> int32ToInt# (uncheckedShiftLInt32# (intToInt32# x) y)
+  47# -> int32ToInt# (uncheckedShiftRAInt32# (intToInt32# x) y)
   _ -> -1#
