@@ -25,16 +25,16 @@ class OriginalStackFormatterTest {
     private fun hash(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     private fun hash(file: File) = hash(file.readBytes())
     private val sourceRoot = "compiler/pinned-ghc-internal/"
-    // Pin the complete path/hash catalog independently, without duplicating its 66 entries.
+    // Pin the complete path/hash catalog independently, without duplicating its 68 entries.
     // A changed exporter catalog cannot silently drop or repin a source in the fixture receipt.
     private val pinned by lazy {
         val text = contained("src/THC/Driver/Wired.hs", true).readText()
             .substringAfter("sourceHashes =").substringBefore("\ndata WiredArtifacts")
         val entries = Regex("\\(\"([^\"]+)\", \"([0-9a-f]{64})\"\\)").findAll(text)
             .map { it.groupValues[1] to it.groupValues[2] }.toList()
-        require(entries.size == 66 && entries.map { it.first }.toSet().size == 66)
+        require(entries.size == 68 && entries.map { it.first }.toSet().size == 68)
         require(hash(entries.sortedBy { it.first }.joinToString("") { (path, digest) -> "$path\u0000$digest\n" }.toByteArray()) ==
-            "5ec8fc0f9fd9b88c6eeaf2483707554c6842a9dfc0344f935ab33f4543f6b5b4")
+            "8eec12fbae7d0c9621170062cba8f77cfcac5d4f055b576171141c343b30db4e")
         entries.associate { (path, digest) -> sourceRoot + path to digest }
     }
     private val requiredInputs by lazy {
@@ -229,6 +229,42 @@ class OriginalStackFormatterTest {
         // of locale/iconv, buffer codecs, finalizers, or the full error closure.
     }
 
+    @Test fun freshOriginalEncodingTypesAndFailureWorkersResolveTheirExactCallers() {
+        val paths = manifest()["originals"] as List<String>
+        val modules = listOf("IO.Encoding.Types", "IO.Encoding.Failure", "IO.Encoding.UTF8",
+            "IO.Encoding", "Foreign.C.String.Encoding").associateWith { name ->
+            json(paths.single { it.endsWith("/GHC.Internal.$name.json") })
+        }
+        val bindings = (CoreModules.merge(modules.values.toList())["bindings"] as List<Map<String, Any?>>)
+            .associateBy { it["id"] as String }
+        val cases = listOf(
+            Triple("Types", "close#", "Foreign.C.String.Encoding.\$wpeekCString"),
+            Triple("Failure", "recoverDecode5", "IO.Encoding.UTF8.utf3"),
+            Triple("Failure", "recoverDecode3", "IO.Encoding.UTF8.utf3"),
+            Triple("Failure", "recoverDecode2", "IO.Encoding.UTF8.utf3"),
+            Triple("Failure", "recoverDecode#", "IO.Encoding.UTF8.mkUTF8"),
+            Triple("Failure", "recoverEncode#", "IO.Encoding.UTF8.mkUTF8"),
+            Triple("Failure", "codingFailureModeSuffix5", "IO.Encoding.mkTextEncoding19"),
+            Triple("Failure", "codingFailureModeSuffix3", "IO.Encoding.mkTextEncoding19"),
+            Triple("Failure", "codingFailureModeSuffix1", "IO.Encoding.mkTextEncoding19"))
+        for ((module, name, callerName) in cases) {
+            val id = "ghc-internal:GHC.Internal.IO.Encoding.$module.$name"
+            val original = (modules.getValue("IO.Encoding.$module")["bindings"] as List<Map<String, Any?>>)
+                .single { it["id"] == id }
+            assertEquals(name, original["name"])
+            assertEquals(original, bindings.getValue(id), "Merge must preserve the exact source binding")
+            fun references(value: Any?): Int = when (value) {
+                is List<*> -> if (value.getOrNull(0) == "var" && value.getOrNull(1) == id) 1 else value.sumOf(::references)
+                is Map<*, *> -> value.values.sumOf(::references)
+                else -> 0
+            }
+            val caller = bindings.getValue("ghc-internal:GHC.Internal.$callerName")
+            assertEquals(1, references(caller["expr"]), "Fresh original $callerName must reference $id")
+        }
+        // This proves source identity and resolution, not buffer recovery,
+        // encoding error execution or admission of the full original error closure.
+    }
+
     @Test fun freshOriginalEnumWorkerResolvesClosureTypeErrorWithoutAlias() {
         val receipt = manifest()
         val path = sourceRoot + "GHC/Internal/Enum.hs"
@@ -416,8 +452,8 @@ class OriginalStackFormatterTest {
         val value = manifest()
         val inputs = value["inputHashes"] as Map<String, String>
         val artifacts = value["artifactHashes"] as Map<String, String>
-        assertEquals(95, requiredInputs.size)
-        assertEquals(91, artifacts.size)
+        assertEquals(97, requiredInputs.size)
+        assertEquals(93, artifacts.size)
         for (path in requiredInputs)
             assertThrows(IllegalArgumentException::class.java, {
                 checked(value + ("inputHashes" to (inputs - path)))
