@@ -51,6 +51,37 @@ class CoreContinuationNativeTest {
         try { return action() } finally { context.leave() }
     }
 
+    @Test fun compiledCoreRootPollParksTheClaimedRequestAndResumesItsFrame() {
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            entered(context) {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val program = BytecodeProgram(language, CoreModules.reachable(module, "applicationAnswer"), true)
+                val thunk = program.entryValue("applicationAnswer") as Thunk
+                val target = thunk.target!!
+                val warm = Calls.target(target, arrayOf(0L)) as DataValue
+                assertEquals(208L, warm.layout.readLong(warm, 0))
+                compile(target)
+                val threads = Language.currentState().threads
+                val id = threads.enterCurrent()
+                try {
+                    val request = threads.send(id, "compiled poll")
+                    val driver = Driver()
+                    assertSame(thunk, assertThrows(ThunkSuspended::class.java) { driver.force(thunk) }.thunk)
+                    assertEquals(AsyncRequestState.CLAIMED, request.state)
+                    assertSame(request, AsyncContinuations.request(thunk.value as ContinuationResult))
+                    request.acknowledge()
+                    val answer = driver.force(thunk) as DataValue
+                    assertEquals(208L, answer.layout.readLong(answer, 0))
+                    assertEquals(AsyncRequestState.ACKNOWLEDGED, request.state)
+                    assertEquals(2, thunk.state)
+                } finally { threads.leaveCurrent() }
+            }
+        }
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun linkedWithPayload(module: Map<String, Any?>, entry: String): Map<String, Any?> {
         val action = CoreModules.reachable(module, entry)
@@ -553,7 +584,7 @@ class CoreContinuationNativeTest {
     }
 
     @Test fun genuineCatchActionResumesOwnedTupleAcrossThreads() {
-        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79", "2", "0", "1", "208"),
+        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79", "2", "0", "1", "208", "208", "209"),
             File(root, "build/core-continuation/native-output.txt").readLines())
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
