@@ -51,6 +51,22 @@ class CoreLinkerTest {
         assertEquals(2, files.map { (it as Map<*, *>)["id"] }.toSet().size)
     }
 
+    @Test fun separateInterfaceClosureFragmentsMergeWithoutAdmittingDuplicateDefinitions() {
+        fun fragment(id: String) = mapOf("schema" to 1, "ghc" to "9.14.1",
+            "unit" to "dependency-closure", "module" to "THC.InterfaceClosure",
+            "boundary" to "actual-interface-unfoldings",
+            "bindings" to listOf(binding(id, literal())), "constructors" to emptyList<Any?>())
+        assertEquals(2, (CoreModules.merge(listOf(fragment("a"), fragment("b")))["bindings"] as List<*>).size)
+        assertThrows(IllegalArgumentException::class.java) {
+            CoreModules.merge(listOf(fragment("a"), fragment("a")))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            CoreModules.merge(listOf(fragment("a"), fragment("b")).map {
+                it + ("boundary" to "optimized-Core-after-Tidy-before-CorePrep")
+            })
+        }
+    }
+
     @Test fun shadowedGlobalsDoNotBringTheirUnsupportedDependenciesIntoTheProgram() {
         val lambda = listOf("lam", listOf(mapOf("id" to "x")), variable("x"))
         assertEquals(listOf("root"), selected(lambda, binding("x", variable("unavailable"))))

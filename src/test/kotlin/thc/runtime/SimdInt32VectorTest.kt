@@ -41,8 +41,9 @@ class SimdInt32VectorTest {
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("plusInt32X4#", listOf(proof, CoreVectors.proof), proof) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packInt32X4#", listOf(CoreVectors.unpacked), proof) }
         assertThrows(RuntimeFault::class.java) { CoreRepresentations.parse(metadata - "vector") }
-        assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(metadata + mapOf("primReps" to listOf("VecRep 8 Int32ElemRep"),
-            "vector" to mapOf("lanes" to 8L, "element" to "Int32ElemRep"))) }
+        // Int32X8 is supported; a three-lane vector still has no carrier.
+        assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(metadata + mapOf("primReps" to listOf("VecRep 3 Int32ElemRep"),
+            "vector" to mapOf("lanes" to 3L, "element" to "Int32ElemRep"))) }
     }
     @Test fun vectorFormalJoinRemainsUnsupported() = withLanguage { language ->
         val m = module().toMutableMap()
