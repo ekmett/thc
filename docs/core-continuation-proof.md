@@ -121,3 +121,17 @@ tag 2 and native GHC, AST, ordinary bytecode, and compiled checkpointed
 bytecode agree on 79. The enclosing lexical mask restore runs only after the
 resumed handler completes: a second `getMaskingState#` after `catch#` must
 observe the original unmasked state. General async delivery remains gated.
+
+The three original GHC masking primops now use the same exact action-root and
+recursive tuple capture only under the private checkpoint. Their actions are
+not tagged as caught `catch#` actions, so private handler delivery cannot use
+them. Each action suspends at two `noDuplicate#` checkpoints; cold segments
+retain the active logical mask (interruptible, unmasked, or uninterruptible)
+across a second host carrier while both carriers recover their ambient mask.
+`getMaskingState#` inside each action observes GHC tags 2, 0, and 1, and a
+second query after the primop observes the restored outer mask. Native GHC,
+AST, ordinary bytecode, and the compiled checkpoint caller agree. A separate
+private run begins `unmaskAsyncExceptions#` with a masked caller and observes
+the masked state restored after cross-thread completion. The
+checkpoint-null path still invokes the original action operation directly;
+general async delivery remains disabled.
