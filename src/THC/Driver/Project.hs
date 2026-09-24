@@ -373,7 +373,9 @@ captureGlobalUnits context project requested missing = do
         store = staging </> "store"
         dist = staging </> "dist"
         capture = staging </> "capture"
-        arguments = ["--store-dir=" ++ store, "build", "all", "--offline",
+        -- Cabal's offline mode rejects Hackage sources in a fresh store even
+        -- when their tarballs are cached; use its normal source cache here.
+        arguments = ["--store-dir=" ++ store, "build", "all",
                      "--enable-build-info", "--project-file", "cabal.project",
                      "--builddir", dist, "--with-compiler", wrapper] ++
                     maybe [] (\path -> ["--with-hc-pkg", path]) (contextGhcPkg context)
