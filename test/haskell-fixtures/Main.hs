@@ -8,6 +8,7 @@
 module Main (main) where
 
 import AggregateFixtures (prepareAggregate)
+import ContinuationFixtures (prepareCoreContinuation)
 import OriginalStdioFixtures (prepareOriginalStdio)
 import SmallArrayFixtures (prepareSmallArrays)
 import StackFixtures (prepareOriginalStack)
@@ -779,6 +780,7 @@ main = do
     ["signed-narrow"] -> prepare root SignedNarrow
     ["explicit64"] -> prepare root Explicit64
     ["pinned-pointer-cells"] -> preparePinnedPointers root
+    ["core-continuation"] -> prepareCoreContinuation root
     ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (original-stack|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|tuple-arithmetic|pinned-pointer-cells|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (core-continuation|original-stack|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|tuple-arithmetic|pinned-pointer-cells|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

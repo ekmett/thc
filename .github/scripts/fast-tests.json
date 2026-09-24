@@ -200,6 +200,10 @@
       "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
       "python": []
     },
+    "src/test/kotlin/thc/runtime/ManagedStackInfoImageTest.kt": {
+      "junit": ["thc.runtime.ManagedStackInfoImageTest", "thc.runtime.OriginalStackInfoCallTest"],
+      "python": []
+    },
     "compiler/test-fixtures/AddressIdentityAudit.hs": {
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "python": []
@@ -598,6 +602,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.CoreContinuationNativeTest",
         "thc.runtime.SmallArrayTest",
         "thc.runtime.PinnedPointerCellsTest",
         "thc.runtime.OriginalStdioNativeTest",
@@ -613,6 +618,10 @@
         "thc.runtime.DoubleArrayNativeTest",
         "thc.runtime.FloatWordArrayNativeTest"
       ],
+      "python": []
+    },
+    "test/haskell-fixtures/ContinuationFixtures.hs": {
+      "junit": ["thc.runtime.CoreContinuationNativeTest"],
       "python": []
     },
     "test/haskell-fixtures/SmallArrayFixtures.hs": {

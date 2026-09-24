@@ -5,6 +5,7 @@
 """Regression tests for lexical dependency closure and capability diagnostics."""
 import importlib.util
 import copy
+import hashlib
 import json
 from pathlib import Path
 import unittest
@@ -1136,7 +1137,7 @@ class OriginalStackCloneAuditTest(unittest.TestCase):
         self.assertTrue(any('capability disabled' in str(issue['detail']) for issue in report['issues']))
         for symbol in ('cloneMyStack#', 'stg_cloneMyStackzh2', 'prefixstg_cloneMyStackzh',
                        'stg_sendCloneStackMessagezh', 'stg_decodeStackzh', 'getStackFieldszh',
-                       'getInfoTableAddrszh', 'advanceStackFrameLocationzh', 'lookupIPE'):
+                       'getStackClosurezh', 'advanceStackFrameLocationzh', 'getWordzh'):
             self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
             self.assertNotIn(symbol, CAP['managedForeignCalls'])
             module = self.fixture(); self.call(module)[6]['foreignCall']['target']['symbol'] = symbol
@@ -1209,6 +1210,248 @@ class OriginalStackCloneAuditTest(unittest.TestCase):
                 self.assertTrue(any('stored State' in str(issue['detail']) for issue in report['issues']))
         module = self.fixture(); state = self.call(module)[2][0][2]
         self.call(module)[2][0] = ['lit', 'int', '7', state]; self.reject(module)
+
+
+class OriginalStackInfoAuditTest(unittest.TestCase):
+    """Genuine unchanged FCall applications in explicitly synthetic scalar consumers.
+
+    This is a raw-proof audit, not execution of GHC's complete Decode closure.
+    Production capabilities admit only the independently implemented protocols.
+    """
+    symbols = ('getStackInfoTableAddrzh', 'getInfoTableAddrszh', 'lookupIPE')
+    resource = ROOT.parent / 'src/test/resources/core/original-stack-info-calls.json'
+
+    def fixture(self, symbol):
+        resource = json.loads(self.resource.read_text())
+        call = next(r['application'] for r in resource['calls'] if r['application'][6]['foreignCall']['target']['symbol'] == symbol)
+        parameters = [dict(id=a[1], lifted=False, rep=copy.deepcopy(a[2]['rep'])) for a in call[2]]
+        case = ['case', call, 'synthetic-result', [['default', None, [], [*lit(0), dict(rep=LONG)]]],
+                dict(rep=LONG, binder=dict(id='synthetic-result', lifted=False, rep=dict(copy.deepcopy(call[6]['rep']), evaluated=True)))]
+        wrapper = dict(bind('synthetic-consumer', ['lam', parameters, case, dict(rep=CLOSURE, resultRep=LONG)]),
+                       rep=CLOSURE, arity=len(parameters))
+        return dict(schema=1, ghc='9.14.1', bindings=[wrapper], constructors=[],
+                    sourceFiles=resource['sourceFiles'], sourceSpans=resource['sourceSpans'])
+
+    @staticmethod
+    def call(module):
+        return module['bindings'][0]['expr'][2][1]
+
+    def audit(self, module, enabled=True):
+        capabilities = [s for s in CAP['managedForeignCalls'] if enabled or s not in self.symbols]
+        return audit_core.Audit([('genuine-stack-info-app-with-synthetic-consumer.json', module)],
+            dict(CAP, managedForeignCalls=capabilities)).run(['synthetic-consumer'])
+
+    def reject(self, module, detail=None):
+        report = self.audit(module)
+        self.assertFalse(report['accepted'], report)
+        self.assertEqual([], report['foreignCalls'], report)
+        if detail is not None:
+            self.assertTrue(any(detail in str(issue['detail']) for issue in report['issues']), report)
+
+    def test_exact_original_applications_accept_with_explicit_capability_only(self):
+        resource = json.loads(self.resource.read_text())
+        self.assertTrue(set(self.symbols) <= set(CAP['managedForeignCalls']))
+        self.assertEqual('902339d332fb4ce2b3c87dcac1ee6495d41ad886', resource['ghcRevision'])
+        self.assertEqual('62e3400c5b889d3971cb4047709c408fd270255f', resource['exporterRevision'])
+        self.assertEqual(set(self.symbols), {r['application'][6]['foreignCall']['target']['symbol'] for r in resource['calls']})
+        for record in resource['calls']:
+            symbol = record['application'][6]['foreignCall']['target']['symbol']
+            module = self.fixture(symbol)
+            self.assertEqual(record['application'], self.call(module))
+            report = self.audit(module)
+            self.assertTrue(report['accepted'], report)
+            self.assertEqual([symbol], [call['symbol'] for call in report['foreignCalls']])
+            self.assertEqual([], report['missingGlobals'])
+            report = self.audit(module, enabled=False)
+            self.assertFalse(report['accepted'], report)
+            self.assertEqual([], report['foreignCalls'])
+            self.assertTrue(any('capability disabled' in str(i['detail']) for i in report['issues']))
+            # Foreign identity is the descriptor, not a particular owner/head ID.
+            self.call(module)[1][1] = 'unrelated:InlinedCaller.foreign'
+            self.assertTrue(self.audit(module)['accepted'])
+
+    def test_projected_source_records_exactly_cover_original_application_notes(self):
+        resource = json.loads(self.resource.read_text())
+        # Canonical hashes of records copied directly from the two pinned source
+        # exports, not coordinates inferred from span IDs or freshly read files.
+        for key, expected in (
+            ('sourceFiles', 'e695a8a85c68c6fe276608c9a9564156ec639387edbacb9ef823a3c342859a14'),
+            ('sourceSpans', '011dc0f96e5b8e1ab8510ad20313fe73e11c19622aefafb7e1b57a78d8a1b551')):
+            encoded = json.dumps(resource[key], sort_keys=True, separators=(',', ':')).encode()
+            self.assertEqual(expected, hashlib.sha256(encoded).hexdigest())
+        referenced = set()
+        def collect(value):
+            if isinstance(value, dict):
+                if isinstance(value.get('source'), str): referenced.add(value['source'])
+                referenced.update(value.get('sourceNotes', []))
+                for child in value.values(): collect(child)
+            elif isinstance(value, list):
+                for child in value: collect(child)
+        for record in resource['calls']: collect(record['application'])
+        spans = resource['sourceSpans']; files = resource['sourceFiles']
+        self.assertEqual(15, len(spans)); self.assertEqual(2, len(files))
+        self.assertEqual(len(spans), len({s['id'] for s in spans}))
+        self.assertEqual(referenced, {s['id'] for s in spans})
+        self.assertEqual({s['file'] for s in spans}, {f['id'] for f in files})
+        for symbol in self.symbols:
+            wrapper = self.fixture(symbol)
+            self.assertEqual(files, wrapper['sourceFiles'])
+            self.assertEqual(spans, wrapper['sourceSpans'])
+
+    def test_exact_descriptor_schema_target_saturation_convention_and_safety(self):
+        for symbol in self.symbols:
+            mutations = [(key, value) for key in ('schema', 'arity', 'suppliedArity')
+                for value in (None, True, False, 1.0, '1', 0, 4, 1 << 32)]
+            mutations += [('convention', x) for x in (None, 'capi', 'javascript')]
+            mutations += [('safety', x) for x in (None, 'unsafe', 'interruptible')]
+            mutations += [('extra', None)]
+            for key, value in mutations:
+                with self.subTest(symbol=symbol, key=key, value=value):
+                    module = self.fixture(symbol); self.call(module)[6]['foreignCall'][key] = value
+                    self.reject(module)
+            module = self.fixture(symbol); descriptor = self.call(module)[6]['foreignCall']
+            descriptor['convention'] = 'prim' if descriptor['convention'] == 'ccall' else 'ccall'
+            self.reject(module)
+            for key, values in {'kind': (None, 'dynamic'), 'unit': (None, '', 'main', 1),
+                                'isFunction': (None, False, 1), 'extra': (None,)}.items():
+                for value in values:
+                    module = self.fixture(symbol); self.call(module)[6]['foreignCall']['target'][key] = value
+                    self.reject(module)
+
+    def test_all_actual_and_declared_argument_proofs_flags_and_lengths_are_exact(self):
+        mutations = [('kind', 'unknown'), ('primReps', None), ('primReps', ['BoxedRep Nothing']),
+            ('primReps', ['IntRep']), ('primReps', ['Word8Rep']), ('evaluated', 1),
+            ('aggregate', 'unboxed-tuple'), ('components', []), ('vector', None), ('extra', None)]
+        for symbol in self.symbols:
+            count = len(self.call(self.fixture(symbol))[2])
+            for index in range(count):
+                for declared in (False, True):
+                    for key, value in mutations:
+                        module = self.fixture(symbol); call = self.call(module)
+                        proof = call[6]['foreignCall']['argumentReps'][index] if declared else call[2][index][2]['rep']
+                        proof[key] = value; self.reject(module)
+                for flag in (True, 0, None):
+                    module = self.fixture(symbol); self.call(module)[3][index] = flag; self.reject(module)
+                module = self.fixture(symbol)
+                self.call(module)[6]['foreignCall']['argumentReps'][index]['evaluated'] = True
+                self.reject(module)
+                module = self.fixture(symbol); self.call(module)[2][index][2]['rep']['evaluated'] = False
+                self.assertTrue(self.audit(module)['accepted'])
+            for site in ('actual', 'declared', 'flags'):
+                for extra in (False, True):
+                    module = self.fixture(symbol); call = self.call(module)
+                    values = call[2] if site == 'actual' else call[3] if site == 'flags' else call[6]['foreignCall']['argumentReps']
+                    if extra: values.append(copy.deepcopy(values[0]))
+                    else: values.pop()
+                    self.reject(module)
+
+    def test_scalar_address_pair_and_state_word8_results_cannot_be_interchanged(self):
+        originals = [self.call(self.fixture(symbol))[6]['rep'] for symbol in self.symbols]
+        for symbol, original in zip(self.symbols, originals):
+            for declared in (False, True):
+                for other in originals:
+                    if other == original: continue
+                    module = self.fixture(symbol); meta = self.call(module)[6]
+                    if declared: meta['foreignCall']['resultRep'] = copy.deepcopy(other)
+                    else: meta['rep'] = copy.deepcopy(other)
+                    self.reject(module)
+                for key, value in (('kind', 'object'), ('primReps', ['WordRep']), ('evaluated', 1),
+                                   ('aggregate', 'unboxed-sum'), ('components', []), ('extra', None)):
+                    module = self.fixture(symbol); meta = self.call(module)[6]
+                    proof = meta['foreignCall']['resultRep'] if declared else meta['rep']
+                    proof[key] = value; self.reject(module)
+                for index in range(len(original.get('components', []))):
+                    for key, value in (('kind', 'unknown'), ('evaluated', False), ('primReps', ['IntRep']), ('vector', None)):
+                        module = self.fixture(symbol); meta = self.call(module)[6]
+                        proof = meta['foreignCall']['resultRep'] if declared else meta['rep']
+                        proof['components'][index][key] = value; self.reject(module)
+            module = self.fixture(symbol); self.call(module)[6]['foreignCall']['resultRep']['evaluated'] = True
+            self.reject(module)
+            module = self.fixture(symbol); self.call(module)[6]['rep']['evaluated'] = True
+            self.assertTrue(self.audit(module)['accepted'])
+            # The caller-supplied result proof is independently checked too.
+            call = self.call(self.fixture(symbol))
+            with self.assertRaises(ValueError):
+                core_original_foreign.validate(call[6], [a[2]['rep'] for a in call[2]], call[3], LONG)
+
+    def test_head_must_remain_an_exact_unbound_foreign_variable(self):
+        for symbol in self.symbols:
+            for head in ([], ['var', None], ['var', ''], ['var', 3], ['prim', symbol], ['var', 'unproved']):
+                module = self.fixture(symbol); self.call(module)[1] = head; self.reject(module)
+            for key, value in (('kind', 'long'), ('primReps', ['BoxedRep (Just Unlifted)']),
+                               ('evaluated', False), ('evaluated', 1), ('extra', None)):
+                module = self.fixture(symbol); self.call(module)[1][2]['rep'][key] = value; self.reject(module)
+            for scope in ('formal', 'global'):
+                module = self.fixture(symbol); wrapper = module['bindings'][0]
+                self.call(module)[1][1] = wrapper['expr'][1][0]['id'] if scope == 'formal' else wrapper['id']
+                self.reject(module)
+
+    def test_stored_carrier_levity_scalar_and_zero_width_proofs_cannot_be_relabelled(self):
+        bad_proofs = [LONG, REFERENCE, CLOSURE, dict(kind='void', primReps=[], evaluated=True),
+            dict(kind='address', primReps=['AddrRep'], evaluated=True),
+            dict(kind='unknown', primReps=['IntRep'], evaluated=True),
+            dict(kind='unknown', primReps=['BoxedRep Nothing'], evaluated=True), tuple_rep(),
+            dict(kind='unknown', primReps=None, evaluated=False, vector={})]
+        for symbol in self.symbols:
+            count = len(self.call(self.fixture(symbol))[2])
+            for index in range(count):
+                expected = self.call(self.fixture(symbol))[2][index][2]['rep']
+                for bad in bad_proofs:
+                    if bad.get('kind') == expected['kind'] and bad.get('primReps') == expected['primReps']: continue
+                    for scope in ('formal', 'global'):
+                        module = self.fixture(symbol); argument = self.call(module)[2][index]
+                        if scope == 'formal': module['bindings'][0]['expr'][1][index]['rep'] = copy.deepcopy(bad)
+                        else:
+                            module['bindings'].append(dict(bind('stored', lit(7), False), rep=copy.deepcopy(bad)))
+                            argument[1] = 'stored'
+                        self.reject(module, 'stored operand')
+                for reps in (None, expected['primReps']):
+                    module = self.fixture(symbol)
+                    module['bindings'][0]['expr'][1][index]['rep'] = dict(kind='unknown', primReps=reps, evaluated=False)
+                    self.assertTrue(self.audit(module)['accepted'])
+                # A local proof wins over a same-ID global, in both directions.
+                module = self.fixture(symbol); argument = self.call(module)[2][index]
+                module['bindings'].append(dict(bind(argument[1], lit(7), False), rep=LONG))
+                self.assertTrue(self.audit(module)['accepted'])
+                module['bindings'][-1]['rep'] = copy.deepcopy(expected)
+                module['bindings'][0]['expr'][1][index]['rep'] = copy.deepcopy(REFERENCE)
+                self.reject(module, 'stored operand')
+
+    def test_intrinsic_and_composite_producers_cannot_forge_operand_carriers(self):
+        for symbol in self.symbols:
+            for index, original in enumerate(self.call(self.fixture(symbol))[2]):
+                metadata = copy.deepcopy(original[2])
+                wrong_literal = 'int8' if metadata['rep']['kind'] == 'long' else 'int'
+                bad = [['lit', wrong_literal, '1', metadata],
+                       ['lam', [], [*lit(0), dict(rep=LONG)], dict(metadata, resultRep=LONG)],
+                       ['con', 'synthetic-box', 0, metadata]]
+                for operand in bad:
+                    for composite in ('direct', 'let', 'case'):
+                        module = self.fixture(symbol)
+                        wrapped = copy.deepcopy(operand)
+                        if composite == 'let': wrapped = ['let', False, [], wrapped, metadata]
+                        if composite == 'case':
+                            wrapped = ['case', [*lit(0), dict(rep=LONG)], 'unused',
+                                [['default', None, [], wrapped]], dict(metadata, binder=dict(id='unused', lifted=False, rep=LONG))]
+                        self.call(module)[2][index] = wrapped
+                        self.reject(module, 'lowered operand')
+                kind = metadata['rep']['kind']
+                if kind in ('address', 'void', 'long'):
+                    module = self.fixture(symbol)
+                    self.call(module)[2][index] = (['void', metadata] if kind == 'void' else
+                        ['lit', 'null-addr' if kind == 'address' else 'word', '0', metadata])
+                    self.assertTrue(self.audit(module)['accepted'])
+
+    def test_aliases_and_all_remaining_stack_getters_stay_unsupported(self):
+        cold = ('getStackFieldszh', 'advanceStackFrameLocationzh', 'getStackClosurezh', 'getWordzh',
+                'getSmallBitmapzh', 'getLargeBitmapzh', 'getBCOLargeBitmapzh', 'getRetFunLargeBitmapzh',
+                'getRetFunSmallBitmapzh', 'getUnderflowFrameNextChunkzh', 'isArgGenBigRetFunTypezh',
+                'stg_decodeStackzh', 'stg_sendCloneStackMessagezh')
+        for symbol in (*cold, *(s + '2' for s in self.symbols), *('prefix' + s for s in self.symbols)):
+            self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
+            self.assertNotIn(symbol, CAP['managedForeignCalls'])
+            module = self.fixture('lookupIPE'); self.call(module)[6]['foreignCall']['target']['symbol'] = symbol
+            self.reject(module)
 
 
 if __name__ == '__main__':

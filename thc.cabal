@@ -189,6 +189,7 @@ executable thc-fixtures
   main-is: Main.hs
   other-modules:
     AggregateFixtures
+    ContinuationFixtures
     FixtureSupport
     OriginalStdioFixtures
     SmallArrayFixtures
