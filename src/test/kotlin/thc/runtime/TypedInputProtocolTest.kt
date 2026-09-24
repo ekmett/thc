@@ -47,7 +47,11 @@ class TypedInputProtocolTest {
             try { action(context, TruffleLanguage.LanguageReference.create(Language::class.java).get(null)) } finally { context.leave() }
         }
     private fun program(language: Language, backend: String, bindings: List<Map<String, Any?>>): ExecutableProgram =
-        if (backend == "ast") Program(language, module(bindings)) else BytecodeProgram(language, module(bindings))
+        when (backend) {
+            "ast" -> Program(language, module(bindings))
+            "bytecode-async" -> BytecodeProgram(language, module(bindings), true)
+            else -> BytecodeProgram(language, module(bindings))
+        }
     private fun run(program: ExecutableProgram, name: String, vararg values: Any?) =
         Calls.target(program.hostEntryTarget(values.size), arrayOf(program.entryValue(name), values))
     private fun valid(target: RootCallTarget, label: String) = assertEquals(true,
@@ -60,7 +64,7 @@ class TypedInputProtocolTest {
     }
 
     @Test fun threeTargetAndPrefixedThreeTargetCyclesReturnTypedResults() {
-        for (backend in listOf("ast", "bytecode")) for (inlining in listOf(true, false)) withLanguage(inlining) { context, language ->
+        for (backend in listOf("ast", "bytecode", "bytecode-async")) for (inlining in listOf(true, false)) withLanguage(inlining) { context, language ->
             fun worker(id: String, next: String) = bind(id, lam(listOf(arg("p", pair), arg("depth")),
                 listOf("case", prim("<=#", v("depth"), n(0)), "done", listOf(
                     listOf("lit", listOf("int", "1"), emptyList<String>(), v("p", pair)),
@@ -92,6 +96,8 @@ class TypedInputProtocolTest {
                     observed.forEach { valid(it, label) }; clear(language)
                 }
                 assertTrue((p.diagnostics()["selfTailReentries"] as Long) > 0, label)
+                if (backend == "bytecode-async")
+                    assertEquals(0L, p.diagnostics()["trampolineIterations"], "$label should reenter locally")
             }
         }
     }
