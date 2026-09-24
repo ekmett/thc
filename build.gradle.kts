@@ -39,6 +39,7 @@ tasks.test {
             "floating/core/**/*.json", "floating/checks.json", "floating/oracle.tsv",
             "floating-tuple/**/*.json", "floating-tuple/*.tsv", "floating-tuple/native/**",
             "tuple-input/**/*.json", "tuple-input/*.tsv", "tuple-input/native/**",
+            "empty-join-input/**/*.json", "empty-join-input/*.tsv", "empty-join-input/native/**",
             "empty-tuple-input/**/*.json", "empty-tuple-input/*.tsv", "empty-tuple-input/native/**",
             "sqrt/**/*.json", "sqrt/*.tsv", "sqrt/native/**",
             "tag-to-enum/**/*.json", "tag-to-enum/*.tsv", "tag-to-enum/native/**",
@@ -99,7 +100,7 @@ tasks.test {
     inputs.files(fileTree("scripts") {
         include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-floating-tuples.py", "prepare-sqrt-audit.py", "prepare-scalar-bitcasts.py", "scalar_bitcast_model.py", "test-scalar-bitcasts.py", "prepare-tag-to-enum-audit.py", "prepare-unsafe-equality-audit.py", "prepare-show-int.py", "show_int_model.py", "test-show-int-model.py", "prepare-show-word-list.py", "show_word_list_model.py", "test-show-word-list-model.py", "test-core-enums.py", "prepare-integer-primops.py", "prepare-bit-primops.py", "prepare-bytearray.py", "prepare-mutable-bytearrays.py", "mutable_bytearray_model.py", "test-mutable-bytearray-model.py", "prepare-compare-byte-arrays.py", "prepare-boxed-arrays.py", "prepare-array-slices.py", "test-array-slice-model.py", "prepare-mutvar.py", "prepare-int-arrays.py", "test-int-array-model.py", "prepare-tuple-arithmetic.py",
             "prepare-signed-narrow-primops.py", "prepare-explicit64-primops.py", "prepare-simd-audit.py", "prepare-floatx4-audit.py", "prepare-doublex2-audit.py", "doublex2_model.py", "test-doublex2-model.py", "core_vectors.py",
-            "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "prepare-tuple-input-audit.py", "test-tuple-inputs.py", "core_*.py", "generate-scalar-signatures.py",
+            "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "prepare-tuple-input-audit.py", "test-tuple-inputs.py", "prepare-empty-join-input.py", "test-empty-join-inputs.py", "core_*.py", "generate-scalar-signatures.py",
             "prepare-double-arrays.py", "test-double-array-model.py",
             "prepare-int32-arrays.py", "test-int32-array-model.py",
             "prepare-float-word-arrays.py", "test-float-word-array-model.py",

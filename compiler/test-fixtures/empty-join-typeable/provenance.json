@@ -1,0 +1,140 @@
+{
+  "schema": 1,
+  "ghc": {
+    "ghcVersion": "9.14.1",
+    "platform": "macOS-15.5-arm64-arm-64bit-Mach-O",
+    "ghc": {
+      "path": "/Users/ekmett/.ghcup/ghc/9.14.1/bin/ghc-9.14.1",
+      "bytes": 440,
+      "sha256": "41dee8bdd6fdfce5fe8cf198671e04ee9ca1a1898c39997f33a9748fae841f19"
+    },
+    "ghcPkg": {
+      "path": "/Users/ekmett/.ghcup/ghc/9.14.1/bin/ghc-pkg-9.14.1",
+      "bytes": 500,
+      "sha256": "92166d2d9174733a38f8d874d32ae7bcbf936b5f3136bcca808152e5fe14c766"
+    },
+    "installedInterfaces": [
+      {
+        "path": "/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/aarch64-osx-ghc-9.14.1-a591/ghc-internal-9.1401.0-0c3b/GHC/Internal/Arr.dyn_hi",
+        "bytes": 43955,
+        "sha256": "28cfc7fc4da595fa1aa7c7b0350b04caf02fe338b717cd73435eede236675e5e"
+      },
+      {
+        "path": "/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/aarch64-osx-ghc-9.14.1-a591/ghc-internal-9.1401.0-0c3b/GHC/Internal/Exception.dyn_hi",
+        "bytes": 12991,
+        "sha256": "a2352ebbfe4edc75ba6a662022a32f80048fc0efb6d2abc6fd3aefc0e8f3fcd0"
+      },
+      {
+        "path": "/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/aarch64-osx-ghc-9.14.1-a591/ghc-internal-9.1401.0-0c3b/GHC/Internal/Exception/Backtrace.dyn_hi",
+        "bytes": 17984,
+        "sha256": "f4383f7e0e99dc6bd286829fab5c0714b2f60c7d27e989bce0c908cfe1ce9e8a"
+      },
+      {
+        "path": "/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/aarch64-osx-ghc-9.14.1-a591/ghc-internal-9.1401.0-0c3b/GHC/Internal/Stack.dyn_hi",
+        "bytes": 7629,
+        "sha256": "1714d88837f2fb775bb86655da764b5cacf17e29a1a968005b29c4cc9d512713"
+      },
+      {
+        "path": "/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/aarch64-osx-ghc-9.14.1-a591/ghc-internal-9.1401.0-0c3b/GHC/Internal/Show.dyn_hi",
+        "bytes": 98330,
+        "sha256": "ff83b741d650077d27526ea5f399967818ea342323af6455e6cb3f0dbcd6f953"
+      },
+      {
+        "path": "/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/aarch64-osx-ghc-9.14.1-a591/ghc-internal-9.1401.0-0c3b/GHC/Internal/Data/Typeable/Internal.dyn_hi",
+        "bytes": 47720,
+        "sha256": "29a8f01dccb3acb891a050b2062879e7ba0b19384e128d95360bd8839225e186"
+      },
+      {
+        "path": "/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/aarch64-osx-ghc-9.14.1-a591/ghc-internal-9.1401.0-0c3b/GHC/Internal/Fingerprint.dyn_hi",
+        "bytes": 8814,
+        "sha256": "344724592c033c7f0dbdb78da8776bf636fb18a3f400714c98f9dafb8936cab3"
+      },
+      {
+        "path": "/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/aarch64-osx-ghc-9.14.1-a591/ghc-internal-9.1401.0-0c3b/GHC/Internal/Unsafe/Coerce.dyn_hi",
+        "bytes": 7142,
+        "sha256": "513c087daf535fb7a31469a1086c0f9afa1dccda02119e0c54743b58da4f998c"
+      }
+    ],
+    "plugin": {
+      "path": "/private/tmp/thc-exception-closure-source/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.dylib",
+      "bytes": 466280,
+      "sha256": "05b4b3386163e4210f5db2f6e2c0938dd7113160056ce4c73adf7256d814db6a"
+    }
+  },
+  "historicalCompiler": [
+    {
+      "path": "/private/tmp/thc-exception-closure-source/compiler/Thc/Cbv.hs",
+      "bytes": 1517,
+      "sha256": "4a42b0cf69aab3c28ead9199943b9b563a3cc0d37e335558ca088662c6f1ef8c"
+    },
+    {
+      "path": "/private/tmp/thc-exception-closure-source/compiler/Thc/Demands.hs",
+      "bytes": 1538,
+      "sha256": "01bd9536ef4963d27ec39739de7c871ff7564bdcb28d4f8b208a057372f6e76a"
+    },
+    {
+      "path": "/private/tmp/thc-exception-closure-source/compiler/Thc/Plugin.hs",
+      "bytes": 34083,
+      "sha256": "f42619ba3a181cf1288ae69f258ca60ed1cd9b05fb4fb5f60cc4b25f15175fe8"
+    },
+    {
+      "path": "/private/tmp/thc-exception-closure-source/compiler/Thc/Sources.hs",
+      "bytes": 5014,
+      "sha256": "b550a2309633ad1e45f31568ec30456ad8f2e7ba5863a4509d4820520e3eb861"
+    },
+    {
+      "path": "/private/tmp/thc-exception-closure-source/compiler/Thc/Wired.hs",
+      "bytes": 4609,
+      "sha256": "27d46e74a3ee1b6c65d6c0292057fe77f5867ec0a2013ba35749324a15de81d5"
+    }
+  ],
+  "sources": [
+    {
+      "path": "Typeable.Internal.hs",
+      "url": "https://raw.githubusercontent.com/ghc/ghc/ghc-9.14.1-release/libraries/ghc-internal/src/GHC/Internal/Data/Typeable/Internal.hs",
+      "sha256": "ff1a002f75f349dbc4699273c3ce6e8e4dba9841aa5ad4aee20d3beb8d8b54e8"
+    },
+    {
+      "path": "Fingerprint.hs-boot",
+      "url": "https://raw.githubusercontent.com/ghc/ghc/ghc-9.14.1-release/libraries/ghc-internal/src/GHC/Internal/Fingerprint.hs-boot",
+      "sha256": "72b19673ee571ca87ebc67470efc62b1ec75c4d4dfe579b4c33d7ac1a90bb246"
+    },
+    {
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/ghc/ghc/ghc-9.14.1-release/libraries/ghc-internal/LICENSE",
+      "sha256": "768c070bd0b7d820d169ee8153d5487acfc262cbbc10dfce18d05c0bb2d2800d"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "pre-GHC.Internal.Data.Typeable.Internal.json.gz",
+      "originalPath": "/private/tmp/thc-exception-closure-investigation/pre-typeable-core/GHC.Internal.Data.Typeable.Internal.json",
+      "rawBytes": 7600234,
+      "rawSha256": "f24827251fb61b88b1b578df4aa221ad06ff3b383951d022f8df06bdbcaeb865",
+      "sha256": "8c13bc8079468f01b90fca23f8007c0dc1174d3329108dd3a9f62a6a2644b52d"
+    },
+    {
+      "path": "pre-THC.InterfaceClosure.json.gz",
+      "originalPath": "/private/tmp/thc-exception-closure-investigation/pre-typeable-core/THC.InterfaceClosure.json",
+      "rawBytes": 239750,
+      "rawSha256": "6c429992f44b3934c0c74cff8bdb5ebcacd14801d9278a6b124f783639275ee4",
+      "sha256": "50fac18dffd7fb7e8b933dad6c087c4acb9e8bdfb4a43035200dfc516136c644"
+    },
+    {
+      "path": "post-GHC.Internal.Data.Typeable.Internal.json.gz",
+      "originalPath": "/private/tmp/thc-exception-closure-investigation/post-typeable-core/GHC.Internal.Data.Typeable.Internal.json",
+      "rawBytes": 7540593,
+      "rawSha256": "7f56bc1a9985bcab1c4c7cfeafc304ea46ef282e85790e773fbf4f3023820b08",
+      "sha256": "ee3aa7375b8fa383efb63fda91315c0ca77ad11fd44cb4441039fe1589865ef5"
+    },
+    {
+      "path": "post-THC.InterfaceClosure.json.gz",
+      "originalPath": "/private/tmp/thc-exception-closure-investigation/post-typeable-core/THC.InterfaceClosure.json",
+      "rawBytes": 187090,
+      "rawSha256": "f5e05680c8bd4a41c2abdb826f91af690fb43aff07d0e41a825c470b1b56fbad",
+      "sha256": "4fbeac6097b98319fde3e9c30adf6988d3f3dd3028a281e82ec017d57ccfc88f"
+    }
+  ],
+  "originalEvidenceSha256": "db9cfde14028c78e107f7959330ced1b9c736e1beaf941f4e509f3fe8b37ec5e",
+  "limitation": "Full unmodified historical exports; not freshly regenerated by this test. Missing globals remain a strict frontier."
+}

@@ -1610,9 +1610,12 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         if (args.size != target.slots.size) throw RuntimeFault("Local join arity mismatch")
         val nodes = args.mapIndexed { index, arg ->
             val lifted = flags.getOrNull(index) as? Boolean ?: throw RuntimeFault("Missing join argument levity")
-            argument(arg, scope, lifted && !callStrict[index] && !target.entryStrict[index])
+            argument(arg, scope, lifted && !callStrict[index] && !target.entryStrict[index],
+                allowEmpty = target.proofs[index].isEmptyTuple, declaredLifted = lifted).also {
+                CoreRepresentations.requireJoinArgument(target.proofs[index], it.representation)
+            }
         }.toTypedArray()
-        val temps = IntArray(nodes.size) { scope.layout.bind("<join argument $it>") }
+        val temps = IntArray(nodes.size) { if (target.proofs[it].isEmptyTuple) -1 else scope.layout.bind("<join argument $it>") }
         return LocalJoinCall(target, nodes, temps, metrics)
     }
     private fun compileJoins(expr: List<Any?>, outer: Scope, tail: Boolean,
@@ -1620,7 +1623,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val recursive = expr[1] == true
         val shadowed = if (recursive) definitions.map { it.id }.toSet() else emptySet()
         definitions.forEach { definition ->
-            definition.parameters.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "join argument") }
+            definition.parameters.forEach {
+                val proof = CoreRepresentations.binder(it)
+                CoreRepresentations.requireJoinInput(proof)
+                if (proof.isEmptyTuple && representation(it)) throw RuntimeFault("Tuple join formal must be unlifted")
+            }
             val formals = definition.parameters.map { it["id"] as String }.toSet()
             (freeVariables(definition.body) - formals - shadowed).forEach { id ->
                 outer.locals[id]?.let { CoreRepresentations.requireScalar(it.proof, "join capture") }
@@ -1638,7 +1645,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             definition.parameters.forEachIndexed { index, parameter ->
                 val lifted = representation(parameter)
                 val proof = CoreRepresentations.binder(parameter).let { if (lifted) it.copy(evaluated = entryStrict[index]) else it }
-                scope.bind(parameter["id"] as String, !lifted && parameter["coercion"] != true, proof)
+                if (proof.isEmptyTuple) scope.bindTuple(parameter["id"] as String, proof.copy(evaluated = true), intArrayOf())
+                else scope.bind(parameter["id"] as String, !lifted && parameter["coercion"] != true, proof)
             }
             scope
         }

@@ -74,7 +74,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
     private class JoinRegion
     private class JoinTarget(val region: JoinRegion, val index: Int, val parameters: List<Map<String, Any?>>,
-                             val locals: List<Local>, val entryStrict: BooleanArray, val result: CoreRepresentation)
+                             val locals: List<Local?>, val entryStrict: BooleanArray, val result: CoreRepresentation)
     private class JoinEmission(val selector: BytecodeLocal?, val next: BytecodeLabel?, val labels: List<BytecodeLabel>) {
         var emittedIndex = -1
     }
@@ -669,22 +669,29 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     /** A join transfer is a parallel move into this activation followed by bytecode control flow. */
     private fun joinCall(target: JoinTarget, arguments: List<Expression>): Expression {
         if (arguments.size != target.parameters.size) throw UnsupportedCore("Local join is not exactly saturated")
+        arguments.forEachIndexed { index, actual ->
+            CoreRepresentations.requireJoinArgument(CoreRepresentations.binder(target.parameters[index]), actual.proof)
+        }
         return ProvenExpression(ResultExpression { e, destination ->
             val b = e.builder
             val region = e.joins[target.region] ?: throw RuntimeFault("Local join escapes its owning activation")
             b.beginBlock()
-            b.emitJoinTransfer(metrics)
             // Saving all operands first is required for swaps and mutually recursive joins.
             val temporaries = arguments.mapIndexed { index, argument ->
-                b.createLocal("join operand $index", null).also { temporary ->
+                if (target.locals[index] == null) {
+                    argument.emitTuple(e, emptyList())
+                    null
+                } else b.createLocal("join operand $index", null).also { temporary ->
                     b.beginStoreLocal(temporary)
                     argument.emit(e)
                     b.endStoreLocal()
                 }
             }
             target.locals.forEachIndexed { index, local ->
-                restoreArgument(e, local) { b.emitLoadLocal(temporaries[index]) }
+                if (local != null) restoreArgument(e, local) { b.emitLoadLocal(temporaries[index]!!) }
             }
+            // A failed operand is not a transfer. Count only after all parallel moves succeed.
+            b.emitJoinTransfer(metrics)
             if (target.index > region.emittedIndex) {
                 b.emitBranch(region.labels[target.index])
             } else {
@@ -705,7 +712,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         val definitions = CoreJoins.definitions(group) ?: throw RuntimeFault("Missing local join definitions")
         val shadowed = if (recursive) definitions.map { it.id }.toSet() else emptySet()
         definitions.forEach { definition ->
-            definition.parameters.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "join argument") }
+            definition.parameters.forEach {
+                val proof = CoreRepresentations.binder(it)
+                CoreRepresentations.requireJoinInput(proof)
+                if (proof.isEmptyTuple && representation(it)) throw RuntimeFault("Tuple join formal must be unlifted")
+            }
             val formals = definition.parameters.map { it["id"] as String }.toSet()
             if ((freeVariables(definition.body) - formals - shadowed).any { it in scope.tuples })
                 throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple (join capture)")
@@ -717,7 +728,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val parameters = definition.parameters.mapIndexed { parameterIndex, parameter ->
                 // Join formal names have lexical scope only in their own body.
                 val proof = CoreRepresentations.binder(parameter).copy(evaluated = !representation(parameter) || entryStrict[parameterIndex])
-                Local(nextLocal++, parameter["id"] as String,
+                if (proof.isEmptyTuple) null else Local(nextLocal++, parameter["id"] as String,
                     if (proof.present) proof.isLong else !representation(parameter) && parameter["coercion"] != true, proof)
             }
             JoinTarget(region, index, definition.parameters, parameters, entryStrict, definition.result).also { local.bindJoin(definition.id, it) }
@@ -725,7 +736,13 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         localJoinCount += targets.size
         val bodies = definitions.mapIndexed { index, definition ->
             val bodyScope = (if (recursive) local else scope).child()
-            targets[index].locals.forEach { bodyScope.bindLocal(it.name, it) }
+            targets[index].locals.forEachIndexed { parameterIndex, parameter ->
+                if (parameter != null) bodyScope.bindLocal(parameter.name, parameter)
+                else {
+                    val raw = definition.parameters[parameterIndex]
+                    bodyScope.bindTuple(raw["id"] as String, CoreRepresentations.binder(raw).copy(evaluated = true), emptyList())
+                }
+            }
             val body = compile(definition.body, bodyScope.withSource(sources.binding(definition.binding, scope.source)), tail)
             CoreRepresentations.requireNoVector(body.proof, "join result")
             CoreRepresentations.requireNoSum(body.proof, "join result")
@@ -743,7 +760,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val result = if (destination == null) b.createLocal("join result", null) else null
             val selector = if (recursive) b.createLocal("join selector", "primitive") else null
             val exit = b.createLabel()
-            targets.flatMap { it.locals }.forEach { e.locals[it.id] = b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
+            targets.flatMap { it.locals.filterNotNull() }.forEach { e.locals[it.id] = b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
             if (selector != null) {
                 b.beginStoreLocal(selector); b.emitLoadConstant(-1L); b.endStoreLocal()
                 b.beginWhile()
@@ -781,7 +798,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             if (result != null) b.emitLoadLocal(result)
             b.endBlock()
             e.joins.remove(region)
-            targets.flatMap { it.locals }.forEach { e.locals.remove(it.id) }
+            targets.flatMap { it.locals.filterNotNull() }.forEach { e.locals.remove(it.id) }
         }, proof.copy(evaluated = entry.proof.evaluated && bodies.all { it.proof.evaluated }))
     }
 

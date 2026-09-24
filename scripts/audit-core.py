@@ -229,6 +229,9 @@ class Audit:
     def supported_empty_input(self, rep):
         return self.is_empty_tuple(rep) and 'empty-unboxed-tuple' in self.cap.get('aggregateInputs', [])
 
+    def supported_empty_join_input(self, rep):
+        return self.is_empty_tuple(rep) and 'empty-unboxed-tuple' in self.cap.get('aggregateJoinInputs', [])
+
     def supported_tuple_input(self, rep):
         return (self.supported_empty_input(rep) or
                 'unboxed-tuple' in self.cap.get('aggregateInputs', []) and tuple_input_proof_error(rep) is None)
@@ -616,8 +619,11 @@ class Audit:
                         self.compare_shapes(stored, self.effective_rep(expr, bound) if sum_payload or is_sum(stored) or self.is_tuple(stored) else self.expression_rep(expr), owner, path + '/rep')
                 else:
                     proof = bound[expr[1]]
-                    if isinstance(proof, dict) and proof.get('_join_arity') == 0 and primitive_arity is None:
-                        proof = proof['_join_result']
+                    if isinstance(proof, dict) and '_join_arity' in proof:
+                        if (primitive_arity if primitive_arity is not None else 0) != proof['_join_arity']:
+                            self.issue('join-arity', owner, path, 'Local join must be exactly saturated at its logical arity')
+                        if proof['_join_arity'] == 0 and primitive_arity is None:
+                            proof = proof['_join_result']
                     self.compare_shapes(proof, self.effective_rep(expr, bound) if sum_payload or is_sum(proof) or self.is_tuple(proof) else self.expression_rep(expr), owner, path + '/rep')
             elif tag == 'lit':
                 self.literal(expr[1], expr[2], owner, path)
@@ -636,8 +642,9 @@ class Audit:
                         self.issue('aggregate-boundary', owner, path, 'unboxed-sum formal argument')
                     if is_vector(binder.get('rep')):
                         self.issue('vector-boundary', owner, path, 'vector formal argument')
-                    if self.is_tuple(binder.get('rep')) and (index < join_prefix or
-                            not self.supported_tuple_input(binder.get('rep'))):
+                    if self.is_tuple(binder.get('rep')) and not (
+                            self.supported_empty_join_input(binder.get('rep')) if index < join_prefix else
+                            self.supported_tuple_input(binder.get('rep'))):
                         self.issue('aggregate-boundary', owner, path, 'unboxed-tuple formal argument')
                     if self.is_tuple(binder.get('rep')) and binder.get('lifted') is not False:
                         self.issue('application-levity', owner, path, 'Tuple formal must be unlifted')
@@ -838,9 +845,11 @@ class Audit:
                         argument_rep = self.effective_rep(argument, bound)
                         stored = bound.get(argument[1]) if argument[0] == 'var' else None
                         if self.is_tuple(argument_rep) or self.is_tuple(stored):
-                            ordinary = function[0] not in ('prim', 'con') and not (
-                                isinstance(target, dict) and '_join_arity' in target)
-                            if not ordinary or not self.supported_tuple_input(argument_rep):
+                            join = isinstance(target, dict) and '_join_arity' in target
+                            ordinary = function[0] not in ('prim', 'con') and not join
+                            supported = self.supported_empty_join_input(argument_rep) if join else (
+                                ordinary and self.supported_tuple_input(argument_rep))
+                            if not supported:
                                 self.issue('aggregate-boundary', owner, f'{path}/arguments/{index}', 'unboxed-tuple argument')
                             if (self.is_tuple(argument_rep) and isinstance(flags, list) and
                                     index < len(flags) and flags[index] is not False):

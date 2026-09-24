@@ -21,6 +21,7 @@ python3 scripts/prepare-state-tuple-audit.py
 python3 scripts/prepare-empty-tuple-input-audit.py
 python3 scripts/prepare-tuple-input-audit.py
 python3 scripts/prepare-tuple-join-audit.py
+python3 scripts/prepare-empty-join-input.py
 python3 scripts/prepare-integer-primops.py
 python3 scripts/prepare-bit-primops.py
 python3 scripts/prepare-bytearray.py
