@@ -55,11 +55,13 @@ def main():
     manifest = BUILD / 'manifest.json'
     manifest.unlink(missing_ok=True)
     entries = [dict(name=f'{op}Int{width}', primitive=f'{op}Int{width}#', width=width,
-                    arity=1 if op == 'negate' else 2)
-               for op in OPERATIONS for width in (8, 16, 32)]
+                    arity=1 if op == 'negate' else 2, selector=selector)
+               for selector, (op, width) in enumerate((op, width)
+                   for op in OPERATIONS for width in (8, 16, 32))]
     core = BUILD / 'core'
     env = dict(os.environ, THC_CORE_OUT=str(core), THC_GHC_OUT=str(BUILD / 'ghc'))
-    run([ROOT / 'compiler/export.sh', *['-fplugin-opt=THC.Plugin:closure=' + e['name']
+    run([ROOT / 'compiler/export.sh', '-fplugin-opt=THC.Plugin:closure=signedNarrowDispatch',
+         *['-fplugin-opt=THC.Plugin:closure=' + e['name']
                                       for e in entries], SOURCE], env=env)
     spec = importlib.util.spec_from_file_location('core_audit', ROOT / 'scripts/audit-core.py')
     audit = importlib.util.module_from_spec(spec)
@@ -67,6 +69,13 @@ def main():
     paths = sorted(core.glob('*.json'))
     modules = [(str(p.relative_to(ROOT)), json.loads(p.read_text())) for p in paths]
     capabilities = json.loads((ROOT / 'scripts/core-capabilities.json').read_text())
+    composite = audit.Audit(modules, capabilities).run(['signedNarrowDispatch'])
+    assert composite['accepted'], composite
+    assert {e['primitive'] for e in entries} <= {p['name'] for p in composite['primitives']}, composite
+    # Every primitive must occur in the dispatcher itself, without a wrapper call.
+    assert len(composite['reachableBindings']) == 1, composite['reachableBindings']
+    composite_path = BUILD / 'composite.audit.json'
+    composite_path.write_text(json.dumps(composite, indent=2) + '\n')
     driver = ['{-# LANGUAGE MagicHash #-}', 'module Main where',
               'import GHC.Exts (Int(I#), Int#)', 'import qualified SignedNarrowPrimopsAudit as P',
               'emit1 :: String -> (Int# -> Int#) -> Int -> IO ()',
@@ -106,9 +115,11 @@ def main():
     inputs = [SOURCE, 'scripts/prepare-signed-narrow-primops.py', 'scripts/core-capabilities.json', 'src/main/resources/thc/scalar-primop-signatures.json',
               'scripts/audit-core.py', 'compiler/build.sh', 'compiler/export.sh', 'compiler/toolchain.sh']
     inputs += [str(p.relative_to(ROOT)) for p in (ROOT / 'compiler/THC').glob('*.hs')]
-    artifacts = [str(p.relative_to(ROOT)) for p in paths] + ['build/signed-narrow-primops/oracle.tsv']
+    artifacts = [str(p.relative_to(ROOT)) for p in paths] + [
+        'build/signed-narrow-primops/oracle.tsv', str(composite_path.relative_to(ROOT))]
     hashes = lambda items: {p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in items}
     manifest.write_text(json.dumps(dict(schema=1, entries=entries, modules=[p for p, _ in modules],
+                                       compositeEntry='signedNarrowDispatch', nativeRows=len(rows),
                                        excludedDivisionInputs=['zero narrowed divisor', 'narrow minBound / -1'],
                                        inputHashes=hashes(inputs), artifactHashes=hashes(artifacts)),
                                    indent=2) + '\n')

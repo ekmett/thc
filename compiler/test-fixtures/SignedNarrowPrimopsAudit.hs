@@ -149,3 +149,46 @@ geInt16 x y = geInt16# (intToInt16# x) (intToInt16# y)
 {-# NOINLINE geInt32 #-}
 geInt32 :: Int# -> Int# -> Int#
 geInt32 x y = geInt32# (intToInt32# x) (intToInt32# y)
+
+-- Direct primops keep the pre-Tidy exported root independent of wrapper inlining.
+-- The dynamic selector keeps all narrow operations in one installed guest root.
+{-# OPAQUE signedNarrowDispatch #-}
+signedNarrowDispatch :: Int# -> Int# -> Int# -> Int#
+signedNarrowDispatch operation x y = case operation of
+  0# -> int8ToInt# (negateInt8# (intToInt8# x))
+  1# -> int16ToInt# (negateInt16# (intToInt16# x))
+  2# -> int32ToInt# (negateInt32# (intToInt32# x))
+  3# -> int8ToInt# (plusInt8# (intToInt8# x) (intToInt8# y))
+  4# -> int16ToInt# (plusInt16# (intToInt16# x) (intToInt16# y))
+  5# -> int32ToInt# (plusInt32# (intToInt32# x) (intToInt32# y))
+  6# -> int8ToInt# (subInt8# (intToInt8# x) (intToInt8# y))
+  7# -> int16ToInt# (subInt16# (intToInt16# x) (intToInt16# y))
+  8# -> int32ToInt# (subInt32# (intToInt32# x) (intToInt32# y))
+  9# -> int8ToInt# (timesInt8# (intToInt8# x) (intToInt8# y))
+  10# -> int16ToInt# (timesInt16# (intToInt16# x) (intToInt16# y))
+  11# -> int32ToInt# (timesInt32# (intToInt32# x) (intToInt32# y))
+  12# -> int8ToInt# (quotInt8# (intToInt8# x) (intToInt8# y))
+  13# -> int16ToInt# (quotInt16# (intToInt16# x) (intToInt16# y))
+  14# -> int32ToInt# (quotInt32# (intToInt32# x) (intToInt32# y))
+  15# -> int8ToInt# (remInt8# (intToInt8# x) (intToInt8# y))
+  16# -> int16ToInt# (remInt16# (intToInt16# x) (intToInt16# y))
+  17# -> int32ToInt# (remInt32# (intToInt32# x) (intToInt32# y))
+  18# -> eqInt8# (intToInt8# x) (intToInt8# y)
+  19# -> eqInt16# (intToInt16# x) (intToInt16# y)
+  20# -> eqInt32# (intToInt32# x) (intToInt32# y)
+  21# -> neInt8# (intToInt8# x) (intToInt8# y)
+  22# -> neInt16# (intToInt16# x) (intToInt16# y)
+  23# -> neInt32# (intToInt32# x) (intToInt32# y)
+  24# -> ltInt8# (intToInt8# x) (intToInt8# y)
+  25# -> ltInt16# (intToInt16# x) (intToInt16# y)
+  26# -> ltInt32# (intToInt32# x) (intToInt32# y)
+  27# -> leInt8# (intToInt8# x) (intToInt8# y)
+  28# -> leInt16# (intToInt16# x) (intToInt16# y)
+  29# -> leInt32# (intToInt32# x) (intToInt32# y)
+  30# -> gtInt8# (intToInt8# x) (intToInt8# y)
+  31# -> gtInt16# (intToInt16# x) (intToInt16# y)
+  32# -> gtInt32# (intToInt32# x) (intToInt32# y)
+  33# -> geInt8# (intToInt8# x) (intToInt8# y)
+  34# -> geInt16# (intToInt16# x) (intToInt16# y)
+  35# -> geInt32# (intToInt32# x) (intToInt32# y)
+  _ -> -1#
