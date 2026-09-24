@@ -1,71 +1,36 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
--- Small deterministic ZIP/STORED codec for immutable Core bundles. No native
--- archiver, compression library, timestamps, or directory entries are needed.
 module THC.Driver.Zip (encodeZip, decodeZip) where
 
-import Data.Bits (complement, shiftR, testBit, xor)
+import Codec.Archive.Zip (Archive(..), Entry(..), emptyArchive, fromArchive,
+                          fromEntry, toArchiveOrFail, toEntry)
+import Control.Exception (SomeException, evaluate, try)
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Lazy as BL
-import Data.List (mapAccumL)
-import Data.Word (Word16, Word32)
+import Data.List (nub)
 
 encodeZip :: [(String, BS.ByteString)] -> Either String BL.ByteString
-encodeZip files = do
-  let prepared = [(name, BS.pack (map (fromIntegral . fromEnum) name), bytes,
-                   fromIntegral (BS.length bytes) :: Word32, crc32 bytes)
-                 | (name, bytes) <- files]
-  if any (not . safeName . first5) prepared then Left "invalid ZIP member name" else pure ()
-  if any (\(_, name, bytes, _, _) -> BS.length name > 65535 || toInteger (BS.length bytes) > 0xffffffff) prepared
-    then Left "Core bundle exceeds ZIP32 entry limits" else pure ()
-  let (size, records) = mapAccumL add (0 :: Integer) prepared
-      central = mconcat [centralRecord offset name size' crc | (offset, _, name, _, size', crc) <- records]
-      centralSize = sum [46 + toInteger (BS.length name) | (_, _, name, _, _, _) <- records]
-  if length files > 65535 || size > 0xffffffff || centralSize > 0xffffffff
-    then Left "Core bundle exceeds ZIP32 directory limits"
-    else pure $ Builder.toLazyByteString $
-      mconcat [localRecord name bytes size' crc | (_, _, name, bytes, size', crc) <- records] <>
-      central <> endRecord (fromIntegral (length files)) (fromIntegral centralSize) (fromIntegral size)
-  where
-    first5 (name, _, _, _, _) = name
-    add offset (name, encoded, bytes, size', crc) =
-      (offset + 30 + toInteger (BS.length encoded) + toInteger size',
-       (fromIntegral offset :: Word32, name, encoded, bytes, size', crc))
+encodeZip files
+  | any (not . safeName . fst) files = Left "invalid ZIP member name"
+  | length names /= length (nub names) = Left "duplicate ZIP member name"
+  | otherwise = Right $ fromArchive emptyArchive
+      { zEntries = [toEntry name 0 (BL.fromStrict bytes) | (name, bytes) <- files] }
+  where names = map fst files
 
-decodeZip :: BS.ByteString -> Either String [(String, BS.ByteString)]
-decodeZip bytes = go 0 []
+decodeZip :: BS.ByteString -> IO (Either String [(String, BS.ByteString)])
+decodeZip bytes = do
+  parsed <- try (evaluate (decode bytes)) :: IO (Either SomeException (Either String [(String, BS.ByteString)]))
+  pure $ either (const (Left "invalid Core ZIP")) id parsed
   where
-    total = BS.length bytes
-    go offset entries
-      | offset + 4 > total = Left "truncated Core ZIP"
-      | word32 offset == 0x02014b50 = Right (reverse entries)
-      | word32 offset /= 0x04034b50 = Left "invalid Core ZIP local header"
-      | offset + 30 > total = Left "truncated Core ZIP local header"
-      | word16 (offset + 6) /= 0x0800 || word16 (offset + 8) /= 0 =
-          Left "unsupported Core ZIP compression or flags"
-      | otherwise = do
-          let size = fromIntegral (word32 (offset + 18))
-              original = word32 (offset + 22)
-              nameLength = fromIntegral (word16 (offset + 26))
-              extraLength = fromIntegral (word16 (offset + 28))
-              nameStart = offset + 30
-              bodyStart = nameStart + nameLength + extraLength
-              end = bodyStart + size
-          if original /= fromIntegral size || end > total
-            then Left "truncated Core ZIP member"
-            else do
-              let name = map (toEnum . fromIntegral) (BS.unpack (BS.take nameLength (BS.drop nameStart bytes)))
-                  body = BS.take size (BS.drop bodyStart bytes)
-              if not (safeName name) || any ((== name) . fst) entries ||
-                 crc32 body /= word32 (offset + 14)
-                then Left "invalid Core ZIP member"
-                else go end ((name, body) : entries)
-    word16 at = fromIntegral (BS.index bytes at) +
-      fromIntegral (BS.index bytes (at + 1)) * 256 :: Word16
-    word32 at = fromIntegral (word16 at) +
-      fromIntegral (word16 (at + 2)) * 65536 :: Word32
+    decode contents = do
+      archive <- toArchiveOrFail (BL.fromStrict contents)
+      let entries = zEntries archive
+          names = map eRelativePath entries
+      if any (not . safeName) names || length names /= length (nub names)
+        then Left "invalid Core ZIP member names"
+        else let decoded = [(eRelativePath entry, BL.toStrict (fromEntry entry)) | entry <- entries]
+             in foldr (\(_, body) result -> BS.length body `seq` result) (Right decoded) decoded
 
 safeName :: String -> Bool
 safeName name = case name of
@@ -77,32 +42,3 @@ safeName name = case name of
     split value = case break (== '/') value of
       (part, []) -> [part]
       (part, _:rest) -> part : split rest
-
-crc32 :: BS.ByteString -> Word32
-crc32 = complement . BS.foldl' step 0xffffffff
-  where
-    step crc byte = foldl turn (crc `xor` fromIntegral byte) [1 :: Int .. 8]
-    turn value _ = (value `shiftR` 1) `xor` (if testBit value 0 then 0xedb88320 else 0)
-
-localRecord :: BS.ByteString -> BS.ByteString -> Word32 -> Word32 -> Builder.Builder
-localRecord name bytes size crc =
-  Builder.word32LE 0x04034b50 <> Builder.word16LE 20 <> Builder.word16LE 0x0800 <>
-  Builder.word16LE 0 <> Builder.word16LE 0 <> Builder.word16LE 0 <>
-  Builder.word32LE crc <> Builder.word32LE size <> Builder.word32LE size <>
-  Builder.word16LE (fromIntegral $ BS.length name) <> Builder.word16LE 0 <>
-  Builder.byteString name <> Builder.byteString bytes
-
-centralRecord :: Word32 -> BS.ByteString -> Word32 -> Word32 -> Builder.Builder
-centralRecord offset name size crc =
-  Builder.word32LE 0x02014b50 <> Builder.word16LE 20 <> Builder.word16LE 20 <>
-  Builder.word16LE 0x0800 <> Builder.word16LE 0 <> Builder.word16LE 0 <> Builder.word16LE 0 <>
-  Builder.word32LE crc <> Builder.word32LE size <> Builder.word32LE size <>
-  Builder.word16LE (fromIntegral $ BS.length name) <> Builder.word16LE 0 <>
-  Builder.word16LE 0 <> Builder.word16LE 0 <> Builder.word16LE 0 <>
-  Builder.word32LE 0 <> Builder.word32LE offset <> Builder.byteString name
-
-endRecord :: Word16 -> Word32 -> Word32 -> Builder.Builder
-endRecord count size offset =
-  Builder.word32LE 0x06054b50 <> Builder.word16LE 0 <> Builder.word16LE 0 <>
-  Builder.word16LE count <> Builder.word16LE count <> Builder.word32LE size <>
-  Builder.word32LE offset <> Builder.word16LE 0

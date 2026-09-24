@@ -24,8 +24,8 @@ import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMis
                          removeFile, removePathForcibly, renameFile)
 import System.Exit (ExitCode(..))
 import System.Environment (getEnvironment, getExecutablePath)
-import System.FilePath ((</>), isAbsolute, makeRelative, takeDirectory, takeExtension,
-                        takeFileName, joinPath, replaceExtension)
+import System.FilePath ((</>), isAbsolute, makeRelative, normalise, splitDirectories,
+                        takeDirectory, takeExtension, takeFileName, joinPath, replaceExtension)
 import System.IO (SeekMode(AbsoluteSeek), hClose, openTempFile, stderr)
 import qualified System.Posix.IO as Posix
 import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, waitForProcess)
@@ -49,7 +49,6 @@ data Component = Component
   , componentCompiler :: FilePath
   , componentArguments :: [String]
   , componentSources :: [(String, FilePath)]
-  , componentBuildInfo :: FilePath
   }
 
 data Bundle = Bundle { bundlePath :: FilePath, bundleHash :: String
@@ -210,30 +209,43 @@ dependencyClosure units target = snd <$> visit Set.empty Set.empty target
 exportUnit :: ExportContext -> Map.Map String String -> Unit -> IO Bundle
 exportUnit context keys unit = do
   component <- readComponent unit (contextCompiler context)
-  buildInfo <- readJson (componentBuildInfo component)
   dist <- field (unitValue unit) "dist-dir"
-  products <- sort . filter nativeProduct <$> recursiveFiles dist
+  let productFlags = ["-odir", "-hidir", "-hiedir", "-stubdir", "-outputdir"]
+      productRoots = nub [path | (flag, path) <- zip (componentArguments component)
+                                                   (drop 1 (componentArguments component)),
+                                 flag `elem` productFlags]
+  require (not (null productRoots) && all (within dist) productRoots)
+    ("Cabal build-info lacks component-scoped native output roots for " ++ unitId unit)
+  products <- sort . nub . filter nativeProduct . concat <$> mapM recursiveFiles productRoots
   require (not (null products)) ("native Cabal build has no Haskell artifacts for " ++ unitId unit)
-  sourceInputs <- forM (componentSources component) $ \(name, path) -> do
-    digest <- digestFile path
-    pure (name, digest)
   nativeInputs <- forM products $ \path -> do
     digest <- digestFile path
     pure (makeRelative (contextNative context) path, digest)
   let dependencies = [(identifier, Map.findWithDefault identifier identifier keys)
                      | identifier <- unitDepends unit]
       normalized = normalizePaths (contextNative context)
-      buildKey = shaHex (BL.toStrict (encode
-        ("thc-core-build-v1" :: String, contextCompiler context, contextAbi context,
-         contextPlatform context, unitId unit, dependencies,
-         normalized (unitValue unit), normalized buildInfo,
-         map (replacePath (contextNative context)) (componentArguments component),
-         sourceInputs, nativeInputs)))
+      inputFields = ["format" .= ("thc-core-build-inputs" :: String), "schema" .= (1 :: Int),
+                     "unit" .= unitId unit,
+                     "compiler" .= object ["id" .= contextCompiler context,
+                                           "abi" .= contextAbi context,
+                                           "platform" .= contextPlatform context],
+                     "component" .= normalized (componentValue component),
+                     "nativeArtifacts" .= [object ["path" .= path, "sha256" .= digest]
+                                           | (path, digest) <- nativeInputs],
+                     "dependencies" .= [object ["id" .= identifier, "buildKey" .= identity]
+                                        | (identifier, identity) <- dependencies]]
+      buildKey = shaHex (BL.toStrict (encode (object inputFields)))
   pluginHash <- digestFile (contextPluginLibrary context)
-  let exportKey = shaHex (BL.toStrict (encode
-        ("thc-core-export-v1" :: String, buildKey, pluginHash,
-         contextPluginUnit context, contextPluginDb context, contextDriverHash context,
-         ["post-tidy", "unit-qualified", "source-notes", "-g", "-dynamic", "-dcore-lint"] :: [String])))
+  let exporter = object ["pluginUnit" .= contextPluginUnit context,
+                         "pluginDb" .= contextPluginDb context,
+                         "pluginHash" .= pluginHash,
+                         "driverHash" .= contextDriverHash context,
+                         "options" .= (["post-tidy", "unit-qualified", "source-notes",
+                                         "-g", "-dynamic", "-dcore-lint"] :: [String])]
+      exportKey = shaHex (BL.toStrict (encode ("thc-core-export-v1" :: String, buildKey, exporter)))
+      buildInputs = object (inputFields ++ ["buildKey" .= buildKey,
+                                           "exportKey" .= exportKey,
+                                           "exporter" .= exporter])
       directory = contextCache context </> "core-bundles/v1" </>
                   (contextCompiler context ++ "-" ++ contextAbi context ++ "-" ++ contextPlatform context) </> exportKey
       destination = directory </> (unitId unit ++ "-" ++ buildKey ++ ".zip")
@@ -241,17 +253,17 @@ exportUnit context keys unit = do
   createDirectoryIfMissing True directory
   withLock (destination ++ ".lock") $ do
     cached <- doesFileExist destination
-    hit <- if cached then readBundle destination (unitId unit) buildKey exportKey expected
+    hit <- if cached then readBundle destination (unitId unit) buildKey exportKey buildInputs expected
            else pure Nothing
     case hit of
       Just bundle -> pure bundle
       Nothing -> do
         when cached (removeFile destination)
-        freshExport context component unit buildKey exportKey expected destination
+        freshExport context component unit buildKey exportKey buildInputs expected destination
 
-freshExport :: ExportContext -> Component -> Unit -> String -> String ->
+freshExport :: ExportContext -> Component -> Unit -> String -> String -> Value ->
                [String] -> FilePath -> IO Bundle
-freshExport context component unit buildKey exportKey expected destination = do
+freshExport context component unit buildKey exportKey buildInputs expected destination = do
   let localRoot = contextOutput context </> "core/staging"
   createDirectoryIfMissing True localRoot
   (staging, handle) <- openTempFile localRoot "export-"
@@ -293,21 +305,31 @@ freshExport context component unit buildKey exportKey expected destination = do
         modules = [object ["name" .= name, "boundary" .= boundary,
                            "path" .= member, "sha256" .= shaHex bytes]
                   | ((name, bytes), (member, _)) <- zip sorted members]
+        inputsBytes = BL.toStrict (encode buildInputs)
         inner = object ["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
                         "unit" .= unitId unit, "buildKey" .= buildKey,
-                        "exportKey" .= exportKey, "modules" .= modules]
-    archive <- either fail pure (encodeZip (("manifest.json", BL.toStrict (encode inner)) : members))
+                        "exportKey" .= exportKey, "modules" .= modules,
+                        "buildInputs" .= object ["path" .= ("inplace-manifest.json" :: String),
+                                                 "sha256" .= shaHex inputsBytes]]
+    archive <- either fail pure (encodeZip
+      (("manifest.json", BL.toStrict (encode inner)) : ("inplace-manifest.json", inputsBytes) : members))
     atomicBytes destination (BL.toStrict archive)
     pure (Bundle destination (shaHex (BL.toStrict archive)) modules buildKey)) `finally` cleanup
 
-readBundle :: FilePath -> String -> String -> String -> [String] -> IO (Maybe Bundle)
-readBundle path unit buildKey exportKey expected = do
+readBundle :: FilePath -> String -> String -> String -> Value -> [String] -> IO (Maybe Bundle)
+readBundle path unit buildKey exportKey buildInputs expected = do
   bytes <- BS.readFile path
+  decoded <- decodeZip bytes
   pure $ do
-    entries <- either (const Nothing) Just (decodeZip bytes)
+    entries <- either (const Nothing) Just decoded
     raw <- lookup "manifest.json" entries
     inner <- either (const Nothing) Just (eitherDecodeStrict' raw)
     modules <- jsonField inner "modules" :: Maybe [Value]
+    inputRef <- jsonField inner "buildInputs" :: Maybe Value
+    inputPath <- jsonField inputRef "path" :: Maybe String
+    inputHash <- jsonField inputRef "sha256" :: Maybe String
+    inputBytes <- lookup inputPath entries
+    storedInputs <- either (const Nothing) Just (eitherDecodeStrict' inputBytes)
     let names = [name | Just name <- map (`jsonField` "name") modules]
         paths = [member | Just member <- map (`jsonField` "path") modules]
         validModule item = do
@@ -327,9 +349,11 @@ readBundle path unit buildKey exportKey expected = do
         jsonField inner "unit" == Just unit &&
         jsonField inner "buildKey" == Just buildKey &&
         jsonField inner "exportKey" == Just exportKey &&
+        inputPath == "inplace-manifest.json" && shaHex inputBytes == inputHash &&
+        storedInputs == buildInputs &&
         length names == length modules && length paths == length modules &&
         length names == length (nub names) && sort names == expected &&
-        sort (map fst entries) == sort ("manifest.json" : paths) &&
+        sort (map fst entries) == sort ("manifest.json" : inputPath : paths) &&
         all (== Just True) (map validModule modules))
       then Just (Bundle path (shaHex bytes) modules buildKey)
       else Nothing
@@ -355,9 +379,6 @@ normalizePaths build value = case value of
   Array values -> Array (fmap (normalizePaths build) values)
   Object fields -> Object (fmap (normalizePaths build) fields)
   other -> other
-
-replacePath :: FilePath -> String -> String
-replacePath build = Text.unpack . Text.replace (Text.pack build) "<native-build>" . Text.pack
 
 expectedModuleNames :: Value -> IO [String]
 expectedModuleNames component = do
@@ -391,7 +412,7 @@ readComponent unit compilerId = do
   require (hasPair "-this-unit-id" (unitId unit) arguments)
     ("compiler arguments have wrong unit ID for " ++ unitId unit)
   sources <- sourcePaths value arguments
-  pure (Component value compilerPath arguments sources location)
+  pure (Component value compilerPath arguments sources)
 
 sourcePaths :: Value -> [String] -> IO [(String, FilePath)]
 sourcePaths component arguments = do
@@ -422,6 +443,11 @@ uniqueSource name candidates = do
 
 nativeProduct :: FilePath -> Bool
 nativeProduct path = any (`isSuffixOf` path) [".o", ".hi", ".hie", ".dyn_o", ".dyn_hi"]
+
+within :: FilePath -> FilePath -> Bool
+within root path = isAbsolute path && not (isAbsolute relative) &&
+  all (/= "..") (splitDirectories relative)
+  where relative = makeRelative (normalise root) (normalise path)
 
 recursiveFiles :: FilePath -> IO [FilePath]
 recursiveFiles root = do
