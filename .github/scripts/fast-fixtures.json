@@ -1,6 +1,13 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.BytecodeTypedTupleInputTest",
+    "thc.runtime.DoubleArrayTest",
+    "thc.runtime.DoubleVectorMemoryProofTest",
+    "thc.runtime.DoubleVectorStorageTest",
+    "thc.runtime.FloatArrayTest",
+    "thc.runtime.FloatVectorMemoryProofTest",
+    "thc.runtime.FloatVectorStorageTest",
     "thc.runtime.CoreTouchTest",
     "thc.runtime.MutableByteArrayContentsTest",
     "thc.runtime.CallMaskSegmentsTest",
@@ -18,13 +25,80 @@
       "junit": ["thc.runtime.FusedFloatingTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "fused-floating"]}],
       "outputs": ["build/fused-floating"],
-      "sources": ["test/haskell-fixtures/FusedFloatingFixtures.hs", "compiler/test-fixtures/FloatingAudit.hs", "compiler/test-fixtures/FloatingAuditNative.hs"]
+      "sources": ["test/haskell-fixtures/FusedFloatingFixtures.hs", "test/haskell-fixtures/Main.hs", "compiler/test-fixtures/FloatingAudit.hs", "compiler/test-fixtures/FloatingAuditNative.hs"]
     },
     "word-floating": {
       "junit": ["thc.runtime.WordFloatingTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "word-floating"]}],
       "outputs": ["build/word-floating"],
-      "sources": ["test/haskell-fixtures/WordFloatingFixtures.hs", "compiler/test-fixtures/WordFloatingAudit.hs", "compiler/test-fixtures/WordFloatingNative.hs"]
+      "sources": ["test/haskell-fixtures/WordFloatingFixtures.hs", "test/haskell-fixtures/Main.hs", "compiler/test-fixtures/WordFloatingAudit.hs", "compiler/test-fixtures/WordFloatingNative.hs"]
+    },
+    "floating-tuples": {
+      "junit": ["thc.runtime.FloatingTupleTest"],
+      "commands": [{"argv": ["python3", "scripts/prepare-floating-tuples.py"]}],
+      "outputs": ["build/floating-tuple"],
+      "sources": ["scripts/prepare-floating-tuples.py", "compiler/test-fixtures/FloatingTupleAudit.hs", "compiler/test-fixtures/FloatingTupleAuditNative.hs"]
+    },
+    "sqrt": {
+      "junit": ["thc.runtime.SqrtPrimitiveTest"],
+      "commands": [{"argv": ["python3", "scripts/prepare-sqrt-audit.py"]}],
+      "outputs": ["build/sqrt"],
+      "sources": ["scripts/prepare-sqrt-audit.py", "compiler/test-fixtures/SqrtAudit.hs", "compiler/test-fixtures/SqrtAuditNative.hs"]
+    },
+    "scalar-bitcasts": {
+      "junit": ["thc.runtime.ScalarBitCastTest"],
+      "commands": [{"argv": ["python3", "scripts/prepare-scalar-bitcasts.py"]}],
+      "outputs": ["build/scalar-bitcasts"],
+      "sources": ["scripts/prepare-scalar-bitcasts.py", "scripts/scalar_bitcast_model.py", "scripts/test-scalar-bitcasts.py", "compiler/test-fixtures/ScalarBitCastAudit.hs"]
+    },
+    "sum-results": {
+      "junit": ["thc.SumLayoutMetadataTest", "thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"],
+      "commands": [
+        {"argv": ["sh", "scripts/prepare-aggregate-frontier.sh"]},
+        {"argv": ["python3", "scripts/check-sum-layout.py", "--prepare"]},
+        {"argv": ["python3", "scripts/prepare-sum-result-audit.py"]}
+      ],
+      "outputs": ["build/aggregate-core", "build/aggregate-post-core", "build/aggregate-native", "build/aggregate-frontier.json", "build/aggregate-layout", "build/sum-layout", "build/sum-result"],
+      "sources": [
+        "scripts/prepare-aggregate-frontier.sh",
+        "scripts/check-aggregate-frontier.py",
+        "scripts/check-aggregate-layout.py",
+        "scripts/check-sum-layout.py",
+        "scripts/sum_layout_model.py",
+        "scripts/test-sum-layout.py",
+        "scripts/prepare-sum-result-audit.py",
+        "compiler/test-fixtures/AggregateFrontier.hs",
+        "compiler/test-fixtures/AggregateFrontierNative.hs",
+        "compiler/test-fixtures/AggregateLayoutAudit.hs",
+        "compiler/test-fixtures/SumLayoutAudit.hs",
+        "compiler/test-fixtures/SumLayoutAuditNative.hs",
+        "compiler/test-fixtures/SumResultAudit.hs",
+        "compiler/test-fixtures/SumResultAuditNative.hs"
+      ]
+    },
+    "simd-floatx4": {
+      "junit": ["thc.runtime.SimdFloatVectorTest"],
+      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) python3 scripts/prepare-floatx4-audit.py --export-only ;; *) python3 scripts/prepare-floatx4-audit.py ;; esac"]}],
+      "outputs": ["build/simd-floatx4"],
+      "sources": ["scripts/prepare-floatx4-audit.py", "scripts/test-floatx4-model.py", "compiler/test-fixtures/SimdFloatX4.hs", "compiler/test-fixtures/SimdFloatX4Native.hs"]
+    },
+    "simd-doublex2": {
+      "junit": ["thc.runtime.SimdDoubleVectorTest"],
+      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) python3 scripts/prepare-doublex2-audit.py --export-only ;; *) python3 scripts/prepare-doublex2-audit.py ;; esac"]}],
+      "outputs": ["build/simd-doublex2"],
+      "sources": ["scripts/prepare-doublex2-audit.py", "scripts/doublex2_model.py", "scripts/test-doublex2-model.py", "compiler/test-fixtures/SimdDoubleX2.hs", "compiler/test-fixtures/SimdDoubleX2Native.hs"]
+    },
+    "simd-floatx4-bytearray": {
+      "junit": ["thc.runtime.SimdFloatByteArrayTest"],
+      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) python3 scripts/prepare-floatx4-bytearray-audit.py --export-only ;; *) python3 scripts/prepare-floatx4-bytearray-audit.py ;; esac"]}],
+      "outputs": ["build/simd-floatx4-bytearray"],
+      "sources": ["scripts/prepare-floatx4-bytearray-audit.py", "scripts/floatx4_bytearray_model.py", "scripts/test-floatx4-bytearray-model.py", "compiler/test-fixtures/SimdFloatX4ByteArray.hs", "compiler/test-fixtures/SimdFloatX4ByteArrayNative.hs"]
+    },
+    "simd-doublex2-bytearray": {
+      "junit": ["thc.runtime.SimdDoubleByteArrayTest"],
+      "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) python3 scripts/prepare-doublex2-bytearray-audit.py --export-only ;; *) python3 scripts/prepare-doublex2-bytearray-audit.py ;; esac"]}],
+      "outputs": ["build/simd-doublex2-bytearray"],
+      "sources": ["scripts/prepare-doublex2-bytearray-audit.py", "scripts/doublex2_bytearray_model.py", "scripts/test-doublex2-bytearray-model.py", "compiler/test-fixtures/SimdDoubleX2ByteArray.hs", "compiler/test-fixtures/SimdDoubleX2ByteArrayNative.hs"]
     },
     "floating-address": {
       "junit": ["thc.runtime.FloatingAddressTest"],

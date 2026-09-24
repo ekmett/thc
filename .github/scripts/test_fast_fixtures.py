@@ -8,6 +8,7 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -346,6 +347,124 @@ class FixturePreparationTest(unittest.TestCase):
                      "pre/core/FloatingAddressAudit.json", "post/core/FloatingAddressAudit.json"):
             self.assertIn("build/floating-address/" + name, fast_fixtures.FULL_REQUIRED)
         self.assertIn('"floating-address/*.tsv"', (project / "build.gradle.kts").read_text())
+
+    def test_floating_native_consumers_use_existing_complete_preparation_groups(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        # Reviewed generated inputs of the ten previously unowned consumers.
+        consumed = {
+            "thc.SumLayoutMetadataTest": ("sum-results", ["sum-layout"]),
+            "thc.runtime.SumProtocolTest": ("sum-results", ["sum-layout", "sum-result"]),
+            "thc.runtime.SumResultTest": ("sum-results", ["sum-layout", "sum-result", "aggregate-core",
+                                                       "aggregate-post-core", "aggregate-native"]),
+            "thc.runtime.FloatingTupleTest": ("floating-tuples", ["floating-tuple"]),
+            "thc.runtime.SqrtPrimitiveTest": ("sqrt", ["sqrt"]),
+            "thc.runtime.ScalarBitCastTest": ("scalar-bitcasts", ["scalar-bitcasts"]),
+            "thc.runtime.SimdFloatVectorTest": ("simd-floatx4", ["simd-floatx4"]),
+            "thc.runtime.SimdDoubleVectorTest": ("simd-doublex2", ["simd-doublex2"]),
+            "thc.runtime.SimdFloatByteArrayTest": ("simd-floatx4-bytearray", ["simd-floatx4-bytearray"]),
+            "thc.runtime.SimdDoubleByteArrayTest": ("simd-doublex2-bytearray", ["simd-doublex2-bytearray"]),
+        }
+        full = " ".join((project / "scripts/prepare-tests.sh").read_text().split())
+        for junit, (group_id, roots) in consumed.items():
+            with self.subTest(junit=junit):
+                self.assertEqual(group_id, owners[junit])
+                group = manifest["groups"][group_id]
+                source = (project / ("src/test/kotlin/" + junit.replace(".", "/") + ".kt")).read_text()
+                for root in roots:
+                    self.assertTrue('"build/' + root in source or '"' + root + '"' in source, root)
+                    self.assertIn("build/" + root, group["outputs"])
+                self.assertTrue(all((project / name).is_file() for name in group["sources"]))
+                for command in group["commands"]:
+                    argv = command["argv"]
+                    self.assertIn(" ".join((argv[2] if argv[:2] == ["sh", "-c"] else " ".join(argv)).split()), full)
+        # The aggregate producer also runs the recursive-layout rejection
+        # checks. Keep their inputs and outputs in the same receipt.
+        sums = manifest["groups"]["sum-results"]
+        self.assertIn("scripts/check-aggregate-layout.py", sums["sources"])
+        self.assertIn("compiler/test-fixtures/AggregateLayoutAudit.hs", sums["sources"])
+        self.assertIn("build/aggregate-layout", sums["outputs"])
+        self.assertIn("build/aggregate-frontier.json", sums["outputs"])
+
+    def test_floating_model_controls_are_explicitly_fixture_free(self):
+        project = Path(__file__).resolve().parents[2]
+        _, owners = fast_fixtures._manifest(project)
+        for name in ("BytecodeTypedTupleInputTest", "DoubleArrayTest", "DoubleVectorMemoryProofTest",
+                     "DoubleVectorStorageTest", "FloatArrayTest", "FloatVectorMemoryProofTest",
+                     "FloatVectorStorageTest"):
+            with self.subTest(name=name):
+                self.assertIn("thc.runtime." + name, owners)
+                self.assertIsNone(owners["thc.runtime." + name])
+                source = (project / "src/test/kotlin/thc/runtime" / (name + ".kt")).read_text()
+                self.assertNotIn('"build/', source)
+
+    def test_floating_simd_commands_preserve_full_preparation_platform_modes(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, _ = fast_fixtures._manifest(project)
+        for family in ("floatx4", "doublex2", "floatx4-bytearray", "doublex2-bytearray"):
+            command = manifest["groups"]["simd-" + family]["commands"][0]["argv"]
+            self.assertEqual(["sh", "-c"], command[:2])
+            for machine in ("x86_64", "arm64", "aarch64"):
+                with self.subTest(family=family, machine=machine):
+                    # Execute only shell dispatch: these functions replace both
+                    # external tools, never invoking a compiler or producer.
+                    prefix = 'uname() { printf "%s\\n" ' + machine + '; }; python3() { printf "%s\\n" "$@"; }; '
+                    actual = subprocess.check_output([*command[:2], prefix + command[2]], text=True).splitlines()
+                    self.assertEqual(["scripts/prepare-" + family + "-audit.py"] +
+                                     ([] if machine == "x86_64" else ["--export-only"]), actual)
+
+    def test_complete_floating_selection_prepares_and_reuses_without_full_fallback(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        policy = json.loads((project / ".github/scripts/fast-tests.json").read_text())
+        classes = policy["leafSources"]["src/main/kotlin/thc/runtime/FloatingPrimitives.kt"]["junit"]
+        expected = sorted({owners[name] for name in classes if owners[name] is not None})
+        self.assertEqual(25, len(classes))
+        self.manifest = {"schema": 1, "fixtureFreeJunit": manifest["fixtureFreeJunit"],
+                         "groups": {name: manifest["groups"][name] for name in expected}}
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        for group in self.manifest["groups"].values():
+            for name in group["sources"]:
+                path = self.root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes((project / name).read_bytes())
+        def run(name, argv, stdout=None):
+            self.calls.append((name, argv, stdout))
+            for group_id, group in self.manifest["groups"].items():
+                if not name.startswith("fixture-" + group_id + "-"):
+                    continue
+                for output in group["outputs"]:
+                    path = self.root / output
+                    if path.suffix != ".json":
+                        path /= "fixture.json"
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text("prepared fixture\n")
+        def prepare():
+            return fast_fixtures.prepare(self.root, self.selection(*classes), run, self.toolchain)
+        self.assertEqual({"mode": "selected", "rebuilt": expected, "reused": []}, prepare())
+        self.assertEqual(2 + sum(len(group["commands"]) for group in self.manifest["groups"].values()), len(self.calls))
+        self.calls.clear()
+        self.assertEqual({"mode": "selected", "rebuilt": [], "reused": expected}, prepare())
+        self.assertEqual([], self.calls)
+        # Real transitive model and native fixture changes invalidate the
+        # affected group only; unchanged inputs never rerun the full producer.
+        for group_id, source in (("sum-results", "scripts/sum_layout_model.py"),
+                                 ("floating-tuples", "compiler/test-fixtures/FloatingTupleAudit.hs")):
+            with self.subTest(source=source):
+                path = self.root / source
+                path.write_bytes(path.read_bytes() + b"\n# changed\n")
+                self.assertEqual([group_id], prepare()["rebuilt"])
+        for group_id in ("sum-results", "floating-tuples", "sqrt", "scalar-bitcasts", "simd-floatx4",
+                         "simd-doublex2", "simd-floatx4-bytearray", "simd-doublex2-bytearray"):
+            for change in ("bytes", "missing"):
+                with self.subTest(group=group_id, change=change):
+                    path = self.root / self.manifest["groups"][group_id]["outputs"][0] / "fixture.json"
+                    if change == "bytes":
+                        path.write_text("corrupt\n")
+                    else:
+                        path.unlink()
+                    self.assertEqual([group_id], prepare()["rebuilt"])
+                    self.assertEqual([], prepare()["rebuilt"])
 
     def test_original_stack_has_portable_focused_and_full_preparation(self):
         project = Path(__file__).resolve().parents[2]

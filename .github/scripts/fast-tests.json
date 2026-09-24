@@ -672,6 +672,8 @@
     "test/haskell-fixtures/Main.hs": {
       "junit": [
         "thc.runtime.FloatingAddressTest",
+        "thc.runtime.FusedFloatingTest",
+        "thc.runtime.WordFloatingTest",
         "thc.runtime.OriginalStackFormatterTest",
         "thc.runtime.CoreContinuationNativeTest",
         "thc.runtime.SmallArrayTest",
@@ -695,6 +697,14 @@
     },
     "test/haskell-fixtures/ContinuationFixtures.hs": {
       "junit": ["thc.runtime.CoreContinuationNativeTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/FusedFloatingFixtures.hs": {
+      "junit": ["thc.runtime.FusedFloatingTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/WordFloatingFixtures.hs": {
+      "junit": ["thc.runtime.WordFloatingTest"],
       "python": []
     },
     "test/haskell-fixtures/WideCharAddressFixtures.hs": {
