@@ -115,6 +115,8 @@ jobs:
             --runtime "$PWD/build/install/thc/bin/thc" \
             --thc-root "$PWD" \
             --scratch "$PWD/build/run-integration"
+      - name: Check registered cross-package Core on both compiled backends
+        run: python3 scripts/test-core-package-link.py
       - name: Preserve default test results
         if: always()
         shell: bash
@@ -226,6 +228,24 @@ jobs:
           python3 scripts/test-resize-bytearrays.py
           python3 scripts/test-mutable-bytearray-size.py
           python3 scripts/test-primop-coverage.py
+      - name: Check merged fixture and runtime recipes with and without assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          for test in \
+            scripts/test-build-cbits.py \
+            scripts/test-core-managed-memory.py \
+            scripts/test-core-md5-foreign.py \
+            scripts/test-core-package-manifest.py \
+            scripts/test-managed-mvar-fixtures.py \
+            scripts/test-managed-mvars.py \
+            scripts/test-pinned-addresses.py \
+            scripts/test-prepare-managed-md5.py \
+            scripts/test-putstrln-export.py \
+            scripts/test-synchronous-exception-fixtures.py; do
+            python3 "$test"
+            python3 -O "$test"
+          done
       - name: Check benchmark power provenance
         run: python3 tools/test-compare-map-runtimes.py
       - name: Prepare fresh Map source and native oracle
