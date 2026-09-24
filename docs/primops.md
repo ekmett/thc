@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 286 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 896 | No declared lowering. |
+| Partial | 292 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 890 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -409,9 +409,11 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexCharOffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `indexDoubleArray#` — arity 2 — Managed byte storage
 - [ ] `indexDoubleArrayAsDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `indexDoubleOffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `indexDoubleX2Array#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `indexFloatArray#` — arity 2 — Managed byte storage
 - [ ] `indexFloatArrayAsFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `indexFloatOffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `indexFloatX4Array#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `indexInt16Array#` — arity 2 — Managed byte storage
 - [ ] `indexInt16OffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
@@ -522,9 +524,11 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readCharOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readDoubleArray#` — arity 3 — Managed byte storage
 - [ ] `readDoubleArrayAsDoubleX2#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `readDoubleOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readDoubleX2Array#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readFloatArray#` — arity 3 — Managed byte storage
 - [ ] `readFloatArrayAsFloatX4#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `readFloatOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readFloatX4Array#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readInt16Array#` — arity 3 — Managed byte storage
 - [ ] `readInt16OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
@@ -614,9 +618,11 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeCharOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeDoubleArray#` — arity 4 — Managed byte storage
 - [ ] `writeDoubleArrayAsDoubleX2#` — arity 4 — Specialized lowering; see capability and coverage limits
+- [ ] `writeDoubleOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeDoubleX2Array#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeFloatArray#` — arity 4 — Managed byte storage
 - [ ] `writeFloatArrayAsFloatX4#` — arity 4 — Specialized lowering; see capability and coverage limits
+- [ ] `writeFloatOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeFloatX4Array#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeInt16Array#` — arity 4 — Managed byte storage
 - [ ] `writeInt16OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
@@ -774,7 +780,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `getSpark#` — arity 1
 - [ ] `indexDoubleArrayAsDoubleX4#` — arity 2
 - [ ] `indexDoubleArrayAsDoubleX8#` — arity 2
-- [ ] `indexDoubleOffAddr#` — arity 2
 - [ ] `indexDoubleOffAddrAsDoubleX2#` — arity 2
 - [ ] `indexDoubleOffAddrAsDoubleX4#` — arity 2
 - [ ] `indexDoubleOffAddrAsDoubleX8#` — arity 2
@@ -785,7 +790,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexDoubleX8OffAddr#` — arity 2
 - [ ] `indexFloatArrayAsFloatX16#` — arity 2
 - [ ] `indexFloatArrayAsFloatX8#` — arity 2
-- [ ] `indexFloatOffAddr#` — arity 2
 - [ ] `indexFloatOffAddrAsFloatX16#` — arity 2
 - [ ] `indexFloatOffAddrAsFloatX4#` — arity 2
 - [ ] `indexFloatOffAddrAsFloatX8#` — arity 2
@@ -1141,7 +1145,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `raiseUnderflow#` — arity 1
 - [ ] `readDoubleArrayAsDoubleX4#` — arity 3
 - [ ] `readDoubleArrayAsDoubleX8#` — arity 3
-- [ ] `readDoubleOffAddr#` — arity 3
 - [ ] `readDoubleOffAddrAsDoubleX2#` — arity 3
 - [ ] `readDoubleOffAddrAsDoubleX4#` — arity 3
 - [ ] `readDoubleOffAddrAsDoubleX8#` — arity 3
@@ -1152,7 +1155,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readDoubleX8OffAddr#` — arity 3
 - [ ] `readFloatArrayAsFloatX16#` — arity 3
 - [ ] `readFloatArrayAsFloatX8#` — arity 3
-- [ ] `readFloatOffAddr#` — arity 3
 - [ ] `readFloatOffAddrAsFloatX16#` — arity 3
 - [ ] `readFloatOffAddrAsFloatX4#` — arity 3
 - [ ] `readFloatOffAddrAsFloatX8#` — arity 3
@@ -1398,7 +1400,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `whereFrom#` — arity 3
 - [ ] `writeDoubleArrayAsDoubleX4#` — arity 4
 - [ ] `writeDoubleArrayAsDoubleX8#` — arity 4
-- [ ] `writeDoubleOffAddr#` — arity 4
 - [ ] `writeDoubleOffAddrAsDoubleX2#` — arity 4
 - [ ] `writeDoubleOffAddrAsDoubleX4#` — arity 4
 - [ ] `writeDoubleOffAddrAsDoubleX8#` — arity 4
@@ -1409,7 +1410,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeDoubleX8OffAddr#` — arity 4
 - [ ] `writeFloatArrayAsFloatX16#` — arity 4
 - [ ] `writeFloatArrayAsFloatX8#` — arity 4
-- [ ] `writeFloatOffAddr#` — arity 4
 - [ ] `writeFloatOffAddrAsFloatX16#` — arity 4
 - [ ] `writeFloatOffAddrAsFloatX4#` — arity 4
 - [ ] `writeFloatOffAddrAsFloatX8#` — arity 4

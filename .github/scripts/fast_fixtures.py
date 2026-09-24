@@ -23,11 +23,11 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "1e5aa0c689c6dbf8327afce889aa93ba9e18d74afb373ea4262e7618e651c930"
+FULL_PREPARATION_PLAN = "53484092ed4fab478f5f3604de7716032629c05178db2aa26fff9cd348634444"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
-    "build/original-stdio", "build/core-continuation", "build/small-arrays",
+    "build/original-stdio", "build/core-continuation", "build/small-arrays", "build/floating-address",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/addr-identity/oracle.txt", "build/addr-identity/pre.audit.json", "build/addr-identity/post.audit.json",
@@ -43,6 +43,10 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/pinned-pointer-cells/post/audit.json",
     "build/pinned-pointer-cells/pre/core/PinnedPointerCellsAudit.json",
     "build/pinned-pointer-cells/post/core/PinnedPointerCellsAudit.json",
+    "build/floating-address/manifest.json", "build/floating-address/oracle.tsv",
+    "build/floating-address/pre/audit.json", "build/floating-address/post/audit.json",
+    "build/floating-address/pre/core/FloatingAddressAudit.json",
+    "build/floating-address/post/core/FloatingAddressAudit.json",
     "build/managed-address-reads/manifest.json",
     "build/original-stdio/manifest.json",
     "build/small-arrays/manifest.json",

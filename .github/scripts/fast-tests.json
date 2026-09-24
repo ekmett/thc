@@ -12,6 +12,10 @@
     ]
   },
   "leafSources": {
+    "src/main/kotlin/thc/runtime/FloatingAddresses.kt": {
+      "junit": ["thc.runtime.FloatingAddressTest"],
+      "python": []
+    },
     "src/main/kotlin/thc/runtime/ManagedSmallArrays.kt": {
       "junit": ["thc.runtime.SmallArrayTest"],
       "python": []
@@ -28,6 +32,7 @@
     },
     "src/main/kotlin/thc/runtime/RawBitCasts.kt": {
       "junit": [
+        "thc.runtime.FloatingAddressTest",
         "thc.runtime.FusedFloatingTest",
         "thc.runtime.WordFloatingTest",
         "thc.SumLayoutMetadataTest",
@@ -257,6 +262,18 @@
     },
     "compiler/test-fixtures/PinnedPointerCellsAudit.hs": {
       "junit": ["thc.runtime.PinnedPointerCellsTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/FloatingAddressAudit.hs": {
+      "junit": ["thc.runtime.FloatingAddressTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/FloatingAddressNative.hs": {
+      "junit": ["thc.runtime.FloatingAddressTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/FloatingAddressFixtures.hs": {
+      "junit": ["thc.runtime.FloatingAddressTest"],
       "python": []
     },
     "compiler/test-fixtures/PinnedPointerCellsNative.hs": {
@@ -654,6 +671,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.FloatingAddressTest",
         "thc.runtime.OriginalStackFormatterTest",
         "thc.runtime.CoreContinuationNativeTest",
         "thc.runtime.SmallArrayTest",
