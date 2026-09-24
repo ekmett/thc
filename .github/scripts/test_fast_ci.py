@@ -72,9 +72,13 @@ class FastRunnerTest(unittest.TestCase):
         narrow = ci.gradle_command(self.selection())
         self.assertIn("--build-cache", narrow)
         self.assertIn("--rerun", narrow)
+        self.assertIn(".github/scripts/fast_ci.init.gradle", narrow)
         self.assertNotIn("--rerun-tasks", narrow)
         self.assertEqual(narrow[-2:], ["--tests", "example.Test"])
         self.assertNotIn("--tests", ci.gradle_command(self.selection("full")))
+        init = Path(__file__).with_name("fast_ci.init.gradle").read_text()
+        self.assertIn("tasks.withType(org.gradle.api.tasks.testing.Test)", init)
+        self.assertIn("outputs.doNotCacheIf", init)
 
     def test_nonrunnable_or_method_only_selection_rejected(self):
         selection = self.selection()
