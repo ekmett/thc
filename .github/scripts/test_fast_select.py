@@ -687,6 +687,24 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                              "scripts/test-sum-layout.py", "scripts/test-tuple-inputs.py",
                              "scripts/test-doublex2-bytearray-model.py", "scripts/test-floatx4-bytearray-model.py"},
                             set(floating["python"]))
+        fixtures = json.loads(Path(__file__).with_name("fast-fixtures.json").read_text())
+        prepared = {name for group in fixtures["groups"].values() for name in group["junit"]}
+        self.assertLessEqual(set(floating["junit"]), prepared | set(fixtures["fixtureFreeJunit"]))
+
+    def test_floating_haskell_producers_and_main_keep_their_consumers(self):
+        owners = self.policy["owners"]
+        for producer, consumer in (("FusedFloatingFixtures", "FusedFloatingTest"),
+                                   ("WordFloatingFixtures", "WordFloatingTest")):
+            with self.subTest(producer=producer):
+                junit = "thc.runtime." + consumer
+                self.assertEqual({junit}, set(owners["test/haskell-fixtures/" + producer + ".hs"]["junit"]))
+                self.assertIn(junit, owners["test/haskell-fixtures/Main.hs"]["junit"])
+        # FMA shares these real native/exported fixtures with the earlier
+        # floating suite; adding its producer must not replace their owners.
+        for fixture in ("FloatingAudit", "FloatingAuditNative"):
+            self.assertEqual({"thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest",
+                              "thc.runtime.FusedFloatingTest"},
+                             set(owners["compiler/test-fixtures/" + fixture + ".hs"]["junit"]))
 
     def test_grouped_vectors_keep_the_union_of_all_former_family_consumers(self):
         expected = {
