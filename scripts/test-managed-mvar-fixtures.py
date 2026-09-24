@@ -218,7 +218,7 @@ class PreparationReuseTests(unittest.TestCase):
 
     def test_normal_reuse_and_check_only_do_not_run_commands(self):
         self.build.mkdir(parents=True)
-        for options in ([], ['--check-only']):
+        for options in ([], ['--check-only'], ['--refresh']):
             argv = ['prepare-managed-mvars.py', '--out', str(self.build), *options]
             with patch.object(recipe, 'ROOT', self.root), patch.object(recipe.sys, 'argv', argv), \
                     patch.object(recipe, 'check_prepared', return_value={'nativeRows': 845}) as check, \
@@ -226,6 +226,32 @@ class PreparationReuseTests(unittest.TestCase):
                     redirect_stdout(io.StringIO()):
                 recipe.main()
                 check.assert_called_once_with(self.build)
+
+    def test_refresh_rebuilds_stale_generated_output(self):
+        self.build.mkdir(parents=True)
+        stale = self.build / 'old-manifest.json'
+        stale.write_text('obsolete fixture')
+        argv = ['prepare-managed-mvars.py', '--out', str(self.build), '--refresh']
+        with patch.object(recipe, 'ROOT', self.root), patch.object(recipe.sys, 'argv', argv), \
+                patch.object(recipe, 'check_prepared', side_effect=ValueError('stale')), \
+                patch.object(recipe.subprocess, 'run', side_effect=RuntimeError('rebuild reached')) as run:
+            with self.assertRaisesRegex(RuntimeError, 'rebuild reached'):
+                recipe.main()
+            run.assert_called_once()
+        self.assertFalse(stale.exists())
+        self.assertTrue(self.build.is_dir())
+
+    def test_refresh_does_not_remove_output_outside_generated_build_tree(self):
+        output = self.root / 'saved-evidence'
+        output.mkdir()
+        sentinel = output / 'keep.txt'
+        sentinel.write_text('keep')
+        argv = ['prepare-managed-mvars.py', '--out', str(output), '--refresh']
+        with patch.object(recipe, 'ROOT', self.root), patch.object(recipe.sys, 'argv', argv), \
+                patch.object(recipe, 'check_prepared', side_effect=ValueError('stale')):
+            with self.assertRaisesRegex(ValueError, 'below build/'):
+                recipe.main()
+        self.assertEqual(sentinel.read_text(), 'keep')
 
 
 if __name__ == '__main__':

@@ -83,6 +83,10 @@ python3 scripts/test-managed-mvar-fixtures.py
 JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test --tests 'thc.runtime.ManagedMVar*' --rerun
 ```
 
+Use `--refresh` to rebuild stale generated output under `build/`. CI uses this
+option when source changes invalidate an existing fixture. Valid output is
+still reused; `--check-only` never changes it.
+
 The manifest records source/generated-artifact hashes and native/audit results;
 installed GHC files are not hashed. No performance claim is made for locking or
 allocation in this slice.

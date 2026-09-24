@@ -43,7 +43,7 @@ python3 scripts/prepare-array-slices.py
 python3 scripts/prepare-address-fields.py
 python3 scripts/prepare-data-to-tag.py
 python3 scripts/prepare-mutvar.py
-python3 scripts/prepare-managed-mvars.py
+python3 scripts/prepare-managed-mvars.py --refresh
 python3 scripts/prepare-managed-md5.py
 python3 scripts/prepare-pinned-addresses.py
 python3 scripts/prepare-int-arrays.py
