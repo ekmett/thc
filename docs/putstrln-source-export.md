@@ -1,3 +1,4 @@
+<!-- SPDX-FileCopyrightText: 2026 Edward Kmett -->
 <!-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause -->
 # Ordinary `putStrLn`: source export and dependency inventory
 
@@ -19,18 +20,13 @@ Installed toolchain artifacts are neither modified nor hashed.
 Set `GHC_SOURCE` to the official source checkout. Put the pinned toolchain on
 `PATH`, or set `GHC` to its executable. The recipe selects sibling `ghc-pkg` and
 `hsc2hs` tools; explicit `GHC_PKG`/`HSC2HS` or CLI overrides must resolve to the
-same installation's bindir. Set `RESOURCE_RUN`
-to your host's shared `resource_run.py`; reserve this checkout's build directory
-for compiler work. The gate is a host resource policy, not a THC dependency.
-From the THC repository root:
+same installation's bindir. From the THC repository root:
 
 ```sh
-python3 "$RESOURCE_RUN" --build-dir "$PWD/build" -- \
-  python3 scripts/putstrln_hsc.py --ghc-source "$GHC_SOURCE"
-python3 "$RESOURCE_RUN" --build-dir "$PWD/build" -- \
-  python3 scripts/putstrln_export.py --ghc-source "$GHC_SOURCE" \
-    --generated-manifest build/putstrln-generated/provenance.json \
-    --rounds 8 --max-modules 30
+python3 scripts/putstrln_hsc.py --ghc-source "$GHC_SOURCE"
+python3 scripts/putstrln_export.py --ghc-source "$GHC_SOURCE" \
+  --generated-manifest build/putstrln-generated/provenance.json \
+  --rounds 8 --max-modules 30
 python3 scripts/putstrln_inventory.py build/putstrln-source-only
 python3 scripts/test-putstrln-export.py
 ```
