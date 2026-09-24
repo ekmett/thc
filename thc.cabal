@@ -49,6 +49,7 @@ extra-source-files:
   compiler/pinned-ghc-internal/GHC/Internal/Heap/Closures.hs
   compiler/pinned-ghc-internal/GHC/Internal/Heap/Constants.hsc
   compiler/pinned-ghc-internal/GHC/Internal/Heap/InfoTable.hsc
+  compiler/pinned-ghc-internal/GHC/Internal/Heap/InfoTable/Types.hsc
   compiler/pinned-ghc-internal/GHC/Internal/InfoProv/Types.hsc
   compiler/pinned-ghc-internal/GHC/Internal/IO.hs
   compiler/pinned-ghc-internal/GHC/Internal/IO.hs-boot
