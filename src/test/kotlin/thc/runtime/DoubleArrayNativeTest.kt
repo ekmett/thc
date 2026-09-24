@@ -65,7 +65,11 @@ class DoubleArrayNativeTest {
         assertEquals(0, state.arguments.depth); assertEquals(0, state.arguments.retainedReferences())
     }
     private fun model(name: String, seed: Long): Long {
-        if (name == "moveDoubleBits" || name == "indexDoubleBits") return seed
+        require(name in names)
+        if (name == "moveDoubleBits" || name == "indexDoubleBits") {
+            require(!signalingNaN(seed)) { "Signaling NaN movement is outside the evidence domain" }
+            return seed
+        }
         // Fixed-point quarters keep the public arithmetic independent of host FP.
         val x = (seed and 65535L) - 32768L
         val cells = LongArray(8) { x * 4 }
@@ -81,11 +85,76 @@ class DoubleArrayNativeTest {
         }
         return cells[0]*7 + cells[3]*11 + cells[7]*13
     }
+    private fun signalingNaN(bits: Long) = bits and 0x7ff0000000000000L == 0x7ff0000000000000L &&
+        bits and 0x000fffffffffffffL != 0L && bits and 0x0008000000000000L == 0L
+    private val magnitudes = listOf(0L, 1L, 2L, 3L, 0x000fffffffffffffL, 0x0010000000000000L,
+        0x3fefffffffffffffL, 0x3ff0000000000000L, 0x3ff0000000000001L, 0x7fefffffffffffffL,
+        0x7ff0000000000000L, 0x7ff8000000000000L, 0x7ff8000000001234L, 0x7fffffffffffffffL,
+        0x5555555555555555L, 0x55aa55aa55aa55aaL, 0x0123456789abcdefL)
+    private fun inputs(): List<Long> {
+        val values = (-16L..16L).toMutableSet()
+        values.addAll(listOf(Long.MIN_VALUE, Long.MIN_VALUE+1, Long.MAX_VALUE-1, Long.MAX_VALUE))
+        for (bit in 0..63) for (delta in -1L..1L) for (sign in listOf(-1L, 1L))
+            values.add(sign*((1L shl bit)+delta))
+        for (bits in magnitudes) for (sign in listOf(0L, Long.MIN_VALUE)) values.add(bits or sign)
+        for (bit in 0..50) for (sign in listOf(0L, Long.MIN_VALUE))
+            values.add(0x7ff8000000000000L or (1L shl bit) or sign)
+        return values.filterNot(::signalingNaN).sorted()
+    }
+    private fun expectedRows() = names.flatMap { name -> inputs().map { Triple(name, it, model(name, it)) } }
+    private fun verifyRows(text: String): List<Triple<String, Long, Long>> {
+        val lines = text.lineSequence().toList().let { if (it.lastOrNull() == "") it.dropLast(1) else it }
+        val rows = lines.map { line ->
+            val fields = line.split('\t')
+            require(fields.size == 3) { "Double oracle requires name/input/result" }
+            Triple(fields[0], fields[1].toLong(), fields[2].toLong())
+        }
+        require(rows == expectedRows()) { "Double oracle/model mismatch or incomplete, duplicate, reordered inputs" }
+        return rows
+    }
+    @Test fun independentModelsAndBinary64DomainAreExact() {
+        val values = inputs()
+        assertEquals(506, values.size); assertEquals(values.distinct().sorted(), values)
+        for (bits in magnitudes) for (sign in listOf(0L, Long.MIN_VALUE)) assertTrue((bits or sign) in values)
+        for (bit in 0..63) for (delta in -1L..1L) for (sign in listOf(-1L, 1L)) {
+            val bits = sign*((1L shl bit)+delta)
+            if (!signalingNaN(bits)) assertTrue(bits in values)
+        }
+        for (bit in 0..50) for (sign in listOf(0L, Long.MIN_VALUE))
+            assertTrue((0x7ff8000000000000L or (1L shl bit) or sign) in values)
+        for (raw in values + listOf(0L, 65535L, Long.MIN_VALUE, Long.MAX_VALUE)) {
+            val x = (raw and 65535)-32768
+            assertEquals(150*x+277, model("unboxedDoubleAccum", raw))
+            assertEquals(176*x+76, model("unboxedDoubleST", raw))
+            for (name in names.take(2)) assertTrue(kotlin.math.abs(model(name, raw)) < (1L shl 24))
+            assertFalse(signalingNaN(raw))
+            for (name in names.drop(2)) assertEquals(raw, model(name, raw))
+        }
+        for (raw in listOf(0x7ff0000000000001L, 0x7ff7ffffffffffffL, 0xfff0000000001234UL.toLong())) {
+            assertTrue(signalingNaN(raw))
+            for (name in names.drop(2)) assertThrows(IllegalArgumentException::class.java) { model(name, raw) }
+        }
+        assertThrows(IllegalArgumentException::class.java) { model("unknown", 0) }
+    }
+    @Test fun independentOracleRejectsCorruptOrIncompleteRows() {
+        val rows = expectedRows()
+        fun text(values: List<Triple<String, Long, Long>>) = values.joinToString("\n", postfix="\n") { "${it.first}\t${it.second}\t${it.third}" }
+        val valid = text(rows)
+        assertEquals(2024, rows.size); assertEquals(rows, verifyRows(valid))
+        val corrupt = listOf("", text(rows.drop(1)), text(rows+rows.first()), text(rows.asReversed()),
+            text(rows.toMutableList().apply { this[0] = this[1] }),
+            text(rows.toMutableList().apply { this[0] = this[0].copy(third=this[0].third+1) }),
+            text(rows.toMutableList().apply { this[0] = this[0].copy(first="unknown") }),
+            valid.replaceFirst("\t", " "), valid.replaceFirst("\t", "\textra\t"), valid+"\n",
+            "moveDoubleBits\t9223372036854775808\t0\n", "moveDoubleBits\tnan\t0\n")
+        for ((index, bad) in corrupt.withIndex()) assertThrows(IllegalArgumentException::class.java, { verifyRows(bad) }, "mutation $index")
+    }
     @Test fun nativePublicArraysAndBitMovementWithInlining() = native(true)
     @Test fun nativePublicArraysAndBitMovementAcrossResidualCalls() = native(false)
     private fun native(inlining: Boolean) {
         val manifest = manifest()
-        assertEquals(names.toSet(), (manifest["entries"] as List<String>).toSet())
+        assertEquals(names, manifest["entries"])
+        assertEquals(inputs(), manifest["inputs"])
         assertEquals(if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) "little" else "big", manifest["byteOrder"])
         assertEquals(64, (manifest["wordBits"] as Number).toInt())
         assertEquals(true, manifest["signalingNaNsExcluded"])
@@ -94,8 +163,9 @@ class DoubleArrayNativeTest {
                 .joinToString("") { "%02x".format(it.toInt() and 255) }
             assertEquals(expected, actual, "Stale Double-array fixture: $path; rerun prepare-double-arrays.py")
         }
-        val rows = File(root, "build/double-arrays/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
+        val rows = verifyRows(File(root, "build/double-arrays/oracle.tsv").readText()).groupBy { it.first }
         assertEquals(names.toSet(), rows.keys)
+        assertEquals(2024L, manifest["nativeRows"])
         assertEquals((manifest["nativeRows"] as Number).toInt(), rows.values.sumOf { it.size })
         val expectedCalls = mapOf("unboxedDoubleAccum" to 2L, "unboxedDoubleST" to 2L, "moveDoubleBits" to 3L, "indexDoubleBits" to 3L)
         assertEquals(expectedCalls, (manifest["expectedGuestCallsByEntry"] as Map<String, Number>).mapValues { it.value.toLong() })
@@ -104,9 +174,9 @@ class DoubleArrayNativeTest {
         for ((stage, paths) in stages) {
             val module = merged(paths)
             for (name in names) {
-                val cases = rows.getValue(name).map { it[1].toLong() to it[2].toLong() }
+                val cases = rows.getValue(name).map { it.second to it.third }
                 assertEquals(cases.size, cases.map { it.first }.toSet().size)
-                assertEquals((manifest["inputs"] as List<Number>).map { it.toLong() }.toSet(), cases.map { it.first }.toSet())
+                assertEquals(inputs(), cases.map { it.first })
                 for ((input, native) in cases) {
                     assertEquals(model(name, input), native, "Native $name($input)")
                     val exponent = input and 0x7ff0000000000000L

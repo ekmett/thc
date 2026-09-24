@@ -109,8 +109,12 @@ class FloatWordArrayNativeTest {
         assertEquals(0, state.results.depth); assertEquals(0, state.results.retainedReferences())
         assertEquals(0, state.arguments.depth); assertEquals(0, state.arguments.retainedReferences())
     }
-    private fun model(name: String, seed: Long): Long {
-        if (name == "moveFloatBits" || name == "indexFloatBits") return seed and 0xffff_ffffL
+    private fun model(name: String, seed: Long, byteOrder: ByteOrder = ByteOrder.nativeOrder()): Long {
+        require(name in names)
+        if (name == "moveFloatBits" || name == "indexFloatBits") {
+            require(!signalingNaN(seed)) { "Signaling NaN movement is outside the evidence domain" }
+            return seed and 0xffff_ffffL
+        }
         if (name.startsWith("unboxedFloat")) {
             // Integer fixed-point quarters: no host floating arithmetic in the model.
             val x = (seed and 65535L) - 32768L
@@ -144,7 +148,7 @@ class FloatWordArrayNativeTest {
         val bytes = LongArray(16) { offset ->
             val value = if (offset < 8) seed else seed xor 0x55aa55aa55aa55aaL
             val position = offset % 8
-            val shift = (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) position else 7-position)*8
+            val shift = (if (byteOrder == ByteOrder.LITTLE_ENDIAN) position else 7-position)*8
             (value ushr shift) and 255
         }
         bytes[7] = (seed+101) and 255
@@ -152,7 +156,7 @@ class FloatWordArrayNativeTest {
         fun element(offset: Int): java.math.BigInteger {
             var value = java.math.BigInteger.ZERO
             for (byte in 0..7) {
-                val shift = (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) byte else 7-byte)*8
+                val shift = (if (byteOrder == ByteOrder.LITTLE_ENDIAN) byte else 7-byte)*8
                 value = value.or(java.math.BigInteger.valueOf(bytes[offset+byte]).shiftLeft(shift))
             }
             return value
@@ -161,23 +165,134 @@ class FloatWordArrayNativeTest {
             17.toBigInteger()*word(bytes[0]) + 19.toBigInteger()*word(bytes[7]) +
             23.toBigInteger()*word(bytes[8]) + 29.toBigInteger()*word(bytes[15])).mod(modulus).toLong()
     }
+    private fun signalingNaN(bits: Long) = bits and 0x7f800000L == 0x7f800000L &&
+        bits and 0x007fffffL != 0L && bits and 0x00400000L == 0L
+    private fun wordInputs(): List<Long> {
+        val values = (-16L..16L).toMutableSet()
+        values.addAll(listOf(Long.MIN_VALUE, Long.MIN_VALUE+1, Long.MAX_VALUE-1, Long.MAX_VALUE))
+        for (bit in 0..63) for (delta in -1L..1L) for (sign in listOf(-1L, 1L))
+            values.add(sign*((1L shl bit)+delta))
+        values.addAll(listOf(0x5555555555555555UL, 0xaaaaaaaaaaaaaaaaUL, 0x55aa55aa55aa55aaUL,
+            0xaa55aa55aa55aa55UL, 0x0123456789abcdefUL, 0xfedcba9876543210UL, 0x8000000080000000UL,
+            0xffffffff00000000UL, 0x800000007fffffffUL, 0x7fffffff80000000UL, 0xffffffff7fffffffUL,
+            0x0000000100000001UL, 0x12345678abcdef01UL).map { it.toLong() })
+        return values.sorted()
+    }
+    private val magnitudes = listOf(0L, 1L, 2L, 3L, 0x007fffffL, 0x00800000L, 0x3f7fffffL,
+        0x3f800000L, 0x3f800001L, 0x7f7fffffL, 0x7f800000L, 0x7fc00000L, 0x7fc01234L, 0x7fffffffL)
+    private fun movementInputs(): List<Long> {
+        val values = wordInputs().toMutableSet()
+        val bits = magnitudes.flatMap { bits -> listOf(bits, bits or 0x80000000L) }.toMutableSet()
+        for (bit in 0..21) for (sign in listOf(0L, 0x80000000L)) bits.add(0x7fc00000L or (1L shl bit) or sign)
+        for (value in bits) for (upper in listOf(0L, 0x1234567800000000L, -0x100000000L)) values.add(value or upper)
+        return values.filterNot(::signalingNaN).sorted()
+    }
+    private fun inputsByEntry() = names.associateWith {
+        if (it in listOf("moveFloatBits", "indexFloatBits")) movementInputs() else wordInputs()
+    }
+    private fun expectedRows() = inputsByEntry().flatMap { (name, values) -> values.map { Triple(name, it, model(name, it)) } }
+    private fun verifyRows(text: String): List<Triple<String, Long, Long>> {
+        val lines = text.lineSequence().toList().let { if (it.lastOrNull() == "") it.dropLast(1) else it }
+        val rows = lines.map { line ->
+            val fields = line.split('\t')
+            require(fields.size == 3) { "Float/Word oracle requires name/input/result" }
+            Triple(fields[0], fields[1].toLong(), fields[2].toLong())
+        }
+        require(rows == expectedRows()) { "Float/Word oracle/model mismatch or incomplete, duplicate, reordered inputs" }
+        return rows
+    }
+    @Test fun independentDomainsPreserveFloatBitsAndAllMachineWords() {
+        val words = wordInputs(); val movement = movementInputs()
+        assertEquals(397, words.size); assertEquals(590, movement.size)
+        assertEquals(words.distinct().sorted(), words); assertEquals(movement.distinct().sorted(), movement)
+        for (bit in 0..63) for (delta in -1L..1L) for (sign in listOf(-1L, 1L))
+            assertTrue(sign*((1L shl bit)+delta) in words)
+        assertTrue(words.any(::signalingNaN))
+        for (bits in magnitudes) for (sign in listOf(0L, 0x80000000L))
+            for (upper in listOf(0L, 0x1234567800000000L, -0x100000000L)) assertTrue((bits or sign or upper) in movement)
+        for (bit in 0..21) for (sign in listOf(0L, 0x80000000L))
+            assertTrue((0x7fc00000L or (1L shl bit) or sign) in movement)
+        for (raw in movement) {
+            assertFalse(signalingNaN(raw))
+            for (name in listOf("moveFloatBits", "indexFloatBits")) assertEquals(raw and 0xffffffffL, model(name, raw))
+        }
+        for (raw in listOf(0x7f800001L, 0x7fbfffffL, 0xff800123L)) {
+            assertTrue(signalingNaN(raw))
+            for (name in listOf("moveFloatBits", "indexFloatBits")) assertThrows(IllegalArgumentException::class.java) { model(name, raw) }
+            // Integer storage and bounded public arithmetic do not exclude these words.
+            for (name in names.filterNot { it in listOf("moveFloatBits", "indexFloatBits") }) model(name, raw)
+        }
+        assertThrows(IllegalArgumentException::class.java) { model("unknown", 0) }
+    }
+    @Test fun independentPublicArithmeticHasExactBinary32Intermediates() {
+        // All quantities are quarter-integers. Reduce only the denominator's two
+        // powers of two, then bound the numerator to binary32's 24-bit precision.
+        fun exact(quarters: Long): Long {
+            var numerator = kotlin.math.abs(quarters)
+            repeat(2) { if (numerator % 2 == 0L) numerator /= 2 }
+            assertTrue(numerator < (1L shl 24), "Non-exact binary32 quarter-integer $quarters")
+            return quarters
+        }
+        for (raw in wordInputs() + listOf(0L, 65535L, Long.MIN_VALUE, Long.MAX_VALUE)) {
+            val x = (raw and 65535)-32768
+            val q = exact(x*4)
+            val accum = listOf(exact(exact(q+13)-8), exact(q+22), exact(q+exact(q/2)))
+            val after = exact(q+1)
+            val st = listOf(q, after, exact(exact(exact(3*after)-q)+2))
+            for ((name, cells) in listOf("unboxedFloatAccum" to accum, "unboxedFloatST" to st)) {
+                val weighted = cells.zip(listOf(7, 11, 13)).map { (cell, weight) -> exact(cell*weight) }
+                val answer = exact(4*exact(exact(weighted[0]+weighted[1])+weighted[2]))
+                assertEquals(0L, answer%4); assertEquals(answer/4, model(name, raw))
+            }
+            assertEquals(150*x+277, model("unboxedFloatAccum", raw))
+            assertEquals(176*x+76, model("unboxedFloatST", raw))
+            assertEquals(44*raw+62, model("unboxedWordAccum", raw))
+            assertEquals(44*raw+350, model("unboxedWordST", raw))
+        }
+    }
+    @Test fun independentWordAliasingChecksBothByteOrders() {
+        for (order in listOf(ByteOrder.LITTLE_ENDIAN, ByteOrder.BIG_ENDIAN)) for (raw in wordInputs()) {
+            fun shift(index: Int) = 8*(if (order == ByteOrder.LITTLE_ENDIAN) index else 7-index)
+            fun byte(value: Long, index: Int) = (value ushr shift(index)) and 255
+            val first = (raw and (255L shl shift(7)).inv()) or (((raw+101) and 255) shl shift(7))
+            val second = ((raw xor 0x55aa55aa55aa55aaL) and (255L shl shift(0)).inv()) or (((raw+37) and 255) shl shift(0))
+            val expected = 3*raw+16*first+20*second+17*byte(first, 0)+19*byte(first, 7)+23*byte(second, 0)+29*byte(second, 7)
+            assertEquals(expected, model("aliasWordBytes", raw, order))
+        }
+        assertNotEquals(model("aliasWordBytes", 0, ByteOrder.LITTLE_ENDIAN), model("aliasWordBytes", 0, ByteOrder.BIG_ENDIAN))
+    }
+    @Test fun independentOracleRejectsCorruptOrIncompleteRows() {
+        val rows = expectedRows()
+        fun text(values: List<Triple<String, Long, Long>>) = values.joinToString("\n", postfix="\n") { "${it.first}\t${it.second}\t${it.third}" }
+        val valid = text(rows)
+        assertEquals(3165, rows.size); assertEquals(rows, verifyRows(valid))
+        val corrupt = listOf("", text(rows.drop(1)), text(rows+rows.first()), text(rows.asReversed()),
+            text(rows.toMutableList().apply { this[0] = this[1] }),
+            text(rows.toMutableList().apply { this[0] = this[0].copy(third=this[0].third+1) }),
+            text(rows.toMutableList().apply { this[0] = this[0].copy(first="unknown") }),
+            valid.replaceFirst("\t", " "), valid.replaceFirst("\t", "\textra\t"), valid+"\n",
+            "moveFloatBits\t9223372036854775808\t0\n", "moveFloatBits\t0\tnan\n")
+        for ((index, bad) in corrupt.withIndex()) assertThrows(IllegalArgumentException::class.java, { verifyRows(bad) }, "mutation $index")
+    }
     @Test fun nativePublicArraysAndFloatMovementWithInlining() = native(true)
     @Test fun nativePublicArraysAndFloatMovementAcrossResidualCalls() = native(false)
     private fun native(inlining: Boolean) {
         val manifest = manifest()
-        assertEquals(names.toSet(), (manifest["entries"] as List<String>).toSet())
+        assertEquals(names, manifest["entries"])
         assertEquals(if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) "little" else "big", manifest["byteOrder"])
         assertEquals(64, (manifest["wordBits"] as Number).toInt())
         assertEquals(true, manifest["signalingNaNsExcluded"])
         assertEquals(setOf("moveFloatBits", "indexFloatBits"), (manifest["signalingNaNExclusionScope"] as List<String>).toSet())
         assertEquals(names.toSet(), (manifest["inputsByEntry"] as Map<String, *>).keys)
+        assertEquals(inputsByEntry(), manifest["inputsByEntry"])
         for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
             val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
                 .joinToString("") { "%02x".format(it.toInt() and 255) }
             assertEquals(expected, actual, "Stale Float/Word-array fixture: $path; rerun prepare-float-word-arrays.py")
         }
-        val rows = File(root, "build/float-word-arrays/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
+        val rows = verifyRows(File(root, "build/float-word-arrays/oracle.tsv").readText()).groupBy { it.first }
         assertEquals(names.toSet(), rows.keys)
+        assertEquals(3165L, manifest["nativeRows"])
         assertEquals((manifest["nativeRows"] as Number).toInt(), rows.values.sumOf { it.size })
         val expectedCalls = names.associateWith { if (it in listOf("moveFloatBits", "indexFloatBits")) 3L else 2L }
         assertEquals(expectedCalls, (manifest["expectedGuestCallsByEntry"] as Map<String, Number>).mapValues { it.value.toLong() })
@@ -186,11 +301,11 @@ class FloatWordArrayNativeTest {
         for ((stage, paths) in stages) {
             val module = merged(paths)
             for (name in names) {
-                val cases = rows.getValue(name).map { it[1].toLong() to it[2].toLong() }
+                val cases = rows.getValue(name).map { it.second to it.third }
                 val movement = name in listOf("moveFloatBits", "indexFloatBits")
                 assertEquals(if (movement) 590 else 397, cases.size, "$name pinned input domain")
                 assertEquals(cases.size, cases.map { it.first }.toSet().size)
-                assertEquals(((manifest["inputsByEntry"] as Map<String, List<Number>>).getValue(name)).map { it.toLong() }.toSet(), cases.map { it.first }.toSet())
+                assertEquals(inputsByEntry().getValue(name), cases.map { it.first })
                 for ((input, native) in cases) {
                     assertEquals(model(name, input), native, "Native $name($input)")
                     if (movement) {
