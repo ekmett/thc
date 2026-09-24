@@ -672,7 +672,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         floating = self.family("FloatingPrimitives")
         self.assertEqual(floating, self.family("RawBitCasts"))
         self.assertEqual({"thc.SumLayoutMetadataTest", *{"thc.runtime." + name for name in (
-            "BytecodeTypedTupleInputTest", "DoubleArrayNativeTest", "DoubleArrayTest",
+            "BytecodeTypedTupleInputTest", "CompiledThunkRetentionTest", "DoubleArrayNativeTest", "DoubleArrayTest",
             "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest", "FloatArrayTest",
             "FloatVectorMemoryProofTest", "FloatVectorStorageTest", "FloatWordArrayNativeTest",
             "FloatingPrimitiveTest", "FloatingTupleTest", "ScalarBitCastTest", "SimdDoubleByteArrayTest",
