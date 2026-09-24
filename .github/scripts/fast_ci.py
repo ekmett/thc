@@ -5,13 +5,14 @@ This driver never treats Gradle task history or restored test XML as a result.
 Only the Test task is rerun; compilation remains eligible for Gradle's build cache.
 """
 import argparse
+from contextlib import ExitStack
 from datetime import datetime, timezone
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -19,6 +20,9 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
 SHA = re.compile(r"[0-9a-f]{40}\Z")
+FIXTURES_SPEC = importlib.util.spec_from_file_location("fast_fixtures", Path(__file__).with_name("fast_fixtures.py"))
+fixtures = importlib.util.module_from_spec(FIXTURES_SPEC)
+FIXTURES_SPEC.loader.exec_module(fixtures)
 
 
 def require(condition, message):
@@ -53,7 +57,7 @@ class Recorder:
     def save(self):
         write_json(self.path, self.data)
 
-    def command(self, name, argv, *, env=None, allowed=(0,), capture=False):
+    def command(self, name, argv, *, env=None, allowed=(0,), capture=False, stdout=None):
         self.directory.mkdir(parents=True, exist_ok=True)
         logfile = self.directory / (f"{len(self.data['phases']):02d}-{name}.log")
         phase = {"name": name, "command": list(map(str, argv)), "started": utc(),
@@ -62,10 +66,13 @@ class Recorder:
         output = []
         print("+ " + repr(phase["command"]), flush=True)
         try:
-            with logfile.open("w") as log:
-                child = subprocess.Popen(argv, cwd=self.root, env=env, stdout=subprocess.PIPE,
-                                         stderr=subprocess.STDOUT, text=True)
-                for line in child.stdout:
+            with ExitStack() as stack:
+                log = stack.enter_context(logfile.open("w"))
+                destination = stack.enter_context((self.root / stdout).open("w")) if stdout else subprocess.PIPE
+                child = stack.enter_context(subprocess.Popen(argv, cwd=self.root, env=env, stdout=destination,
+                                         stderr=subprocess.PIPE if stdout else subprocess.STDOUT, text=True))
+                # Native oracle stdout is data. Diagnostics go only to its log.
+                for line in child.stderr if stdout else child.stdout:
                     log.write(line)
                     log.flush()
                     print(line, end="", flush=True)
@@ -122,7 +129,7 @@ def gradle_command(selection):
     require(classes and len(set(classes)) == len(classes), "Empty/duplicate selected classes")
     require(all(isinstance(c, str) and re.fullmatch(r"[A-Za-z_][\w.$]*", c) for c in classes),
             "Invalid selected class name")
-    argv = ["scripts/gradle.sh", "--no-daemon", "--max-workers=4", "--build-cache",
+    argv = ["scripts/gradle.sh", "--daemon", "--max-workers=4", "--build-cache",
             "--init-script", ".github/scripts/fast_ci.init.gradle", "test", "--rerun"]
     if selection["mode"] == "narrow":
         require(selection["junit"]["patterns"] == classes, "Narrow patterns must name entire selected classes")
@@ -197,7 +204,7 @@ def identify(recorder, identity_path):
             stream.write(f"native-key={keys[0]}\ngradle-prefix={gradle_key}\n")
 
 
-def execute(recorder, base, head, identity_path, bundle):
+def execute(recorder, base, head, identity_path):
     _, output = recorder.command("select", [sys.executable, ".github/scripts/fast_select.py",
                                 "--base", base, "--head", head], capture=True)
     selection = json.loads(output)
@@ -208,18 +215,11 @@ def execute(recorder, base, head, identity_path, bundle):
     # as well as misses. Keep this fresh report separate from cached provenance.
     recorder.command("primop-checklist", [sys.executable, "scripts/primop-coverage.py",
                      "--check", "--output", str(recorder.directory / "primop-coverage.json")])
-    code, _ = recorder.command("native-restore", [sys.executable, ".github/scripts/fast_inputs.py",
-        "restore", "--identity", str(identity_path), "--bundle", str(bundle)], allowed=(0, 1))
-    recorder.data["nativeInputs"] = "verified-hit" if code == 0 else "miss-or-rejected"
+    identity = json.loads(identity_path.read_text())
+    inputs = fixtures.prepare(recorder.root, selection, recorder.command,
+                              {"platform": identity["platform"], "toolchain": identity["toolchain"]})
+    recorder.data["nativeInputs"] = inputs
     recorder.save()
-    if code == 1:
-        if bundle.exists() or bundle.is_symlink():
-            rejected = recorder.directory / "rejected-native-inputs.tar.gz"
-            require(not rejected.exists(), "Rejected bundle receipt already exists")
-            bundle.rename(rejected)
-        recorder.command("native-prepare", ["scripts/prepare-tests.sh"])
-        recorder.command("native-pack", [sys.executable, ".github/scripts/fast_inputs.py",
-            "pack", "--identity", str(identity_path), "--bundle", str(bundle)])
     failures = []
     for index, command in enumerate(python_commands(selection, sys.executable)):
         try:
@@ -285,13 +285,13 @@ def finish(recorder):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("start", "identify", "run", "publish", "finish"))
-    parser.add_argument("--report-dir", type=Path, default=ROOT / "build/fast/results")
-    parser.add_argument("--identity", type=Path, default=ROOT / "build/fast/identity.json")
-    parser.add_argument("--bundle", type=Path, default=ROOT / "build/fast/native-inputs.tar.gz")
+    parser.add_argument("--report-dir", type=Path, default=Path(os.environ.get("FAST_REPORT_DIR", ROOT / "build/fast/results")))
+    parser.add_argument("--identity", type=Path)
     parser.add_argument("--base", default=os.environ.get("FAST_BASE_SHA", ""))
     parser.add_argument("--head", default=os.environ.get("FAST_HEAD_SHA", "HEAD"))
     args = parser.parse_args(argv)
     recorder = Recorder(ROOT, args.report_dir.resolve())
+    identity_path = args.identity or recorder.directory / "identity.json"
     try:
         if args.command == "start":
             require(not recorder.path.exists(), "Use a fresh report directory for each run")
@@ -299,9 +299,9 @@ def main(argv=None):
             require(not expected or expected == git(ROOT, "rev-parse", "HEAD"), "Dispatched revision mismatch")
             recorder.save()
         elif args.command == "identify":
-            identify(recorder, args.identity)
+            identify(recorder, identity_path)
         elif args.command == "run":
-            execute(recorder, args.base, args.head, args.identity, args.bundle)
+            execute(recorder, args.base, args.head, identity_path)
         elif args.command == "publish":
             allowed = successful_revision(recorder) and publication_allowed(ROOT, os.environ)
             if os.environ.get("GITHUB_OUTPUT"):

@@ -35,7 +35,7 @@ class FastInputTests(unittest.TestCase):
         self.put("src/main/kotlin/thc/runtime/Program.kt", "unrelated runtime\n")
         subprocess.run(["git", "-C", str(self.root), "add", "."], check=True)
         self.tc = {"ghcLibdir": str(self.temp_root / "toolchain/lib"),
-                   "version": "9.14.1", "installedAbiSha256": "a" * 64,
+                   "version": "9.14.1", "target": "x86_64-unknown-linux",
                    "javaRelease": {"path": str(self.temp_root / "jdk/release"), "sha256": "b" * 64}}
         self.tool_patch = patch.object(cache, "toolchain", side_effect=lambda root: copy.deepcopy(self.tc))
         self.tool_patch.start(); self.addCleanup(self.tool_patch.stop)
@@ -127,7 +127,7 @@ class FastInputTests(unittest.TestCase):
             current = copy.deepcopy(self.current); current[field] = "changed"
             with self.subTest(field=field), self.assertRaises(cache.CacheMiss):
                 cache.restore(self.root, current, self.bundle)
-        for field in ("version", "installedAbiSha256", "javaRelease"):
+        for field in ("version", "target", "javaRelease"):
             self.tc[field] = "changed"
             self.assertNotEqual(cache.cache_key(self.current), cache.cache_key(cache.identity(self.root)))
         self.put(cache.SELF, "changed cache schema implementation")
@@ -333,6 +333,34 @@ class FastInputTests(unittest.TestCase):
         self.put(".ghc.environment.x86_64-linux-9.14.1","package-id changed")
         with patch.dict(os.environ,{},clear=True),patch.object(cache,"command",return_value=""),self.assertRaises(cache.CacheMiss):
             cache.check_package_scope(self.root,"ghc-pkg")
+
+
+class ToolchainVersionTests(unittest.TestCase):
+    def test_ghc_uses_version_and_target_without_hashing_installation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            libdir = root / "ghc/lib"
+            libdir.mkdir(parents=True)
+            release = root / "jdk/release"
+            release.parent.mkdir()
+            release.write_text('JAVA_VERSION="25"\n')
+            responses = ["9.14.1", "GHC package manager version 9.14.1", "",
+                         repr([("Target platform", "x86_64-unknown-linux")]), str(libdir)]
+            with patch.dict(os.environ, {"JAVA_HOME": str(release.parent), "GHC_ENVIRONMENT": "-"}, clear=True), \
+                    patch.object(cache, "command", side_effect=responses), \
+                    patch.object(cache, "digest", wraps=cache.digest) as digest, \
+                    patch.object(Path, "rglob", side_effect=AssertionError("Do not scan GHC")):
+                result = cache.toolchain(root)
+            digest.assert_called_once_with(release)
+            self.assertEqual(result["version"], "9.14.1")
+            self.assertEqual(result["target"], "x86_64-unknown-linux")
+            self.assertNotIn("installedAbiSha256", result)
+
+    def test_wrong_ghc_version_fails_before_other_inspection(self):
+        with patch.object(cache, "command", return_value="9.12.2") as command, \
+                self.assertRaisesRegex(cache.CacheMiss, "Requires GHC9.14.1"):
+            cache.toolchain(Path.cwd())
+        self.assertEqual(command.call_count, 1)
 
 
 class RenamedInputContractTests(unittest.TestCase):

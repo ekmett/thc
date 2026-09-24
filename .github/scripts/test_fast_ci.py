@@ -2,6 +2,7 @@
 import importlib.util
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -134,8 +135,7 @@ class FastRunnerTest(unittest.TestCase):
         workflow = Path(__file__).parents[1] / "workflows/fast.yml"
         text = workflow.read_text()
         self.assertNotIn("pull_request_target", text)
-        self.assertEqual(text.count("uses: actions/cache/save@"), 3)
-        self.assertEqual(text.count("if: steps.publish.outputs.allowed == 'true'"), 3)
+        self.assertNotIn("native-inputs.tar.gz", text)
         self.assertIn("name: Fast checks", text)
         self.assertIn("  fast-check:", text)
 
@@ -150,19 +150,49 @@ class FastRunnerTest(unittest.TestCase):
             recorder.data["revision"] = "b" * 40
             self.assertFalse(ci.successful_revision(recorder))
 
-    def test_primop_check_runs_on_cache_hit_without_overwriting_cached_provenance(self):
+    def test_primop_check_and_selected_fixtures_run_before_junit(self):
         selection = self.selection() | {"reasons": [], "python": {"commands": []}}
+        identity = {"platform": "linux", "toolchain": {"version": "9.14.1"}}
+        identity_path = self.root / "identity.json"
+        identity_path.write_text(json.dumps(identity))
         with patch.object(ci, "git", return_value="a" * 40):
             recorder = ci.Recorder(self.root, self.root / "receipts")
-        with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection)), (0, ""), (0, "")]) as run:
-            with patch.object(ci, "run_mode", return_value={"cases": [["example.Test", "works"]]}):
-                ci.execute(recorder, "HEAD", "HEAD", self.root / "identity", self.root / "bundle")
+        with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection)), (0, "")]) as run:
+            with patch.object(ci, "run_mode", return_value={"cases": [["example.Test", "works"]]}), \
+                    patch.object(ci.fixtures, "prepare", return_value={"mode": "selected", "reused": ["smoke"]}) as prepare:
+                ci.execute(recorder, "HEAD", "HEAD", identity_path)
+                prepare.assert_called_once_with(self.root, selection, run, identity)
         self.assertEqual(run.call_args_list[1].args[0], "primop-checklist")
         self.assertEqual(run.call_args_list[1].args[1][1:],
                          ["scripts/primop-coverage.py", "--check", "--output",
                           str(recorder.directory / "primop-coverage.json")])
-        self.assertEqual(run.call_args_list[2].args[0], "native-restore")
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(recorder.data["nativeInputs"]["reused"], ["smoke"])
         self.assertTrue(recorder.data["passed"])
+
+    def test_native_oracle_stdout_excludes_diagnostics(self):
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "receipts")
+        recorder.command("native", [sys.executable, "-c",
+                         "import sys; print('1\\t42'); print('diagnostic', file=sys.stderr)"],
+                         stdout="oracle.tsv")
+        self.assertEqual((self.root / "oracle.tsv").read_text(), "1\t42\n")
+        log = self.root / recorder.data["phases"][0]["log"]
+        self.assertEqual(log.read_text(), "diagnostic\n")
+
+    def test_fixture_failure_prevents_junit_success(self):
+        selection = self.selection() | {"reasons": [], "python": {"commands": []}}
+        identity_path = self.root / "identity.json"
+        identity_path.write_text(json.dumps({"platform": "linux", "toolchain": {}}))
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "receipts")
+        with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection)), (0, "")]), \
+                patch.object(ci.fixtures, "prepare", side_effect=RuntimeError("native failed")), \
+                patch.object(ci, "run_mode") as junit:
+            with self.assertRaisesRegex(RuntimeError, "native failed"):
+                ci.execute(recorder, "HEAD", "HEAD", identity_path)
+            junit.assert_not_called()
+        self.assertNotIn("passed", recorder.data)
 
 
 if __name__ == "__main__":

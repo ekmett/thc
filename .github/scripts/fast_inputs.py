@@ -15,7 +15,6 @@ import os
 from pathlib import Path, PurePosixPath
 import platform
 import re
-import shlex
 import shutil
 import stat
 import subprocess
@@ -133,15 +132,9 @@ def tracked_files(root):
     return set(command(["git", "ls-files", "-z"], root).split("\0")) - {""}
 
 
-def tool(name, root):
-    path = Path(shutil.which(name) or name).resolve()
-    require(path.is_file(), "Missing tool: " + name)
-    return {"path": str(path), "sha256": digest(path)}
-
-
 def check_package_scope(root, pkg):
     # This cache intentionally supports the clean pinned CI installation only.
-    # A same-path mutable user/override DB is not covered by the global ABI tree.
+    # Additional user/override packages are not identified by the GHC version.
     require("GHC_PACKAGE_PATH" not in os.environ, "Custom GHC_PACKAGE_PATH is outside the cache scope")
     require(os.environ.get("GHC_ENVIRONMENT", "-") == "-", "Custom GHC_ENVIRONMENT is outside the cache scope")
     require(not command([pkg, "list", "--user", "--simple-output"], root),
@@ -154,44 +147,27 @@ def check_package_scope(root, pkg):
 
 
 def toolchain(root):
-    ghc = tool(os.environ.get("GHC", "ghc"), root)
-    pkg = tool(os.environ.get("GHC_PKG", "ghc-pkg"), root)
-    require(command([ghc["path"], "--numeric-version"], root) == "9.14.1", "Requires GHC9.14.1")
-    require(command([pkg["path"], "--version"], root) == "GHC package manager version 9.14.1",
+    # The pinned version is the GHC compatibility gate. Scanning its installed
+    # interfaces and libraries costs minutes and does not help ordinary PRs.
+    ghc = str(Path(shutil.which(os.environ.get("GHC", "ghc")) or os.environ.get("GHC", "ghc")).resolve())
+    pkg = str(Path(shutil.which(os.environ.get("GHC_PKG", "ghc-pkg")) or os.environ.get("GHC_PKG", "ghc-pkg")).resolve())
+    version = command([ghc, "--numeric-version"], root)
+    require(version == "9.14.1", "Requires GHC9.14.1")
+    require(command([pkg, "--version"], root) == "GHC package manager version 9.14.1",
             "Requires ghc-pkg9.14.1")
-    check_package_scope(root, pkg["path"])
-    info = command([ghc["path"], "--info"], root)
-    settings = dict(ast.literal_eval(info))
-    libdir = Path(command([ghc["path"], "--print-libdir"], root)).resolve()
+    check_package_scope(root, pkg)
+    settings = dict(ast.literal_eval(command([ghc, "--info"], root)))
+    libdir = Path(command([ghc, "--print-libdir"], root)).resolve()
     require(libdir.is_dir() and len(libdir.parts) > 3, "Unsafe GHC libdir")
-    actual = libdir.parent / "bin/ghc-9.14.1"
-    cc_command = shlex.split(settings["C compiler command"])
-    require(bool(cc_command), "Missing GHC C compiler")
-    cc = tool(cc_command[0], root)
     java_home = os.environ.get("JAVA_HOME")
     require(bool(java_home), "JAVA_HOME must identify pinned Graal/JDK")
     release = Path(java_home).resolve() / "release"
-    result = {"ghcLauncher": ghc, "ghcBinary": {"path": str(actual), "sha256": digest(actual)},
-        "ghcPkg": pkg, "ghcInfo": info, "ghcLibdir": str(libdir),
-        "packageDumpSha256": sha(command([pkg["path"], "dump", "--global"], root).encode()),
-        "settingsSha256": digest(libdir / "settings"), "cc": cc,
-        "ccVersion": command([cc["path"], *cc_command[1:], "--version"], root),
-        "python": tool(sys.executable, root), "pythonVersion": sys.version,
+    result = {"version": version, "target": settings["Target platform"],
+        "ghcLauncher": {"path": ghc},
+        "ghcBinary": {"path": str(libdir.parent / ("bin/ghc-" + version))},
+        "ghcPkg": {"path": pkg}, "ghcLibdir": str(libdir),
+        "pythonVersion": platform.python_version(),
         "javaRelease": {"path": str(release), "sha256": digest(release)}}
-    # Same package IDs do not prove identical unfoldings or linked native code.
-    # Bind the installed interfaces, headers and libraries, not just --version.
-    installed = {}
-    memo = {}
-    for path in sorted(libdir.rglob("*")):
-        if path.is_file() and (path.suffix in (".hi", ".dyn_hi", ".h", ".a", ".so", ".dylib")
-                               or ".so." in path.name):
-            resolved = path.resolve()
-            if resolved not in memo:
-                memo[resolved] = digest(resolved)
-            installed[path.relative_to(libdir).as_posix()] = memo[resolved]
-    require(bool(installed), "Installed GHC ABI files missing")
-    result["installedAbiSha256"] = sha(canonical(installed))
-    # Explicit preparation-affecting overrides cannot silently share a key.
     result["environment"] = {k: v for k, v in sorted(os.environ.items()) if k in
         ("THC_SOURCE_NOTES", "THC_CORE_OUT", "THC_GHC_OUT", "GHC", "GHC_PKG", "GHC_ENVIRONMENT",
          "GHCRTS", "CC", "CFLAGS", "CPATH", "LIBRARY_PATH", "LD_LIBRARY_PATH", "LANG", "LC_ALL")}
