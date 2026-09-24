@@ -109,6 +109,26 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
             if (resume.getFailure() != null) throw resume.getFailure();
             return resume.getValue();
         }
+        @Specialization public static Object deliver(AsyncThunkUnwind delivery) {
+            throw new PrivateAsyncDelivery(delivery.getPayload());
+        }
+    }
+
+    /** A test-only origin tag: never a GuestException or shared thunk result. */
+    public static final class PrivateAsyncDelivery extends AbstractTruffleException {
+        private final Object payload;
+        PrivateAsyncDelivery(Object payload) {
+            super("Private captured-handler delivery", null, 0, null);
+            this.payload = payload;
+        }
+        public Object getPayload() { return payload; }
+    }
+
+    @Operation public static final class RequirePrivateAsyncDelivery {
+        @Specialization public static Object payload(AbstractTruffleException failure) {
+            if (failure instanceof PrivateAsyncDelivery delivery) return delivery.getPayload();
+            throw failure;
+        }
     }
 
     @Operation
@@ -284,12 +304,24 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
     /** Nested mask and real guest catch scopes around a shared suspending child. */
     public static RootCallTarget maskedCaller(Language language, AtomicReference<Thunk> child, AtomicInteger effects,
             AtomicInteger compiledEffects, MaskingState outer, MaskingState inner, MaskProbe probe) {
-        return maskedCaller(language, child, effects, compiledEffects, outer, inner, probe, null);
+        return maskedCaller(language, child, effects, compiledEffects, outer, inner, probe, null, false);
     }
 
     public static RootCallTarget maskedCaller(Language language, AtomicReference<Thunk> child, AtomicInteger effects,
             AtomicInteger compiledEffects, MaskingState outer, MaskingState inner, MaskProbe probe,
             TailProbe tailProbe) {
+        return maskedCaller(language, child, effects, compiledEffects, outer, inner, probe, tailProbe, false);
+    }
+
+    public static RootCallTarget privateAsyncHandlerCaller(Language language, AtomicReference<Thunk> child,
+            AtomicInteger effects, AtomicInteger compiledEffects, MaskingState outer, MaskingState inner,
+            MaskProbe probe) {
+        return maskedCaller(language, child, effects, compiledEffects, outer, inner, probe, null, true);
+    }
+
+    private static RootCallTarget maskedCaller(Language language, AtomicReference<Thunk> child, AtomicInteger effects,
+            AtomicInteger compiledEffects, MaskingState outer, MaskingState inner, MaskProbe probe,
+            TailProbe tailProbe, boolean privateAsyncHandler) {
         RootCallTarget childForceTarget = new ChildForceRoot().getCallTarget();
         return ThunkYieldProofRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
             b.beginRoot();
@@ -342,7 +374,11 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
             b.endStoreLocal();
             b.beginBlock();
             b.beginStoreLocal(payload);
-            b.beginRequireGuestFailure(); b.emitLoadException(); b.endRequireGuestFailure();
+            if (privateAsyncHandler) {
+                b.beginRequirePrivateAsyncDelivery(); b.emitLoadException(); b.endRequirePrivateAsyncDelivery();
+            } else {
+                b.beginRequireGuestFailure(); b.emitLoadException(); b.endRequireGuestFailure();
+            }
             b.endStoreLocal();
             b.beginStoreLocal(handlerPrior); b.emitEnterExceptionHandler(); b.endStoreLocal();
             b.beginTryFinally(() -> {

@@ -54,3 +54,23 @@ These are two boundaries enabled only by the private test control. Other
 force, tuple, mask, and handler edges do not yet capture caller segments.
 There is no general async delivery, `throwTo`, or replay of an interrupted
 effectful right-hand side.
+
+A private handler-cut test now claims a captured bytecode caller while its
+exact shared child thunk remains parked. A distinct async-origin marker enters
+that caller's saved Yield continuation, and the nearest test-only DSL catch
+handler consumes it under the restored logical mask. The child later resumes
+once from its saved frame; its effectful prefix is not replayed, and neither
+the child nor an unhandled marker becomes a memoized guest exception. This is
+not a `throwTo` entry point or a production `catch#` implementation.
+
+The real `catch#` action still crosses `InvokeIOAction` and `TupleDispatch`.
+Those operations expect a completed unboxed-tuple carrier and immediately copy
+it into the caller's typed `BytecodeTupleSlots`; they cannot yet accept a
+`ContinuationResult`. A next production slice must capture the action's exact
+callee continuation and the destination identity before copying any result.
+The caller bytecode frame owns the durable typed destination locals. A pooled
+`TupleComplete` result has a thread-local result-slab loan that must be consumed
+and released before parking or transfer; a materialized `HandoffStorage` result
+is an unpooled private carrier. Resumption must copy a completed child result
+into the same typed locals once, while a guest failure enters the original
+handler and restores its prior logical mask and the carrier's ambient mask.
