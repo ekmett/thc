@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 package thc
 
 import com.oracle.truffle.api.dsl.Cached
@@ -137,12 +140,27 @@ object CoreModules {
     characterMimeTypes = ["application/x-thc-core"], defaultMimeType = "application/x-thc-core",
     contextPolicy = TruffleLanguage.ContextPolicy.EXCLUSIVE)
 class Language : TruffleLanguage<Language.State>() {
-    internal val handoffLayouts = thc.runtime.HandoffLayouts(this)
+    // Layout interning belongs to a context even when the language instance is shared.
+    internal val handoffLayouts: thc.runtime.HandoffLayouts get() = currentState(null).handoffLayouts
     internal val handoffState = locals.createContextThreadLocal { _, _ -> thc.runtime.HandoffState() }
-    class State(val env: Env) {
+    class State(val env: Env, language: Language) {
+        internal val handoffLayouts = thc.runtime.HandoffLayouts(language)
         internal val javaScriptImports = thc.runtime.JavaScriptImports()
+        // A future SHARED policy may keep the lockless thunk path while this is valid.
+        // The transition is one-way and belongs to this context, not to Language.
+        internal val singleThreadedAssumption = Truffle.getRuntime().createAssumption("THC single-threaded context")
+        private var firstThread: Thread? = null
+        @Synchronized internal fun noteThread(thread: Thread) {
+            if (firstThread == null) firstThread = thread
+            else if (firstThread !== thread) markMultithreaded()
+        }
+        internal fun markMultithreaded() {
+            singleThreadedAssumption.invalidate("A second guest thread entered the context")
+        }
     }
-    override fun createContext(env: Env): State = State(env)
+    override fun createContext(env: Env): State = State(env, this)
+    override fun initializeThread(context: State, thread: Thread) = context.noteThread(thread)
+    override fun initializeMultiThreading(context: State) = context.markMultithreaded()
     companion object {
         private val contexts = ContextReference.create(Language::class.java)
         @JvmStatic fun currentState(node: Node?): State = contexts.get(node)
