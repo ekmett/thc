@@ -65,7 +65,7 @@ jobs:
         with:
           ghc-version: '9.14.1'
           cabal-version: '3.16.0.0'
-          cabal-update: false
+          cabal-update: true
       - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
         with:
           version: '25.3.4.1'
@@ -78,7 +78,7 @@ jobs:
         run: |
           test "$(ghc --numeric-version)" = 9.14.1
           test "$(ghc-pkg --version)" = 'GHC package manager version 9.14.1'
-          test "$(cabal --numeric-version)" = 3.16.0.0
+          case "$(cabal --numeric-version)" in 3.16.*) ;; *) exit 1 ;; esac
           python3 - <<'PY'
           import os
           from pathlib import Path
@@ -89,6 +89,8 @@ jobs:
           java --version
       - name: Check the primop checklist
         run: python3 scripts/primop-coverage.py --check
+      - name: Resolve Cabal driver dependencies
+        run: cabal build exe:thc
       - name: Build and test from source
         run: scripts/try.sh
       - name: Check Haskell calls into JavaScript
@@ -103,7 +105,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cabal build thc --offline -fdevelopment
+          cabal build exe:thc --offline -fdevelopment
           cabal run thc --offline -fdevelopment -- --help
           driver="$(cabal list-bin exe:thc --offline -fdevelopment)"
           test -x "$driver"
@@ -115,6 +117,12 @@ jobs:
             --runtime "$PWD/build/install/thc/bin/thc" \
             --thc-root "$PWD" \
             --scratch "$PWD/build/run-integration"
+          mkdir -p build/project-run-integration
+          python3 test/run_project_integration.py \
+            --driver "$driver" \
+            --runtime "$PWD/build/install/thc/bin/thc" \
+            --thc-root "$PWD" \
+            --scratch "$PWD/build/project-run-integration"
       - name: Check registered cross-package Core on both compiled backends
         run: python3 scripts/test-core-package-link.py
       - name: Preserve default test results

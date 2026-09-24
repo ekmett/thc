@@ -1,0 +1,20 @@
+cabal-version: 3.0
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+name: app-run
+version: 0.1.0.0
+build-type: Simple
+license: BSD-3-Clause
+library bridge
+  exposed-modules: Bridge
+  other-modules: Paths_app_run
+  autogen-modules: Paths_app_run
+  hs-source-dirs: src
+  build-depends: base >=4.22 && <4.23, dep-data, th-helper, template-haskell >=2.24 && <2.25
+  default-language: Haskell2010
+executable completed
+  main-is: Main.hs
+  hs-source-dirs: app
+  build-depends: base >=4.22 && <4.23, app-run:bridge
+  default-language: Haskell2010

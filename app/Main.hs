@@ -6,11 +6,14 @@ module Main (main) where
 import Distribution.Simple.Utils (topHandler)
 import Distribution.Types.Flag (mkFlagName)
 import System.Console.GetOpt
+import System.Directory (doesFileExist)
 import System.Environment (getArgs)
 import System.Exit (die)
+import System.FilePath ((</>))
 import System.IO (hSetEncoding, stderr, stdout, utf8)
 import THC.Driver.Cabal
 import THC.Driver.Json (renderJson)
+import THC.Driver.Project (runProject)
 import THC.Driver.Run
 
 main :: IO ()
@@ -32,7 +35,8 @@ main = topHandler $ do
       (updates, targets, []) | length targets <= 1 -> do
         let opts = foldl (flip ($)) (RunOptions defaultPlanOptions "" "" Nothing) updates
             target = case targets of [] -> "."; [file] -> file; _ -> error "checked above"
-        runPackage opts target
+        project <- doesFileExist (target </> "cabal.project")
+        if project then runProject opts target else runPackage opts target
       (_, _, errors) -> die (concat errors ++ runUsage)
     _ -> die usage
 
@@ -67,4 +71,4 @@ liftPlanOption (Option shorts longs argument description) = Option shorts longs 
   where liftUpdate update run = run {runPlan = update (runPlan run)}
 
 runUsage :: String
-runUsage = usageInfo "Usage: thc run [PACKAGE.cabal|DIR] --exe NAME --thc-root DIR [OPTIONS]\n\nBuild the selected Cabal executable, export and audit its GHC main :: IO (), then execute that action in THC.\nThe native executable is never run. This first slice requires an executable without internal library or build-tool dependencies.\n" runOptions
+runUsage = usageInfo "Usage: thc run [PACKAGE.cabal|DIR] --exe NAME --thc-root DIR [OPTIONS]\n\nBuild the selected Cabal executable, export and audit its GHC main :: IO (), then execute that action in THC.\nA DIR containing cabal.project uses Cabal's resolved multi-package plan and accepts NAME or PACKAGE:exe:NAME.\nFor an explicit .cabal file, the initial single-package path still requires no internal library or build-tool dependencies.\n" runOptions
