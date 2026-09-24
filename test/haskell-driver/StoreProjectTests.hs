@@ -5,6 +5,7 @@ module StoreProjectTests (tests) where
 
 import Control.Exception (bracket)
 import Control.Monad (unless)
+import Data.List (isPrefixOf)
 import System.Directory (getModificationTime, removeFile, removePathForcibly)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.FilePath ((</>), takeDirectory, takeFileName)
@@ -45,6 +46,8 @@ tests env = TestLabel "source-built Cabal store Core" $ TestCase $
     assertEqual "native and THC output" (out native) (out first)
     firstManifest <- readJson (output </> "packages.json")
     let firstPath = string (field (bundle firstManifest firstId) "path")
+    assertBool "store ZIP uses shared application cache"
+      ((base </> "cache/core-bundles/v1") `isPrefixOf` firstPath)
     assertEqual "Cabal store ID is ZIP basename" (firstId ++ ".zip") (takeFileName firstPath)
     assertReachable output firstId
     firstTime <- getModificationTime firstPath

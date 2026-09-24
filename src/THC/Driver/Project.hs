@@ -62,7 +62,8 @@ data ExportContext = ExportContext
   , contextPluginDb :: FilePath, contextPluginUnit :: String
   , contextPluginLibrary :: FilePath, contextNative :: FilePath
   , contextCache :: FilePath, contextDriverHash :: String
-  , contextGhc :: FilePath, contextDriver :: FilePath }
+  , contextGhc :: FilePath, contextGhcPkg :: Maybe FilePath
+  , contextDriver :: FilePath }
 
 boundary :: String
 boundary = "optimized-Core-after-Tidy-before-CorePrep"
@@ -109,14 +110,16 @@ runProject opts target = do
   compiler <- case ghcPath flags of
     Just path -> canonicalizePath path
     Nothing -> findExecutable "ghc" >>= maybe (fail "GHC compiler not found") canonicalizePath
+  packageTool <- traverse canonicalizePath (ghcPkgPath flags)
   withProjectLock output $
     runBuiltProject project thcRoot runtime output native executable cabalArgs
-                    pluginDb pluginUnit pluginLibrary compiler
+                    pluginDb pluginUnit pluginLibrary compiler packageTool
 
 runBuiltProject :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath ->
-                   String -> [String] -> FilePath -> String -> FilePath -> FilePath -> IO ()
+                   String -> [String] -> FilePath -> String -> FilePath -> FilePath ->
+                   Maybe FilePath -> IO ()
 runBuiltProject project thcRoot runtime output native executable cabalArgs
-                pluginDb pluginUnit pluginLibrary ghc = do
+                pluginDb pluginUnit pluginLibrary ghc ghcPkg = do
   runCommand True "cabal" cabalArgs project
   plan <- readJson (native </> "cache/plan.json")
   cabalVersion <- field plan "cabal-version"
@@ -130,7 +133,7 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   driver <- getExecutablePath
   driverHash <- digestFile driver
   let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
-                              pluginLibrary native cacheRoot driverHash ghc driver
+                              pluginLibrary native cacheRoot driverHash ghc ghcPkg driver
   records <- field plan "install-plan" :: IO [Value]
   units <- mapM readUnit records
   let byId = Map.fromList [(unitId unit, unit) | unit <- units]
@@ -290,7 +293,8 @@ captureGlobalUnits context project requested missing = do
         capture = staging </> "capture"
         arguments = ["--store-dir=" ++ store, "build", "all", "--offline",
                      "--enable-build-info", "--project-file", "cabal.project",
-                     "--builddir", dist, "--with-compiler", wrapper]
+                     "--builddir", dist, "--with-compiler", wrapper] ++
+                    maybe [] (\path -> ["--with-hc-pkg", path]) (contextGhcPkg context)
     writeFile wrapper "#!/bin/sh\nexec \"$THC_PROXY_DRIVER\" ghc-proxy \"$@\"\n"
     permissions <- getPermissions wrapper
     setPermissions wrapper (permissions {Directory.executable = True})
@@ -304,6 +308,13 @@ captureGlobalUnits context project requested missing = do
         environment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
     runCommandWithEnv True "cabal" arguments project (Just environment)
     plan <- readJson (dist </> "cache/plan.json")
+    isolatedCompiler <- field plan "compiler-id"
+    isolatedAbi <- field plan "compiler-abi"
+    isolatedOs <- field plan "os"
+    isolatedArch <- field plan "arch"
+    require (isolatedCompiler == contextCompiler context && isolatedAbi == contextAbi context &&
+             isolatedArch ++ "-" ++ isolatedOs == contextPlatform context)
+      "isolated Cabal export build changed compiler or platform"
     isolated <- mapM readUnit =<< field plan "install-plan"
     let byId = Map.fromList [(unitId unit, unit) | unit <- isolated]
     forM_ missing $ \(unit, buildKey, exportKey, path) -> do
@@ -311,7 +322,10 @@ captureGlobalUnits context project requested missing = do
                  (Map.lookup (unitId unit) byId)
       originalHash <- field (unitValue unit) "pkg-src-sha256" :: IO String
       rebuiltHash <- field (unitValue rebuilt) "pkg-src-sha256" :: IO String
-      require (originalHash == rebuiltHash && unitDepends unit == unitDepends rebuilt)
+      kind <- field (unitValue rebuilt) "type" :: IO String
+      style <- field (unitValue rebuilt) "style" :: IO String
+      require (kind == "configured" && style == "global" &&
+               originalHash == rebuiltHash && unitDepends unit == unitDepends rebuilt)
         ("isolated Cabal build changed store identity for " ++ unitId unit)
       createDirectoryIfMissing True (takeDirectory path)
       withLock (path ++ ".lock") $
