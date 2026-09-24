@@ -480,7 +480,9 @@
     "readInt8Array#": 3,
     "writeInt8Array#": 4,
     "indexInt8Array#": 2,
-    "readWord8Array#": 3
+    "readWord8Array#": 3,
+    "addWordC#": 2,
+    "subWordC#": 2
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
@@ -547,6 +549,14 @@
     }
   ],
   "tuplePrimitives": {
+    "addWordC#": {
+      "arguments": ["WordRep", "WordRep"],
+      "result": ["WordRep", "IntRep"]
+    },
+    "subWordC#": {
+      "arguments": ["WordRep", "WordRep"],
+      "result": ["WordRep", "IntRep"]
+    },
     "quotRemInt#": {
       "arguments": [
         "IntRep",

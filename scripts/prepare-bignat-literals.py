@@ -75,10 +75,10 @@ def inventory():
             else:
                 # Keep the complete installed GMP arithmetic closure unsupported.
                 check(not report['accepted'],'Arithmetic frontier unexpectedly accepted')
-                expected=(22,6) if entry=='integerAddFrontier' else (16,3)
+                expected=(21,6) if entry=='integerAddFrontier' else (15,3)
                 check((len(report['issues']),len(report['missingGlobals']))==expected,'Arithmetic frontier changed: '+str(report['summary']))
                 check({i['code'] for i in report['issues']}=={'unsupported-primitive'},'Arithmetic issue kind changed')
-                wanted_issues={'getSizeofMutableByteArray#':14,'shrinkMutableByteArray#':7,'subWordC#':1} if entry=='integerAddFrontier' else {'getSizeofMutableByteArray#':10,'shrinkMutableByteArray#':5,'addWordC#':1}
+                wanted_issues={'getSizeofMutableByteArray#':14,'shrinkMutableByteArray#':7} if entry=='integerAddFrontier' else {'getSizeofMutableByteArray#':10,'shrinkMutableByteArray#':5}
                 check(Counter(i['detail'] for i in report['issues'])==Counter(wanted_issues),'Changed exact arithmetic primitive frontier')
                 symbols=[re.search(r'__ffi_static_ccall_unsafe ghc-internal:([^ ]+)', m['id']).group(1)
                          if '__ffi_static_ccall_unsafe ghc-internal:' in m['id'] else m['id'] for m in report['missingGlobals']]

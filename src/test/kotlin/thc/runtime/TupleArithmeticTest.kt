@@ -15,7 +15,7 @@ import java.security.MessageDigest
 
 class TupleArithmeticTest {
     private val root = File(System.getProperty("thc.projectRoot"))
-    private val names = listOf("quotRemInt", "quotRemWord", "addIntC", "subIntC", "plusWord2", "timesWord2")
+    private val names = listOf("quotRemInt", "quotRemWord", "addIntC", "subIntC", "plusWord2", "timesWord2", "addWordC", "subWordC")
     private fun module(stage: String = "pre") = Json.parse(File(root,
         "build/tuple-arithmetic/$stage-core/TupleArithmeticAudit.json").readText()) as Map<String, Any?>
     private fun context() = Context.newBuilder("thc").allowExperimentalOptions(true)
@@ -49,6 +49,10 @@ class TupleArithmeticTest {
                 val result = if (row.name == "addIntC") x + y else x - y
                 result.toLong() to if (result < BigInteger.valueOf(Long.MIN_VALUE) || result > BigInteger.valueOf(Long.MAX_VALUE)) 1L else 0L
             }
+            "addWordC", "subWordC" -> {
+                val result = if (row.name == "addWordC") unsignedX + unsignedY else unsignedX - unsignedY
+                result.toLong() to if (result.signum() < 0 || result >= modulus) 1L else 0L
+            }
             else -> {
                 val result = if (row.name == "plusWord2") unsignedX + unsignedY else unsignedX * unsignedY
                 result.shiftRight(64).toLong() to result.toLong()
@@ -77,7 +81,7 @@ class TupleArithmeticTest {
                     for (field in 0L..1L) assertEquals(if (field == 0L) row.first else row.second,
                         Calls.target(host, arrayOf(entries.getValue(row.name), arrayOf(row.x, row.y, field))), "$stage/$backend/$row/$field")
                 }
-                // Establish the final host dispatch before warming individual roots. Six
+                // Establish the final host dispatch before warming individual roots. Eight
                 // targets replace its three-entry direct cache with indirect calls; with
                 // handoff enabled this changes empty arguments to the ordinary packet.
                 // Each root must see that packet during warmup, before we compile it.

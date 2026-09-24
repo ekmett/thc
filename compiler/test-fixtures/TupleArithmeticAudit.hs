@@ -32,3 +32,32 @@ plusWord2 x y field = case plusWord2# (int2Word# x) (int2Word# y) of
 timesWord2 :: Int# -> Int# -> Int# -> Int#
 timesWord2 x y field = case timesWord2# (int2Word# x) (int2Word# y) of
   (# high, low #) -> case field of 0# -> word2Int# high; _ -> word2Int# low
+
+{-# OPAQUE addWordC #-}
+addWordC :: Int# -> Int# -> Int# -> Int#
+addWordC x y field = case addWordC# (int2Word# x) (int2Word# y) of
+  (# result, carry #) -> case field of 0# -> word2Int# result; _ -> carry
+
+{-# OPAQUE subWordC #-}
+subWordC :: Int# -> Int# -> Int# -> Int#
+subWordC x y field = case subWordC# (int2Word# x) (int2Word# y) of
+  (# result, borrow #) -> case field of 0# -> word2Int# result; _ -> borrow
+
+-- Preserve genuine mixed WordRep/IntRep return boundaries as well as direct writers.
+-- The reversible value adjustment prevents eta reduction to a first-class primop.
+{-# OPAQUE addWordResult #-}
+addWordResult :: Word# -> Word# -> (# Word#, Int# #)
+addWordResult x y = case addWordC# x y of
+  (# value, flag #) -> (# plusWord# value 1##, flag #)
+{-# OPAQUE subWordResult #-}
+subWordResult :: Word# -> Word# -> (# Word#, Int# #)
+subWordResult x y = case subWordC# x y of
+  (# value, flag #) -> (# plusWord# value 1##, flag #)
+{-# OPAQUE addWordCall #-}
+addWordCall :: Int# -> Int# -> Int# -> Int#
+addWordCall x y field = case addWordResult (int2Word# x) (int2Word# y) of
+  (# result, flag #) -> case field of 0# -> word2Int# (minusWord# result 1##); _ -> flag
+{-# OPAQUE subWordCall #-}
+subWordCall :: Int# -> Int# -> Int# -> Int#
+subWordCall x y field = case subWordResult (int2Word# x) (int2Word# y) of
+  (# result, flag #) -> case field of 0# -> word2Int# (minusWord# result 1##); _ -> flag
