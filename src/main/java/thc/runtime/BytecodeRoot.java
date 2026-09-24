@@ -408,6 +408,127 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class FileOpen {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress path, long mode, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = CoreManagedFiles.current(node).open(path, mode);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class FileRead {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                long fd, ManagedAddress address, long count, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = CoreManagedFiles.current(node).read(fd, address, count);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class FileWrite {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                long fd, ManagedAddress address, long count, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = CoreManagedFiles.current(node).write(fd, address, count);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class FileClose {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                long fd, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = CoreManagedFiles.current(node).close(fd);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class FileErrorKind {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = CoreManagedFiles.current(node).errorKind();
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class FileErrorMessage {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedAddress result = CoreManagedFiles.current(node).errorMessage();
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class FileSeek {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                long fd, long offset, long mode, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = CoreManagedFiles.current(node).seek(fd, offset, mode);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class FileSize {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                long fd, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = CoreManagedFiles.current(node).size(fd);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class FileSetSize {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                long fd, long length, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = CoreManagedFiles.current(node).setSize(fd, length);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class FileIsTerminal {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                long fd, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = CoreManagedFiles.current(node).isTerminal(fd);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class FileDeviceType {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                long fd, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = CoreManagedFiles.current(node).deviceType(fd);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
     public static final class Md5Init {
         @Specialization public static void apply(ManagedAddress context, Object state) {
             ManagedByteArray.requireState(state);

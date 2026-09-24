@@ -154,6 +154,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: List<Local>)
 
     init {
+        CoreManagedFiles.validateHeads(bindings)
         CoreMd5Foreign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(bindings, constructors)
@@ -846,11 +847,47 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val tupleProof = CoreRepresentations.expression(expr)
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
             val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
-            val javascript = CoreJavaScript.validate(expr, defined)
+            val managedFile = CoreManagedFiles.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val javascript = if (managedFile == null) CoreJavaScript.validate(expr, defined) else null
             val md5 = if (javascript == null) CoreMd5Foreign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
-            val polyglot = if (javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
-            if (md5 != null) {
+            val polyglot = if (managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
+            if (managedFile != null) {
+                CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val operands = args.map { compile(it, scope, false) }
+                tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    val result = destination.single()
+                    when (managedFile) {
+                        ManagedFileOp.OPEN -> b.beginFileOpen(result)
+                        ManagedFileOp.READ -> b.beginFileRead(result)
+                        ManagedFileOp.WRITE -> b.beginFileWrite(result)
+                        ManagedFileOp.CLOSE -> b.beginFileClose(result)
+                        ManagedFileOp.ERROR_KIND -> b.beginFileErrorKind(result)
+                        ManagedFileOp.ERROR_MESSAGE -> b.beginFileErrorMessage(result)
+                        ManagedFileOp.SEEK -> b.beginFileSeek(result)
+                        ManagedFileOp.SIZE -> b.beginFileSize(result)
+                        ManagedFileOp.SET_SIZE -> b.beginFileSetSize(result)
+                        ManagedFileOp.IS_TERMINAL -> b.beginFileIsTerminal(result)
+                        ManagedFileOp.DEVICE_TYPE -> b.beginFileDeviceType(result)
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (managedFile) {
+                        ManagedFileOp.OPEN -> b.endFileOpen()
+                        ManagedFileOp.READ -> b.endFileRead()
+                        ManagedFileOp.WRITE -> b.endFileWrite()
+                        ManagedFileOp.CLOSE -> b.endFileClose()
+                        ManagedFileOp.ERROR_KIND -> b.endFileErrorKind()
+                        ManagedFileOp.ERROR_MESSAGE -> b.endFileErrorMessage()
+                        ManagedFileOp.SEEK -> b.endFileSeek()
+                        ManagedFileOp.SIZE -> b.endFileSize()
+                        ManagedFileOp.SET_SIZE -> b.endFileSetSize()
+                        ManagedFileOp.IS_TERMINAL -> b.endFileIsTerminal()
+                        ManagedFileOp.DEVICE_TYPE -> b.endFileDeviceType()
+                    }
+                }
+            } else if (md5 != null) {
                 CoreMd5Foreign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.map { compile(it, scope, false) }
                 tupleExpression(tupleProof) { e, _ ->
