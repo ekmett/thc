@@ -38,7 +38,7 @@ boxed-arrays bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar
 narrow-literal-proofs original-stdio resize-bytearrays scalar-bitcasts short-bytes-slices
-show-int show-word-list signed-narrow-primops synchronous-exceptions tuple-arithmetic""".split()
+show-int show-word-list signed-narrow-primops synchronous-exceptions tuple-arithmetic word-floating""".split()
 PROVENANCE_DIRS = """aggregate-layout empty-join-input empty-tuple-input
 floating-tuple sqrt state-tuple sum-layout sum-result tag-to-enum tuple-input
 tuple-join tuple-return unsafe-equality simd simd-int32x4 simd-floatx4

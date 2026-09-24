@@ -198,6 +198,8 @@
     ">=##": 2,
     "int2Float#": 1,
     "int2Double#": 1,
+    "word2Float#": 1,
+    "word2Double#": 1,
     "float2Int#": 1,
     "double2Int#": 1,
     "float2Double#": 1,

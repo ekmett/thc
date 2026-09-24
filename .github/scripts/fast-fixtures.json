@@ -11,6 +11,12 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "word-floating": {
+      "junit": ["thc.runtime.WordFloatingTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "word-floating"]}],
+      "outputs": ["build/word-floating"],
+      "sources": ["test/haskell-fixtures/WordFloatingFixtures.hs", "compiler/test-fixtures/WordFloatingAudit.hs", "compiler/test-fixtures/WordFloatingNative.hs"]
+    },
     "original-stdio": {
       "junit": ["thc.runtime.OriginalStdioNativeTest"],
       "commands": [{"argv": ["python3", "scripts/prepare-original-stdio.py", "--require-supported"]}],

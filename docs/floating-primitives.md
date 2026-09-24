@@ -2,7 +2,7 @@
 
 THC supports a bounded scalar `Float#`/`Double#` foundation in both the AST and
 bytecode backends. It includes floating literals, primitive locals, constructor
-fields and closure captures, scalar arguments/results, and 34 primops:
+fields and closure captures, scalar arguments/results, and 36 primops:
 
 | Family | Float# | Double# |
 | --- | --- | --- |
@@ -10,6 +10,7 @@ fields and closure captures, scalar arguments/results, and 34 primops:
 | Square root | `sqrtFloat#` | `sqrtDouble#` |
 | Comparisons | `eqFloat#`, `neFloat#`, `ltFloat#`, `leFloat#`, `gtFloat#`, `geFloat#` | `==##`, `/=##`, `<##`, `<=##`, `>##`, `>=##` |
 | Int conversion | `int2Float#`, `float2Int#` | `int2Double#`, `double2Int#` |
+| Unsigned Word conversion | `word2Float#` | `word2Double#` |
 | Precision conversion | `double2Float#` | `float2Double#` |
 | Raw bit casts | `castFloatToWord32#`, `castWord32ToFloat#` | `castDoubleToWord64#`, `castWord64ToDouble#` |
 
@@ -20,6 +21,21 @@ same concrete types with Bytecode DSL boxing elimination enabled for each.
 There is no implicit widening between the two types. Every floating operation
 rounds to its declared precision; comparisons use IEEE arithmetic equality and
 ordering, including unordered NaNs and equal positive/negative zeros.
+
+`word2Float#` and `word2Double#` accept the full unsigned 64-bit `Word#`
+range, represented by raw Long bits. Top-bit-set values are shifted right with
+a sticky low bit before a direct conversion at the destination precision, then
+scaled exactly by two. The Float path never goes through Double: that would
+double-round inputs one integer away from a binary32 midpoint. Both operations
+round to nearest, ties to even, including rounding `maxBound :: Word` to 2^64.
+`cabal run exe:thc-fixtures -- word-floating` produces argument-fed native raw-bit
+observations and strict pre/post Core audits using the existing Haskell fixture
+runner. `WordFloatingTest` independently derives integer rounding and checks
+both backends before and on the first/subsequent installed compiled calls, with
+inlining enabled/disabled. Its input domain includes 2^24/2^53, both sides of
+2^63, max Word, and even/odd midpoint neighbors; exact Word/Float/Double proofs
+and unary arities have negative controls. Preparation is wired into full and
+focused CI; no installed GHC artifacts are hashed.
 
 Generic function call packets and root returns still use the existing Object
 ABI. Non-inlined floating calls can therefore allocate wrapper objects. The

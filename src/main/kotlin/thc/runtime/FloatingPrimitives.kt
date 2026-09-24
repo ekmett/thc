@@ -35,6 +35,19 @@ private const val FLOAT_INT = 24
 private const val DOUBLE_INT = 25
 private const val FLOAT_DOUBLE = 26
 private const val DOUBLE_FLOAT = 27
+private const val WORD_FLOAT = 28
+private const val WORD_DOUBLE = 29
+
+/** Unsigned 64-bit conversion with one rounding at the destination precision. */
+internal object WordFloatingConversions {
+    // Halve a top-bit-set word into the signed range, retaining the discarded
+    // bit as sticky. It is below either format's rounding position. Scaling by
+    // two is exact; Float must never go through an intermediate Double.
+    @JvmStatic fun toFloat(x: Long): Float =
+        if (x >= 0) x.toFloat() else ((x ushr 1) or (x and 1)).toFloat() * 2.0f
+    @JvmStatic fun toDouble(x: Long): Double =
+        if (x >= 0) x.toDouble() else ((x ushr 1) or (x and 1)).toDouble() * 2.0
+}
 
 private val floatingOperations = mapOf(
     "plusFloat#" to FLOAT_ADD, "minusFloat#" to FLOAT_SUB, "timesFloat#" to FLOAT_MUL,
@@ -45,7 +58,8 @@ private val floatingOperations = mapOf(
     "==##" to DOUBLE_EQ, "/=##" to DOUBLE_NE, "<##" to DOUBLE_LT,
     "<=##" to DOUBLE_LE, ">##" to DOUBLE_GT, ">=##" to DOUBLE_GE,
     "int2Float#" to INT_FLOAT, "int2Double#" to INT_DOUBLE, "float2Int#" to FLOAT_INT,
-    "double2Int#" to DOUBLE_INT, "float2Double#" to FLOAT_DOUBLE, "double2Float#" to DOUBLE_FLOAT)
+    "double2Int#" to DOUBLE_INT, "float2Double#" to FLOAT_DOUBLE, "double2Float#" to DOUBLE_FLOAT,
+    "word2Float#" to WORD_FLOAT, "word2Double#" to WORD_DOUBLE)
 
 /** JVM float operations round each result to binary32; no implicit numeric widening. */
 internal fun floatingPrimitive(name: String, arguments: Array<Expr>): Expr? {
@@ -56,14 +70,14 @@ internal fun floatingPrimitive(name: String, arguments: Array<Expr>): Expr? {
     }
     val kind = when (name) {
         "plusFloat#", "minusFloat#", "timesFloat#", "divideFloat#", "negateFloat#",
-        "int2Float#", "double2Float#" -> CoreKind.FLOAT
-        "+##", "-##", "*##", "/##", "negateDouble#", "int2Double#", "float2Double#" -> CoreKind.DOUBLE
+        "int2Float#", "word2Float#", "double2Float#" -> CoreKind.FLOAT
+        "+##", "-##", "*##", "/##", "negateDouble#", "int2Double#", "word2Double#", "float2Double#" -> CoreKind.DOUBLE
         "eqFloat#", "neFloat#", "ltFloat#", "leFloat#", "gtFloat#", "geFloat#",
         "==##", "/=##", "<##", "<=##", ">##", ">=##", "float2Int#", "double2Int#" -> CoreKind.LONG
         else -> return null
     }
     val unary = name in setOf("negateFloat#", "negateDouble#", "int2Float#", "int2Double#",
-        "float2Int#", "double2Int#", "float2Double#", "double2Float#")
+        "float2Int#", "double2Int#", "float2Double#", "double2Float#", "word2Float#", "word2Double#")
     if (arguments.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
     return FloatingPrimitive(floatingOperations.getValue(name), arguments, kind)
 }
@@ -90,6 +104,7 @@ private class FloatingPrimitive(private val operation: Int,
         else if (resultKind == CoreKind.DOUBLE) executeDouble(frame) else executeLong(frame)
 
     override fun executeFloat(frame: VirtualFrame): Float {
+        if (operation == WORD_FLOAT) return WordFloatingConversions.toFloat(arguments[0].executeRequiredLong(frame))
         if (operation == INT_FLOAT) return arguments[0].executeRequiredLong(frame).toFloat()
         if (operation == DOUBLE_FLOAT) return arguments[0].executeRequiredDouble(frame).toFloat()
         val x = arguments[0].executeRequiredFloat(frame)
@@ -105,6 +120,7 @@ private class FloatingPrimitive(private val operation: Int,
     }
 
     override fun executeDouble(frame: VirtualFrame): Double {
+        if (operation == WORD_DOUBLE) return WordFloatingConversions.toDouble(arguments[0].executeRequiredLong(frame))
         if (operation == INT_DOUBLE) return arguments[0].executeRequiredLong(frame).toDouble()
         if (operation == FLOAT_DOUBLE) return arguments[0].executeRequiredFloat(frame).toDouble()
         val x = arguments[0].executeRequiredDouble(frame)

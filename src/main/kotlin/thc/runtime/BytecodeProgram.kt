@@ -2047,17 +2047,19 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "castWord64ToDouble#" -> "CastWord64ToDouble"
             "int2Float#" -> "IntToFloat"
             "int2Double#" -> "IntToDouble"
+            "word2Float#" -> "WordToFloat"
+            "word2Double#" -> "WordToDouble"
             "float2Int#" -> "FloatToInt"
             "double2Int#" -> "DoubleToInt"
             "float2Double#" -> "FloatToDouble"
             "double2Float#" -> "DoubleToFloat"
             else -> return null
         }
-        val unary = operation in setOf("CastFloatToWord32", "CastWord32ToFloat", "CastDoubleToWord64", "CastWord64ToDouble", "FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "IntToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat")
+        val unary = operation in setOf("CastFloatToWord32", "CastWord32ToFloat", "CastDoubleToWord64", "CastWord64ToDouble", "FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "IntToDouble", "WordToFloat", "WordToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         val kind = when (operation) {
-            "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "FloatSqrt", "IntToFloat", "DoubleToFloat", "CastWord32ToFloat" -> CoreKind.FLOAT
-            "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "DoubleSqrt", "IntToDouble", "FloatToDouble", "CastWord64ToDouble" -> CoreKind.DOUBLE
+            "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "FloatSqrt", "IntToFloat", "WordToFloat", "DoubleToFloat", "CastWord32ToFloat" -> CoreKind.FLOAT
+            "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "DoubleSqrt", "IntToDouble", "WordToDouble", "FloatToDouble", "CastWord64ToDouble" -> CoreKind.DOUBLE
             else -> CoreKind.LONG
         }
         return ProvenExpression(Expression { e ->
@@ -2093,6 +2095,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "CastWord64ToDouble" -> b.beginCastWord64ToDouble()
                 "IntToFloat" -> b.beginIntToFloat()
                 "IntToDouble" -> b.beginIntToDouble()
+                "WordToFloat" -> b.beginWordToFloat()
+                "WordToDouble" -> b.beginWordToDouble()
                 "FloatToInt" -> b.beginFloatToInt()
                 "DoubleToInt" -> b.beginDoubleToInt()
                 "FloatToDouble" -> b.beginFloatToDouble()
@@ -2130,6 +2134,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "CastWord64ToDouble" -> b.endCastWord64ToDouble()
                 "IntToFloat" -> b.endIntToFloat()
                 "IntToDouble" -> b.endIntToDouble()
+                "WordToFloat" -> b.endWordToFloat()
+                "WordToDouble" -> b.endWordToDouble()
                 "FloatToInt" -> b.endFloatToInt()
                 "DoubleToInt" -> b.endDoubleToInt()
                 "FloatToDouble" -> b.endFloatToDouble()

@@ -664,7 +664,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             "BytecodeTypedTupleInputTest", "DoubleArrayNativeTest", "DoubleArrayTest",
             "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest", "FloatArrayTest",
             "FloatVectorMemoryProofTest", "FloatVectorStorageTest", "FloatWordArrayNativeTest",
-            "FloatingPrimitiveTest", "FloatingTupleTest", "ScalarBitCastTest", "SimdDoubleByteArrayTest",
+            "FloatingPrimitiveTest", "FloatingTupleTest", "WordFloatingTest", "ScalarBitCastTest", "SimdDoubleByteArrayTest",
             "SimdDoubleVectorTest", "SimdFloatByteArrayTest", "SimdFloatVectorTest", "SqrtPrimitiveTest",
             "SumProtocolTest", "SumResultTest", "TupleInputNativeTest", "TypedInputScalarSourceTest")}},
                          set(floating["junit"]))

@@ -59,6 +59,7 @@ tasks.withType<Test>().configureEach {
     inputs.files(fileTree(layout.buildDirectory) {
         include("core/**/*.json", "source-core/**/*.json", "cbv-post-core/**/*.json",
             "floating/core/**/*.json", "floating/checks.json", "floating/oracle.tsv",
+            "word-floating/**/*.json", "word-floating/oracle.tsv",
             "floating-tuple/**/*.json", "floating-tuple/*.tsv", "floating-tuple/native/**",
             "tuple-input/**/*.json", "tuple-input/*.tsv", "tuple-input/native/**",
             "io-main-pap/**/*.json", "io-main-pap/*.tsv", "io-main-pap/native/**",

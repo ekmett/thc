@@ -2143,6 +2143,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class CastWord64ToDouble { @Specialization public static double apply(long value) { return RawBitCasts.word64ToDouble(value); } }
     @Operation public static final class IntToFloat { @Specialization public static float apply(long x) { return (float) x; } }
     @Operation public static final class IntToDouble { @Specialization public static double apply(long x) { return (double) x; } }
+    @Operation public static final class WordToFloat { @Specialization public static float apply(long x) { return WordFloatingConversions.toFloat(x); } }
+    @Operation public static final class WordToDouble { @Specialization public static double apply(long x) { return WordFloatingConversions.toDouble(x); } }
     @Operation public static final class FloatToInt { @Specialization public static long apply(float x) { return (long) x; } }
     @Operation public static final class DoubleToInt { @Specialization public static long apply(double x) { return (long) x; } }
     @Operation public static final class FloatToDouble { @Specialization public static double apply(float x) { return (double) x; } }

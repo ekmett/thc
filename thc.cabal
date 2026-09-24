@@ -187,6 +187,7 @@ executable thc-fixtures
   other-modules:
     AggregateFixtures
     FixtureSupport
+    WordFloatingFixtures
   hs-source-dirs: test/haskell-fixtures
   build-depends:
     base >= 4.22 && < 4.23,

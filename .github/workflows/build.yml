@@ -265,6 +265,7 @@ jobs:
             build/floating/core/
             build/floating/checks.json
             build/floating/oracle.tsv
+            build/word-floating/
             build/floating-tuple/
             build/empty-tuple-input/
             build/empty-join-input/

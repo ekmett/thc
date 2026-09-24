@@ -204,6 +204,37 @@ class IoMainAuditTest(unittest.TestCase):
 
 
 class AuditTest(unittest.TestCase):
+    def test_word_floating_requires_exact_unsigned_input_result_and_arity(self):
+        for primitive, kind, register in [('word2Float#', 'float', 'FloatRep'),
+                                          ('word2Double#', 'double', 'DoubleRep')]:
+            word = dict(LONG, primReps=['WordRep'])
+            result = dict(kind=kind, primReps=[register], evaluated=True)
+            body = ['app', ['prim', primitive], [['var', 'x', dict(rep=word)]],
+                    [False], False, True, dict(rep=result)]
+            expression = ['lam', [dict(id='x', lifted=False, rep=word)], body,
+                          dict(rep=CLOSURE, resultRep=result)]
+            self.assertTrue(run(expression)['accepted'], primitive)
+            for variant in ('signed', 'word64', 'result', 'arity', 'hidden'):
+                bad = copy.deepcopy(expression)
+                if variant in ('signed', 'word64', 'hidden'):
+                    rep = dict(LONG, primReps=['Word64Rep' if variant == 'word64' else 'IntRep'])
+                    bad[1][0]['rep'] = rep
+                    if variant == 'hidden':
+                        bad[2][2][0].pop()
+                    else:
+                        bad[2][2][0][2]['rep'] = rep
+                elif variant == 'result':
+                    other = dict(kind='double' if kind == 'float' else 'float',
+                                 primReps=['DoubleRep' if kind == 'float' else 'FloatRep'], evaluated=True)
+                    bad[2][6]['rep'] = other
+                    bad[3]['resultRep'] = other
+                else:
+                    bad[2][2] = []; bad[2][3] = []
+                report = run(bad)
+                self.assertFalse(report['accepted'], (primitive, variant))
+                self.assertTrue(any(issue['code'] in ('primitive-representation', 'primitive-arity')
+                                    for issue in report['issues']), report['issues'])
+
     def test_scalar_primitive_signatures_reject_consistent_forgery_and_hidden_binder_proofs(self):
         for primitive, expected, result in [('plusInt64#', 'Int64Rep', 'Int64Rep'),
                 ('ltWord64#', 'Word64Rep', 'IntRep'), ('int64ToWord64#', 'Int64Rep', 'Word64Rep')]:
