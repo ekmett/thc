@@ -32,6 +32,7 @@ extra-source-files:
   compiler/pinned-ghc-internal/GHC/Internal/Data/OldList.hs
   compiler/pinned-ghc-internal/GHC/Internal/Data/Typeable/Internal.hs
   compiler/pinned-ghc-internal/GHC/Internal/Data/Tuple.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Enum.hs
   compiler/pinned-ghc-internal/GHC/Internal/Enum.hs-boot
   compiler/pinned-ghc-internal/GHC/Internal/Err.hs
   compiler/pinned-ghc-internal/GHC/Internal/ExecutionStack/Internal.hsc
