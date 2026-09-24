@@ -105,7 +105,7 @@ internal class Thunk(target: RootCallTarget, var environment: CapturedFrame?) {
     var target: RootCallTarget? = target
     // 0 = unevaluated, 1 = owned, 2 = WHNF, 3 = ordinary failure,
     // 4 = interrupted without a resumable continuation, 5 = cooperatively
-    // yielded bytecode root with a captured continuation. State publishes the
+    // yielded guest root with a captured continuation. State publishes the
     // value/continuation and release of ownership to all waiting guest threads.
     @Volatile var state = 0
     var value: Any? = null
@@ -114,13 +114,14 @@ internal class Thunk(target: RootCallTarget, var environment: CapturedFrame?) {
 }
 /** A cold, one-shot call continuation. Unlike a thunk update, its answer may itself be lazy. */
 internal class CallSegment @JvmOverloads constructor(
-    continuation: ContinuationResult,
+    continuation: Any,
     var logicalMask: MaskingState = MaskingState.UNMASKED,
     val callerMask: MaskingState = MaskingState.UNMASKED,
     val tupleShape: TupleShape? = null,
     /** This cold token was captured inside a real catch# action boundary. */
     val caughtIOAction: Boolean = false
 ) {
+    init { check(savedGuestContinuation(continuation) != null) { "Call segment needs a saved continuation" } }
     @Volatile var state = 5 // owned=1, completed=2, failure=3, unsupported unwind=4, parked=5
     var value: Any? = continuation
     var owner: Thread? = null
@@ -151,7 +152,7 @@ internal class CallSegmentSuspended @JvmOverloads constructor(
     val segment: CallSegment,
     /** Logical mask before a caller parked to its root-entry mask for Yield. */
     val parkedActiveMask: MaskingState? = null,
-    val asyncRequest: AsyncRequest? = (segment.value as? ContinuationResult)?.let(AsyncContinuations::request)
+    val asyncRequest: AsyncRequest? = savedGuestContinuation(segment.value)?.asyncRequest()
 ) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
         "Internal bytecode call segment suspension", null, 0, null)
@@ -325,7 +326,7 @@ private class Delay(private val target: RootCallTarget, private val captureLayou
 }
 internal class Force @JvmOverloads constructor(private val metrics: Metrics, private val asyncMode: Boolean = false) : Node() {
     private object Retry
-    private class Parked(val boundary: Any, val continuation: ContinuationResult)
+    private class Parked(val boundary: Any, val continuation: SavedGuestContinuation)
     @Child private var calls = ThunkTargetCache(metrics)
     @Child private var trampoline = TailCallLoop(metrics)
     private val tailCallProfile = BranchProfile.create()
@@ -347,7 +348,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 3 -> rethrowFailure(original)
                 4 -> fault("Interrupted thunk has no resumable continuation")
             }
-            val observed = if (original.state == 5) original.value as? ContinuationResult else null
+            val observed = if (original.state == 5) savedGuestContinuation(original.value) else null
             val child = suspendedChild(observed)
             // The continuation owns its captured callee frame. None of the
             // update/resume helpers needs this caller's frame; materializing
@@ -374,7 +375,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 claimed = true
                 checkNotNull(saved)
             }
-            return evaluateOwned(original, continuation, AsyncThunkUnwind(payload))
+            return evaluateOwned(original, savedGuestContinuation(continuation), AsyncThunkUnwind(payload))
         } catch (failure: Throwable) {
             if (claimed) suspendOwned(original)
             throw failure
@@ -426,7 +427,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                     // The captured parent commits this cut. An independent observer may
                     // complete the shared child before its handler continuation runs.
                     afterClaim?.invoke()
-                    evaluateOwned(original, continuation, PrivateIOUnwind(child, payload, request))
+                    evaluateOwned(original, savedGuestContinuation(continuation), PrivateIOUnwind(child, payload, request))
                 } catch (failure: Throwable) {
                     if (claimed) suspendOwned(original)
                     if (claimed) request?.fail()
@@ -451,7 +452,8 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                         checkNotNull(saved)
                     }
                     afterClaim?.invoke()
-                    evaluateCallSegment(original, continuation, mask, PrivateIOUnwind(child, payload, request))
+                    evaluateCallSegment(original, checkNotNull(savedGuestContinuation(continuation)), mask,
+                        PrivateIOUnwind(child, payload, request))
                 } catch (failure: Throwable) {
                     if (claimed) suspendCallOwned(original)
                     if (claimed) request?.fail()
@@ -463,7 +465,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
     }
 
     private fun executeOne(original: Thunk,
-                           observed: ContinuationResult?, resumeValue: Any?): Any? {
+                           observed: SavedGuestContinuation?, resumeValue: Any?): Any? {
         while (true) {
             when (original.state) {
                 2 -> { if (metrics.enabled) metrics.incrementThunkHits(); return original.value }
@@ -472,17 +474,17 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
             }
             // A volatile state read alone cannot claim an unevaluated thunk:
             // another thread can enter during the single-threaded transition.
-            var continuation: ContinuationResult? = null
+            var continuation: SavedGuestContinuation? = null
             var claimedHere = false
             try {
                 val claim = synchronized(original.monitor) {
                     when (original.state) {
                         0 -> { original.owner = Thread.currentThread(); original.state = 1; claimedHere = true; 0 }
-                        5 -> if ((observed != null && original.value !== observed) ||
+                        5 -> if ((observed != null && original.value !== observed.identity) ||
                             (observed == null &&
-                                (suspendedChild(original.value as? ContinuationResult) != null))) 3 else {
-                            continuation = original.value as? ContinuationResult
-                                ?: fault("Suspended thunk has no bytecode continuation")
+                                (suspendedChild(savedGuestContinuation(original.value)) != null))) 3 else {
+                            continuation = savedGuestContinuation(original.value)
+                                ?: fault("Suspended thunk has no guest continuation")
                             original.value = null // One owner consumes the one-shot continuation.
                             original.owner = Thread.currentThread()
                             original.state = 1
@@ -516,7 +518,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
             parked.clear()
             seen.clear()
             var leaf: Any = original
-            var leafContinuation: ContinuationResult? = null
+            var leafContinuation: SavedGuestContinuation? = null
             while (true) {
                 if (seen.put(leaf, true) != null) fault("Suspended thunk dependency cycle")
                 leafContinuation = continuationOf(leaf)
@@ -559,35 +561,35 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         }
     }
 
-    private fun continuationOf(boundary: Any): ContinuationResult? = when (boundary) {
-        is Thunk -> if (boundary.state == 5) boundary.value as? ContinuationResult else null
-        is CallSegment -> if (boundary.state == 5) boundary.value as? ContinuationResult else null
+    private fun continuationOf(boundary: Any): SavedGuestContinuation? = when (boundary) {
+        is Thunk -> if (boundary.state == 5) savedGuestContinuation(boundary.value) else null
+        is CallSegment -> if (boundary.state == 5) savedGuestContinuation(boundary.value) else null
         else -> fault("Invalid suspended continuation boundary")
     }
 
-    private fun suspendedChild(continuation: ContinuationResult?): Any? = when (val signal = continuation?.result) {
+    private fun suspendedChild(continuation: SavedGuestContinuation?): Any? = when (val signal = continuation?.yielded) {
         is ThunkSuspended -> signal.thunk
         is CallSegmentSuspended -> signal.segment
         else -> null
     }
 
-    private fun executeCallSegment(segment: CallSegment, observed: ContinuationResult?, resumeValue: Any?): Any? {
+    private fun executeCallSegment(segment: CallSegment, observed: SavedGuestContinuation?, resumeValue: Any?): Any? {
         while (true) {
             when (segment.state) {
                 2 -> return segment.value
                 3 -> rethrowCallFailure(segment)
                 4 -> fault("Interrupted call segment has no resumable continuation")
             }
-            var continuation: ContinuationResult? = null
+            var continuation: SavedGuestContinuation? = null
             var resumeMask = MaskingState.UNMASKED
             var claimedHere = false
             try {
                 val claim = synchronized(segment.monitor) {
                     when (segment.state) {
-                        5 -> if ((observed != null && segment.value !== observed) ||
-                            (observed == null && suspendedChild(segment.value as? ContinuationResult) != null)) 3 else {
-                            continuation = segment.value as? ContinuationResult
-                                ?: fault("Suspended call segment has no bytecode continuation")
+                        5 -> if ((observed != null && segment.value !== observed.identity) ||
+                            (observed == null && suspendedChild(savedGuestContinuation(segment.value)) != null)) 3 else {
+                            continuation = savedGuestContinuation(segment.value)
+                                ?: fault("Suspended call segment has no guest continuation")
                             resumeMask = segment.logicalMask
                             segment.value = null // Consume the one-shot continuation under ownership.
                             segment.owner = Thread.currentThread()
@@ -612,7 +614,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         }
     }
 
-    private fun evaluateCallSegment(segment: CallSegment, continuation: ContinuationResult,
+    private fun evaluateCallSegment(segment: CallSegment, continuation: SavedGuestContinuation,
                                     resumeMask: MaskingState, resumeValue: Any?): Any? {
         val carrierAmbient = SynchronousMasking.current(this)
         try {
@@ -620,15 +622,15 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
             val returned = try { continuation.continueWith(resumeValue) }
                 catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
             val result = if (returned is TailYield) returned.continuation else returned
-            if (result is ContinuationResult) {
-                if (returned !is TailYield && !sameContinuationBody(result.continuationRootNode.sourceRootNode,
-                        continuation.continuationRootNode.sourceRootNode))
-                    throw IllegalStateException("Nested bytecode yield has no captured caller segment")
-                val parkedMask = (result.result as? CallSegmentSuspended)?.parkedActiveMask
+            val saved = savedGuestContinuation(result)
+            if (saved != null) {
+                if (returned !is TailYield && !sameContinuationBody(saved.sourceRoot, continuation.sourceRoot))
+                    throw IllegalStateException("Nested guest yield has no captured caller segment")
+                val parkedMask = (saved.yielded as? CallSegmentSuspended)?.parkedActiveMask
                 if (parkedMask != null && SynchronousMasking.current(this) != segment.callerMask)
                     throw IllegalStateException("Parked call segment did not restore its caller mask")
-                val request = AsyncContinuations.request(result)
-                publishCallContinuation(segment, result, parkedMask ?: SynchronousMasking.current(this))
+                val request = saved.asyncRequest()
+                publishCallContinuation(segment, saved, parkedMask ?: SynchronousMasking.current(this))
                 throw CallSegmentSuspended(segment, asyncRequest = request)
             }
             // A completed tuple may still be a producer-thread slab loan.
@@ -668,13 +670,13 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         } finally { SynchronousMasking.set(this, carrierAmbient) }
     }
 
-    private fun publishCallContinuation(segment: CallSegment, continuation: ContinuationResult,
+    private fun publishCallContinuation(segment: CallSegment, continuation: SavedGuestContinuation,
                                         logicalMask: MaskingState) {
         val safepoint = TruffleSafepoint.getCurrent()
         val previous = safepoint.setAllowSideEffects(false)
         try {
             synchronized(segment.monitor) {
-                segment.value = continuation
+                segment.value = continuation.identity
                 segment.logicalMask = logicalMask
                 segment.owner = null
                 segment.state = 5
@@ -718,7 +720,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         }, segment)
     }
 
-    private fun evaluateOwned(thunk: Thunk, continuation: ContinuationResult?, resumeValue: Any?): Any? {
+    private fun evaluateOwned(thunk: Thunk, continuation: SavedGuestContinuation?, resumeValue: Any?): Any? {
         try {
             if (metrics.enabled && continuation == null) {
                 val target = thunk.target ?: fault("Unevaluated thunk has no body")
@@ -729,7 +731,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
             } else {
                 // A captured logical computation may move to another host
-                // thread. Its bytecode reinstalls the saved logical mask;
+                // thread. The saved activation reinstalls its logical mask;
                 // the carrier's ambient mask must survive the entire resumed
                 // chain, including a tail-call trampoline.
                 val ambient = SynchronousMasking.current(this)
@@ -739,13 +741,14 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 } finally { SynchronousMasking.set(this, ambient) }
             }
             val result = if (returned is TailYield) returned.continuation else returned
-            if (result is ContinuationResult) {
-                val expectedRoot = continuation?.continuationRootNode?.sourceRootNode
+            val saved = savedGuestContinuation(result)
+            if (saved != null) {
+                val expectedRoot = continuation?.sourceRoot
                     ?: thunk.target?.rootNode
-                if (returned !is TailYield && !sameContinuationBody(result.continuationRootNode.sourceRootNode, expectedRoot))
-                    throw IllegalStateException("Nested bytecode yield has no captured caller segment")
-                val request = AsyncContinuations.request(result)
-                publishContinuation(thunk, result)
+                if (returned !is TailYield && !sameContinuationBody(saved.sourceRoot, expectedRoot))
+                    throw IllegalStateException("Nested guest yield has no captured caller segment")
+                val request = saved.asyncRequest()
+                publishContinuation(thunk, saved)
                 throw ThunkSuspended(thunk, request)
             }
             if (result is Thunk) fault("Thunk target violated WHNF convention")
@@ -783,7 +786,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
     private fun sameContinuationBody(actual: Any, expected: Any?): Boolean =
         actual === expected || actual is GuestRoot && expected is GuestRoot && actual.isSelf(expected.callTarget)
 
-    private fun publishContinuation(thunk: Thunk, continuation: ContinuationResult) {
+    private fun publishContinuation(thunk: Thunk, continuation: SavedGuestContinuation) {
         // A side-effecting thread-local action must not unwind between storing
         // the captured frame and publishing the released owner. This is the
         // exceptional yield path, not a cost on ordinary thunk evaluation.
@@ -791,7 +794,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         val previous = safepoint.setAllowSideEffects(false)
         try {
             synchronized(thunk.monitor) {
-                thunk.value = continuation
+                thunk.value = continuation.identity
                 thunk.target = null
                 thunk.environment = null
                 thunk.owner = null
