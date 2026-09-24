@@ -332,6 +332,22 @@ class FixturePreparationTest(unittest.TestCase):
                 self.assertIn(name + "/**/*.json", (project / "build.gradle.kts").read_text())
                 self.assertIn(junit, policy["leafSources"]["src/main/kotlin/thc/runtime/FloatingPrimitives.kt"]["junit"])
 
+    def test_explicit64_array_fixture_is_selected_and_receipted(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest["groups"]["explicit64-arrays"]
+        self.assertEqual("explicit64-arrays", owners["thc.runtime.Explicit64ArrayTest"])
+        self.assertEqual(["build/explicit64-arrays"], group["outputs"])
+        self.assertTrue(all((project / name).is_file() for name in group["sources"]))
+        self.assertIn('"$fixture_bin" explicit64-arrays',
+                      (project / "scripts/prepare-tests.sh").read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn("build/explicit64-arrays", fast_fixtures.FULL_OUTPUT_ROOTS)
+        for name in ("manifest.json", "oracle.tsv", "pre/audit.json", "post/audit.json",
+                     "pre/core/Explicit64ArrayAudit.json", "post/core/Explicit64ArrayAudit.json"):
+            self.assertIn("build/explicit64-arrays/" + name, fast_fixtures.FULL_REQUIRED)
+        self.assertIn('"explicit64-arrays/*.tsv"', (project / "build.gradle.kts").read_text())
+
     def test_floating_address_fixture_is_selected_and_receipted(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

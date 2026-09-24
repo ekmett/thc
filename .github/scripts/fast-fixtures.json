@@ -100,6 +100,19 @@
       "outputs": ["build/simd-doublex2-bytearray"],
       "sources": ["scripts/prepare-doublex2-bytearray-audit.py", "scripts/doublex2_bytearray_model.py", "scripts/test-doublex2-bytearray-model.py", "compiler/test-fixtures/SimdDoubleX2ByteArray.hs", "compiler/test-fixtures/SimdDoubleX2ByteArrayNative.hs"]
     },
+    "explicit64-arrays": {
+      "junit": ["thc.runtime.Explicit64ArrayTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "explicit64-arrays"]}],
+      "outputs": ["build/explicit64-arrays"],
+      "sources": [
+        "test/haskell-fixtures/Explicit64ArrayFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "compiler/test-fixtures/Explicit64ArrayAudit.hs",
+        "compiler/test-fixtures/Explicit64ArrayNative.hs",
+        "thc.cabal"
+      ]
+    },
     "floating-address": {
       "junit": ["thc.runtime.FloatingAddressTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "floating-address"]}],
