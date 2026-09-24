@@ -11,6 +11,19 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "boxed-array-extensions": {
+      "junit": ["thc.runtime.BoxedArrayExtensionsTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "boxed-array-extensions"]}],
+      "outputs": ["build/boxed-array-extensions"],
+      "sources": [
+        "compiler/test-fixtures/BoxedArrayExtensionsAudit.hs",
+        "compiler/test-fixtures/BoxedArrayExtensionsNative.hs",
+        "test/haskell-fixtures/BoxedArrayExtensionsFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal"
+      ]
+    },
     "original-stdio": {
       "junit": ["thc.runtime.OriginalStdioNativeTest"],
       "commands": [{"argv": ["scripts/prepare-original-stdio.sh", "--require-supported"]}],

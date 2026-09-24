@@ -34,7 +34,7 @@ COMPILER_BUILD_INPUTS = ("thc.cabal", "cabal.project", "Setup.hs", "Makefile")
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/java/thc/runtime/DoubleX2.java")
 MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
-boxed-arrays bytearray compare-byte-arrays data-to-tag double-arrays
+boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar
 narrow-literal-proofs original-stdio resize-bytearrays scalar-bitcasts short-bytes-slices
@@ -102,6 +102,25 @@ ORIGINAL_STDIO_OUTPUTS = frozenset("build/original-stdio/" + name for name in (
 
 class CacheMiss(RuntimeError):
     """Unavailable, stale or invalid cache; fresh preparation is required."""
+
+
+BOXED_ARRAY_EXTENSION_FILES = frozenset((
+    "native/boxed-array-extensions-oracle",
+    *(f"{stage}-core/{module}.json" for stage in ("pre", "post")
+      for module in ("BoxedArrayExtensionsAudit", "THC.InterfaceClosure")),
+    *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post")
+      for entry in ("boxedExtSizes", "boxedExtClone", "boxedExtCopy", "boxedExtMove", "boxedExtThaw", "boxedExtLazy")),
+    *(f"logs/{label}.{suffix}" for label in (
+        "ghc-version", "ghc-info", "pre-export", "post-export", "native-compile", "native-oracle",
+        *(f"{stage}-audit-{entry}" for stage in ("pre", "post")
+          for entry in ("boxedExtSizes", "boxedExtClone", "boxedExtCopy", "boxedExtMove", "boxedExtThaw", "boxedExtLazy")))
+      for suffix in ("stdout", "stderr", "command.json")),
+))
+
+
+def boxed_array_extension_artifact(name):
+    match = re.fullmatch(r"build/boxed-array-extensions/run-[1-9][0-9]*/(.+)", name)
+    return match is not None and match.group(1) in BOXED_ARRAY_EXTENSION_FILES
 
 
 def require(condition, message):
@@ -255,6 +274,8 @@ def allowed_payload(name, pins):
             bool(re.fullmatch(r"libHSthc-[\w.-]+\.(so|dylib)", parts[2])))
     if parts[1] == "original-stdio":
         return name in ORIGINAL_STDIO_OUTPUTS
+    if parts[1] == "boxed-array-extensions":
+        return name == "build/boxed-array-extensions/manifest.json" or boxed_array_extension_artifact(name)
     if parts[1] not in BUILD_DIRS or any(p in ("test-results", "reports", "classes", ".gradle") for p in parts):
         return False
     # Fixture inputs and recorded native objects only, not arbitrary executable

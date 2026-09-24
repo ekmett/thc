@@ -21,6 +21,44 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def test_boxed_array_extensions_only_admit_reviewed_attempt_artifacts(self):
+        self.assertIn('build/boxed-array-extensions/manifest.json', DECLARED_REQUIRED)
+        for attempt in ('run-1', 'run-42'):
+            for suffix in cache.BOXED_ARRAY_EXTENSION_FILES:
+                name = f'build/boxed-array-extensions/{attempt}/{suffix}'
+                self.assertTrue(cache.allowed_payload(name, {}), name)
+            self.assertEqual(0o755, cache.safe_mode(0o755,
+                f'build/boxed-array-extensions/{attempt}/native/boxed-array-extensions-oracle'))
+        for suffix in ('proof.json', 'run-0/logs/ghc-info.stdout', 'run-01/logs/ghc-info.stdout',
+                       'run-1/previous-manifest.json', 'run-1/logs/extra.stdout',
+                       'run-1/pre-core/Extra.json', 'run-1/native/Main.o', 'run-1/native/other-oracle'):
+            self.assertFalse(cache.allowed_payload('build/boxed-array-extensions/' + suffix, {}), suffix)
+        with self.assertRaises(cache.CacheMiss):
+            cache.safe_mode(0o755, 'build/boxed-array-extensions/run-1/logs/ghc-info.stdout')
+
+    def test_boxed_array_extensions_cache_round_trip_and_missing_dependency(self):
+        manifest_path = 'build/boxed-array-extensions/manifest.json'
+        attempt = 'build/boxed-array-extensions/run-3/'
+        artifacts = {attempt + name for name in cache.BOXED_ARRAY_EXTENSION_FILES}
+        executable = attempt + 'native/boxed-array-extensions-oracle'
+        for name in artifacts:
+            self.put(name, b'{}\n' if name.endswith('.json') else b'\x00\x80\xff\n')
+        (self.root / executable).chmod(0o755)
+        original = json.dumps({'schema': 1, 'inputHashes': self.manifest['inputHashes'],
+            'artifactHashes': {name: cache.digest(self.root / name) for name in sorted(artifacts)}})
+        self.put(manifest_path, original)
+        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, manifest_path)):
+            manifest = self.pack()
+            self.assertTrue(artifacts <= manifest['payload'].keys())
+            self.remove_payload(manifest)
+            cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(original, (self.root / manifest_path).read_text())
+            self.assertEqual(0o755, (self.root / executable).stat().st_mode & 0o7777)
+            self.remove_payload(manifest)
+            changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                if member.name != 'files/' + attempt + 'logs/native-oracle.stdout'])
+            self.rejected_without_writes(changed)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

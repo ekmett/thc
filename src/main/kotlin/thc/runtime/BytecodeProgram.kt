@@ -154,6 +154,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: List<Local>)
 
     init {
+        ArrayOp.validateApplications(bindings)
         CoreStackForeign.validateHeads(bindings)
         CoreOriginalStdio.validateHeads(bindings)
         CoreManagedFiles.validateHeads(bindings)
@@ -1123,8 +1124,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     when (operation) {
                         ArrayOp.NEW -> e.builder.beginNewArray(destination[0])
                         ArrayOp.READ -> e.builder.beginReadArray(destination[0])
-                        ArrayOp.FREEZE -> e.builder.beginFreezeArray(destination[0])
-                        ArrayOp.FREEZE_COPY, ArrayOp.THAW -> e.builder.beginCopyArraySlice(destination[0])
+                        ArrayOp.FREEZE, ArrayOp.UNSAFE_THAW -> e.builder.beginFreezeArray(destination[0])
+                        ArrayOp.FREEZE_COPY, ArrayOp.THAW, ArrayOp.CLONE_MUTABLE -> e.builder.beginCopyArraySlice(destination[0])
                         ArrayOp.INDEX -> e.builder.beginIndexArray(destination[0])
                         else -> error("Not a tuple array operation")
                     }
@@ -1132,15 +1133,25 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     when (operation) {
                         ArrayOp.NEW -> e.builder.endNewArray()
                         ArrayOp.READ -> e.builder.endReadArray()
-                        ArrayOp.FREEZE -> e.builder.endFreezeArray()
-                        ArrayOp.FREEZE_COPY, ArrayOp.THAW -> e.builder.endCopyArraySlice()
+                        ArrayOp.FREEZE, ArrayOp.UNSAFE_THAW -> e.builder.endFreezeArray()
+                        ArrayOp.FREEZE_COPY, ArrayOp.THAW, ArrayOp.CLONE_MUTABLE -> e.builder.endCopyArraySlice()
                         ArrayOp.INDEX -> e.builder.endIndexArray()
                         else -> error("Not a tuple array operation")
                     }
                 } else ProvenExpression(Expression { e ->
-                    if (operation == ArrayOp.CLONE) e.builder.beginCloneArray() else e.builder.beginWriteArray()
+                    when (operation) {
+                        ArrayOp.CLONE -> e.builder.beginCloneArray()
+                        ArrayOp.SIZE, ArrayOp.SIZE_MUTABLE -> e.builder.beginSizeArray()
+                        ArrayOp.COPY, ArrayOp.COPY_MUTABLE -> e.builder.beginTransferArray(operation == ArrayOp.COPY_MUTABLE)
+                        else -> e.builder.beginWriteArray()
+                    }
                     operands.forEach { it.emit(e) }
-                    if (operation == ArrayOp.CLONE) e.builder.endCloneArray() else e.builder.endWriteArray()
+                    when (operation) {
+                        ArrayOp.CLONE -> e.builder.endCloneArray()
+                        ArrayOp.SIZE, ArrayOp.SIZE_MUTABLE -> e.builder.endSizeArray()
+                        ArrayOp.COPY, ArrayOp.COPY_MUTABLE -> e.builder.endTransferArray()
+                        else -> e.builder.endWriteArray()
+                    }
                 }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && VectorByteArrayOp.named(fn[1] as String) != null) {
                 val operation = VectorByteArrayOp.named(fn[1] as String)!!
