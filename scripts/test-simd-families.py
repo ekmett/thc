@@ -50,6 +50,22 @@ class SimdFamiliesTest(unittest.TestCase):
                         bits = 0x7f800000
                     self.assertEqual(bits, float_operation('divide', left, right, width))
 
+    def test_infinity_products_distinguish_infinity_from_signed_zero(self):
+        for width, one, sign, infinity, nan in (
+            (32, 0x3f800000, 0x80000000, 0x7f800000, 0x7fc00000),
+            (64, 0x3ff0000000000000, 1 << 63, 0x7ff0000000000000, 0x7ff8000000000000)):
+            for left_sign in (0, sign):
+                for right_sign in (0, sign):
+                    expected_infinity = infinity | (left_sign ^ right_sign)
+                    self.assertEqual(expected_infinity,
+                                     float_operation('times', infinity | left_sign, infinity | right_sign, width))
+                    self.assertEqual(expected_infinity,
+                                     float_operation('times', one | left_sign, infinity | right_sign, width))
+                    self.assertEqual(expected_infinity,
+                                     float_operation('times', infinity | left_sign, one | right_sign, width))
+                    self.assertEqual(nan, float_operation('times', infinity | left_sign, right_sign, width))
+                    self.assertEqual(nan, float_operation('times', left_sign, infinity | right_sign, width))
+
     def test_floating_composites_cover_finite_arithmetic_and_each_lane(self):
         for width, one, two, three, half, sign in (
             (32, 0x3f800000, 0x40000000, 0x40400000, 0x3f000000, 0x80000000),

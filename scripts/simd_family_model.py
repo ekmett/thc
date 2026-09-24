@@ -88,7 +88,9 @@ def float_operation(operation, left, right, width):
             return (ls << (width - 1)) if not lv and not rv and ls == rs else 0
         return encode(int(value < 0), abs(value), width)
     if operation == 'times':
-        if lc == 'nan' or rc == 'nan' or lc == 'infinity' and not rv or rc == 'infinity' and not lv:
+        zero_times_infinity = ((lc == 'infinity' and rc == 'finite' and rv == 0) or
+                               (rc == 'infinity' and lc == 'finite' and lv == 0))
+        if lc == 'nan' or rc == 'nan' or zero_times_infinity:
             return nan
         if lc == 'infinity' or rc == 'infinity':
             return (sign << (width - 1)) | infinity
