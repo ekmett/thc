@@ -121,6 +121,10 @@ internal class AsyncThunkUnwind(val payload: Any?) : RuntimeException("Asynchron
 internal class ThunkSuspended(val thunk: Thunk) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
         "Internal bytecode thunk suspension", null, 0, null)
+/** A call returned its own bytecode continuation; only that exact call edge may capture it. */
+internal class CapturedCallSuspension(val thunk: Thunk) :
+    com.oracle.truffle.api.exception.AbstractTruffleException(
+        "Internal bytecode call suspension", null, 0, null)
 /** Cold caller-segment input distinguishes a child result from its guest failure. */
 internal class ChildResume(val value: Any?, val failure: GuestException?)
 internal class Metrics(val enabled: Boolean) {
