@@ -176,7 +176,7 @@ post-Tidy consumers pass strict audits. `OriginalStackFormatterTest` checks thos
 observations through both backends, before and immediately after explicit
 compilation, with inlining enabled and disabled.
 
-The fixture records exactly 95 source inputs and 91 artifacts from one export
+The fixture records exactly 103 source inputs and 99 artifacts from one export
 attempt. Provenance tests independently pin the upstream source catalog and
 reject omissions, changed pins and escaped paths. Focused preparation and cache
 receipts reuse this exact inventory; installed-interface symlink overlays are
@@ -216,8 +216,8 @@ identities: `integerFromWord#`, `$fIntegralInteger`, `showHex1`, and
 pointer-formatter reference, the exact unlifted Word# input, the original
 Integer constant 16 and the Integral dictionary constructor. Compiling Integer
 requires the unchanged small boot interfaces in BigNat, Natural, Integer order;
-the BigNat/WordArray/backend implementations are not added. Strict traversal
-still exposes those implementations and further numeric/encoding/error
+the BigNat/WordArray/backend implementations are not added. At that numeric-source
+checkpoint, strict traversal exposed those implementations and further numeric/encoding/error
 dependencies, installed GMP foreign calls, tuple captures, `timesInt2#`,
 `addr2Int#`, libdw and cold decoder branches. This source addition does not
 admit those paths or select a bignum backend.
@@ -228,8 +228,8 @@ same pinned revision supply `Types.close#` and eight original Failure workers:
 `recoverEncode#`, and `codingFailureModeSuffix1`, `codingFailureModeSuffix3`,
 `codingFailureModeSuffix5`. The source proof checks their exact original
 CString/UTF8/encoding caller references and preserves each exported binding
-through module merging. These modules use the existing private installed-interface
-overlay for `IO.Buffer`, `Char`, and `Num`; their implementations are not added.
+through module merging. At that checkpoint these modules used the existing
+private installed-interface overlay for `IO.Buffer`, `Char`, and `Num`.
 No new boot interface or target-layout receipt is needed. This is source
 availability, not execution or admission of the buffer-recovery/error closure.
 At that encoding-source checkpoint, the original error probe still stopped at
@@ -250,3 +250,18 @@ through module merging. Installed Magic/Tuple and compatibility Integer/Natural
 interfaces still supply omitted modules. This proves source availability, not
 general Integer, BigNat/backend, error, or library execution; no runtime,
 primitive, masking, libdw, or admission policy is changed by this source slice.
+
+The next bounded source slice adds unchanged `GHC.Internal.Char` and
+`IO.Encoding.Latin1`, `IO.Encoding.UTF16`, and `IO.Encoding.UTF32` from the same
+pinned revision. Char follows Err before Enum; the codecs follow Encoding.Failure
+before CString.Encoding. No new source or boot prerequisite, Unicode tables or
+Iconv implementation is added. The existing installed-interface overlay supplies
+`IO.Buffer`, `Data.Bits` and `IORef`. Fresh source proof checks exactly two
+`Char.$wlvl` references in `Encoding.Failure.$wrecoverDecode`, and one reference
+each to `mkAscii`, `mkLatin1_checked`, `mkUTF16`, `mkUTF16be`, `mkUTF16le`, `mkUTF32`,
+`mkUTF32be` and `mkUTF32le` in `Encoding.mkTextEncoding19`; merging preserves the
+original definitions and callers. This establishes source availability, not
+execution or admission of the stateful codecs, their ForeignPtr buffers, BOM
+IORef state, or the full original error-display closure. The seven target-layout
+HSC sources and all runtime, exception, backtrace and admission policies remain
+unchanged.

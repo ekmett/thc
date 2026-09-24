@@ -40,7 +40,7 @@ class FastInputTests(unittest.TestCase):
     def test_formatter_catalog_and_exact_artifact_admission(self):
         project = Path(__file__).resolve().parents[2]
         modules, pins = cache.wired_catalog(project)
-        self.assertEqual((54, 70), (len(modules), len(pins)))
+        self.assertEqual((58, 74), (len(modules), len(pins)))
         handle_boot = 'GHC/Internal/IO/Handle/Types.hs-boot'
         self.assertIn(handle_boot, pins)
         self.assertIn('  compiler/pinned-ghc-internal/' + handle_boot + '\n', (project / 'thc.cabal').read_text())
@@ -56,14 +56,21 @@ class FastInputTests(unittest.TestCase):
         for first, second in (('Bignum/Natural.hs', 'Bignum/Integer.hs'),
                               ('Types.hs', 'Classes.hs'), ('Classes.hs', 'Bignum/Integer.hs'),
                               ('Base.hs', 'Num.hs'), ('Num.hs', 'Show.hs'),
+                              ('Err.hs', 'Char.hs'), ('Char.hs', 'Enum.hs'),
                               ('Enum.hs', 'Real.hs'), ('Real.hs', 'Numeric.hs'), ('Numeric.hs', 'Ptr.hs'),
                               ('ForeignPtr.hs', 'IO/Encoding/Types.hs'),
                               ('IO/Encoding/Types.hs', 'IO/Encoding/Failure.hs'),
+                              ('Char.hs', 'IO/Encoding/Failure.hs'),
+                              ('IO/Encoding/Failure.hs', 'IO/Encoding/Latin1.hs'),
+                              ('IO/Encoding/Latin1.hs', 'IO/Encoding/UTF16.hs'),
+                              ('IO/Encoding/UTF16.hs', 'IO/Encoding/UTF32.hs'),
+                              ('IO/Encoding/UTF32.hs', 'Foreign/C/String/Encoding.hs'),
                               ('IO/Encoding/Failure.hs', 'Foreign/C/String/Encoding.hs')):
             self.assertLess(list(modules).index('GHC/Internal/' + first), list(modules).index('GHC/Internal/' + second))
         self.assertIn('  compiler/pinned-ghc-internal/GHC/Internal/Enum.hs\n',
                       (project / 'thc.cabal').read_text())
-        for source in ('Classes.hs', 'Num.hs', 'ForeignPtr.hs', 'Foreign/C/String/Encoding.hs', 'IO/Encoding/Types.hs',
+        for source in ('Classes.hs', 'Num.hs', 'Char.hs', 'ForeignPtr.hs', 'Foreign/C/String/Encoding.hs', 'IO/Encoding/Types.hs',
+                       'IO/Encoding/Latin1.hs', 'IO/Encoding/UTF16.hs', 'IO/Encoding/UTF32.hs',
                        'IO/Encoding/Failure.hs', 'IO/Encoding/UTF8.hs', 'IO/Encoding.hs'):
             path = 'GHC/Internal/' + source
             self.assertIn(path, modules)
@@ -75,7 +82,7 @@ class FastInputTests(unittest.TestCase):
         for name, expected in pins.items():
             self.assertEqual(expected, cache.digest(project / 'compiler/pinned-ghc-internal' / name), name)
         files = cache.original_stack_formatter_files(project)
-        self.assertEqual(95, len(files))
+        self.assertEqual(99, len(files))
         self.assertIn('build/original-stack-formatter/manifest.json', DECLARED_REQUIRED)
         for attempt in ('run-1', 'run-42'):
             for suffix in files:

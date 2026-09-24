@@ -36,6 +36,7 @@ extra-source-files:
   compiler/pinned-ghc-internal/GHC/Internal/CString.hs
   compiler/pinned-ghc-internal/GHC/Internal/ClosureTypes.hs
   compiler/pinned-ghc-internal/GHC/Internal/Classes.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Char.hs
   compiler/pinned-ghc-internal/GHC/Internal/Control/Monad/Fail.hs
   compiler/pinned-ghc-internal/GHC/Internal/Data/Either.hs
   compiler/pinned-ghc-internal/GHC/Internal/Data/Maybe.hs
@@ -69,6 +70,9 @@ extra-source-files:
   compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding.hs
   compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding/Types.hs
   compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding/Failure.hs
+  compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding/Latin1.hs
+  compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding/UTF16.hs
+  compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding/UTF32.hs
   compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding/UTF8.hs
   compiler/pinned-ghc-internal/GHC/Internal/IO/Exception.hs
   compiler/pinned-ghc-internal/GHC/Internal/IO/Exception.hs-boot

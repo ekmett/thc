@@ -93,7 +93,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(['original-stack-formatter'], prepare()['reused'])
         self.assertEqual([], self.calls)
         outputs = fast_fixtures._output_hashes(self.root, group)
-        self.assertEqual(96, len(outputs))
+        self.assertEqual(100, len(outputs))
         self.assertFalse(any('interfaces/' in path for path in outputs))
         # Includes the production exporter, all pinned source kinds and the
         # target-layout C probe, without a second hand-maintained source list.
@@ -107,6 +107,7 @@ class FixturePreparationTest(unittest.TestCase):
                      'compiler/pinned-ghc-internal/GHC/Internal/Bignum/Integer.hs',
                      'compiler/pinned-ghc-internal/GHC/Internal/Classes.hs',
                      'compiler/pinned-ghc-internal/GHC/Internal/Num.hs',
+                     'compiler/pinned-ghc-internal/GHC/Internal/Char.hs',
                      'compiler/pinned-ghc-internal/GHC/Internal/Bignum/Integer.hs-boot',
                      'compiler/pinned-ghc-internal/GHC/Internal/Bignum/BigNat.hs-boot',
                      'compiler/pinned-ghc-internal/GHC/Internal/Bignum/Natural.hs-boot',
@@ -118,6 +119,9 @@ class FixturePreparationTest(unittest.TestCase):
                      'compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding/UTF8.hs',
                      'compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding/Types.hs',
                      'compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding/Failure.hs',
+                     'compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding/Latin1.hs',
+                     'compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding/UTF16.hs',
+                     'compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding/UTF32.hs',
                      'compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding.hs',
                      'compiler/pinned-ghc-internal/GHC/Internal/IO/Handle/Types.hs-boot',
                      'compiler/pinned-ghc-internal/GHC/Internal/InfoProv/Types.hsc',
