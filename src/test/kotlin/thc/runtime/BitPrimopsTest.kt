@@ -78,7 +78,9 @@ class BitPrimopsTest {
                 NumericPrimopCoreEvidence.assertCall(compositeCalls, primitive, arguments, result, "$stage/$composite")
             }
             for (backend in listOf("ast", "bytecode")) primopTestContext().use { context ->
-                context.initialize("thc"); context.enter()
+                NumericPrimopCoreEvidence.assertLoadableWrappers(context, merged,
+                    entries.map { it["name"] as String }, backend)
+                context.enter()
                 try {
                     val label = "$stage/$backend"
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
