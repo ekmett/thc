@@ -28,6 +28,7 @@
     },
     "src/main/kotlin/thc/runtime/RawBitCasts.kt": {
       "junit": [
+        "thc.runtime.WordFloatingTest",
         "thc.SumLayoutMetadataTest",
         "thc.runtime.BytecodeTypedTupleInputTest",
         "thc.runtime.CompiledThunkRetentionTest",
@@ -68,6 +69,7 @@
     },
     "src/main/kotlin/thc/runtime/FloatingPrimitives.kt": {
       "junit": [
+        "thc.runtime.WordFloatingTest",
         "thc.SumLayoutMetadataTest",
         "thc.runtime.BytecodeTypedTupleInputTest",
         "thc.runtime.CompiledThunkRetentionTest",

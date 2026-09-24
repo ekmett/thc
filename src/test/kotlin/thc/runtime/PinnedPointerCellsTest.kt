@@ -15,7 +15,8 @@ import java.security.MessageDigest
 
 class PinnedPointerCellsTest {
     private val root = File(System.getProperty("thc.projectRoot"))
-    private data class Row(val input: Long, val pointer: Long, val array: Long, val order: Long)
+    private data class Row(val input: Long, val pointer: Long, val array: Long, val order: Long,
+        val char8: Long, val byte8: Long)
     private fun context() = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
         .option("engine.CompilationFailureAction", "Throw").build()
@@ -33,6 +34,13 @@ class PinnedPointerCellsTest {
         assertThrows(RuntimeFault::class.java) { PinnedMemory.writeAddressArray(pinned, -1, nullAddress) }
         assertThrows(RuntimeFault::class.java) { PinnedMemory.writeAddressArray(pinned, Long.MAX_VALUE, nullAddress) }
         assertSame(nullAddress, PinnedMemory.readAddressArray(pinned, 1))
+        val base = ManagedAddress.fromAllocation(pinned)
+        val target = base.plus(24)
+        base.writeAddressElementIndex(1, target)
+        base.writeWord8(16, 0x1e9)
+        assertEquals(0xe9L, base.readWord8(16))
+        assertThrows(RuntimeFault::class.java) { base.writeWord8(8, 0x41) }
+        assertSame(target, base.readAddressElementIndex(1))
     }
 
     @Test fun orderedAddressesRequireOneAllocationAndPreserveCheckedOffsets() {
@@ -68,14 +76,20 @@ class PinnedPointerCellsTest {
             }
         val rows = File(root, "build/pinned-pointer-cells/oracle.tsv").readLines().map { line ->
             val fields = line.split('\t')
-            assertEquals(4, fields.size)
-            Row(fields[0].toLong(), fields[1].toLong(), fields[2].toLong(), fields[3].toLong())
+            assertEquals(6, fields.size)
+            Row(fields[0].toLong(), fields[1].toLong(), fields[2].toLong(), fields[3].toLong(),
+                fields[4].toLong(), fields[5].toLong())
         }
         assertEquals(listOf(0L, 1L, 17L, 127L, 255L, 256L, -1L), rows.map { it.input })
         for (row in rows) {
             assertEquals(1009L + 17L * (row.input and 255L), row.pointer)
             assertEquals(1L, row.array)
             assertEquals(if (row.input and 7L == 0L) 122L else 127L, row.order)
+            assertEquals(0x01010101L * (row.input and 255L), row.char8)
+            val unsigned = row.input and 255L
+            val signed = unsigned.toByte().toLong()
+            assertEquals(((signed + 128L) shl 24) + ((signed + 128L) shl 16) +
+                (unsigned shl 8) + unsigned, row.byte8)
         }
         for (stage in listOf("pre", "post")) {
             val directory = File(root, "build/pinned-pointer-cells/$stage")
@@ -87,7 +101,16 @@ class PinnedPointerCellsTest {
                 "keepAlive#", "writeAddrOffAddr#", "readAddrOffAddr#", "indexAddrOffAddr#",
                 "writeAddrArray#", "readAddrArray#", "indexAddrArray#",
                 "ltAddr#", "leAddr#", "gtAddr#", "geAddr#",
+                "readCharOffAddr#", "writeCharOffAddr#", "indexCharOffAddr#",
+                "readCharArray#", "writeCharArray#", "indexCharArray#",
+                "readInt8OffAddr#", "writeInt8OffAddr#", "indexInt8OffAddr#", "indexWord8OffAddr#",
                 "readWord8OffAddr#", "indexWord8Array#")))
+            for (primitive in setOf("readInt8OffAddr#", "writeInt8OffAddr#", "indexInt8OffAddr#",
+                "indexWord8OffAddr#")) {
+                val evidence = (audit["primitives"] as List<Map<String, Any?>>).single { it["name"] == primitive }
+                val owners = (evidence["uses"] as List<Map<String, Any?>>).map { it["owner"] }.toSet()
+                assertEquals(setOf("main:PinnedPointerCellsAudit.byte8Roundtrip"), owners, "$stage/$primitive")
+            }
             val paths = listOf("PinnedPointerCellsAudit.json", "THC.InterfaceClosure.json")
                 .map { File(directory, "core/$it") }
             val merged = CoreModules.merge(paths.map { Json.parse(it.readText()) as Map<String, Any?> })
@@ -95,7 +118,8 @@ class PinnedPointerCellsTest {
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                    for (entry in listOf("pointerRoundtrip", "pointerArrayRoundtrip", "pointerOrder")) {
+                    for (entry in listOf("pointerRoundtrip", "pointerArrayRoundtrip", "pointerOrder",
+                        "char8Roundtrip", "byte8Roundtrip")) {
                         val source = CoreModules.reachable(merged, entry) + ("instrument" to true)
                         val program: ExecutableProgram = if (backend == "ast") Program(language, source)
                             else BytecodeProgram(language, source)
@@ -107,7 +131,9 @@ class PinnedPointerCellsTest {
                         fun expected(row: Row) = when (entry) {
                             "pointerRoundtrip" -> row.pointer
                             "pointerArrayRoundtrip" -> row.array
-                            else -> row.order
+                            "pointerOrder" -> row.order
+                            "char8Roundtrip" -> row.char8
+                            else -> row.byte8
                         }
                         rows.forEach { row -> check(row.input, expected(row)) }
                         // EntryValue compiles the active DirectCallNode target (which may

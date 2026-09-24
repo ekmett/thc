@@ -11,12 +11,17 @@ import com.oracle.truffle.api.bytecode.ContinuationResult
 import com.oracle.truffle.api.frame.FrameSlotKind
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.graalvm.polyglot.Context
 import thc.Language
 import thc.CoreModules
 import thc.Json
 import thc.executionContext
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicReference
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.RootNode
 
@@ -33,6 +38,25 @@ class CoreContinuationNativeTest {
         @Child private var force = Force(Metrics(true))
         override fun execute(frame: VirtualFrame): Any? = force.execute(frame, frame.arguments[0])
         fun force(thunk: Thunk): Any? = Calls.target(callTarget, arrayOf(thunk))
+    }
+
+    private fun <T> entered(context: Context, action: () -> T): T {
+        context.enter()
+        try { return action() } finally { context.leave() }
+    }
+
+    private fun callSegmentCaller(language: Language, segment: CallSegment): RootCallTarget {
+        val suspended = CallSegmentSuspended(segment)
+        return BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+            b.beginRoot()
+            b.beginReturn()
+            b.beginResumeApplication()
+            b.emitLoadConstant(suspended)
+            b.beginYield(); b.emitLoadConstant(suspended); b.endYield()
+            b.endResumeApplication()
+            b.endReturn()
+            b.endRoot()
+        }.getNode(0).callTarget
     }
 
     @Test fun nativeNonTailApplicationResumesCalleeThenCaller() {
@@ -67,7 +91,7 @@ class CoreContinuationNativeTest {
                 val driver = Driver()
                 assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
                 val caller = parent.value as ContinuationResult
-                val suspendedCall = (caller.result as ThunkSuspended).thunk
+                val suspendedCall = (caller.result as CallSegmentSuspended).segment
                 assertNotSame(parent, suspendedCall)
                 assertEquals(5, suspendedCall.state)
                 val calleeSegment = suspendedCall.value as ContinuationResult
@@ -85,7 +109,7 @@ class CoreContinuationNativeTest {
         }
     }
 
-    @Test fun applicationRejectsUnownedNestedRootAndActiveMask() {
+    @Test fun applicationRejectsUnownedNestedRootAndPreservesMaskedCarrier() {
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
         executionContext().use { context ->
@@ -105,12 +129,15 @@ class CoreContinuationNativeTest {
                 assertEquals(4, nested.state, "An unowned nested root cannot be replayed")
 
                 val (_, masked) = checked("applicationAnswer")
-                SynchronousMasking.set(masked.target!!.rootNode, MaskingState.MASKED_INTERRUPTIBLE)
+                val maskNode = masked.target!!.rootNode
+                SynchronousMasking.set(maskNode, MaskingState.MASKED_INTERRUPTIBLE)
                 try {
-                    val unsupported = assertThrows(IllegalStateException::class.java) { driver.force(masked) }
-                    assertTrue(unsupported.message!!.contains("Masked application continuation"))
-                    assertEquals(4, masked.state, "Masked suspension remains fail-closed")
-                } finally { SynchronousMasking.set(masked.target!!.rootNode, MaskingState.UNMASKED) }
+                    assertSame(masked, assertThrows(ThunkSuspended::class.java) { driver.force(masked) }.thunk)
+                    assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(driver))
+                    val answer = driver.force(masked) as DataValue
+                    assertEquals(208L, answer.layout.readLong(answer, 0))
+                    assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(driver))
+                } finally { SynchronousMasking.set(maskNode, MaskingState.UNMASKED) }
 
                 val (_, malformed) = checked("applicationAnswer")
                 assertThrows(ThunkSuspended::class.java) { driver.force(malformed) }
@@ -120,7 +147,7 @@ class CoreContinuationNativeTest {
         }
     }
 
-    @Test fun suspendedApplicationReturningLazyThunkFailsClosedWithoutForcingIt() {
+    @Test fun suspendedApplicationReturnsLazyThunkWithoutEnteringIt() {
         executionContext().use { context ->
             context.initialize("thc")
             context.enter()
@@ -140,6 +167,7 @@ class CoreContinuationNativeTest {
                     b.beginBlock()
                     b.beginStoreLocal(visited); b.emitCheckpointArmed(checkpoint); b.endStoreLocal()
                     b.beginYield(); b.emitLoadConstant(Unit); b.endYield()
+                    b.beginYield(); b.emitLoadConstant(Unit); b.endYield()
                     b.beginReturn(); b.emitLoadConstant(lazy); b.endReturn()
                     b.endBlock()
                     b.endRoot()
@@ -147,19 +175,171 @@ class CoreContinuationNativeTest {
                 val continuation = Calls.target(callee, arrayOf(0L)) as ContinuationResult
                 val function = Closure(null, NO_PAP_ARGUMENTS, 0, callee)
                 val call = assertThrows(CapturedCallSuspension::class.java) {
-                    BytecodeRoot.CaptureApplicationResult.capture(0, function, continuation, Driver())
-                }.thunk
-                val driver = Driver()
-                val failure = assertThrows(RuntimeFault::class.java) { driver.force(call) }
-                assertTrue(failure.message!!.contains("Thunk target violated WHNF convention"))
-                assertEquals(3, call.state, "The unsupported return must not replay the call")
+                    BytecodeRoot.CaptureApplicationResult.capture(0, function, continuation,
+                        MaskingState.UNMASKED, Driver())
+                }.segment
+                assertEquals(5, call.state)
                 assertEquals(1, checkpoint.visits.get())
                 assertEquals(0, lazy.state, "The returned lazy thunk must not be forced")
                 assertEquals(0, lazyEffects.get())
-                assertThrows(RuntimeFault::class.java) { driver.force(call) }
-                assertEquals(1, checkpoint.visits.get())
-                assertEquals(0, lazyEffects.get())
+                val suspended = CallSegmentSuspended(call)
+                val layout = DataLayout(language, "proof.LazyBox", "LazyBox", arrayOf("LiftedRep"))
+                val caller = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+                    b.beginRoot()
+                    b.beginReturn()
+                    b.beginConstruct(layout)
+                    b.beginResumeApplication()
+                    b.emitLoadConstant(suspended)
+                    b.beginYield(); b.emitLoadConstant(suspended); b.endYield()
+                    b.endResumeApplication()
+                    b.endConstruct()
+                    b.endReturn()
+                    b.endRoot()
+                }.getNode(0).callTarget
+                val parent = Thunk(caller, null)
+                val driver = Driver()
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                assertEquals(5, call.state, "A second yield retains the same call segment")
+                val box = driver.force(parent) as DataValue
+                assertSame(lazy, box.layout.read(box, 0), "The call returns the original lazy value")
+                assertEquals(2, call.state)
+                assertEquals(2, parent.state)
+                assertEquals(1, checkpoint.visits.get(), "The call must not replay its pre-yield work")
+                assertEquals(0, lazyEffects.get(), "Constructing the caller result must not enter the thunk")
+                assertEquals(7L, driver.force(lazy))
+                assertEquals(1, lazyEffects.get(), "A later demand enters the value exactly once")
+                assertEquals(7L, driver.force(lazy))
+                assertEquals(1, lazyEffects.get())
             } finally { context.leave() }
+        }
+    }
+
+    @Test fun twoWaitersResumeOneCallSegmentWithoutReplayingItsPrefix() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val effects = AtomicInteger()
+            val gate = ThunkYieldProofRoot.Gate().also { it.armed = true }
+            val marker = Any()
+            val (segment, parent) = entered(context) {
+                val callee = ThunkYieldProofRoot.target(language, effects, AtomicInteger(), gate, marker)
+                val continuation = Calls.target(callee, arrayOf(0L)) as ContinuationResult
+                val segment = CallSegment(continuation)
+                segment to Thunk(callSegmentCaller(language, segment), null)
+            }
+            val driver = entered(context) { Driver() }
+            entered(context) {
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+            }
+            Executors.newFixedThreadPool(2).use { pool ->
+                fun reader() = pool.submit<Any?> { entered(context) {
+                    repeat(4) {
+                        try { return@entered driver.force(parent) }
+                        catch (yielded: ThunkSuspended) { assertSame(parent, yielded.thunk) }
+                    }
+                    fail<Any>("The same segment did not finish after its two yields")
+                } }
+                val first = reader()
+                assertTrue(gate.entered.await(5, TimeUnit.SECONDS), "The first owner must be inside the segment")
+                val second = reader()
+                gate.release.countDown()
+                val firstAnswer = first.get(5, TimeUnit.SECONDS)
+                assertSame(firstAnswer, second.get(5, TimeUnit.SECONDS))
+                assertSame(marker, (firstAnswer as ThunkYieldProofRoot.Answer).marker())
+            }
+            assertEquals(1, effects.get(), "Neither waiter may re-enter the callee prefix")
+            assertEquals(2, segment.state)
+            assertEquals(2, parent.state)
+        }
+    }
+
+    @Test fun callSegmentMemoizesGuestFailureButHostUnwindFailsClosed() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            val payload = Any()
+            val effects = AtomicInteger()
+            val (segment, parent) = entered(context) {
+                val failure = GuestException(payload, driver)
+                val callee = ThunkYieldProofRoot.target(language, effects, AtomicInteger(),
+                    ThunkYieldProofRoot.Gate(), failure)
+                val segment = CallSegment(Calls.target(callee, arrayOf(0L)) as ContinuationResult)
+                segment to Thunk(callSegmentCaller(language, segment), null)
+            }
+            entered(context) {
+                repeat(2) { assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk) }
+                assertSame(payload, assertThrows(GuestException::class.java) { driver.force(parent) }.payload)
+                assertSame(payload, assertThrows(GuestException::class.java) { driver.force(parent) }.payload)
+            }
+            assertEquals(3, segment.state)
+            assertEquals(3, parent.state)
+            assertEquals(1, effects.get())
+
+            val blocked = ThunkYieldProofRoot.Gate().also { it.armed = true }
+            val hostEffects = AtomicInteger()
+            val (hostSegment, hostParent) = entered(context) {
+                val callee = ThunkYieldProofRoot.target(language, hostEffects, AtomicInteger(), blocked, Any())
+                val segment = CallSegment(Calls.target(callee, arrayOf(0L)) as ContinuationResult)
+                segment to Thunk(callSegmentCaller(language, segment), null)
+            }
+            entered(context) {
+                assertSame(hostParent, assertThrows(ThunkSuspended::class.java) { driver.force(hostParent) }.thunk)
+            }
+            Executors.newSingleThreadExecutor().use { pool ->
+                val ownerThread = AtomicReference<Thread>()
+                val finished = CountDownLatch(1)
+                val owner = pool.submit<Throwable?> { entered(context) {
+                    ownerThread.set(Thread.currentThread())
+                    try { driver.force(hostParent); null }
+                    catch (failure: Throwable) { failure }
+                    finally { finished.countDown() }
+                } }
+                assertTrue(blocked.entered.await(5, TimeUnit.SECONDS))
+                ownerThread.get().interrupt()
+                assertTrue(finished.await(5, TimeUnit.SECONDS))
+                blocked.release.countDown()
+                assertNotNull(owner.get(5, TimeUnit.SECONDS))
+                assertEquals(4, hostSegment.state, "Unknown host unwind cannot replay a call segment")
+            }
+            entered(context) {
+                val fault = assertThrows(RuntimeFault::class.java) { driver.force(hostParent) }
+                assertTrue(fault.message!!.contains("no resumable continuation"))
+            }
+            assertEquals(1, hostEffects.get())
+        }
+    }
+
+    @Test fun repeatedCallYieldRetainsActiveMaskAndRejectsUnrestoredCompletion() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val (segment, parent) = entered(context) {
+                val target = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+                    b.beginRoot()
+                    val prior = b.createLocal("prior mask", "object")
+                    b.beginYield(); b.emitLoadConstant(Unit); b.endYield()
+                    b.beginStoreLocal(prior); b.emitEnterMask(MaskingState.MASKED_INTERRUPTIBLE); b.endStoreLocal()
+                    b.beginYield(); b.emitLoadConstant(Unit); b.endYield()
+                    b.beginReturn(); b.emitLoadConstant(1L); b.endReturn()
+                    b.endRoot()
+                }.getNode(0).callTarget
+                val segment = CallSegment(Calls.target(target, arrayOf(0L)) as ContinuationResult)
+                segment to Thunk(callSegmentCaller(language, segment), null)
+            }
+            val driver = entered(context) { Driver() }
+            entered(context) {
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                assertEquals(MaskingState.MASKED_INTERRUPTIBLE, segment.logicalMask)
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(driver))
+                val unsupported = assertThrows(IllegalStateException::class.java) { driver.force(parent) }
+                assertTrue(unsupported.message!!.contains("did not restore its caller mask"))
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(driver))
+            }
+            assertEquals(4, segment.state)
+            assertEquals(5, parent.state)
         }
     }
 

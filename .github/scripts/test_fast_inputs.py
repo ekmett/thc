@@ -489,6 +489,14 @@ class FastInputTests(unittest.TestCase):
             self.assertTrue(cache.allowed_payload(f"build/{name}/native/{name}", pins))
         self.assertIn("build/map/boot-core", cache.CORE_DIRS)
 
+    def test_word_floating_manifest_and_semantic_payload_are_cache_inputs(self):
+        self.assertIn("build/word-floating/manifest.json", DECLARED_REQUIRED)
+        for name in ("oracle.tsv", "pre-audit.json", "post-audit.json",
+                     "pre-core/WordFloatingAudit.json", "post-core/WordFloatingAudit.json"):
+            self.assertTrue(cache.allowed_payload("build/word-floating/" + name, {}), name)
+        for name in ("test-results/results.json", "classes/Main.class", "unreviewed.sh"):
+            self.assertFalse(cache.allowed_payload("build/word-floating/" + name, {}), name)
+
     def test_original_stdio_inventory_is_exact_and_manifest_is_required(self):
         # setUp replaces REQUIRED for the small archive tests.
         self.assertIn("build/original-stdio/manifest.json", DECLARED_REQUIRED)

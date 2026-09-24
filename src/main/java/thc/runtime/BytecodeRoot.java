@@ -359,42 +359,82 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation
     @ConstantOperand(type = int.class, name = "arity")
     public static final class CaptureApplicationResult {
-        @Specialization public static Object capture(int arity, Closure function, Object result,
+        @Specialization public static Object capture(int arity, Closure function, Object result, MaskingState callerMask,
                 @Bind("$node") Node node) {
-            if (!(result instanceof ContinuationResult continuation)) return result;
+            if (!(result instanceof ContinuationResult continuation)) {
+                if (SynchronousMasking.current(node) != callerMask) {
+                    SynchronousMasking.set(node, callerMask);
+                    throw new IllegalStateException("Completed application did not restore its caller mask");
+                }
+                return result;
+            }
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            Object source = continuation.getContinuationRootNode().getSourceRootNode();
-            if (function.arity != arity || !(source instanceof BytecodeRoot callee) ||
-                    !callee.isSelf(function.target) ||
-                    !(continuation.getResult() == kotlin.Unit.INSTANCE || continuation.getResult() instanceof ThunkSuspended))
-                throw new IllegalStateException("Application returned an unrelated bytecode continuation: " +
-                        "arity=" + function.arity + "/" + arity + ", source=" + source +
-                        ", target=" + function.target.getRootNode() + ", yielded=" + continuation.getResult());
-            if (SynchronousMasking.current(node) != MaskingState.UNMASKED)
-                throw new IllegalStateException("Masked application continuation has no logical mask segment");
-            // This private, cold call segment begins already suspended. It has no
-            // original body to replay: only the captured Truffle frame can resume.
-            Thunk call = new Thunk(function.target, null);
-            call.setTarget(null);
-            call.setValue(continuation);
-            call.setState(5);
-            throw new CapturedCallSuspension(call);
+            try {
+                Object source = continuation.getContinuationRootNode().getSourceRootNode();
+                if (function.arity != arity || !(source instanceof BytecodeRoot callee) ||
+                        !callee.isSelf(function.target) ||
+                        !(continuation.getResult() == kotlin.Unit.INSTANCE || continuation.getResult() instanceof ThunkSuspended ||
+                                continuation.getResult() instanceof CallSegmentSuspended))
+                    throw new IllegalStateException("Application returned an unrelated bytecode continuation: " +
+                            "arity=" + function.arity + "/" + arity + ", source=" + source +
+                            ", target=" + function.target.getRootNode() + ", yielded=" + continuation.getResult());
+                MaskingState parked = continuation.getResult() instanceof CallSegmentSuspended suspended
+                        ? suspended.getParkedActiveMask() : null;
+                if (parked != null && SynchronousMasking.current(node) != callerMask)
+                    throw new IllegalStateException("Parked application did not restore its caller mask");
+                // Only a yielded call allocates this carrier. Its bytecode frame
+                // and active mask belong to the logical callee, not this host thread.
+                MaskingState active = parked != null ? parked : SynchronousMasking.current(node);
+                throw new CapturedCallSuspension(new CallSegment(continuation, active, callerMask));
+            } finally {
+                SynchronousMasking.set(node, callerMask);
+            }
+        }
+    }
+
+    /** Mask operations below are emitted only by the private call checkpoint path. */
+    @Operation public static final class CurrentMask {
+        @Specialization public static MaskingState read(@Bind("$node") Node node) {
+            return SynchronousMasking.current(node);
+        }
+    }
+
+    @Operation public static final class ParkCallMask {
+        @Specialization public static CallSegmentSuspended park(CallSegmentSuspended suspended,
+                MaskingState rootEntry, MaskingState callerActive, @Bind("$node") Node node) {
+            try {
+                if (SynchronousMasking.current(node) != callerActive)
+                    throw new IllegalStateException("Captured caller lost its logical mask before Yield");
+                return new CallSegmentSuspended(suspended.getSegment(), callerActive);
+            } finally {
+                // Yield skips lexical finally. Each root parks to its own entry
+                // mask, so a chain of callers unwinds to the carrier ambient.
+                SynchronousMasking.set(node, rootEntry);
+            }
+        }
+    }
+
+    @Operation public static final class ReenterCallMask {
+        @Specialization public static Object reenter(Object resumed, MaskingState callerActive,
+                @Bind("$node") Node node) {
+            SynchronousMasking.set(node, callerActive);
+            return resumed;
         }
     }
 
     @Operation
     public static final class CallSuspensionOnly {
-        @Specialization public static ThunkSuspended capture(AbstractTruffleException failure) {
-            if (failure instanceof CapturedCallSuspension captured) return new ThunkSuspended(captured.getThunk());
+        @Specialization public static CallSegmentSuspended capture(AbstractTruffleException failure) {
+            if (failure instanceof CapturedCallSuspension captured) return new CallSegmentSuspended(captured.getSegment());
             throw failure;
         }
     }
 
     @Operation
     public static final class ResumeApplication {
-        @Specialization public static Object resume(ThunkSuspended suspended, ChildResume resumed) {
+        @Specialization public static Object resume(CallSegmentSuspended suspended, ChildResume resumed) {
             if (resumed.getFailure() != null) throw resumed.getFailure();
-            Thunk call = suspended.getThunk();
+            CallSegment call = suspended.getSegment();
             if (call.getState() != 2 || call.getValue() != resumed.getValue() || resumed.getValue() instanceof ContinuationResult)
                 throw new IllegalStateException("Application continuation lost its call update");
             return resumed.getValue();
@@ -488,6 +528,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 ManagedAddress address, long offset, Object state, @Bind("$node") Node node) {
             ManagedByteArray.requireState(state);
             long value = address.readWord8(offset);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, value);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadInt8OffAddr {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress address, long offset, Object state, @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            long value = (byte) address.readWord8(offset);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, value);
         }
     }
@@ -1369,9 +1420,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             throw fail("Expected primitive Long");
         }
     }
-    @Operation public static final class AddressIndexChar {
-        @Specialization public static long index(ManagedAddress address, long displacement) { return address.indexChar(displacement); }
-        @Fallback public static long invalid(Object address, Object displacement) {
+    @Operation @ConstantOperand(type = boolean.class, name = "signed")
+    public static final class AddressIndexByte {
+        @Specialization public static long index(boolean signed, ManagedAddress address, long displacement) {
+            long value = address.readWord8(displacement);
+            return signed ? (byte) value : value;
+        }
+        @Fallback public static long invalid(boolean signed, Object address, Object displacement) {
             if (!(address instanceof ManagedAddress)) throw fail("Expected a managed literal Addr#");
             throw fail("Expected primitive Long");
         }
@@ -2462,6 +2517,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation @ConstantOperand(type = int.class, name = "shift")
     public static final class RemainderNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(signedNarrow(x, shift) % signedNarrow(y, shift), shift); } }
     @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class ShiftLeftNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x << (int) y, shift); } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class ShiftRightNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x, shift) >> (int) y; } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
     public static final class EqualNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x, shift) == signedNarrow(y, shift) ? 1L : 0L; } }
     @Operation @ConstantOperand(type = int.class, name = "shift")
     public static final class NotEqualNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x, shift) != signedNarrow(y, shift) ? 1L : 0L; } }
@@ -2533,6 +2592,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class CastWord64ToDouble { @Specialization public static double apply(long value) { return RawBitCasts.word64ToDouble(value); } }
     @Operation public static final class IntToFloat { @Specialization public static float apply(long x) { return (float) x; } }
     @Operation public static final class IntToDouble { @Specialization public static double apply(long x) { return (double) x; } }
+    @Operation public static final class WordToFloat { @Specialization public static float apply(long x) { return WordFloatingConversions.toFloat(x); } }
+    @Operation public static final class WordToDouble { @Specialization public static double apply(long x) { return WordFloatingConversions.toDouble(x); } }
     @Operation public static final class FloatToInt { @Specialization public static long apply(float x) { return (long) x; } }
     @Operation public static final class DoubleToInt { @Specialization public static long apply(double x) { return (long) x; } }
     @Operation public static final class FloatToDouble { @Specialization public static double apply(float x) { return (double) x; } }

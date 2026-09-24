@@ -305,6 +305,22 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(self.prepare("thc.AlphaTest")["reused"], ["alpha"])
         self.assertEqual(self.calls, [])
 
+    def test_word_floating_has_focused_and_full_preparation(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest["groups"]["word-floating"]
+        self.assertEqual("word-floating", owners["thc.runtime.WordFloatingTest"])
+        self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "word-floating"]}], group["commands"])
+        self.assertEqual(["build/word-floating"], group["outputs"])
+        self.assertTrue(all((project / name).is_file() for name in group["sources"]))
+        self.assertIn('"$fixture_bin" word-floating', (project / "scripts/prepare-tests.sh").read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn("build/word-floating", fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertIn("build/word-floating/manifest.json", fast_fixtures.FULL_REQUIRED)
+        policy = json.loads((project / ".github/scripts/fast-tests.json").read_text())
+        self.assertIn("thc.runtime.WordFloatingTest",
+                      policy["leafSources"]["src/main/kotlin/thc/runtime/FloatingPrimitives.kt"]["junit"])
+
     def test_original_stack_has_portable_focused_and_full_preparation(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

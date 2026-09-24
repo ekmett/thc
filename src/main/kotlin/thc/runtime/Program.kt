@@ -32,19 +32,19 @@ internal fun fault(message: String): Nothing {
 }
 /** Narrow unsigned carriers are zero-extended Longs, unlike signed Int8/16/32 carriers. */
 internal fun narrowWordPrimitiveMask(name: String): Long = when (name) {
-    "wordToWord8#", "word8ToWord#", "plusWord8#", "subWord8#", "timesWord8#", "ltWord8#", "leWord8#",
+    "wordToWord8#", "word8ToWord#", "int8ToWord8#", "narrow8Word#", "plusWord8#", "subWord8#", "timesWord8#", "ltWord8#", "leWord8#",
     "quotWord8#", "remWord8#", "eqWord8#", "neWord8#", "gtWord8#", "geWord8#", "andWord8#", "orWord8#", "xorWord8#", "notWord8#", "uncheckedShiftLWord8#", "uncheckedShiftRLWord8#" -> 0xffL
-    "wordToWord16#", "word16ToWord#", "plusWord16#", "subWord16#", "timesWord16#", "ltWord16#", "leWord16#",
+    "wordToWord16#", "word16ToWord#", "int16ToWord16#", "narrow16Word#", "plusWord16#", "subWord16#", "timesWord16#", "ltWord16#", "leWord16#",
     "quotWord16#", "remWord16#", "eqWord16#", "neWord16#", "gtWord16#", "geWord16#", "andWord16#", "orWord16#", "xorWord16#", "notWord16#", "uncheckedShiftLWord16#", "uncheckedShiftRLWord16#" -> 0xffffL
-    "wordToWord32#", "word32ToWord#", "plusWord32#", "subWord32#", "timesWord32#", "ltWord32#", "leWord32#",
+    "wordToWord32#", "word32ToWord#", "int32ToWord32#", "narrow32Word#", "plusWord32#", "subWord32#", "timesWord32#", "ltWord32#", "leWord32#",
     "quotWord32#", "remWord32#", "eqWord32#", "neWord32#", "gtWord32#", "geWord32#", "andWord32#", "orWord32#", "xorWord32#", "notWord32#", "uncheckedShiftLWord32#", "uncheckedShiftRLWord32#" -> 0xffff_ffffL
     else -> 0L
 }
 /** Fixed-width signed arithmetic retains canonical sign-extended Long carriers. */
 internal fun narrowIntPrimitiveShift(name: String): Int = when (name) {
-    "negateInt8#", "plusInt8#", "subInt8#", "timesInt8#", "quotInt8#", "remInt8#", "eqInt8#", "neInt8#", "ltInt8#", "leInt8#", "gtInt8#", "geInt8#" -> 56
-    "negateInt16#", "plusInt16#", "subInt16#", "timesInt16#", "quotInt16#", "remInt16#", "eqInt16#", "neInt16#", "ltInt16#", "leInt16#", "gtInt16#", "geInt16#" -> 48
-    "negateInt32#", "plusInt32#", "subInt32#", "timesInt32#", "quotInt32#", "remInt32#", "eqInt32#", "neInt32#", "ltInt32#", "leInt32#", "gtInt32#", "geInt32#" -> 32
+    "word8ToInt8#", "negateInt8#", "plusInt8#", "subInt8#", "timesInt8#", "quotInt8#", "remInt8#", "eqInt8#", "neInt8#", "ltInt8#", "leInt8#", "gtInt8#", "geInt8#", "uncheckedShiftLInt8#", "uncheckedShiftRAInt8#" -> 56
+    "word16ToInt16#", "negateInt16#", "plusInt16#", "subInt16#", "timesInt16#", "quotInt16#", "remInt16#", "eqInt16#", "neInt16#", "ltInt16#", "leInt16#", "gtInt16#", "geInt16#", "uncheckedShiftLInt16#", "uncheckedShiftRAInt16#" -> 48
+    "word32ToInt32#", "negateInt32#", "plusInt32#", "subInt32#", "timesInt32#", "quotInt32#", "remInt32#", "eqInt32#", "neInt32#", "ltInt32#", "leInt32#", "gtInt32#", "geInt32#", "uncheckedShiftLInt32#", "uncheckedShiftRAInt32#" -> 32
     else -> 0
 }
 private fun signedNarrow(value: Long, shift: Int): Long = (value shl shift) shr shift
@@ -112,6 +112,17 @@ internal class Thunk(target: RootCallTarget, var environment: CapturedFrame?) {
     var owner: Thread? = null
     val monitor = java.lang.Object()
 }
+/** A cold, one-shot call continuation. Unlike a thunk update, its answer may itself be lazy. */
+internal class CallSegment @JvmOverloads constructor(
+    continuation: ContinuationResult,
+    var logicalMask: MaskingState = MaskingState.UNMASKED,
+    val callerMask: MaskingState = MaskingState.UNMASKED
+) {
+    @Volatile var state = 5 // owned=1, completed=2, failure=3, unsupported unwind=4, parked=5
+    var value: Any? = continuation
+    var owner: Thread? = null
+    val monitor = java.lang.Object()
+}
 /** Keep immutable guest failure data, never a shared mutable Truffle stack trace. */
 private data class MemoizedGuestFailure(val payload: Any?, val location: Node)
 /** Async delivery must carry its origin separately from its guest payload. */
@@ -121,9 +132,16 @@ internal class ThunkSuspended(val thunk: Thunk) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
         "Internal bytecode thunk suspension", null, 0, null)
 /** A call returned its own bytecode continuation; only that exact call edge may capture it. */
-internal class CapturedCallSuspension(val thunk: Thunk) :
+internal class CapturedCallSuspension(val segment: CallSegment) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
         "Internal bytecode call suspension", null, 0, null)
+internal class CallSegmentSuspended @JvmOverloads constructor(
+    val segment: CallSegment,
+    /** Logical mask before a caller parked to its root-entry mask for Yield. */
+    val parkedActiveMask: MaskingState? = null
+) :
+    com.oracle.truffle.api.exception.AbstractTruffleException(
+        "Internal bytecode call segment suspension", null, 0, null)
 /** Cold caller-segment input distinguishes a child result from its guest failure. */
 internal class ChildResume(val value: Any?, val failure: GuestException?)
 internal class Metrics(val enabled: Boolean) {
@@ -294,7 +312,7 @@ private class Delay(private val target: RootCallTarget, private val captureLayou
 }
 internal class Force(private val metrics: Metrics) : Node() {
     private object Retry
-    private class Parked(val thunk: Thunk, val continuation: ContinuationResult)
+    private class Parked(val boundary: Any, val continuation: ContinuationResult)
     @Child private var calls = ThunkTargetCache(metrics)
     @Child private var trampoline = TailCallLoop(metrics)
     private val tailCallProfile = BranchProfile.create()
@@ -317,7 +335,7 @@ internal class Force(private val metrics: Metrics) : Node() {
                 4 -> fault("Interrupted thunk has no resumable continuation")
             }
             val observed = if (original.state == 5) original.value as? ContinuationResult else null
-            val child = (observed?.result as? ThunkSuspended)?.thunk
+            val child = suspendedChild(observed)
             // The continuation owns its captured callee frame. None of the
             // update/resume helpers needs this caller's frame; materializing
             // it here poisons frame-access speculation on ordinary loop exits.
@@ -345,7 +363,7 @@ internal class Force(private val metrics: Metrics) : Node() {
                         0 -> { original.owner = Thread.currentThread(); original.state = 1; claimedHere = true; 0 }
                         5 -> if ((observed != null && original.value !== observed) ||
                             (observed == null &&
-                                ((original.value as? ContinuationResult)?.result is ThunkSuspended))) 3 else {
+                                (suspendedChild(original.value as? ContinuationResult) != null))) 3 else {
                             continuation = original.value as? ContinuationResult
                                 ?: fault("Suspended thunk has no bytecode continuation")
                             original.value = null // One owner consumes the one-shot continuation.
@@ -376,27 +394,35 @@ internal class Force(private val metrics: Metrics) : Node() {
     @CompilerDirectives.TruffleBoundary
     private fun resumeChain(original: Thunk): Any? {
         val parked = java.util.ArrayDeque<Parked>()
-        val seen = java.util.IdentityHashMap<Thunk, Boolean>()
+        val seen = java.util.IdentityHashMap<Any, Boolean>()
         while (true) {
             parked.clear()
             seen.clear()
-            var leaf = original
+            var leaf: Any = original
             var leafContinuation: ContinuationResult? = null
             while (true) {
                 if (seen.put(leaf, true) != null) fault("Suspended thunk dependency cycle")
-                leafContinuation = if (leaf.state == 5) leaf.value as? ContinuationResult else null
-                val child = (leafContinuation?.result as? ThunkSuspended)?.thunk ?: break
-                parked.addLast(Parked(leaf, leafContinuation))
+                leafContinuation = continuationOf(leaf)
+                val child = suspendedChild(leafContinuation) ?: break
+                parked.addLast(Parked(leaf, leafContinuation!!))
                 leaf = child
             }
-            var current = leaf
+            var current: Any = leaf
             var expected = leafContinuation
             var input: Any? = Unit
             while (true) {
                 val outcome = try {
-                    val answer = executeOne(current, expected, input)
+                    val answer = when (current) {
+                        is Thunk -> executeOne(current, expected, input)
+                        is CallSegment -> executeCallSegment(current, expected, input)
+                        else -> fault("Invalid suspended continuation boundary")
+                    }
                     if (answer === Retry) null else ChildResume(answer, null)
                 } catch (suspension: ThunkSuspended) {
+                    // Resignal the requested update boundary, not a deeper child.
+                    if (original.state == 5) throw ThunkSuspended(original)
+                    throw suspension
+                } catch (suspension: CallSegmentSuspended) {
                     // The requested thunk is still parked even if a deeper
                     // dependency yielded again. A new caller must capture the
                     // requested update boundary, not skip its continuation.
@@ -409,11 +435,161 @@ internal class Force(private val metrics: Metrics) : Node() {
                     return outcome.value
                 }
                 val parent = parked.removeLast()
-                current = parent.thunk
+                current = parent.boundary
                 expected = parent.continuation
                 input = outcome
             }
         }
+    }
+
+    private fun continuationOf(boundary: Any): ContinuationResult? = when (boundary) {
+        is Thunk -> if (boundary.state == 5) boundary.value as? ContinuationResult else null
+        is CallSegment -> if (boundary.state == 5) boundary.value as? ContinuationResult else null
+        else -> fault("Invalid suspended continuation boundary")
+    }
+
+    private fun suspendedChild(continuation: ContinuationResult?): Any? = when (val signal = continuation?.result) {
+        is ThunkSuspended -> signal.thunk
+        is CallSegmentSuspended -> signal.segment
+        else -> null
+    }
+
+    private fun executeCallSegment(segment: CallSegment, observed: ContinuationResult?, resumeValue: Any?): Any? {
+        while (true) {
+            when (segment.state) {
+                2 -> return segment.value
+                3 -> rethrowCallFailure(segment)
+                4 -> fault("Interrupted call segment has no resumable continuation")
+            }
+            var continuation: ContinuationResult? = null
+            var resumeMask = MaskingState.UNMASKED
+            var claimedHere = false
+            try {
+                val claim = synchronized(segment.monitor) {
+                    when (segment.state) {
+                        5 -> if ((observed != null && segment.value !== observed) ||
+                            (observed == null && suspendedChild(segment.value as? ContinuationResult) != null)) 3 else {
+                            continuation = segment.value as? ContinuationResult
+                                ?: fault("Suspended call segment has no bytecode continuation")
+                            resumeMask = segment.logicalMask
+                            segment.value = null // Consume the one-shot continuation under ownership.
+                            segment.owner = Thread.currentThread()
+                            segment.state = 1
+                            claimedHere = true
+                            0
+                        }
+                        1 -> if (segment.owner === Thread.currentThread()) 2 else 1
+                        else -> 3
+                    }
+                }
+                when (claim) {
+                    0 -> return evaluateCallSegment(segment, continuation!!, resumeMask, resumeValue)
+                    1 -> awaitCallOwner(segment)
+                    2 -> fault("Blackhole: cyclic call segment entered while evaluating")
+                    3 -> return Retry
+                }
+            } catch (failure: Throwable) {
+                if (claimedHere) suspendCallOwned(segment)
+                throw failure
+            }
+        }
+    }
+
+    private fun evaluateCallSegment(segment: CallSegment, continuation: ContinuationResult,
+                                    resumeMask: MaskingState, resumeValue: Any?): Any? {
+        val carrierAmbient = SynchronousMasking.current(this)
+        try {
+            SynchronousMasking.set(this, resumeMask)
+            val result = try { continuation.continueWith(resumeValue) }
+                catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
+            if (result is ContinuationResult) {
+                if (result.continuationRootNode.sourceRootNode !== continuation.continuationRootNode.sourceRootNode)
+                    throw IllegalStateException("Nested bytecode yield has no captured caller segment")
+                val parkedMask = (result.result as? CallSegmentSuspended)?.parkedActiveMask
+                if (parkedMask != null && SynchronousMasking.current(this) != segment.callerMask)
+                    throw IllegalStateException("Parked call segment did not restore its caller mask")
+                publishCallContinuation(segment, result, parkedMask ?: SynchronousMasking.current(this))
+                throw CallSegmentSuspended(segment)
+            }
+            if (SynchronousMasking.current(this) != segment.callerMask)
+                throw IllegalStateException("Completed call segment did not restore its caller mask")
+            synchronized(segment.monitor) {
+                segment.value = result // A call may return an unforced thunk; never enter it here.
+                segment.owner = null
+                segment.state = 2
+                segment.monitor.notifyAll()
+            }
+            return result
+        } catch (e: CallSegmentSuspended) {
+            if (e.segment !== segment) suspendCallOwned(segment)
+            throw e
+        } catch (e: ThunkSuspended) {
+            suspendCallOwned(segment)
+            throw e
+        } catch (e: AsyncThunkUnwind) {
+            suspendCallOwned(segment)
+            throw e
+        } catch (e: GuestException) {
+            if (SynchronousMasking.current(this) != segment.callerMask) {
+                suspendCallOwned(segment)
+                throw IllegalStateException("Failed call segment did not restore its caller mask", e)
+            }
+            publishCallFailure(segment, MemoizedGuestFailure(e.payload, e.location ?: this))
+            throw e
+        } catch (e: RuntimeFault) {
+            publishCallFailure(segment, e)
+            throw e
+        } catch (e: Throwable) {
+            suspendCallOwned(segment)
+            throw e
+        } finally { SynchronousMasking.set(this, carrierAmbient) }
+    }
+
+    private fun publishCallContinuation(segment: CallSegment, continuation: ContinuationResult,
+                                        logicalMask: MaskingState) {
+        val safepoint = TruffleSafepoint.getCurrent()
+        val previous = safepoint.setAllowSideEffects(false)
+        try {
+            synchronized(segment.monitor) {
+                segment.value = continuation
+                segment.logicalMask = logicalMask
+                segment.owner = null
+                segment.state = 5
+                segment.monitor.notifyAll()
+            }
+        } finally { safepoint.setAllowSideEffects(previous) }
+    }
+
+    private fun publishCallFailure(segment: CallSegment, failure: Any) = synchronized(segment.monitor) {
+        segment.value = failure
+        segment.owner = null
+        segment.state = 3
+        segment.monitor.notifyAll()
+    }
+
+    private fun suspendCallOwned(segment: CallSegment) = synchronized(segment.monitor) {
+        if (segment.state != 1 || segment.owner !== Thread.currentThread()) return@synchronized
+        segment.owner = null
+        segment.state = 4
+        segment.monitor.notifyAll()
+    }
+
+    private fun rethrowCallFailure(segment: CallSegment): Nothing {
+        CompilerDirectives.transferToInterpreterAndInvalidate()
+        when (val failure = segment.value) {
+            is MemoizedGuestFailure -> throw GuestException(failure.payload, failure.location)
+            is Throwable -> throw failure
+            else -> fault("Invalid failed call segment")
+        }
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    private fun awaitCallOwner(segment: CallSegment) {
+        TruffleSafepoint.setBlockedThreadInterruptible(this, TruffleSafepoint.Interruptible<CallSegment> { waiting ->
+            synchronized(waiting.monitor) {
+                if (waiting.state == 1 && waiting.owner !== Thread.currentThread()) waiting.monitor.wait()
+            }
+        }, segment)
     }
 
     private fun evaluateOwned(thunk: Thunk, continuation: ContinuationResult?, resumeValue: Any?): Any? {
@@ -927,6 +1103,8 @@ private class Primitive(private val name: String, @field:Children private var ar
             "leInt8#", "leInt16#", "leInt32#" -> 2
             "gtInt8#", "gtInt16#", "gtInt32#" -> 2
             "geInt8#", "geInt16#", "geInt32#" -> 2
+            "uncheckedShiftLInt8#", "uncheckedShiftLInt16#", "uncheckedShiftLInt32#",
+            "uncheckedShiftRAInt8#", "uncheckedShiftRAInt16#", "uncheckedShiftRAInt32#" -> 2
 
             "quotWord#" -> 2
             "remWord#" -> 2
@@ -947,7 +1125,9 @@ private class Primitive(private val name: String, @field:Children private var ar
             "negateInt#", "not#", "notI#", "clz#", "ctz#", "popCnt#", "int2Word#", "word2Int#", "ord#", "chr#",
             "narrow8Int#", "narrow16Int#", "narrow32Int#", "intToInt64#", "int64ToInt#",
             "intToInt8#", "int8ToInt#", "intToInt16#", "int16ToInt#", "intToInt32#", "int32ToInt#",
-            "wordToWord8#", "word8ToWord#", "wordToWord16#", "word16ToWord#", "wordToWord32#", "word32ToWord#" -> 1
+            "int8ToWord8#", "word8ToInt8#", "int16ToWord16#", "word16ToInt16#", "int32ToWord32#", "word32ToInt32#",
+            "wordToWord8#", "word8ToWord#", "wordToWord16#", "word16ToWord#", "wordToWord32#", "word32ToWord#",
+            "narrow8Word#", "narrow16Word#", "narrow32Word#" -> 1
             "+#", "plusWord#", "-#", "minusWord#", "*#", "timesWord#", "quotInt#", "remInt#",
             "==#", "eqWord#", "eqChar#", "/=#", "neWord#", "neChar#", "<#", "ltWord#", "ltChar#", "<=#", "leWord#", "leChar#",
             ">#", "gtChar#", ">=#", "geChar#", "and#", "andI#", "or#", "orI#", "xor#", "xorI#",
@@ -982,6 +1162,10 @@ private class Primitive(private val name: String, @field:Children private var ar
             "leInt8#", "leInt16#", "leInt32#" -> b(signedNarrow(x, intShift) <= signedNarrow(y, intShift))
             "gtInt8#", "gtInt16#", "gtInt32#" -> b(signedNarrow(x, intShift) > signedNarrow(y, intShift))
             "geInt8#", "geInt16#", "geInt32#" -> b(signedNarrow(x, intShift) >= signedNarrow(y, intShift))
+            "uncheckedShiftLInt8#", "uncheckedShiftLInt16#", "uncheckedShiftLInt32#" ->
+                signedNarrow(x shl y.toInt(), intShift)
+            "uncheckedShiftRAInt8#", "uncheckedShiftRAInt16#", "uncheckedShiftRAInt32#" ->
+                signedNarrow(x, intShift) shr y.toInt()
 
             "quotWord#" -> java.lang.Long.divideUnsigned(x, y)
             "remWord#" -> java.lang.Long.remainderUnsigned(x, y)
@@ -1031,10 +1215,12 @@ private class Primitive(private val name: String, @field:Children private var ar
             "uncheckedIShiftRL#", "uncheckedShiftRL#" -> x ushr y.toInt()
             // Narrow signed values use sign-normalized Long carriers. Truncation
             // and signed widening therefore share the width-specific conversion.
-            "narrow8Int#", "intToInt8#", "int8ToInt#" -> x.toByte().toLong()
-            "narrow16Int#", "intToInt16#", "int16ToInt#" -> x.toShort().toLong()
-            "narrow32Int#", "intToInt32#", "int32ToInt#" -> x.toInt().toLong()
-            "wordToWord8#", "word8ToWord#", "wordToWord16#", "word16ToWord#", "wordToWord32#", "word32ToWord#" -> x and wordMask
+            "narrow8Int#", "intToInt8#", "int8ToInt#", "word8ToInt8#" -> x.toByte().toLong()
+            "narrow16Int#", "intToInt16#", "int16ToInt#", "word16ToInt16#" -> x.toShort().toLong()
+            "narrow32Int#", "intToInt32#", "int32ToInt#", "word32ToInt32#" -> x.toInt().toLong()
+            "wordToWord8#", "word8ToWord#", "int8ToWord8#", "wordToWord16#", "word16ToWord#", "int16ToWord16#",
+            "wordToWord32#", "word32ToWord#", "int32ToWord32#",
+            "narrow8Word#", "narrow16Word#", "narrow32Word#" -> x and wordMask
             "int2Word#", "word2Int#", "ord#", "chr#", "intToInt64#", "int64ToInt#" -> x
             else -> fault("Unsupported primitive")
         }
@@ -2086,9 +2272,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 else -> ManagedAddressOrder.GE
             })
         }
-        "plusAddr#", "indexCharOffAddr#" -> {
+        "plusAddr#", "indexCharOffAddr#", "indexWord8OffAddr#", "indexInt8OffAddr#" -> {
             if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
-            if (name == "plusAddr#") PlusManagedAddress(args[0], args[1]) else IndexLiteralChar(args[0], args[1])
+            if (name == "plusAddr#") PlusManagedAddress(args[0], args[1])
+            else IndexManagedByte(name == "indexInt8OffAddr#", args[0], args[1])
         }
         else -> Primitive(name, args)
     }

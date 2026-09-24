@@ -74,6 +74,7 @@ internal object ScalarPrimopModel {
         val input = unsigned(carrier, width)
         val bits = List(width) { input.testBit(it) }
         return when (operation) {
+            "narrowWord" -> input.toLong()
             "popCnt" -> bits.count { it }.toLong()
             "clz" -> bits.asReversed().takeWhile { !it }.size.toLong()
             "ctz" -> bits.takeWhile { !it }.size.toLong()

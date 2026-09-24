@@ -8,9 +8,9 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Supported | 274 | Implemented fixed numeric/character scalar forms. |
-| Partial | 252 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 965 | No declared lowering. |
+| Supported | 291 | Implemented fixed numeric/character scalar forms. |
+| Partial | 261 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 939 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -39,7 +39,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 
 ## Current aggregate and address limits
 
-- Address operations support managed literal or byte-array backing with checked offsets; no raw pointers. Ordered Addr# comparisons are limited to offsets in the same backing allocation or null compared with itself; unrelated addresses have no synthetic order. Only the exact GHC MD5 C foreign calls admit managed addresses through Sulong.
+- Address operations support managed literal or byte-array backing with checked offsets; no raw pointers. Char# byte-memory operations read an unsigned byte and write the low eight bits of WordRep. Ordered Addr# comparisons are limited to offsets in the same backing allocation or null compared with itself; unrelated addresses have no synthetic order. Only the exact GHC MD5 C foreign calls admit managed addresses through Sulong.
 - Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Aggregate captures, heap fields, ordinary let bindings and join captures remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums, vectors and unresolved leaves cannot appear in tuple inputs; exact evaluated AddrRep leaves use managed address references.
 - Binary unboxed sum results and immediate cases support exact machine Int/Word, Float, Double, known reference, void and tuple payloads. Nested sums, width-changing payload casts, vector/address or unknown leaves, sum inputs/captures/heap fields/local lets/joins/host results remain unsupported.
 
@@ -150,13 +150,16 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `gtWord64#` — arity 2
 - [x] `gtWord8#` — arity 2
 - [x] `int16ToInt#` — arity 1
+- [x] `int16ToWord16#` — arity 1
 - [x] `int2Double#` — arity 1
 - [x] `int2Float#` — arity 1
 - [x] `int2Word#` — arity 1
 - [x] `int32ToInt#` — arity 1
+- [x] `int32ToWord32#` — arity 1
 - [x] `int64ToInt#` — arity 1
 - [x] `int64ToWord64#` — arity 1
 - [x] `int8ToInt#` — arity 1
+- [x] `int8ToWord8#` — arity 1
 - [x] `intToInt16#` — arity 1
 - [x] `intToInt32#` — arity 1
 - [x] `intToInt64#` — arity 1
@@ -190,8 +193,11 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `minusFloat#` — arity 2
 - [x] `minusWord#` — arity 2
 - [x] `narrow16Int#` — arity 1
+- [x] `narrow16Word#` — arity 1
 - [x] `narrow32Int#` — arity 1
+- [x] `narrow32Word#` — arity 1
 - [x] `narrow8Int#` — arity 1
+- [x] `narrow8Word#` — arity 1
 - [x] `neChar#` — arity 2
 - [x] `neFloat#` — arity 2
 - [x] `neInt16#` — arity 2
@@ -295,19 +301,30 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `uncheckedIShiftRL64#` — arity 2
 - [x] `uncheckedShiftL#` — arity 2
 - [x] `uncheckedShiftL64#` — arity 2
+- [x] `uncheckedShiftLInt16#` — arity 2
+- [x] `uncheckedShiftLInt32#` — arity 2
+- [x] `uncheckedShiftLInt8#` — arity 2
 - [x] `uncheckedShiftLWord16#` — arity 2
 - [x] `uncheckedShiftLWord32#` — arity 2
 - [x] `uncheckedShiftLWord8#` — arity 2
+- [x] `uncheckedShiftRAInt16#` — arity 2
+- [x] `uncheckedShiftRAInt32#` — arity 2
+- [x] `uncheckedShiftRAInt8#` — arity 2
 - [x] `uncheckedShiftRL#` — arity 2
 - [x] `uncheckedShiftRL64#` — arity 2
 - [x] `uncheckedShiftRLWord16#` — arity 2
 - [x] `uncheckedShiftRLWord32#` — arity 2
 - [x] `uncheckedShiftRLWord8#` — arity 2
+- [x] `word16ToInt16#` — arity 1
 - [x] `word16ToWord#` — arity 1
+- [x] `word2Double#` — arity 1
+- [x] `word2Float#` — arity 1
 - [x] `word2Int#` — arity 1
+- [x] `word32ToInt32#` — arity 1
 - [x] `word32ToWord#` — arity 1
 - [x] `word64ToInt64#` — arity 1
 - [x] `word64ToWord#` — arity 1
+- [x] `word8ToInt8#` — arity 1
 - [x] `word8ToWord#` — arity 1
 - [x] `wordToWord16#` — arity 1
 - [x] `wordToWord32#` — arity 1
@@ -370,6 +387,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexAddrArray#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `indexAddrOffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `indexArray#` — arity 2 — Managed lifted arrays
+- [ ] `indexCharArray#` — arity 2 — Managed byte storage
 - [ ] `indexCharOffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `indexDoubleArray#` — arity 2 — Managed byte storage
 - [ ] `indexDoubleArrayAsDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -382,6 +400,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexInt32ArrayAsInt32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `indexInt32X4Array#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `indexInt8Array#` — arity 2 — Managed byte storage
+- [ ] `indexInt8OffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `indexIntArray#` — arity 2 — Managed byte storage
 - [ ] `indexSmallArray#` — arity 2 — Managed lifted arrays
 - [ ] `indexWord16Array#` — arity 2 — Managed byte storage
@@ -389,6 +408,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexWord32ArrayAsWord32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `indexWord32X4Array#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `indexWord8Array#` — arity 2 — Managed byte storage
+- [ ] `indexWord8OffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `indexWordArray#` — arity 2 — Managed byte storage
 - [ ] `isEmptyMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `keepAlive#` — arity 3 — Specialized lowering; see capability and coverage limits
@@ -470,6 +490,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readAddrArray#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readAddrOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readArray#` — arity 3 — Managed lifted arrays
+- [ ] `readCharArray#` — arity 3 — Managed byte storage
+- [ ] `readCharOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readDoubleArray#` — arity 3 — Managed byte storage
 - [ ] `readDoubleArrayAsDoubleX2#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readDoubleX2Array#` — arity 3 — Specialized lowering; see capability and coverage limits
@@ -482,6 +504,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readInt32OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readInt32X4Array#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readInt8Array#` — arity 3 — Managed byte storage
+- [ ] `readInt8OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readIntArray#` — arity 3 — Managed byte storage
 - [ ] `readIntOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
@@ -553,6 +576,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeAddrArray#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeAddrOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeArray#` — arity 4 — Managed lifted arrays
+- [ ] `writeCharArray#` — arity 4 — Managed byte storage
+- [ ] `writeCharOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeDoubleArray#` — arity 4 — Managed byte storage
 - [ ] `writeDoubleArrayAsDoubleX2#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeDoubleX2Array#` — arity 4 — Specialized lowering; see capability and coverage limits
@@ -564,6 +589,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeInt32ArrayAsInt32X4#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeInt32X4Array#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeInt8Array#` — arity 4 — Managed byte storage
+- [ ] `writeInt8OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeIntArray#` — arity 4 — Managed byte storage
 - [ ] `writeMutVar#` — arity 3 — Managed lazy reference cells
 - [ ] `writeSmallArray#` — arity 4 — Managed lifted arrays
@@ -711,7 +737,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `getApStackVal#` — arity 2
 - [ ] `getCCSOf#` — arity 2
 - [ ] `getSpark#` — arity 1
-- [ ] `indexCharArray#` — arity 2
 - [ ] `indexDoubleArrayAsDoubleX4#` — arity 2
 - [ ] `indexDoubleArrayAsDoubleX8#` — arity 2
 - [ ] `indexDoubleOffAddr#` — arity 2
@@ -775,7 +800,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexInt8ArrayAsInt8X16#` — arity 2
 - [ ] `indexInt8ArrayAsInt8X32#` — arity 2
 - [ ] `indexInt8ArrayAsInt8X64#` — arity 2
-- [ ] `indexInt8OffAddr#` — arity 2
 - [ ] `indexInt8OffAddrAsInt8X16#` — arity 2
 - [ ] `indexInt8OffAddrAsInt8X32#` — arity 2
 - [ ] `indexInt8OffAddrAsInt8X64#` — arity 2
@@ -845,7 +869,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexWord8ArrayAsWord8X16#` — arity 2
 - [ ] `indexWord8ArrayAsWord8X32#` — arity 2
 - [ ] `indexWord8ArrayAsWord8X64#` — arity 2
-- [ ] `indexWord8OffAddr#` — arity 2
 - [ ] `indexWord8OffAddrAsAddr#` — arity 2
 - [ ] `indexWord8OffAddrAsChar#` — arity 2
 - [ ] `indexWord8OffAddrAsDouble#` — arity 2
@@ -900,10 +923,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `insertWord8X16#` — arity 3
 - [ ] `insertWord8X32#` — arity 3
 - [ ] `insertWord8X64#` — arity 3
-- [ ] `int16ToWord16#` — arity 1
 - [ ] `int2Addr#` — arity 1
-- [ ] `int32ToWord32#` — arity 1
-- [ ] `int8ToWord8#` — arity 1
 - [ ] `isByteArrayPinned#` — arity 1
 - [ ] `isByteArrayWeaklyPinned#` — arity 1
 - [ ] `isCurrentThreadBound#` — arity 1
@@ -1000,9 +1020,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `mulIntMayOflo#` — arity 2
 - [ ] `mutableByteArrayContents#` — arity 1
 - [ ] `myThreadId#` — arity 1
-- [ ] `narrow16Word#` — arity 1
-- [ ] `narrow32Word#` — arity 1
-- [ ] `narrow8Word#` — arity 1
 - [ ] `negateDoubleX8#` — arity 1
 - [ ] `negateFloatX16#` — arity 1
 - [ ] `negateInt16X16#` — arity 1
@@ -1107,8 +1124,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `raiseDivZero#` — arity 1
 - [ ] `raiseOverflow#` — arity 1
 - [ ] `raiseUnderflow#` — arity 1
-- [ ] `readCharArray#` — arity 3
-- [ ] `readCharOffAddr#` — arity 3
 - [ ] `readDoubleArrayAsDoubleX4#` — arity 3
 - [ ] `readDoubleArrayAsDoubleX8#` — arity 3
 - [ ] `readDoubleOffAddr#` — arity 3
@@ -1171,7 +1186,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readInt8ArrayAsInt8X16#` — arity 3
 - [ ] `readInt8ArrayAsInt8X32#` — arity 3
 - [ ] `readInt8ArrayAsInt8X64#` — arity 3
-- [ ] `readInt8OffAddr#` — arity 3
 - [ ] `readInt8OffAddrAsInt8X16#` — arity 3
 - [ ] `readInt8OffAddrAsInt8X32#` — arity 3
 - [ ] `readInt8OffAddrAsInt8X64#` — arity 3
@@ -1350,12 +1364,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `traceBinaryEvent#` — arity 3
 - [ ] `traceEvent#` — arity 2
 - [ ] `traceMarker#` — arity 2
-- [ ] `uncheckedShiftLInt16#` — arity 2
-- [ ] `uncheckedShiftLInt32#` — arity 2
-- [ ] `uncheckedShiftLInt8#` — arity 2
-- [ ] `uncheckedShiftRAInt16#` — arity 2
-- [ ] `uncheckedShiftRAInt32#` — arity 2
-- [ ] `uncheckedShiftRAInt8#` — arity 2
 - [ ] `uncheckedShiftRLInt16#` — arity 2
 - [ ] `uncheckedShiftRLInt32#` — arity 2
 - [ ] `uncheckedShiftRLInt8#` — arity 2
@@ -1379,13 +1387,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `waitRead#` — arity 2
 - [ ] `waitWrite#` — arity 2
 - [ ] `whereFrom#` — arity 3
-- [ ] `word16ToInt16#` — arity 1
-- [ ] `word2Double#` — arity 1
-- [ ] `word2Float#` — arity 1
-- [ ] `word32ToInt32#` — arity 1
-- [ ] `word8ToInt8#` — arity 1
-- [ ] `writeCharArray#` — arity 4
-- [ ] `writeCharOffAddr#` — arity 4
 - [ ] `writeDoubleArrayAsDoubleX4#` — arity 4
 - [ ] `writeDoubleArrayAsDoubleX8#` — arity 4
 - [ ] `writeDoubleOffAddr#` — arity 4
@@ -1449,7 +1450,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeInt8ArrayAsInt8X16#` — arity 4
 - [ ] `writeInt8ArrayAsInt8X32#` — arity 4
 - [ ] `writeInt8ArrayAsInt8X64#` — arity 4
-- [ ] `writeInt8OffAddr#` — arity 4
 - [ ] `writeInt8OffAddrAsInt8X16#` — arity 4
 - [ ] `writeInt8OffAddrAsInt8X32#` — arity 4
 - [ ] `writeInt8OffAddrAsInt8X64#` — arity 4
