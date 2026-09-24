@@ -9,6 +9,9 @@ owning context. There is no separate scheduler identity. The command-line
 runtime permits thread creation; an embedding must enable
 `Context.Builder.allowCreateThread(true)`.
 
+The [capture contract](async-continuation-contract.md) separates delivery
+eligibility from the caller's obligation to preserve a suspended computation.
+
 `killThread#` queues a lazy exception payload and waits for delivery or target
 completion. A Truffle thread-local action wakes the target; it does not throw
 from arbitrary Java frames. The target claims the request at a bytecode
