@@ -29,6 +29,7 @@ import thc.runtime.ExecutableProgram
 import thc.runtime.CoreRepresentations
 import thc.runtime.CoreRepresentation
 import thc.runtime.IoMainRoot
+import thc.runtime.TargetLayout
 import java.io.File
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.FutureTask
@@ -118,7 +119,15 @@ object CoreModules {
                     visit(expr[2] as List<Any?>, bound + ids)
                 }
                 "app" -> {
-                    visit(expr[1] as List<Any?>, bound)
+                    val function = expr[1] as List<Any?>
+                    // FCallIds name foreign declarations, not Haskell globals.
+                    // Lowering validates the complete ABI and rejects unsupported
+                    // targets. Defined heads and all operands still participate
+                    // in linking; metadata cannot hide their dependencies.
+                    val foreignHead = CoreRepresentations.metadata(expr)?.get("foreignCall") is Map<*, *> &&
+                        function.firstOrNull() == "var" && function.getOrNull(1) is String &&
+                        function[1] !in bound && function[1] !in byId
+                    if (!foreignHead) visit(function, bound)
                     (expr[2] as List<List<Any?>>).forEach { visit(it, bound) }
                 }
                 "let" -> {
@@ -169,14 +178,21 @@ object CoreModules {
         return buildString {
             append(options, 0, options.length - 1)
             append(",\"modules\":[")
-            if (manifest != null) CorePackageManifest.appendModules(this, manifest)
-            else paths.forEachIndexed { index, path ->
-                if (index != 0) append(',')
-                // Validate each complete document before embedding it. Language.parse
-                // materializes the modules once; all bindings and metadata travel intact.
-                Json.appendObjectDocument(this, File(path).readText())
+            val layout = if (manifest != null) CorePackageManifest.appendModules(this, manifest) else {
+                paths.forEachIndexed { index, path ->
+                    if (index != 0) append(',')
+                    // Validate each complete document before embedding it. Language.parse
+                    // materializes the modules once; all bindings and metadata travel intact.
+                    Json.appendObjectDocument(this, File(path).readText())
+                }
+                null
             }
-            append("]}")
+            append(']')
+            if (layout != null) {
+                append(",\"targetLayout\":")
+                append(Json.stringify(layout.document()))
+            }
+            append('}')
         }
     }
 }
@@ -192,6 +208,7 @@ class Language : TruffleLanguage<Language.State>() {
         internal val handoffLayouts = thc.runtime.HandoffLayouts(language)
         internal val javaScriptImports = thc.runtime.JavaScriptImports()
         internal val files = thc.runtime.ManagedFiles(env)
+        internal val stdio = thc.runtime.ManagedStdio(files)
         internal val maskingState = ThreadLocal.withInitial { thc.runtime.MaskingState.UNMASKED }
         // A future SHARED policy may keep the lockless thunk path while this is valid.
         // The transition is one-way and belongs to this context, not to Language.
@@ -232,7 +249,9 @@ class Language : TruffleLanguage<Language.State>() {
     }
     override fun createContext(env: Env): State = State(env, this)
     override fun isThreadAccessAllowed(thread: Thread, singleThreaded: Boolean): Boolean = true
-    override fun disposeContext(context: State) = context.files.dispose()
+    override fun disposeContext(context: State) {
+        try { context.files.dispose() } finally { context.stdio.dispose() }
+    }
     override fun initializeThread(context: State, thread: Thread) = context.noteThread(thread)
     override fun initializeMultiThreading(context: State) = context.markMultithreaded()
     companion object {
@@ -247,9 +266,11 @@ class Language : TruffleLanguage<Language.State>() {
         require(input["ioMain"] != true || input["diagnosticUnsupported"] != true) {
             "IO main requires strict unsupported-Core rejection"
         }
+        val layout = input["targetLayout"]?.let(TargetLayout::fromDocument)
         val linked = CoreModules.reachable(CoreModules.merge(modules), entry, input["strictLink"] == true) + mapOf("instrument" to (input["instrument"] != false),
             "diagnosticUnsupported" to (input["diagnosticUnsupported"] == true),
-            "sourceNotesEnabled" to (input["sourceNotesEnabled"] != false))
+            "sourceNotesEnabled" to (input["sourceNotesEnabled"] != false)) +
+            (if (layout == null) emptyMap() else mapOf("targetLayout" to layout))
         val bindings = linked["bindings"] as List<Map<String, Any?>>
         val selected = bindings.singleOrNull { it["id"] == entry } ?: bindings.single { it["name"] == entry }
         val selectedExpression = selected["expr"] as List<Any?>

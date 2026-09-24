@@ -5,12 +5,15 @@ package thc
 
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import thc.runtime.TargetLayout
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.nio.ByteOrder
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -58,18 +61,33 @@ class CoreZipBundleTest {
 
     private fun unit(id: String, source: ByteArray = module(id),
                      omit: Boolean = false, extra: Boolean = false,
-                     innerUnit: String = id, inputs: ByteArray? = null): Map<String, Any?> {
+                     innerUnit: String = id, inputs: ByteArray? = null,
+                     layout: Map<String, Any?>? = null, abi: String = "bcbf",
+                     platform: String = hostPlatform(), way: String = "dynamic-nonprofiling"): Map<String, Any?> {
         val core = "core/Shared.json"
         val inventory = listOf(mapOf("name" to "Shared", "boundary" to boundary,
             "path" to core, "sha256" to hash(source)))
         val indexFields = mutableMapOf<String, Any>("format" to "thc-core-bundle", "schema" to 1,
             "unit" to innerUnit, "buildKey" to "0".repeat(64), "exportKey" to "1".repeat(64),
             "modules" to inventory)
-        if (inputs != null) indexFields["buildInputs"] = mapOf("path" to "inplace-manifest.json", "sha256" to hash(inputs))
+        val generated = (0 until 6).map { mapOf("path" to "source$it.hsc", "sha256" to "a".repeat(64)) }
+        if (layout != null) {
+            indexFields["targetLayout"] = layout
+            indexFields["generatedSources"] = generated
+        }
+        val inputBytes = inputs ?: layout?.let {
+            Json.stringify(mapOf("format" to "thc-core-build-inputs", "schema" to 1,
+                "unit" to id, "buildKey" to "0".repeat(64), "exportKey" to "1".repeat(64),
+                "compiler" to mapOf("id" to "ghc-9.14.1", "abi" to abi,
+                    "platform" to platform, "way" to way),
+                "targetLayout" to layout, "generatedSources" to generated)).toByteArray()
+        }
+        if (inputBytes != null) indexFields["buildInputs"] =
+            mapOf("path" to "inplace-manifest.json", "sha256" to hash(inputBytes))
         val index = Json.stringify(indexFields).toByteArray()
         val entries = listOf("manifest.json" to index) +
             (if (omit) emptyList() else listOf(core to source)) +
-            (if (inputs == null) emptyList() else listOf("inplace-manifest.json" to inputs)) +
+            (if (inputBytes == null) emptyList() else listOf("inplace-manifest.json" to inputBytes)) +
             (if (extra) listOf("extra.json" to source) else emptyList())
         val archive = temporary.resolve("$id.zip")
         Files.write(archive, zipped(entries))
@@ -77,6 +95,46 @@ class CoreZipBundleTest {
             "bundle" to mapOf("path" to archive.toString(), "sha256" to hash(Files.readAllBytes(archive))),
             "modules" to inventory)
     }
+
+    private fun hostPlatform(): String {
+        val arch = if (System.getProperty("os.arch").lowercase() in setOf("arm64", "aarch64")) "aarch64" else "x86_64"
+        val os = if (System.getProperty("os.name").startsWith("Mac")) "osx" else "linux"
+        return "$arch-$os"
+    }
+
+    private fun targetLayout(): Map<String, Any?> = mapOf(
+        "schema" to 1, "profiled" to false, "wordBytes" to 8,
+        "targetPlatform" to hostPlatform(),
+        "tablesNextToCode" to true,
+        "endianness" to (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) "little" else "big"),
+        "infoTableBytes" to 16, "infoTablePtrsOffset" to 0, "infoTablePtrsBytes" to 4,
+        "infoTableNptrsOffset" to 4, "infoTableNptrsBytes" to 4,
+        "infoTableTypeOffset" to 8, "infoTableTypeBytes" to 4,
+        "infoTableSrtOffset" to 12, "infoTableSrtBytes" to 4,
+        "infoProvEntBytes" to 72, "infoProvBytes" to 64,
+        "infoProvEntInfoOffset" to 0, "infoProvEntProvOffset" to 8,
+        "infoProvNameOffset" to 0, "infoProvDescOffset" to 8, "infoProvDescBytes" to 4,
+        "infoProvTyDescOffset" to 16, "infoProvLabelOffset" to 24,
+        "infoProvUnitOffset" to 32, "infoProvModuleOffset" to 40,
+        "infoProvFileOffset" to 48, "infoProvSpanOffset" to 56,
+        "closureRetBco" to 29, "closureRetSmall" to 30, "closureRetBig" to 31,
+        "closureRetFun" to 32, "closureUpdateFrame" to 33, "closureCatchFrame" to 34,
+        "closureUnderflowFrame" to 35, "closureStopFrame" to 36,
+        "closureStack" to 53, "closureAtomicallyFrame" to 55,
+        "closureCatchRetryFrame" to 56, "closureCatchStmFrame" to 57,
+        "closureAnnFrame" to 65, "stackHeaderBytes" to 8,
+        "stackCatchHandlerBytes" to 8, "stackCatchFrameBytes" to 16,
+        "stackCatchStmCodeBytes" to 8, "stackCatchStmHandlerBytes" to 16,
+        "stackCatchStmFrameBytes" to 24, "stackUpdateeBytes" to 8,
+        "stackUpdateFrameBytes" to 16, "stackAtomicallyCodeBytes" to 8,
+        "stackAtomicallyResultBytes" to 16, "stackAtomicallyFrameBytes" to 24,
+        "stackCatchRetryAltCodeBytes" to 8, "stackCatchRetryFirstCodeBytes" to 16,
+        "stackCatchRetryAltBytes" to 24, "stackCatchRetryFrameBytes" to 32,
+        "stackRetFunSizeBytes" to 8, "stackRetFunFunBytes" to 16,
+        "stackRetFunPayloadBytes" to 24, "stackRetFunFrameBytes" to 24,
+        "stackAnnPayloadBytes" to 8, "stackAnnFrameBytes" to 16,
+        "stackClosurePayloadBytes" to 8,
+    )
 
     @Test fun nativeBuildInputsAreVerifiedWhenPresent() {
         fun inputs(buildKey: String) = Json.stringify(mapOf("format" to "thc-core-build-inputs",
@@ -89,6 +147,57 @@ class CoreZipBundleTest {
         assertTrue(assertThrows(RuntimeException::class.java) {
             CoreModules.request(listOf("@$bad"), "pkg-a:Shared.entry")
         }.message!!.contains("build inputs record"))
+    }
+
+    @Test fun wiredTargetLayoutIsValidatedAndCarriedToBothBackends() {
+        val layout = targetLayout()
+        val path = manifest(listOf(unit("pkg-a", layout = layout)))
+        for (backend in listOf("ast", "bytecode")) {
+            val request = CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry", backend = backend)
+            val input = Json.parse(request) as Map<*, *>
+            val record = TargetLayout.fromDocument(input["targetLayout"])
+            assertEquals(8, record.wordBytes)
+            assertTrue(record.tablesNextToCode)
+            assertEquals(8, record.offset("infoProvEntProvOffset"))
+            Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
+                assertEquals(51L, context.eval("thc", request).execute().asLong(), backend)
+                val original = input["targetLayout"] as Map<*, *>
+                val source = original["layout"] as Map<*, *>
+                val malformed = input + ("targetLayout" to
+                    (original + ("layout" to (source + ("infoProvSpanOffset" to 64)))))
+                assertThrows(RuntimeException::class.java) {
+                    context.eval("thc", Json.stringify(malformed))
+                }
+            }
+        }
+        fun rejected(units: List<Map<String, Any?>>) = assertThrows(RuntimeException::class.java) {
+            CoreModules.request(listOf("@${manifest(units)}"), "pkg-a:Shared.entry")
+        }
+        val wrongEndian = rejected(listOf(unit("pkg-a", layout = layout + ("endianness" to "invalid"))))
+        assertTrue(wrongEndian.message!!.contains("endianness"))
+        val wrongOffset = rejected(listOf(unit("pkg-a", layout = layout + ("infoProvSpanOffset" to 64))))
+        assertTrue(wrongOffset.message!!.contains("exceeds"))
+        val wrongPlatform = rejected(listOf(unit("pkg-a", layout = layout, platform = "other-os")))
+        assertTrue(wrongPlatform.message!!.contains("identity or way"))
+        val wrongWay = rejected(listOf(unit("pkg-a", layout = layout, way = "profiling")))
+        assertTrue(wrongWay.message!!.contains("identity or way"))
+        val otherLayout = layout + ("tablesNextToCode" to false)
+        val otherRequest = Json.parse(CoreModules.request(listOf("@${manifest(listOf(unit("pkg-a", layout = otherLayout)))}"),
+            "pkg-a:Shared.entry")) as Map<*, *>
+        assertFalse(TargetLayout.fromDocument(otherRequest["targetLayout"]).tablesNextToCode)
+        val wrongFlag = rejected(listOf(unit("pkg-a", layout = layout + ("tablesNextToCode" to "false"))))
+        assertTrue(wrongFlag.message!!.contains("tables-next-to-code"))
+        val conflictingFlag = rejected(listOf(unit("pkg-a", layout = layout),
+            unit("pkg-b", layout = otherLayout)))
+        assertTrue(conflictingFlag.message!!.contains("Conflicting GHC target layouts"))
+        val conflicting = rejected(listOf(unit("pkg-a", layout = layout),
+            unit("pkg-b", layout = layout, abi = "other")))
+        assertTrue(conflicting.message!!.contains("Conflicting GHC target layouts"))
+        val noReceipt = Json.stringify(mapOf("format" to "thc-core-build-inputs", "schema" to 1,
+            "unit" to "pkg-a", "buildKey" to "0".repeat(64), "exportKey" to "1".repeat(64)))
+            .toByteArray()
+        val missingReceipt = rejected(listOf(unit("pkg-a", layout = layout, inputs = noReceipt)))
+        assertTrue(missingReceipt.message!!.contains("receipts differ"))
     }
 
     private fun manifest(units: List<Map<String, Any?>>): Path = temporary.resolve("packages.json").also {

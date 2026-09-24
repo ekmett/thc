@@ -36,7 +36,7 @@ import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.Run (RunOptions(..))
 import THC.Driver.Zip (decodeZip, encodeZip)
-import THC.Driver.Wired (moduleSources, sourceHashes, exportPinnedCore)
+import THC.Driver.Wired (WiredArtifacts(..), moduleSources, sourceHashes, exportPinnedCore)
 
 -- Cabal performs the project solve, preprocessing, host-tool/TH execution and
 -- native build. Its machine-readable plan and per-component build-info, rather
@@ -179,6 +179,7 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
 wiredGhcInternal :: ExportContext -> FilePath -> IO Value
 wiredGhcInternal context thcRoot = do
   let pinned = thcRoot </> "compiler/pinned-ghc-internal"
+      layoutRecipe = thcRoot </> "compiler/target-layout.c"
       unit = "ghc-internal" :: String
       names = map snd moduleSources
       sourceArtifact (name, digest) = object
@@ -188,26 +189,32 @@ wiredGhcInternal context thcRoot = do
     requireFile path
     actual <- digestFile path
     require (actual == expected) ("pinned GHC 9.14.1 source changed: " ++ name)
+  requireFile layoutRecipe
+  recipeHash <- digestFile layoutRecipe
   pluginHash <- digestFile (contextPluginLibrary context)
   let inputFields = ["format" .= ("thc-core-build-inputs" :: String), "schema" .= (1 :: Int),
                      "unit" .= unit,
                      "compiler" .= object ["id" .= contextCompiler context,
                                            "abi" .= contextAbi context,
-                                           "platform" .= contextPlatform context],
+                                           "platform" .= contextPlatform context,
+                                           "way" .= ("dynamic-nonprofiling" :: String)],
                      "component" .= object ["kind" .= ("pinned-wired-source" :: String),
                                              "modules" .= names],
                      "nativeArtifacts" .= ([] :: [Value]),
                      "sourceArtifacts" .= map sourceArtifact sourceHashes,
+                     "recipeArtifacts" .= [object
+                       ["path" .= ("compiler/target-layout.c" :: String),
+                        "sha256" .= recipeHash]],
                      "dependencies" .= ([] :: [Value])]
       buildKey = shaHex (BL.toStrict (encode (object inputFields)))
       exporter = object ["pluginUnit" .= contextPluginUnit context,
                          "pluginDb" .= contextPluginDb context,
                          "pluginHash" .= pluginHash,
                          "driverHash" .= contextDriverHash context,
-                         "options" .= (["ghc-internal-source-closure-v1", "post-tidy",
-                                        "source-notes", "-g", "-dynamic", "-dcore-lint",
+                         "options" .= (["ghc-internal-source-closure-v2", "post-tidy",
+                                        "source-notes", "hsc2hs", "-g", "-dynamic", "-dcore-lint",
                                         "-XNoPolyKinds"] :: [String])]
-      exportKey = shaHex (BL.toStrict (encode ("thc-wired-ghc-internal-v1" :: String,
+      exportKey = shaHex (BL.toStrict (encode ("thc-wired-ghc-internal-v2" :: String,
                                              buildKey, exporter)))
       buildInputs = object (inputFields ++ ["buildKey" .= buildKey,
                                            "exportKey" .= exportKey, "exporter" .= exporter])
@@ -218,7 +225,7 @@ wiredGhcInternal context thcRoot = do
   createDirectoryIfMissing True directory
   bundle <- withLock (destination ++ ".lock") $ do
     cached <- doesFileExist destination
-    hit <- if cached then readBundle destination unit buildKey exportKey buildInputs (sort names)
+    hit <- if cached then readBundle True destination unit buildKey exportKey buildInputs (sort names)
            else pure Nothing
     case hit of
       Just value -> pure value
@@ -236,8 +243,16 @@ wiredGhcInternal context thcRoot = do
           let packageTool = maybe (takeDirectory (contextGhc context) </> "ghc-pkg") id
                               (contextGhcPkg context)
           requireFile packageTool
-          exportPinnedCore pinned (contextGhc context) packageTool
-                           (contextPluginLibrary context) (contextPluginUnit context) staging
+          artifacts <- exportPinnedCore pinned (contextGhc context) packageTool
+                           (contextPluginLibrary context) (contextPluginUnit context)
+                           layoutRecipe staging
+          layout <- readJson (targetLayout artifacts)
+          require (validTargetLayout layout &&
+                   jsonField layout "targetPlatform" == Just (contextPlatform context))
+                  "GHC target layout receipt differs from compiler target"
+          generated <- forM (generatedSources artifacts) $ \(name, path) -> do
+            digest <- digestFile path
+            pure (object ["path" .= name, "sha256" .= digest])
           members <- forM names $ \name -> do
             let core = staging </> "core" </> (name ++ ".json")
                 member = "core/" ++ name ++ ".json"
@@ -253,10 +268,15 @@ wiredGhcInternal context thcRoot = do
                               "path" .= ("core/" ++ name ++ ".json"),
                               "sha256" .= shaHex bytes]
                      | (name, (_, bytes)) <- zip names members]
-              inputsBytes = BL.toStrict (encode buildInputs)
+              derived = ["targetLayout" .= layout, "generatedSources" .= generated]
+              inputsBytes = BL.toStrict (encode (object
+                (inputFields ++ ["buildKey" .= buildKey, "exportKey" .= exportKey,
+                                 "exporter" .= exporter] ++ derived)))
               inner = object ["format" .= ("thc-core-bundle" :: String),
                               "schema" .= (1 :: Int), "unit" .= unit,
                               "buildKey" .= buildKey, "exportKey" .= exportKey,
+                              "targetLayout" .= layout,
+                              "generatedSources" .= generated,
                               "modules" .= refs,
                               "buildInputs" .= object
                                 ["path" .= ("inplace-manifest.json" :: String),
@@ -548,7 +568,7 @@ exportUnit context keys unit = do
   createDirectoryIfMissing True directory
   withLock (destination ++ ".lock") $ do
     cached <- doesFileExist destination
-    hit <- if cached then readBundle destination (unitId unit) buildKey exportKey buildInputs expected
+    hit <- if cached then readBundle False destination (unitId unit) buildKey exportKey buildInputs expected
            else pure Nothing
     case hit of
       Just bundle -> pure bundle
@@ -611,8 +631,8 @@ freshExport context component unit buildKey exportKey buildInputs expected desti
     atomicBytes destination (BL.toStrict archive)
     pure (Bundle destination (shaHex (BL.toStrict archive)) modules buildKey)) `finally` cleanup
 
-readBundle :: FilePath -> String -> String -> String -> Value -> [String] -> IO (Maybe Bundle)
-readBundle path unit buildKey exportKey buildInputs expected = do
+readBundle :: Bool -> FilePath -> String -> String -> String -> Value -> [String] -> IO (Maybe Bundle)
+readBundle requireDerived path unit buildKey exportKey buildInputs expected = do
   bytes <- BS.readFile path
   decoded <- decodeZip bytes
   pure $ do
@@ -625,6 +645,14 @@ readBundle path unit buildKey exportKey buildInputs expected = do
     inputHash <- jsonField inputRef "sha256" :: Maybe String
     inputBytes <- lookup inputPath entries
     storedInputs <- either (const Nothing) Just (eitherDecodeStrict' inputBytes)
+    let storedBase = case storedInputs of
+          Object fields -> Object (KeyMap.delete "generatedSources"
+            (KeyMap.delete "targetLayout" fields))
+          value -> value
+        layout = jsonField storedInputs "targetLayout" :: Maybe Value
+        innerLayout = jsonField inner "targetLayout" :: Maybe Value
+        generated = jsonField storedInputs "generatedSources" :: Maybe [Value]
+        innerGenerated = jsonField inner "generatedSources" :: Maybe [Value]
     let names = [name | Just name <- map (`jsonField` "name") modules]
         paths = [member | Just member <- map (`jsonField` "path") modules]
         validModule item = do
@@ -645,13 +673,50 @@ readBundle path unit buildKey exportKey buildInputs expected = do
         jsonField inner "buildKey" == Just buildKey &&
         jsonField inner "exportKey" == Just exportKey &&
         inputPath == "inplace-manifest.json" && shaHex inputBytes == inputHash &&
-        storedInputs == buildInputs &&
+        (if requireDerived then storedBase == buildInputs &&
+          layout == innerLayout && generated == innerGenerated &&
+          maybe False validTargetLayout layout && maybe False validGeneratedSources generated
+         else storedInputs == buildInputs) &&
         length names == length modules && length paths == length modules &&
         length names == length (nub names) && sort names == expected &&
         sort (map fst entries) == sort ("manifest.json" : inputPath : paths) &&
         all (== Just True) (map validModule modules))
       then Just (Bundle path (shaHex bytes) modules buildKey)
       else Nothing
+
+validTargetLayout :: Value -> Bool
+validTargetLayout layout =
+  jsonField layout "schema" == Just (1 :: Int) &&
+  jsonField layout "profiled" == Just False &&
+  maybe False (const True) (jsonField layout "tablesNextToCode" :: Maybe Bool) &&
+  maybe False (not . null) (jsonField layout "targetPlatform" :: Maybe String) &&
+  (jsonField layout "endianness" :: Maybe String) `elem` [Just "little", Just "big"] &&
+  maybe False (`elem` [4, 8]) (jsonField layout "wordBytes" :: Maybe Int) &&
+  all (maybe False (>= 0) . (jsonField layout :: String -> Maybe Int))
+    ["infoTableBytes", "infoTablePtrsOffset", "infoTablePtrsBytes",
+     "infoTableNptrsOffset", "infoTableNptrsBytes", "infoTableTypeOffset",
+     "infoTableTypeBytes", "infoTableSrtOffset", "infoTableSrtBytes",
+     "infoProvEntBytes", "infoProvBytes", "infoProvDescBytes",
+     "infoProvEntInfoOffset", "infoProvEntProvOffset", "infoProvNameOffset",
+     "infoProvDescOffset", "infoProvTyDescOffset", "infoProvLabelOffset",
+     "infoProvUnitOffset", "infoProvModuleOffset", "infoProvFileOffset",
+     "infoProvSpanOffset", "stackHeaderBytes", "stackCatchHandlerBytes",
+     "stackCatchFrameBytes", "stackUpdateeBytes", "stackUpdateFrameBytes",
+     "stackAnnPayloadBytes", "stackAnnFrameBytes", "stackRetFunSizeBytes",
+     "stackRetFunFunBytes", "stackRetFunPayloadBytes", "stackRetFunFrameBytes"] &&
+  all (\(name, ordinal) -> jsonField layout name == Just (ordinal :: Int))
+    [("closureRetBco", 29), ("closureRetSmall", 30), ("closureRetBig", 31),
+     ("closureRetFun", 32), ("closureStopFrame", 36), ("closureStack", 53),
+     ("closureAnnFrame", 65)]
+
+validGeneratedSources :: [Value] -> Bool
+validGeneratedSources generated =
+  let paths = map (`jsonField` "path") generated :: [Maybe FilePath]
+      digests = map (`jsonField` "sha256") generated :: [Maybe String]
+      expected = sort [path | (path, _) <- moduleSources, takeExtension path == ".hsc"]
+  in sort [path | Just path <- paths] == expected &&
+     length paths == length expected &&
+     all (maybe False (\digest -> length digest == 64 && all isHexDigit digest)) digests
 
 jsonField :: FromJSON a => Value -> String -> Maybe a
 jsonField (Object fields) name = do

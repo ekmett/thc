@@ -31,6 +31,7 @@ dependencies {
     runtimeOnly("org.graalvm.truffle:truffle-runtime:$graalVersion")
     runtimeOnly("org.graalvm.polyglot:llvm-community:$graalVersion")
     kapt("org.graalvm.truffle:truffle-dsl-processor:$graalVersion")
+    testAnnotationProcessor("org.graalvm.truffle:truffle-dsl-processor:$graalVersion")
     testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     polyglotDemoRuntime("org.graalvm.polyglot:js:$graalVersion")
@@ -88,6 +89,7 @@ tasks.withType<Test>().configureEach {
             "synchronous-exceptions/**/*.json", "synchronous-exceptions/*.tsv", "synchronous-exceptions/native/**",
             "managed-md5-native/**",
             "pinned-addresses/**/*.json", "pinned-addresses/*.tsv", "pinned-addresses/native/**",
+            "pinned-pointer-cells/**/*.json", "pinned-pointer-cells/*.tsv", "pinned-pointer-cells/native/**",
             "managed-address-reads/**/*.json", "managed-address-reads/*.tsv", "managed-address-reads/native/**",
             "scalar-bitcasts/**/*.json", "scalar-bitcasts/*.tsv", "scalar-bitcasts/NativeScalarBitCast.hs", "scalar-bitcasts/native/**",
             "compare-byte-arrays/**/*.json", "compare-byte-arrays/*.tsv", "compare-byte-arrays/NativeCompareByteArrays.hs", "compare-byte-arrays/native/**",
@@ -231,3 +233,13 @@ val compileCbits by tasks.registering(Exec::class) {
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/cbits")) }
 tasks.processResources { dependsOn(compileCbits) }
+
+// Original stdio FCalls use target C widths/errno, not JVM or private-ABI values.
+val generateStdioAbi by tasks.registering(Exec::class) {
+    inputs.files("scripts/generate-stdio-abi.py", "scripts/build-cbits.py", "src/main/c/stdio-abi-probe.c")
+    outputs.dir(layout.buildDirectory.dir("generated/stdio-abi"))
+    outputs.upToDateWhen { false }
+    commandLine("python3", "scripts/generate-stdio-abi.py", "--output", layout.buildDirectory.dir("generated/stdio-abi").get().asFile)
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/stdio-abi")) }
+tasks.processResources { dependsOn(generateStdioAbi) }

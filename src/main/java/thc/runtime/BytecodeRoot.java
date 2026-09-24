@@ -17,6 +17,7 @@ import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
@@ -465,12 +466,46 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class OriginalStdioWrite {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                long fd, ManagedAddress address, long count, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = CoreOriginalStdio.current(node).write(fd, address, count);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class OriginalStdioErrno {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = CoreOriginalStdio.current(node).errno();
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class FileOpen {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 ManagedAddress path, long mode, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = CoreManagedFiles.current(node).open(path, mode);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class CloneMyStack {
+        @Specialization public static void capture(VirtualFrame frame, LocalAccessor destination,
+                Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            // The current operation's frame is required, not a caller FrameInstance.
+            ManagedStackSnapshot snapshot = ManagedStackSnapshot.capture(node, frame);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, snapshot);
         }
     }
 
@@ -1008,44 +1043,91 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
-    /** Execute only the action inside this catch frame; a handler rethrow escapes it. */
+    @Operation public static final class RequireIOState {
+        @Specialization public static void check(Object state) { TupleResultsKt.requireVoidCarrier(state); }
+    }
+
+    /** Called inside a DSL TryCatch; its typed tuple destination is unchanged. */
     @Operation(forceCached = true)
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = Metrics.class, name = "metrics")
-    public static final class CatchIO {
+    public static final class InvokeIOAction {
         @Specialization public static void run(VirtualFrame frame, BytecodeTupleSlots destination, Metrics metrics,
-                Object action, Object handler, Object state,
+                Object action, Object prior,
                 @Cached(value = "createAction(destination, metrics)", neverDefault = true) TupleDispatch actionCall,
-                @Cached(value = "createHandler(destination, metrics)", neverDefault = true) TupleDispatch handlerCall,
                 @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
-            TupleResultsKt.requireVoidCarrier(state);
-            GuestException failure;
             try {
                 actionCall.execute(frame, RequireClosure.require(force.execute(frame, action)),
                         new Object[]{kotlin.Unit.INSTANCE});
-                failure = null;
-            } catch (GuestException guest) {
-                failure = guest;
-            }
-            if (failure != null) {
-                MaskingState prior = SynchronousMasking.current(force);
-                if (prior == MaskingState.UNMASKED)
-                    SynchronousMasking.set(force, MaskingState.MASKED_INTERRUPTIBLE);
-                try {
-                    handlerCall.execute(frame, RequireClosure.require(force.execute(frame, handler)),
-                            new Object[]{failure.getPayload(), kotlin.Unit.INSTANCE});
-                } finally {
-                    SynchronousMasking.set(force, prior);
-                }
+            } catch (RuntimeException | Error failure) {
+                // Generated DSL finally handlers see Truffle exceptions, but
+                // host faults and control transfers bypass them. Preserve the
+                // old Java finally contract on just that exceptional edge.
+                if (prior instanceof MaskingState mask && !(failure instanceof AbstractTruffleException))
+                    SynchronousMasking.set(force, mask);
+                throw failure;
             }
         }
         public static TupleDispatch createAction(BytecodeTupleSlots destination, Metrics metrics) {
             return new TupleDispatch(destination, metrics, 1, false);
         }
+        public static Force createForce(Metrics metrics) { return new Force(metrics); }
+    }
+
+    /** The bytecode handler admits only synchronous Haskell guest exceptions. */
+    @Operation public static final class RequireGuestFailure {
+        @Specialization public static Object payload(AbstractTruffleException failure) {
+            if (failure instanceof GuestException guest) return guest.getPayload();
+            throw failure;
+        }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class InvokeIOHandler {
+        @Specialization public static void run(VirtualFrame frame, BytecodeTupleSlots destination, Metrics metrics,
+                Object handler, Object payload, MaskingState prior,
+                @Cached(value = "createHandler(destination, metrics)", neverDefault = true) TupleDispatch handlerCall,
+                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
+            try {
+                handlerCall.execute(frame, RequireClosure.require(force.execute(frame, handler)),
+                        new Object[]{payload, kotlin.Unit.INSTANCE});
+            } catch (RuntimeException | Error failure) {
+                if (!(failure instanceof AbstractTruffleException)) SynchronousMasking.set(force, prior);
+                throw failure;
+            }
+        }
         public static TupleDispatch createHandler(BytecodeTupleSlots destination, Metrics metrics) {
             return new TupleDispatch(destination, metrics, 2, false);
         }
         public static Force createForce(Metrics metrics) { return new Force(metrics); }
+    }
+
+    /** Return the caller mask so the DSL TryFinally can restore it. */
+    @Operation public static final class EnterHandlerMask {
+        @Specialization public static MaskingState enter(@Bind("$node") Node node) {
+            MaskingState prior = SynchronousMasking.current(node);
+            if (prior == MaskingState.UNMASKED)
+                SynchronousMasking.set(node, MaskingState.MASKED_INTERRUPTIBLE);
+            return prior;
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = MaskingState.class, name = "target")
+    public static final class EnterMask {
+        @Specialization public static MaskingState enter(MaskingState target, @Bind("$node") Node node) {
+            MaskingState prior = SynchronousMasking.current(node);
+            SynchronousMasking.set(node, target);
+            return prior;
+        }
+    }
+
+    @Operation public static final class RestoreMask {
+        @Specialization public static void restore(MaskingState prior, @Bind("$node") Node node) {
+            SynchronousMasking.set(node, prior);
+        }
     }
 
     @Operation
@@ -1068,67 +1150,6 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
                     ManagedAddress.Companion.nullAddress());
         }
-    }
-
-    private static void runMaskAction(VirtualFrame frame, Object action, Object state,
-            TupleDispatch actionCall, Force force, MaskingState target) {
-        TupleResultsKt.requireVoidCarrier(state);
-        MaskingState prior = SynchronousMasking.current(force);
-        SynchronousMasking.set(force, target);
-        try {
-            actionCall.execute(frame, RequireClosure.require(force.execute(frame, action)),
-                    new Object[]{kotlin.Unit.INSTANCE});
-        } finally {
-            SynchronousMasking.set(force, prior);
-        }
-    }
-
-    @Operation(forceCached = true)
-    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
-    @ConstantOperand(type = Metrics.class, name = "metrics")
-    public static final class UnmaskAsyncExceptions {
-        @Specialization public static void run(VirtualFrame frame, BytecodeTupleSlots destination, Metrics metrics,
-                Object action, Object state,
-                @Cached(value = "createAction(destination, metrics)", neverDefault = true) TupleDispatch actionCall,
-                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
-            runMaskAction(frame, action, state, actionCall, force, MaskingState.UNMASKED);
-        }
-        public static TupleDispatch createAction(BytecodeTupleSlots destination, Metrics metrics) {
-            return new TupleDispatch(destination, metrics, 1, false);
-        }
-        public static Force createForce(Metrics metrics) { return new Force(metrics); }
-    }
-
-    @Operation(forceCached = true)
-    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
-    @ConstantOperand(type = Metrics.class, name = "metrics")
-    public static final class MaskAsyncExceptions {
-        @Specialization public static void run(VirtualFrame frame, BytecodeTupleSlots destination, Metrics metrics,
-                Object action, Object state,
-                @Cached(value = "createAction(destination, metrics)", neverDefault = true) TupleDispatch actionCall,
-                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
-            runMaskAction(frame, action, state, actionCall, force, MaskingState.MASKED_INTERRUPTIBLE);
-        }
-        public static TupleDispatch createAction(BytecodeTupleSlots destination, Metrics metrics) {
-            return new TupleDispatch(destination, metrics, 1, false);
-        }
-        public static Force createForce(Metrics metrics) { return new Force(metrics); }
-    }
-
-    @Operation(forceCached = true)
-    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
-    @ConstantOperand(type = Metrics.class, name = "metrics")
-    public static final class MaskUninterruptible {
-        @Specialization public static void run(VirtualFrame frame, BytecodeTupleSlots destination, Metrics metrics,
-                Object action, Object state,
-                @Cached(value = "createAction(destination, metrics)", neverDefault = true) TupleDispatch actionCall,
-                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
-            runMaskAction(frame, action, state, actionCall, force, MaskingState.MASKED_UNINTERRUPTIBLE);
-        }
-        public static TupleDispatch createAction(BytecodeTupleSlots destination, Metrics metrics) {
-            return new TupleDispatch(destination, metrics, 1, false);
-        }
-        public static Force createForce(Metrics metrics) { return new Force(metrics); }
     }
 
     /** Force already grants each suspended thunk one evaluator across guest threads. */

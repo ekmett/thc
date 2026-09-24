@@ -27,13 +27,20 @@ data class ManagedStackNote internal constructor(
     val startLine: Int, val startColumn: Int, val endLine: Int, val endColumn: Int
 )
 
+/** Detached original binding identity, never inferred from a debug label or source path. */
+@ConsistentCopyVisibility
+data class ManagedStackFunctionIdentity internal constructor(
+    val bindingId: String, val unitId: String, val moduleName: String, val occurrence: String
+)
+
 enum class ManagedStackLocationKind { CURRENT_NODE, CALL_NODE, BYTECODE, ROOT, UNAVAILABLE }
 
 class ManagedStackFrame internal constructor(
     val functionName: String,
     val location: ManagedStackSource?,
     val locationKind: ManagedStackLocationKind,
-    sections: List<ManagedStackSource>, notes: List<ManagedStackNote>
+    sections: List<ManagedStackSource>, notes: List<ManagedStackNote>,
+    val coreIdentity: ManagedStackFunctionIdentity?
 ) {
     /** Bytecode sections are ordered most to least concrete; AST notes retain exporter order. */
     val sections: List<ManagedStackSource> = immutableStackList(sections)
@@ -111,6 +118,9 @@ class ManagedStackSnapshot private constructor(frames: List<ManagedStackFrame>) 
                         sections.map(::copySection), notes.map { note ->
                             ManagedStackNote(note.id, note.label, copySection(note.section),
                                 note.startLine, note.startColumn, note.endLine, note.endColumn)
+                        }, root.coreIdentity?.let { identity ->
+                            ManagedStackFunctionIdentity(identity.bindingId, identity.unitId,
+                                identity.moduleName, identity.occurrence)
                         })
                 }
                 null

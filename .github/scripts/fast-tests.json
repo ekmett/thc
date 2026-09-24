@@ -196,10 +196,6 @@
       "junit": ["thc.runtime.PinnedPointerCellsTest"],
       "python": []
     },
-    "scripts/prepare-pinned-pointer-cells.sh": {
-      "junit": ["thc.runtime.PinnedPointerCellsTest"],
-      "python": []
-    },
     "scripts/prepare-address-identity.sh": {
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "python": []
@@ -574,6 +570,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.PinnedPointerCellsTest",
         "thc.runtime.BitPrimopsTest",
         "thc.IntegerPrimopsTest",
         "thc.SignedNarrowPrimopsTest",

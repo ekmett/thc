@@ -759,6 +759,51 @@ parseArrayRow line = case splitTab (takeWhile (/= '\r') line) of
     pure (name,value)
   _ -> Nothing
 
+preparePinnedPointers :: FilePath -> IO ()
+preparePinnedPointers root = do
+  let directory = "build/pinned-pointer-cells"
+      manifest = root </> directory </> "manifest.json"
+      native = directory </> "native"
+      binary = native </> "oracle"
+      source = "compiler/test-fixtures/PinnedPointerCellsAudit.hs"
+      driver = "compiler/test-fixtures/PinnedPointerCellsNative.hs"
+  createDirectoryIfMissing True (root </> native)
+  present <- doesFileExist manifest
+  when present (removeFile manifest)
+  ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+  version <- takeWhile (/= '\n') <$> run root [] ghc ["--numeric-version"] ""
+  unless (version == "9.14.1") (die "Pinned pointer fixture requires GHC 9.14.1")
+  _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint",
+    "-i./compiler/test-fixtures", "-odir", native, "-hidir", native, driver, "-o", binary] ""
+  oracle <- run root [] (root </> binary) [] (unlines (map show ([0,1,17,127,255,256,-1] :: [Int])))
+  writeFile (root </> directory </> "oracle.tsv") oracle
+  forM_ ["pre", "post"] $ \stage -> do
+    let core = directory </> stage </> "core"
+        ghcOut = directory </> stage </> "ghc"
+        options = if stage == "post" then ["-fplugin-opt=THC.Plugin:post-tidy"] else []
+    forM_ [core, ghcOut] (createDirectoryIfMissing True . (root </>))
+    _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
+      "compiler/export.sh" (options ++ ["-fplugin-opt=THC.Plugin:closure=pointerRoundtrip", source]) ""
+    _ <- run root [] "python3" ["scripts/audit-core.py", "--entry", "pointerRoundtrip",
+      "--output", directory </> stage </> "audit.json",
+      core </> "PinnedPointerCellsAudit.json", core </> "THC.InterfaceClosure.json"] ""
+    pure ()
+  plugin <- listDirectory (root </> "compiler/THC")
+  scripts <- listDirectory (root </> "scripts")
+  let inputs = sort $ [source, driver, "test/haskell-fixtures/Main.hs", "scripts/audit-core.py",
+        "scripts/core-capabilities.json", "compiler/export.sh", "compiler/build.sh",
+        "compiler/toolchain.sh", "compiler/plugin.py", "thc.cabal", "cabal.project"] ++
+        ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
+        ["scripts" </> file | file <- scripts, "core_" `isPrefixOf` file, takeExtension file == ".py"]
+      artifacts = (directory </> "oracle.tsv") :
+        [directory </> stage </> file | stage <- ["pre", "post"],
+          file <- ["audit.json", "core/PinnedPointerCellsAudit.json", "core/THC.InterfaceClosure.json"]]
+  inputHashes <- hashes root inputs
+  artifactHashes <- hashes root artifacts
+  writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= version,
+    "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]
+  putStrLn "pinned-pointer-cells: 7 native rows, strict pre/post Core"
+
 main :: IO ()
 main = do
   args <- getArgs
@@ -773,5 +818,6 @@ main = do
     ["integer"] -> prepare root IntegerWord
     ["signed-narrow"] -> prepare root SignedNarrow
     ["explicit64"] -> prepare root Explicit64
+    ["pinned-pointer-cells"] -> preparePinnedPointers root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (bit|integer|signed-narrow|explicit64|tuple-arithmetic|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (bit|integer|signed-narrow|explicit64|tuple-arithmetic|pinned-pointer-cells|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

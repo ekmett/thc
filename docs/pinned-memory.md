@@ -57,7 +57,7 @@ failure-before-publication and malformed loader proofs. Native inputs are
 aligned live allocations; adversarial out-of-bounds inputs are managed-only
 tests. These reads do not enable arbitrary native pointer dereferences.
 
-`scripts/prepare-pinned-pointer-cells.sh` exports the genuine
+`cabal run exe:thc-fixtures -- pinned-pointer-cells` exports the genuine
 `newPinnedByteArray#`/freeze/contents/`keepAlive#` sequence at both Core stages,
 with strict representation audits and seven native oracle inputs.
 `PinnedPointerCellsTest` checks the same rows interpreted and explicitly

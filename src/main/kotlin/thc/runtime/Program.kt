@@ -11,7 +11,9 @@ import com.oracle.truffle.api.dsl.TypeSystemReference
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.TruffleSafepoint
+import com.oracle.truffle.api.bytecode.ContinuationResult
 import com.oracle.truffle.api.frame.FrameDescriptor
+import com.oracle.truffle.api.frame.MaterializedFrame
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.*
 import com.oracle.truffle.api.profiles.BranchProfile
@@ -103,8 +105,9 @@ internal class Thunk(target: RootCallTarget, var environment: CapturedFrame?) {
     // Updated thunks retain only their answer (or memoized guest failure).
     var target: RootCallTarget? = target
     // 0 = unevaluated, 1 = owned, 2 = WHNF, 3 = ordinary failure,
-    // 4 = interrupted without a resumable continuation. State publishes value
-    // and release of the target/environment to all waiting guest threads.
+    // 4 = interrupted without a resumable continuation, 5 = cooperatively
+    // yielded bytecode root with a captured continuation. State publishes the
+    // value/continuation and release of ownership to all waiting guest threads.
     @Volatile var state = 0
     var value: Any? = null
     var owner: Thread? = null
@@ -114,6 +117,12 @@ internal class Thunk(target: RootCallTarget, var environment: CapturedFrame?) {
 private data class MemoizedGuestFailure(val payload: Any?, val location: Node)
 /** Async delivery must carry its origin separately from its guest payload. */
 internal class AsyncThunkUnwind(val payload: Any?) : RuntimeException("Asynchronous guest unwind")
+/** A root-local bytecode yield hands the shared thunk to another evaluator. */
+internal class ThunkSuspended(val thunk: Thunk) :
+    com.oracle.truffle.api.exception.AbstractTruffleException(
+        "Internal bytecode thunk suspension", null, 0, null)
+/** Cold caller-segment input distinguishes a child result from its guest failure. */
+internal class ChildResume(val value: Any?, val failure: GuestException?)
 internal class Metrics(val enabled: Boolean) {
     private val thunkCounts = linkedMapOf<String, Long>()
     @CompilerDirectives.TruffleBoundary @Synchronized fun recordThunk(label: String) {
@@ -275,6 +284,8 @@ private class Delay(private val target: RootCallTarget, private val captureLayou
     override fun execute(frame: VirtualFrame): Thunk = Thunk(target, captureLayout?.capture(frame, captures))
 }
 internal class Force(private val metrics: Metrics) : Node() {
+    private object Retry
+    private class Parked(val thunk: Thunk, val continuation: ContinuationResult)
     @Child private var calls = ThunkTargetCache(metrics)
     @Child private var trampoline = TailCallLoop(metrics)
     private val tailCallProfile = BranchProfile.create()
@@ -295,29 +306,122 @@ internal class Force(private val metrics: Metrics) : Node() {
                 3 -> rethrowFailure(original)
                 4 -> fault("Interrupted thunk has no resumable continuation")
             }
+            val observed = if (original.state == 5) original.value as? ContinuationResult else null
+            val child = (observed?.result as? ThunkSuspended)?.thunk
+            if (child != null) return resumeChain(frame.materialize(), original)
+            val result = executeOne(frame, original, observed, Unit)
+            if (result !== Retry) return result
+        }
+    }
+
+    private fun executeOne(frame: VirtualFrame, original: Thunk,
+                           observed: ContinuationResult?, resumeValue: Any?): Any? {
+        while (true) {
+            when (original.state) {
+                2 -> { if (metrics.enabled) metrics.incrementThunkHits(); return original.value }
+                3 -> rethrowFailure(original)
+                4 -> fault("Interrupted thunk has no resumable continuation")
+            }
             // A volatile state read alone cannot claim an unevaluated thunk:
             // another thread can enter during the single-threaded transition.
-            val claim = synchronized(original.monitor) {
-                when (original.state) {
-                    0 -> { original.owner = Thread.currentThread(); original.state = 1; 0 }
-                    1 -> if (original.owner === Thread.currentThread()) 2 else 1
-                    else -> 3
+            var continuation: ContinuationResult? = null
+            var claimedHere = false
+            try {
+                val claim = synchronized(original.monitor) {
+                    when (original.state) {
+                        0 -> { original.owner = Thread.currentThread(); original.state = 1; claimedHere = true; 0 }
+                        5 -> if ((observed != null && original.value !== observed) ||
+                            (observed == null &&
+                                ((original.value as? ContinuationResult)?.result is ThunkSuspended))) 3 else {
+                            continuation = original.value as? ContinuationResult
+                                ?: fault("Suspended thunk has no bytecode continuation")
+                            original.value = null // One owner consumes the one-shot continuation.
+                            original.owner = Thread.currentThread()
+                            original.state = 1
+                            claimedHere = true
+                            0
+                        }
+                        1 -> if (original.owner === Thread.currentThread()) 2 else 1
+                        else -> 3
+                    }
                 }
-            }
-            when (claim) {
-                0 -> return evaluateOwned(original)
-                1 -> awaitOwner(original)
-                2 -> { if (metrics.enabled) metrics.incrementBlackholes(); fault("Blackhole: cyclic thunk entered while evaluating") }
+                when (claim) {
+                    0 -> return evaluateOwned(original, continuation, resumeValue)
+                    1 -> awaitOwner(original)
+                    2 -> { if (metrics.enabled) metrics.incrementBlackholes(); fault("Blackhole: cyclic thunk entered while evaluating") }
+                    3 -> return Retry
+                }
+            } catch (failure: Throwable) {
+                // A safepoint can transfer control after the ownership store but
+                // before evaluateOwned's handler begins. Never strand state 1.
+                if (claimedHere) suspendOwned(original)
+                throw failure
             }
         }
     }
 
-    private fun evaluateOwned(thunk: Thunk): Any? {
+    @CompilerDirectives.TruffleBoundary
+    private fun resumeChain(frame: MaterializedFrame, original: Thunk): Any? {
+        val parked = java.util.ArrayDeque<Parked>()
+        val seen = java.util.IdentityHashMap<Thunk, Boolean>()
+        while (true) {
+            parked.clear()
+            seen.clear()
+            var leaf = original
+            var leafContinuation: ContinuationResult? = null
+            while (true) {
+                if (seen.put(leaf, true) != null) fault("Suspended thunk dependency cycle")
+                leafContinuation = if (leaf.state == 5) leaf.value as? ContinuationResult else null
+                val child = (leafContinuation?.result as? ThunkSuspended)?.thunk ?: break
+                parked.addLast(Parked(leaf, leafContinuation))
+                leaf = child
+            }
+            var current = leaf
+            var expected = leafContinuation
+            var input: Any? = Unit
+            while (true) {
+                val outcome = try {
+                    val answer = executeOne(frame, current, expected, input)
+                    if (answer === Retry) null else ChildResume(answer, null)
+                } catch (suspension: ThunkSuspended) {
+                    // The requested thunk is still parked even if a deeper
+                    // dependency yielded again. A new caller must capture the
+                    // requested update boundary, not skip its continuation.
+                    if (original.state == 5) throw ThunkSuspended(original)
+                    throw suspension
+                } catch (failure: GuestException) { ChildResume(null, failure) }
+                if (outcome == null) break // Another evaluator advanced a link; rescan from the root.
+                if (parked.isEmpty()) {
+                    outcome.failure?.let { throw it }
+                    return outcome.value
+                }
+                val parent = parked.removeLast()
+                current = parent.thunk
+                expected = parent.continuation
+                input = outcome
+            }
+        }
+    }
+
+    private fun evaluateOwned(thunk: Thunk, continuation: ContinuationResult?, resumeValue: Any?): Any? {
         try {
-            val target = thunk.target ?: fault("Unevaluated thunk has no body")
-            if (metrics.enabled) { metrics.incrementThunkEvaluations(); metrics.recordThunk(target.rootNode.name) }
-            val result = try { calls.call(target, thunk.environment) }
+            if (metrics.enabled && continuation == null) {
+                val target = thunk.target ?: fault("Unevaluated thunk has no body")
+                metrics.incrementThunkEvaluations(); metrics.recordThunk(target.rootNode.name)
+            }
+            val result = try {
+                if (continuation == null) calls.call(thunk.target ?: fault("Unevaluated thunk has no body"), thunk.environment)
+                else continuation.continueWith(resumeValue)
+            }
             catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
+            if (result is ContinuationResult) {
+                val expectedRoot = continuation?.continuationRootNode?.sourceRootNode
+                    ?: thunk.target?.rootNode
+                if (result.continuationRootNode.sourceRootNode !== expectedRoot)
+                    throw IllegalStateException("Nested bytecode yield has no captured caller segment")
+                publishContinuation(thunk, result)
+                throw ThunkSuspended(thunk)
+            }
             if (result is Thunk) fault("Thunk target violated WHNF convention")
             synchronized(thunk.monitor) {
                 thunk.value = result
@@ -328,6 +432,11 @@ internal class Force(private val metrics: Metrics) : Node() {
                 thunk.monitor.notifyAll()
             }
             return result
+        } catch (e: ThunkSuspended) {
+            // Without a captured caller segment, the outer update frame cannot
+            // resume after this child. Release its owner and fail closed.
+            if (e.thunk !== thunk) suspendOwned(thunk)
+            throw e
         } catch (e: AsyncThunkUnwind) {
             suspendOwned(thunk)
             throw e
@@ -345,6 +454,26 @@ internal class Force(private val metrics: Metrics) : Node() {
         }
     }
 
+    private fun publishContinuation(thunk: Thunk, continuation: ContinuationResult) {
+        // A side-effecting thread-local action must not unwind between storing
+        // the captured frame and publishing the released owner. This is the
+        // exceptional yield path, not a cost on ordinary thunk evaluation.
+        val safepoint = TruffleSafepoint.getCurrent()
+        val previous = safepoint.setAllowSideEffects(false)
+        try {
+            synchronized(thunk.monitor) {
+                thunk.value = continuation
+                thunk.target = null
+                thunk.environment = null
+                thunk.owner = null
+                thunk.state = 5
+                thunk.monitor.notifyAll()
+            }
+        } finally {
+            safepoint.setAllowSideEffects(previous)
+        }
+    }
+
     private fun publishFailure(thunk: Thunk, failure: Any) = synchronized(thunk.monitor) {
         thunk.value = failure
         thunk.target = null
@@ -355,6 +484,7 @@ internal class Force(private val metrics: Metrics) : Node() {
     }
 
     private fun suspendOwned(thunk: Thunk) = synchronized(thunk.monitor) {
+        if (thunk.state != 1 || thunk.owner !== Thread.currentThread()) return@synchronized
         // An arbitrary Java/bytecode stack is not a resumable Haskell AP_STACK.
         // Retain the body for a future continuation implementation; never replay
         // effects by silently returning this thunk to state 0.
@@ -1172,6 +1302,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val hostEntries = mutableMapOf<Int, RootCallTarget>()
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
     init {
+        CoreStackForeign.validateHeads(bindings)
+        CoreOriginalStdio.validateHeads(bindings)
         CoreManagedFiles.validateHeads(bindings)
         CoreMd5Foreign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
@@ -1407,13 +1539,28 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val tupleProof = CoreRepresentations.expression(expr)
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
             val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
+            val stackClone = CoreStackForeign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags)
+            val originalStdio = CoreOriginalStdio.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val managedFile = CoreManagedFiles.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val javascript = if (managedFile == null) CoreJavaScript.validate(expr, defined) else null
+            val javascript = if (!stackClone && originalStdio == null && managedFile == null) CoreJavaScript.validate(expr, defined) else null
             val md5 = if (javascript == null) CoreMd5Foreign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
-            val polyglot = if (managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
-            if (managedFile != null) {
+            val polyglot = if (!stackClone && originalStdio == null && managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
+            if (stackClone) {
+                CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val state = args.single()
+                CoreStackForeign.validateBinding(if (state[0] == "var")
+                    scope.locals[state[1]]?.proof ?: globalProofs[state[1]] else null)
+                val operand = compile(state, scope, false)
+                CoreStackForeign.validateState(operand.representation)
+                CloneStackExpression(operand, tupleProof)
+            } else if (originalStdio != null) {
+                CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                OriginalStdioExpression(originalStdio, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
+            } else if (managedFile != null) {
                 CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 ManagedFileExpression(managedFile, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
             } else if (md5 != null) {

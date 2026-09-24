@@ -154,6 +154,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: List<Local>)
 
     init {
+        CoreStackForeign.validateHeads(bindings)
+        CoreOriginalStdio.validateHeads(bindings)
         CoreManagedFiles.validateHeads(bindings)
         CoreMd5Foreign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
@@ -847,13 +849,41 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val tupleProof = CoreRepresentations.expression(expr)
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
             val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
+            val stackClone = CoreStackForeign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags)
+            val originalStdio = CoreOriginalStdio.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val managedFile = CoreManagedFiles.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val javascript = if (managedFile == null) CoreJavaScript.validate(expr, defined) else null
+            val javascript = if (!stackClone && originalStdio == null && managedFile == null) CoreJavaScript.validate(expr, defined) else null
             val md5 = if (javascript == null) CoreMd5Foreign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
-            val polyglot = if (managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
-            if (managedFile != null) {
+            val polyglot = if (!stackClone && originalStdio == null && managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
+            if (stackClone) {
+                CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val state = args.single()
+                CoreStackForeign.validateBinding(if (state[0] == "var")
+                    scope.locals[state[1]]?.proof ?: globalProofs[state[1]] else null)
+                val operand = compile(state, scope, false)
+                CoreStackForeign.validateState(operand.proof)
+                tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginCloneMyStack(destination.single())
+                    operand.emit(e)
+                    e.builder.endCloneMyStack()
+                }
+            } else if (originalStdio != null) {
+                CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val operands = args.map { compile(it, scope, false) }
+                tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    val result = destination.single()
+                    if (originalStdio == OriginalStdioOp.ERRNO) b.beginOriginalStdioErrno(result)
+                    else b.beginOriginalStdioWrite(result)
+                    operands.forEach { it.emit(e) }
+                    if (originalStdio == OriginalStdioOp.ERRNO) b.endOriginalStdioErrno()
+                    else b.endOriginalStdioWrite()
+                }
+            } else if (managedFile != null) {
                 CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.map { compile(it, scope, false) }
                 tupleExpression(tupleProof) { e, destination ->
@@ -968,24 +998,64 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 CoreSynchronousExceptions.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
                 tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
                     when (name) {
-                        "raiseIO#" -> e.builder.beginRaiseIO()
-                        "catch#" -> e.builder.beginCatchIO(tupleSlots(TupleShape(tupleProof, language), destination), metrics)
-                        "getMaskingState#" -> e.builder.beginGetMaskingState(destination[0])
-                        "maskAsyncExceptions#" -> e.builder.beginMaskAsyncExceptions(
-                            tupleSlots(TupleShape(tupleProof, language), destination), metrics)
-                        "maskUninterruptible#" -> e.builder.beginMaskUninterruptible(
-                            tupleSlots(TupleShape(tupleProof, language), destination), metrics)
-                        else -> e.builder.beginUnmaskAsyncExceptions(tupleSlots(TupleShape(tupleProof, language), destination), metrics)
-                    }
-                    operands.forEach { it.emit(e) }
-                    when (name) {
-                        "raiseIO#" -> e.builder.endRaiseIO()
-                        "catch#" -> e.builder.endCatchIO()
-                        "getMaskingState#" -> e.builder.endGetMaskingState()
-                        "maskAsyncExceptions#" -> e.builder.endMaskAsyncExceptions()
-                        "maskUninterruptible#" -> e.builder.endMaskUninterruptible()
-                        else -> e.builder.endUnmaskAsyncExceptions()
+                        "raiseIO#" -> {
+                            b.beginRaiseIO(); operands.forEach { it.emit(e) }; b.endRaiseIO()
+                        }
+                        "getMaskingState#" -> {
+                            b.beginGetMaskingState(destination[0]); operands[0].emit(e); b.endGetMaskingState()
+                        }
+                        else -> {
+                            // All operands and the State# check precede the protected
+                            // action, exactly as in the original synchronous primop.
+                            val action = b.createLocal("IO action", "object")
+                            b.beginStoreLocal(action); operands[0].emit(e); b.endStoreLocal()
+                            val handler = if (name == "catch#") b.createLocal("IO handler", "object").also {
+                                b.beginStoreLocal(it); operands[1].emit(e); b.endStoreLocal()
+                            } else null
+                            b.beginRequireIOState()
+                            operands[if (handler == null) 1 else 2].emit(e)
+                            b.endRequireIOState()
+                            val slots = tupleSlots(TupleShape(tupleProof, language), destination)
+                            if (handler != null) {
+                                b.beginTryCatch()
+                                b.beginInvokeIOAction(slots, metrics)
+                                b.emitLoadLocal(action); b.emitLoadNull()
+                                b.endInvokeIOAction()
+                                b.beginBlock()
+                                val payload = b.createLocal("caught exception payload", "object")
+                                b.beginStoreLocal(payload)
+                                b.beginRequireGuestFailure(); b.emitLoadException(); b.endRequireGuestFailure()
+                                b.endStoreLocal()
+                                val prior = b.createLocal("handler caller mask", "object")
+                                b.beginStoreLocal(prior); b.emitEnterHandlerMask(); b.endStoreLocal()
+                                b.beginTryFinally(Runnable {
+                                    b.beginRestoreMask(); b.emitLoadLocal(prior); b.endRestoreMask()
+                                })
+                                b.beginInvokeIOHandler(slots, metrics)
+                                b.emitLoadLocal(handler); b.emitLoadLocal(payload); b.emitLoadLocal(prior)
+                                b.endInvokeIOHandler()
+                                b.endTryFinally()
+                                b.endBlock()
+                                b.endTryCatch()
+                            } else {
+                                val target = when (name) {
+                                    "maskAsyncExceptions#" -> MaskingState.MASKED_INTERRUPTIBLE
+                                    "maskUninterruptible#" -> MaskingState.MASKED_UNINTERRUPTIBLE
+                                    else -> MaskingState.UNMASKED
+                                }
+                                val prior = b.createLocal("mask caller state", "object")
+                                b.beginStoreLocal(prior); b.emitEnterMask(target); b.endStoreLocal()
+                                b.beginTryFinally(Runnable {
+                                    b.beginRestoreMask(); b.emitLoadLocal(prior); b.endRestoreMask()
+                                })
+                                b.beginInvokeIOAction(slots, metrics)
+                                b.emitLoadLocal(action); b.emitLoadLocal(prior)
+                                b.endInvokeIOAction()
+                                b.endTryFinally()
+                            }
+                        }
                     }
                 }
             } else if (fn[0] == "prim" && fn[1] == "noDuplicate#") {
