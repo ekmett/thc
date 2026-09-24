@@ -128,3 +128,17 @@ tupleRaiseAnswer :: Int
 tupleRaiseAnswer =
   case tupleDelayedRaise 0# (Box 7#) realWorld# of
     (# _, left, (# _, Box right #) #) -> I# (100# +# left +# right)
+
+-- The original catch# handler itself is a resumable tuple-producing callee.
+-- Its masking state remains logical when a different host thread resumes it.
+{-# OPAQUE catchHandlerAnswer #-}
+catchHandlerAnswer :: Int
+catchHandlerAnswer =
+  case catch# (\s0 -> case noDuplicate# s0 of s1 -> raiseIO# (Box 7#) s1)
+              (\(Box value) s2 -> case noDuplicate# s2 of { s3 ->
+                case noDuplicate# s3 of { s4 ->
+                  case getMaskingState# s4 of
+                    (# s5, mask #) -> (# s5, Box (value +# 70# +# mask) #) } })
+              realWorld# of
+    (# s6, Box result #) -> case getMaskingState# s6 of
+      (# _, outside #) -> I# (result +# 100# *# outside)

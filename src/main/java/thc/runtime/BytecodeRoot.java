@@ -1559,6 +1559,54 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         public static Force createForce(Metrics metrics) { return new Force(metrics); }
     }
 
+    /** Private checkpoint variant: retain the original handler's tuple and mask update. */
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class InvokeIOHandlerCheckpoint {
+        @Specialization public static void run(VirtualFrame frame, BytecodeTupleSlots destination, Metrics metrics,
+                Object handler, Object payload, MaskingState prior,
+                @Bind Node node,
+                @Cached(value = "createHandler(destination, metrics)", neverDefault = true) TupleDispatch handlerCall,
+                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
+            MaskingState callerMask = SynchronousMasking.current(node);
+            Closure closure = null;
+            try {
+                closure = RequireClosure.require(force.execute(frame, handler));
+                handlerCall.execute(frame, closure, new Object[]{payload, kotlin.Unit.INSTANCE});
+            } catch (TupleCallYield yielded) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                boolean captured = false;
+                try {
+                    ContinuationResult continuation = yielded.getContinuation();
+                    Object source = continuation.getContinuationRootNode().getSourceRootNode();
+                    if (closure == null || closure.arity != 2 || !(source instanceof BytecodeRoot callee) ||
+                            !callee.isSelf(closure.target) || !callee.hasTupleResult(destination.getShape()) ||
+                            !(continuation.getResult() == kotlin.Unit.INSTANCE ||
+                                    continuation.getResult() instanceof ThunkSuspended ||
+                                    continuation.getResult() instanceof CallSegmentSuspended))
+                        throw new IllegalStateException("IO handler returned an unrelated tuple continuation");
+                    MaskingState parked = continuation.getResult() instanceof CallSegmentSuspended suspended
+                            ? suspended.getParkedActiveMask() : null;
+                    if (parked != null && SynchronousMasking.current(node) != callerMask)
+                        throw new IllegalStateException("Parked IO handler did not restore its caller mask");
+                    MaskingState active = parked != null ? parked : SynchronousMasking.current(node);
+                    CapturedCallSuspension escape = new CapturedCallSuspension(new CallSegment(continuation,
+                            active, callerMask, destination.getShape(), false));
+                    captured = true;
+                    throw escape;
+                } finally { SynchronousMasking.set(node, captured ? callerMask : prior); }
+            } catch (RuntimeException | Error failure) {
+                if (!(failure instanceof AbstractTruffleException)) SynchronousMasking.set(node, prior);
+                throw failure;
+            }
+        }
+        public static TupleDispatch createHandler(BytecodeTupleSlots destination, Metrics metrics) {
+            return new TupleDispatch(new ContinuationTupleDestination(destination), metrics, 2, false);
+        }
+        public static Force createForce(Metrics metrics) { return new Force(metrics); }
+    }
+
     /** Return the caller mask so the DSL TryFinally can restore it. */
     @Operation public static final class EnterHandlerMask {
         @Specialization public static MaskingState enter(@Bind("$node") Node node) {
