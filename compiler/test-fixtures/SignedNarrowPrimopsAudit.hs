@@ -155,6 +155,30 @@ geInt32 x y = geInt32# (intToInt32# x) (intToInt32# y)
 
 -- Direct primops keep the pre-Tidy exported root independent of wrapper inlining.
 -- The dynamic selector keeps all narrow operations in one installed guest root.
+{-# NOINLINE int8ToWord8 #-}
+int8ToWord8 :: Int# -> Int#
+int8ToWord8 x = word2Int# (word8ToWord# (int8ToWord8# (intToInt8# x)))
+
+{-# NOINLINE word8ToInt8 #-}
+word8ToInt8 :: Int# -> Int#
+word8ToInt8 x = int8ToInt# (word8ToInt8# (wordToWord8# (int2Word# x)))
+
+{-# NOINLINE int16ToWord16 #-}
+int16ToWord16 :: Int# -> Int#
+int16ToWord16 x = word2Int# (word16ToWord# (int16ToWord16# (intToInt16# x)))
+
+{-# NOINLINE word16ToInt16 #-}
+word16ToInt16 :: Int# -> Int#
+word16ToInt16 x = int16ToInt# (word16ToInt16# (wordToWord16# (int2Word# x)))
+
+{-# NOINLINE int32ToWord32 #-}
+int32ToWord32 :: Int# -> Int#
+int32ToWord32 x = word2Int# (word32ToWord# (int32ToWord32# (intToInt32# x)))
+
+{-# NOINLINE word32ToInt32 #-}
+word32ToInt32 :: Int# -> Int#
+word32ToInt32 x = int32ToInt# (word32ToInt32# (wordToWord32# (int2Word# x)))
+
 {-# OPAQUE signedNarrowDispatch #-}
 signedNarrowDispatch :: Int# -> Int# -> Int# -> Int#
 signedNarrowDispatch operation x y = case operation of
@@ -194,4 +218,10 @@ signedNarrowDispatch operation x y = case operation of
   33# -> geInt8# (intToInt8# x) (intToInt8# y)
   34# -> geInt16# (intToInt16# x) (intToInt16# y)
   35# -> geInt32# (intToInt32# x) (intToInt32# y)
+  36# -> word2Int# (word8ToWord# (int8ToWord8# (intToInt8# x)))
+  37# -> int8ToInt# (word8ToInt8# (wordToWord8# (int2Word# x)))
+  38# -> word2Int# (word16ToWord# (int16ToWord16# (intToInt16# x)))
+  39# -> int16ToInt# (word16ToInt16# (wordToWord16# (int2Word# x)))
+  40# -> word2Int# (word32ToWord# (int32ToWord32# (intToInt32# x)))
+  41# -> int32ToInt# (word32ToInt32# (wordToWord32# (int2Word# x)))
   _ -> -1#

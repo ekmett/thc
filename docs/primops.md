@@ -8,9 +8,9 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Supported | 274 | Implemented fixed numeric/character scalar forms. |
+| Supported | 280 | Implemented fixed numeric/character scalar forms. |
 | Partial | 252 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 965 | No declared lowering. |
+| Missing | 959 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -150,13 +150,16 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `gtWord64#` — arity 2
 - [x] `gtWord8#` — arity 2
 - [x] `int16ToInt#` — arity 1
+- [x] `int16ToWord16#` — arity 1
 - [x] `int2Double#` — arity 1
 - [x] `int2Float#` — arity 1
 - [x] `int2Word#` — arity 1
 - [x] `int32ToInt#` — arity 1
+- [x] `int32ToWord32#` — arity 1
 - [x] `int64ToInt#` — arity 1
 - [x] `int64ToWord64#` — arity 1
 - [x] `int8ToInt#` — arity 1
+- [x] `int8ToWord8#` — arity 1
 - [x] `intToInt16#` — arity 1
 - [x] `intToInt32#` — arity 1
 - [x] `intToInt64#` — arity 1
@@ -303,11 +306,14 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `uncheckedShiftRLWord16#` — arity 2
 - [x] `uncheckedShiftRLWord32#` — arity 2
 - [x] `uncheckedShiftRLWord8#` — arity 2
+- [x] `word16ToInt16#` — arity 1
 - [x] `word16ToWord#` — arity 1
 - [x] `word2Int#` — arity 1
+- [x] `word32ToInt32#` — arity 1
 - [x] `word32ToWord#` — arity 1
 - [x] `word64ToInt64#` — arity 1
 - [x] `word64ToWord#` — arity 1
+- [x] `word8ToInt8#` — arity 1
 - [x] `word8ToWord#` — arity 1
 - [x] `wordToWord16#` — arity 1
 - [x] `wordToWord32#` — arity 1
@@ -900,10 +906,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `insertWord8X16#` — arity 3
 - [ ] `insertWord8X32#` — arity 3
 - [ ] `insertWord8X64#` — arity 3
-- [ ] `int16ToWord16#` — arity 1
 - [ ] `int2Addr#` — arity 1
-- [ ] `int32ToWord32#` — arity 1
-- [ ] `int8ToWord8#` — arity 1
 - [ ] `isByteArrayPinned#` — arity 1
 - [ ] `isByteArrayWeaklyPinned#` — arity 1
 - [ ] `isCurrentThreadBound#` — arity 1
@@ -1379,11 +1382,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `waitRead#` — arity 2
 - [ ] `waitWrite#` — arity 2
 - [ ] `whereFrom#` — arity 3
-- [ ] `word16ToInt16#` — arity 1
 - [ ] `word2Double#` — arity 1
 - [ ] `word2Float#` — arity 1
-- [ ] `word32ToInt32#` — arity 1
-- [ ] `word8ToInt8#` — arity 1
 - [ ] `writeCharArray#` — arity 4
 - [ ] `writeCharOffAddr#` — arity 4
 - [ ] `writeDoubleArrayAsDoubleX4#` — arity 4

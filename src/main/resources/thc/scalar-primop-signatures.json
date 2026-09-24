@@ -729,6 +729,12 @@
       ],
       "result": "IntRep"
     },
+    "int16ToWord16#": {
+      "arguments": [
+        "Int16Rep"
+      ],
+      "result": "Word16Rep"
+    },
     "int2Double#": {
       "arguments": [
         "IntRep"
@@ -753,6 +759,12 @@
       ],
       "result": "IntRep"
     },
+    "int32ToWord32#": {
+      "arguments": [
+        "Int32Rep"
+      ],
+      "result": "Word32Rep"
+    },
     "int64ToInt#": {
       "arguments": [
         "Int64Rep"
@@ -770,6 +782,12 @@
         "Int8Rep"
       ],
       "result": "IntRep"
+    },
+    "int8ToWord8#": {
+      "arguments": [
+        "Int8Rep"
+      ],
+      "result": "Word8Rep"
     },
     "intToInt16#": {
       "arguments": [
@@ -1781,6 +1799,12 @@
       ],
       "result": "Word8Rep"
     },
+    "word16ToInt16#": {
+      "arguments": [
+        "Word16Rep"
+      ],
+      "result": "Int16Rep"
+    },
     "word16ToWord#": {
       "arguments": [
         "Word16Rep"
@@ -1792,6 +1816,12 @@
         "WordRep"
       ],
       "result": "IntRep"
+    },
+    "word32ToInt32#": {
+      "arguments": [
+        "Word32Rep"
+      ],
+      "result": "Int32Rep"
     },
     "word32ToWord#": {
       "arguments": [
@@ -1810,6 +1840,12 @@
         "Word64Rep"
       ],
       "result": "WordRep"
+    },
+    "word8ToInt8#": {
+      "arguments": [
+        "Word8Rep"
+      ],
+      "result": "Int8Rep"
     },
     "word8ToWord#": {
       "arguments": [

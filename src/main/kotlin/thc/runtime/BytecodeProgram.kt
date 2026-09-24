@@ -2464,10 +2464,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "uncheckedIShiftRA#" -> "ShiftRight"
             "uncheckedIShiftRL#", "uncheckedShiftRL#" -> "ShiftRightUnsigned"
             // Match AST sign-normalized Long carriers in both conversion directions.
-            "narrow8Int#", "intToInt8#", "int8ToInt#" -> "Narrow8"
-            "narrow16Int#", "intToInt16#", "int16ToInt#" -> "Narrow16"
-            "narrow32Int#", "intToInt32#", "int32ToInt#" -> "Narrow32"
-            "wordToWord8#", "word8ToWord#", "wordToWord16#", "word16ToWord#", "wordToWord32#", "word32ToWord#" -> "NarrowWord"
+            "narrow8Int#", "intToInt8#", "int8ToInt#", "word8ToInt8#" -> "Narrow8"
+            "narrow16Int#", "intToInt16#", "int16ToInt#", "word16ToInt16#" -> "Narrow16"
+            "narrow32Int#", "intToInt32#", "int32ToInt#", "word32ToInt32#" -> "Narrow32"
+            "wordToWord8#", "word8ToWord#", "int8ToWord8#", "wordToWord16#", "word16ToWord#", "int16ToWord16#",
+            "wordToWord32#", "word32ToWord#", "int32ToWord32#" -> "NarrowWord"
             "int2Word#", "word2Int#", "ord#", "chr#", "intToInt64#", "int64ToInt#" -> "Identity"
             "raise#" -> "Raise"
             "plusAddr#" -> "AddressPlus"
