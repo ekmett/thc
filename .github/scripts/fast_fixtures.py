@@ -23,11 +23,12 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "53484092ed4fab478f5f3604de7716032629c05178db2aa26fff9cd348634444"
+FULL_PREPARATION_PLAN = "61cc293e96118c14f52976097b754400997b62be1462d75d5bf71d525a6ad6ad"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
     "build/original-stdio", "build/core-continuation", "build/small-arrays", "build/floating-address",
+    "build/explicit64-arrays",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/addr-identity/oracle.txt", "build/addr-identity/pre.audit.json", "build/addr-identity/post.audit.json",
@@ -47,6 +48,10 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/floating-address/pre/audit.json", "build/floating-address/post/audit.json",
     "build/floating-address/pre/core/FloatingAddressAudit.json",
     "build/floating-address/post/core/FloatingAddressAudit.json",
+    "build/explicit64-arrays/manifest.json", "build/explicit64-arrays/oracle.tsv",
+    "build/explicit64-arrays/pre/audit.json", "build/explicit64-arrays/post/audit.json",
+    "build/explicit64-arrays/pre/core/Explicit64ArrayAudit.json",
+    "build/explicit64-arrays/post/core/Explicit64ArrayAudit.json",
     "build/managed-address-reads/manifest.json",
     "build/original-stdio/manifest.json",
     "build/small-arrays/manifest.json",

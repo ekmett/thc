@@ -264,6 +264,18 @@
       "junit": ["thc.runtime.PinnedPointerCellsTest"],
       "python": []
     },
+    "compiler/test-fixtures/Explicit64ArrayAudit.hs": {
+      "junit": ["thc.runtime.Explicit64ArrayTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/Explicit64ArrayNative.hs": {
+      "junit": ["thc.runtime.Explicit64ArrayTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/Explicit64ArrayFixtures.hs": {
+      "junit": ["thc.runtime.Explicit64ArrayTest"],
+      "python": []
+    },
     "compiler/test-fixtures/FloatingAddressAudit.hs": {
       "junit": ["thc.runtime.FloatingAddressTest"],
       "python": []
@@ -671,6 +683,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.Explicit64ArrayTest",
         "thc.runtime.FloatingAddressTest",
         "thc.runtime.OriginalStackFormatterTest",
         "thc.runtime.CoreContinuationNativeTest",

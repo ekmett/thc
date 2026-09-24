@@ -26,6 +26,19 @@
       "outputs": ["build/word-floating"],
       "sources": ["test/haskell-fixtures/WordFloatingFixtures.hs", "compiler/test-fixtures/WordFloatingAudit.hs", "compiler/test-fixtures/WordFloatingNative.hs"]
     },
+    "explicit64-arrays": {
+      "junit": ["thc.runtime.Explicit64ArrayTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "explicit64-arrays"]}],
+      "outputs": ["build/explicit64-arrays"],
+      "sources": [
+        "test/haskell-fixtures/Explicit64ArrayFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "compiler/test-fixtures/Explicit64ArrayAudit.hs",
+        "compiler/test-fixtures/Explicit64ArrayNative.hs",
+        "thc.cabal"
+      ]
+    },
     "floating-address": {
       "junit": ["thc.runtime.FloatingAddressTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "floating-address"]}],

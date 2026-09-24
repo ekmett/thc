@@ -836,6 +836,13 @@
       ],
       "result": "IntRep"
     },
+    "indexWideCharOffAddr#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "WordRep"
+    },
     "indexWord16OffAddr#": {
       "arguments": [
         "AddrRep",

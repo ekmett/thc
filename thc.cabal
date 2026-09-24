@@ -200,6 +200,7 @@ executable thc-fixtures
     FixtureSupport
     WordFloatingFixtures
     FloatingAddressFixtures
+    Explicit64ArrayFixtures
     FusedFloatingFixtures
     OriginalStdioFixtures
     SmallArrayFixtures
