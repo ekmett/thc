@@ -8,6 +8,7 @@ import qualified THC.Demands as Demands
 import THC.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid)
 import GHC.Types.Tickish (CoreTickish)
 import GHC.Types.Literal
+import qualified GHC.Types.ForeignCall as Foreign
 import GHC.Types.RepType (typePrimRep_maybe, unwrapType, ubxSumRepType, layoutUbxSum, primRepSlot, slotPrimRep)
 import GHC.Builtin.Types (tupleRepDataConTyCon, sumRepDataConTyCon)
 import GHC.Core.TyCo.Rep (scaledThing)
@@ -373,6 +374,50 @@ withUnsafeEqualityCase (A xs) = case reverse xs of
   _ -> A (xs ++ [O [("unsafeEqualityCase",S "GHC.Core.Utils.isUnsafeEqualityCase/CoreToStg")]])
 withUnsafeEqualityCase node = node
 
+-- Preserve GHC's typed FCallId declaration at a direct application. The
+-- runtime still validates the exact v1 symbol, convention and machine shape;
+-- a similarly named Haskell function cannot acquire this metadata.
+foreignCallFields :: Ctx -> CoreExpr -> [CoreExpr] -> [(String,J)]
+foreignCallFields d f@(Var v) args
+  | canCertify d
+  , Just (Foreign.CCall (Foreign.CCallSpec target convention safety)) <- isFCallId_maybe v
+  , let (types,values) = span isTypeArg args
+  , not (any isTypeArg values)
+  , let instantiated = exprType (mkApps f types)
+  , null (fst (splitForAllTyVars instantiated))
+  , let (parameters,result) = splitFunTys instantiated
+  = [("foreignCall",O
+      [("schema",num (1 :: Int)),("target",targetRecord target)
+      ,("convention",S (callConvention convention)),("safety",S (callSafety safety))
+      ,("arity",num (length parameters)),("suppliedArity",num (length values))
+      ,("argumentReps",A [typeRep (scaledThing parameter) False | parameter <- parameters])
+      ,("resultRep",typeRep result False)])]
+  where
+    isTypeArg Type{} = True
+    isTypeArg _ = False
+    targetRecord (Foreign.StaticTarget _ symbol unit isFunction) = O
+      [("kind",S "static"),("symbol",S (unpackFS symbol))
+      ,("unit",maybe Z (S . unitString) unit),("isFunction",B isFunction)]
+    targetRecord Foreign.DynamicTarget = O [("kind",S "dynamic")]
+    callConvention Foreign.CCallConv = "ccall"
+    callConvention Foreign.CApiConv = "capi"
+    callConvention Foreign.StdCallConv = "stdcall"
+    callConvention Foreign.PrimCallConv = "prim"
+    callConvention Foreign.JavaScriptCallConv = "javascript"
+    callSafety Foreign.PlayRisky = "unsafe"
+    callSafety Foreign.PlaySafe = "safe"
+    callSafety Foreign.PlayInterruptible = "interruptible"
+foreignCallFields _ _ _ = []
+
+-- Only the versioned Truffle intrinsics are link-resolved without a source
+-- definition. Every other foreign import stays in missingDefinitions.
+polyglotForeign :: Id -> Bool
+polyglotForeign v = case isFCallId_maybe v of
+  Just (Foreign.CCall (Foreign.CCallSpec
+    (Foreign.StaticTarget _ symbol _ True) Foreign.PrimCallConv Foreign.PlaySafe)) ->
+      unpackFS symbol `elem` ["thc_polyglot_v1_eval", "thc_polyglot_v1_read_member", "thc_polyglot_v1_execute_int"]
+  _ -> False
+
 exprRaw :: Ctx -> CoreExpr -> J
 exprRaw d original = case original of
   Var v | Just p <- isPrimOpId_maybe v -> node [S "prim",S (occNameString (primOpOcc p))] []
@@ -390,7 +435,8 @@ exprRaw d original = case original of
                [S "app",expr d f,A (map (expr d) vals),A (map argLifted vals)
                ,B (canCertify d && exprIsHNF a)
                ,B (canCertify d && exprOkForSpecEval (\v -> not (v `elemVarSet` recursiveIds d)) a)] (demand ++ [("enumFamily",enumFamily tc) | Just tc <- [tagToEnumFamily a]]
-                 ++ [("dataToTagFamily",dataToTagFamily d tc) | Just tc <- [dataToTagApplication a]])
+                 ++ [("dataToTagFamily",dataToTagFamily d tc) | Just tc <- [dataToTagApplication a]]
+                 ++ foreignCallFields d f args)
   l@Lam{} -> let (bs,body) = collectBinders l
                  vals = filter (not . isTyVar) bs
              in if null vals then withRep (exprRep d l) (expr d body)
@@ -614,6 +660,7 @@ exportInterfaceClosure dir rootCtx roots = do
         | v `elemVarSet` seen = walk seen todo found missing
         | Just _ <- isPrimOpId_maybe v = walk seen' todo found missing
         | Just _ <- isDataConWorkId_maybe v = walk seen' todo found missing
+        | polyglotForeign v = walk seen' todo found missing
         | Just (_,e) <- lookupVarEnv sourceEnv v = walk seen' (refs e ++ todo) found missing
         | Just e <- maybeUnfoldingTemplate (realIdUnfolding v) =
             let kind = case realIdUnfolding v of DFunUnfolding{} -> "interface-dfun-unfolding"; _ -> "interface-core-unfolding"

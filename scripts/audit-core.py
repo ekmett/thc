@@ -22,6 +22,8 @@ from core_vector_memory import OPERATIONS as VECTOR_MEMORY_OPERATIONS, read_case
 # The identical checked-in resource is packaged in the JVM runtime jar.
 SCALAR_SIGNATURES = json.loads((Path(__file__).resolve().parent.parent /
     'src/main/resources/thc/scalar-primop-signatures.json').read_text())['primitives']
+POLYGLOT_ABI = json.loads((Path(__file__).resolve().parent.parent /
+    'src/main/resources/thc/polyglot-abi.json').read_text())
 
 
 class Audit:
@@ -34,6 +36,7 @@ class Audit:
         self.edges = []
         self.missing = {}
         self.primitives = {}
+        self.foreign_calls = []
         self.literals = {}
         self.used_constructors = {}
         self.reachable = []
@@ -486,6 +489,66 @@ class Audit:
                 check(expected, stored, f'arguments/{index}/binder')
         check(signature['result'], result, 'rep')
 
+    def polyglot_call(self, expr, bound, owner, path):
+        """Accept only an exact, saturated GHC FCallId application in the v1 ABI."""
+        function, arguments = expr[1:3]
+        metadata = expr[6] if len(expr) > 6 and isinstance(expr[6], dict) else {}
+        call = metadata.get('foreignCall')
+        if call is None:
+            return False
+
+        def reject(detail):
+            self.issue('foreign-call', owner, path, detail)
+            return False
+
+        if function[0] != 'var' or function[1] in bound or function[1] in self.bindings:
+            return reject('Foreign descriptor requires a direct external FCallId head')
+        if not isinstance(call, dict) or call.get('schema') != 1:
+            return reject('Missing GHC foreign-call schema 1 evidence')
+        target = call.get('target')
+        if not isinstance(target, dict) or target.get('kind') != 'static' or target.get('isFunction') is not True:
+            return reject('Requires a static function target')
+        symbol = target.get('symbol')
+        spec = POLYGLOT_ABI['operations'].get(symbol)
+        if spec is None:
+            return reject('Unsupported foreign target ' + repr(symbol))
+        if call.get('convention') != POLYGLOT_ABI['convention'] or call.get('safety') != POLYGLOT_ABI['safety']:
+            return reject('GHC calling convention or safety differs from polyglot ABI')
+        declared = spec['arguments']
+        if (type(call.get('arity')) is not int or call['arity'] != len(declared) or
+                type(call.get('suppliedArity')) is not int or call['suppliedArity'] != len(declared) or
+                len(arguments) != len(declared)):
+            return reject('Foreign call must be exactly saturated at declared arity')
+        def exact(rep, register):
+            if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):
+                return False
+            kinds = {'AddrRep': 'address', 'IntRep': 'long',
+                     'BoxedRep (Just Lifted)': 'object', 'State# RealWorld': 'void'}
+            return (rep.get('kind') == kinds[register] and
+                    rep.get('primReps') == ([] if register == 'State# RealWorld' else [register]))
+        declared_reps = call.get('argumentReps')
+        if (not isinstance(declared_reps, list) or len(declared_reps) != len(declared) or
+                any(not exact(rep, register) for rep, register in zip(declared_reps, declared))):
+            return reject('GHC declared argument representations differ from polyglot ABI')
+        for index, (argument, register) in enumerate(zip(arguments, declared)):
+            actual = self.effective_rep(argument, bound)
+            if not exact(actual, register):
+                return reject(f'Argument {index} lacks exact {register} proof')
+        expected_lifted = [register == 'BoxedRep (Just Lifted)' for register in declared]
+        if expr[3] != expected_lifted:
+            return reject('Argument levity differs from GHC foreign signature')
+        result = call.get('resultRep')
+        components = result.get('components') if isinstance(result, dict) else None
+        wanted = spec['result']
+        if (not isinstance(components, list) or len(components) != len(wanted) or
+                result.get('aggregate') != 'unboxed-tuple' or result.get('kind') != 'unknown' or
+                any(not exact(rep, register) for rep, register in zip(components, wanted)) or
+                result.get('primReps') != [r for rep in components for r in rep['primReps']] or
+                self.shape(self.expression_rep(expr)) != self.shape(result)):
+            return reject('GHC declared State# tuple result differs from polyglot ABI')
+        self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path))
+        return True
+
     def free_variables(self, expr):
         if not isinstance(expr, list) or not expr:
             return set()
@@ -830,6 +893,10 @@ class Audit:
                 if enum_application or data_tag:
                     self.expression_metadata(function, owner, path + '/function')
                     self.primitives.setdefault(function[1], []).append(dict(self.location(owner, path), arity=len(arguments)))
+                elif self.polyglot_call(expr, bound, owner, path):
+                    # The descriptor was emitted for this direct GHC FCallId,
+                    # and the runtime links this exact versioned symbol.
+                    self.expression_metadata(function, owner, path + '/function')
                 else:
                     self.walk(function, bound, owner, path + '/function', len(arguments), proof if tuple_constructor or sum_constructor else None)
                 for index, argument in enumerate(arguments):
@@ -1078,6 +1145,7 @@ class Audit:
                     runtimeExternals=[dict(id=key, uses=[edge for edge in self.edges if edge['dependency'] == key])
                                       for key in sorted((set(self.cap.get('externalBindings', [])) - self.bindings.keys()) & {edge['dependency'] for edge in self.edges})],
                     primitives=[dict(name=k, expectedArity=self.cap['primitives'].get(k), uses=v) for k, v in sorted(self.primitives.items())],
+                    foreignCalls=self.foreign_calls,
                     constructors=[dict(id=k, metadata=self.constructors.get(k), uses=v) for k, v in sorted(self.used_constructors.items())],
                     literals=[v for _, v in sorted(self.literals.items())], issues=self.issues,
                     limits=['All syntactically reachable branches and local RHSs are audited, including lazy error paths.',
