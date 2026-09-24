@@ -220,10 +220,14 @@ def prepare():
     sources = [FIXTURE, Path(__file__).resolve(), ROOT / 'scripts/audit-core.py',
                ROOT / 'scripts/core-capabilities.json', ROOT / 'scripts/sum_layout_model.py', ROOT / 'compiler/build.sh',
                ROOT / 'compiler/export.sh', ROOT / 'compiler/toolchain.sh',
-               *sorted((ROOT / 'compiler/THC').glob('*.hs'))]
+               *sorted((ROOT / 'compiler/THC').glob('*.hs')),
+               ROOT / 'thc.cabal', ROOT / 'cabal.project']
     artifacts = [p for directory in ('native', 'pre-core', 'pre-ghc', 'post-core', 'post-ghc')
                  for p in sorted((OUT / directory).rglob('*')) if p.is_file()]
-    artifacts += sorted((ROOT / 'build/compiler').glob('libHSthc-core-plugin-*'))
+    plugin_manifest = ROOT / 'build/compiler/plugin.json'
+    plugin = json.loads(plugin_manifest.read_text())
+    check(plugin['schema'] == 1 and plugin['unitId'] and plugin['sharedLibrary'], 'Invalid plugin manifest')
+    artifacts += [plugin_manifest, Path(plugin['sharedLibrary'])]
     return dict(schema=1, recordedAtUtc=datetime.now(timezone.utc).isoformat(),
                 recordingMode='fresh-native-compile-and-plugin-exports',
                 toolchain=dict(ghc=record(Path(shutil.which(ghc) or ghc).resolve()),

@@ -164,10 +164,14 @@ def prepare():
     sources = [FIXTURE, NATIVE, Path(__file__).resolve(), ROOT/'scripts/sum_layout_model.py', ROOT/'scripts/test-sum-layout.py',
                ROOT/'scripts/audit-core.py', ROOT/'scripts/core-capabilities.json', ROOT/'src/main/resources/thc/scalar-primop-signatures.json',
                *sorted((ROOT/'scripts').glob('core_*.py')), *sorted((ROOT/'compiler/THC').glob('*.hs')),
-               *[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')]]
+               *[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')],
+               ROOT/'thc.cabal', ROOT/'cabal.project']
     artifacts = [OUT/'oracle.tsv', *[p for directory in ('native', 'pre-core', 'pre-ghc', 'post-core', 'post-ghc')
                  for p in sorted((OUT/directory).rglob('*')) if p.is_file()]]
-    artifacts += sorted((ROOT/'build/compiler').glob('libHSthc-core-plugin-*'))
+    plugin_manifest = ROOT/'build/compiler/plugin.json'
+    plugin = json.loads(plugin_manifest.read_text())
+    check(plugin['schema'] == 1 and plugin['unitId'] and plugin['sharedLibrary'], 'Invalid plugin manifest')
+    artifacts += [plugin_manifest, Path(plugin['sharedLibrary'])]
     toolchain = dict(version='9.14.1', ghc=record(Path(shutil.which(ghc) or ghc).resolve()),
                      ghcPkg=record(Path(shutil.which(pkg) or pkg).resolve()), ghcInfo=output([ghc,'--info']),
                      packages={name:output([pkg,'describe',name]) for name in ('ghc','base','ghc-internal','ghc-prim')})

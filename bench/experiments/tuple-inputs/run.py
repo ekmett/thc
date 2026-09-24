@@ -41,7 +41,7 @@ def main():
     manifest = ROOT / 'build/tuple-input/provenance.json'
     tools = sorted([p for p in HERE.rglob('*') if p.is_file() and
                     ('captured' not in p.parts) and (p.suffix in ('.py', '.java', '.json'))])
-    tools += [ROOT / 'tools/GraphInspect.java', ROOT / 'scripts/gradle.sh']
+    tools += [ROOT / 'tools/GraphInspect.java', ROOT / 'gradlew', ROOT / 'Makefile']
     commands = []
 
     def run(argv, log=None):
@@ -80,7 +80,7 @@ def main():
             require(hashlib.sha256(subprocess.check_output(['git', 'show', revision + ':' + path], cwd=ROOT)).hexdigest() == sha,
                     'Commit runtime source before capture: ' + path)
         run(['python3', ROOT / 'scripts/prepare-tuple-input-audit.py', '--check-only'])
-        run([ROOT / 'scripts/gradle.sh', '--offline', '--no-daemon', '-Pkotlin.incremental=false',
+        run([ROOT / 'gradlew', '--offline', '--no-daemon', '-Pkotlin.incremental=false',
              '-Pkapt.incremental.apt=false', 'installDist'], out / 'installDist.log')
         require(sources == {p: digest(ROOT / p) for p in paths}, 'Runtime changed during build')
         inputs = tools + [module, manifest, ROOT / 'build/tuple-input/oracle.tsv', ROOT / 'build/tuple-input/oracle-pairs.tsv',

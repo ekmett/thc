@@ -62,7 +62,7 @@ share the same heap structure. `scripts/primop-coverage.py` also checks the adve
 names and arities against the installed GHC API, and records its signatures.
 
 Run `compiler/build.sh`, then `python3 scripts/prepare-bytearray.py` and
-`scripts/gradle.sh test --tests thc.runtime.ByteArrayTest`. Preparation exports
+`./gradlew test --tests thc.runtime.ByteArrayTest`. Preparation exports
 pre/post-Tidy source fixtures, exports the pinned List source, and records hashes
 of sources, exporter, auditor, capability manifest, Core artifacts, and native
 oracle. The tests compare 4,116 real native rows against an independent unbounded

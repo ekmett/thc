@@ -54,7 +54,7 @@ Preparation and checks:
 python3 scripts/prepare-int-arrays.py
 python3 scripts/test-core-bytearrays.py
 python3 scripts/test-int-array-model.py
-scripts/gradle.sh test --tests 'thc.runtime.IntArray*'
+./gradlew test --tests 'thc.runtime.IntArray*'
 ```
 
 The native oracle, independent mathematical models, exact dependency audits,

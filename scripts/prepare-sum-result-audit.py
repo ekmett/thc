@@ -101,8 +101,13 @@ def main():
     sources=[ROOT/'compiler/test-fixtures/SumResultAudit.hs',ROOT/'compiler/test-fixtures/SumResultAuditNative.hs',Path(__file__).resolve(),
              ROOT/'scripts/audit-core.py',ROOT/'scripts/core-capabilities.json',ROOT/'src/main/resources/thc/scalar-primop-signatures.json',
              ROOT/'scripts/generate-scalar-signatures.py',*sorted((ROOT/'scripts').glob('core_*.py')),*sorted((ROOT/'compiler/THC').glob('*.hs')),
-             *[ROOT/'compiler'/name for name in ('build.sh','export.sh','toolchain.sh')]]
-    artifacts=[p for p in sorted(OUT.rglob('*')) if p.is_file() and p.name!='provenance.json']+sorted((ROOT/'build/compiler').glob('libHSthc-core-plugin-*'))
+             *[ROOT/'compiler'/name for name in ('build.sh','export.sh','toolchain.sh')],
+             ROOT/'thc.cabal', ROOT/'cabal.project']
+    plugin_manifest=ROOT/'build/compiler/plugin.json'
+    plugin=json.loads(plugin_manifest.read_text())
+    require(plugin['schema']==1 and plugin['unitId'] and plugin['sharedLibrary'], 'Invalid plugin manifest')
+    artifacts=[p for p in sorted(OUT.rglob('*')) if p.is_file() and p.name!='provenance.json']
+    artifacts += [plugin_manifest, Path(plugin['sharedLibrary'])]
     provenance=dict(schema=1,nativeRows=110,independentPairRows=7,sources=[record(p) for p in sources],artifacts=[record(p) for p in artifacts],commands=commands,
         toolchain=dict(ghc=record(Path(shutil.which(ghc) or ghc).resolve()),ghcPkg=record(Path(shutil.which(pkg) or pkg).resolve()),
             info=run([ghc,'--info']),packages={p:run([pkg,'describe',p]) for p in ('ghc','base','ghc-internal','ghc-prim')}))

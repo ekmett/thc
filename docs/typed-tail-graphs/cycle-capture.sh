@@ -3,7 +3,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
-. scripts/java-home.sh
+make --no-print-directory -s check-java
 if (( $# < 3 )); then echo 'Usage: capture.sh ast|bytecode IMMUTABLE_LIBDIR OUTPUT_DIR [cycle3|cycleInner|cycleNonTail|cycleArity] [INPUT]' >&2; exit 2; fi
 BACKEND="$1"; LIBDIR="$(cd "$2" && pwd)"; OUT="$3"; ENTRY="${4:-cycleInner}"; BASE="${5:-10000}"
 case "$BACKEND" in ast|bytecode) ;; *) exit 2;; esac

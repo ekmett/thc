@@ -180,25 +180,7 @@
     }
   },
   "owners": {
-    "Setup.hs": {
-      "junit": [],
-      "python": [
-        "test/test_driver.py"
-      ]
-    },
     "app/Main.hs": {
-      "junit": [],
-      "python": [
-        "test/test_driver.py"
-      ]
-    },
-    "cabal.project": {
-      "junit": [],
-      "python": [
-        "test/test_driver.py"
-      ]
-    },
-    "thc.cabal": {
       "junit": [],
       "python": [
         "test/test_driver.py"

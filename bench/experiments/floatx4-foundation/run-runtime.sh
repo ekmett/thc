@@ -3,7 +3,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
 OUT="${1:-$ROOT/build/floatx4-runtime}"
-if [[ -z "${JAVA_HOME:-}" ]]; then source "$ROOT/scripts/java-home.sh"; fi
+make --no-print-directory -s -C "$ROOT" check-java
 mkdir -p "$OUT/classes"
 OUT="$(cd "$OUT" && pwd)"
 CP="$OUT/classes:$ROOT/build/install/thc/lib/*"

@@ -50,7 +50,7 @@ jobs:
         run: |
           mkdir -p build/jit-stability/ordinary
           status=0
-          scripts/gradle.sh --no-daemon jitStabilityTest --rerun 2>&1 | tee build/jit-stability/ordinary/run.log || status=$?
+          ./gradlew --no-daemon jitStabilityTest --rerun 2>&1 | tee build/jit-stability/ordinary/run.log || status=$?
           if [ -d build/test-results/jitStabilityTest ]; then
             cp -R build/test-results/jitStabilityTest build/jit-stability/ordinary/xml
           fi
@@ -66,7 +66,7 @@ jobs:
           mkdir -p build/jit-stability/dense
           rm -rf build/test-results/jitStabilityTest build/reports/tests/jitStabilityTest
           status=0
-          scripts/gradle.sh --no-daemon jitStabilityTest --rerun 2>&1 | tee build/jit-stability/dense/run.log || status=$?
+          ./gradlew --no-daemon jitStabilityTest --rerun 2>&1 | tee build/jit-stability/dense/run.log || status=$?
           if [ -d build/test-results/jitStabilityTest ]; then
             cp -R build/test-results/jitStabilityTest build/jit-stability/dense/xml
           fi

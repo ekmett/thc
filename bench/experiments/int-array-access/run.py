@@ -140,11 +140,11 @@ def main():
         for path, digest in source.items():
             check(hashlib.sha256(subprocess.check_output(['git', 'show', revision + ':' + path], cwd=ROOT)).hexdigest() == digest, 'Commit runtime source before capture: ' + path)
         with (out / 'installDist.log').open('w') as log:
-            subprocess.run([ROOT / 'scripts/gradle.sh', '--no-daemon', 'installDist'], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True)
+            subprocess.run([ROOT / 'gradlew', '--no-daemon', 'installDist'], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True)
         check(runtime_sources() == source, 'Source changed during build')
         java = Path(os.environ['JAVA_HOME']).resolve(); classes = out / 'classes'; classes.mkdir()
         files = [Path(__file__).resolve(), HERE / 'IntArrayGraphProbe.java', ROOT / 'tools/GraphInspect.java',
-                 ROOT / 'scripts/gradle.sh', ROOT / 'scripts/java-home.sh', MANIFEST,
+                 ROOT / 'gradlew', ROOT / 'Makefile', MANIFEST,
                  *sorted((ROOT / 'build/install/thc/lib').glob('*.jar'))]
         files += [ROOT / p for group in ('inputHashes', 'artifactHashes') for p in fixture[group]]
         launch = dict(runtimeSourceCommit=revision, runtimeSourceSha256=source,

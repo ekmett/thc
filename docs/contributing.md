@@ -1,5 +1,14 @@
 # Development
 
+`make` builds the runtime and Haskell components. `make test` prepares native
+fixtures and runs the JVM tests; `make test TESTS='thc.RuntimeTest'` selects one
+JUnit class. `make jit-test` runs the separate advisory JIT retention suite.
+`make jar` rebuilds only the runtime JAR, and `make probe ARGS='...'` invokes
+the diagnostic runner. `make clean` removes the Gradle and Cabal build products;
+`make distclean` also removes `.gradle`, `.kotlin`, and `.gradle-user-home` in the
+checkout. Neither cleanup target requires a JDK or removes an external cache.
+Use `GRADLE_FLAGS=--offline` or `CABAL_FLAGS=--offline` for an offline build.
+
 Use a descriptive branch name, such as `pinned-arrays` or `fast-ci`, and a
 focused pull request against `main`. Explain the problem, the change and how you
 checked it. Keep issues about the work to do; PRs carry the implementation
@@ -43,8 +52,8 @@ Run the advisory checks locally with:
 
 ```sh
 python3 scripts/prepare-short-bytes-slices.py
-scripts/gradle.sh --no-daemon jitStabilityTest --rerun
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true scripts/gradle.sh --no-daemon jitStabilityTest --rerun
+./gradlew --no-daemon jitStabilityTest --rerun
+JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon jitStabilityTest --rerun
 ```
 
 The local task exits unsuccessfully if a stability assertion fails; only CI
@@ -102,7 +111,7 @@ To reproduce the main checks locally:
 
 ```sh
 scripts/try.sh
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true scripts/gradle.sh --no-daemon test --rerun
+JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test --rerun
 scripts/try-libraries.sh
 THC_DIAGNOSTIC_UNSUPPORTED=true scripts/try-map.sh
 python3 -m unittest discover -s .github/scripts -p 'test_*.py'

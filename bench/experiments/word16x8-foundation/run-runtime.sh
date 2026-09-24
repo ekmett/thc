@@ -3,7 +3,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
 OUT="${1:-$ROOT/build/word16x8-runtime}"
-if [[ -z "${JAVA_HOME:-}" ]]; then source "$ROOT/scripts/java-home.sh"; fi
+make --no-print-directory -s -C "$ROOT" check-java
 # A failed capture remains immutable evidence; use another directory for a new run.
 if [[ -e "$OUT" ]]; then
   echo "Choose a new output directory: $OUT" >&2

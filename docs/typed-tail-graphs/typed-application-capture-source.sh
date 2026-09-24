@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd /Users/ekmett/thc
-. scripts/java-home.sh
+make --no-print-directory -s check-java
 ENTRY="$1"
 LIBDIR="$2"
 OUT="$3"

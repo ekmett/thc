@@ -20,7 +20,7 @@ def main():
     parser.add_argument('--collect-only',action='store_true');parser.add_argument('--capture',type=Path);args=parser.parse_args()
     out=args.output.resolve();java=Path(os.environ['JAVA_HOME']);classes=out/'classes';cp=str(classes)+':'+str(ROOT/'build/install/thc/lib/*')
     module=ROOT/'build/sum-result/pre-core/SumResultAudit.json';manifest=ROOT/'build/sum-result/provenance.json'
-    tools=[HERE/'run.py',HERE/'summarize.py',HERE/'SumGraphProbe.java',ROOT/'tools/GraphInspect.java',ROOT/'scripts/gradle.sh']
+    tools=[HERE/'run.py',HERE/'summarize.py',HERE/'SumGraphProbe.java',ROOT/'tools/GraphInspect.java',ROOT/'gradlew',ROOT/'Makefile']
     commands=[]
     def run(argv,log=None):
         argv=list(map(str,argv));commands.append(argv);(out/'commands.json').write_text(json.dumps(commands,indent=2)+'\n')
@@ -35,7 +35,7 @@ def main():
         for path,sha in sources.items():
             require(hashlib.sha256(subprocess.check_output(['git','show',revision+':'+path],cwd=ROOT)).hexdigest()==sha,'Commit source before graph capture: '+path)
         run(['python3',ROOT/'scripts/prepare-sum-result-audit.py','--check-existing'])
-        run([ROOT/'scripts/gradle.sh','--offline','--no-daemon','installDist'],out/'installDist.log')
+        run([ROOT/'gradlew','--offline','--no-daemon','installDist'],out/'installDist.log')
         require(sources=={p:digest(ROOT/p) for p in paths},'Runtime changed during build')
         inputs=tools+[module,manifest,ROOT/'build/sum-result/oracle.tsv',ROOT/'build/sum-result/oracle-pairs.tsv',java/'release',*sorted((ROOT/'build/install/thc/lib').glob('*.jar'))]
         launch=dict(runtimeCommit=revision,runtimeSourceSha256=sources,inputSha256={str(p.resolve()):digest(p) for p in inputs},

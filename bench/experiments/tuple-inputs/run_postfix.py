@@ -45,7 +45,7 @@ def main():
                     'Commit runtime source before capture: ' + path)
         run(['python3', ROOT / 'scripts/prepare-tuple-input-audit.py', '--check-only'])
         # Build a current main JAR without replacing the historical installDist capture.
-        run([ROOT / 'scripts/gradle.sh', '--offline', '--no-daemon', '-Pkotlin.incremental=false',
+        run([ROOT / 'gradlew', '--offline', '--no-daemon', '-Pkotlin.incremental=false',
              '-Pkapt.incremental.apt=false', 'jar'], out / 'jar.log')
         require(sources == {p: digest(ROOT / p) for p in paths}, 'Runtime changed during build')
         jar = ROOT / 'build/libs/thc-0.1-experiment.jar'
@@ -55,7 +55,7 @@ def main():
         module = ROOT / 'build/tuple-input/pre-core/TupleInputAudit.json'
         manifest = ROOT / 'build/tuple-input/provenance.json'
         inputs = [HERE / p for p in ('run_postfix.py', 'run.py', 'summarize.py', 'TupleInputGraphProbe.java')]
-        inputs += [ROOT / 'tools/GraphInspect.java', ROOT / 'scripts/gradle.sh', module, manifest,
+        inputs += [ROOT / 'tools/GraphInspect.java', ROOT / 'gradlew', ROOT / 'Makefile', module, manifest,
                    ROOT / 'build/tuple-input/oracle.tsv', ROOT / 'build/tuple-input/oracle-pairs.tsv',
                    java / 'release', jar, *dependencies]
         launch = dict(runtimeCommit=revision, runtimeSourceSha256=sources,

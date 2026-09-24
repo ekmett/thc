@@ -52,8 +52,8 @@ From a clean checkout with the pinned GHC and Graal toolchains:
 ```sh
 compiler/build.sh
 python3 scripts/prepare-bit-primops.py
-scripts/gradle.sh test --tests thc.runtime.BitPrimopsTest
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true scripts/gradle.sh test --tests thc.runtime.BitPrimopsTest --rerun
+./gradlew test --tests thc.runtime.BitPrimopsTest
+JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --tests thc.runtime.BitPrimopsTest --rerun
 ```
 
 `scripts/prepare-tests.sh` includes preparation, so the ordinary clean-build CI

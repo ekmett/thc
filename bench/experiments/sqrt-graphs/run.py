@@ -53,7 +53,7 @@ def main():
     oracle = ROOT / 'build/sqrt/integer-oracle.tsv'
     provenance = ROOT / 'build/sqrt/provenance.json'
     tooling = [Path(__file__).resolve(), SHARED / 'TupleRuntimeGraphProbe.java', SHARED / 'inputs.py',
-               SHARED / 'summarize.py', ROOT / 'tools/GraphInspect.java', ROOT / 'scripts/gradle.sh']
+               SHARED / 'summarize.py', ROOT / 'tools/GraphInspect.java', ROOT / 'gradlew', ROOT / 'Makefile']
     manifest_path = output / 'launch-manifest.json'
     classes = output / 'classes'; classes.mkdir(exist_ok=True)
     cp = str(classes) + ':' + str(ROOT / 'build/install/thc/lib/*')
@@ -73,7 +73,7 @@ def main():
             committed = subprocess.check_output(['git', 'show', revision + ':' + path], cwd=ROOT)
             check(hashlib.sha256(committed).hexdigest() == sha, 'Commit runtime source before graph capture: ' + path)
         run(['python3', ROOT / 'scripts/prepare-sqrt-audit.py', '--check-only'])
-        run([ROOT / 'scripts/gradle.sh', '--no-daemon', 'installDist'], output / 'installDist.log')
+        run([ROOT / 'gradlew', '--no-daemon', 'installDist'], output / 'installDist.log')
         check(source_hashes() == before_build, 'Runtime source changed during installDist')
         launch = dict(schema=1, runtimeSourceCommit=revision, runtimeSourceSha256=before_build,
             javaVersion=subprocess.check_output([java / 'java', '-version'], stderr=subprocess.STDOUT, text=True).splitlines(),

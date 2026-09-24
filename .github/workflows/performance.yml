@@ -81,7 +81,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p work/ci-performance/logs
-          echo "THC_GRADLE_USER_HOME=$RUNNER_TEMP/thc-performance-gradle" >> "$GITHUB_ENV"
+          echo "GRADLE_USER_HOME=$RUNNER_TEMP/thc-performance-gradle" >> "$GITHUB_ENV"
           test "$(ghc --numeric-version)" = 9.14.1
           test "$(ghc-pkg --version)" = 'GHC package manager version 9.14.1'
           python3 - <<'PY'
@@ -105,7 +105,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          work/ci-baseline-checkout/scripts/gradle.sh --no-daemon installDist \
+          work/ci-baseline-checkout/gradlew -p work/ci-baseline-checkout --no-daemon installDist \
             2>&1 | tee work/ci-performance/logs/original-build.log
       - name: Reparse and verify published compiler graphs once
         if: inputs.suite == 'standard'
