@@ -120,6 +120,11 @@ frame sizes, InfoProv offsets and closure ordinals. The receipt identifies the
 nonprofiling dynamic way separately from the GHC version, ABI and platform.
 It is provenance for a future low-level snapshot adapter; source export alone
 does not make the original RTS stack primitives executable.
+The JVM package loader compares that layout in the ZIP index and hashed build
+receipt, checks the host architecture, word size, endianness, nonprofiling way
+and field bounds, then passes one immutable target-layout record to either
+backend. Bundles without the receipt have no target layout; stack/IPE operations
+must reject that absence instead of assuming offsets from a particular host.
 
 `driver-tests` is an ordinary Cabal HUnit test suite. Cabal builds the driver
 first, then the tests copy fixtures into isolated temporary directories outside

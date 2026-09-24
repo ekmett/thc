@@ -247,7 +247,9 @@ wiredGhcInternal context thcRoot = do
                            (contextPluginLibrary context) (contextPluginUnit context)
                            layoutRecipe staging
           layout <- readJson (targetLayout artifacts)
-          require (validTargetLayout layout) "GHC target layout receipt is incomplete"
+          require (validTargetLayout layout &&
+                   jsonField layout "targetPlatform" == Just (contextPlatform context))
+                  "GHC target layout receipt differs from compiler target"
           generated <- forM (generatedSources artifacts) $ \(name, path) -> do
             digest <- digestFile path
             pure (object ["path" .= name, "sha256" .= digest])
@@ -686,10 +688,14 @@ validTargetLayout :: Value -> Bool
 validTargetLayout layout =
   jsonField layout "schema" == Just (1 :: Int) &&
   jsonField layout "profiled" == Just False &&
+  maybe False (not . null) (jsonField layout "targetPlatform" :: Maybe String) &&
+  (jsonField layout "endianness" :: Maybe String) `elem` [Just "little", Just "big"] &&
   maybe False (`elem` [4, 8]) (jsonField layout "wordBytes" :: Maybe Int) &&
   all (maybe False (>= 0) . (jsonField layout :: String -> Maybe Int))
-    ["infoTableBytes", "infoTablePtrsOffset", "infoTableNptrsOffset",
-     "infoTableTypeOffset", "infoTableSrtOffset", "infoProvEntBytes",
+    ["infoTableBytes", "infoTablePtrsOffset", "infoTablePtrsBytes",
+     "infoTableNptrsOffset", "infoTableNptrsBytes", "infoTableTypeOffset",
+     "infoTableTypeBytes", "infoTableSrtOffset", "infoTableSrtBytes",
+     "infoProvEntBytes", "infoProvBytes", "infoProvDescBytes",
      "infoProvEntInfoOffset", "infoProvEntProvOffset", "infoProvNameOffset",
      "infoProvDescOffset", "infoProvTyDescOffset", "infoProvLabelOffset",
      "infoProvUnitOffset", "infoProvModuleOffset", "infoProvFileOffset",

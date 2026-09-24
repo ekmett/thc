@@ -10,11 +10,13 @@ import java.nio.file.Path
 import java.security.MessageDigest
 import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
+import thc.runtime.TargetLayout
 
 /** Exact post-Tidy Core artifacts from separate, Cabal-planned GHC units. */
 object CorePackageManifest {
     private const val boundary = "optimized-Core-after-Tidy-before-CorePrep"
     private val sha256 = Regex("[0-9a-f]{64}")
+    private data class BundleContents(val entries: Map<String, ByteArray>, val targetLayout: TargetLayout?)
 
     private fun digest(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes)
         .joinToString("") { "%02x".format(it) }
@@ -34,7 +36,7 @@ object CorePackageManifest {
     }
 
     private fun bundle(id: String, record: Map<String, Any?>,
-                       modules: List<*>): Map<String, ByteArray> {
+                       modules: List<*>): BundleContents {
         val location = record["path"] as? String ?: error("Missing ZIP bundle path for $id")
         val expected = record["sha256"] as? String ?: error("Missing ZIP bundle SHA-256 for $id")
         require(record.keys == setOf("path", "sha256") && expected.matches(sha256)) {
@@ -81,6 +83,7 @@ object CorePackageManifest {
             "ZIP manifest does not match package unit $id"
         }
         val buildInputs = index["buildInputs"]
+        var inputRecord: Map<*, *>? = null
         if (index.containsKey("buildInputs")) {
             val reference = buildInputs as? Map<*, *> ?: error("Invalid build inputs in ZIP manifest for $id")
             require(reference.keys == setOf("path", "sha256") && reference["path"] == "inplace-manifest.json" &&
@@ -88,10 +91,10 @@ object CorePackageManifest {
                 "Invalid build inputs reference in ZIP manifest for $id"
             }
             val inputBytes = entries["inplace-manifest.json"] ?: error("Missing build inputs in ZIP bundle for $id")
-            val record = Json.parse(inputBytes.toString(Charsets.UTF_8)) as? Map<*, *>
-            require(digest(inputBytes) == reference["sha256"] && record?.get("format") == "thc-core-build-inputs" &&
-                record["schema"] == 1L && record["unit"] == id &&
-                record["buildKey"] == index["buildKey"] && record["exportKey"] == index["exportKey"]) {
+            inputRecord = Json.parse(inputBytes.toString(Charsets.UTF_8)) as? Map<*, *>
+            require(digest(inputBytes) == reference["sha256"] && inputRecord?.get("format") == "thc-core-build-inputs" &&
+                inputRecord["schema"] == 1L && inputRecord["unit"] == id &&
+                inputRecord["buildKey"] == index["buildKey"] && inputRecord["exportKey"] == index["exportKey"]) {
                 "Invalid build inputs record in ZIP bundle for $id"
             }
         }
@@ -101,11 +104,14 @@ object CorePackageManifest {
             "ZIP entries differ from declared modules in $id"
         }
         require(centralNames == entries.keys.toList()) { "ZIP central directory differs from entries in $id" }
-        return entries
+        require(index["targetLayout"] == null || inputRecord != null) {
+            "Wired target layout lacks hashed build inputs in $id"
+        }
+        return BundleContents(entries, inputRecord?.let { TargetLayout.fromReceipts(index, it) })
     }
 
     @Suppress("UNCHECKED_CAST")
-    internal fun appendModules(destination: StringBuilder, manifestPath: String) {
+    internal fun appendModules(destination: StringBuilder, manifestPath: String): TargetLayout? {
         val manifest = Path.of(manifestPath).toRealPath()
         val root = manifest.parent
         val document = Json.parse(Files.readString(manifest)) as? Map<String, Any?>
@@ -118,6 +124,7 @@ object CorePackageManifest {
         val seenUnits = hashSetOf<String>()
         val seenModules = hashSetOf<Pair<String, String>>()
         var count = 0
+        var targetLayout: TargetLayout? = null
         for (record in units) {
             val unit = record as? Map<String, Any?> ?: error("Invalid package unit: $manifest")
             val id = unit["id"] as? String ?: error("Missing GHC unit ID: $manifest")
@@ -130,6 +137,12 @@ object CorePackageManifest {
             val bundle = if (unit.containsKey("bundle"))
                 this.bundle(id, unit["bundle"] as? Map<String, Any?> ?: error("Invalid ZIP bundle for $id"), modules)
                 else null
+            bundle?.targetLayout?.let { layout ->
+                require(targetLayout == null || targetLayout == layout) {
+                    "Conflicting GHC target layouts across package bundles"
+                }
+                targetLayout = layout
+            }
             for (item in modules) {
                 val module = item as? Map<String, Any?> ?: error("Invalid module record in GHC unit $id")
                 val name = module["name"] as? String ?: error("Missing module name in GHC unit $id")
@@ -142,7 +155,7 @@ object CorePackageManifest {
                 // Hash and embed the same bytes: a concurrent rewrite cannot
                 // substitute an unchecked module between validation and load.
                 val bytes = if (bundle == null) artifact(root, relative)
-                    else bundle[relative] ?: error("Missing ZIP module in $id: $relative")
+                    else bundle.entries[relative] ?: error("Missing ZIP module in $id: $relative")
                 val actual = digest(bytes)
                 require(actual == expected) { "Core package artifact hash mismatch: $id:$name at $relative" }
                 val text = bytes.toString(Charsets.UTF_8)
@@ -166,5 +179,6 @@ object CorePackageManifest {
             }
         }
         require(count != 0) { "Core package manifest has no executable modules: $manifest" }
+        return targetLayout
     }
 }
