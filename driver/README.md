@@ -8,7 +8,7 @@ dependency solver.
 
 `thc run` is the first executable slice. It asks Cabal's library to configure and
 build one selected executable, exports that executable's `Main.main :: IO ()`
-through `Thc.Plugin`, rejects unsupported reachable Core through the strict
+through `THC.Plugin`, rejects unsupported reachable Core through the strict
 audit, then invokes the THC JVM runtime. It never executes the native Cabal
 binary. The standalone `build` and `repl` commands remain absent.
 
