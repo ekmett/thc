@@ -24,15 +24,16 @@ BYTECODE_PROGRAM = "src/main/kotlin/thc/runtime/BytecodeProgram.kt"
 TEST_ANNOTATION = r"@\s*(?:org\.junit\.(?:jupiter\.api|jupiter\.params)\.)?(?:Test|TestFactory|TestTemplate|ParameterizedTest|RepeatedTest)\b"
 LIFECYCLE = r"@\s*(?:org\.junit\.jupiter\.api\.)?(?:BeforeEach|AfterEach|BeforeAll|AfterAll)\b"
 DECLARATION = re.compile(r"\b(class|object|interface|fun|val|var|typealias)\s+([A-Za-z_]\w*)")
+SOURCE_SPECIAL = re.compile(r'''//|/\*|"""|["']''')
 
 
 class SelectionError(Exception):
     pass
 
 
-def git(repo, *args):
+def git(repo, *args, input_bytes=None):
     process = subprocess.run(["git", "--no-replace-objects", "-C", str(repo), *args],
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             input=input_bytes, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                              env=dict(os.environ, GIT_OPTIONAL_LOCKS="0"))
     if process.returncode:
         raise SelectionError("git command failed: " + args[0])
@@ -84,6 +85,35 @@ def tree(repo, commit):
     return result
 
 
+def batch_blobs(repo, oids):
+    """Read committed inventory sources with one Git process, keyed by exact OID."""
+    oids = list(dict.fromkeys(oids))
+    if not oids:
+        return {}
+    if any(not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", oid) for oid in oids):
+        raise SelectionError("invalid Git blob id")
+    data = git(repo, "cat-file", "--batch", input_bytes=("\n".join(oids) + "\n").encode("ascii"))
+    result = {}
+    offset = 0
+    for oid in oids:
+        header_end = data.find(b"\n", offset)
+        if header_end < 0:
+            raise SelectionError("truncated Git blob batch")
+        parts = data[offset:header_end].split(b" ")
+        if (len(parts) != 3 or parts[0] != oid.encode("ascii") or parts[1] != b"blob"
+                or not parts[2].isdigit()):
+            raise SelectionError("unexpected Git blob batch header")
+        size = int(parts[2])
+        start, end = header_end + 1, header_end + 1 + size
+        if end >= len(data) or data[end:end + 1] != b"\n":
+            raise SelectionError("truncated Git blob batch body")
+        result[oid] = data[start:end]
+        offset = end + 1
+    if offset != len(data):
+        raise SelectionError("extra Git blob batch data")
+    return result
+
+
 def python_test(path):
     name = PurePosixPath(path).name
     # Historical snapshots are data, not runnable test sources. Changes to these
@@ -107,6 +137,10 @@ def code_only(source):
     result = list(source)
     index = 0
     while index < len(source):
+        token = SOURCE_SPECIAL.search(source, index)
+        if token is None:
+            break
+        index = token.start()
         start = index
         if source.startswith("//", index):
             end = source.find("\n", index)
@@ -142,8 +176,7 @@ def code_only(source):
             else:
                 raise SelectionError("unclosed string")
         else:
-            index += 1
-            continue
+            raise SelectionError("unexpected source token")
         result[start:index] = ["\n" if c == "\n" else " " for c in source[start:index]]
     return "".join(result)
 
@@ -205,9 +238,29 @@ def junit_info(source):
             if not private_at(item.start()):
                 unsafe.append("shared-test-helper")
     for _, start, end in ranges:
+        private_constructors = []
+        for item in declarations:
+            if not start < item.start() < end or depths[item.start()] != 1 or item[1] != "class" or not private_at(item.start()):
+                continue
+            opener = re.match(r"\s*\(", code[item.end():])
+            if opener is None:
+                continue
+            first = item.end() + opener.end() - 1
+            parens = 0
+            for position in range(first, end):
+                char = code[position]
+                if char in "{}":
+                    break  # Complex constructor: retain conservative widening.
+                parens += (char == "(") - (char == ")")
+                if parens == 0:
+                    private_constructors.append((first, position))
+                    break
         previous = start + 1
         for item in declarations:
             if not start < item.start() < end or depths[item.start()] != 1:
+                continue
+            if item[1] in ("val", "var") and any(first < item.start() < last for first, last in private_constructors):
+                previous = item.end()
                 continue
             prefix = "".join(code[i] if depths[i] == 1 else " " for i in range(previous, item.start()))
             if not private_at(item.start()) and not (
@@ -371,12 +424,18 @@ def select(repo, base_ref, head_ref):
     inventory_complete = True
     if inventory_commit:
         files = tree(repo, inventory_commit)
+    inventory_paths = [path for path in files if junit_source(path) or path in (SCRIPT, POLICY)]
+    blobs = batch_blobs(repo, [files[path][2] for path in inventory_paths
+                               if files[path][0] in ("100644", "100755") and files[path][1] == "blob"])
     def text(path):
         if path not in texts:
             mode, kind, oid = files[path]
             if mode not in ("100644", "100755") or kind != "blob":
                 raise SelectionError("nonregular source")
-            texts[path] = git(repo, "cat-file", "blob", oid).decode("utf-8")
+            raw = blobs.get(oid)
+            if raw is None:
+                raw = git(repo, "cat-file", "blob", oid)
+            texts[path] = raw.decode("utf-8")
         return texts[path]
     classes = {}
     python_files = sorted(path for path in files if python_test(path))
