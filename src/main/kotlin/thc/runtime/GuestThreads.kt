@@ -186,6 +186,8 @@ internal class AsyncRequest internal constructor(
         private set
     @Volatile var failure: Throwable? = null
         internal set
+    /** Set by the bytecode poll before crossing into the mailbox boundary. */
+    @JvmField @Volatile var compiledCapture = false
 
     internal fun transition(next: AsyncRequestState) = synchronized(monitor) {
         state = next
