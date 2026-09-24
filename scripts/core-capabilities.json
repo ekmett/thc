@@ -712,11 +712,17 @@
     "copyMutableArray#": 6,
     "unsafeThawArray#": 2,
     "readInt32Array#": 3,
+    "readWord8ArrayAsInt32#": 3,
     "writeInt32Array#": 4,
+    "writeWord8ArrayAsInt32#": 4,
     "indexInt32Array#": 2,
+    "indexWord8ArrayAsInt32#": 2,
     "readWord32Array#": 3,
+    "readWord8ArrayAsWord32#": 3,
     "writeWord32Array#": 4,
+    "writeWord8ArrayAsWord32#": 4,
     "indexWord32Array#": 2,
+    "indexWord8ArrayAsWord32#": 2,
     "readFloatArray#": 3,
     "readWord8ArrayAsFloat#": 3,
     "writeFloatArray#": 4,
@@ -1854,7 +1860,76 @@
         ]
       }
     },
+    "readWord8ArrayAsInt32#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "Int32Rep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "Int32Rep"
+            ]
+          }
+        ]
+      }
+    },
     "writeInt32Array#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "Int32Rep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "writeWord8ArrayAsInt32#": {
       "arguments": [
         {
           "kind": "object",
@@ -1906,7 +1981,68 @@
         ]
       }
     },
+    "indexWord8ArrayAsInt32#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "Int32Rep"
+        ]
+      }
+    },
     "readWord32Array#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "Word32Rep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "Word32Rep"
+            ]
+          }
+        ]
+      }
+    },
+    "readWord8ArrayAsWord32#": {
       "arguments": [
         {
           "kind": "object",
@@ -1975,7 +2111,59 @@
         "primReps": []
       }
     },
+    "writeWord8ArrayAsWord32#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "Word32Rep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
     "indexWord32Array#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "Word32Rep"
+        ]
+      }
+    },
+    "indexWord8ArrayAsWord32#": {
       "arguments": [
         {
           "kind": "object",
