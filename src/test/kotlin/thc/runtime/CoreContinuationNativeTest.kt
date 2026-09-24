@@ -454,7 +454,7 @@ class CoreContinuationNativeTest {
     }
 
     @Test fun nativeCoreThunkResumesThroughForcedLocal() {
-        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114"),
+        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79"),
             File(root, "build/core-continuation/native-output.txt").readLines())
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
@@ -504,7 +504,7 @@ class CoreContinuationNativeTest {
     }
 
     @Test fun genuineCatchActionResumesOwnedTupleAcrossThreads() {
-        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114"),
+        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79"),
             File(root, "build/core-continuation/native-output.txt").readLines())
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
@@ -588,6 +588,78 @@ class CoreContinuationNativeTest {
                 assertEquals(if (name == "catchActionFailure") 3 else 2, segment.state)
                 assertEquals(2, thunk.state)
             }
+        }
+    }
+
+    @Test fun genuineCatchHandlerResumesItsOriginalTupleAndLogicalMask() {
+        assertEquals("79", File(root, "build/core-continuation/native-output.txt").readLines()[7])
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            val linked = CoreModules.reachable(module, "catchHandlerAnswer", strictLink = true)
+            fun number(value: Any?): Long = (value as DataValue).layout.readLong(value, 0)
+            entered(context) {
+                for (program in listOf(Program(language, linked), BytecodeProgram(language, linked)))
+                    assertEquals(79L, number(driver.force(program.entryValue("catchHandlerAnswer") as Thunk)))
+            }
+            val checkpoint = BytecodeCheckpoint()
+            val program = entered(context) { BytecodeProgram(language, linked, checkpoint) }
+            entered(context) {
+                val target = program.entryTarget("catchHandlerAnswer")
+                assertEquals(79L, number(Calls.target(target, arrayOf(0L))))
+                compile(target)
+                assertEquals(79L, number(Calls.target(target, arrayOf(0L))))
+                assertTrue(checkpoint.compiledVisits.get() > 0)
+            }
+            checkpoint.armed = true
+            val parent = entered(context) { program.entryValue("catchHandlerAnswer") as Thunk }
+            val compiledBefore = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+            entered(context) {
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                assertEquals(1, checkpoint.visits.get(), "The action prefix ran exactly once")
+                assertEquals(0, language.handoffState.get().results.depth)
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                assertEquals(2, checkpoint.visits.get(), "The original handler reached its first checkpoint")
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(driver),
+                    "A parked handler restores its carrier ambient mask")
+                assertEquals(0, language.handoffState.get().results.depth)
+            }
+            val continuation = parent.value as ContinuationResult
+            val handler = (continuation.result as CallSegmentSuspended).segment
+            assertFalse(handler.caughtIOAction, "The handler result is not the interrupted action")
+            assertEquals(listOf(CoreKind.VOID, CoreKind.DATA),
+                requireNotNull(handler.tupleShape).proof.components!!.map { it.kind })
+            assertTrue(((handler.value as ContinuationResult).continuationRootNode.sourceRootNode) is BytecodeRoot,
+                "The saved continuation belongs to the original GHC handler root")
+            assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() > compiledBefore,
+                "The suspended catch caller entered installed guest bytecode")
+            assertEquals(MaskingState.MASKED_INTERRUPTIBLE, handler.logicalMask)
+            assertEquals(5, handler.state)
+            Executors.newSingleThreadExecutor().use { pool ->
+                val resumed = pool.submit<Long> { entered(context) {
+                    SynchronousMasking.set(driver, MaskingState.MASKED_UNINTERRUPTIBLE)
+                    try {
+                        assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                        assertEquals(3, checkpoint.visits.get(), "The handler reached its second checkpoint")
+                        assertEquals(5, handler.state)
+                        assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, SynchronousMasking.current(driver))
+                        assertEquals(0, language.handoffState.get().results.depth)
+                        val result = number(driver.force(parent))
+                        assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, SynchronousMasking.current(driver),
+                            "Completion restores the second carrier's ambient mask")
+                        assertEquals(0, language.handoffState.get().results.depth)
+                        assertEquals(0, language.handoffState.get().results.retainedReferences())
+                        result
+                    } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+                } }
+                assertEquals(79L, resumed.get(5, TimeUnit.SECONDS))
+            }
+            assertEquals(2, handler.state)
+            assertEquals(2, parent.state)
+            assertEquals(3, checkpoint.visits.get(), "Neither the action nor the handler prefix replays")
         }
     }
 

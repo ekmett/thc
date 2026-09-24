@@ -108,6 +108,16 @@ AST, and bytecode. Cutting at its inner handler with a boxed 7 yields 78
 without replaying its checkpoint. The tests also reject a wrong parent/child
 pair and preserve each host carrier's ambient mask across the handler cut.
 This is deterministic, in-process proof control; it does not admit production
-`throwTo`, arbitrary suspension inside a handler body, or uncaptured nested
-call edges. Such edges still fail closed. The diagnostic stack snapshot is
-not a resumable continuation.
+`throwTo` or uncaptured nested call edges. Such edges still fail closed. The
+diagnostic stack snapshot is not a resumable continuation.
+
+The original GHC `catch#` handler can now suspend inside its own body under
+the private checkpoint. Its exact two-argument callee root and recursive
+State#/lifted result tuple are checked before publication. The handler's
+logical interruptible mask is saved in the cold segment while each host
+carrier recovers its ambient mask. Two handler yields and one prior action
+yield execute once each; the final `getMaskingState#` sees GHC's interruptible
+tag 2 and native GHC, AST, ordinary bytecode, and compiled checkpointed
+bytecode agree on 79. The enclosing lexical mask restore runs only after the
+resumed handler completes: a second `getMaskingState#` after `catch#` must
+observe the original unmasked state. General async delivery remains gated.
