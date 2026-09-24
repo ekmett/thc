@@ -328,6 +328,8 @@
     "indexCharOffAddr#": 2,
     "indexWord8OffAddr#": 2,
     "indexInt8OffAddr#": 2,
+    "indexWord16OffAddr#": 2,
+    "indexInt16OffAddr#": 2,
     "getCurrentCCS#": 2,
     "raise#": 1,
     "raiseIO#": 2,
@@ -489,6 +491,8 @@
     "byteArrayContents#": 1,
     "readWord8OffAddr#": 3,
     "readInt8OffAddr#": 3,
+    "readWord16OffAddr#": 3,
+    "readInt16OffAddr#": 3,
     "readCharOffAddr#": 3,
     "readWord32OffAddr#": 3,
     "readWordOffAddr#": 3,
@@ -1129,6 +1133,24 @@
       ],
       "result": {"kind": "unknown", "aggregate": "unboxed-tuple", "primReps": ["Int8Rep"],
         "components": [{"kind": "void", "primReps": []}, {"kind": "long", "primReps": ["Int8Rep"]}]}
+    },
+    "readWord16OffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "unknown", "aggregate": "unboxed-tuple", "primReps": ["Word16Rep"],
+        "components": [{"kind": "void", "primReps": []}, {"kind": "long", "primReps": ["Word16Rep"]}]}
+    },
+    "readInt16OffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "unknown", "aggregate": "unboxed-tuple", "primReps": ["Int16Rep"],
+        "components": [{"kind": "void", "primReps": []}, {"kind": "long", "primReps": ["Int16Rep"]}]}
     },
     "writeInt8OffAddr#": {
       "arguments": [

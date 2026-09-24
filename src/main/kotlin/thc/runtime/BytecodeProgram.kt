@@ -1349,6 +1349,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.READ_INT8 -> e.builder.beginReadInt8OffAddr(destination[0])
                         PinnedMemoryOp.READ_ADDR -> e.builder.beginReadAddrOffAddr(destination[0])
                         PinnedMemoryOp.READ_ADDR_ARRAY -> e.builder.beginReadAddrArray(destination[0])
+                        PinnedMemoryOp.READ_WORD16, PinnedMemoryOp.READ_INT16,
                         PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
                         PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT ->
                             e.builder.beginReadManagedAddress(operation.addressRead!!, destination[0])
@@ -1362,6 +1363,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.READ_INT8 -> e.builder.endReadInt8OffAddr()
                         PinnedMemoryOp.READ_ADDR -> e.builder.endReadAddrOffAddr()
                         PinnedMemoryOp.READ_ADDR_ARRAY -> e.builder.endReadAddrArray()
+                        PinnedMemoryOp.READ_WORD16, PinnedMemoryOp.READ_INT16,
                         PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
                         PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT -> e.builder.endReadManagedAddress()
                         else -> error("Scalar pinned memory operation")
@@ -2501,6 +2503,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "neAddr#" -> "AddressNotEqual"
             "ltAddr#", "leAddr#", "gtAddr#", "geAddr#" -> "AddressOrder"
             "indexCharOffAddr#", "indexWord8OffAddr#", "indexInt8OffAddr#" -> "AddressIndexByte"
+            "indexWord16OffAddr#", "indexInt16OffAddr#" -> "AddressIndexManagedScalar"
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
         val unary = operation in setOf("PopulationCountWidth", "CountLeadingZerosWidth", "CountTrailingZerosWidth", "ByteSwapWidth", "BitReverseWidth", "NegateNarrowInt", "BitNotNarrowWord", "Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount",
@@ -2563,6 +2566,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "NarrowWord" -> b.beginNarrowWord(wordMask)
                 "Raise" -> b.beginRaise(); "AddressPlus" -> b.beginAddressPlus()
                 "AddressIndexByte" -> b.beginAddressIndexByte(name == "indexInt8OffAddr#")
+                "AddressIndexManagedScalar" -> b.beginAddressIndexManagedScalar(
+                    if (name == "indexInt16OffAddr#") ManagedAddressRead.INT16 else ManagedAddressRead.WORD16)
                 "AddressEqual" -> b.beginAddressEqual(); "AddressNotEqual" -> b.beginAddressNotEqual()
                 "AddressOrder" -> b.beginAddressOrder(when (name) {
                     "ltAddr#" -> ManagedAddressOrder.LT
@@ -2625,6 +2630,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "Narrow8" -> b.endNarrow8(); "Narrow16" -> b.endNarrow16(); "Narrow32" -> b.endNarrow32()
                 "NarrowWord" -> b.endNarrowWord()
                 "Raise" -> b.endRaise(); "AddressPlus" -> b.endAddressPlus(); "AddressIndexByte" -> b.endAddressIndexByte()
+                "AddressIndexManagedScalar" -> b.endAddressIndexManagedScalar()
                 "AddressEqual" -> b.endAddressEqual(); "AddressNotEqual" -> b.endAddressNotEqual()
                 "AddressOrder" -> b.endAddressOrder()
             }
