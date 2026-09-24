@@ -5,6 +5,7 @@ package thc
 
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -104,6 +105,7 @@ class CoreZipBundleTest {
     private fun targetLayout(): Map<String, Any?> = mapOf(
         "schema" to 1, "profiled" to false, "wordBytes" to 8,
         "targetPlatform" to hostPlatform(),
+        "tablesNextToCode" to true,
         "endianness" to (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) "little" else "big"),
         "infoTableBytes" to 16, "infoTablePtrsOffset" to 0, "infoTablePtrsBytes" to 4,
         "infoTableNptrsOffset" to 4, "infoTableNptrsBytes" to 4,
@@ -155,6 +157,7 @@ class CoreZipBundleTest {
             val input = Json.parse(request) as Map<*, *>
             val record = TargetLayout.fromDocument(input["targetLayout"])
             assertEquals(8, record.wordBytes)
+            assertTrue(record.tablesNextToCode)
             assertEquals(8, record.offset("infoProvEntProvOffset"))
             Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
                 assertEquals(51L, context.eval("thc", request).execute().asLong(), backend)
@@ -178,6 +181,15 @@ class CoreZipBundleTest {
         assertTrue(wrongPlatform.message!!.contains("identity or way"))
         val wrongWay = rejected(listOf(unit("pkg-a", layout = layout, way = "profiling")))
         assertTrue(wrongWay.message!!.contains("identity or way"))
+        val otherLayout = layout + ("tablesNextToCode" to false)
+        val otherRequest = Json.parse(CoreModules.request(listOf("@${manifest(listOf(unit("pkg-a", layout = otherLayout)))}"),
+            "pkg-a:Shared.entry")) as Map<*, *>
+        assertFalse(TargetLayout.fromDocument(otherRequest["targetLayout"]).tablesNextToCode)
+        val wrongFlag = rejected(listOf(unit("pkg-a", layout = layout + ("tablesNextToCode" to "false"))))
+        assertTrue(wrongFlag.message!!.contains("tables-next-to-code"))
+        val conflictingFlag = rejected(listOf(unit("pkg-a", layout = layout),
+            unit("pkg-b", layout = otherLayout)))
+        assertTrue(conflictingFlag.message!!.contains("Conflicting GHC target layouts"))
         val conflicting = rejected(listOf(unit("pkg-a", layout = layout),
             unit("pkg-b", layout = layout, abi = "other")))
         assertTrue(conflicting.message!!.contains("Conflicting GHC target layouts"))
