@@ -65,6 +65,11 @@ class FloatingByteOffsetTest {
             assertThrows(RuntimeFault::class.java) { ManagedByteArray.readFloatByteOffsetGuest(bytes, offset) }
         for (offset in listOf(-1L, 25L, Long.MAX_VALUE))
             assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeDoubleByteOffsetGuest(bytes, offset, 1.0) }
+        val edge = ByteArray(12)
+        ManagedByteArray.writeFloatByteOffsetGuest(edge, 8, -0.0f)
+        assertEquals(0x80000000L, RawBitCasts.floatToWord32(ManagedByteArray.readFloatByteOffsetGuest(edge, 8)))
+        ManagedByteArray.writeDoubleByteOffsetGuest(edge, 4, -0.0)
+        assertEquals(Long.MIN_VALUE, RawBitCasts.doubleToWord64(ManagedByteArray.readDoubleByteOffsetGuest(edge, 4)))
 
         val owner = ManagedAllocation.mutable(32, 8)
         val target = ManagedAddress.fromAllocation(ManagedAllocation.mutable(8, 8))
@@ -83,6 +88,26 @@ class FloatingByteOffsetTest {
         assertThrows(RuntimeFault::class.java) { write.execute(frame) }
         assertThrows(RuntimeFault::class.java) { BytecodeRoot.WriteDoubleArray.write(true, bytes, 9L, 2.0, "invalid state") }
         assertArrayEquals(model, bytes)
+    }
+
+    @Test fun primitiveMetadataRejectsWrongOffsetsRepsAndFlags() {
+        fun proof(kind: CoreKind, rep: String) = CoreRepresentation(kind, primReps = listOf(rep))
+        val array = proof(CoreKind.OBJECT, "BoxedRep (Just Unlifted)")
+        val offset = proof(CoreKind.LONG, "IntRep")
+        val wrongOffset = proof(CoreKind.LONG, "WordRep")
+        val float = proof(CoreKind.FLOAT, "FloatRep")
+        val double = proof(CoreKind.DOUBLE, "DoubleRep")
+        ByteArrayOp.INDEX_WORD8_AS_FLOAT.validate(listOf(array, offset), listOf(false, false), float)
+        ByteArrayOp.INDEX_WORD8_AS_DOUBLE.validate(listOf(array, offset), listOf(false, false), double)
+        assertThrows(RuntimeFault::class.java) {
+            ByteArrayOp.INDEX_WORD8_AS_FLOAT.validate(listOf(array, wrongOffset), listOf(false, false), float)
+        }
+        assertThrows(RuntimeFault::class.java) {
+            ByteArrayOp.INDEX_WORD8_AS_DOUBLE.validate(listOf(array, offset), listOf(false, false), float)
+        }
+        assertThrows(RuntimeFault::class.java) {
+            ByteArrayOp.INDEX_WORD8_AS_FLOAT.validate(listOf(array, offset), listOf(false, true), float)
+        }
     }
 
     @Suppress("UNCHECKED_CAST")

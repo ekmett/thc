@@ -109,6 +109,7 @@ tasks.withType<Test>().configureEach {
             "pinned-pointer-cells/**/*.json", "pinned-pointer-cells/*.tsv", "pinned-pointer-cells/native/**",
             "wide-char-address/**/*.json", "wide-char-address/logs/*.stdout", "wide-char-address/native/**",
             "floating-address/**/*.json", "floating-address/*.tsv", "floating-address/native/**",
+            "explicit64-arrays/**/*.json", "explicit64-arrays/*.tsv", "explicit64-arrays/native/**",
             "managed-address-reads/**/*.json", "managed-address-reads/*.tsv", "managed-address-reads/native/**",
             "scalar-bitcasts/**/*.json", "scalar-bitcasts/*.tsv", "scalar-bitcasts/NativeScalarBitCast.hs", "scalar-bitcasts/native/**",
             "compare-byte-arrays/**/*.json", "compare-byte-arrays/*.tsv", "compare-byte-arrays/NativeCompareByteArrays.hs", "compare-byte-arrays/native/**",
