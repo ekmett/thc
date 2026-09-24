@@ -75,6 +75,10 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
         fun flatten(proof: CoreRepresentation): List<CoreRepresentation> = proof.components?.flatMap(::flatten)
             ?: if (proof.kind == CoreKind.VOID) emptyList() else listOf(proof)
         fun compatible(left: CoreRepresentation, right: CoreRepresentation): Boolean = signature(left) == signature(right)
+        /** Canonical lowering-time key for call layouts. Known PrimRep names do
+         * not contain structural delimiters; only immutable metadata is interned,
+         * never a language instance, guest payload, node, or storage carrier. */
+        fun compatibilityKey(proof: CoreRepresentation): String = signature(proof).toString().intern()
         fun requireCompatible(expected: CoreRepresentation, actual: CoreRepresentation, component: Boolean = false) {
             if (actual.present && (component || expected.isAggregate || actual.isAggregate) && !compatible(expected, actual))
                 throw RuntimeFault("Conflicting logical tuple representation proofs")
