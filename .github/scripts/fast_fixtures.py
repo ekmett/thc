@@ -23,12 +23,12 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "5391abe61fa52a674751cf033670f5667192d180c56de89d4fc8832cfc4ee6fc"
+FULL_PREPARATION_PLAN = "72234430c1c8944e75f7551f68252dfcd80e5e0eae24911c205db91c8e357815"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
     "build/original-stdio", "build/core-continuation", "build/small-arrays", "build/floating-address",
-    "build/floating-byte-offset", "build/narrow-byte-offset",
+    "build/floating-byte-offset", "build/narrow-byte-offset", "build/int32-byte-offset",
     "build/explicit64-arrays",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
@@ -57,6 +57,10 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/narrow-byte-offset/pre/audit.json", "build/narrow-byte-offset/post/audit.json",
     "build/narrow-byte-offset/pre/core/NarrowByteOffsetAudit.json",
     "build/narrow-byte-offset/post/core/NarrowByteOffsetAudit.json",
+    "build/int32-byte-offset/manifest.json", "build/int32-byte-offset/oracle.tsv",
+    "build/int32-byte-offset/pre/audit.json", "build/int32-byte-offset/post/audit.json",
+    "build/int32-byte-offset/pre/core/Int32ByteOffsetAudit.json",
+    "build/int32-byte-offset/post/core/Int32ByteOffsetAudit.json",
     "build/explicit64-arrays/manifest.json", "build/explicit64-arrays/oracle.tsv",
     "build/explicit64-arrays/pre/audit.json", "build/explicit64-arrays/post/audit.json",
     "build/explicit64-arrays/pre/core/Explicit64ArrayAudit.json",

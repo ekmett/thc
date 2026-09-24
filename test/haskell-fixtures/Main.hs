@@ -12,6 +12,7 @@ import WordFloatingFixtures (prepareWordFloating)
 import FloatingAddressFixtures (prepareFloatingAddress)
 import FloatingByteOffsetFixtures (prepareFloatingByteOffset)
 import NarrowByteOffsetFixtures (prepareNarrowByteOffset)
+import Int32ByteOffsetFixtures (prepareInt32ByteOffset)
 import Explicit64ArrayFixtures (prepareExplicit64Array)
 import FusedFloatingFixtures (prepareFusedFloating)
 import ContinuationFixtures (prepareCoreContinuation)
@@ -832,6 +833,7 @@ main = do
     ["floating-address"] -> prepareFloatingAddress root
     ["floating-byte-offset"] -> prepareFloatingByteOffset root
     ["narrow-byte-offset"] -> prepareNarrowByteOffset root
+    ["int32-byte-offset"] -> prepareInt32ByteOffset root
     ["explicit64-arrays"] -> prepareExplicit64Array root
     ["fused-floating"] -> prepareFusedFloating root
     "original-stdio":options -> prepareOriginalStdio root options
@@ -848,4 +850,4 @@ main = do
     ["core-continuation"] -> prepareCoreContinuation root
     ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (core-continuation|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|floating-address|floating-byte-offset|narrow-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (core-continuation|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

@@ -27,6 +27,14 @@ public final class ManagedInt32Array {
         return (int) index * Integer.BYTES;
     }
 
+    private static int checkedByteOffset(byte[] bytes, long offset) {
+        if (offset < 0 || offset > bytes.length - Integer.BYTES) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            throw new RuntimeFault("ByteArray# 32-bit byte offset outside its backing storage");
+        }
+        return (int) offset;
+    }
+
     public static long readSigned(byte[] bytes, long index) {
         return (int) ELEMENTS.get(bytes, byteOffset(bytes, index));
     }
@@ -37,5 +45,17 @@ public final class ManagedInt32Array {
 
     public static void write(byte[] bytes, long index, long value) {
         ELEMENTS.set(bytes, byteOffset(bytes, index), (int) value);
+    }
+
+    public static long readSignedByteOffset(byte[] bytes, long offset) {
+        return (int) ELEMENTS.get(bytes, checkedByteOffset(bytes, offset));
+    }
+
+    public static long readUnsignedByteOffset(byte[] bytes, long offset) {
+        return Integer.toUnsignedLong((int) ELEMENTS.get(bytes, checkedByteOffset(bytes, offset)));
+    }
+
+    public static void writeByteOffset(byte[] bytes, long offset, long value) {
+        ELEMENTS.set(bytes, checkedByteOffset(bytes, offset), (int) value);
     }
 }

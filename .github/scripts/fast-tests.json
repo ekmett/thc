@@ -312,6 +312,18 @@
       "junit": ["thc.runtime.NarrowByteOffsetTest"],
       "python": []
     },
+    "compiler/test-fixtures/Int32ByteOffsetAudit.hs": {
+      "junit": ["thc.runtime.Int32ByteOffsetTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/Int32ByteOffsetNative.hs": {
+      "junit": ["thc.runtime.Int32ByteOffsetTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/Int32ByteOffsetFixtures.hs": {
+      "junit": ["thc.runtime.Int32ByteOffsetTest"],
+      "python": []
+    },
     "compiler/test-fixtures/PinnedPointerCellsNative.hs": {
       "junit": ["thc.runtime.PinnedPointerCellsTest"],
       "python": []
@@ -707,6 +719,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.Int32ByteOffsetTest",
         "thc.runtime.NarrowByteOffsetTest",
         "thc.runtime.Explicit64ArrayTest",
         "thc.runtime.FloatingAddressTest",
