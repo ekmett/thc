@@ -150,21 +150,39 @@
     },
     "int8-arrays": {
       "junit": ["thc.runtime.Int8ArrayNativeTest"],
-      "commands": [{"argv": ["python3", "scripts/prepare-int8-arrays.py"]}],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int8-arrays"]}],
       "outputs": ["build/int8-arrays"],
-      "sources": ["scripts/prepare-int8-arrays.py", "scripts/prepare-int16-arrays.py", "scripts/test-int8-array-model.py", "compiler/test-fixtures/Int8ArrayAudit.hs", "examples/THC/Unboxed8Arrays.hs"]
+      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/Int8ArrayAudit.hs", "examples/THC/Unboxed8Arrays.hs"]
     },
     "int16-arrays": {
       "junit": ["thc.runtime.Int16ArrayNativeTest"],
-      "commands": [{"argv": ["python3", "scripts/prepare-int16-arrays.py"]}],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int16-arrays"]}],
       "outputs": ["build/int16-arrays"],
-      "sources": ["scripts/prepare-int16-arrays.py", "scripts/test-int16-array-model.py", "compiler/test-fixtures/Int16ArrayAudit.hs", "examples/THC/Unboxed16Arrays.hs"]
+      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/Int16ArrayAudit.hs", "examples/THC/Unboxed16Arrays.hs"]
     },
     "int32-arrays": {
       "junit": ["thc.runtime.Int32ArrayNativeTest"],
-      "commands": [{"argv": ["python3", "scripts/prepare-int32-arrays.py"]}],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int32-arrays"]}],
       "outputs": ["build/int32-arrays"],
-      "sources": ["scripts/prepare-int32-arrays.py", "scripts/test-int32-array-model.py", "compiler/test-fixtures/Int32ArrayAudit.hs", "examples/THC/Unboxed32Arrays.hs"]
+      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/Int32ArrayAudit.hs", "examples/THC/Unboxed32Arrays.hs"]
+    },
+    "int-arrays": {
+      "junit": ["thc.runtime.IntArrayNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int-arrays"]}],
+      "outputs": ["build/int-arrays"],
+      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/IntArrayAudit.hs", "examples/THC/UnboxedArrays.hs"]
+    },
+    "double-arrays": {
+      "junit": ["thc.runtime.DoubleArrayNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "double-arrays"]}],
+      "outputs": ["build/double-arrays"],
+      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/DoubleArrayAudit.hs", "examples/THC/UnboxedDoubleArrays.hs"]
+    },
+    "float-word-arrays": {
+      "junit": ["thc.runtime.FloatWordArrayNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "float-word-arrays"]}],
+      "outputs": ["build/float-word-arrays"],
+      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/FloatArrayAudit.hs", "compiler/test-fixtures/WordArrayAudit.hs", "examples/THC/UnboxedFloatArrays.hs", "examples/THC/UnboxedWordArrays.hs"]
     },
     "simd-capability-smoke": {
       "junit": ["thc.runtime.SimdCapabilitySmokeTest"],

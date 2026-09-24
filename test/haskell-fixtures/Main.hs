@@ -452,43 +452,165 @@ data ArrayGroup = ArrayGroup
   , arrayEntries :: [String]
   }
 
+data ArrayInputDomain = SharedInputs [Integer] | PerEntryInputs (Map.Map String [Integer])
+
 data ArraySpec = ArraySpec
   { arrayName :: String
   , arrayGroups :: [ArrayGroup]
   , arrayDriver :: FilePath
   , arrayOracle :: FilePath
-  , arrayValues :: [Integer]
+  , arrayInputDomain :: ArrayInputDomain
+  , arrayElementBits :: Maybe Int
+  , arrayLiterals :: [String]
+  , arrayLiteralInputs :: [Integer]
+  , arrayNaNHelpers :: [String]
   }
 
+basicArray :: String -> [ArrayGroup] -> FilePath -> FilePath -> ArrayInputDomain -> ArraySpec
+basicArray name groups driver oracle inputs = ArraySpec name groups driver oracle inputs Nothing [] [] []
+
 arraySpec :: String -> Maybe ArraySpec
-arraySpec "int-arrays" = Just $ ArraySpec "int-arrays"
+arraySpec "int-arrays" = Just $ basicArray "int-arrays"
   [ArrayGroup "examples/THC/UnboxedArrays.hs" "THC.UnboxedArrays" "U"
     ["unboxedAccum", "unboxedST", "unboxedEmpty"],
    ArrayGroup "compiler/test-fixtures/IntArrayAudit.hs" "IntArrayAudit" "P"
     ["orderedInts", "aliasIntBytes"]]
-  "NativeIntArray.hs" "int-array-oracle" (arrayBoundaryInputs
+  "NativeIntArray.hs" "int-array-oracle" (SharedInputs $ arrayBoundaryInputs [-16 .. 16]
     [0x5555555555555555, 0xaaaaaaaaaaaaaaaa, 0x55aa55aa55aa55aa,
      0xaa55aa55aa55aa55, 0x0123456789abcdef, 0xfedcba9876543210])
+arraySpec "int8-arrays" = Just $ (basicArray "int8-arrays"
+  [ArrayGroup "examples/THC/Unboxed8Arrays.hs" "THC.Unboxed8Arrays" "U"
+    ["unboxedInt8Accum", "unboxedInt8ST", "unboxedWord8Accum", "unboxedWord8ST"],
+   ArrayGroup "compiler/test-fixtures/Int8ArrayAudit.hs" "Int8ArrayAudit" "P"
+    ["aliasBytes", "emptyBytes", "rawSignedRead", "rawUnsignedRead", "rawSignedIndex"]]
+  "NativeInt8Array.hs" "int8-array-oracle" (SharedInputs $ arrayBitInputs [-256 .. 255]
+    [0x5555555555555555, 0xaaaaaaaaaaaaaaaa, 0x0123456789abcdef, 0xfedcba9876543210]))
+  {arrayElementBits = Just 8}
+arraySpec "int16-arrays" = Just $ (basicArray "int16-arrays"
+  [ArrayGroup "examples/THC/Unboxed16Arrays.hs" "THC.Unboxed16Arrays" "U"
+    ["unboxedInt16Accum", "unboxedInt16ST", "unboxedWord16Accum", "unboxedWord16ST"],
+   ArrayGroup "compiler/test-fixtures/Int16ArrayAudit.hs" "Int16ArrayAudit" "P"
+    ["aliasInt16Bytes", "aliasWord16Bytes"]]
+  "NativeInt16Array.hs" "int16-array-oracle" (SharedInputs $ arrayBoundaryInputs [-16 .. 16]
+    [0x5555555555555555, 0xaaaaaaaaaaaaaaaa, 0x55aa55aa55aa55aa,
+     0xaa55aa55aa55aa55, 0x0123456789abcdef, 0xfedcba9876543210,
+     0x8000000080000000, 0xffffffff00000000, 0x800000007fffffff,
+     0x7fffffff80000000, 0xffffffff7fffffff, 0x0000000100000001,
+     0x12345678abcdef01, 0x80008000, 0xffff0000, 0x80007fff,
+     0x7fff8000, 0xffff7fff, 0x00010001, 0x12345678abcd8000]))
+  {arrayElementBits = Just 16,
+   arrayLiterals = ["noinlineInt16Literal", "noinlineWord16Literal"],
+   arrayLiteralInputs = [-pow2 63, -32768, -1, 0, 1, 32767, pow2 63 - 1]}
+arraySpec "int32-arrays" = Just $ (basicArray "int32-arrays"
+  [ArrayGroup "examples/THC/Unboxed32Arrays.hs" "THC.Unboxed32Arrays" "U"
+    ["unboxedInt32Accum", "unboxedInt32ST", "unboxedWord32Accum", "unboxedWord32ST"],
+   ArrayGroup "compiler/test-fixtures/Int32ArrayAudit.hs" "Int32ArrayAudit" "P"
+    ["aliasInt32Bytes", "aliasWord32Bytes"]]
+  "NativeInt32Array.hs" "int32-array-oracle" (SharedInputs $ arrayBoundaryInputs [-16 .. 16]
+    [0x5555555555555555, 0xaaaaaaaaaaaaaaaa, 0x55aa55aa55aa55aa,
+     0xaa55aa55aa55aa55, 0x0123456789abcdef, 0xfedcba9876543210,
+     0x8000000080000000, 0xffffffff00000000, 0x800000007fffffff,
+     0x7fffffff80000000, 0xffffffff7fffffff, 0x0000000100000001,
+     0x12345678abcdef01]))
+  {arrayElementBits = Just 32,
+   arrayLiterals = ["noinlineInt32Literal", "noinlineWord32Literal"],
+   arrayLiteralInputs = [-pow2 63, -2147483648, -1, 0, 1, 2147483647, pow2 63 - 1]}
+arraySpec "double-arrays" = Just $ (basicArray "double-arrays"
+  [ArrayGroup "examples/THC/UnboxedDoubleArrays.hs" "THC.UnboxedDoubleArrays" "U"
+    ["unboxedDoubleAccum", "unboxedDoubleST"],
+   ArrayGroup "compiler/test-fixtures/DoubleArrayAudit.hs" "DoubleArrayAudit" "P"
+    ["moveDoubleBits", "indexDoubleBits"]]
+  "NativeDoubleArray.hs" "double-array-oracle" (SharedInputs doubleArrayInputs))
+  {arrayNaNHelpers = ["moveDoubleBits", "indexDoubleBits"]}
+arraySpec "float-word-arrays" = Just $ (basicArray "float-word-arrays"
+  [ArrayGroup "examples/THC/UnboxedFloatArrays.hs" "THC.UnboxedFloatArrays" "F"
+    ["unboxedFloatAccum", "unboxedFloatST"],
+   ArrayGroup "examples/THC/UnboxedWordArrays.hs" "THC.UnboxedWordArrays" "W"
+    ["unboxedWordAccum", "unboxedWordST"],
+   ArrayGroup "compiler/test-fixtures/FloatArrayAudit.hs" "FloatArrayAudit" "P"
+    ["moveFloatBits", "indexFloatBits"],
+   ArrayGroup "compiler/test-fixtures/WordArrayAudit.hs" "WordArrayAudit" "Q"
+    ["aliasWordBytes"]]
+  "NativeFloatWordArray.hs" "float-word-array-oracle" (PerEntryInputs floatWordInputs))
+  {arrayNaNHelpers = ["moveFloatBits", "indexFloatBits"]}
 arraySpec _ = Nothing
 
-arrayBoundaryInputs :: [Integer] -> [Integer]
-arrayBoundaryInputs patterns = Set.toAscList $ Set.fromList $
-  [-16 .. 16] ++ [-pow2 63, -pow2 63 + 1, pow2 63 - 2, pow2 63 - 1] ++
+arrayBoundaryInputs :: [Integer] -> [Integer] -> [Integer]
+arrayBoundaryInputs initial patterns = Set.toAscList $ Set.fromList $
+  arrayBitInputs initial patterns ++ [-pow2 63, -pow2 63 + 1, pow2 63 - 2, pow2 63 - 1]
+
+arrayBitInputs :: [Integer] -> [Integer] -> [Integer]
+arrayBitInputs initial patterns = Set.toAscList $ Set.fromList $
+  initial ++
   [signed64 (sign * (pow2 bit + delta)) |
     bit <- [0 .. 63], delta <- [-1,0,1], sign <- [-1,1]] ++ map signed64 patterns
 
+doubleArrayInputs :: [Integer]
+doubleArrayInputs = filter (not . signalingDouble) $ Set.toAscList $ Set.fromList $
+  arrayBoundaryInputs [-16 .. 16] [] ++
+  [signed64 (bits .|. sign) | bits <- magnitudes, sign <- [0,pow2 63]] ++
+  [signed64 (0x7ff8000000000000 .|. pow2 bit .|. sign) |
+    bit <- [0 .. 50], sign <- [0,pow2 63]]
+  where
+    magnitudes = [0,1,2,3,0x000fffffffffffff,0x0010000000000000,
+      0x3fefffffffffffff,0x3ff0000000000000,0x3ff0000000000001,
+      0x7fefffffffffffff,0x7ff0000000000000,0x7ff8000000000000,
+      0x7ff8000000001234,0x7fffffffffffffff,0x5555555555555555,
+      0x55aa55aa55aa55aa,0x0123456789abcdef]
+
+signalingDouble :: Integer -> Bool
+signalingDouble value = let bits = value .&. (pow2 64 - 1)
+                            fraction = bits .&. (pow2 52 - 1)
+                        in bits .&. 0x7ff0000000000000 == 0x7ff0000000000000 &&
+                           fraction /= 0 && bits .&. pow2 51 == 0
+
+floatWordInputs :: Map.Map String [Integer]
+floatWordInputs = Map.fromList
+  [(name, if name `elem` helpers then movement else regular) | name <- names]
+  where
+    helpers = ["moveFloatBits", "indexFloatBits"]
+    names = ["unboxedFloatAccum", "unboxedFloatST", "unboxedWordAccum", "unboxedWordST",
+             "moveFloatBits", "indexFloatBits", "aliasWordBytes"]
+    regular = arrayBoundaryInputs [-16 .. 16]
+      [0x5555555555555555,0xaaaaaaaaaaaaaaaa,0x55aa55aa55aa55aa,
+       0xaa55aa55aa55aa55,0x0123456789abcdef,0xfedcba9876543210,
+       0x8000000080000000,0xffffffff00000000,0x800000007fffffff,
+       0x7fffffff80000000,0xffffffff7fffffff,0x0000000100000001,
+       0x12345678abcdef01]
+    magnitudes = [0,1,2,3,0x007fffff,0x00800000,0x3f7fffff,0x3f800000,
+      0x3f800001,0x7f7fffff,0x7f800000,0x7fc00000,0x7fc01234,0x7fffffff]
+    bits = Set.toAscList $ Set.fromList $
+      [magnitude .|. sign | magnitude <- magnitudes, sign <- [0,pow2 31]] ++
+      [0x7fc00000 .|. pow2 bit .|. sign | bit <- [0 .. 21], sign <- [0,pow2 31]]
+    movement = filter (not . signalingFloat) $ Set.toAscList $ Set.fromList $
+      regular ++ [signed64 (value .|. upper) | value <- bits,
+                  upper <- [0,0x1234567800000000,0xffffffff00000000]]
+
+signalingFloat :: Integer -> Bool
+signalingFloat value = let bits = value .&. (pow2 32 - 1)
+                           fraction = bits .&. (pow2 23 - 1)
+                       in bits .&. 0x7f800000 == 0x7f800000 &&
+                          fraction /= 0 && bits .&. pow2 22 == 0
+
 arrayDriverSource :: ArraySpec -> String
-arrayDriverSource spec = unlines $ header ++ map arm allEntries ++ ending
+arrayDriverSource spec = unlines $ header ++ map arm (allEntries ++ literalEntries) ++ ending
   where
     groups = arrayGroups spec
     allEntries = [(name, arrayPrefix group) | group <- groups, name <- arrayEntries group]
+    literalEntries = [(name,"P") | name <- arrayLiterals spec]
     header = ["{-# LANGUAGE MagicHash #-}", "module Main where",
-      "import GHC.Exts (Int(I#), Int#)", "import Data.Bits (finiteBitSize)"] ++
+      "import GHC.Exts", "import Data.Bits (finiteBitSize)"] ++
       ["import qualified " ++ arrayModule group ++ " as " ++ arrayPrefix group | group <- groups] ++
       ["emit :: String -> (Int# -> Int#) -> Int -> IO ()",
        "emit name f x@(I# a) = putStrLn (name ++ \"\\t\" ++ show x ++ \"\\t\" ++ show (I# (f a)))",
        "dispatch :: [String] -> IO ()", "dispatch [name,x] = case name of"]
-    arm (name,prefix) = "  " ++ show name ++ " -> emit name " ++ prefix ++ "." ++ name ++ " (read x)"
+    arm (name,prefix) = "  " ++ show name ++ " -> emit name " ++ function name prefix ++ " (read x)"
+    function "rawUnsignedRead" prefix =
+      "(\\a -> word2Int# (word8ToWord# (" ++ prefix ++ ".rawUnsignedRead a)))"
+    function name prefix
+      | name `elem` ["rawSignedRead", "rawSignedIndex"] =
+          "(\\a -> int8ToInt# (" ++ prefix ++ "." ++ name ++ " a))"
+      | otherwise = prefix ++ "." ++ name
     ending = ["  _ -> error \"unknown entry\"", "dispatch _ = error \"invalid input\"",
       "main :: IO ()", "main = if finiteBitSize (0 :: Int) /= 64 then error \"Requires 64-bit Int\"",
       "       else getContents >>= mapM_ (dispatch . words) . lines"]
@@ -506,7 +628,11 @@ prepareArray root spec = do
       manifest = output </> "manifest.json"
       groups = arrayGroups spec
       names = concatMap arrayEntries groups
-      values = arrayValues spec
+      inputFor name = case arrayInputDomain spec of
+        SharedInputs values -> values
+        PerEntryInputs values -> Map.findWithDefault [] name values
+      literals = arrayLiterals spec
+      literalRequests = [(name,value) | name <- literals, value <- arrayLiteralInputs spec]
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
   when present (removeFile manifest)
@@ -541,8 +667,14 @@ prepareArray root spec = do
   let driver = directory </> arrayDriver spec
       binary = directory </> "native" </> arrayOracle spec
       oracle = directory </> "oracle.tsv"
-      requests = [(name,value) | name <- names, value <- values]
+      requests = [(name,value) | name <- names, value <- inputFor name]
       arrayRequestText = unlines [name ++ "\t" ++ show value | (name,value) <- requests]
+  unless (Set.size (Set.fromList names) == length names &&
+          all (not . null . inputFor) names &&
+          (case arrayInputDomain spec of
+             SharedInputs _ -> True
+             PerEntryInputs values -> Map.keysSet values == Set.fromList names))
+    (die "Invalid array entry or input declaration")
   writeFile (root </> driver) (arrayDriverSource spec)
   createDirectoryIfMissing True (root </> directory </> "native")
   _ <- run root [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
@@ -556,23 +688,48 @@ prepareArray root spec = do
   unless (length rows == Set.size expectedKeys && Set.fromList rows == expectedKeys)
     (die "Native array oracle returned missing, duplicate, or unexpected inputs")
   writeFile (root </> oracle) actual
+  literalArtifacts <- if null literals then pure [] else do
+    let literalOracle = directory </> "literal-oracle.tsv"
+        literalRequestText = unlines [name ++ "\t" ++ show value | (name,value) <- literalRequests]
+    literalActual <- run root [] (root </> binary) [] literalRequestText
+    literalRows <- maybe (die "Malformed native literal oracle TSV") pure $
+      traverse parseArrayRow (lines literalActual)
+    let literalKeys = Set.fromList literalRequests
+    unless (length literalRows == Set.size literalKeys && Set.fromList literalRows == literalKeys)
+      (die "Native literal oracle returned missing, duplicate, or unexpected inputs")
+    writeFile (root </> literalOracle) literalActual
+    pure [literalOracle]
   plugin <- listDirectory (root </> "compiler/THC")
   let sources = sort $ ["thc.cabal", "test/haskell-fixtures/Main.hs", "compiler/build.sh",
         "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
         map arraySource groups ++ ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"]
-      artifacts = concatMap snd stages ++ [driver,binary,oracle]
+      artifacts = concatMap snd stages ++ [driver,binary,oracle] ++ literalArtifacts
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   byteOrder <- nativeByteOrder
   installedArray <- run root [] ghcPkg ["describe", "array"] ""
   ghcInfo <- run root [] ghc ["--info"] ""
-  writeJson manifest $ object
+  let inputFields = case arrayInputDomain spec of
+        SharedInputs values -> ["inputs" .= values]
+        PerEntryInputs values -> ["inputsByEntry" .= values]
+      widthFields = maybe [] (\bits -> ["elementBits" .= bits]) (arrayElementBits spec)
+      literalFields = if null literals then [] else
+        ["literalEntries" .= literals, "literalInputs" .= arrayLiteralInputs spec,
+         "literalNativeRows" .= length literalRequests]
+      nanFields = if null (arrayNaNHelpers spec) then [] else
+        ["signalingNaNsExcluded" .= True,
+         "signalingNaNExclusionScope" .= arrayNaNHelpers spec]
+      expectedCalls = Map.fromList
+        [(name, if name `elem` arrayNaNHelpers spec then (3 :: Int) else 2) | name <- names]
+  writeJson manifest $ object $
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "array" .= ("0.5.8.0" :: String),
      "wordBits" .= (64 :: Int), "byteOrder" .= byteOrder,
-     "entries" .= names, "inputs" .= values, "nativeRows" .= length rows,
+     "entries" .= names, "nativeRows" .= length rows,
+     "expectedGuestCallsByEntry" .= expectedCalls,
      "stages" .= Map.fromList stages, "installedArray" .= installedArray, "ghcInfo" .= ghcInfo,
      "inputHashes" .= sourceHashes, "artifactHashes" .= artifactHashes,
-     "claim" .= ("Native GHC oracle and pre/post Core exports; JVM tests own independent semantic and structural validation" :: String)]
+     "claim" .= ("Native GHC oracle and pre/post Core exports; JVM tests own independent semantic and structural validation" :: String)] ++
+     inputFields ++ widthFields ++ literalFields ++ nanFields
   putStrLn (arrayName spec ++ ": " ++ show (length names) ++ " entries, " ++
             show (length rows) ++ " native rows, pre/post GHC Core")
 
@@ -595,5 +752,5 @@ main = do
     ["integer"] -> prepare root IntegerWord
     ["signed-narrow"] -> prepare root SignedNarrow
     ["explicit64"] -> prepare root Explicit64
-    [name] | Just spec <- arraySpec name -> prepareArray root spec
-    _ -> die "Usage: thc-fixtures (bit|integer|signed-narrow|explicit64|int-arrays)"
+    _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
+    _ -> die "Usage: thc-fixtures (bit|integer|signed-narrow|explicit64|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
