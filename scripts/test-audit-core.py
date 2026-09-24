@@ -792,13 +792,15 @@ class EmptyTupleInputTests(unittest.TestCase):
         self.assertFalse(report['accepted'])
         self.assertIn('aggregate-shape', {i['code'] for i in report['issues']})
 
-    def test_join_formals_and_ordinary_empty_let_values_stay_rejected(self):
+    def test_exact_empty_join_formals_are_separately_gated_and_ordinary_empty_lets_stay_rejected(self):
         module = self.fixture([self.empty])
         worker = module['bindings'].pop()
         worker.update(joinValueArity=1, joinResultRep=LONG, info=dict(joinArity=1))
         call = module['bindings'][0]['expr']
         module['bindings'][0]['expr'] = ['let', False, [worker], call, dict(rep=LONG)]
-        self.assertFalse(self.audit(module)['accepted'])
+        self.assertTrue(self.audit(module)['accepted'])
+        disabled = dict(CAP, aggregateJoinInputs=[])
+        self.assertFalse(audit_core.Audit([('join', module)], disabled).run(['root'])['accepted'])
         module = self.fixture()
         value = module['bindings'][0]['expr'][2][0]
         local = dict(bind('e', value, False), rep=self.empty)

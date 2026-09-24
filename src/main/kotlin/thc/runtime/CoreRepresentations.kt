@@ -124,6 +124,17 @@ internal object CoreRepresentations {
                 throw UnsupportedCore("Unsupported Core tuple input with unknown boxed levity")
         } else requireScalar(proof, "argument")
     }
+    /** Joins retain logical arity; only the exact nullary tuple has no input slot. */
+    fun requireJoinInput(proof: CoreRepresentation) {
+        if (!proof.isEmptyTuple) requireScalar(proof, "join argument")
+    }
+    fun requireJoinArgument(expected: CoreRepresentation, actual: CoreRepresentation) {
+        requireJoinInput(actual)
+        if (expected.isEmptyTuple || actual.isEmptyTuple) {
+            if (!expected.isEmptyTuple || !actual.isEmptyTuple)
+                throw RuntimeFault("Local join requires matching exact empty tuple argument proof")
+        }
+    }
     fun requireScalar(proof: CoreRepresentation, boundary: String) {
         requireNoVector(proof, boundary)
         if (proof.isSum) throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum ($boundary)")

@@ -24,10 +24,12 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
     init { representation = target.result.copy(evaluated = true) }
     @field:CompilationFinal(dimensions = 1)
     private val referenceKinds = target.proofs.map { if (it.evaluated) it.kind else CoreKind.UNKNOWN }.toTypedArray()
+    @field:CompilationFinal(dimensions = 1) private val emptySlots = IntArray(0)
     @ExplodeLoop override fun execute(frame: VirtualFrame): Nothing {
         // All operands are read before any formal is overwritten, including recursive swaps.
         for (i in arguments.indices) {
-            if (target.proofs[i].isLong) FrameAccess.writeLong(frame, temporaries[i], arguments[i].executeRequiredLong(frame))
+            if (target.proofs[i].isEmptyTuple) arguments[i].executeTuple(frame, emptySlots, 0)
+            else if (target.proofs[i].isLong) FrameAccess.writeLong(frame, temporaries[i], arguments[i].executeRequiredLong(frame))
             else if (target.proofs[i].isFloat) FrameAccess.writeFloat(frame, temporaries[i], arguments[i].executeRequiredFloat(frame))
             else if (target.proofs[i].isDouble) FrameAccess.writeDouble(frame, temporaries[i], arguments[i].executeRequiredDouble(frame))
             else if (referenceKinds[i] == CoreKind.DATA) FrameAccess.write(frame, temporaries[i], arguments[i].executeRequiredDataValue(frame))
@@ -36,6 +38,7 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
             else FrameAccess.write(frame, temporaries[i], arguments[i].execute(frame))
         }
         for (i in arguments.indices) {
+            if (target.proofs[i].isEmptyTuple) continue
             if (target.proofs[i].isLong) FrameAccess.writeLong(frame, target.slots[i], frame.getLong(temporaries[i]))
             else if (target.proofs[i].isFloat) FrameAccess.writeFloat(frame, target.slots[i], frame.getFloat(temporaries[i]))
             else if (target.proofs[i].isDouble) FrameAccess.writeDouble(frame, target.slots[i], frame.getDouble(temporaries[i]))
@@ -49,7 +52,7 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
         }
         // Clear only after every parallel move succeeds; no join body reads
         // these scratch slots, including when control enters a different join.
-        for (temporary in temporaries) frame.clear(temporary)
+        for (temporary in temporaries) if (temporary >= 0) frame.clear(temporary)
         if (metrics.enabled) metrics.localJoinTransfers++
         throw target.jump
     }
