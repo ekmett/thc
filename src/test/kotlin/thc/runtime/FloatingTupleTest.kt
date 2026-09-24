@@ -163,7 +163,7 @@ class FloatingTupleTest {
         released(language)
     }
 
-    @Test fun floatingResultsDoNotEnableScalarHandoffOrAggregateArguments() = withLanguage { language ->
+    @Test fun floatingTupleInputsKeepScalarHandoffAndHostAggregateFrontiersDistinct() = withLanguage { language ->
         val integer = CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep"))
         for ((kind, rep) in listOf(CoreKind.FLOAT to "FloatRep", CoreKind.DOUBLE to "DoubleRep")) {
             assertFalse(HandoffLayout.supports(rep)); assertTrue(HandoffLayout.supportsResult(rep))
@@ -172,10 +172,17 @@ class FloatingTupleTest {
         }
         if (language.handoffLayouts.enabled) assertNotNull(HandoffEntry.create(language, FrameLayout(), listOf(integer), integer, false))
         for (backend in listOf("ast", "bytecode")) {
-            val failure = assertThrows(UnsupportedCore::class.java) {
-                program(language, backend, CoreModules.reachable(module(), "floatingTupleArgument"))
+            val p = program(language, backend, CoreModules.reachable(module(), "floatingTupleArgument"))
+            val input = (p.entryTarget("floatingTupleArgument").rootNode as GuestRoot).inputLayout!!
+            assertTrue(input.requiresTyped)
+            assertEquals(1, input.logicalArity); assertEquals(2, input.physicalArity)
+            assertEquals(listOf(CoreKind.FLOAT, CoreKind.DOUBLE), input.physicalProofs.map { it.kind })
+            // Guest tuple parameters are supported, but a scalar host argument
+            // cannot stand in for the exact logical tuple shape.
+            assertThrows(RuntimeFault::class.java) {
+                Calls.target(p.hostEntryTarget(1), arrayOf(p.entryValue("floatingTupleArgument"), arrayOf<Any?>(0L)))
             }
-            assertTrue(failure.message.orEmpty().contains("argument"), failure.message)
+            released(language)
         }
     }
 
