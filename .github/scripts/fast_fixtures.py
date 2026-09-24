@@ -39,6 +39,8 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/core-continuation/native-output.txt",
     "build/core-continuation/core/LazyIOCallbackAudit.json",
     "build/core-continuation/lazy-native-output.txt",
+    "build/core-continuation/keep-alive-scalar-audit.json",
+    "build/core-continuation/keep-alive-tuple-audit.json",
     "build/core-continuation/lazy-action-audit.json", "build/core-continuation/lazy-handler-audit.json",
     "build/live-async/manifest.json", "build/live-async/oracle.txt", "build/live-async/strict-oracle.txt",
     "build/live-async/pre/core/LiveAsyncAudit.json", "build/live-async/post/core/LiveAsyncAudit.json",

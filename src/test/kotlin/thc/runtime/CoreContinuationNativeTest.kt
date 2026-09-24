@@ -638,21 +638,38 @@ class CoreContinuationNativeTest {
     }
 
     @Test fun lazyOriginalActionAndHandlerHeadsSuspendInsideTheirCatchScopes() {
+        checkLazyCallbacks(listOf("catchLazyHandlerHead" to 77L, "catchLazyActionHead" to 42L))
+    }
+
+    @Test fun keepAliveBodySuspendsAndResumesWithItsSavedReference() {
+        checkLazyCallbacks(listOf("keepAliveScalar" to 43L, "keepAliveTuple" to 44L), compiled = true)
+    }
+
+    private fun checkLazyCallbacks(entries: List<Pair<String, Long>>, compiled: Boolean = false) {
         val oracle = File(root, "build/core-continuation/lazy-native-output.txt").readLines()
-        assertEquals(listOf("42", "77"), oracle)
+        assertEquals(listOf("42", "77", "43", "44"), oracle)
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/LazyIOCallbackAudit.json").readText()) as Map<String, Any?>
         executionContext().use { context ->
             context.initialize("thc")
             val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
             val driver = entered(context) { Driver() }
-            for ((name, expected) in listOf("catchLazyHandlerHead" to 77L, "catchLazyActionHead" to 42L)) {
+            for ((name, expected) in entries) {
                 val linked = CoreModules.reachable(module, name, strictLink = true)
-                val checkpoint = BytecodeCheckpoint().also { it.armed = true }
+                val checkpoint = BytecodeCheckpoint()
                 val program = entered(context) { BytecodeProgram(language, linked, checkpoint) }
                 val parent = entered(context) { program.entryValue(name) as Thunk }
                 entered(context) {
+                    if (compiled) {
+                        val target = parent.target!!
+                        val warm = Calls.target(target, arrayOf(0L)) as DataValue
+                        assertEquals(expected, warm.layout.readLong(warm, 0))
+                        compile(target)
+                    }
+                    checkpoint.armed = true
                     assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                    if (compiled) assertTrue(checkpoint.compiledVisits.get() > 0,
+                        "$name checkpoint must run in installed guest code")
                     assertEquals(1, checkpoint.visits.get(), "$name head checkpoint")
                     assertEquals(5, parent.state, "$name must retain its captured bytecode frame")
                     val answer = driver.force(parent) as DataValue

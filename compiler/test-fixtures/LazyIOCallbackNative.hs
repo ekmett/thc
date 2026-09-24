@@ -8,3 +8,5 @@ main :: IO ()
 main = do
   print catchLazyActionHead
   print catchLazyHandlerHead
+  print keepAliveScalar
+  print keepAliveTuple
