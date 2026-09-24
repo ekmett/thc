@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -106,5 +107,31 @@ class GuestThreadsTest {
         threads.leaveCurrent()
         assertEquals(AsyncRequestState.TARGET_FINISHED, request.state)
         assertEquals(MaskingState.UNMASKED, masks.get())
+    }
+
+    @Test fun exactUnliftedThreadIdAndLazyKillPayloadContract() {
+        val state = CoreRepresentation(CoreKind.VOID, true, true, emptyList())
+        val thread = CoreRepresentation(CoreKind.OBJECT, true, true, listOf("BoxedRep (Just Unlifted)"))
+        val lifted = CoreRepresentation(CoreKind.DATA, false, true, listOf("BoxedRep (Just Lifted)"))
+        val action = CoreRepresentation(CoreKind.CLOSURE, true, true, listOf("BoxedRep (Just Lifted)"))
+        val result = CoreRepresentation(CoreKind.UNKNOWN, false, true, thread.primReps,
+            components = listOf(state, thread))
+        CoreGuestThreads.validate("fork#", listOf(action, state), listOf(true, false), result)
+        CoreGuestThreads.validate("myThreadId#", listOf(state), listOf(false), result)
+        CoreGuestThreads.validate("killThread#", listOf(thread, lifted, state),
+            listOf(false, true, false), state)
+        val wrongThread = thread.copy(primReps = lifted.primReps)
+        assertThrows(RuntimeFault::class.java) {
+            CoreGuestThreads.validate("killThread#", listOf(wrongThread, lifted, state),
+                listOf(false, true, false), state)
+        }
+        assertThrows(RuntimeFault::class.java) {
+            CoreGuestThreads.validate("killThread#", listOf(thread, lifted, state),
+                listOf(false, false, false), state)
+        }
+        assertThrows(RuntimeFault::class.java) {
+            CoreGuestThreads.validate("fork#", listOf(action, state), listOf(true, false),
+                result.copy(components = listOf(state, lifted)))
+        }
     }
 }

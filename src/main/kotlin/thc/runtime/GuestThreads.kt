@@ -52,6 +52,10 @@ internal class GuestThreads internal constructor(
 
     fun registerCurrent(): Long = enterCurrent()
 
+    /** myThreadId# observes an existing guest entry; it never creates a new lifetime. */
+    fun currentId(): Long = currentSlot.get()?.takeIf { it.entries > 0 }?.thread?.threadId()
+        ?: fault("Current Java thread has not entered this guest context")
+
     /** The sender waits on the returned token; mere safepoint observation is not delivery. */
     @TruffleBoundary fun send(targetId: Long, payload: Any?): AsyncRequest {
         val request = synchronized(this) {
