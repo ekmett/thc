@@ -23,6 +23,10 @@ prepareCoreContinuation root = do
        "--entry", "applicationAnswer", "--output", base </> "application-audit.json"] ""
   _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
        "--entry", "nestedApplication", "--output", base </> "nested-audit.json"] ""
+  _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
+       "--entry", "catchActionAnswer", "--output", base </> "catch-action-audit.json"] ""
+  _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
+       "--entry", "catchActionFailure", "--output", base </> "catch-failure-audit.json"] ""
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   version <- run root [] ghc ["--numeric-version"] ""
   unless (takeWhile (/= '\n') version == "9.14.1") (die "core-continuation requires GHC 9.14.1")
@@ -30,5 +34,5 @@ prepareCoreContinuation root = do
        "-hidir", base </> "native", "-o", base </> "native-oracle",
        "compiler/test-fixtures/CoreContinuationNative.hs", source] ""
   native <- run root [] (base </> "native-oracle") [] ""
-  unless (native == "108\n208\n") (die "core-continuation native oracle expected 108 and 208")
+  unless (native == "108\n208\n42\n77\n") (die "core-continuation native oracle expected 108, 208, 42 and 77")
   writeFile (base </> "native-output.txt") native

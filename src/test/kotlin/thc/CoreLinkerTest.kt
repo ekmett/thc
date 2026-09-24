@@ -54,6 +54,26 @@ class CoreLinkerTest {
         assertEquals(2, files.map { (it as Map<*, *>)["id"] }.toSet().size)
     }
 
+    @Test fun constructorDisplayTypeMayRenameVariablesButRuntimeMetadataMustMatch() {
+        val constructor: Map<String, Any?> = mapOf("id" to "pkg:Shared.C", "kind" to "boxed",
+            "arity" to 1, "tag" to 2, "fieldReps" to listOf(listOf("IntRep")),
+            "fieldTypes" to listOf("Int#"), "strictFields" to listOf(true),
+            "fieldLifted" to listOf(false), "type" to "forall k. C k")
+        fun module(name: String, record: Map<String, Any?>): Map<String, Any?> = mapOf(
+            "schema" to 1, "ghc" to "9.14.1", "unit" to "pkg", "module" to name,
+            "bindings" to listOf(binding("pkg:$name.entry", literal())),
+            "constructors" to listOf(record))
+        fun merge(second: Map<String, Any?>) = CoreModules.merge(listOf(
+            module("First", constructor), module("Second", second)))
+        assertEquals(listOf(constructor), merge(constructor + ("type" to "forall k1. C k1"))["constructors"])
+        for ((field, changed) in listOf("kind" to "unboxed-tuple", "arity" to 2, "tag" to 3,
+                "fieldReps" to listOf(listOf("WordRep")), "fieldTypes" to listOf("Word#"),
+                "strictFields" to listOf(false), "fieldLifted" to listOf(true),
+                "futureLayout" to "different")) {
+            assertThrows(IllegalArgumentException::class.java, { merge(constructor + (field to changed)) }, field)
+        }
+    }
+
     @Test fun separateInterfaceClosureFragmentsMergeWithoutAdmittingDuplicateDefinitions() {
         fun fragment(id: String) = mapOf("schema" to 1, "ghc" to "9.14.1",
             "unit" to "dependency-closure", "module" to "THC.InterfaceClosure",

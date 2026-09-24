@@ -16,5 +16,7 @@ main = getContents >>= mapM_ answer . lines
         "\t" ++ show (I# (Cells.pointerOrder raw)) ++
         "\t" ++ show (I# (Cells.char8Roundtrip raw)) ++
         "\t" ++ show (I# (Cells.byte8Roundtrip raw)) ++
+        "\t" ++ show (I# (Cells.halfwordReadRoundtrip raw)) ++
+        "\t" ++ show (I# (Cells.halfwordWriteRoundtrip raw)) ++
         "\t" ++ show (I# (Cells.mutableContentsRoundtrip raw)) ++
         "\t" ++ show (I# (Cells.touchLazyPayload raw)))

@@ -8,6 +8,7 @@ import java.nio.ByteOrder
 /** Native-endian scalar reads from managed storage, never process addresses.
  * Offsets count elements, including negative offsets from a derived address. */
 internal enum class ManagedAddressRead(val width: Int, val payload: String) {
+    WORD16(2, "Word16Rep"), INT16(2, "Int16Rep"),
     WORD32(4, "Word32Rep"), WORD(8, "WordRep"), INT32(4, "Int32Rep"), INT(8, "IntRep");
 
     fun read(address: ManagedAddress, elementOffset: Long): Long {
@@ -20,7 +21,9 @@ internal enum class ManagedAddressRead(val width: Int, val payload: String) {
             val shift = if (littleEndian) byte * 8 else (width - 1 - byte) * 8
             value = value or (address.readWord8(displacement + byte) shl shift)
         }
-        return if (this == INT32) value.toInt().toLong() else value
+        return if (this == INT16) value.toShort().toLong()
+            else if (this == INT32) value.toInt().toLong()
+            else value
     }
 
     companion object {

@@ -45,6 +45,7 @@ abstract class GuestRoot(language: TruffleLanguage<*>?, descriptor: FrameDescrip
     @field:CompilationFinal internal var tupleResult: TupleShape? = null
         private set
     internal fun configureTupleResult(shape: TupleShape?) { tupleResult = shape }
+    @JvmName("hasTupleResult") internal fun hasTupleResult(shape: TupleShape): Boolean = tupleResult?.matches(shape) == true
     // Clones retain identity, so self calls through a cloned target still loop.
     private val bodyIdentity = Any()
     @JvmField val mask = System.identityHashCode(bodyIdentity).let { h ->

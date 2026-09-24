@@ -283,8 +283,8 @@ class ManagedMemoryProofTest(unittest.TestCase):
             self.rejected(module, 'primitive-arity')
 
     def test_three_closed_md5_descriptors_accept_singleton_state_under_scalar_wrapper(self):
-        self.assertEqual(set(MD5), set(CAP['managedForeignCalls']))
-        self.assertEqual(3, len(CAP['managedForeignCalls']))
+        self.assertEqual(set(MD5), {name for name in CAP['managedForeignCalls']
+                                    if name.startswith('__hsbase_MD5')})
         for symbol in MD5:
             report = self.accepted(md5(symbol)[0])
             self.assertEqual([], report['primitives'])

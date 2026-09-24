@@ -9,6 +9,7 @@ import com.oracle.truffle.api.frame.VirtualFrame
 import java.lang.ref.Reference
 import java.lang.ref.ReferenceQueue
 import java.lang.ref.WeakReference
+import java.nio.ByteOrder
 
 /** A managed Addr#, never a native pointer. Non-null addresses have exactly one
  * final backing reference. Literal contents are immutable compilation constants;
@@ -145,6 +146,26 @@ internal class ManagedAddress private constructor(
         bytes[index] = value.toByte()
     }
 
+    /** Int16#/Word16# stores use native-endian two-byte elements. Check the
+     * whole range before mutation so a partial pointer-cell overlap cannot
+     * leave behind one modified byte. */
+    fun writeWord16(elementOffset: Long, value: Long) {
+        if (elementOffset < Long.MIN_VALUE / 2 || elementOffset > Long.MAX_VALUE / 2)
+            fault("Managed Addr# element offset overflow")
+        val displacement = elementOffset * 2
+        requireRange(displacement, 2, writable = true)
+        val low = value.toByte()
+        val high = (value ushr 8).toByte()
+        val little = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN
+        val first = if (little) low else high
+        val second = if (little) high else low
+        owner?.let { it.copyBytesIn(byteArrayOf(first, second), 0, offset + displacement, 2); return }
+        val bytes = mutableBytes ?: fault("Cannot write through an immutable literal Addr#")
+        val start = (offset + displacement).toInt()
+        bytes[start] = first
+        bytes[start + 1] = second
+    }
+
     /** Validate a complete byte region before any effect. An empty region may
      * start one past the allocation; an immutable destination is never writable. */
     fun requireRange(displacement: Long, count: Long, writable: Boolean = false) {
@@ -260,4 +281,11 @@ internal class IndexManagedByte(private val signed: Boolean, @field:Child privat
         val byte = value.readWord8(displacement.executeRequiredLong(frame))
         return if (signed) byte.toByte().toLong() else byte
     }
+}
+
+internal class IndexManagedScalarAddress(private val operation: ManagedAddressRead,
+    @field:Child private var address: Expr, @field:Child private var element: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any = executeLong(frame)
+    override fun executeLong(frame: VirtualFrame): Long = operation.read(
+        address.executeRequiredAddress(frame), element.executeRequiredLong(frame))
 }

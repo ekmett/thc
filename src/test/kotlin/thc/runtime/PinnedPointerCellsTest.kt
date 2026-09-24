@@ -19,11 +19,14 @@ import java.lang.ref.WeakReference
 import java.security.MessageDigest
 import java.util.Collections
 import java.util.IdentityHashMap
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 class PinnedPointerCellsTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private data class Row(val input: Long, val pointer: Long, val array: Long, val order: Long,
-        val char8: Long, val byte8: Long, val mutableContents: Long, val touchLazy: Long)
+        val char8: Long, val byte8: Long, val halfwordRead: Long, val halfwordWrite: Long,
+        val mutableContents: Long, val touchLazy: Long)
     private fun context() = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
         .option("engine.CompilationFailureAction", "Throw").build()
@@ -64,10 +67,11 @@ class PinnedPointerCellsTest {
     private fun rows(): List<Row> {
         val rows = File(root, "build/pinned-pointer-cells/oracle.tsv").readLines().map { line ->
             val fields = line.split('\t').map(String::toLong)
-            assertEquals(8, fields.size)
-            Row(fields[0], fields[1], fields[2], fields[3], fields[4], fields[5], fields[6], fields[7])
+            assertEquals(10, fields.size)
+            Row(fields[0], fields[1], fields[2], fields[3], fields[4], fields[5], fields[6], fields[7], fields[8], fields[9])
         }
-        assertEquals(listOf(0L, 1L, 17L, 127L, 255L, 256L, -1L), rows.map { it.input })
+        assertEquals(listOf(0L, 1L, 17L, 127L, 255L, 256L, 32767L, 32768L, 65535L, -1L, -32768L),
+            rows.map { it.input })
         for (row in rows) {
             val byte = row.input and 255L
             assertEquals(1000000L + byte * 256L + (byte xor 90L), row.mutableContents)
@@ -119,6 +123,9 @@ class PinnedPointerCellsTest {
         base.writeAddressElementIndex(1, target)
         base.writeWord8(16, 0x1e9)
         assertEquals(0xe9L, base.readWord8(16))
+        assertDoesNotThrow { ManagedAddressRead.WORD16.read(base, 8) }
+        assertThrows(RuntimeFault::class.java) { ManagedAddressRead.WORD16.read(base, 4) }
+        assertThrows(RuntimeFault::class.java) { ManagedAddressRead.INT16.read(base, Long.MAX_VALUE) }
         assertThrows(RuntimeFault::class.java) { base.writeWord8(8, 0x41) }
         assertSame(target, base.readAddressElementIndex(1))
     }
@@ -329,6 +336,34 @@ class PinnedPointerCellsTest {
             }
     }
 
+    @Test fun halfwordStoresCheckWholeElementAndPreserveDisjointPointerCells() {
+        val base = ManagedAddress.fromAllocation(PinnedMemory.allocate(32, 1))
+        val target = base.plus(24)
+        base.writeAddressElementIndex(1, target)
+        base.writeWord16(8, 0x12345)
+        val expected = ByteBuffer.allocate(2).order(ByteOrder.nativeOrder()).putShort(0x2345.toShort()).array()
+        assertEquals(expected[0].toLong() and 255, base.readWord8(16))
+        assertEquals(expected[1].toLong() and 255, base.readWord8(17))
+        assertSame(target, base.readAddressElementIndex(1))
+        for (index in listOf(4L, 7L, 16L, Long.MAX_VALUE, Long.MIN_VALUE))
+            assertThrows(RuntimeFault::class.java) { base.writeWord16(index, 0x55aa) }
+        assertSame(target, base.readAddressElementIndex(1))
+        assertEquals(expected[0].toLong() and 255, base.readWord8(16))
+        assertThrows(RuntimeFault::class.java) { ManagedAddress.fromHex("0000").writeWord16(0, 1) }
+        base.plus(2).writeWord16(-1, -1)
+        assertEquals(255L, base.readWord8(0))
+        assertEquals(255L, base.readWord8(1))
+    }
+
+    private fun halfwordModel(input: Long): Long {
+        val bytes = ByteBuffer.allocate(32).order(ByteOrder.nativeOrder())
+        bytes.putShort(24, input.toShort())
+        bytes.putShort(16, (input + 32768).toShort())
+        return (1L shl 32) + (16..17).plus(24..25).fold(0L) { packed, offset ->
+            (packed shl 8) or (bytes.get(offset).toLong() and 255L)
+        }
+    }
+
     @Test fun originalPinnedFreezeContentsAndKeepAliveMatchNativeInBothBackends() {
         provenance()
         val rows = rows()
@@ -341,6 +376,11 @@ class PinnedPointerCellsTest {
             val signed = unsigned.toByte().toLong()
             assertEquals(((signed + 128L) shl 24) + ((signed + 128L) shl 16) +
                 (unsigned shl 8) + unsigned, row.byte8)
+            val halfword = row.input and 65535L
+            val signedHalfword = halfword.toShort().toLong()
+            assertEquals(((signedHalfword + 32768L) shl 48) + ((signedHalfword + 32768L) shl 32) +
+                (halfword shl 16) + halfword, row.halfwordRead)
+            assertEquals(halfwordModel(row.input), row.halfwordWrite)
         }
         for (stage in listOf("pre", "post")) {
             val directory = File(root, "build/pinned-pointer-cells/$stage")
@@ -355,12 +395,21 @@ class PinnedPointerCellsTest {
                 "readCharOffAddr#", "writeCharOffAddr#", "indexCharOffAddr#",
                 "readCharArray#", "writeCharArray#", "indexCharArray#",
                 "readInt8OffAddr#", "writeInt8OffAddr#", "indexInt8OffAddr#", "indexWord8OffAddr#",
+                "readInt16OffAddr#", "readWord16OffAddr#", "indexInt16OffAddr#", "indexWord16OffAddr#",
+                "writeInt16OffAddr#", "writeWord16OffAddr#",
                 "readWord8OffAddr#", "indexWord8Array#")))
             for (primitive in setOf("readInt8OffAddr#", "writeInt8OffAddr#", "indexInt8OffAddr#",
-                "indexWord8OffAddr#")) {
+                "indexWord8OffAddr#", "writeInt16OffAddr#", "writeWord16OffAddr#")) {
                 val evidence = (audit["primitives"] as List<Map<String, Any?>>).single { it["name"] == primitive }
                 val owners = (evidence["uses"] as List<Map<String, Any?>>).map { it["owner"] }.toSet()
-                assertEquals(setOf("main:PinnedPointerCellsAudit.byte8Roundtrip"), owners, "$stage/$primitive")
+                val owner = if (primitive.endsWith("16OffAddr#")) "halfwordWriteRoundtrip" else "byte8Roundtrip"
+                assertEquals(setOf("main:PinnedPointerCellsAudit.$owner"), owners, "$stage/$primitive")
+            }
+            for (primitive in setOf("readInt16OffAddr#", "readWord16OffAddr#", "indexInt16OffAddr#",
+                "indexWord16OffAddr#")) {
+                val evidence = (audit["primitives"] as List<Map<String, Any?>>).single { it["name"] == primitive }
+                val owners = (evidence["uses"] as List<Map<String, Any?>>).map { it["owner"] }.toSet()
+                assertEquals(setOf("main:PinnedPointerCellsAudit.halfwordReadRoundtrip"), owners, "$stage/$primitive")
             }
             val paths = listOf("PinnedPointerCellsAudit.json", "THC.InterfaceClosure.json")
                 .map { File(directory, "core/$it") }
@@ -370,7 +419,7 @@ class PinnedPointerCellsTest {
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                     for (entry in listOf("pointerRoundtrip", "pointerArrayRoundtrip", "pointerOrder",
-                        "char8Roundtrip", "byte8Roundtrip")) {
+                        "char8Roundtrip", "byte8Roundtrip", "halfwordReadRoundtrip", "halfwordWriteRoundtrip")) {
                         val source = CoreModules.reachable(merged, entry) + ("instrument" to true)
                         val program: ExecutableProgram = if (backend == "ast") Program(language, source)
                             else BytecodeProgram(language, source)
@@ -384,7 +433,9 @@ class PinnedPointerCellsTest {
                             "pointerArrayRoundtrip" -> row.array
                             "pointerOrder" -> row.order
                             "char8Roundtrip" -> row.char8
-                            else -> row.byte8
+                            "byte8Roundtrip" -> row.byte8
+                            "halfwordReadRoundtrip" -> row.halfwordRead
+                            else -> row.halfwordWrite
                         }
                         rows.forEach { row -> check(row.input, expected(row)) }
                         // EntryValue compiles the active DirectCallNode target (which may

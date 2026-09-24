@@ -116,7 +116,8 @@ internal class Thunk(target: RootCallTarget, var environment: CapturedFrame?) {
 internal class CallSegment @JvmOverloads constructor(
     continuation: ContinuationResult,
     var logicalMask: MaskingState = MaskingState.UNMASKED,
-    val callerMask: MaskingState = MaskingState.UNMASKED
+    val callerMask: MaskingState = MaskingState.UNMASKED,
+    val tupleShape: TupleShape? = null
 ) {
     @Volatile var state = 5 // owned=1, completed=2, failure=3, unsupported unwind=4, parked=5
     var value: Any? = continuation
@@ -534,15 +535,18 @@ internal class Force(private val metrics: Metrics) : Node() {
                 publishCallContinuation(segment, result, parkedMask ?: SynchronousMasking.current(this))
                 throw CallSegmentSuspended(segment)
             }
+            // A completed tuple may still be a producer-thread slab loan.
+            // Release that loan even if the callee returned under a wrong mask.
+            val answer = segment.tupleShape?.let { ownedTupleResult(result, it) } ?: result
             if (SynchronousMasking.current(this) != segment.callerMask)
                 throw IllegalStateException("Completed call segment did not restore its caller mask")
             synchronized(segment.monitor) {
-                segment.value = result // A call may return an unforced thunk; never enter it here.
+                segment.value = answer // A scalar call may return an unforced thunk; never enter it here.
                 segment.owner = null
                 segment.state = 2
                 segment.monitor.notifyAll()
             }
-            return result
+            return answer
         } catch (e: CallSegmentSuspended) {
             if (e.segment !== segment) suspendCallOwned(segment)
             throw e
@@ -2314,6 +2318,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
             if (name == "plusAddr#") PlusManagedAddress(args[0], args[1])
             else IndexManagedByte(name == "indexInt8OffAddr#", args[0], args[1])
+        }
+        "indexWord16OffAddr#", "indexInt16OffAddr#" -> {
+            if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
+            IndexManagedScalarAddress(if (name == "indexInt16OffAddr#") ManagedAddressRead.INT16
+                else ManagedAddressRead.WORD16, args[0], args[1])
         }
         else -> Primitive(name, args)
     }

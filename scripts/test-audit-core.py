@@ -126,6 +126,28 @@ def io_main_fixture(prefix=2):
     return dict(schema=1, ghc='9.14.1', bindings=[root, worker], constructors=constructors)
 
 
+class ConstructorMetadataAuditTest(unittest.TestCase):
+    def test_alpha_renamed_display_type_keeps_exact_layout_and_future_metadata(self):
+        constructor = dict(id='pkg:Module.C', kind='boxed', arity=1, tag=2,
+                           fieldReps=[['IntRep']], fieldTypes=['Int#'],
+                           strictFields=[True], fieldLifted=[False],
+                           type='forall k. C k')
+        def audit(second):
+            modules = [('first.json', dict(schema=1, ghc='9.14.1', bindings=[bind('root', lit(0))],
+                                          constructors=[constructor])),
+                       ('second.json', dict(schema=1, ghc='9.14.1', bindings=[bind('other', lit(1))],
+                                           constructors=[second]))]
+            return audit_core.Audit(modules, CAP).run(['root'])
+        self.assertTrue(audit(dict(constructor, type='forall k1. C k1'))['accepted'])
+        for field, changed in [('kind', 'unboxed-tuple'), ('arity', 2), ('tag', 3),
+                               ('fieldReps', [['WordRep']]), ('fieldTypes', ['Word#']),
+                               ('strictFields', [False]), ('fieldLifted', [True]),
+                               ('futureLayout', 'different')]:
+            with self.subTest(field=field):
+                report = audit(dict(constructor, **{field: changed}))
+                self.assertIn('inconsistent-constructor', {issue['code'] for issue in report['issues']})
+
+
 class IoMainAuditTest(unittest.TestCase):
     def audit(self, module):
         return audit_core.Audit([('io-main.json', module)], CAP).run(['root'], io_main=True)

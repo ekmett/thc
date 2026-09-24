@@ -21,7 +21,7 @@ inside `handleYield` only; the normal path does not capture a continuation.
 The resumed segment may run cold. A separate direct call through an uncaptured
 root and malformed continuation inputs fail closed.
 
-The application proof captures only an exactly saturated scalar call whose
+The scalar application proof captures only an exactly saturated call whose
 continuation belongs to the directly invoked callee root, including a cloned
 target with the same body identity. A cold call segment lets the existing
 worklist resume the callee before feeding its result to the caller. An unrelated
@@ -33,8 +33,8 @@ The cold call segment is separate from a Haskell thunk update. Its resumed
 application result can be a lazy `Thunk`: the captured caller receives that
 same object without entering it, and a later demand may force it. Ordinary
 thunk updates still require WHNF. Pending aggregate results and operand
-handoff ownership are uncaptured; only the scalar result already on this
-direct call edge is fed to its caller.
+handoff ownership are uncaptured on that application edge; only the scalar
+result already on the direct call edge is fed to its caller.
 
 Only a yielded call allocates a segment. Its continuation is claimed once,
 published with a wakeup for competing readers, and retained across repeated
@@ -50,8 +50,8 @@ masked→unmasked→masked test exercises repeated yields and failure. The ordin
 non-suspending nested call still explicitly compiles; only the cold path
 allocates mask metadata.
 
-These are two boundaries enabled only by the private test control. Other
-force, tuple, mask, and handler edges do not yet capture caller segments.
+These boundaries are enabled only by the private test control. Other force,
+tuple, mask, and handler edges do not yet capture caller segments.
 There is no general async delivery, `throwTo`, or replay of an interrupted
 effectful right-hand side.
 
@@ -63,14 +63,23 @@ once from its saved frame; its effectful prefix is not replayed, and neither
 the child nor an unhandled marker becomes a memoized guest exception. This is
 not a `throwTo` entry point or a production `catch#` implementation.
 
-The real `catch#` action still crosses `InvokeIOAction` and `TupleDispatch`.
-Those operations expect a completed unboxed-tuple carrier and immediately copy
-it into the caller's typed `BytecodeTupleSlots`; they cannot yet accept a
-`ContinuationResult`. A next production slice must capture the action's exact
-callee continuation and the destination identity before copying any result.
-The caller bytecode frame owns the durable typed destination locals. A pooled
-`TupleComplete` result has a thread-local result-slab loan that must be consumed
-and released before parking or transfer; a materialized `HandoffStorage` result
-is an unpooled private carrier. Resumption must copy a completed child result
-into the same typed locals once, while a guest failure enters the original
-handler and restores its prior logical mask and the carrier's ambient mask.
+One genuine GHC `catch#` action now uses a private checkpoint variant of
+`InvokeIOAction`. Its exact action target and recursive unboxed-tuple shape are
+checked before an action continuation becomes a cold call segment. The caller's
+Bytecode DSL frame retains the original typed `BytecodeTupleSlots`, and only a
+completed child result is copied into them on resume. Before a completed call
+segment wakes another thread, it copies a pooled `TupleComplete` into an owned
+`HandoffStorage` and releases the thread-local result-slab loan. A result-shape
+failure releases that loan too. A synchronous guest failure enters the original
+GHC handler; the handler's lifted payload stays lazy. Original native GHC, AST,
+ordinary bytecode, and explicitly compiled checkpointed bytecode produce 42
+for the successful action and 77 for a caught `raiseIO#`. Repeated suspension
+does not replay the action prefix, and another host thread can complete the
+shared action before the catch caller resumes.
+
+The ordinary `checkpoint == null` path retains the original `InvokeIOAction`
+and emits no Yield or private tuple dispatch. The private proof captures only
+the directly invoked action root and its exact result shape. Handler-body
+suspension, arbitrary nested calls, general aggregate applications, and
+delivery of an asynchronous exception remain unsupported; uncaptured edges
+fail closed. The diagnostic stack snapshot is not a resumable continuation.

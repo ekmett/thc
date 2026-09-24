@@ -21,7 +21,8 @@ import java.security.MessageDigest
 
 class ManagedAddressReadTest {
     private val root = File(System.getProperty("thc.projectRoot"))
-    private val operations = listOf(PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
+    private val operations = listOf(PinnedMemoryOp.READ_WORD16, PinnedMemoryOp.READ_INT16,
+        PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
         PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT)
     private fun context() = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
@@ -84,6 +85,8 @@ class ManagedAddressReadTest {
     private fun expected(operation: ManagedAddressRead, bytes: ByteArray, start: Int): Long {
         val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder())
         return when (operation) {
+            ManagedAddressRead.WORD16 -> buffer.getShort(start).toLong() and 0xffffL
+            ManagedAddressRead.INT16 -> buffer.getShort(start).toLong()
             ManagedAddressRead.WORD32 -> buffer.getInt(start).toLong() and 0xffffffffL
             ManagedAddressRead.INT32 -> buffer.getInt(start).toLong()
             else -> buffer.getLong(start)
@@ -110,6 +113,8 @@ class ManagedAddressReadTest {
             assertThrows(RuntimeFault::class.java) { operation.read(ManagedAddress.fromByteArray(ByteArray(0)), 0) }
         }
         val allOnes = ManagedAddress.fromHex("ffffffffffffffff")
+        assertEquals(65535L, ManagedAddressRead.WORD16.read(allOnes, 0))
+        assertEquals(-1L, ManagedAddressRead.INT16.read(allOnes, 0))
         assertEquals(4294967295L, ManagedAddressRead.WORD32.read(allOnes, 0))
         assertEquals(-1L, ManagedAddressRead.INT32.read(allOnes, 0))
         assertEquals(-1L, ManagedAddressRead.WORD.read(allOnes, 0))
@@ -189,7 +194,8 @@ class ManagedAddressReadTest {
                 }
                 for (bad in listOf<Any?>(null, 0L, Any(), bytes)) assertThrows(RuntimeFault::class.java) { call(bad) }
                 for (bad in listOf<Any?>(null, 0L, Any())) assertThrows(RuntimeFault::class.java) { call(derived, 0L, bad) }
-                for (offset in listOf(Long.MIN_VALUE, Long.MAX_VALUE, 1L shl 32, -3L))
+                for (offset in listOf(Long.MIN_VALUE, Long.MAX_VALUE, 1L shl 32,
+                    -8L / operation.addressRead!!.width - 1))
                     assertThrows(RuntimeFault::class.java) { call(derived, offset) }
                 assertEquals(expected(operation.addressRead!!, bytes, 8), call(derived))
                 released(language)
