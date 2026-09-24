@@ -51,3 +51,12 @@ This remains a cooperative test-only proof, not `throwTo` support. It does not
 deliver asynchronous exceptions, capture arbitrary safepoint PCs, or restore
 Haskell handler and mask state. An uncaptured caller still fails closed rather
 than replaying effects. Production Core lowering is yield-disabled.
+
+The production bytecode lowering of synchronous `catch#` and masking actions
+now exposes the protected action, handler, and mask restoration as DSL
+`TryCatch`/`TryFinally` control flow. Yield is still disabled there. A future
+yield would suspend rather than finish a lexical mask scope: it must restore
+the carrier host thread's ambient mask while saving the logical active and
+prior masks in the continuation, then re-enter that active mask on resumption.
+Ordinary final exit restores the lexical prior mask. The current host-thread
+`ThreadLocal` mask alone cannot express that cross-thread handoff.
