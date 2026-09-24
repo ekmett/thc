@@ -1,9 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 import copy
 import unittest
 from urllib.error import HTTPError
 
 from merge_bot import (ACTIONS_APP, CHECKS, REQUIRED_STATUS, BUILD_GATE, FAST_GATE, PR_GATE,
-                       BULK_LABEL, BULK_PREFIX, bulk_chain, candidate_manifest,
+                       BULK_LABEL, BULK_PREFIX, bulk_chain, candidate_manifest, select_bulk,
                        mark_solo_retest, solo_retest_cutoff,
                        build_result, main_build_health, owner_authorized,
                        publish_run as publish_selected_run, reconcile, workflow_result, dispatch, ensure_main_checks)
@@ -15,7 +17,7 @@ def publish_run(api, run_id):
 
 
 def pull(number=1):
-    return {"number": number, "state": "open", "draft": False,
+    return {"number": number, "title": "A change", "state": "open", "draft": False,
             "base": {"ref": "main", "sha": "base", "repo": {"full_name": "ekmett/thc"}},
             "head": {"sha": "head", "ref": "codex/change", "repo": {"full_name": "ekmett/thc"}},
             "labels": [{"name": "auto-merge"}], "mergeable": True, "mergeable_state": "clean"}
@@ -596,6 +598,7 @@ class FastAPI(FakeAPI):
         self.full_runs = [main_build()]
         self.main_fast_runs = [{**main_build(200), "workflow_id": 18}]
         self.commit_parents = {"base": "parent", "merged": "base"}
+        self.commit_messages = {}
         self.dispatch_errors = {}
         self.after_dispatch = lambda _: None
         self.full_jobs = jobs()
@@ -614,7 +617,8 @@ class FastAPI(FakeAPI):
                 return {"id": 18}
             if path.startswith("commits/"):
                 sha = path.split("/")[1]
-                return {"sha": sha, "parents": [{"sha": self.commit_parents[sha]}]}
+                return {"sha": sha, "parents": [{"sha": self.commit_parents.get(sha, "base")}],
+                        "commit": {"message": self.commit_messages.get(sha, "ordinary commit")}}
             if path in self.comparisons:
                 return self.comparisons[path]
             if path.startswith("actions/runs/"):
@@ -627,6 +631,7 @@ class FastAPI(FakeAPI):
         if method == "PUT" and path.endswith("/merge"):
             result = super().call(method, path, body)
             result["sha"] = "merged"
+            self.commit_messages["merged"] = body.get("commit_title", "ordinary merge")
             self.after_merge()
             return result
         if method == "POST" and path.endswith("/dispatches"):
@@ -728,6 +733,66 @@ class FastGateTest(unittest.TestCase):
         self.run_bot(api)
         self.assertEqual(api.actions, [("POST", "actions/workflows/fast.yml/dispatches", {
             "ref": "codex/change", "inputs": {"expected_sha": "head", "base_sha": "base"}})])
+
+    def test_title_tag_skips_pr_and_postmerge_ci_with_explicit_status(self):
+        api = FastAPI(); api.runs = []
+        api.pr["title"] = "Clarify docs [CI SKIP]"
+        self.run_bot(api)
+        self.assertEqual(api.actions, [("PUT", "pulls/1/merge", {
+            "sha": "head", "merge_method": "squash", "commit_title": "Clarify docs [ci skip]"})])
+        self.assertEqual(api.statuses[0]["state"], "success")
+        self.assertEqual(api.statuses[0]["description"], "Fast checks skipped by [ci skip] in PR title")
+        self.assertEqual(api.statuses[0]["target_url"], "https://github.com/ekmett/thc/pull/1")
+        self.assertNotIn("actions/workflows/fast.yml/dispatches", [path for _, path, _ in api.actions])
+
+    def test_head_commit_tag_survives_squash_and_skips_main_dispatch(self):
+        api = FastAPI(); api.runs = []
+        api.commit_messages["head"] = "Document interface [ci skip]\n\nDetails"
+        self.run_bot(api)
+        self.assertEqual(api.actions, [("PUT", "pulls/1/merge", {
+            "sha": "head", "merge_method": "squash", "commit_title": "A change [ci skip]"})])
+        self.assertIn("[ci skip]", api.commit_messages["merged"])
+        self.assertEqual(api.statuses[0]["description"], "Fast checks skipped by [ci skip] in head commit")
+        before = len(api.actions)
+        api.prs = []
+        self.run_bot(api)
+        self.assertEqual(len(api.actions), before)
+
+    def test_removed_title_tag_retires_skip_status_before_merge(self):
+        api = FastAPI(); api.runs = []
+        api.pr["title"] = "Docs [ci skip]"
+        api.before_pr_read = lambda count: api.pr.update(title="Docs") if count == 2 else None
+        messages = self.run_bot(api)
+        self.assert_no_merge(api)
+        self.assertEqual(api.statuses[0]["state"], "pending")
+        self.assertIn("declaration changed", messages[-1])
+
+    def test_edited_title_revokes_prior_skip_status_for_same_head(self):
+        api = FastAPI(); api.runs = []
+        api.pr.update(title="Docs [ci skip]", labels=[])
+        self.run_bot(api)
+        self.assertEqual(api.statuses[0]["state"], "success")
+        api.pr["title"] = "Docs"
+        self.run_bot(api)
+        self.assertEqual(api.statuses[0]["state"], "pending")
+        self.assertTrue(api.statuses[0]["target_url"].endswith("fast.yml"))
+
+    def test_skip_status_does_not_require_merge_label_or_file_inspection(self):
+        api = FastAPI(); api.runs = []
+        api.pr.update(title="Docs [ci skip]", labels=[])
+        api.pr["head"]["repo"]["full_name"] = "fork/thc"
+        self.run_bot(api)
+        self.assertEqual(api.actions, [])
+        self.assertEqual(api.statuses[0]["state"], "success")
+
+    def test_skip_workflows_have_metadata_trigger_and_title_gate(self):
+        from pathlib import Path
+        workflows = Path(__file__).parents[1] / "workflows"
+        merge = (workflows / "merge.yml").read_text()
+        fast = (workflows / "fast.yml").read_text()
+        self.assertIn("pull_request_target:", merge)
+        self.assertIn("opened, synchronize, edited", merge)
+        self.assertIn("!contains(github.event.pull_request.title, '[ci skip]')", fast)
 
     def test_missing_fast_runs_dispatch_all_current_heads_in_one_pass(self):
         api = FastAPI(); api.runs = []
@@ -1049,7 +1114,8 @@ class BulkAPI(FastAPI):
             return {"object": {"sha": self.refs[branch]}}
         if method == "GET" and path.startswith("commits/") and path.split("/")[1] in self.parents:
             sha = path.split("/")[1]
-            return {"sha": sha, "parents": [{"sha": parent} for parent in self.parents[sha]]}
+            return {"sha": sha, "parents": [{"sha": parent} for parent in self.parents[sha]],
+                    "commit": {"message": self.commit_messages.get(sha, "Batch PR")}}
         if method == "GET" and path.startswith("compare/"):
             head = path.split("...")[-1]
             return {"ahead_by": 1, "behind_by": self.behind.get(head, 0) if isinstance(self.behind, dict) else self.behind,
@@ -1151,6 +1217,42 @@ class BulkMergeTest(unittest.TestCase):
         dispatches = [body for _, path, body in api.actions if path == "actions/workflows/fast.yml/dispatches"]
         self.assertEqual(dispatches, [{"ref": candidate["head"]["ref"], "inputs": {
             "expected_sha": candidate["head"]["sha"], "base_sha": api.base_sha}}])
+
+    def test_tagged_bulk_member_takes_solo_skip_and_untagged_member_is_not_green(self):
+        api = BulkAPI()
+        api.prs[0]["title"] = "Docs [ci skip]"
+        self.run_bot(api)
+        self.assertEqual(len(api.prs), 2)  # No candidate can inherit a member's skip.
+        self.assertEqual([status["state"] for status in api.statuses if status["sha"] == api.first_sha],
+                         ["success"])
+        self.assertEqual(next(status["state"] for status in api.statuses if status["sha"] == api.second_sha),
+                         "pending")
+        self.assertIn(("PUT", "pulls/1/merge", {
+            "sha": api.first_sha, "merge_method": "squash", "commit_title": "Docs [ci skip]"}), api.actions)
+
+    def test_mixed_bulk_selection_keeps_two_untagged_members_in_candidate(self):
+        api = BulkAPI()
+        api.prs[0]["title"] = "Docs [ci skip]"
+        third = pull(3)
+        third["base"]["sha"] = api.base_sha
+        third["head"].update(sha="9" * 40, ref="feature/third")
+        third["labels"] = [{"name": BULK_LABEL}]
+        api.prs.append(third)
+        api.events_by_pr[3] = [{"id": 3, "event": "labeled", "label": {"name": BULK_LABEL},
+                                "actor": {"login": "ekmett"}}]
+        api.files[3] = [{"filename": "third.txt", "status": "modified"}]
+        self.assertEqual([pr["number"] for pr in select_bulk(api, api.prs, api.base_sha)], [2, 3])
+
+    def test_existing_candidate_still_requires_combined_fast_when_member_later_tags(self):
+        api = BulkAPI(); self.run_bot(api)
+        api.prs[0]["title"] = "Docs [ci skip]"
+        candidate = api.prs[2]
+        self.assertFalse(any(status["sha"] == candidate["head"]["sha"] and status["state"] == "success"
+                             for status in api.statuses))
+        api.finish_fast()
+        self.run_bot(api)
+        self.assertIn(("PUT", "pulls/3/merge", {"sha": candidate["head"]["sha"],
+                                                  "merge_method": "merge"}), api.actions)
 
     def test_success_promotes_exact_checked_ancestry(self):
         api = BulkAPI(); self.run_bot(api); api.finish_fast()

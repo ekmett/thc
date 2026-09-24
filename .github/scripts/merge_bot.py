@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 """Merge opted-in PRs using GitHub's required checks and expected-head guard.
 
 Run only from trusted main. PR contents are data and are never checked out here.
@@ -20,6 +22,7 @@ BULK_LIMIT = 4
 BULK_FILE_LIMIT = 100
 BOT_LOGIN = "github-actions[bot]"
 RETEST_MARKER = "#thc-solo-retest-after-"
+CI_SKIP = re.compile(r"\[ci skip\]", re.IGNORECASE)
 CHECKS = {"build (ubuntu-latest)", "build (macos-latest)", "automation"} | {
     f"library ({os}, {backend}, handoff={handoff})"
     for os in ("ubuntu-latest", "macos-latest")
@@ -185,9 +188,38 @@ def main_build_health(api):
     return "success", snapshot
 
 
+def skip_declaration(api, pr):
+    """Trust the requested marker, never infer it from the changed files."""
+    if pr["head"]["ref"].startswith(BULK_PREFIX):
+        return None  # A combined candidate must always test its full composition.
+    if CI_SKIP.search(pr.get("title") or ""):
+        return "PR title"
+    sha = pr["head"]["sha"]
+    try:
+        commit = api.call("GET", f"commits/{sha}")
+    except HTTPError as error:
+        if error.code != 404:
+            raise
+        error.close()
+        return None
+    if commit["sha"] != sha:
+        raise RuntimeError("Head commit changed during CI-skip inspection")
+    return "head commit" if CI_SKIP.search(commit["commit"]["message"]) else None
+
+
+def skipped_main_commit(api, sha):
+    commit = api.call("GET", f"commits/{sha}")
+    if commit["sha"] != sha:
+        raise RuntimeError("Main commit changed during CI-skip inspection")
+    return bool(CI_SKIP.search(commit["commit"]["message"]))
+
+
 def ensure_main_checks(api, sha, report, base_sha=None):
     # GITHUB_TOKEN merges suppress both ordinary push workflows. Recover each
     # missing workflow independently; an existing failed run is never retried.
+    if skipped_main_commit(api, sha):
+        report(f"main {sha}: [ci skip] declared; no automatic Build/Fast dispatch")
+        return
     failure = None
     for gate in (BUILD_GATE, FAST_GATE):
         try:
@@ -239,6 +271,22 @@ def publish_result(api, sha, state, run, gate=PR_GATE):
         "description": {"success": f"All required {gate.name} jobs passed",
                         "pending": f"Waiting for the current {gate.name} attempt",
                         "failure": f"{gate.name} failed or omitted a required job"}[state],
+    })
+
+
+def publish_skip_result(api, pr, source):
+    sha = pr["head"]["sha"]
+    target = f"https://github.com/{api.repo}/pull/{pr['number']}"
+    description = f"Fast checks skipped by [ci skip] in {source}"
+    existing = next((status for status in api.pages(f"commits/{sha}/statuses")
+                     if status["context"].casefold() == REQUIRED_STATUS.casefold()), None)
+    if (existing and existing["state"] == "success"
+            and (existing.get("creator") or {}).get("login") == BOT_LOGIN
+            and existing.get("target_url") == target and existing.get("description") == description):
+        return
+    api.call("POST", f"statuses/{sha}", {
+        "context": REQUIRED_STATUS, "state": "success", "target_url": target,
+        "description": description,
     })
 
 
@@ -325,6 +373,8 @@ def dispatch(api, pr, gate=PR_GATE, label=LABEL):
         if (not still_authorized(api, fresh, label) or fresh["head"]["sha"] != pr["head"]["sha"]
                 or fresh["base"]["sha"] != base
                 or api.call("GET", f"compare/{base}...{fresh['head']['sha']}")["behind_by"]):
+            return False
+        if skip_declaration(api, fresh):
             return False
         inputs["base_sha"] = base
         pr = fresh
@@ -420,6 +470,8 @@ def select_bulk(api, candidates, base):
         if (not still_authorized(api, pr, BULK_LABEL) or pr["base"]["sha"] != base
                 or pr["mergeable"] is not True):
             continue
+        if skip_declaration(api, pr):
+            continue  # Declared docs go through the guarded solo skip path.
         comparison = api.call("GET", f"compare/{base}...{pr['head']['sha']}")
         if not comparison["ahead_by"]:
             continue
@@ -632,6 +684,10 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
     # Events can be coalesced by workflow concurrency. Recover gate publication
     # for every PR, including forks and manually merged/unlabelled work.
     for candidate in candidates:
+        skipped = skip_declaration(api, candidate) if gate == FAST_GATE else None
+        if skipped:
+            publish_skip_result(api, candidate, skipped)
+            continue
         events = (("workflow_dispatch",) if candidate["head"]["ref"].startswith(BULK_PREFIX)
                   else ("push", "pull_request", "workflow_dispatch", "merge_group"))
         state, run = workflow_result(api, candidate["head"]["sha"], gate, events,
@@ -652,6 +708,7 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
         label = LABEL if LABEL in {item["name"] for item in pr["labels"]} else BULK_LABEL
         if not still_authorized(api, pr, label):
             continue
+        skip_source = skip_declaration(api, pr) if gate == FAST_GATE else None
         if bulk_busy and label == BULK_LABEL:
             continue
         sha = pr["head"]["sha"]
@@ -719,8 +776,11 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
                 report(f"#{number}: branch update pending; a later run will dispatch {gate.name}")
             continue
         cutoff = solo_retest_cutoff(api, sha) or 0
-        state, run = workflow_result(api, sha, gate, after_id=cutoff)
-        if run:
+        state, run = (("success", None) if skip_source else
+                      workflow_result(api, sha, gate, after_id=cutoff))
+        if skip_source:
+            publish_skip_result(api, pr, skip_source)
+        elif run:
             publish_result(api, sha, state, run, gate)
         if state == "failure":
             report(f"#{number}: checks failed; waiting for a fix or manual rerun")
@@ -757,13 +817,26 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
         if fresh["mergeable_state"] not in ("clean", "unstable"):
             report(f"#{number}: GitHub merge state is {fresh['mergeable_state']}")
             continue
-        final_state, final_run = workflow_result(api, sha, gate, after_id=cutoff)
-        if (final_state != "success" or final_run["id"] != run["id"]
-                or final_run["run_attempt"] != run["run_attempt"]):
-            if final_run:
-                publish_result(api, sha, final_state, final_run, gate)
-            report(f"#{number}: {gate.name} changed before merging; waiting")
+        final_skip = skip_declaration(api, fresh) if gate == FAST_GATE else None
+        if final_skip != skip_source:
+            if final_skip:
+                publish_skip_result(api, fresh, final_skip)
+            else:
+                changed_state, changed_run = workflow_result(api, sha, gate, after_id=cutoff)
+                publish_result(api, sha, "pending" if changed_state == "missing" else changed_state,
+                               changed_run, gate)
+            report(f"#{number}: [ci skip] declaration changed before merging; waiting")
             return
+        if final_skip:
+            publish_skip_result(api, fresh, final_skip)
+        else:
+            final_state, final_run = workflow_result(api, sha, gate, after_id=cutoff)
+            if (final_state != "success" or final_run["id"] != run["id"]
+                    or final_run["run_attempt"] != run["run_attempt"]):
+                if final_run:
+                    publish_result(api, sha, final_state, final_run, gate)
+                report(f"#{number}: {gate.name} changed before merging; waiting")
+                return
         if (gate == FAST_GATE
                 and main_build_snapshot(completed_main_attempts(api)) != health_snapshot):
             # A full result may have arrived during the final consent/Fast
@@ -772,7 +845,12 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
             report(f"#{number}: full main Build changed before merging; waiting")
             return
         try:
-            result = api.call("PUT", f"{path}/merge", {"sha": sha, "merge_method": "squash"})
+            merge = {"sha": sha, "merge_method": "squash"}
+            if final_skip:
+                title = fresh["title"]
+                merge["commit_title"] = (CI_SKIP.sub("[ci skip]", title, count=1)
+                                          if CI_SKIP.search(title) else title + " [ci skip]")
+            result = api.call("PUT", f"{path}/merge", merge)
         except HTTPError as error:
             if error.code in (405, 409):
                 report(f"#{number}: merge requirements changed; GitHub refused the merge")

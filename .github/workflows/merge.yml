@@ -1,9 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 name: Merge bot
 
 on:
   pull_request_target:
     branches: [main]
-    types: [labeled, unlabeled, ready_for_review, reopened, closed]
+    types: [opened, synchronize, edited, labeled, unlabeled, ready_for_review, reopened, closed]
   workflow_run:
     workflows: [Build, Fast checks]
     types: [requested, in_progress, completed]

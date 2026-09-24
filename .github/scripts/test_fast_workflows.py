@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 """Exercise the workflow's runner-routing and persistent-runner guards."""
 
 import json
@@ -27,7 +29,8 @@ def embedded_python(delimiter):
 class FastWorkflowGuardsTest(unittest.TestCase):
     def test_candidate_pr_does_not_duplicate_or_cancel_dispatch(self):
         workflow = WORKFLOW.read_text()
-        self.assertIn("if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'thc-bulk/')", workflow)
+        self.assertIn("!startsWith(github.head_ref, 'thc-bulk/')", workflow)
+        self.assertIn("!contains(github.event.pull_request.title, '[ci skip]')", workflow)
         self.assertIn("&& 'candidate-pr' || 'gate'", workflow)
 
     def check_case(self, kind, ref, event, trusted):
