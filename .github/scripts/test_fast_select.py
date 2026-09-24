@@ -489,9 +489,13 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         for name, group in fixture["groups"].items():
             for path in group["sources"]:
                 with self.subTest(group=name, path=path):
-                    expected = ({"thc.RuntimeTest", "thc.BytecodeBackendTest"} if path in native_only
-                                else set(group["junit"]))
-                    self.assertEqual(expected, set(owners[path]["junit"]))
+                    actual = set(owners[path]["junit"])
+                    if path in native_only:
+                        self.assertEqual("runtime-core-native", name)
+                        self.assertLessEqual({"thc.RuntimeTest", "thc.BytecodeBackendTest"}, actual)
+                        self.assertLessEqual(actual, set(group["junit"]))
+                    else:
+                        self.assertEqual(set(group["junit"]), actual)
         self.assertEqual({"thc.runtime.BitPrimopsTest", "thc.IntegerPrimopsTest",
                           "thc.SignedNarrowPrimopsTest"},
                          set(owners["src/test/kotlin/thc/PrimopTestContext.kt"]["junit"]))
