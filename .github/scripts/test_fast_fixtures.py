@@ -164,7 +164,8 @@ class FullFixtureReceiptTest(unittest.TestCase):
 
     def setUp(self):
         FixturePreparationTest.setUp(self)
-        for name in ("build.gradle.kts", ".github/scripts/fast_fixtures.py",
+        for name in ("build.gradle.kts", "thc.cabal", "cabal.project", "Setup.hs",
+                     ".github/scripts/fast_fixtures.py",
                      "scripts/prepare-tests.sh"):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -221,6 +222,14 @@ class FullFixtureReceiptTest(unittest.TestCase):
         generated.write_text("class Generated { int changed; }\n")
         self.assertEqual(self.prepare("thc.UnknownTest")["reused"], ["full"])
         self.assertEqual(self.prepared, 1)
+
+    def test_root_cabal_inputs_invalidate_full_fixture_receipt(self):
+        self.prepare("thc.UnknownTest")
+        for name in ("thc.cabal", "cabal.project", "Setup.hs"):
+            with self.subTest(name=name):
+                (self.root / name).write_text("changed root Cabal input\n")
+                self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
+        self.assertEqual(self.prepared, 4)
 
     def test_source_output_and_toolchain_drift_each_miss(self):
         self.prepare("thc.UnknownTest")

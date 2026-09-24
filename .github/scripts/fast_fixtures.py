@@ -181,7 +181,8 @@ def _full_key(root):
     for name, actual in present.items():
         if actual != pins[name]:
             raise RuntimeError("Vendored GHC source differs from its pinned hash")
-    extra = ("build.gradle.kts", ".github/scripts/fast-fixtures.json",
+    extra = ("build.gradle.kts", "thc.cabal", "cabal.project", "Setup.hs",
+             ".github/scripts/fast-fixtures.json",
              ".github/scripts/fast_fixtures.py")
     value = {"schema": 1, "identity": fast_inputs.identity(root),
              "declaration": {"plan": FULL_PREPARATION_PLAN,
