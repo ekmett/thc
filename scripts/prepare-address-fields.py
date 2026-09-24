@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Native GHC address-bearing constructor fields, with exact aggregate frontier gates."""
+"""Native GHC managed literal addresses in constructors and unboxed tuples."""
 import hashlib
 import importlib.util
 import json
@@ -13,7 +13,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / 'build/address-fields'
 SOURCE = 'compiler/test-fixtures/AddressFieldAudit.hs'
-ENTRIES = ['natural', 'returned', 'captured', 'partial', 'twins', 'emptyLiteral', 'terminator', 'backwards']
+ENTRIES = ['natural', 'returned', 'captured', 'partial', 'twins', 'emptyLiteral', 'terminator', 'backwards', 'tupleFrontier']
 VALUES = sorted(set(range(-8, 9)) | {-2**63, -2**63+1, 2**63-2, 2**63-1, -4097, 4097, -2**32, 2**32})
 
 def signed(value): return (value + 2**63) % 2**64 - 2**63
@@ -22,7 +22,8 @@ def model(name, x):
     byte = [65, 255, 128, 0][x & 3]
     return signed({'natural': x+byte, 'returned': 4*x+2+byte,
         'captured': 4*x+5+byte, 'partial': 4*x+7+byte,
-        'twins': x+630+byte, 'emptyLiteral': 4*x+11, 'terminator': 4*x+13, 'backwards': x+byte}[name])
+        'twins': x+630+byte, 'emptyLiteral': 4*x+11, 'terminator': 4*x+13, 'backwards': x+byte,
+        'tupleFrontier': x+65}[name])
 
 def walk(value):
     if isinstance(value, list):
@@ -43,7 +44,7 @@ def main():
     spec = importlib.util.spec_from_file_location('address_audit', ROOT/'scripts/audit-core.py')
     audit = importlib.util.module_from_spec(spec); spec.loader.exec_module(audit)
     cap = json.loads((ROOT/'scripts/core-capabilities.json').read_text())
-    assert 'AddrRep' in cap['fieldRepresentations'] and 'AddrRep' not in cap['aggregateFieldRepresentations']
+    assert 'AddrRep' in cap['fieldRepresentations'] and 'AddrRep' in cap['aggregateFieldRepresentations']
     stages, summaries, artifacts = {}, {}, []
     for stage in ('pre', 'post'):
         directory = BUILD/stage; core = directory/'core'
@@ -77,18 +78,19 @@ def main():
         partial_lambda = list(n for n in walk(bindings['partial']['expr']) if n[:1] == ['lam'])[1]
         assert any(n[:1] == ['var'] and len(n) > 2 and n[2]['rep']['kind'] == 'address'
                    for n in walk(partial_lambda)), 'Address capture in eta-expanded constructor vanished'
-        for name in ENTRIES + ['tupleFrontier']:
+        for name in ENTRIES:
             report = audit.Audit([(str(path.relative_to(ROOT)), module)], cap).run([name])
             dest = directory/(name+'.audit.json'); dest.write_text(json.dumps(report, indent=2)+'\n'); artifacts.append(dest)
             assert not report['missingGlobals'], (stage, name, report['missingGlobals'])
             if name in ENTRIES:
                 assert report['accepted'], (stage, name, report['issues'])
-                if name != 'natural':
+                if name not in ('natural', 'tupleFrontier'):
                     assert bindings['bottom']['id'] in {b['id'] for b in report['reachableBindings']}
-            else:
-                assert not report['accepted'] and report['issues']
-                assert {i['code'] for i in report['issues']} == {'aggregate-representation'}, report['issues']
             summaries[stage+'/'+name] = report['summary']
+        assert any(n[:2] == ['con', next(c['id'] for c in module['constructors'] if c['kind'] == 'unboxed-tuple')]
+                   for n in walk(bindings['addressTuple']['expr'])), 'AddrRep tuple producer vanished'
+        assert any(n[:1] == ['data'] and n[1] in {c['id'] for c in module['constructors'] if c['kind'] == 'unboxed-tuple'}
+                   for n in walk(bindings['tupleFrontier']['expr'])), 'AddrRep tuple consumer vanished'
     driver = ['{-# LANGUAGE MagicHash #-}', 'module Main where', 'import GHC.Exts (Int(I#))',
         'import qualified AddressFieldAudit as P', 'call name (I# x) = case name of']
     driver += ['  "'+name+'" -> I# (P.'+name+' x)' for name in ENTRIES]
@@ -113,8 +115,8 @@ def main():
         allNativeValuesMatchIndependentModel=True, inputHashes=hashes(inputs), artifactHashes=hashes(artifacts), commands=commands,
         ghcInfo=run([ghc, '--info'], text=True, capture_output=True).stdout,
         limitations=['Managed immutable literal allocations only; no foreign pointer or raw address conversion.',
-                    'AddrRep tuple/sum fields remain unsupported; constructor fields do not extend aggregate ABIs.',
+                    'Only managed literal AddrRep tuple fields are transported; AddrRep sums and native pointers remain unsupported.',
                     'Native reads stay within the original literal including its final NUL; invalid offsets are JVM-only controls.']), indent=2)+'\n')
-    print(f'Prepared address fields: {len(ENTRIES)*len(VALUES)} native/model rows; {2*len(ENTRIES)} accepted and 2 rejected pre/post audits')
+    print(f'Prepared address fields: {len(ENTRIES)*len(VALUES)} native/model rows; {2*len(ENTRIES)} accepted pre/post audits')
 
 if __name__ == '__main__': main()

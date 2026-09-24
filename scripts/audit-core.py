@@ -108,6 +108,9 @@ class Audit:
                         if 'aggregate' not in component and (component.get('kind') == 'unknown' or
                                 any(r not in self.cap['aggregateFieldRepresentations'] for r in registers)):
                             self.issue('aggregate-representation', owner, path, aggregate + ': unsupported component')
+                        if ('aggregate' not in component and registers == ['AddrRep'] and
+                                (component.get('kind') != 'address' or component.get('evaluated') is not True)):
+                            self.issue('aggregate-representation', owner, path, aggregate + ': address needs an evaluated AddrRep carrier')
                 if rep.get('kind') != 'unknown' or rep.get('primReps') != physical:
                     self.issue('representation-proof', owner, path, 'Tuple components disagree with physical representations')
         kind, registers, evaluated = rep.get('kind'), rep.get('primReps'), rep.get('evaluated')

@@ -78,6 +78,7 @@ internal class TypedInputLayout(val language: Language, val logical: ArgumentLay
             proof.isLong -> "IntRep"
             proof.isFloat -> "FloatRep"
             proof.isDouble -> "DoubleRep"
+            proof.kind == CoreKind.ADDRESS -> "AddrRep"
             else -> "BoxedRep (Just Lifted)"
         }
         fun create(language: Language, logical: ArgumentLayout?, hasEnvironment: Boolean): TypedInputLayout? =
