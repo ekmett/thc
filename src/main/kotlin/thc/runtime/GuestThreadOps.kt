@@ -91,18 +91,18 @@ private class ForkActionRoot(private val language: Language, initialShape: Tuple
     override fun execute(frame: VirtualFrame): Any {
         frame.setLong(FrameLayout.BLOOM_FILTER, 0L)
         val input = frame.arguments[0]
-        var resolved: Closure? = null
-        while (resolved == null) {
-            try { resolved = requireClosure(force.execute(frame, input)) }
-            catch (suspended: ThunkSuspended) {
-                // The fork's head is outside the action's catch# scope. A real
-                // async request is uncaught; a private checkpoint resumes its
-                // exact thunk rather than replaying its already-run prefix.
-                suspended.asyncRequest?.let { throw UncaughtForkAsync(it) }
-                TruffleSafepoint.poll(this)
-            }
+        val action = try { requireClosure(force.execute(frame, input)) }
+        catch (suspended: ThunkSuspended) {
+            // The fork child has no enclosing continuation consumer. The
+            // shared thunk retains its captured body for a later evaluator.
+            throw UncaughtForkAsync(suspended.asyncRequest
+                ?: fault("fork# action head suspended without an async request"))
         }
-        val action = resolved
+        catch (blocked: AsyncBlocked) {
+            // This child was waiting for another evaluator of the same head.
+            // It does not own the thunk or a continuation to resume.
+            throw UncaughtForkAsync(blocked.request)
+        }
         val shape = GuestThreadOps.actionResult(action)
         val callee = dispatch ?: insert(TupleDispatch(ForkDestination(shape, language), Metrics(false), 1, false))
             .also { dispatch = it }
@@ -137,7 +137,11 @@ internal object GuestThreadOps {
         val threads = state.threads
         // A known closure retains immediate contract validation. A lazy action
         // must be forced after the child enters its own guest thread instead.
-        val shape = (action as? Closure)?.let(::actionResult)
+        val shape = when (action) {
+            is Closure -> actionResult(action)
+            is Thunk -> null
+            else -> fault("fork# requires a lazy state-transformer action")
+        }
         val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(node)
         val root = ForkActionRoot(language, shape).callTarget
         val inheritedMask = state.maskingState.get()
