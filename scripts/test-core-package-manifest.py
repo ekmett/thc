@@ -46,13 +46,13 @@ class PackageManifestTest(unittest.TestCase):
                               buildKey='a' * 64, exportKey='b' * 64, modules=unit['modules'])
         if build_inputs is not None:
             input_bytes = json.dumps(build_inputs).encode()
-            inner['buildInputs'] = dict(path='build-inputs.json',
+            inner['buildInputs'] = dict(path='inplace-manifest.json',
                                         sha256=input_hash or hashlib.sha256(input_bytes).hexdigest())
         bundle = self.root / 'bundle.zip'
         with ZipFile(bundle, 'w') as archive:
             archive.writestr('manifest.json', json.dumps(inner))
             if build_inputs is not None:
-                archive.writestr('build-inputs.json', input_bytes)
+                archive.writestr('inplace-manifest.json', input_bytes)
             for name, value in contents.items():
                 archive.writestr(name, value)
         unit['bundle'] = dict(path=str(bundle), sha256=hashlib.sha256(bundle.read_bytes()).hexdigest())

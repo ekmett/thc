@@ -74,14 +74,14 @@ def bundle_modules(path, unit, records):
                 if 'buildInputs' in inner:
                     ref = inner['buildInputs']
                     if (not isinstance(ref, dict) or set(ref) != {'path', 'sha256'} or
-                            ref['path'] != 'build-inputs.json' or
+                            ref['path'] != 'inplace-manifest.json' or
                             not isinstance(ref['sha256'], str) or not SHA256.fullmatch(ref['sha256'])):
                         raise ValueError(f'{path}: invalid build-inputs reference for {unit["id"]}')
                     expected.add(ref['path'])
                 if set(names) != expected:
                     raise ValueError(f'{path}: duplicate, unsafe, missing, or extra ZIP entry in {archive_path}')
                 if 'buildInputs' in inner:
-                    inputs = archive.read('build-inputs.json')
+                    inputs = archive.read('inplace-manifest.json')
                     if hashlib.sha256(inputs).hexdigest() != inner['buildInputs']['sha256']:
                         raise ValueError(f'{path}: build-inputs hash mismatch for {unit["id"]}')
                     record = strict_json(inputs.decode('utf-8'))
