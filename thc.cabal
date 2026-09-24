@@ -33,6 +33,7 @@ extra-source-files:
   compiler/pinned-ghc-internal/GHC/Internal/Bignum/Integer.hs-boot
   compiler/pinned-ghc-internal/GHC/Internal/CString.hs
   compiler/pinned-ghc-internal/GHC/Internal/ClosureTypes.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Classes.hs
   compiler/pinned-ghc-internal/GHC/Internal/Control/Monad/Fail.hs
   compiler/pinned-ghc-internal/GHC/Internal/Data/Either.hs
   compiler/pinned-ghc-internal/GHC/Internal/Data/Maybe.hs
@@ -75,6 +76,7 @@ extra-source-files:
   compiler/pinned-ghc-internal/GHC/Internal/Ix.hs
   compiler/pinned-ghc-internal/GHC/Internal/List.hs
   compiler/pinned-ghc-internal/GHC/Internal/Num.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/Num.hs
   compiler/pinned-ghc-internal/GHC/Internal/Numeric.hs
   compiler/pinned-ghc-internal/GHC/Internal/Ptr.hs
   compiler/pinned-ghc-internal/GHC/Internal/Real.hs-boot
