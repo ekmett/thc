@@ -48,10 +48,12 @@ internal object CoreVectorMemory {
     private fun requireProof(condition: Boolean, detail: String) {
         if (!condition) throw RuntimeFault("Invalid local vector read case: $detail")
     }
+    private fun exactInteger(value: Any?, expected: Long): Boolean =
+        (value is Int || value is Long) && (value as Number).toLong() == expected
     private fun vectorAnnotation(raw: Any?): Boolean {
         val value = raw as? Map<*, *> ?: return false
-        val lanes = value["lanes"] as? Number ?: return false
-        return lanes.toDouble() == 4.0 && value["element"] == "Int32ElemRep"
+        return value.keys == setOf("lanes", "element") &&
+            exactInteger(value["lanes"], 4) && value["element"] == "Int32ElemRep"
     }
     /** The pinned exporter annotates this aggregate with its sole physical VecRep.
      * Validate the original map without admitting it to generic CoreVector.parse. */
@@ -62,7 +64,9 @@ internal object CoreVectorMemory {
             value["primReps"] == CoreVectors.proof32.primReps && vectorAnnotation(value["vector"]) &&
             value["evaluated"] is Boolean && (!binder || value["evaluated"] == true) && components?.size == 2,
             "expected exact (# State#, Int32X4# #) proof")
-        requireProof(exact(stateProof, CoreRepresentations.parse(components!![0])) &&
+        // Check the raw vector shape before generic parsing normalizes its lane count.
+        requireProof(vectorAnnotation((components!![1] as? Map<*, *>)?.get("vector")) &&
+            exact(stateProof, CoreRepresentations.parse(components[0])) &&
             exact(CoreVectors.proof32, CoreRepresentations.parse(components[1])), "result components")
     }
     private fun termUses(value: Any?, id: String): Boolean = when (value) {
@@ -95,7 +99,7 @@ internal object CoreVectorMemory {
         val alternative = alternatives.single() as? List<*> ?: throw RuntimeFault("Invalid local vector read alternative")
         val constructor = (alternative.getOrNull(1) as? String)?.let(constructors::get)
         requireProof(alternative.firstOrNull() == "data" && constructor?.get("kind") == "unboxed-tuple" &&
-            (constructor?.get("arity") as? Number)?.toDouble() == 2.0, "requires a registered tuple2 constructor")
+            exactInteger(constructor?.get("arity"), 2), "requires a registered tuple2 constructor")
         val ids = alternative.getOrNull(2) as? List<*> ?: throw RuntimeFault("Missing local vector read pattern ids")
         requireProof(ids.size == 2 && ids.all { it is String } && ids.distinct().size == 2 && whole !in ids,
             "pattern binder identities")
@@ -104,6 +108,7 @@ internal object CoreVectorMemory {
         listOf(stateProof, CoreVectors.proof32).forEachIndexed { i, expected ->
             val record = records!![i] as? Map<*, *> ?: throw RuntimeFault("Invalid local vector read pattern metadata")
             requireProof(record["id"] == ids[i] && record["lifted"] == false && record["coercion"] == false && "joinValueArity" !in record &&
+                (!expected.isVector || vectorAnnotation((record["rep"] as? Map<*, *>)?.get("vector"))) &&
                 exact(expected, CoreRepresentations.parse(record["rep"])) &&
                 (record["rep"] as? Map<*, *>)?.get("evaluated") == true, "pattern binder representation")
         }

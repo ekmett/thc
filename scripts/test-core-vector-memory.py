@@ -125,6 +125,22 @@ class VectorMemoryProofTest(unittest.TestCase):
                         mutate(app[6]['rep'] if site == 'producer' else body[4]['binder']['rep'])
                         self.assertFalse(check(module)['accepted'])
 
+        for name in READS:
+            for site in ('producer', 'binder', 'producer-component', 'binder-component', 'pattern'):
+                for count in (4.0, 4.5, True, '4', None):
+                    module, app, body = fixture(name)
+                    producer, whole = app[6]['rep'], body[4]['binder']['rep']
+                    proof = {'producer': producer, 'binder': whole,
+                             'producer-component': producer['components'][1],
+                             'binder-component': whole['components'][1],
+                             'pattern': body[3][0][4]['binders'][1]['rep']}[site]
+                    proof['vector']['lanes'] = count
+                    self.assertFalse(check(module)['accepted'], (name, site, count))
+            for arity in (2.0, 2.5, True, '2', None):
+                module, _, _ = fixture(name)
+                module['constructors'][0]['arity'] = arity
+                self.assertFalse(check(module)['accepted'], (name, arity))
+
     def test_all_operations_require_exact_flags_arity_and_arguments(self):
         for name in OPERATIONS:
             for flag in (True, None, 0, 'false'):

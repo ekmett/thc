@@ -26,7 +26,7 @@ class SimdInt32ByteArrayTest {
     private fun context(inlining: Boolean) = Context.newBuilder("thc")
         .allowExperimentalOptions(true).option("compiler.Inlining", inlining.toString())
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
-        .option("engine.CompilationFailureAction", "Throw").option("engine.SingleTierCompilationThreshold", "10000000")
+        .option("engine.CompilationFailureAction", "Throw")
         .build()
     private fun withLanguage(inlining: Boolean, action: (Language) -> Unit) = context(inlining).use { context ->
         context.initialize("thc"); context.enter()
