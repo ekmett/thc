@@ -11,6 +11,7 @@ import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import thc.*
 import java.io.File
@@ -100,10 +101,10 @@ class SimdFamiliesTest {
 
     // These early gates use actual pre-Tidy Core and the independent model.
     // They are deliberately separate from native evidence and capability enablement.
-    @Test fun widerPreparedCoreCompilesWithInlining() = execute(true, true)
-    @Test fun widerPreparedCoreCompilesAcrossResidualCalls() = execute(false, true)
-    @Test fun nativeFamiliesWithInlining() = execute(true, false)
-    @Test fun nativeFamiliesAcrossResidualCalls() = execute(false, false)
+    @Test @Tag("simd-families-experiment") fun widerPreparedCoreCompilesWithInlining() = execute(true, true)
+    @Test @Tag("simd-families-experiment") fun widerPreparedCoreCompilesAcrossResidualCalls() = execute(false, true)
+    @Test @Tag("simd-families-experiment") fun nativeFamiliesWithInlining() = execute(true, false)
+    @Test @Tag("simd-families-experiment") fun nativeFamiliesAcrossResidualCalls() = execute(false, false)
 
     private fun execute(inlining: Boolean, earlyWideGate: Boolean) {
         val manifest = Json.parse(File(directory, "manifest.json").readText()) as Map<String, Any?>

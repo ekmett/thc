@@ -48,7 +48,11 @@ workers provide real residual calls without a vector calling convention.
 A full native preparation omits `--export-only` on a suitable GHC9.14.1 x86 host.
 Target flags may be passed explicitly as `--ghc-option=...`; the manifest records
 them, toolchain identity, generated sources, exact inputs, oracle and exported
-Core. The native JVM gates require both pre/post Core and byte-identical
-native/model TSVs. Early wider-shape gates use the prepared model and are named
-separately. Both preserve exact guest-entry, actual-target identity/validity and
+Core. Run the prepared experiment explicitly with
+`scripts/gradle.sh --no-daemon simdFamiliesExperimentTest --rerun` after full
+native preparation. Ordinary `test` keeps the fixture-free carrier and proof
+checks; it excludes the four prepared experiment methods. The native JVM gates
+require both pre/post Core and byte-identical native/model TSVs. Early wider-shape
+gates use the prepared model and are named separately. Both preserve exact
+guest-entry, actual-target identity/validity and
 input/result-pool cleanup checks.

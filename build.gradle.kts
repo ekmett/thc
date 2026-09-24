@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 plugins {
     application
     kotlin("jvm") version "2.4.20"
@@ -152,7 +155,16 @@ tasks.withType<Test>().configureEach {
     testLogging { events("failed", "skipped", "passed") }
 }
 tasks.test {
-    useJUnitPlatform { excludeTags("jit-stability") }
+    useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment") }
+}
+tasks.register<Test>("simdFamiliesExperimentTest") {
+    group = "verification"
+    description = "Runs the prepared generated SIMD Core, native-oracle, and compiled-path experiment."
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform { includeTags("simd-families-experiment") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("SIMD evidence must be checked in a fresh test process") { true }
 }
 tasks.register<Test>("jitStabilityTest") {
     group = "verification"
