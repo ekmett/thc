@@ -321,6 +321,21 @@ private val text = "class FakeString { @Test }"
                 self.commit()
                 self.full()
 
+    def test_private_nested_constructor_properties_are_not_shared_members(self):
+        path = "src/test/kotlin/example/OtherTest.kt"
+        body = "@Test fun test() {}\nprivate data class Row(val entry: String, val input: Long, val expected: Long)"
+        self.write(path, kotlin("OtherTest", body))
+        self.commit()
+        result = self.plan()
+        self.assertEqual("narrow", result["mode"], result)
+        self.assertEqual(["example.OtherTest"], result["affected"]["junit"])
+        self.write(path, kotlin("OtherTest", body.replace("private data class", "data class")))
+        self.commit()
+        self.full("shared-test-member")
+        self.write(path, kotlin("OtherTest", body + "\nval shared = 1"))
+        self.commit()
+        self.full("shared-test-member")
+
     def test_java_tests_select_their_class_but_widen_unknown_helper_grammar(self):
         self.write("src/test/java/example/JavaTest.java", "package example;\npublic class JavaTest { @Test public void test() {} public static void helper() {} }\n")
         self.commit()
