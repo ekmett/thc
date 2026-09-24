@@ -8,25 +8,42 @@ package thc.runtime
  * parent step would otherwise drop an effectful suffix inside the same root. */
 internal object AstAsyncAdmission {
     private val blockingMVars = setOf("takeMVar#", "readMVar#", "putMVar#")
+    private val readingMVars = setOf("takeMVar#", "readMVar#")
 
     fun validate(bindings: List<Map<String, Any?>>) {
         for (binding in bindings) {
             val expression = binding["expr"] as? List<*>
                 ?: throw RuntimeFault("AST async binding has no expression: ${binding["id"]}")
-            if (!root(expression))
+            if (expression.firstOrNull() !in setOf("lam", "lit", "void") || !root(expression, null))
                 throw RuntimeFault("AST async capture is not complete for ${binding["id"]}")
         }
     }
 
-    private fun root(expression: List<*>): Boolean = when (expression.firstOrNull()) {
+    private fun root(expression: List<*>, result: CoreRepresentation?): Boolean = when (expression.firstOrNull()) {
         "lam" -> CoreEntries.lambda(expression).none { it } &&
-            (expression.getOrNull(2) as? List<*>)?.let(::root) == true
+            (expression.getOrNull(2) as? List<*>)?.let {
+                root(it, CoreRepresentations.lambdaResult(expression))
+            } == true
         "lit", "void" -> true
         "app" -> {
             val head = expression.getOrNull(1) as? List<*>
             val arguments = expression.getOrNull(2) as? List<*>
             head?.firstOrNull() == "prim" && head.getOrNull(1) in blockingMVars &&
                 arguments != null && arguments.all { atom(it as? List<*>) }
+        }
+        "case" -> {
+            val scrutinee = expression.getOrNull(1) as? List<*>
+            val head = scrutinee?.getOrNull(1) as? List<*>
+            val alternative = (expression.getOrNull(3) as? List<*>)?.singleOrNull() as? List<*>
+            val body = alternative?.getOrNull(3) as? List<*>
+            // The literal suffix cannot suspend. Other tuple alternatives wait
+            // until their own effects and typed result paths have capture steps.
+            scrutinee?.firstOrNull() == "app" && head?.firstOrNull() == "prim" &&
+                head.getOrNull(1) in readingMVars && root(scrutinee, null) &&
+                CoreRepresentations.expression(scrutinee as List<Any?>).isTuple &&
+                alternative?.firstOrNull() == "data" && body?.firstOrNull() == "lit" &&
+                body.getOrNull(1) == "int" && CoreRepresentations.expression(body as List<Any?>).isLong &&
+                result?.kind == CoreKind.LONG && result.primReps == listOf("IntRep")
         }
         else -> false
     }
