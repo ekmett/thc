@@ -857,6 +857,36 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 CoreVectors.validate(name, args.map(CoreVectors::argumentProof), tupleProof)
                 CoreVectors.validateFlags(flags)
                 vectorPrimitive(name, args.map { compile(it, scope, false) })
+            } else if (fn[0] == "prim" && MVarOp.named(fn[1] as String) != null) {
+                val operation = MVarOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                operation.validateBindings(args.map(CoreRepresentations::expression), args.map {
+                    if (it[0] == "var") scope.locals[it[1]]?.proof ?: globalProofs[it[1]] else null
+                })
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                operation.validate(operands.map { it.proof }, flags, tupleProof)
+                if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
+                    when (operation) {
+                        MVarOp.NEW -> e.builder.beginNewMVar(destination[0])
+                        MVarOp.TAKE, MVarOp.READ -> e.builder.beginReadMVar(destination[0], operation == MVarOp.TAKE)
+                        MVarOp.TRY_TAKE, MVarOp.TRY_READ ->
+                            e.builder.beginTryReadMVar(destination[0], destination[1], operation == MVarOp.TRY_TAKE)
+                        MVarOp.TRY_PUT -> e.builder.beginTryPutMVar(destination[0])
+                        MVarOp.IS_EMPTY -> e.builder.beginIsEmptyMVar(destination[0])
+                        else -> error("Not a tuple MVar operation")
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (operation) {
+                        MVarOp.NEW -> e.builder.endNewMVar()
+                        MVarOp.TAKE, MVarOp.READ -> e.builder.endReadMVar()
+                        MVarOp.TRY_TAKE, MVarOp.TRY_READ -> e.builder.endTryReadMVar()
+                        MVarOp.TRY_PUT -> e.builder.endTryPutMVar()
+                        MVarOp.IS_EMPTY -> e.builder.endIsEmptyMVar()
+                        else -> error("Not a tuple MVar operation")
+                    }
+                } else ProvenExpression(Expression { e ->
+                    e.builder.beginPutMVar(); operands.forEach { it.emit(e) }; e.builder.endPutMVar()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && MutVarOp.named(fn[1] as String) != null) {
                 val operation = MutVarOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

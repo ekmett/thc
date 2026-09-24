@@ -635,6 +635,74 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class NewMVar {
+        @Specialization public static void create(VirtualFrame frame, LocalAccessor destination,
+                Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, new ManagedMVar());
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = boolean.class, name = "remove")
+    public static final class ReadMVar {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination, boolean remove,
+                Object value, Object state, @Bind("$node") Node node) {
+            ManagedMVar cell = ManagedMVar.require(value);
+            TupleResultsKt.requireVoidCarrier(state);
+            Object result = remove ? cell.take(node) : cell.read(node);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "flag")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = boolean.class, name = "remove")
+    public static final class TryReadMVar {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor flag, LocalAccessor destination,
+                boolean remove, Object value, Object state, @Bind("$node") Node node) {
+            ManagedMVar cell = ManagedMVar.require(value);
+            TupleResultsKt.requireVoidCarrier(state);
+            MVarReadResult result = remove ? cell.tryTake() : cell.tryRead();
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            flag.setLong(bytecode, frame, result.getPresent() ? 1L : 0L);
+            destination.setObject(bytecode, frame, result.getValue());
+        }
+    }
+    @Operation public static final class PutMVar {
+        @Specialization public static Object put(Object reference, Object value, Object state,
+                @Bind("$node") Node node) {
+            ManagedMVar cell = ManagedMVar.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            cell.put(value, node);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class TryPutMVar {
+        @Specialization public static void put(VirtualFrame frame, LocalAccessor destination,
+                Object reference, Object value, Object state, @Bind("$node") Node node) {
+            ManagedMVar cell = ManagedMVar.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = cell.tryPut(value) ? 1L : 0L;
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class IsEmptyMVar {
+        @Specialization public static void empty(VirtualFrame frame, LocalAccessor destination,
+                Object value, Object state, @Bind("$node") Node node) {
+            ManagedMVar cell = ManagedMVar.require(value);
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = cell.isEmpty() ? 1L : 0L;
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class NewMutVar {
         @Specialization public static void create(VirtualFrame frame, LocalAccessor destination,
                 Object value, Object state, @Bind("$node") Node node) {
