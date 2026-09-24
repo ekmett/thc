@@ -177,6 +177,7 @@ jobs:
           python3 scripts/test-int8-array-model.py
           python3 scripts/test-show-int-model.py
           python3 scripts/test-show-word-list-model.py
+          python3 scripts/test-bignat-literals.py
           python3 scripts/test-short-bytes-slices-model.py
           python3 scripts/test-array-slice-model.py
           python3 scripts/test-mutable-bytearray-model.py
@@ -243,6 +244,13 @@ jobs:
             build/show-int/boot/core/
             build/show-int/boot/boot-provenance.json
             build/show-int/native/show-int-oracle
+            build/bignat-literals/manifest.json
+            build/bignat-literals/*.tsv
+            build/bignat-literals/*.audit.json
+            build/bignat-literals/*-core/
+            build/bignat-literals/boot/core/
+            build/bignat-literals/boot/boot-provenance.json
+            build/bignat-literals/native/bignat-literal-oracle
             build/show-word-list/manifest.json
             build/show-word-list/*.tsv
             build/show-word-list/*.audit.json

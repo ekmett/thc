@@ -279,3 +279,5 @@ unpack additionally needs `Data.Text.Show.$wunpack`, and public length uses the
 foreign `_hs_text_measure_off` entry. The original text-2.1.3 pack source also
 uses mutable-byte-array shrink/resize operations. These gaps are not covered by
 the slice fixture or its native oracle.
+
+[BigNat literal and Integer/Natural conversion coverage](bignat-literals.md) supplies complete original Bignum source bodies and canonical unlifted byte-array literals. Addition retains its exact GMP, mutable-size/shrink and exception frontiers.

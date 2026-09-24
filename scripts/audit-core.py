@@ -205,6 +205,9 @@ class Audit:
         if kind not in self.cap['literalKinds']:
             self.issue('unsupported-literal', owner, path, kind)
             return
+        if kind == 'bignat':
+            if not isinstance(value, str) or not value or any(c not in '0123456789' for c in value) or len(value) > 1 and value[0] == '0':
+                self.issue('invalid-literal-value', owner, path, 'bignat requires canonical nonnegative decimal')
         if kind == 'string-bytes':
             if not isinstance(value, str) or len(value) % 2 or any(c not in '0123456789abcdefABCDEF' for c in value):
                 self.issue('invalid-literal-value', owner, path, 'string-bytes must contain pairs of hexadecimal digits')
@@ -355,6 +358,8 @@ class Audit:
             return dict(kind='void', evaluated=True)
         if expr[0] == 'lit' and len(expr) >= 3:
             narrow = {'int8': 'Int8Rep', 'word8': 'Word8Rep', 'int16': 'Int16Rep', 'word16': 'Word16Rep', 'int32': 'Int32Rep', 'word32': 'Word32Rep'}
+            if expr[1] == 'bignat':
+                return dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
             if expr[1] in narrow:
                 return dict(kind='long', primReps=[narrow[expr[1]]], evaluated=True)
             kind = {'float': 'float', 'double': 'double', 'string-bytes': 'address',
@@ -633,6 +638,11 @@ class Audit:
                     if (not isinstance(proof, dict) or proof.get('kind') != 'long' or
                             proof.get('primReps') != intrinsic['primReps'] or 'aggregate' in proof or is_vector(proof)):
                         self.issue('scalar-representation', owner, path + '/rep', 'Narrow literal requires exact signed/unsigned identity')
+                if expr[1] == 'bignat':
+                    proof = self.expression_rep(expr)
+                    if (not isinstance(proof, dict) or proof.get('kind') != 'object' or
+                            proof.get('primReps') != ['BoxedRep (Just Unlifted)'] or 'aggregate' in proof or is_vector(proof)):
+                        self.issue('scalar-representation', owner, path + '/rep', 'BigNat literal requires exact unlifted ByteArray# identity')
             elif tag == 'void':
                 self.compare_shapes(self.expression_rep(expr), self.literal_rep(expr), owner, path + '/rep')
             elif tag == 'lam':
@@ -959,6 +969,8 @@ class Audit:
                                                             owner, f'{altpath}/binders/{field}/rep', component=True)
                     elif kind == 'lit':
                         self.literal(value[0], value[1], owner, altpath + '/literal')
+                        if value[0] == 'bignat':
+                            self.issue('alternative-kind', owner, altpath, 'BigNat literal alternatives are invalid GHC Core')
                         if value[0] in ('float', 'double'):
                             self.issue('alternative-kind', owner, altpath, 'Floating literal alternatives are invalid GHC Core')
                     elif kind != 'default':
