@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 281 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 901 | No declared lowering. |
+| Partial | 283 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 899 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -457,6 +457,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `minusWord32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusWord64X2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `mutableByteArrayContents#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `neAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `negateDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `negateDoubleX4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -579,6 +580,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `timesWord32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesWord64X2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `touch#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `tryPutMVar#` — arity 3 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `tryReadMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `tryTakeMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
@@ -1040,7 +1042,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `mkWeak#` — arity 4
 - [ ] `mkWeakNoFinalizer#` — arity 3
 - [ ] `mulIntMayOflo#` — arity 2
-- [ ] `mutableByteArrayContents#` — arity 1
 - [ ] `myThreadId#` — arity 1
 - [ ] `negateDoubleX8#` — arity 1
 - [ ] `negateFloatX16#` — arity 1
@@ -1368,7 +1369,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `timesWord64X8#` — arity 2
 - [ ] `timesWord8X32#` — arity 2
 - [ ] `timesWord8X64#` — arity 2
-- [ ] `touch#` — arity 2
 - [ ] `traceBinaryEvent#` — arity 3
 - [ ] `traceEvent#` — arity 2
 - [ ] `traceMarker#` — arity 2

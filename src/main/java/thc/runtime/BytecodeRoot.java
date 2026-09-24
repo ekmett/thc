@@ -992,6 +992,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation public static final class Touch {
+        @Specialization public static Object preserve(Object kept, Object state) {
+            return thc.runtime.Touch.preserve(kept, state);
+        }
+    }
+
     /** Invoke exactly one logical State argument, with a fence after real return/throw. */
     @Operation(forceCached = true)
     @ConstantOperand(type = Metrics.class, name = "metrics")

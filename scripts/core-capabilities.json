@@ -512,6 +512,7 @@
     "newPinnedByteArray#": 2,
     "newAlignedPinnedByteArray#": 3,
     "byteArrayContents#": 1,
+    "mutableByteArrayContents#": 1,
     "readWord8OffAddr#": 3,
     "readInt8OffAddr#": 3,
     "readWord16OffAddr#": 3,
@@ -547,6 +548,7 @@
     "writeAddrOffAddr#": 4,
     "writeAddrArray#": 4,
     "keepAlive#": 3,
+    "touch#": 2,
     "newByteArray#": 2,
     "resizeMutableByteArray#": 3,
     "getSizeofMutableByteArray#": 2,
@@ -969,6 +971,12 @@
           "AddrRep"
         ]
       }
+    },
+    "mutableByteArrayContents#": {
+      "arguments": [
+        {"kind": "object", "primReps": ["BoxedRep (Just Unlifted)"]}
+      ],
+      "result": {"kind": "address", "primReps": ["AddrRep"]}
     },
     "readWord32OffAddr#": {
       "arguments": [

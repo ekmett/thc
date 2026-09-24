@@ -6,6 +6,41 @@ module PinnedPointerCellsAudit where
 
 import GHC.Exts
 
+-- Keep the genuine mutable contents primop reachable, without freezing or
+-- copying the allocation. The helper also exposes its checked managed offset
+-- boundary to the JVM tests; native calls use only in-bounds offsets.
+{-# OPAQUE mutableContentsAt #-}
+mutableContentsAt :: MutableByteArray# s -> Int# -> Addr#
+mutableContentsAt bytes offset = plusAddr# (mutableByteArrayContents# bytes) offset
+
+{-# OPAQUE mutableContentsRoundtrip #-}
+mutableContentsRoundtrip :: Int# -> Int#
+mutableContentsRoundtrip raw = runRW# (\s0 ->
+  case newPinnedByteArray# 32# s0 of { (# s1, bytes #) ->
+  case andI# raw 15# of { offset ->
+  case mutableContentsAt bytes 0# of { base ->
+  case mutableContentsAt bytes offset of { interior ->
+  case writeWord8Array# bytes offset (wordToWord8# (int2Word# raw)) s1 of { s2 ->
+  case readWord8OffAddr# interior 0# s2 of { (# s3, fromArray #) ->
+  case writeWord8OffAddr# interior 0# (wordToWord8# (int2Word# (xorI# raw 90#))) s3 of { s4 ->
+  case readWord8Array# bytes offset s4 of { (# s5, fromAddress #) ->
+  case touch# bytes s5 of { _ ->
+    eqAddr# interior (plusAddr# base offset) *# 1000000#
+      +# word2Int# (word8ToWord# fromArray) *# 256#
+      +# word2Int# (word8ToWord# fromAddress)
+  } } } } } } } } })
+
+-- A lifted bottom must remain unevaluated by touch#. A wrong strictness
+-- implementation raises immediately instead of hanging the native oracle.
+{-# OPAQUE opaqueBottom #-}
+opaqueBottom :: Int# -> Int
+opaqueBottom raw = raise# (I# raw)
+
+{-# OPAQUE touchLazyPayload #-}
+touchLazyPayload :: Int# -> Int#
+touchLazyPayload raw = runRW# (\s ->
+  case touch# (opaqueBottom raw) s of { _ -> raw +# 37# })
+
 -- Keep the allocation alive while deriving, storing, and re-reading an
 -- interior pointer. The pointer field occupies bytes 8..15 on this target;
 -- the numeric field at byte 16 proves disjoint writes survive.
