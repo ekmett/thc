@@ -1,0 +1,273 @@
+@file:Suppress("UNCHECKED_CAST")
+package thc.runtime
+
+import com.oracle.truffle.api.Truffle
+import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.frame.FrameDescriptor
+import com.oracle.truffle.api.frame.VirtualFrame
+import org.graalvm.polyglot.Context
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
+import thc.Language
+import java.nio.ByteOrder
+
+class Int32VectorMemoryProofTest {
+    private fun scalar(kind: String, rep: String?) = mapOf("kind" to kind,
+        "primReps" to if (rep == null) emptyList<String>() else listOf(rep), "evaluated" to true)
+    private val state = scalar("void", null)
+    private val integer = scalar("long", "IntRep")
+    private val lane = scalar("long", "Int32Rep")
+    private val array = scalar("object", "BoxedRep (Just Unlifted)")
+    private val closure = scalar("closure", "BoxedRep (Just Lifted)")
+    private val vector = mapOf("kind" to "vector", "primReps" to listOf("VecRep 4 Int32ElemRep"),
+        "evaluated" to true, "vector" to mapOf("lanes" to 4, "element" to "Int32ElemRep"))
+    private val unsignedVector = vector + mapOf("primReps" to listOf("VecRep 4 Word32ElemRep"),
+        "vector" to mapOf("lanes" to 4, "element" to "Word32ElemRep"))
+    private val unpacked = mapOf("kind" to "unknown", "primReps" to List(4) { "Int32Rep" },
+        "evaluated" to true, "aggregate" to "unboxed-tuple", "components" to List(4) { lane })
+    private val written = intArrayOf(Int.MIN_VALUE, 0x01234567, -1, Int.MAX_VALUE)
+    private val weights = longArrayOf(3, 5, 7, 11)
+    private fun readResult(evaluated: Boolean) = mapOf("kind" to "unknown", "aggregate" to "unboxed-tuple",
+        "primReps" to listOf("VecRep 4 Int32ElemRep"), "vector" to vector.getValue("vector"),
+        "components" to listOf(state, vector), "evaluated" to evaluated)
+    private fun copy(value: Any?): Any? = when (value) {
+        is Map<*, *> -> value.entries.associateTo(linkedMapOf()) { it.key as String to copy(it.value) }
+        is List<*> -> value.map(::copy).toMutableList()
+        else -> value
+    }
+    private fun map(value: Any?) = value as MutableMap<String, Any?>
+    private fun list(value: Any?) = value as MutableList<Any?>
+    private fun binder(id: String, proof: Map<String, Any?>) = mutableMapOf<String, Any?>(
+        "id" to id, "name" to id, "lifted" to false, "coercion" to false, "rep" to copy(proof))
+    private fun variable(id: String, proof: Map<String, Any?>) = mutableListOf<Any?>("var", id, mutableMapOf("rep" to copy(proof)))
+    private fun literal(value: Long, kind: String = "int", proof: Map<String, Any?> = integer) =
+        mutableListOf<Any?>("lit", kind, value.toString(), mutableMapOf("rep" to copy(proof)))
+    private fun call(name: String, arguments: List<List<Any?>>, proof: Map<String, Any?>) = mutableListOf<Any?>(
+        "app", listOf("prim", name, mapOf("rep" to closure)), arguments.toMutableList(),
+        MutableList(arguments.size) { false }, false, false, mutableMapOf("rep" to copy(proof)))
+    private fun checksumExpression(): MutableList<Any?> {
+        var result = literal(0)
+        for (i in 0..3) result = call("+#", listOf(result, call("*#", listOf(
+            call("int32ToInt#", listOf(variable("lane$i", lane)), integer), literal(weights[i])), integer)), integer)
+        return result
+    }
+    private fun consume(value: List<Any?>): MutableList<Any?> = mutableListOf("case",
+        call("unpackInt32X4#", listOf(value), unpacked), "lanes", mutableListOf(mutableListOf<Any?>(
+            "data", "Tuple4", MutableList(4) { "lane$it" }, checksumExpression(),
+            mutableMapOf("binders" to MutableList(4) { binder("lane$it", lane) }))),
+        mutableMapOf("rep" to copy(integer), "binder" to binder("lanes", unpacked)))
+    private fun packed(): MutableList<Any?> {
+        val tuple = mutableListOf<Any?>("app", listOf("con", "Tuple4", 4),
+            written.map { literal(it.toLong(), "int32", lane) }, List(4) { false }, false, true,
+            mutableMapOf("rep" to copy(unpacked)))
+        return call("packInt32X4#", listOf(tuple), vector)
+    }
+    private data class Fixture(val module: MutableMap<String, Any?>, val app: MutableList<Any?>,
+        val body: MutableList<Any?>, val parameters: List<MutableMap<String, Any?>>)
+    private fun fixture(operation: VectorByteArrayOp): Fixture {
+        val parameters = listOf(binder("array", array), binder("offset", integer), binder("state", state))
+        val operands = listOf(variable("array", array), variable("offset", integer))
+        val app = when {
+            operation.isRead -> call(operation.primitive, operands + listOf(variable("state", state)), readResult(false))
+            operation.isWrite -> call(operation.primitive, operands + listOf(packed(), variable("state", state)), state)
+            else -> call(operation.primitive, operands, vector)
+        }
+        val body = when {
+            operation.isRead -> mutableListOf<Any?>("case", app, "whole", mutableListOf(mutableListOf<Any?>(
+                "data", "Tuple2", mutableListOf("nextState", "vector"), consume(variable("vector", vector)),
+                mutableMapOf("binders" to mutableListOf(binder("nextState", state), binder("vector", vector))))),
+                mutableMapOf("rep" to copy(integer), "binder" to binder("whole", readResult(true))))
+            operation.isWrite -> mutableListOf<Any?>("case", app, "afterWrite", mutableListOf(mutableListOf<Any?>(
+                "default", null, emptyList<String>(), consume(call(if (operation.scalarOffset)
+                    "indexInt32ArrayAsInt32X4#" else "indexInt32X4Array#", operands, vector)),
+                mutableMapOf("binders" to emptyList<Any>()))),
+                mutableMapOf("rep" to copy(integer), "binder" to binder("afterWrite", state)))
+            else -> consume(app)
+        }
+        val module = mutableMapOf<String, Any?>("schema" to 1, "ghc" to "9.14.1", "instrument" to true,
+            "constructors" to mutableListOf(mutableMapOf<String, Any?>("id" to "Tuple2", "kind" to "unboxed-tuple", "arity" to 2),
+                mutableMapOf<String, Any?>("id" to "Tuple4", "kind" to "unboxed-tuple", "arity" to 4)),
+            "bindings" to mutableListOf(mutableMapOf<String, Any?>("id" to "root", "name" to "root", "arity" to 3,
+                "lifted" to true, "rep" to copy(closure), "expr" to mutableListOf("lam", parameters, body,
+                    mutableMapOf("rep" to copy(closure), "resultRep" to copy(integer))))))
+        return Fixture(module, app, body, parameters)
+    }
+    private fun withLanguage(action: (Language) -> Unit) = Context.newBuilder("thc").allowExperimentalOptions(true)
+        .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+        .option("engine.CompilationFailureAction", "Throw").build().use { context ->
+            context.initialize("thc"); context.enter()
+            try { action(TruffleLanguage.LanguageReference.create(Language::class.java).get(null)) } finally { context.leave() }
+        }
+    private fun program(language: Language, backend: String, fixture: Fixture, diagnostic: Boolean): ExecutableProgram {
+        val module = fixture.module + ("diagnosticUnsupported" to diagnostic)
+        return if (backend == "ast") Program(language, module) else BytecodeProgram(language, module)
+    }
+    private fun invoke(program: ExecutableProgram, bytes: ByteArray, index: Long, token: Any? = Unit): Any? =
+        Calls.target(program.hostEntryTarget(3), arrayOf(program.entryValue("root"), arrayOf(bytes, index, token)))
+    private fun shift(byte: Int) = 8 * (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) byte else 3 - byte)
+    private fun expected(bytes: ByteArray, offset: Int): Long = (0..3).sumOf { lane ->
+        val value = (0..3).fold(0) { bits, byte -> bits or ((bytes[offset + lane * 4 + byte].toInt() and 255) shl shift(byte)) }
+        value.toLong() * weights[lane]
+    }
+    private fun storeModel(bytes: ByteArray, offset: Int) {
+        for (lane in 0..3) for (byte in 0..3) bytes[offset + lane * 4 + byte] = (written[lane] ushr shift(byte)).toByte()
+    }
+    private fun released(language: Language) {
+        val state = language.handoffState.get()
+        assertEquals(0, state.arguments.depth); assertEquals(0, state.arguments.retainedReferences())
+        assertEquals(0, state.results.depth); assertEquals(0, state.results.retainedReferences())
+    }
+
+    @Test fun allSixExactContractsExecuteOnBothBackendsInBothLoadModes() {
+        assertEquals(setOf("indexInt32X4Array#", "indexInt32ArrayAsInt32X4#", "readInt32X4Array#",
+            "readInt32ArrayAsInt32X4#", "writeInt32X4Array#", "writeInt32ArrayAsInt32X4#"),
+            VectorByteArrayOp.entries.map { it.primitive }.toSet())
+        for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) withLanguage { language ->
+            for (operation in VectorByteArrayOp.entries) {
+                val p = program(language, backend, fixture(operation), diagnostic)
+                for (index in if (operation.scalarOffset) 0L..3L else 0L..1L) {
+                    val bytes = ByteArray(40) { (it * 47 + 129).toByte() }
+                    val expectedBytes = bytes.copyOf(); val offset = (index * if (operation.scalarOffset) 4 else 16).toInt()
+                    if (operation.isWrite) storeModel(expectedBytes, offset)
+                    assertEquals(expected(expectedBytes, offset), invoke(p, bytes, index), "$backend/$diagnostic/${operation.primitive}/$index")
+                    assertArrayEquals(expectedBytes, bytes); released(language)
+                }
+                assertEquals(0L, (p.diagnostics().getValue("unsupportedTraps") as Number).toLong())
+            }
+        }
+    }
+
+    private fun reject(language: Language, backend: String, diagnostic: Boolean, fixture: Fixture, label: String) {
+        val bytes = ByteArray(40) { (it * 13 + 97).toByte() }; val before = bytes.copyOf()
+        assertThrows(RuntimeFault::class.java, { invoke(program(language, backend, fixture, diagnostic), bytes, 0) }, label)
+        assertArrayEquals(before, bytes, "rejected before effects $label"); released(language)
+    }
+    @Test fun allOperationsRejectWrongArgumentsFlagsArityAndResultProofs() {
+        for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) withLanguage { language ->
+            for (operation in VectorByteArrayOp.entries) {
+                val mutations = listOf("array-levity", "index-signedness", "lexical-array", "lexical-index", "partial", "over", "result") +
+                    if (operation.isRead || operation.isWrite) listOf("state") else emptyList()
+                for (mutation in mutations) {
+                    val f = fixture(operation); val args = list(f.app[2]); val flags = list(f.app[3])
+                    when (mutation) {
+                        "array-levity" -> map(list(args[0])[2])["rep"] = copy(scalar("object", "BoxedRep (Just Lifted)"))
+                        "index-signedness" -> map(list(args[1])[2])["rep"] = copy(scalar("long", "WordRep"))
+                        "lexical-array" -> f.parameters[0]["rep"] = copy(scalar("object", "BoxedRep (Just Lifted)"))
+                        "lexical-index" -> f.parameters[1]["rep"] = copy(scalar("long", "WordRep"))
+                        "partial" -> { args.removeAt(args.lastIndex); flags.removeAt(flags.lastIndex) }
+                        "over" -> { args.add(copy(args[0])); flags.add(false) }
+                        "result" -> map(f.app[6]).remove("rep")
+                        "state" -> map(list(args.last())[2])["rep"] = copy(integer)
+                    }
+                    reject(language, backend, diagnostic, f, "$backend/$diagnostic/$operation/$mutation")
+                }
+                for (index in list(fixture(operation).app[2]).indices) for (flag in listOf(true, null, 0L, "false")) {
+                    val f = fixture(operation); list(f.app[3])[index] = flag
+                    reject(language, backend, diagnostic, f, "$backend/$diagnostic/$operation/flag[$index]=$flag")
+                }
+                if (operation.isWrite) {
+                    val f = fixture(operation); map(list(list(f.app[2])[2])[6])["rep"] = copy(unsignedVector)
+                    reject(language, backend, diagnostic, f, "$backend/$diagnostic/$operation/unsigned vector")
+                }
+            }
+        }
+    }
+
+    @Test fun immediateReadCasesRejectEscapesWrongShapesAndPatternMetadata() {
+        val mutations = listOf("whole-escape", "missing-vector", "unsigned-result", "width", "components", "component-state",
+            "default", "multiple", "constructor", "arity", "duplicate-pattern", "whole-pattern", "pattern-order",
+            "pattern-state", "pattern-unsigned", "whole-levity", "pattern-levity", "whole-coercion", "pattern-coercion",
+            "missing-whole-coercion", "missing-pattern-coercion", "whole-id", "whole-unevaluated", "pattern-unevaluated", "outer-result")
+        for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) withLanguage { language ->
+            for (operation in VectorByteArrayOp.entries.filter { it.isRead }) for (mutation in mutations) {
+                val f = fixture(operation); val alternative = list(list(f.body[3])[0])
+                val whole = map(map(f.body[4])["binder"]); val records = list(map(alternative[4])["binders"])
+                val result = map(map(f.app[6])["rep"])
+                when (mutation) {
+                    "whole-escape" -> alternative[3] = mutableListOf<Any?>("var", "whole")
+                    "missing-vector" -> result.remove("vector")
+                    "unsigned-result" -> { result["vector"] = unsignedVector["vector"]; result["primReps"] = unsignedVector["primReps"] }
+                    "width" -> map(result["vector"])["lanes"] = 2
+                    "components" -> list(result["components"]).reverse()
+                    "component-state" -> list(result["components"])[0] = copy(integer)
+                    "default" -> alternative[0] = "default"
+                    "multiple" -> list(f.body[3]).add(copy(alternative))
+                    "constructor" -> list(f.module["constructors"]).removeAt(0)
+                    "arity" -> map(list(f.module["constructors"])[0])["arity"] = 4
+                    "duplicate-pattern" -> list(alternative[2])[1] = "nextState"
+                    "whole-pattern" -> list(alternative[2])[1] = "whole"
+                    "pattern-order" -> records.reverse()
+                    "pattern-state" -> map(records[0])["rep"] = copy(integer)
+                    "pattern-unsigned" -> map(records[1])["rep"] = copy(unsignedVector)
+                    "whole-levity" -> whole["lifted"] = true
+                    "pattern-levity" -> map(records[1])["lifted"] = true
+                    "whole-coercion" -> whole["coercion"] = true
+                    "pattern-coercion" -> map(records[1])["coercion"] = true
+                    "missing-whole-coercion" -> whole.remove("coercion")
+                    "missing-pattern-coercion" -> map(records[0]).remove("coercion")
+                    "whole-id" -> whole["id"] = "other"
+                    "whole-unevaluated" -> map(whole["rep"])["evaluated"] = false
+                    "pattern-unevaluated" -> map(map(records[1])["rep"])["evaluated"] = false
+                    "outer-result" -> map(f.body[4])["rep"] = copy(scalar("double", "DoubleRep"))
+                }
+                reject(language, backend, diagnostic, f, "$backend/$diagnostic/$operation/$mutation")
+            }
+        }
+    }
+
+    @Test fun stateExpressionsRunBeforeReadOrWriteAndFailurePrecedesVectorBounds() {
+        for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) withLanguage { language ->
+            for (operation in VectorByteArrayOp.entries.filter { !it.isIndex }) for (failure in listOf(false, true)) {
+                val f = fixture(operation)
+                val stride = if (operation.scalarOffset) 4L else 16L
+                val effectIndex = if (failure) literal(Long.MAX_VALUE) else call("*#", listOf(variable("offset", integer), literal(stride)), integer)
+                list(f.app[2])[list(f.app[2]).lastIndex] = call("writeWord8Array#", listOf(variable("array", array), effectIndex,
+                    literal(93, "word8", scalar("long", "Word8Rep")), variable("state", state)), state)
+                val p = program(language, backend, f, diagnostic)
+                val bytes = ByteArray(40) { (it * 37 + 161).toByte() }; val expectedBytes = bytes.copyOf()
+                if (failure) {
+                    val error = assertThrows(RuntimeFault::class.java) { invoke(p, bytes, Long.MAX_VALUE) }
+                    assertTrue(error.message.orEmpty().contains("ByteArray# index outside"), "State must fail before vector bounds: $error")
+                } else {
+                    val offset = stride.toInt(); expectedBytes[offset] = 93
+                    if (operation.isWrite) storeModel(expectedBytes, offset)
+                    assertEquals(expected(expectedBytes, offset), invoke(p, bytes, 1))
+                }
+                assertArrayEquals(expectedBytes, bytes); released(language)
+            }
+            for (operation in VectorByteArrayOp.entries.filter { !it.isIndex }) {
+                val p = program(language, backend, fixture(operation), diagnostic)
+                for (index in listOf(0L, Long.MIN_VALUE, Long.MAX_VALUE)) {
+                    val bytes = ByteArray(40) { 37 }; val before = bytes.copyOf()
+                    val error = assertThrows(RuntimeFault::class.java) { invoke(p, bytes, index, 0L) }
+                    assertTrue(error.message.orEmpty().contains("zero-width"), "invalid State must precede bounds: $error")
+                    assertArrayEquals(before, bytes); released(language)
+                }
+                for (index in listOf(-1L, 10L, 1L shl 32, Long.MAX_VALUE)) {
+                    val bytes = ByteArray(40) { 37 }; val before = bytes.copyOf()
+                    assertThrows(RuntimeFault::class.java) { invoke(p, bytes, index) }
+                    assertArrayEquals(before, bytes); released(language)
+                }
+            }
+        }
+    }
+
+    @Test fun directAstOperandsPreserveStateOrderAndDoNotPublishFailedLoads() {
+        val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameDescriptor.newBuilder().build())
+        for (operation in VectorByteArrayOp.entries.filter { !it.isIndex }) {
+            val bytes = ByteArray(32) { 53 }; val before = bytes.copyOf(); val events = mutableListOf<String>()
+            val failure = RuntimeFault("state marker")
+            fun operand(name: String, action: () -> Any?) = object : Expr() {
+                override fun execute(frame: VirtualFrame): Any? { events.add(name); return action() }
+            }
+            val arguments = mutableListOf<Expr>(operand("array") { bytes }, operand("index") { Long.MAX_VALUE })
+            if (operation.isWrite) arguments.add(operand("vector") { Int32X4(1, 2, 3, 4) })
+            arguments.add(operand("state") { throw failure })
+            val expression = VectorByteArrayExpression(operation, arguments.toTypedArray())
+            val sentinel = Any(); var published: Any? = sentinel
+            assertSame(failure, assertThrows(RuntimeFault::class.java) { published = expression.execute(frame) })
+            assertSame(sentinel, published); assertArrayEquals(before, bytes)
+            assertEquals(if (operation.isWrite) listOf("array", "index", "vector", "state") else listOf("array", "index", "state"), events)
+        }
+    }
+}
