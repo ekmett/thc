@@ -23,11 +23,12 @@ import java.nio.file.StandardOpenOption
  * three streams are supported. Calls are synchronous: this is not a scheduler,
  * readiness service, or an implementation of interruptible foreign calls. */
 internal class ManagedFiles(private val env: TruffleLanguage.Env) {
+    private data class FileIdentity(val device: Long, val inode: Long)
     private class Descriptor(
         val input: InputStream? = null,
         val output: OutputStream? = null,
         val channel: SeekableByteChannel? = null,
-        val file: TruffleFile? = null,
+        val identity: FileIdentity? = null,
         val readable: Boolean = false,
         val writable: Boolean = false,
         val append: Boolean = false
@@ -54,6 +55,24 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env) {
     private fun descriptor(fd: Long): Descriptor = descriptors[fd]
         ?: fail(4, "Closed or unknown THC file descriptor: $fd")
 
+    private fun identity(file: TruffleFile, name: String): FileIdentity {
+        val attributes = file.getAttributes(listOf(TruffleFile.IS_REGULAR_FILE, TruffleFile.IS_DIRECTORY,
+            TruffleFile.UNIX_DEV, TruffleFile.UNIX_INODE))
+        if (attributes.get(TruffleFile.IS_DIRECTORY) == true) fail(9, "Cannot open a directory: $name")
+        if (attributes.get(TruffleFile.IS_REGULAR_FILE) != true) fail(7, "Only regular files are supported: $name")
+        val device: Long? = attributes.get(TruffleFile.UNIX_DEV)
+        val inode: Long? = attributes.get(TruffleFile.UNIX_INODE)
+        if (device == null || inode == null) fail(7, "File provider does not expose stable Unix identity: $name")
+        return FileIdentity(device, inode)
+    }
+
+    private fun requireUnclaimed(identity: FileIdentity, writable: Boolean, name: String) {
+        for (other in descriptors.values) {
+            if (other.identity == identity && (writable || other.writable))
+                fail(8, "File already has an incompatible reader/writer in this THC context: $name")
+        }
+    }
+
     private inline fun result(action: () -> Long): Long = try {
         action()
     } catch (error: FileFailure) {
@@ -78,7 +97,9 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env) {
 
     /** Read0/Write1/Append2/ReadWrite3. Write truncates only after the context's
      * Haskell single-writer/multiple-reader check, never while acquiring a channel.
-     * isSameFile checks aliases including hard links on supporting file systems.
+     * Claims use provider-supplied Unix device/inode identities, not retained paths.
+     * Pre/post-open checks detect simple replacement but cannot provide atomic
+     * opened-channel identity against concurrent host mutation (including ABA).
      * This does not coordinate external processes or replace native file locks. */
     @Synchronized @TruffleBoundary fun open(path: ManagedAddress, mode: Long): Long {
         val name = path.utf8() // Bad managed memory is a runtime fault, not IOException.
@@ -89,18 +110,8 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env) {
             if (nextDescriptor > Int.MAX_VALUE) fail(6, "THC file descriptor space exhausted")
             val file = env.getPublicTruffleFile(name)
             val writable = mode != 0L
-            val existing = try {
-                val attributes = file.getAttributes(listOf(TruffleFile.IS_REGULAR_FILE, TruffleFile.IS_DIRECTORY))
-                if (attributes.get(TruffleFile.IS_DIRECTORY)) fail(9, "Cannot open a directory: $name")
-                if (!attributes.get(TruffleFile.IS_REGULAR_FILE)) fail(7, "Only regular files are supported: $name")
-                true
-            } catch (_: NoSuchFileException) { false }
-            if (existing) {
-                for (other in descriptors.values) {
-                    if (other.file != null && (writable || other.writable) && file.isSameFile(other.file))
-                        fail(8, "File already has an incompatible reader/writer in this THC context: $name")
-                }
-            }
+            val before = try { identity(file, name) } catch (_: NoSuchFileException) { null }
+            if (before != null) requireUnclaimed(before, writable, name)
             val options = when (mode) {
                 0L -> setOf(StandardOpenOption.READ)
                 2L -> setOf(StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.APPEND)
@@ -109,9 +120,12 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env) {
             }
             val channel = file.newByteChannel(options)
             try {
+                val after = identity(file, name)
+                if (before != null && before != after) fail(8, "File identity changed while opening: $name")
+                requireUnclaimed(after, writable, name)
                 if (mode == 1L) channel.truncate(0)
                 val fd = nextDescriptor++
-                descriptors[fd] = Descriptor(channel = channel, file = file,
+                descriptors[fd] = Descriptor(channel = channel, identity = after,
                     readable = mode == 0L || mode == 3L, writable = writable, append = mode == 2L)
                 fd
             } catch (error: Throwable) {
@@ -212,14 +226,16 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env) {
         disposed = true
         val entries = descriptors.values.toList()
         descriptors.clear()
-        var failed: IOException? = null
+        var failed: Throwable? = null
         for (entry in entries) try {
             entry.channel?.close()
             entry.output?.flush()
-        } catch (error: IOException) {
-            if (failed == null) failed = error else failed.addSuppressed(error)
+        } catch (error: Throwable) {
+            if (failed == null) failed = error else if (failed !== error) failed.addSuppressed(error)
         }
         failure.remove()
-        if (failed != null) throw RuntimeFault("THC file disposal failed: ${failed.message}")
+        if (failed is IOException)
+            throw RuntimeFault("THC file disposal failed: ${failed.message}").also { it.initCause(failed) }
+        if (failed != null) throw failed
     }
 }

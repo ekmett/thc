@@ -4,6 +4,7 @@
 package thc.runtime
 
 import org.graalvm.polyglot.Context
+import org.graalvm.polyglot.io.FileSystem
 import org.graalvm.polyglot.io.IOAccess
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -12,8 +13,12 @@ import thc.Language
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.nio.channels.SeekableByteChannel
 import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.OpenOption
 import java.nio.file.Path
+import java.nio.file.attribute.FileAttribute
 
 /** Managed service contract tests, not a claim of ordinary GHC Handle execution. */
 class ManagedFilesTest {
@@ -25,6 +30,12 @@ class ManagedFilesTest {
     private fun <T> entered(context: Context, action: (ManagedFiles) -> T): T {
         context.initialize("thc"); context.enter()
         return try { action(Language.currentState().files) } finally { context.leave() }
+    }
+
+    private open class TrackingFileSystem(private val delegate: FileSystem = FileSystem.newDefaultFileSystem()) : FileSystem by delegate {
+        val channels = mutableListOf<SeekableByteChannel>()
+        override fun newByteChannel(path: Path, options: Set<OpenOption>, vararg attributes: FileAttribute<*>): SeekableByteChannel =
+            delegate.newByteChannel(path, options, *attributes).also { channels.add(it) }
     }
 
     @Test fun standardStreamsAreContextOwnedAndClosingThemDoesNotCloseEmbeddingStreams() {
@@ -112,6 +123,73 @@ class ManagedFilesTest {
             files.close(reader)
             assertTrue(files.open(text(hard.toString()), 1) >= 3)
             assertEquals("", Files.readString(path))
+        } }
+    }
+
+    @Test fun readerClaimFollowsFileIdentityAcrossRenameAndReplacement() {
+        val original = directory.resolve("original.bin"); Files.writeString(original, "keep")
+        val renamed = directory.resolve("renamed.bin")
+        builder().build().use { context -> entered(context) { files ->
+            val reader = files.open(text(original.toString()), 0)
+            assertTrue(reader >= 3)
+            Files.move(original, renamed)
+            Files.writeString(original, "replacement")
+            assertEquals(-1L, files.open(text(renamed.toString()), 1))
+            assertEquals(8L, files.errorKind()); assertEquals("keep", Files.readString(renamed))
+            val replacement = files.open(text(original.toString()), 1)
+            assertTrue(replacement >= 3); assertEquals("", Files.readString(original))
+            val content = ByteArray(4)
+            assertEquals(4L, files.read(reader, ManagedAddress.fromByteArray(content), 4))
+            assertEquals("keep", String(content))
+            files.close(reader)
+            assertTrue(files.open(text(renamed.toString()), 1) >= 3)
+        } }
+    }
+
+    @Test fun unlinkingAnOpenFileDoesNotPreventUnrelatedOpens() {
+        val original = directory.resolve("unlinked.bin"); Files.writeString(original, "keep")
+        val unrelated = directory.resolve("unrelated.bin"); Files.writeString(unrelated, "replace")
+        builder().build().use { context -> entered(context) { files ->
+            val reader = files.open(text(original.toString()), 0)
+            assertTrue(reader >= 3)
+            Files.delete(original)
+            assertTrue(files.open(text(unrelated.toString()), 1) >= 3)
+            val content = ByteArray(4)
+            assertEquals(4L, files.read(reader, ManagedAddress.fromByteArray(content), 4))
+            assertEquals("keep", String(content))
+        } }
+    }
+
+    @Test fun unavailableStableIdentityFailsBeforeOpeningOrTruncatingExistingFile() {
+        val path = directory.resolve("no-identity.bin"); Files.writeString(path, "keep")
+        val backing = FileSystem.newDefaultFileSystem()
+        val fs = object : TrackingFileSystem(backing) {
+            override fun readAttributes(path: Path, attributes: String, vararg options: LinkOption): Map<String, Any> =
+                backing.readAttributes(path, attributes, *options).toMutableMap().also { it.remove("dev") }
+        }
+        builder().allowIO(IOAccess.newBuilder().fileSystem(fs).build()).build().use { context -> entered(context) { files ->
+            assertEquals(-1L, files.open(text(path.toString()), 1))
+            assertEquals(7L, files.errorKind()); assertEquals("keep", Files.readString(path))
+            assertTrue(fs.channels.isEmpty())
+        } }
+    }
+
+    @Test fun detectedIdentityChangeClosesTheAcquiredChannelWithoutTruncation() {
+        val path = directory.resolve("changing.bin"); Files.writeString(path, "original")
+        val moved = directory.resolve("moved.bin")
+        val fs = object : TrackingFileSystem() {
+            override fun newByteChannel(path: Path, options: Set<OpenOption>, vararg attributes: FileAttribute<*>): SeekableByteChannel {
+                val channel = super.newByteChannel(path, options, *attributes)
+                Files.move(path, moved)
+                Files.writeString(path, "replacement")
+                return channel
+            }
+        }
+        builder().allowIO(IOAccess.newBuilder().fileSystem(fs).build()).build().use { context -> entered(context) { files ->
+            assertEquals(-1L, files.open(text(path.toString()), 1))
+            assertEquals(8L, files.errorKind())
+            assertEquals("original", Files.readString(moved)); assertEquals("replacement", Files.readString(path))
+            assertEquals(1, fs.channels.size); assertFalse(fs.channels.single().isOpen)
         } }
     }
 
@@ -208,6 +286,36 @@ class ManagedFilesTest {
             assertEquals(0L, files.errorKind()); assertEquals(1L, files.deviceType(1))
             assertTrue(files.open(text(path.toString()), 1) >= 3)
         } }
+    }
+
+    @Test fun disposalClosesOwnedChannelsAfterCheckedAndUncheckedEmbeddingFailures() {
+        for (first in listOf(IOException("checked flush"), IllegalStateException("unchecked flush"))) {
+            val second = IllegalArgumentException("second flush")
+            var failing = false
+            val output = object : ByteArrayOutputStream() {
+                override fun flush() { if (failing) throw first }
+            }
+            val errors = object : ByteArrayOutputStream() {
+                override fun flush() { if (failing) throw second }
+            }
+            val fs = TrackingFileSystem()
+            builder().allowIO(IOAccess.newBuilder().fileSystem(fs).build()).out(output).err(errors).build().use { context ->
+                entered(context) { files ->
+                    val path = directory.resolve("cleanup-${first.javaClass.simpleName}.bin")
+                    assertTrue(files.open(text(path.toString()), 1) >= 3)
+                    assertEquals(1, fs.channels.size); assertTrue(fs.channels.single().isOpen)
+                    failing = true
+                    try {
+                        val thrown = assertThrows(RuntimeException::class.java) { files.dispose() }
+                        val cause = if (first is IOException) thrown.cause else thrown
+                        assertSame(first, cause)
+                        assertArrayEquals(arrayOf(second), first.suppressed)
+                        assertFalse(fs.channels.single().isOpen)
+                        assertDoesNotThrow { files.dispose() }
+                    } finally { failing = false }
+                }
+            }
+        }
     }
 
     @Test fun streamIoFailureIsNotSuccessfulOutputAndDoesNotCatchRuntimeFaults() {

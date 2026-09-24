@@ -8,6 +8,22 @@ POSIX or Windows handles. The service supports regular files and the embedding's
 standard byte streams; it does not implement a scheduler, readiness polling,
 interruptible calls, or arbitrary device files.
 
+Reader/writer claims retain immutable provider-supplied Unix device/inode pairs,
+so a rename, unlink, or replacement after open cannot redirect an existing claim.
+File providers without reliable Unix identities are unsupported; standard streams
+do not need those attributes. Metadata is accessed only through the embedding's
+public Truffle filesystem. Identity and regular-file type are checked before and
+after nontruncating channel acquisition, and conflicts are checked before any
+Write-mode truncation. Truffle exposes no opened-channel identity query: these
+checks detect simple replacements but do not establish atomic identity against
+concurrent external filesystem mutation, including ABA replacement. This is not
+a native file lock or an external-process synchronization guarantee.
+
+Disposal attempts every owned channel close and embedding output flush even if
+one throws an unchecked exception. It reports the first failure after cleanup,
+retaining later failures as suppressed exceptions. Embedding streams are never
+closed, and disposal cannot flush Haskell-level Handle buffers.
+
 Every argument is unlifted. In the table, `S` is the erased `State# RealWorld`
 carrier, `I` is exact `IntRep`, and `A` is exact `AddrRep` backed by managed memory.
 
