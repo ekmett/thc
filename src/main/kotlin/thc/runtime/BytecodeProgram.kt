@@ -1340,6 +1340,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 val operation = VectorByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 vectorByteArray(operation, args.map { compile(it, scope, false) })
+            } else if (fn[0] == "prim" && fn[1] == "touch#") {
+                CoreTouch.validateRaw(args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
+                    CoreRepresentations.metadata(expr)?.get("rep"))
+                val lowered = argument(args[0], scope, flags[0] as Boolean)
+                // A newly delayed lifted expression has an untyped thunk carrier.
+                // Its body was checked by lowering; refine without asserting WHNF
+                // or permitting an incompatible known stored representation.
+                val kept = ProvenExpression(lowered,
+                    lowered.proof.refine(CoreRepresentations.expression(args[0]).copy(evaluated = false)))
+                val state = compile(args[1], scope, false)
+                CoreTouch.validate(listOf(kept.proof, state.proof), flags, tupleProof)
+                ProvenExpression(Expression { e ->
+                    e.builder.beginTouch()
+                    kept.emit(e); state.emit(e)
+                    e.builder.endTouch()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && fn[1] == "keepAlive#") {
                 CoreKeepAlive.validate(args.map(CoreRepresentations::expression), flags, tupleProof,
                     args.getOrNull(2)?.let { CoreRepresentations.knownFunctionSignature(it, bindings) })

@@ -1103,6 +1103,74 @@ class EmptyTupleInputTests(unittest.TestCase):
             self.assertEqual(bool(primitive_errors), state is empty)
 
 
+class TouchAuditTest(unittest.TestCase):
+    state = dict(kind='void', primReps=[], evaluated=True)
+
+    def fixture(self, kind='object', lifted=True):
+        kept = dict(kind=kind, primReps=['BoxedRep (Just Lifted)' if lifted else 'BoxedRep (Just Unlifted)'], evaluated=False)
+        args = [[*var('kept'), dict(rep=copy.deepcopy(kept))], [*var('s'), dict(rep=copy.deepcopy(self.state))]]
+        call = ['app', ['prim', 'touch#'], args, [lifted, False], False, False, dict(rep=copy.deepcopy(self.state))]
+        params = [dict(id='kept', lifted=lifted, rep=kept), dict(id='s', lifted=False, rep=copy.deepcopy(self.state))]
+        root = dict(bind('root', ['lam', params, call, dict(rep=CLOSURE, resultRep=copy.deepcopy(self.state))]), rep=CLOSURE, arity=2)
+        return dict(schema=1, ghc='9.14.1', bindings=[root], constructors=[])
+
+    @staticmethod
+    def call(module):
+        return module['bindings'][0]['expr'][2]
+
+    def audit(self, module):
+        # Runtime/proof controls alone do not enable production admission; the
+        # existing pinned-pointer native fixture independently owns that gate.
+        cap = dict(CAP, primitives=dict(CAP['primitives'], **{'touch#': 2}))
+        return audit_core.Audit([('touch-model.json', module)], cap).run(['root'])
+
+    def test_exact_lifted_and_unlifted_reference_state_contracts(self):
+        for kind in ('object', 'data', 'closure'):
+            for lifted in (False, True):
+                module = self.fixture(kind, lifted)
+                self.assertTrue(self.audit(module)['accepted'], (kind, lifted, self.audit(module)))
+                self.call(module)[2][0][2]['rep']['evaluated'] = True
+                self.assertTrue(self.audit(module)['accepted'])
+
+    def test_malformed_raw_proofs_and_flags_fail_closed(self):
+        for where in ('kept', 'state', 'result'):
+            for key, value in (('kind', 'long'), ('primReps', ['IntRep']), ('evaluated', 1),
+                               ('extra', None), ('vector', None), ('aggregate', 'unboxed-tuple'), ('components', [])):
+                module = self.fixture(); call = self.call(module)
+                proof = call[6]['rep'] if where == 'result' else call[2][0 if where == 'kept' else 1][2]['rep']
+                proof[key] = value
+                with self.subTest(where=where, key=key):
+                    self.assertFalse(self.audit(module)['accepted'])
+            module = self.fixture(); call = self.call(module)
+            proof = call[6]['rep'] if where == 'result' else call[2][0 if where == 'kept' else 1][2]['rep']
+            proof.pop('evaluated')
+            self.assertFalse(self.audit(module)['accepted'])
+        for flags in ([], [True], [False, False], [True, True], [1, False], [True, False, False]):
+            module = self.fixture(); self.call(module)[3] = flags
+            self.assertFalse(self.audit(module)['accepted'], flags)
+        for count in (0, 1, 3):
+            module = self.fixture(); call = self.call(module)
+            call[2] = (call[2] * 2)[:count]; call[3] = [True, False, False][:count]
+            self.assertFalse(self.audit(module)['accepted'], count)
+
+    def test_unknown_levity_tuple_state_and_stored_scalar_cannot_be_disguised(self):
+        for index, proof in ((0, dict(REFERENCE, primReps=['BoxedRep Nothing'])),
+                             (1, tuple_rep(self.state))):
+            module = self.fixture(); self.call(module)[2][index][2]['rep'] = proof
+            self.assertFalse(self.audit(module)['accepted'])
+        module = self.fixture(); self.call(module)[6]['rep'] = tuple_rep(self.state)
+        self.assertFalse(self.audit(module)['accepted'])
+        for stored in (LONG, dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)):
+            module = self.fixture(); module['bindings'][0]['expr'][1][0]['rep'] = copy.deepcopy(stored)
+            self.assertFalse(self.audit(module)['accepted'])
+        module = self.fixture()
+        module['bindings'][0]['expr'][1].pop(0)
+        module['bindings'].append(dict(bind('kept', [*lit(1), dict(rep=LONG)], lifted=False), rep=LONG))
+        self.assertFalse(self.audit(module)['accepted'])
+        module = self.fixture(); self.call(module)[2][0] = [*lit(1), dict(rep=REFERENCE)]
+        self.assertFalse(self.audit(module)['accepted'])
+
+
 class OriginalStackCloneAuditTest(unittest.TestCase):
     """Unchanged genuine worker; only its scalar-result audit consumer is synthetic."""
     symbol = 'stg_cloneMyStackzh'

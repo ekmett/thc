@@ -1920,6 +1920,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val operation = VectorByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 VectorByteArrayExpression(operation, args.map { compile(it, scope, false) }.toTypedArray())
+            } else if (fn[0] == "prim" && fn[1] == "touch#") {
+                CoreTouch.validateRaw(args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
+                    CoreRepresentations.metadata(expr)?.get("rep"))
+                val kept = argument(args[0], scope, flags[0] as Boolean)
+                val state = compile(args[1], scope, false)
+                CoreTouch.validate(listOf(kept.representation, state.representation), flags, tupleProof)
+                TouchExpression(kept, state, tupleProof)
             } else if (fn[0] == "prim" && fn[1] == "keepAlive#") {
                 CoreKeepAlive.validate(args.map(CoreRepresentations::expression), flags, tupleProof,
                     args.getOrNull(2)?.let { CoreRepresentations.knownFunctionSignature(it, bindings) })

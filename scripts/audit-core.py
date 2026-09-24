@@ -1000,6 +1000,33 @@ class Audit:
                         valid = array_role(proof, result)
                     if not valid:
                         self.issue('primitive-representation', owner, path, function[1] + ': exact Array result required')
+                if function[0] == 'prim' and function[1] == 'touch#':
+                    def touch_scalar(rep):
+                        return (isinstance(rep, dict) and set(rep) == {'kind', 'primReps', 'evaluated'} and
+                                type(rep['evaluated']) is bool)
+                    def touch_state(rep):
+                        return touch_scalar(rep) and rep['kind'] == 'void' and rep['primReps'] == []
+                    actual = [self.expression_rep(a) for a in arguments]
+                    valid = (len(actual) == 2 and touch_scalar(actual[0]) and
+                             actual[0]['kind'] in ('object', 'data', 'closure') and
+                             actual[0]['primReps'] in (['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)']) and
+                             touch_state(actual[1]) and touch_state(proof) and
+                             isinstance(flags, list) and all(type(flag) is bool for flag in flags) and
+                             flags == [actual[0]['primReps'] == ['BoxedRep (Just Lifted)'], False])
+                    if not valid:
+                        self.issue('primitive-representation', owner, path,
+                                   'touch#: exact reference, State input and bare State result required')
+                    for index, argument in enumerate(arguments):
+                        stored = ((bound.get(argument[1]) if argument[1] in bound else self.bindings.get(argument[1], {}).get('rep'))
+                                  if argument[0] == 'var' else self.literal_rep(argument))
+                        if isinstance(stored, dict):
+                            reps = stored.get('primReps')
+                            kinds = ('unknown', 'object', 'data', 'closure') if index == 0 else ('unknown', 'void')
+                            if (stored.get('kind', 'unknown') not in kinds or
+                                    isinstance(reps, list) and reps != ['BoxedRep Nothing'] and
+                                    self.shape(stored) != self.shape(actual[index])):
+                                self.issue('primitive-representation', owner, path,
+                                           'touch#: argument contradicts its stored/intrinsic proof')
                 if function[0] == 'prim' and function[1] == 'keepAlive#':
                     def kept_reference(rep):
                         return (isinstance(rep, dict) and 'aggregate' not in rep and not is_vector(rep) and
