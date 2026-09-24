@@ -1338,7 +1338,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('modules', nargs='*', help='Exported JSON modules, or directories containing exported *.json modules')
     parser.add_argument('--module-list', action='append', type=Path, default=[], help='Read an exact newline-delimited module manifest; relative paths are relative to the manifest')
-    parser.add_argument('--package-manifest', type=Path, help='Validate and audit an exact GHC-unit Core package manifest')
+    parser.add_argument('--package-manifest', type=Path, help='Validate and audit exact GHC-unit Core modules, including content-addressed ZIP bundles')
     parser.add_argument('--entry', action='append', required=True, help='Exact global id or unambiguous occurrence name; repeatable')
     parser.add_argument('--io-main', action='store_true', help='Validate the exact IO () host entry contract instead of the scalar host result')
     parser.add_argument('--capabilities', type=Path, default=Path(__file__).with_name('core-capabilities.json'))
