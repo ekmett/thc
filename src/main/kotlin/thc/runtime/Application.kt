@@ -1,8 +1,12 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 package thc.runtime
 
 import com.oracle.truffle.api.CallTarget
 import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.TruffleSafepoint
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.dsl.Bind
 import com.oracle.truffle.api.dsl.Cached
@@ -258,6 +262,7 @@ internal abstract class GenericDispatch : Node() {
             var function = initial
             var offset = 0
             while (true) {
+                TruffleSafepoint.poll(node)
                 val remaining = logicalCount - offset
                 val physicalOffset = ArgumentLayout.offset(layout, offset)
                 ArgumentLayout.validate(function, layout, offset, minOf(function.arity, remaining))
