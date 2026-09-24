@@ -186,17 +186,54 @@
       ],
       "python": []
     },
+    "compiler/test-fixtures/CBVAudit.hs": {
+      "junit": ["thc.RealCoreEntryContractTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/CBVJoinAudit.hs": {
+      "junit": ["thc.RealCoreEntryContractTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/CBVCoercionAudit.hs": {
+      "junit": ["thc.RealCoreEntryContractTest", "thc.runtime.ScalarLexicalProofTest", "thc.runtime.BoxedLexicalProofTest", "thc.runtime.ScalarPrimitiveSignatureTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/DataToTagAudit.hs": {
+      "junit": ["thc.runtime.DataToTagTest"],
+      "python": ["scripts/test-core-data-tags.py"]
+    },
+    "compiler/test-fixtures/DemandAudit.hs": {
+      "junit": ["thc.RealCoreEntryContractTest"],
+      "python": []
+    },
     "compiler/test-fixtures/Explicit64PrimopsAudit.hs": {
       "junit": [
-        "thc.runtime.Explicit64PrimopsTest"
+        "thc.runtime.Explicit64PrimopsTest",
+        "thc.runtime.ScalarPrimitiveSignatureTest"
       ],
       "python": []
+    },
+    "compiler/test-fixtures/Int8ArrayAudit.hs": {
+      "junit": ["thc.runtime.Int8ArrayNativeTest"],
+      "python": ["scripts/test-int8-array-model.py"]
+    },
+    "compiler/test-fixtures/Int16ArrayAudit.hs": {
+      "junit": ["thc.runtime.Int16ArrayNativeTest"],
+      "python": ["scripts/test-int16-array-model.py"]
+    },
+    "compiler/test-fixtures/Int32ArrayAudit.hs": {
+      "junit": ["thc.runtime.Int32ArrayNativeTest"],
+      "python": ["scripts/test-int32-array-model.py"]
     },
     "compiler/test-fixtures/IntegerPrimopsAudit.hs": {
       "junit": [
         "thc.IntegerPrimopsTest"
       ],
       "python": []
+    },
+    "compiler/test-fixtures/MutableByteArraySizeAudit.hs": {
+      "junit": ["thc.runtime.MutableByteArraySizeTest"],
+      "python": ["scripts/test-mutable-bytearray-size.py"]
     },
     "compiler/test-fixtures/SignedNarrowPrimopsAudit.hs": {
       "junit": [
@@ -249,6 +286,26 @@
       ],
       "python": []
     },
+    "examples/THC/Unboxed8Arrays.hs": {
+      "junit": ["thc.runtime.Int8ArrayNativeTest"],
+      "python": ["scripts/test-int8-array-model.py"]
+    },
+    "examples/THC/Unboxed16Arrays.hs": {
+      "junit": ["thc.runtime.Int16ArrayNativeTest"],
+      "python": ["scripts/test-int16-array-model.py"]
+    },
+    "examples/THC/Unboxed32Arrays.hs": {
+      "junit": ["thc.runtime.Int32ArrayNativeTest"],
+      "python": ["scripts/test-int32-array-model.py"]
+    },
+    "scripts/check-cbv-metadata.py": {
+      "junit": ["thc.RealCoreEntryContractTest"],
+      "python": []
+    },
+    "scripts/check-demand-metadata.py": {
+      "junit": ["thc.RealCoreEntryContractTest"],
+      "python": []
+    },
     "scripts/native-oracle.sh": {
       "junit": [
         "thc.FastSmokeTest",
@@ -263,6 +320,10 @@
       ],
       "python": []
     },
+    "scripts/prepare-data-to-tag.py": {
+      "junit": ["thc.runtime.DataToTagTest"],
+      "python": ["scripts/test-core-data-tags.py"]
+    },
     "scripts/prepare-explicit64-primops.py": {
       "junit": [
         "thc.runtime.Explicit64PrimopsTest"
@@ -274,6 +335,22 @@
         "thc.IntegerPrimopsTest"
       ],
       "python": []
+    },
+    "scripts/prepare-int8-arrays.py": {
+      "junit": ["thc.runtime.Int8ArrayNativeTest"],
+      "python": ["scripts/test-int8-array-model.py"]
+    },
+    "scripts/prepare-int16-arrays.py": {
+      "junit": ["thc.runtime.Int8ArrayNativeTest", "thc.runtime.Int16ArrayNativeTest"],
+      "python": ["scripts/test-int8-array-model.py", "scripts/test-int16-array-model.py"]
+    },
+    "scripts/prepare-int32-arrays.py": {
+      "junit": ["thc.runtime.Int32ArrayNativeTest"],
+      "python": ["scripts/test-int32-array-model.py"]
+    },
+    "scripts/prepare-mutable-bytearray-size.py": {
+      "junit": ["thc.runtime.MutableByteArraySizeTest"],
+      "python": ["scripts/test-mutable-bytearray-size.py"]
     },
     "scripts/prepare-signed-narrow-primops.py": {
       "junit": [

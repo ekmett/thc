@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Fixture selection and persistent-stamp tests; no compiler or JVM is run."""
 
 import json
@@ -148,6 +151,28 @@ class FixturePreparationTest(unittest.TestCase):
         (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
         self.assertEqual(self.prepare("thc.AlphaTest")["reused"], ["alpha"])
         self.assertEqual(self.calls, [])
+
+    def test_pr80_affected_classes_have_focused_preparation(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        affected = {"thc.RealCoreEntryContractTest", "thc.runtime.ScalarLexicalProofTest",
+                    "thc.runtime.BoxedLexicalProofTest", "thc.runtime.ScalarPrimitiveSignatureTest",
+                    "thc.runtime.DataToTagTest", "thc.runtime.MutableByteArraySizeTest",
+                    "thc.runtime.Int8ArrayNativeTest", "thc.runtime.Int16ArrayNativeTest",
+                    "thc.runtime.Int32ArrayNativeTest"}
+        self.assertEqual({"cbv-coercion", "data-to-tag", "mutable-bytearray-size",
+                          "int8-arrays", "int16-arrays", "int32-arrays"},
+                         {owners[name] for name in affected})
+        for group_id in {owners[name] for name in affected}:
+            group = manifest["groups"][group_id]
+            self.assertTrue(all((project / path).is_file() for path in group["sources"]))
+            self.assertTrue(group["commands"] and group["outputs"])
+        cbv = manifest["groups"]["cbv-coercion"]
+        self.assertIn("build/cbv-post-core/CBVCoercionAudit.json", cbv["outputs"])
+        self.assertIn("build/tuple-arithmetic/pre-core/TupleArithmeticAudit.json", cbv["outputs"])
+        self.assertIn("build/explicit64-primops/core/Explicit64PrimopsAudit.json", cbv["outputs"])
+        self.assertTrue(any("scripts/check-cbv-metadata.py" in command["argv"]
+                            for command in cbv["commands"]))
 
 
 if __name__ == "__main__":

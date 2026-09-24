@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Pure Git/source selection tests: never compile or execute guest/JUnit code."""
 import copy
 import importlib.util
@@ -467,6 +470,46 @@ private val text = "class FakeString { @Test }"
                 self.assertEqual(sorted(group["python"]), result["affected"]["python"])
                 previous = current
 
+    def test_warning_only_fixture_changes_select_pr80_consumers(self):
+        policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
+        self.write(select.POLICY, json.dumps(policy))
+        groups = [policy["smoke"], *policy["leafSources"].values(), *policy["owners"].values(),
+                  *policy["primopFamilies"].values(), *policy["automation"].values()]
+        for name in {name for group in groups for name in group["junit"]}:
+            package, short = name.rsplit(".", 1)
+            self.write("src/test/kotlin/" + name.replace(".", "/") + ".kt",
+                       kotlin(short).replace("package example", "package " + package))
+        for path in {path for group in groups for path in group["python"]}:
+            self.write(path, PYTHON_TEST)
+        for path in policy["leafSources"]:
+            self.write(path, "// synthetic production source\n")
+        changed = ["compiler/test-fixtures/CBVCoercionAudit.hs",
+                   "compiler/test-fixtures/DataToTagAudit.hs",
+                   "compiler/test-fixtures/MutableByteArraySizeAudit.hs",
+                   "examples/THC/Unboxed8Arrays.hs",
+                   "examples/THC/Unboxed16Arrays.hs",
+                   "examples/THC/Unboxed32Arrays.hs"]
+        for path in changed:
+            self.write(path, "fixture before\n")
+        base = self.commit()
+        for path in changed:
+            self.write(path, "fixture after\n")
+        self.commit()
+        result = self.plan(base=base)
+        self.assertEqual("narrow", result["mode"], result["reasons"])
+        self.assertEqual([], result["reasons"])
+        self.assertEqual(sorted(changed), result["changedPaths"])
+        expected = {"thc.RealCoreEntryContractTest", "thc.runtime.ScalarLexicalProofTest",
+                    "thc.runtime.BoxedLexicalProofTest", "thc.runtime.ScalarPrimitiveSignatureTest",
+                    "thc.runtime.DataToTagTest", "thc.runtime.MutableByteArraySizeTest",
+                    "thc.runtime.Int8ArrayNativeTest", "thc.runtime.Int16ArrayNativeTest",
+                    "thc.runtime.Int32ArrayNativeTest"}
+        self.assertEqual(sorted(expected), result["affected"]["junit"])
+        self.assertEqual(12, result["junit"]["count"])  # Nine affected + three smoke.
+        self.assertEqual(sorted({"scripts/test-core-data-tags.py", "scripts/test-mutable-bytearray-size.py",
+                                 "scripts/test-int8-array-model.py", "scripts/test-int16-array-model.py",
+                                 "scripts/test-int32-array-model.py"}), result["affected"]["python"])
+
 
 class PrimitiveFamilyPolicyTest(unittest.TestCase):
     @classmethod
@@ -501,16 +544,24 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         owners = self.policy["owners"]
         native_only = {"examples/NativeOracle.hs", "examples/THC/MapWorkload.hs",
                        "scripts/native-oracle.sh"}
+        source_groups = {}
+        for group in fixture["groups"].values():
+            for path in group["sources"]:
+                source_groups.setdefault(path, set()).update(group["junit"])
         for name, group in fixture["groups"].items():
             for path in group["sources"]:
                 with self.subTest(group=name, path=path):
+                    self.assertTrue((self.root / path).is_file(), path)
+                    if path not in owners:
+                        # A transitive source without a narrow owner still widens
+                        # to the complete suite when changed.
+                        continue
                     actual = set(owners[path]["junit"])
+                    self.assertTrue(actual & set(group["junit"]))
+                    self.assertLessEqual(actual, source_groups[path])
                     if path in native_only:
                         self.assertEqual("runtime-core-native", name)
                         self.assertLessEqual({"thc.RuntimeTest", "thc.BytecodeBackendTest"}, actual)
-                        self.assertLessEqual(actual, set(group["junit"]))
-                    else:
-                        self.assertEqual(set(group["junit"]), actual)
         self.assertEqual({"thc.runtime.BitPrimopsTest", "thc.IntegerPrimopsTest",
                           "thc.SignedNarrowPrimopsTest"},
                          set(owners["src/test/kotlin/thc/PrimopTestContext.kt"]["junit"]))
