@@ -21,7 +21,9 @@ tests env = TestList [projectTests env, cstringTests env]
 
 projectTests :: Env -> Test
 projectTests env = TestLabel "three-package project native versus THC run" $ TestCase $
-  withFixture env "test/fixtures/run-project" $ \project ->
+  -- GHC 9.14's Linux -g assembler cannot quote a double quote in .file paths.
+  -- Plan/run tests retain the quoted Unicode path coverage.
+  withFixtureNamed env "test/fixtures/run-project" "project café" $ \project ->
   withCache (takeDirectory project </> "cache") $ do
     let base = takeDirectory project
         output = base </> "output"
@@ -78,7 +80,7 @@ projectTests env = TestLabel "three-package project native versus THC run" $ Tes
 
 cstringTests :: Env -> Test
 cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ TestCase $
-  withFixture env "test/fixtures/run-cstring" $ \project ->
+  withFixtureNamed env "test/fixtures/run-cstring" "project café" $ \project ->
   withCache (takeDirectory project </> "cache") $ do
     let output = takeDirectory project </> "output"
         invoke backend = run env (takeDirectory project) (Just backend) 240
