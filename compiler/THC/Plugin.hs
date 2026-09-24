@@ -1,5 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
-module THC.Plugin (plugin) where
+module THC.Plugin (plugin, InteractiveStage(..), serializeInteractiveCore) where
 
 import GHC.Plugins
 import qualified THC.Sources as Sources
@@ -35,6 +35,30 @@ plugin = defaultPlugin
   , latePlugin = exportLate
   , pluginRecompile = \_ -> pure ForceRecompile
   }
+
+-- | Capture boundaries used by the GHCi adapter. These do not claim that a
+-- statement or declaration group is a complete source module.
+data InteractiveStage = InteractiveDesugaredStatement | InteractiveStatement | InteractiveDeclarations | InteractiveModule
+
+serializeInteractiveCore :: HscEnv -> Module -> InteractiveStage -> CoreProgram -> [TyCon] -> [Id] -> IO String
+serializeInteractiveCore hsc m stage binds tycons results = do
+  let d = Ctx (hsc_dflags hsc) (unitString (moduleUnit m) ++ ":" ++ moduleNameString (moduleName m))
+              emptyVarSet emptyVarSet True False Nothing []
+      cons = nubBy (\a b -> dataConName a == dataConName b)
+             (concatMap tyConDataCons tycons ++ concatMap (exprCons . snd) (concatMap flattenBind binds))
+      (boundary, scope) = case stage of
+        InteractiveDesugaredStatement -> ("desugared-interactive-Core", "interactive-statement")
+        InteractiveStatement -> ("optimized-Core-after-Tidy-before-CorePrep", "interactive-statement")
+        InteractiveDeclarations -> ("optimized-Core-after-Tidy-before-CorePrep", "interactive-declarations")
+        InteractiveModule -> ("optimized-Core-after-Tidy-before-CorePrep", "complete-source-module")
+  pure $ json $ O
+    [ ("schema",num (1::Int)), ("ghc",S "9.14.1"), ("module",S (moduleNameString (moduleName m)))
+    , ("unit",S (unitString (moduleUnit m))), ("boundary",S boundary), ("definitionScope",S scope)
+    , ("interactiveBindings", A (map (binder d) results))
+    , ("bindings",A (concatMap (bindingGroup d) binds)), ("constructors",A (map (constructor d) cons))
+    , ("groups",A [O [("recursive",B (case b of Rec{} -> True; _ -> False))
+                       ,("ids",A [S (varKey d v) | (v,_) <- flattenBind b])] | b <- binds])
+    ]
 
 data J = O [(String,J)] | A [J] | S String | N Integer | B Bool | Z
 
