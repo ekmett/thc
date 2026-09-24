@@ -80,5 +80,20 @@ Use `--report-dir`, `--identity` and `--bundle` to preserve repeated experiments
 
 The workflow pins action commits and keeps cache writes separate from restores.
 The Gradle init script uses the documented
-[`TaskOutputs.doNotCacheIf`](https://docs.gradle.org/current/javadoc/org/gradle/api/tasks/TaskOutputs.html#du)
+[`TaskOutputs.doNotCacheIf`](https://docs.gradle.org/current/javadoc/org/gradle/api/tasks/TaskOutputs.html)
 mechanism to exclude test outcomes while leaving compilation cacheable.
+
+## First local measurement
+
+On eak-quartus (Linux x86-64), revision `7e0cacadeb0a32a638355401b0b64fdc4a6a1bc0`
+passed the seven-class smoke suite after all generated fixtures, vendor files and
+project build state were moved aside. The input archive restored 976 files and
+all seven compilation tasks came `FROM-CACHE`. The runner took **69.8 seconds**:
+1.72s identity, 1.89s selection, 5.06s restore, 9.93s Python checks, 23.97s default
+and 27.02s dense. Each mode ran 44 fresh tests with no failures/errors/skips.
+
+This was a no-source-change, installed-toolchain/local-cache measurement, not a
+GitHub-hosted result. Hosted GHC/Graal downloads and cache transfer still need to
+be measured. The cold preparation plus uncached JVM compilation took 296.15s
+(Gradle reported 43s). Raw command/exit/timing/XML records are retained under
+`bench/experiments/fast-ci/evidence-x86_64/`; no runtime assertions or limits changed.

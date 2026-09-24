@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "bash",
+    "-c",
+    "set -e\n/usr/bin/time -p python3 .github/scripts/fast_inputs.py key --output build/fast/identity.json\n/usr/bin/time -p python3 .github/scripts/fast_inputs.py pack --identity build/fast/identity.json --bundle build/fast/native-inputs.tar.gz\n/usr/bin/time -p python3 .github/scripts/fast_inputs.py restore --identity build/fast/identity.json --bundle build/fast/native-inputs.tar.gz"
+  ],
+  "cwd": "/home/ekmett/ai/thc-fast-ci-01a0cdeb",
+  "started": 1790226128.8143492,
+  "resources": [
+    "build:/home/ekmett/ai/thc-fast-ci-01a0cdeb/build"
+  ]
+}

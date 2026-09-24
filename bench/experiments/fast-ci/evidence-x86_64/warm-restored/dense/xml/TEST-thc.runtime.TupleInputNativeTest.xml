@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.TupleInputNativeTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-24T05:04:06.178Z" hostname="eak-quartus" time="10.383">
+  <properties/>
+  <testcase name="nativeZeroWidthFailurePrecedesInputPublication()" classname="thc.runtime.TupleInputNativeTest" time="0.038"/>
+  <testcase name="nativeTypedInputsResidual()" classname="thc.runtime.TupleInputNativeTest" time="3.903"/>
+  <testcase name="nativeTypedInputsInline()" classname="thc.runtime.TupleInputNativeTest" time="6.038"/>
+  <testcase name="independentTypedInputLanesInlineAndResidual()" classname="thc.runtime.TupleInputNativeTest" time="0.404"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
