@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.*
 import java.io.File
+import java.lang.reflect.Method
 import java.nio.ByteOrder
 import java.security.MessageDigest
 import java.util.Collections
@@ -58,20 +59,48 @@ class FloatWordArrayNativeTest {
         visit(entry)
         return targets
     }
-    private data class TargetState(val target: RootCallTarget, val lastTierValid: Boolean)
+    private data class BoundaryProbe(val method: Any, val hasCompiledCode: Method)
+    private data class SnapshotProbes(val callCount: Result<Method>, val boundary: Result<BoundaryProbe>)
+    private fun snapshotProbes(entry: RootCallTarget): SnapshotProbes = SnapshotProbes(
+        runCatching { entry.javaClass.getMethod("getCallCount") },
+        runCatching {
+            val jvmci = Class.forName("jdk.vm.ci.runtime.JVMCI").getMethod("getRuntime").invoke(null)
+            val backend = Class.forName("jdk.vm.ci.runtime.JVMCIRuntime")
+                .getMethod("getHostJVMCIBackend").invoke(jvmci)
+            val metaAccess = Class.forName("jdk.vm.ci.runtime.JVMCIBackend")
+                .getMethod("getMetaAccess").invoke(backend)
+            val method = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
+                .getDeclaredMethod("callBoundary", Array<Any?>::class.java)
+            val boundary = Class.forName("jdk.vm.ci.meta.MetaAccessProvider")
+                .getMethod("lookupJavaMethod", java.lang.reflect.Executable::class.java).invoke(metaAccess, method)
+            BoundaryProbe(boundary, Class.forName("jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod")
+                .getMethod("hasCompiledCode"))
+        })
+    private data class TargetState(val target: RootCallTarget, val lastTierValid: Boolean, val callCount: Result<Int>)
     private data class CallState(val entry: TargetState, val active: List<TargetState>)
-    private fun callState(entry: RootCallTarget): Result<CallState> = runCatching {
-        fun state(target: RootCallTarget) = TargetState(target,
-            target.javaClass.getMethod("isValidLastTier").invoke(target) as Boolean)
-        CallState(state(entry), activeTargets(entry).map(::state))
+    private data class CallSnapshot(val targets: Result<CallState>, val boundaryHasCompiledCode: Result<Boolean>)
+    private fun callState(entry: RootCallTarget, probes: SnapshotProbes): CallSnapshot {
+        val targets = runCatching {
+            fun state(target: RootCallTarget) = TargetState(target,
+                target.javaClass.getMethod("isValidLastTier").invoke(target) as Boolean,
+                probes.callCount.mapCatching { it.invoke(target) as Int })
+            CallState(state(entry), activeTargets(entry).map(::state))
+        }
+        // The shared stub and guest code have separate lifetimes. An unavailable
+        // JVMCI observation must not discard the independently captured targets.
+        val boundary = probes.boundary.mapCatching { it.hasCompiledCode.invoke(it.method) as Boolean }
+        return CallSnapshot(targets, boundary)
     }
-    private fun describe(state: Result<CallState>): String = state.fold({ call ->
+    private fun unavailable(error: Throwable) =
+        "unavailable(${error.javaClass.simpleName}: ${error.message.orEmpty().take(160)})"
+    private fun describe(state: CallSnapshot): String = state.targets.fold({ call ->
         fun target(value: TargetState) = "${value.target.rootNode.name.take(80)}@${System.identityHashCode(value.target).toString(16)}" +
-            "(lastTierValid=${value.lastTierValid})"
+            "(lastTierValid=${value.lastTierValid}, callCount=${value.callCount.fold({ it.toString() }, ::unavailable)})"
         "entry=${target(call.entry)} activeCount=${call.active.size} active=[" +
             call.active.take(8).joinToString { target(it) } +
             (if (call.active.size > 8) ", ..." else "") + "]"
-    }, { error -> "unavailable(${error.javaClass.simpleName}: ${error.message.orEmpty().take(160)})" })
+    }, ::unavailable) + " boundaryHasCompiledCode=" +
+        state.boundaryHasCompiledCode.fold({ it.toString() }, ::unavailable)
     private fun released(language: Language) {
         val state = language.handoffState.get()
         assertEquals(0, state.results.depth); assertEquals(0, state.results.retainedReferences())
@@ -185,6 +214,8 @@ class FloatWordArrayNativeTest {
                         val stateCall = rootExpression[2] as List<*>
                         val expectedLabels = bindings.map { lambdaLabel(it["expr"] as List<*>) }.toSet() +
                             lambdaLabel(stateCall[1] as List<*>)
+                        // Resolve read-only metadata before the unchanged interpreted warmup.
+                        val probes = snapshotProbes(entry)
                         var targets = emptyList<RootCallTarget>()
                         fun count() = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                         fun check(compiled: Boolean) {
@@ -192,12 +223,12 @@ class FloatWordArrayNativeTest {
                                 val label = "$stage/$backend/$name/$input/inlining=$inlining"
                                 // Read-only snapshots add no guest calls. Snapshot failures must
                                 // not replace the result/counter assertions they help diagnose.
-                                val beforeTargets = if (compiled) callState(entry) else null
+                                val beforeTargets = if (compiled) callState(entry, probes) else null
                                 val before = count()
                                 assertEquals(native, Calls.target(entry, arrayOf(0L, input)), label)
                                 if (compiled) {
                                     val after = count()
-                                    val afterTargets = callState(entry)
+                                    val afterTargets = callState(entry, probes)
                                     assertEquals(expectedCalls.getValue(name), after-before) {
                                         "$label exact compiled entries context@${System.identityHashCode(context).toString(16)}" +
                                             " handoff=${System.getProperty("thc.handoffSlabs", "false")}" +
