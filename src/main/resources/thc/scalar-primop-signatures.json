@@ -1885,6 +1885,18 @@
       ],
       "result": "WordRep"
     },
+    "word2Double#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "word2Float#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "FloatRep"
+    },
     "word2Int#": {
       "arguments": [
         "WordRep"

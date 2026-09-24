@@ -8,9 +8,9 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Supported | 289 | Implemented fixed numeric/character scalar forms. |
+| Supported | 291 | Implemented fixed numeric/character scalar forms. |
 | Partial | 261 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 941 | No declared lowering. |
+| Missing | 939 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -317,6 +317,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `uncheckedShiftRLWord8#` — arity 2
 - [x] `word16ToInt16#` — arity 1
 - [x] `word16ToWord#` — arity 1
+- [x] `word2Double#` — arity 1
+- [x] `word2Float#` — arity 1
 - [x] `word2Int#` — arity 1
 - [x] `word32ToInt32#` — arity 1
 - [x] `word32ToWord#` — arity 1
@@ -1385,8 +1387,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `waitRead#` — arity 2
 - [ ] `waitWrite#` — arity 2
 - [ ] `whereFrom#` — arity 3
-- [ ] `word2Double#` — arity 1
-- [ ] `word2Float#` — arity 1
 - [ ] `writeDoubleArrayAsDoubleX4#` — arity 4
 - [ ] `writeDoubleArrayAsDoubleX8#` — arity 4
 - [ ] `writeDoubleOffAddr#` — arity 4

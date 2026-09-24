@@ -193,6 +193,7 @@ executable thc-fixtures
     AggregateFixtures
     ContinuationFixtures
     FixtureSupport
+    WordFloatingFixtures
     OriginalStdioFixtures
     SmallArrayFixtures
     StackFixtures

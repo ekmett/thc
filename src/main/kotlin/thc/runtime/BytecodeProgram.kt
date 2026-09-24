@@ -2262,17 +2262,19 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "castWord64ToDouble#" -> "CastWord64ToDouble"
             "int2Float#" -> "IntToFloat"
             "int2Double#" -> "IntToDouble"
+            "word2Float#" -> "WordToFloat"
+            "word2Double#" -> "WordToDouble"
             "float2Int#" -> "FloatToInt"
             "double2Int#" -> "DoubleToInt"
             "float2Double#" -> "FloatToDouble"
             "double2Float#" -> "DoubleToFloat"
             else -> return null
         }
-        val unary = operation in setOf("CastFloatToWord32", "CastWord32ToFloat", "CastDoubleToWord64", "CastWord64ToDouble", "FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "IntToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "FloatTan", "FloatAsin", "FloatAcos", "FloatAtan", "FloatSinh", "FloatCosh", "FloatTanh", "DoubleTan", "DoubleAsin", "DoubleAcos", "DoubleAtan", "DoubleSinh", "DoubleCosh", "DoubleTanh")
+        val unary = operation in setOf("CastFloatToWord32", "CastWord32ToFloat", "CastDoubleToWord64", "CastWord64ToDouble", "FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "WordToFloat", "IntToDouble", "WordToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "FloatTan", "FloatAsin", "FloatAcos", "FloatAtan", "FloatSinh", "FloatCosh", "FloatTanh", "DoubleTan", "DoubleAsin", "DoubleAcos", "DoubleAtan", "DoubleSinh", "DoubleCosh", "DoubleTanh")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         val kind = when (operation) {
-            "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "FloatSqrt", "IntToFloat", "DoubleToFloat", "CastWord32ToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "FloatPower", "FloatTan", "FloatAsin", "FloatAcos", "FloatAtan", "FloatSinh", "FloatCosh", "FloatTanh" -> CoreKind.FLOAT
-            "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "DoubleSqrt", "IntToDouble", "FloatToDouble", "CastWord64ToDouble", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "DoublePower", "DoubleTan", "DoubleAsin", "DoubleAcos", "DoubleAtan", "DoubleSinh", "DoubleCosh", "DoubleTanh" -> CoreKind.DOUBLE
+            "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "FloatSqrt", "IntToFloat", "WordToFloat", "DoubleToFloat", "CastWord32ToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "FloatPower", "FloatTan", "FloatAsin", "FloatAcos", "FloatAtan", "FloatSinh", "FloatCosh", "FloatTanh" -> CoreKind.FLOAT
+            "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "DoubleSqrt", "IntToDouble", "WordToDouble", "FloatToDouble", "CastWord64ToDouble", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "DoublePower", "DoubleTan", "DoubleAsin", "DoubleAcos", "DoubleAtan", "DoubleSinh", "DoubleCosh", "DoubleTanh" -> CoreKind.DOUBLE
             else -> CoreKind.LONG
         }
         return ProvenExpression(Expression { e ->
@@ -2338,6 +2340,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "CastWord64ToDouble" -> b.beginCastWord64ToDouble()
                 "IntToFloat" -> b.beginIntToFloat()
                 "IntToDouble" -> b.beginIntToDouble()
+                "WordToFloat" -> b.beginWordToFloat()
+                "WordToDouble" -> b.beginWordToDouble()
                 "FloatToInt" -> b.beginFloatToInt()
                 "DoubleToInt" -> b.beginDoubleToInt()
                 "FloatToDouble" -> b.beginFloatToDouble()
@@ -2405,6 +2409,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "CastWord64ToDouble" -> b.endCastWord64ToDouble()
                 "IntToFloat" -> b.endIntToFloat()
                 "IntToDouble" -> b.endIntToDouble()
+                "WordToFloat" -> b.endWordToFloat()
+                "WordToDouble" -> b.endWordToDouble()
                 "FloatToInt" -> b.endFloatToInt()
                 "DoubleToInt" -> b.endDoubleToInt()
                 "FloatToDouble" -> b.endFloatToDouble()
