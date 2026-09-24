@@ -59,28 +59,39 @@ class CoreZipBundleTest {
             .toByteArray()
     }
 
+    // Follow the actual producer catalog, not a synthetic fixed-cardinality list:
+    // a newly pinned HSC must exercise the production bundle/receipt boundary.
+    private fun generatedReceipts(): List<Map<String, String>> {
+        val catalog = Files.readString(Path.of(System.getProperty("thc.projectRoot"), "src/THC/Driver/Wired.hs"))
+            .substringAfter("moduleSources =").substringBefore("sourceHashes ::")
+        return Regex("\\(\"([^\"]+\\.hsc)\", \"[^\"]+\"\\)").findAll(catalog)
+            .map { mapOf("path" to it.groupValues[1], "sha256" to "a".repeat(64)) }.toList()
+            .also { assertEquals(7, it.size) }
+    }
+
     private fun unit(id: String, source: ByteArray = module(id),
                      omit: Boolean = false, extra: Boolean = false,
                      innerUnit: String = id, inputs: ByteArray? = null,
                      layout: Map<String, Any?>? = null, abi: String = "bcbf",
-                     platform: String = hostPlatform(), way: String = "dynamic-nonprofiling"): Map<String, Any?> {
+                     platform: String = hostPlatform(), way: String = "dynamic-nonprofiling",
+                     generated: List<Any?>? = generatedReceipts(),
+                     inputGenerated: List<Any?>? = generated): Map<String, Any?> {
         val core = "core/Shared.json"
         val inventory = listOf(mapOf("name" to "Shared", "boundary" to boundary,
             "path" to core, "sha256" to hash(source)))
         val indexFields = mutableMapOf<String, Any>("format" to "thc-core-bundle", "schema" to 1,
             "unit" to innerUnit, "buildKey" to "0".repeat(64), "exportKey" to "1".repeat(64),
             "modules" to inventory)
-        val generated = (0 until 6).map { mapOf("path" to "source$it.hsc", "sha256" to "a".repeat(64)) }
         if (layout != null) {
             indexFields["targetLayout"] = layout
-            indexFields["generatedSources"] = generated
+            if (generated != null) indexFields["generatedSources"] = generated
         }
         val inputBytes = inputs ?: layout?.let {
             Json.stringify(mapOf("format" to "thc-core-build-inputs", "schema" to 1,
                 "unit" to id, "buildKey" to "0".repeat(64), "exportKey" to "1".repeat(64),
                 "compiler" to mapOf("id" to "ghc-9.14.1", "abi" to abi,
                     "platform" to platform, "way" to way),
-                "targetLayout" to layout, "generatedSources" to generated)).toByteArray()
+                "targetLayout" to layout, "generatedSources" to inputGenerated)).toByteArray()
         }
         if (inputBytes != null) indexFields["buildInputs"] =
             mapOf("path" to "inplace-manifest.json", "sha256" to hash(inputBytes))
@@ -198,6 +209,39 @@ class CoreZipBundleTest {
             .toByteArray()
         val missingReceipt = rejected(listOf(unit("pkg-a", layout = layout, inputs = noReceipt)))
         assertTrue(missingReceipt.message!!.contains("receipts differ"))
+    }
+
+    @Test fun generatedReceiptCatalogRejectsMissingDuplicateStaleMalformedAndMismatchedSources() {
+        val generated = generatedReceipts()
+        val layout = targetLayout()
+        val reordered = manifest(listOf(unit("pkg-a", layout = layout, generated = generated.reversed())))
+        val valid = Json.parse(CoreModules.request(listOf("@$reordered"), "pkg-a:Shared.entry")) as Map<*, *>
+        assertEquals(8, TargetLayout.fromDocument(valid["targetLayout"]).wordBytes)
+        val malformed = listOf<List<Any?>?>(
+            null, emptyList(), generated + generated.first(),
+            generated.dropLast(1) + generated.first(),
+            (0 until 6).map { mapOf("path" to "source$it.hsc", "sha256" to "a".repeat(64)) },
+            generated.map { it + ("path" to "other/${it.getValue("path")}") },
+        ) + generated.indices.map { missing -> generated.filterIndexed { index, _ -> index != missing } } +
+            listOf<Any?>(null, "invalid", emptyMap<String, String>(),
+                generated.first() + ("sha256" to "f".repeat(63)),
+                generated.first() + ("sha256" to "g".repeat(64)),
+                generated.first() + ("unused" to true),
+                generated.first() + ("path" to "../GHC/Internal/Heap/Constants.hsc"),
+                generated.first() + ("path" to "GHC/Internal/Heap/Constants.hs"),
+                generated.first() + ("path" to 7)).map { listOf(it) + generated.drop(1) }
+        for ((index, sources) in malformed.withIndex()) {
+            val path = manifest(listOf(unit("pkg-a", layout = layout, generated = sources)))
+            val error = assertThrows(RuntimeException::class.java, {
+                CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry")
+            }, "malformed generated receipt $index")
+            assertTrue(error.message!!.contains("GHC source receipts"), error.message)
+        }
+        val changedHash = listOf(generated.first() + ("sha256" to "b".repeat(64))) + generated.drop(1)
+        val mismatch = manifest(listOf(unit("pkg-a", layout = layout, inputGenerated = changedHash)))
+        assertTrue(assertThrows(RuntimeException::class.java) {
+            CoreModules.request(listOf("@$mismatch"), "pkg-a:Shared.entry")
+        }.message!!.contains("receipts differ"))
     }
 
     private fun manifest(units: List<Map<String, Any?>>): Path = temporary.resolve("packages.json").also {
