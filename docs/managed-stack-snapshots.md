@@ -176,7 +176,7 @@ post-Tidy consumers pass strict audits. `OriginalStackFormatterTest` checks thos
 observations through both backends, before and immediately after explicit
 compilation, with inlining enabled and disabled.
 
-The fixture records exactly 84 source inputs and 84 artifacts from one export
+The fixture records exactly 95 source inputs and 91 artifacts from one export
 attempt. Provenance tests independently pin the upstream source catalog and
 reject omissions, changed pins and escaped paths. Focused preparation and cache
 receipts reuse this exact inventory; installed-interface symlink overlays are
@@ -208,8 +208,16 @@ it does not replace or alias the worker. The unchanged original `Ptr`,
 `Data.Either.$fShowEither`, `Word.$fShowWord32`, and `Word.$fShowWord8`
 under the `ghc-internal:GHC.Internal` prefix. Availability of those exact
 bindings does not establish full `Show StgInfoTable`, ErrorCall, or decoder
-support. Strict traversal now exposes missing `Bignum.Integer.integerFromWord#`,
-`Numeric.showHex1`, `Numeric.showIntAtBase`, and `Real.$fIntegralInteger`, as
-well as the separate encoding/libdw frontier and unsupported `addr2Int#`.
-Those dependencies and cold decoder branches are not admitted by this source
-addition.
+support.
+
+Original `Bignum.Integer`, `Real`, and `Numeric` sources supply the next four
+identities: `integerFromWord#`, `$fIntegralInteger`, `showHex1`, and
+`showIntAtBase` in those respective modules. The proof checks each unchanged
+pointer-formatter reference, the exact unlifted Word# input, the original
+Integer constant 16 and the Integral dictionary constructor. Compiling Integer
+requires the unchanged small boot interfaces in BigNat, Natural, Integer order;
+the BigNat/WordArray/backend implementations are not added. Strict traversal
+still exposes those implementations and further numeric/encoding/error
+dependencies, installed GMP foreign calls, tuple captures, `timesInt2#`,
+`addr2Int#`, libdw and cold decoder branches. This source addition does not
+admit those paths or select a bignum backend.

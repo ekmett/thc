@@ -25,6 +25,10 @@ extra-source-files:
   compiler/pinned-ghc-internal/GHC/Internal/Arr.hs
   compiler/pinned-ghc-internal/GHC/Internal/Base.hs
   compiler/pinned-ghc-internal/GHC/Internal/Bignum/Natural.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Bignum/BigNat.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/Bignum/Natural.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/Bignum/Integer.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Bignum/Integer.hs-boot
   compiler/pinned-ghc-internal/GHC/Internal/CString.hs
   compiler/pinned-ghc-internal/GHC/Internal/ClosureTypes.hs
   compiler/pinned-ghc-internal/GHC/Internal/Control/Monad/Fail.hs
@@ -67,8 +71,10 @@ extra-source-files:
   compiler/pinned-ghc-internal/GHC/Internal/Ix.hs
   compiler/pinned-ghc-internal/GHC/Internal/List.hs
   compiler/pinned-ghc-internal/GHC/Internal/Num.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/Numeric.hs
   compiler/pinned-ghc-internal/GHC/Internal/Ptr.hs
   compiler/pinned-ghc-internal/GHC/Internal/Real.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/Real.hs
   compiler/pinned-ghc-internal/GHC/Internal/Show.hs
   compiler/pinned-ghc-internal/GHC/Internal/Stack.hs
   compiler/pinned-ghc-internal/GHC/Internal/Stack.hs-boot

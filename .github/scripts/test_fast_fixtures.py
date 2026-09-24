@@ -93,7 +93,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(['original-stack-formatter'], prepare()['reused'])
         self.assertEqual([], self.calls)
         outputs = fast_fixtures._output_hashes(self.root, group)
-        self.assertEqual(89, len(outputs))
+        self.assertEqual(92, len(outputs))
         self.assertFalse(any('interfaces/' in path for path in outputs))
         # Includes the production exporter, all pinned source kinds and the
         # target-layout C probe, without a second hand-maintained source list.
@@ -104,6 +104,12 @@ class FixturePreparationTest(unittest.TestCase):
                      'compiler/pinned-ghc-internal/GHC/Internal/Ptr.hs',
                      'compiler/pinned-ghc-internal/GHC/Internal/Data/Either.hs',
                      'compiler/pinned-ghc-internal/GHC/Internal/Word.hs',
+                     'compiler/pinned-ghc-internal/GHC/Internal/Bignum/Integer.hs',
+                     'compiler/pinned-ghc-internal/GHC/Internal/Bignum/Integer.hs-boot',
+                     'compiler/pinned-ghc-internal/GHC/Internal/Bignum/BigNat.hs-boot',
+                     'compiler/pinned-ghc-internal/GHC/Internal/Bignum/Natural.hs-boot',
+                     'compiler/pinned-ghc-internal/GHC/Internal/Real.hs',
+                     'compiler/pinned-ghc-internal/GHC/Internal/Numeric.hs',
                      'compiler/pinned-ghc-internal/GHC/Internal/Enum.hs',
                      'compiler/pinned-ghc-internal/GHC/Internal/ForeignPtr.hs',
                      'compiler/pinned-ghc-internal/GHC/Internal/Foreign/C/String/Encoding.hs',
