@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 # Export the real JavaScript FFI source in both Core stages, audit IO main, and run it.
 set -eu
 cd "$(dirname "$0")/.."

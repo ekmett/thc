@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 {-# LANGUAGE GHCForeignImportPrim, MagicHash, UnboxedTuples, UnliftedFFITypes #-}
 -- | A GHC-typed module boundary for THC's versioned Truffle polyglot calls.
 -- The foreign symbols are supplied by THC, not by a native C library.
