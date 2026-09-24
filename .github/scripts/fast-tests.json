@@ -263,6 +263,14 @@
       "junit": ["thc.runtime.PinnedPointerCellsTest"],
       "python": []
     },
+    "compiler/test-fixtures/WideCharAddressAudit.hs": {
+      "junit": ["thc.runtime.WideCharAddressTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/WideCharAddressNative.hs": {
+      "junit": ["thc.runtime.WideCharAddressTest"],
+      "python": []
+    },
     "compiler/test-fixtures/SmallArrayAudit.hs": {
       "junit": ["thc.runtime.SmallArrayTest"],
       "python": []
@@ -650,6 +658,7 @@
         "thc.runtime.CoreContinuationNativeTest",
         "thc.runtime.SmallArrayTest",
         "thc.runtime.PinnedPointerCellsTest",
+        "thc.runtime.WideCharAddressTest",
         "thc.runtime.OriginalStdioNativeTest",
         "thc.runtime.OriginalStackConsumerProofTest",
         "thc.runtime.BoxedArrayExtensionsTest",
@@ -668,6 +677,10 @@
     },
     "test/haskell-fixtures/ContinuationFixtures.hs": {
       "junit": ["thc.runtime.CoreContinuationNativeTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/WideCharAddressFixtures.hs": {
+      "junit": ["thc.runtime.WideCharAddressTest"],
       "python": []
     },
     "test/haskell-fixtures/SmallArrayFixtures.hs": {

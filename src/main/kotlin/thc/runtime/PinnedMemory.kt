@@ -49,6 +49,7 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
     READ_WORD16("readWord16OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.WORD16),
     READ_INT16("readInt16OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.INT16),
     READ_WORD32("readWord32OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.WORD32),
+    READ_WIDE_CHAR("readWideCharOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.WIDE_CHAR),
     READ_WORD("readWordOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.WORD),
     READ_INT32("readInt32OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.INT32),
     READ_INT("readIntOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.INT),
@@ -58,6 +59,7 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
     INDEX_ADDR_OFF("indexAddrOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep")), false),
     INDEX_INT32("indexInt32OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep")), false, ManagedAddressRead.INT32),
     INDEX_WORD32("indexWord32OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep")), false, ManagedAddressRead.WORD32),
+    INDEX_WIDE_CHAR("indexWideCharOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep")), false, ManagedAddressRead.WIDE_CHAR),
     INDEX_INT("indexIntOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep")), false, ManagedAddressRead.INT),
     INDEX_WORD("indexWordOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep")), false, ManagedAddressRead.WORD),
     INDEX_INT64("indexInt64OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep")), false, ManagedAddressRead.INT64),
@@ -70,6 +72,7 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
     WRITE_WORD16("writeWord16OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), listOf("Word16Rep"), emptyList()), false),
     WRITE_INT32("writeInt32OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), listOf("Int32Rep"), emptyList()), false),
     WRITE_WORD32("writeWord32OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), listOf("Word32Rep"), emptyList()), false),
+    WRITE_WIDE_CHAR("writeWideCharOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), listOf("WordRep"), emptyList()), false),
     WRITE_INT("writeIntOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), listOf("IntRep"), emptyList()), false),
     WRITE_WORD("writeWordOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), listOf("WordRep"), emptyList()), false),
     WRITE_INT64("writeInt64OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), listOf("Int64Rep"), emptyList()), false),
@@ -192,13 +195,15 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
             Unit
         }
         operation == PinnedMemoryOp.WRITE_INT32 || operation == PinnedMemoryOp.WRITE_WORD32 ||
+            operation == PinnedMemoryOp.WRITE_WIDE_CHAR ||
             operation == PinnedMemoryOp.WRITE_INT || operation == PinnedMemoryOp.WRITE_WORD ||
             operation == PinnedMemoryOp.WRITE_INT64 || operation == PinnedMemoryOp.WRITE_WORD64 -> {
             val address = operands[0].executeRequiredAddress(frame)
             val offset = operands[1].executeRequiredLong(frame)
             val value = operands[2].executeRequiredLong(frame)
             ManagedByteArray.requireState(operands[3].execute(frame))
-            val width = if (operation == PinnedMemoryOp.WRITE_INT32 || operation == PinnedMemoryOp.WRITE_WORD32) 4 else 8
+            val width = if (operation == PinnedMemoryOp.WRITE_INT32 || operation == PinnedMemoryOp.WRITE_WORD32 ||
+                operation == PinnedMemoryOp.WRITE_WIDE_CHAR) 4 else 8
             address.writeNativeScalar(offset, width, value)
             Unit
         }
@@ -226,7 +231,7 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
             }
             PinnedMemoryOp.READ, PinnedMemoryOp.READ_INT8, PinnedMemoryOp.READ_CHAR,
             PinnedMemoryOp.READ_WORD16, PinnedMemoryOp.READ_INT16,
-            PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
+            PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WIDE_CHAR, PinnedMemoryOp.READ_WORD,
             PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT,
             PinnedMemoryOp.READ_INT64, PinnedMemoryOp.READ_WORD64 -> {
                 val address = operands[0].executeRequiredAddress(frame)

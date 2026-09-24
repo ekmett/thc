@@ -15,6 +15,7 @@ import OriginalStdioFixtures (prepareOriginalStdio)
 import StackFixtures (prepareOriginalStack, prepareOriginalStackFormatter, exportOriginalStackSource)
 import SmallArrayFixtures (prepareSmallArrays)
 import BoxedArrayExtensionsFixtures (prepareBoxedArrayExtensions)
+import WideCharAddressFixtures (prepareWideCharAddress)
 import Control.Monad (forM, forM_, unless, when)
 import Data.Aeson (Value (..), decodeStrict', object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -830,6 +831,7 @@ main = do
     ["original-stack-formatter"] -> prepareOriginalStackFormatter root
     ["original-stack-source-export", directory] -> exportOriginalStackSource root directory
     ["boxed-array-extensions"] -> prepareBoxedArrayExtensions root
+    ["wide-char-address"] -> prepareWideCharAddress root
     ["bit"] -> prepare root Bit
     ["integer"] -> prepare root IntegerWord
     ["signed-narrow"] -> prepare root SignedNarrow

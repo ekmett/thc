@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 283 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 899 | No declared lowering. |
+| Partial | 286 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 896 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -425,6 +425,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexIntArray#` — arity 2 — Managed byte storage
 - [ ] `indexIntOffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `indexSmallArray#` — arity 2 — Managed lifted arrays
+- [ ] `indexWideCharOffAddr#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `indexWord16Array#` — arity 2 — Managed byte storage
 - [ ] `indexWord16OffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `indexWord32Array#` — arity 2 — Managed byte storage
@@ -539,6 +540,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `readMutVar#` — arity 2 — Managed lazy reference cells
 - [ ] `readSmallArray#` — arity 3 — Managed lifted arrays
+- [ ] `readWideCharOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readWord16Array#` — arity 3 — Managed byte storage
 - [ ] `readWord16OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readWord32Array#` — arity 3 — Managed byte storage
@@ -629,6 +631,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeIntOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeMutVar#` — arity 3 — Managed lazy reference cells
 - [ ] `writeSmallArray#` — arity 4 — Managed lifted arrays
+- [ ] `writeWideCharOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeWord16Array#` — arity 4 — Managed byte storage
 - [ ] `writeWord16OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeWord32Array#` — arity 4 — Managed byte storage
@@ -841,7 +844,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexStablePtrArray#` — arity 2
 - [ ] `indexStablePtrOffAddr#` — arity 2
 - [ ] `indexWideCharArray#` — arity 2
-- [ ] `indexWideCharOffAddr#` — arity 2
 - [ ] `indexWord16ArrayAsWord16X16#` — arity 2
 - [ ] `indexWord16ArrayAsWord16X32#` — arity 2
 - [ ] `indexWord16ArrayAsWord16X8#` — arity 2
@@ -1211,7 +1213,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readTVar#` — arity 2
 - [ ] `readTVarIO#` — arity 2
 - [ ] `readWideCharArray#` — arity 3
-- [ ] `readWideCharOffAddr#` — arity 3
 - [ ] `readWord16ArrayAsWord16X16#` — arity 3
 - [ ] `readWord16ArrayAsWord16X32#` — arity 3
 - [ ] `readWord16ArrayAsWord16X8#` — arity 3
@@ -1468,7 +1469,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeStablePtrOffAddr#` — arity 4
 - [ ] `writeTVar#` — arity 3
 - [ ] `writeWideCharArray#` — arity 4
-- [ ] `writeWideCharOffAddr#` — arity 4
 - [ ] `writeWord16ArrayAsWord16X16#` — arity 4
 - [ ] `writeWord16ArrayAsWord16X32#` — arity 4
 - [ ] `writeWord16ArrayAsWord16X8#` — arity 4

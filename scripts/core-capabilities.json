@@ -519,6 +519,7 @@
     "readInt16OffAddr#": 3,
     "readCharOffAddr#": 3,
     "readWord32OffAddr#": 3,
+    "readWideCharOffAddr#": 3,
     "readWordOffAddr#": 3,
     "readInt32OffAddr#": 3,
     "readIntOffAddr#": 3,
@@ -528,6 +529,7 @@
     "indexAddrOffAddr#": 2,
     "indexInt32OffAddr#": 2,
     "indexWord32OffAddr#": 2,
+    "indexWideCharOffAddr#": 2,
     "indexIntOffAddr#": 2,
     "indexWordOffAddr#": 2,
     "indexInt64OffAddr#": 2,
@@ -540,6 +542,7 @@
     "writeWord16OffAddr#": 4,
     "writeInt32OffAddr#": 4,
     "writeWord32OffAddr#": 4,
+    "writeWideCharOffAddr#": 4,
     "writeIntOffAddr#": 4,
     "writeWordOffAddr#": 4,
     "writeInt64OffAddr#": 4,
@@ -992,6 +995,20 @@
         ]
       }
     },
+    "readWideCharOffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {
+        "kind": "unknown", "aggregate": "unboxed-tuple", "primReps": ["WordRep"],
+        "components": [
+          {"kind": "void", "primReps": []},
+          {"kind": "long", "primReps": ["WordRep"]}
+        ]
+      }
+    },
     "readWordOffAddr#": {
       "arguments": [
         {"kind": "address", "primReps": ["AddrRep"]},
@@ -1142,6 +1159,13 @@
         {"kind": "long", "primReps": ["IntRep"]}
       ],
       "result": {"kind": "long", "primReps": ["IntRep"]}
+    },
+    "indexWideCharOffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]}
+      ],
+      "result": {"kind": "long", "primReps": ["WordRep"]}
     },
     "indexWordOffAddr#": {
       "arguments": [
@@ -1319,6 +1343,15 @@
         {"kind": "address", "primReps": ["AddrRep"]},
         {"kind": "long", "primReps": ["IntRep"]},
         {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "void", "primReps": []}
+    },
+    "writeWideCharOffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "long", "primReps": ["WordRep"]},
         {"kind": "void", "primReps": []}
       ],
       "result": {"kind": "void", "primReps": []}
