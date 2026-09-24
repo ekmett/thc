@@ -1106,7 +1106,9 @@ class Audit:
                         if isinstance(stored, dict) and (
                                 'aggregate' in stored or is_vector(stored) or
                                 stored.get('kind') not in (None, 'unknown', required['kind']) or
-                                stored.get('primReps') is not None and stored['primReps'] != required['primReps']):
+                                stored.get('primReps') is not None and stored['primReps'] != required['primReps'] and
+                                not (stored['primReps'] == ['BoxedRep Nothing'] and
+                                     required['primReps'] == ['BoxedRep (Just Unlifted)'])):
                             self.issue('primitive-representation', owner, path + f'/args/{index}',
                                        function[1] + ': stored ByteArray operand contradicts its required representation')
                     if not exact(proof, bytearray_primitive['result']):

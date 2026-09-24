@@ -80,6 +80,11 @@ class ByteArrayContracts(unittest.TestCase):
     def test_mutable_contents_requires_exact_unlifted_reference_and_address_result(self):
         for name in ('byteArrayContents#', 'mutableByteArrayContents#'):
             self.assertTrue(check(fixture(name)[0])['accepted'])
+            for stored in (dict(kind='unknown', primReps=None, evaluated=False),
+                           dict(kind='object', primReps=['BoxedRep Nothing'], evaluated=True)):
+                module, _ = fixture(name)
+                module['bindings'][0]['expr'][1][0]['rep'] = stored
+                self.assertTrue(check(module)['accepted'], (name, stored))
             for mutation in ('lifted-argument', 'unknown-argument', 'wrong-result', 'tuple-result',
                              'lifted-flag', 'missing-argument', 'extra-state', 'stored-scalar'):
                 module, app = fixture(name)
