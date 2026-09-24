@@ -35,6 +35,12 @@ incremental. `make runtime` and `make haskell` build either part separately.
 `make` keeps Gradle's cache in `.gradle-user-home`; set `GRADLE_USER_HOME` to
 share a cache across checkouts.
 
+`make check-ghc-core GHC=/path/to/ghc` checks whether an installation carries
+complete Core for `ghc-internal`. The [compiler build guide](docs/ghc-core.md)
+includes a one-line GHC patch and source-build instructions. This prepares the
+replacement for our pinned library sources; exporter API support is still
+limited to the GHC version above.
+
 Use `make test` for the test suite and `make clean` to remove build products.
 `make distclean` also removes the checkout's Gradle and Kotlin caches.
 `make run ARGS='--help'` builds and runs the driver; the equivalent Cabal command
