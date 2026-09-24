@@ -34,6 +34,9 @@ CONTRACTS = {
 REQUIRED = {name: set(CONTRACTS) for name in ('transitions', 'lazyPayload', 'unliftedPayload')}
 REQUIRED.update({name: {'newMVar#', 'putMVar#', 'takeMVar#', 'readMVar#'}
                  for name in ('aliasRoundTrip', 'closurePayload')})
+REQUIRED.update(waitTake={'takeMVar#'}, waitRead={'readMVar#'}, waitPut={'putMVar#'}, makeBox=set())
+COMMAND_LABELS = ['ghc-version', 'ghc-package-db', 'ghc-info', 'plugin-build', 'pre-export', 'post-export',
+                  'native-build', 'native-word-bits', 'native-ready', 'native-concurrent-N1', 'native-concurrent-N2']
 
 
 def require(condition, message):
@@ -137,12 +140,111 @@ def validate_rows(text, entries, values):
     return rows
 
 
+def input_vectors():
+    random_values = random.Random(0x4D564152)
+    values = sorted(set(range(-32, 33)) | {-2**63, -2**63 + 1, 2**63 - 2, 2**63 - 1, -4097, 4097, -10**12, 10**12}
+                    | {signed(random_values.getrandbits(64)) for _ in range(96)})
+    concurrent = sorted({-2**63, -4097, -1, 0, 1, 4097, 2**63 - 1}
+                        | {signed(random_values.getrandbits(64)) for _ in range(8)})
+    return values, concurrent
+
+
+def source_inputs(root=ROOT):
+    inputs = [SOURCE, NATIVE, 'scripts/prepare-managed-mvars.py', 'scripts/audit-core.py',
+              'scripts/core-capabilities.json', 'src/main/resources/thc/scalar-primop-signatures.json']
+    inputs += sorted(str(p.relative_to(root)) for p in (root / 'scripts').glob('core_*.py'))
+    inputs += sorted(str(p.relative_to(root)) for p in (root / 'compiler/THC').glob('*.hs'))
+    return inputs
+
+
+def hash_files(paths, root=ROOT):
+    return {path: hashlib.sha256((root / path).read_bytes()).hexdigest() for path in paths}
+
+
+def classify_audit(report, label):
+    require(not report['missingGlobals'], label + ': missing genuine source definitions')
+    if not report['accepted']:
+        require(report['issues'] and all(issue['code'] == 'unsupported-primitive' and issue['detail'] in CONTRACTS
+                                        for issue in report['issues']), label + ': unexpected audit rejection')
+    else:
+        require(not report['issues'], label + ': accepted report still has issues')
+    return 'accepted' if report['accepted'] else 'pending-managed-mvar-capabilities'
+
+
+def expected_artifacts(build, root=ROOT):
+    stages = {stage: [str((build / stage / 'core' / name).relative_to(root))
+                      for name in ('ManagedMVarAudit.json', 'THC.InterfaceClosure.json')] for stage in ('pre', 'post')}
+    files = [build / stage / (name + '.audit.json') for stage in stages for name in ENTRIES + CONTEXT_ENTRIES]
+    files += [build / 'logs' / (label + suffix) for label in COMMAND_LABELS for suffix in ('.stdout', '.stderr', '.command.json')]
+    suffix = 'dylib' if sys.platform == 'darwin' else 'so'
+    files += [build / 'plugin' / ('libHSthc-core-plugin-0.1-ghc9.14.1.' + suffix),
+              build / 'native/managed-mvar-oracle', build / 'oracle.tsv', build / 'context-oracle.tsv', build / 'contracts.json']
+    return stages, {str(path.relative_to(root)) for path in files} | {path for paths in stages.values() for path in paths}
+
+
+def check_prepared(build, root=ROOT):
+    """Read-only verification: never repair, delete, compile, or run an oracle."""
+    try:
+        manifest = json.loads((build / 'manifest.json').read_text())
+        require(manifest['schema'] == 1 and manifest['recipeVersion'] == 2 and manifest['ghc'] == '9.14.1',
+                'missing/current recipe version mismatch')
+        require(manifest['entries'] == manifest['entryNames'] == ENTRIES and manifest['contextEntryNames'] == CONTEXT_ENTRIES,
+                'entry inventory mismatch')
+        stages, artifacts = expected_artifacts(build, root)
+        require(manifest['stages'] == stages, 'pre/post Core inventory mismatch')
+        require(set(manifest['inputHashes']) == set(source_inputs(root)), 'input hash inventory is incomplete')
+        require(set(manifest['artifactHashes']) == artifacts, 'artifact hash inventory is incomplete')
+        for key, boundary in (('inputHashes', root), ('artifactHashes', build)):
+            for path, expected in manifest[key].items():
+                require(not Path(path).is_absolute() and (root / path).resolve().is_relative_to(boundary),
+                        'hash path escapes its source/output boundary: ' + path)
+                require(hash_files([path], root)[path] == expected, 'hash mismatch: ' + path)
+        values, concurrent_values = input_vectors()
+        require(manifest['inputs'] == values, 'deterministic input inventory mismatch')
+        for filename, names, count in (('oracle.tsv', ENTRIES, 'nativeRows'), ('context-oracle.tsv', READY_ENTRIES, 'nativeContextRows')):
+            rows = validate_rows((build / filename).read_text(), names, values)
+            require(manifest[count] == len(rows), 'actual row count mismatch: ' + count)
+        validate_rows((build / 'logs/native-ready.stdout').read_text(), ENTRIES + READY_ENTRIES, values)
+        require(set(manifest['nativeConcurrent']) == {'1', '2'}, 'missing native capability-count run')
+        for capabilities_count in ('1', '2'):
+            record = manifest['nativeConcurrent'][capabilities_count]
+            require(record['entries'] == CONCURRENT_ENTRIES and record['inputs'] == concurrent_values, 'concurrent input inventory mismatch')
+            rows = validate_rows((build / ('logs/native-concurrent-N' + capabilities_count + '.stdout')).read_text(),
+                                 CONCURRENT_ENTRIES, concurrent_values)
+            require(record['rows'] == len(rows), 'actual concurrent row count mismatch')
+        expected_status = {}
+        for stage in stages:
+            require(set(manifest['contextEntries'][stage]) == set(CONTEXT_ENTRIES), 'context entry metadata missing')
+            for name in ENTRIES + CONTEXT_ENTRIES:
+                report = json.loads((build / stage / (name + '.audit.json')).read_text())
+                label = stage + '/' + name
+                require(report['roots'] == ['main:ManagedMVarAudit.' + name], label + ': wrong audit root')
+                expected_status[label] = classify_audit(report, label)
+                require(REQUIRED[name] <= {p['name'] for p in report['primitives']}, label + ': missing primitive coverage')
+                require(manifest['reachableBindings'][label] == report['reachableBindings'], label + ': reachable inventory mismatch')
+        require(manifest['auditStatus'] == expected_status, 'strict audit status inventory mismatch')
+        for label in COMMAND_LABELS:
+            command = json.loads((build / ('logs/' + label + '.command.json')).read_text())
+            require(command['exit'] == 0, 'incomplete/failed command: ' + label)
+        require((build / 'logs/native-word-bits.stdout').read_text().strip() == '64', 'wrong native Int width')
+        require((build / 'logs/ghc-version.stdout').read_text().strip() == '9.14.1', 'wrong compiler version')
+        require(manifest['installedArtifactsHashed'] is False, 'unexpected installed-artifact hashing')
+        return manifest
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise ValueError(f'Stale or incomplete preparation at {build}: {error}. Outputs were not changed; choose a fresh --out directory.') from error
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, default=ROOT / 'build/managed-mvars')
+    parser.add_argument('--check-only', action='store_true', help='Verify existing hashes, complete audits, and actual native/model rows without building')
     args = parser.parse_args()
     build = args.out.resolve()
-    require(build.is_relative_to(ROOT) and not build.exists(), 'Use a fresh output directory inside this checkout')
+    require(build.is_relative_to(ROOT), 'Output directory must be inside this checkout')
+    if args.check_only or build.exists():
+        manifest = check_prepared(build)
+        print(f'Verified complete preparation: {manifest["nativeRows"]} native/model rows; no outputs changed')
+        return
     build.mkdir(parents=True)
     artifacts = []
 
@@ -175,11 +277,8 @@ def main():
         require(result.returncode == 0, 'Command failed; see ' + str(log.with_suffix('.stderr')))
         return result.stdout
 
-    inputs = [SOURCE, NATIVE, 'scripts/prepare-managed-mvars.py', 'scripts/audit-core.py',
-              'scripts/core-capabilities.json', 'src/main/resources/thc/scalar-primop-signatures.json']
-    inputs += sorted(str(p.relative_to(ROOT)) for p in (ROOT / 'scripts').glob('core_*.py'))
-    inputs += sorted(str(p.relative_to(ROOT)) for p in (ROOT / 'compiler/THC').glob('*.hs'))
-    hashes = lambda paths: {p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in paths}
+    inputs = source_inputs()
+    hashes = hash_files
     input_hashes = hashes(inputs)
     ghc = os.environ.get('GHC', 'ghc')
     require(run([ghc, '--numeric-version'], 'ghc-version').strip() == '9.14.1', 'Expected GHC 9.14.1')
@@ -217,14 +316,10 @@ def main():
         artifacts.extend(stages[stage])
         bindings = {b['id']: b for _, module in modules for b in module['bindings']}
         observed = {name: set() for name in CONTRACTS}
-        for name in ENTRIES:
+        for name in ENTRIES + CONTEXT_ENTRIES:
             report = audit.Audit(modules, capabilities).run([name])
             save(directory / (name + '.audit.json'), report)
-            require(not report['missingGlobals'], f'{stage}/{name}: missing genuine source definitions')
-            if not report['accepted']:
-                require(all(issue['code'] == 'unsupported-primitive' and issue['detail'] in CONTRACTS for issue in report['issues']),
-                        f'{stage}/{name}: unexpected audit issue; retained full report')
-            audit_status[stage + '/' + name] = 'accepted' if report['accepted'] else 'pending-managed-mvar-capabilities'
+            audit_status[stage + '/' + name] = classify_audit(report, stage + '/' + name)
             require(REQUIRED[name] <= {p['name'] for p in report['primitives']}, stage + '/' + name + ': missing primitive coverage')
             closures[stage + '/' + name] = report['reachableBindings']
             records = []
@@ -251,10 +346,9 @@ def main():
     executable = native / 'managed-mvar-oracle'
     run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-threaded', '-rtsopts', *package_flags,
          '-icompiler/test-fixtures', '-odir', native, '-hidir', native, NATIVE, '-o', executable], 'native-build')
+    artifacts.append(relative(executable))
     require(run([executable, '--word-bits'], 'native-word-bits').strip() == '64', 'Oracle requires a native 64-bit Int target')
-    random_values = random.Random(0x4D564152)
-    values = sorted(set(range(-32, 33)) | {-2**63, -2**63 + 1, 2**63 - 2, 2**63 - 1, -4097, 4097, -10**12, 10**12}
-                    | {signed(random_values.getrandbits(64)) for _ in range(96)})
+    values, concurrent_values = input_vectors()
     requests = ''.join(f'{name}\t{value}\n' for name in ENTRIES + READY_ENTRIES for value in values)
     native_output = run([executable, '+RTS', '-N1', '-RTS'], 'native-ready', input=requests)
     rows = validate_rows(native_output, ENTRIES + READY_ENTRIES, values)
@@ -262,8 +356,6 @@ def main():
         path = build / filename
         path.write_text(''.join('\t'.join(row) + '\n' for row in rows if row[0] in names))
         artifacts.append(relative(path))
-    concurrent_values = sorted({-2**63, -4097, -1, 0, 1, 4097, 2**63 - 1}
-                               | {signed(random_values.getrandbits(64)) for _ in range(8)})
     requests = ''.join(f'{name}\t{value}\n' for name in CONCURRENT_ENTRIES for value in concurrent_values)
     concurrent = {}
     for capabilities_count in (1, 2):
@@ -273,7 +365,7 @@ def main():
     require(input_hashes == hashes(inputs), 'Inputs changed during native/export preparation')
     save(build / 'contracts.json', {'primitiveRoles': CONTRACTS, 'applications': application_records,
                                     'contextEntries': context_records})
-    manifest = dict(schema=1, ghc='9.14.1', ghcInfo=ghc_info, entries=ENTRIES, entryNames=ENTRIES,
+    manifest = dict(schema=1, recipeVersion=2, ghc='9.14.1', ghcInfo=ghc_info, entries=ENTRIES, entryNames=ENTRIES,
                     contextEntryNames=CONTEXT_ENTRIES, contextEntries=context_records,
                     stages=stages, nativeRows=len(ENTRIES) * len(values), nativeContextRows=len(READY_ENTRIES) * len(values),
                     nativeConcurrent=concurrent, inputs=values, reachableBindings=closures, auditStatus=audit_status,
@@ -282,6 +374,7 @@ def main():
                             'Context entries accept managed objects/logical State# only in internal host-driven tests.',
                             'Native fork/catch/status drivers are not guest exports or evidence of guest thread support.'])
     save(build / 'manifest.json', manifest)
+    check_prepared(build)
     print(json.dumps({'nativeRows': manifest['nativeRows'], 'nativeContextRows': manifest['nativeContextRows'],
                       'nativeConcurrent': concurrent, 'auditStatus': dict(Counter(audit_status.values()))}, indent=2))
 
