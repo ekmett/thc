@@ -372,6 +372,8 @@ jobs:
             build/libdw-unavailable/foreign-labels.json
             build/libdw-unavailable/logs/
             build/original-termios/
+            build/original-tcsetattr/
+            build/original-tcgetattr/
             build/original-sigset/
             build/native-addresses/manifest.json
             build/native-addresses/oracle.json

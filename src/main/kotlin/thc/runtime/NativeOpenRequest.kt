@@ -48,6 +48,8 @@ internal class NativeOpenRequest(val endpoint: StandardEndpoint?,
 
 internal interface NativeFileResource : SeekableByteChannel {
     fun statImage(): ByteArray
+    fun readTermios(image: ByteArray)
+    fun writeTermios(action: Int, image: ByteArray)
     fun requireLive()
     fun readinessWait(): NativeFdWait
 }
@@ -57,6 +59,8 @@ internal interface NativeFileResource : SeekableByteChannel {
 internal class OpenedNativeFile(private val channel: SeekableByteChannel,
     private val metadata: NativeFileResource) : NativeFileResource, SeekableByteChannel by channel {
     override fun statImage(): ByteArray = metadata.statImage()
+    override fun readTermios(image: ByteArray) = metadata.readTermios(image)
+    override fun writeTermios(action: Int, image: ByteArray) = metadata.writeTermios(action, image)
     override fun requireLive() = metadata.requireLive()
     override fun readinessWait(): NativeFdWait = metadata.readinessWait()
     override fun close() {

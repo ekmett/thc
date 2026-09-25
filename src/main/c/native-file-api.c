@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <termios.h>
 #include <unistd.h>
 
 // Private Linux provider transport. These are not original GHC FCall symbols.
@@ -17,6 +18,21 @@ _Static_assert(sizeof(int) == 4 && sizeof(off_t) == 8 && sizeof(size_t) == 8 && 
                "native files require the Linux LP64 ABI");
 
 int64_t thc_file_stat_size(void) { return sizeof(struct stat); }
+int64_t thc_file_termios_size(void) { return sizeof(struct termios); }
+
+// The caller seeds the complete image. Preserve libc's actual writes (including
+// unchanged padding and failure paths), rather than inventing an output image.
+int64_t thc_file_tcgetattr(const int *lease, struct termios *image, int64_t *error) {
+  int result = tcgetattr(*lease, image);
+  *error = result < 0 ? errno : 0;
+  return result;
+}
+
+int64_t thc_file_tcsetattr(const int *lease, int action, const struct termios *image, int64_t *error) {
+  int result = tcsetattr(*lease, action, image);
+  *error = result < 0 ? errno : 0;
+  return result;
+}
 
 // Original unsafe open transport: no added flags, path decoding, type filter,
 // retry, truncation deferral or RTS locking. The caller reserved its guest fd.

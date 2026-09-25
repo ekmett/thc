@@ -470,6 +470,44 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         } }
     }
 
+    /** Same owner/allocation lock order as fstat. The staging bytes start with
+     * the original image and copy back even on a returned libc error. Neither
+     * padding nor the failed-call buffer is synthesized by the adapter. */
+    @TruffleBoundary internal fun tcgetattr(fd: Long, destination: ManagedAddress): Long {
+        val size = TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.nullAddress(), 0)
+        destination.requireByteRegion(size, writable = true)
+        return result { withDescriptor(fd) { entry ->
+            fun observe(): Long {
+                destination.requireByteRegion(size, writable = true)
+                val resource = entry.native ?: fail(7, "THC descriptor has no native terminal capability: $fd")
+                val image = ByteArray(size.toInt()) { destination.readWord8(it.toLong()).toByte() }
+                try { resource.readTermios(image) }
+                finally { ManagedAddress.fromByteArray(image).copyNonOverlappingTo(destination, size) }
+                return 0L
+            }
+            val allocation = destination.cbitsOwner()
+            if (allocation == null) observe() else synchronized(allocation) { observe() }
+        } }
+    }
+
+    /** Snapshot the full const input under the same owner/allocation order as
+     * tcgetattr. No write permission or copyback: libc only reads this image. */
+    @TruffleBoundary internal fun tcsetattr(fd: Long, action: Int, source: ManagedAddress): Long {
+        val size = TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.nullAddress(), 0)
+        source.requireByteRegion(size, writable = false)
+        return result { withDescriptor(fd) { entry ->
+            fun applyImage(): Long {
+                source.requireByteRegion(size, writable = false)
+                val resource = entry.native ?: fail(7, "THC descriptor has no native terminal capability: $fd")
+                val image = ByteArray(size.toInt()) { source.readWord8(it.toLong()).toByte() }
+                resource.writeTermios(action, image)
+                return 0L
+            }
+            val allocation = source.cbitsOwner()
+            if (allocation == null) applyImage() else synchronized(allocation) { applyImage() }
+        } }
+    }
+
     @TruffleBoundary fun read(fd: Long, address: ManagedAddress, count: Long): Long {
         address.requireRange(0, count, true) // Validate the whole destination before consuming input.
         return result { withDescriptor(fd) { entry ->

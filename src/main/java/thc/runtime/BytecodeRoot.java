@@ -976,6 +976,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             ManagedStdio stdio = CoreOriginalStdio.current(node);
             long result;
             if (operation == OriginalStdioOp.OPEN) result = stdio.open(address, fd, count);
+            else if (operation == OriginalStdioOp.TCSETATTR) result = stdio.tcsetattr(fd, count, address);
             else if (operation == OriginalStdioOp.READ_SAFE || operation == OriginalStdioOp.READ_UNSAFE)
                 result = stdio.read(fd, address, count);
             else result = stdio.write(fd, address, count);
@@ -1054,6 +1055,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             long result;
             if (operation.getSigset()) result = SigsetImage.execute(operation, address, fd, CoreOriginalStdio.current(node));
             else if (operation.getStat()) result = PosixStat.execute(operation, address, fd);
+            else if (operation == OriginalStdioOp.TCGETATTR) result = CoreOriginalStdio.current(node).tcgetattr(fd, address);
             else if (operation == OriginalStdioOp.FSTAT) result = CoreOriginalStdio.current(node).fstat(fd, address);
             else if (operation == OriginalStdioOp.UNLOCK) result = CoreOriginalStdio.locks(node).unlock(fd);
             else if (operation == OriginalStdioOp.ERRNO) result = CoreOriginalStdio.current(node).errno();

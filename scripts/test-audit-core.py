@@ -2124,11 +2124,12 @@ class OriginalDupAuditTest(unittest.TestCase):
         'ghczuwrapperZC13ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigemptyset': (('AddrRep', None), 'Int32Rep'),
         'ghczuwrapperZC12ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigaddset': (('AddrRep', 'Int32Rep', None), 'Int32Rep'),
     }
-    symbols = ('dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile', *termios, *sigset)
+    symbols = (core_original_foreign.TCSETATTR_SYMBOL, core_original_foreign.TCGETATTR_SYMBOL, 'dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile', *termios, *sigset)
     def fixture(self, symbol):
-        arguments = (('Word64Rep', 'Word64Rep', 'Word64Rep', 'Int32Rep', None) if symbol == 'lockFile' else
+        arguments = (('Int32Rep', 'Int32Rep', 'AddrRep', None) if symbol == core_original_foreign.TCSETATTR_SYMBOL else
+                     ('Word64Rep', 'Word64Rep', 'Word64Rep', 'Int32Rep', None) if symbol == 'lockFile' else
                      ('Word64Rep', None) if symbol == 'unlockFile' else
-                     ('Int32Rep', 'AddrRep', None) if symbol == '__hscore_fstat' else
+                     ('Int32Rep', 'AddrRep', None) if symbol in ('__hscore_fstat', core_original_foreign.TCGETATTR_SYMBOL) else
                      ('AddrRep', 'Int32Rep', 'Word32Rep', None) if symbol == '__hscore_open' else
                      ('Int32Rep', None) if symbol == 'dup' else ('Int32Rep', 'Int32Rep', None))
         arguments, output = (self.termios | self.sigset).get(symbol, (arguments, 'Int32Rep'))
@@ -2138,7 +2139,7 @@ class OriginalDupAuditTest(unittest.TestCase):
         result = tuple_rep(*(scalar(rep, True) for rep in ((None,) if output is None else (None, output))))
         result['evaluated'] = False
         descriptor = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='ghc-internal', isFunction=True),
-            convention='capi' if symbol in self.sigset else 'ccall', safety='unsafe', arity=len(arguments), suppliedArity=len(arguments),
+            convention='capi' if symbol in self.sigset or symbol in (core_original_foreign.TCGETATTR_SYMBOL, core_original_foreign.TCSETATTR_SYMBOL) else 'ccall', safety='unsafe', arity=len(arguments), suppliedArity=len(arguments),
             argumentReps=[scalar(p, False) for p in arguments], resultRep=copy.deepcopy(result))
         call = ['app', ['var', 'original-foreign', dict(rep=CLOSURE)],
             [['var', p['id'], dict(rep=copy.deepcopy(p['rep']))] for p in parameters],
@@ -2169,7 +2170,7 @@ class OriginalDupAuditTest(unittest.TestCase):
     def test_descriptor_flags_head_and_raw_representation_forgery_reject(self):
         for symbol in self.symbols:
             mutations = [(key, value) for key in ('schema', 'arity', 'suppliedArity')
-                for value in (None, True, 2.0, '2', 0, 1 << 32)] + [('convention', 'ccall' if symbol in self.sigset else 'capi'), ('safety', 'safe'), ('safety', 'interruptible'), ('extra', None)]
+                for value in (None, True, 2.0, '2', 0, 1 << 32)] + [('convention', 'ccall' if symbol in self.sigset or symbol in (core_original_foreign.TCGETATTR_SYMBOL, core_original_foreign.TCSETATTR_SYMBOL) else 'capi'), ('safety', 'safe'), ('safety', 'interruptible'), ('extra', None)]
             for key, value in mutations:
                 module = self.fixture(symbol); self.call(module)[6]['foreignCall'][key] = value
                 self.assertFalse(self.audit(module)['accepted'], (symbol, key, value))

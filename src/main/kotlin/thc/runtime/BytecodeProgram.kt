@@ -1491,7 +1491,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio == OriginalStdioOp.FSTAT || originalStdio == OriginalStdioOp.OPEN ||
+                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio == OriginalStdioOp.OPEN ||
                             originalStdio.iconv || originalStdio.strerror || originalStdio.duplication || originalStdio.locking)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
@@ -1509,8 +1509,15 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.createLocal("original open path", "object").also {
                             b.beginStoreLocal(it); operands[0].emit(e); b.endStoreLocal()
                         } else null
+                    // tcsetattr declares descriptor/action/address/State. Evaluate
+                    // both integers first, then share the transfer instruction's
+                    // long/address/long lanes without reordering guest effects.
+                    val termiosArguments = if (originalStdio == OriginalStdioOp.TCSETATTR)
+                        (0..1).map { index -> b.createLocal("original tcsetattr integer $index", "primitive").also {
+                            b.beginStoreLocal(it); operands[index].emit(e); b.endStoreLocal()
+                        } } else null
                     val status = originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
-                        originalStdio == OriginalStdioOp.CLOSE || originalStdio == OriginalStdioOp.DUP || originalStdio == OriginalStdioOp.FSTAT || originalStdio == OriginalStdioOp.UNLOCK || originalStdio.seekConstant || originalStdio.stat
+                        originalStdio == OriginalStdioOp.CLOSE || originalStdio == OriginalStdioOp.DUP || originalStdio.readImage || originalStdio == OriginalStdioOp.UNLOCK || originalStdio.seekConstant || originalStdio.stat
                     // Image updates declare address before value. Store that operand
                     // once before filling the shared long/address/State lanes.
                     val imageAddress = if (originalStdio == OriginalStdioOp.POKE_LFLAG || originalStdio == OriginalStdioOp.SIGADDSET)
@@ -1532,6 +1539,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (originalStdio == OriginalStdioOp.OPEN) {
                         operands[1].emit(e); b.emitLoadLocal(openPath!!)
                         operands[2].emit(e); operands[3].emit(e)
+                    } else if (originalStdio == OriginalStdioOp.TCSETATTR) {
+                        b.emitLoadLocal(termiosArguments!![0]); operands[2].emit(e)
+                        b.emitLoadLocal(termiosArguments[1]); operands[3].emit(e)
                     } else if (originalStdio.savedTermios) {
                         operands[0].emit(e)
                         if (originalStdio == OriginalStdioOp.SET_SAVED_TERMIOS) operands[1].emit(e)
@@ -1549,7 +1559,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                             originalStdio == OriginalStdioOp.SIZEOF_STAT || originalStdio.statField)
                             b.emitLoadConstant(0L) else operands[0].emit(e)
                         if (originalStdio.statField) operands[0].emit(e)
-                        else if (originalStdio == OriginalStdioOp.FSTAT) operands[1].emit(e)
+                        else if (originalStdio.readImage) operands[1].emit(e)
                         else b.emitLoadConstant(ManagedAddress.nullAddress())
                         operands.last().emit(e)
                     } else if (originalStdio == OriginalStdioOp.SEEK) {
