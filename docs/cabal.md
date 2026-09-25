@@ -56,11 +56,31 @@ the JVM. Foreign calls remain an explicit runtime requirement.
 
 ## REPL
 
+REPL work follows broad file and Handle support: ordinary reads and writes,
+buffering, closing, and IO exceptions come first.
+
 `thc repl [target]` should use the same package environment and export cache as
 the other commands. GHC can maintain the interactive typechecking environment;
 THC can load and execute the resulting expressions and bindings. Reloading a
 module must replace its dependent code and values without retaining obsolete
 closures indefinitely.
+
+The frontend can also be exposed as `thci`. It should reuse the `ghc` library's
+parser, typechecker and interactive scope, with an adapter that exports Core
+before GHCi's execution path requires `ForeignHValue`. The installed `ghci`
+library does not expose the GHCi command loop as an independent UI library.
+Keeping values in THC therefore needs our own prompt and command dispatch, plus
+binding and result handling; it does not require a GHC bytecode interpreter in
+THC. Native GHC remains responsible for build-time Template Haskell. A splice
+that needs a value created only in the THC session needs an explicit bridge or
+native evaluation of that binding.
+
+The interactive UI should support live syntax highlighting, completion,
+multiline editing and inline diagnostics using GHC's syntax and type information.
+Debugging should use Truffle's instrumentation for source breakpoints, stepping
+and frame inspection. Lazy values must remain inspectable without forcing them;
+evaluation should be an explicit action. Existing source notes are a starting
+point, not a claim that debugger instrumentation is already implemented.
 
 This can start with a driver around Cabal and GHC. A dedicated Cabal backend can
 follow if it becomes useful; it need not block the first working integration.
