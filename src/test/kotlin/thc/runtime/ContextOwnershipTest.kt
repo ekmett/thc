@@ -4,17 +4,78 @@
 package thc.runtime
 
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.interop.InteropLibrary
+import com.oracle.truffle.api.interop.UnsupportedMessageException
 import org.graalvm.polyglot.Context
 import org.graalvm.polyglot.Engine
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotSame
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import thc.Language
 import java.util.concurrent.atomic.AtomicReference
 
 class ContextOwnershipTest {
+    @Test fun closingOneContextRetiresWeakStableAndNativeOwnersTogether() {
+        data class Roots(val state: Language.State, val weak: Any, val stable: ManagedAddress,
+            val address: ManagedAddress, val bits: Long, val pointer: NativeReadOnlyPointer)
+        Engine.create().use { engine ->
+            var finalizerCalls = 0
+            fun capture(context: Context): Roots {
+                context.initialize("thc")
+                context.enter()
+                return try {
+                    val state = Language.currentState()
+                    val address = ManagedAddress.fromHex("616263")
+                    val stable = state.stablePointers.make(address)
+                    state.stablePointers.getOrSetSharedCAF(SharedCAFStore.EVENT_MANAGER, stable)
+                    val weak = state.weaks.make(address, stable, { ++finalizerCalls })
+                    val bits = state.nativeAddresses.project(address)
+                    Roots(state, weak, stable, address, bits, state.nativeAddresses.transport(address)!!)
+                } finally { context.leave() }
+            }
+            val interop = InteropLibrary.getUncached()
+            fun live(roots: Roots) {
+                assertEquals(1, roots.state.weaks.retainedCount())
+                assertSame(roots.stable, roots.state.weaks.dereference(roots.weak).value)
+                assertSame(roots.address, roots.state.stablePointers.dereference(roots.stable))
+                assertTrue(interop.isPointer(roots.pointer))
+                assertEquals(roots.bits, interop.asPointer(roots.pointer))
+                assertEquals(97L, roots.state.nativeAddresses.recover(roots.bits).readWord8(0))
+            }
+            fun retired(roots: Roots) {
+                assertEquals(0, roots.state.weaks.retainedCount())
+                assertThrows(RuntimeFault::class.java) { roots.state.weaks.dereference(roots.weak) }
+                assertThrows(RuntimeFault::class.java) { roots.state.stablePointers.dereference(roots.stable) }
+                assertThrows(RuntimeFault::class.java) {
+                    roots.state.stablePointers.getOrSetSharedCAF(SharedCAFStore.EVENT_MANAGER,
+                        ManagedAddress.nullAddress())
+                }
+                assertThrows(RuntimeFault::class.java) { roots.state.nativeAddresses.recover(roots.bits) }
+                assertFalse(interop.isPointer(roots.pointer))
+                assertThrows(UnsupportedMessageException::class.java) { interop.asPointer(roots.pointer) }
+                assertEquals(0, finalizerCalls)
+            }
+            Context.newBuilder("thc").engine(engine).allowNativeAccess(true).build().use { first ->
+                Context.newBuilder("thc").engine(engine).allowNativeAccess(true).build().use { second ->
+                    val firstRoots = capture(first)
+                    val secondRoots = capture(second)
+                    live(firstRoots)
+                    live(secondRoots)
+                    first.close()
+                    retired(firstRoots)
+                    live(secondRoots)
+                    second.close()
+                    retired(secondRoots)
+                    retired(firstRoots)
+                }
+            }
+        }
+    }
+
     @Test fun handoffLayoutsAndThreadUpgradeAreOwnedByEachContext() {
         Engine.create().use { engine ->
             fun capture(context: Context): Pair<Language.State, HandoffLayout> {
