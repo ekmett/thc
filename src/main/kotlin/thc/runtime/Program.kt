@@ -2414,7 +2414,16 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             }
             val formals = definition.parameters.map { it["id"] as String }.toSet()
             (freeVariables(definition.body) - formals - shadowed).forEach { id ->
-                outer.locals[id]?.let { CoreRepresentations.requireScalar(it.proof, "join capture") }
+                outer.locals[id]?.let { captured ->
+                    if (captured.proof.isTuple) {
+                        // A join stays in this activation: its lexical tuple is already
+                        // held in typed frame slots, not in a closure environment.
+                        CoreRepresentations.requireInput(captured.proof)
+                        val slots = captured.tupleSlots ?: throw RuntimeFault("Missing tuple join capture slots")
+                        if (slots.size != TupleShape.flatten(captured.proof).size || slots.any { it < 0 })
+                            throw RuntimeFault("Tuple join capture disagrees with its physical slots")
+                    } else CoreRepresentations.requireScalar(captured.proof, "join capture")
+                }
             }
         }
         CoreJoins.validate(expr[2] as List<Map<String, Any?>>, expr[3] as List<Any?>, recursive)

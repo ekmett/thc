@@ -112,7 +112,7 @@ class TupleJoinResultTest {
         }
     }
 
-    @Test fun recursiveJoinShadowsAnOuterTupleButZeroArityJoinCannotCaptureIt() {
+    @Test fun recursiveJoinShadowsAnOuterTupleAndZeroArityJoinReadsItsFields() {
         for (backend in listOf("ast", "bytecode")) context(false).use { context ->
             context.initialize("thc"); context.enter()
             try {
@@ -139,12 +139,10 @@ class TupleJoinResultTest {
                     rhs[2] = listOf("case", scrutinee, tupleId, listOf(listOf("default", null, emptyList<String>(), body, mapOf("binders" to emptyList<Any>()))),
                         mapOf("rep" to result, "binder" to mapOf("id" to tupleId, "lifted" to false, "rep" to (result + ("evaluated" to true)))))
                     val linked = CoreModules.reachable(module, "recursiveCase")
-                    if (capture) assertThrows(UnsupportedCore::class.java) { program(language, linked, backend) }
-                    else {
-                        val program = program(language, linked, backend)
-                        assertEquals(4123L, Calls.target(program.hostEntryTarget(1), arrayOf(program.entryValue("recursiveCase"), arrayOf(4097L))))
-                        released(language)
-                    }
+                    val program = program(language, linked, backend)
+                    assertEquals(if (capture) 4168L else 4123L,
+                        Calls.target(program.hostEntryTarget(1), arrayOf(program.entryValue("recursiveCase"), arrayOf(4097L))))
+                    released(language)
                 }
             } finally { context.leave() }
         }

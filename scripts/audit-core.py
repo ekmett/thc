@@ -916,7 +916,12 @@ class Audit:
                 vector_captures = {key for key in (self.free_variables(expr[2]) - ids) & bound.keys() if is_vector(bound[key])}
                 if vector_captures:
                     self.issue('vector-boundary', owner, path, 'vector capture')
-                if captured:
+                # The consumed join lambda branches within its enclosing frame;
+                # a residual lambda still allocates an ordinary closure.
+                local_join_prefix = join_prefix > 0 and join_prefix == len(expr[1])
+                if captured and not (local_join_prefix and
+                                     'unboxed-tuple' in self.cap.get('aggregateJoinCaptures', []) and
+                                     all(self.supported_tuple_input(bound[key]) for key in captured)):
                     self.issue('aggregate-boundary', owner, path, 'unboxed-tuple capture')
                 metadata = expr[3] if len(expr) > 3 and isinstance(expr[3], dict) else {}
                 if is_vector(metadata.get('resultRep')) or is_vector(self.expression_rep(expr[2])):
@@ -1384,7 +1389,9 @@ class Audit:
                         captured = (self.free_variables(binding['expr']) - (ids if recursive else set())) & bound.keys()
                         if any(is_sum(bound[key]) for key in captured):
                             self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-sum join capture')
-                        if any(self.is_tuple_value(bound[key]) for key in captured):
+                        tuple_captures = [bound[key] for key in captured if self.is_tuple_value(bound[key])]
+                        if tuple_captures and ('unboxed-tuple' not in self.cap.get('aggregateJoinCaptures', []) or
+                                               not all(self.supported_tuple_input(rep) for rep in tuple_captures)):
                             self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-tuple join capture')
                         self.compare_shapes(self.expression_rep(expr), binding.get('joinResultRep'), owner,
                                             f'{path}/bindings/{index}/joinResultRep')

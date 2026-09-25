@@ -1169,6 +1169,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         CoreJoins.validate(group, expression, recursive)
         val definitions = CoreJoins.definitions(group) ?: throw RuntimeFault("Missing local join definitions")
         val shadowed = if (recursive) definitions.map { it.id }.toSet() else emptySet()
+        val capturedTupleFields = linkedMapOf<Int, Local>()
         definitions.forEach { definition ->
             definition.parameters.forEach {
                 val proof = CoreRepresentations.binder(it)
@@ -1176,8 +1177,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 if (proof.isEmptyTuple && representation(it)) throw RuntimeFault("Tuple join formal must be unlifted")
             }
             val formals = definition.parameters.map { it["id"] as String }.toSet()
-            if ((freeVariables(definition.body) - formals - shadowed).any { it in scope.tuples })
-                throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple (join capture)")
+            (freeVariables(definition.body) - formals - shadowed).forEach { id ->
+                scope.tuples[id]?.let { (proof, fields) ->
+                    CoreRepresentations.requireInput(proof)
+                    val leaves = TupleShape.flatten(proof)
+                    if (fields.size != leaves.size) throw RuntimeFault("Tuple join capture disagrees with its physical slots")
+                    fields.forEachIndexed { index, field ->
+                        if (!field.proof.present || !TupleShape.compatible(leaves[index], field.proof))
+                            throw RuntimeFault("Tuple join capture has a mismatched leaf proof")
+                        capturedTupleFields[field.id]?.let { previous ->
+                            if (!TupleShape.compatible(previous.proof, field.proof))
+                                throw RuntimeFault("Tuple join captures disagree on a shared physical slot")
+                        }
+                        capturedTupleFields[field.id] = field
+                    }
+                }
+            }
         }
         val region = JoinRegion()
         val local = scope.child()
@@ -1213,6 +1228,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         bodies.forEach { TupleShape.requireCompatible(proof, it.proof) }
         return ProvenExpression(ResultExpression { e, destination ->
             if (proof.isTuple != (destination != null)) throw RuntimeFault("Join result destination disagrees with its representation")
+            // A local join branches inside the current root. Every captured leaf
+            // must still name an active typed local in that root's lexical scope.
+            capturedTupleFields.values.forEach { if (it.id !in e.locals) throw RuntimeFault("Tuple join capture escaped its lexical slots") }
             val b = e.builder
             b.beginBlock()
             val result = if (destination == null) b.createLocal("join result", null) else null
