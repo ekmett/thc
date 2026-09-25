@@ -3474,6 +3474,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return FloatX8Fused.apply(operation, first, second, third);
         }
     }
+    @Operation @ConstantOperand(type = int.class, name = "operation")
+    public static final class VectorDouble4Fused {
+        @Specialization public static DoubleX4 apply(int operation, DoubleX4 first, DoubleX4 second, DoubleX4 third) {
+            return DoubleX4Fused.apply(operation, first, second, third);
+        }
+    }
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "first")
     @ConstantOperand(type = LocalAccessor.class, name = "second")

@@ -14,7 +14,7 @@ import thc.Language
 import java.io.File
 import java.security.MessageDigest
 
-/** FloatX4, FloatX8 and DoubleX2 share one native executable and pre/post Core export. */
+/** Four floating vector shapes share one native executable and pre/post Core export. */
 class SimdFloatFmaTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = File(root, "build/simd-floatx4-fma")
@@ -62,6 +62,7 @@ class SimdFloatFmaTest {
         for ((names, proof, wrong) in listOf(
             Triple(CoreVectors.fusedFloat, CoreVectors.proofFloat, CoreVectors.proofDouble),
             Triple(CoreVectors.fusedFloat8, GeneratedVectors.proofFloatX8, CoreVectors.proofFloat),
+            Triple(CoreVectors.fusedDouble4, GeneratedVectors.proofDoubleX4, CoreVectors.proofDouble),
             Triple(CoreVectors.fusedDouble, CoreVectors.proofDouble, CoreVectors.proofFloat))) for (name in names) {
             val good = List(3) { proof }
             CoreVectors.validate(name, good, proof)
@@ -93,16 +94,29 @@ class SimdFloatFmaTest {
         }
         assertEquals(0L, DoubleX2.fused(2, DoubleX2.broadcast(0.0),
             DoubleX2.broadcast(0.0), DoubleX2.broadcast(0.0)).lane(0).toRawBits())
+        val wide = DoubleX4Fused.apply(0, DoubleX4.broadcast(x), DoubleX4.broadcast(y), DoubleX4.broadcast(-1.0))
+        listOf(wide.lane0, wide.lane1, wide.lane2, wide.lane3)
+            .forEach { assertEquals((-Math.scalb(1.0, -104)).toRawBits(), it.toRawBits()) }
+        for (operation in 0..3) for ((a,b,c) in controls) {
+            val expected = Math.fma(if (operation >= 2) -a else a, b, if (operation and 1 != 0) -c else c)
+            val actual = DoubleX4Fused.apply(operation, DoubleX4.broadcast(a), DoubleX4.broadcast(b), DoubleX4.broadcast(c))
+            for (lane in listOf(actual.lane0, actual.lane1, actual.lane2, actual.lane3)) {
+                if (expected.isNaN()) assertTrue(lane.isNaN(), "NaN payload is unspecified")
+                else assertEquals(expected.toRawBits(), lane.toRawBits(), "$operation/$a/$b/$c")
+            }
+        }
     }
 
     @Test fun genuineCoreAndNativeLaneBitsSurviveBothCompiledBackends() {
-        for (laneCount in listOf(4, 2, 8)) checkGenuineCoreAndNativeLaneBits(laneCount)
+        for ((double, laneCount) in listOf(false to 4, true to 2, false to 8, true to 4))
+            checkGenuineCoreAndNativeLaneBits(double, laneCount)
     }
 
-    private fun checkGenuineCoreAndNativeLaneBits(laneCount: Int) {
-        val double = laneCount == 2
+    private fun checkGenuineCoreAndNativeLaneBits(double: Boolean, laneCount: Int) {
+        val doubleWide = double && laneCount == 4
         val wide = laneCount == 8
         val names = when {
+            doubleWide -> listOf("doubleWideAddCase", "doubleWideSubCase", "doubleWideNegAddCase", "doubleWideNegSubCase")
             double -> listOf("doubleAddCase", "doubleSubCase", "doubleNegAddCase", "doubleNegSubCase")
             wide -> listOf("wideAddCase", "wideSubCase", "wideNegAddCase", "wideNegSubCase")
             else -> this.names
@@ -121,7 +135,8 @@ class SimdFloatFmaTest {
                 return all.map { (a,b,c) -> Triple(a.toDouble(), b.toDouble(), c.toDouble()) }
             }
             val (x,y,z) = input.map(Double::fromBits)
-            return listOf(Triple(x,y,z), Triple(y,z,-x))
+            val base = listOf(Triple(x,y,z), Triple(y,z,-x))
+            return if (doubleWide) base + listOf(Triple(z,x,y), Triple(-x,y,-z)) else base
         }
         fun model(operation: Int, lane: Triple<Double, Double, Double>): Long {
             val (x,y,z) = lane
@@ -135,7 +150,7 @@ class SimdFloatFmaTest {
         assertEquals("9.14.1", manifest["ghc"])
         val exportOnly = System.getProperty("os.arch") in listOf("aarch64", "arm64")
         assertEquals(if (exportOnly) listOf("pre") else listOf("pre", "post"), manifest["stages"])
-        assertEquals(if (exportOnly) null else 1232L, manifest["nativeRows"], "Native preparation cannot silently downgrade")
+        assertEquals(if (exportOnly) null else 1584L, manifest["nativeRows"], "Native preparation cannot silently downgrade")
         assertEquals(listOf("-fllvm", "-mavx2", "-mfma"), manifest["nativeFlags"])
         for ((path, want) in ((manifest["inputHashes"] as Map<String, String>) +
                 (manifest["artifactHashes"] as Map<String, String>))) {
@@ -143,14 +158,14 @@ class SimdFloatFmaTest {
                 .joinToString("") { "%02x".format(it) }
             assertEquals(want, hash, "Stale shared SIMD fused fixture $path")
         }
-        assertEquals(names, manifest[if (double) "doubleEntries" else if (wide) "wideEntries" else "entries"])
+        assertEquals(names, manifest[if (doubleWide) "doubleWideEntries" else if (double) "doubleEntries" else if (wide) "wideEntries" else "entries"])
         for (stage in manifest["stages"] as List<String>) {
             val audit = Json.parse(File(directory, "$stage-audit.json").readText()) as Map<String, Any?>
             assertEquals(true, audit["accepted"], "$stage canonical audit")
             assertEquals(emptyList<Any?>(), audit["issues"])
             assertEquals(emptyList<Any?>(), audit["missingGlobals"])
             val doubleAudit = Json.parse(File(directory, "$stage-double-audit.json").readText()) as Map<String, Any?>
-            assertEquals(true, doubleAudit["accepted"], "$stage canonical DoubleX2 audit")
+            assertEquals(true, doubleAudit["accepted"], "$stage canonical double-vector audit")
             assertEquals(emptyList<Any?>(), doubleAudit["issues"])
             assertEquals(emptyList<Any?>(), doubleAudit["missingGlobals"])
         }
@@ -158,7 +173,7 @@ class SimdFloatFmaTest {
             else (manifest["inputs"] as List<List<Number>>).map { row -> row.map { it.toLong() } }
         assertEquals(22, inputs.size)
         val native = if (manifest["nativeRows"] != null) File(directory, "oracle.txt").readLines().map { it.split(' ') }.also {
-            assertEquals(1232, it.size)
+            assertEquals(1584, it.size)
         }.filter { it[0] in names } else null
         val expectedRequests = names.flatMap { name -> inputs.flatMap { input -> (0 until laneCount).map { lane ->
             listOf(name) + input.map(::unsigned) + lane.toString()
@@ -207,7 +222,7 @@ class SimdFloatFmaTest {
                         val resultShape = requireNotNull(workerRoot.tupleResult)
                         assertEquals(3, inputLayout.logical.logicalArity)
                         assertEquals(3 * laneCount, inputLayout.logical.physicalArity)
-                        assertEquals(if (double) CoreVector.DOUBLEX2 else if (wide) GeneratedVectors.vectorFloatX8 else CoreVector.FLOATX4, resultShape.proof.vector)
+                        assertEquals(if (doubleWide) GeneratedVectors.vectorDoubleX4 else if (double) CoreVector.DOUBLEX2 else if (wide) GeneratedVectors.vectorFloatX8 else CoreVector.FLOATX4, resultShape.proof.vector)
                         fun workerCall(input: List<Long>) {
                             val laneInputs = lanes(input)
                             val loan = language.handoffState.get().arguments.acquire(inputLayout.packet)

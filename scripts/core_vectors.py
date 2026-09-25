@@ -122,6 +122,10 @@ OPERATIONS.update({name + 'FloatX8#': ([VECTOR_FLOAT8_REP] * 3, VECTOR_FLOAT8_RE
                    for name in ('fmadd', 'fmsub', 'fnmadd', 'fnmsub')})
 VECTOR_DOUBLE_REP = {'kind': 'vector', 'primReps': ['VecRep 2 DoubleElemRep'], 'evaluated': True,
                     'vector': {'lanes': 2, 'element': 'DoubleElemRep'}}
+VECTOR_DOUBLE4_REP = {'kind': 'vector', 'primReps': ['VecRep 4 DoubleElemRep'], 'evaluated': True,
+                     'vector': {'lanes': 4, 'element': 'DoubleElemRep'}}
+OPERATIONS.update({name + 'DoubleX4#': ([VECTOR_DOUBLE4_REP] * 3, VECTOR_DOUBLE4_REP)
+                   for name in ('fmadd', 'fmsub', 'fnmadd', 'fnmsub')})
 LANE_DOUBLE_REP = {'kind': 'double', 'primReps': ['DoubleRep'], 'evaluated': True}
 TUPLE_DOUBLE_REP = {'kind': 'unknown', 'primReps': ['DoubleRep'] * 2, 'evaluated': True,
                    'aggregate': 'unboxed-tuple', 'components': [LANE_DOUBLE_REP] * 2}

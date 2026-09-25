@@ -20,6 +20,8 @@ main = getContents >>= mapM_ row . lines
                 "wideNegAddCase" -> wideNegAddCase; "wideNegSubCase" -> wideNegSubCase
                 "doubleAddCase" -> doubleAddCase; "doubleSubCase" -> doubleSubCase
                 "doubleNegAddCase" -> doubleNegAddCase; "doubleNegSubCase" -> doubleNegSubCase
+                "doubleWideAddCase" -> doubleWideAddCase; "doubleWideSubCase" -> doubleWideSubCase
+                "doubleWideNegAddCase" -> doubleWideNegAddCase; "doubleWideNegSubCase" -> doubleWideNegSubCase
                 _ -> error "Unknown fused vector entry"
           putStrLn (unwords [name,a,b,c,d,show (W# (operation x y z lane))])
         _ -> die "Malformed fused vector operands"

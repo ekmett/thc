@@ -5,6 +5,7 @@ module SimdFloatFma where
 import GHC.Exts
 import GHC.Prim (fmaddFloatX8#, fmsubFloatX8#, fnmaddFloatX8#, fnmsubFloatX8#,
                  fmaddFloatX4#, fmsubFloatX4#, fnmaddFloatX4#, fnmsubFloatX4#,
+                 fmaddDoubleX4#, fmsubDoubleX4#, fnmaddDoubleX4#, fnmsubDoubleX4#,
                  fmaddDoubleX2#, fmsubDoubleX2#, fnmaddDoubleX2#, fnmsubDoubleX2#)
 
 -- GHC 902339d332fb4ce2b3c87dcac1ee6495d41ad886 primops.txt.pp:4289-4308:
@@ -97,3 +98,36 @@ wideAddCase = wideLaneBits wideAddWorker
 wideSubCase = wideLaneBits wideSubWorker
 wideNegAddCase = wideLaneBits wideNegAddWorker
 wideNegSubCase = wideLaneBits wideNegSubWorker
+
+{-# NOINLINE doubleWideAddWorker #-}
+{-# NOINLINE doubleWideSubWorker #-}
+{-# NOINLINE doubleWideNegAddWorker #-}
+{-# NOINLINE doubleWideNegSubWorker #-}
+doubleWideAddWorker, doubleWideSubWorker, doubleWideNegAddWorker, doubleWideNegSubWorker :: DoubleX4# -> DoubleX4# -> DoubleX4# -> DoubleX4#
+doubleWideAddWorker x y z = fmaddDoubleX4# x y z
+doubleWideSubWorker x y z = fmsubDoubleX4# x y z
+doubleWideNegAddWorker x y z = fnmaddDoubleX4# x y z
+doubleWideNegSubWorker x y z = fnmsubDoubleX4# x y z
+
+-- Keep an actual PAP with two vector arguments across a lifted call boundary.
+{-# NOINLINE doubleWideApply #-}
+doubleWideApply :: (DoubleX4# -> DoubleX4#) -> DoubleX4# -> DoubleX4#
+doubleWideApply operation value = operation value
+
+{-# INLINE doubleWideLaneBits #-}
+doubleWideLaneBits :: (DoubleX4# -> DoubleX4# -> DoubleX4# -> DoubleX4#) -> Word# -> Word# -> Word# -> Int# -> Word#
+doubleWideLaneBits operation xb yb zb lane =
+  case castWord64ToDouble# (wordToWord64# xb) of { x ->
+  case castWord64ToDouble# (wordToWord64# yb) of { y ->
+  case castWord64ToDouble# (wordToWord64# zb) of { z ->
+  case doubleWideApply (operation (packDoubleX4# (# x, y, z, negateDouble# x #))
+                                 (packDoubleX4# (# y, z, x, y #)))
+                       (packDoubleX4# (# z, negateDouble# x, y, negateDouble# z #)) of { vector ->
+  case unpackDoubleX4# vector of { (# a, b, c, d #) ->
+  word64ToWord# (castDoubleToWord64# (case lane of 0# -> a; 1# -> b; 2# -> c; _ -> d)) } } } } }
+
+doubleWideAddCase, doubleWideSubCase, doubleWideNegAddCase, doubleWideNegSubCase :: Word# -> Word# -> Word# -> Int# -> Word#
+doubleWideAddCase = doubleWideLaneBits doubleWideAddWorker
+doubleWideSubCase = doubleWideLaneBits doubleWideSubWorker
+doubleWideNegAddCase = doubleWideLaneBits doubleWideNegAddWorker
+doubleWideNegSubCase = doubleWideLaneBits doubleWideNegSubWorker
