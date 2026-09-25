@@ -1166,7 +1166,20 @@
       "haskell": ["driver-tests"]
     },
     "src/THC/Driver/Installed.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
+      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "src/main/kotlin/thc/runtime/TargetLayout.kt": {
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"],
+      "python": []
+    },
+    "src/THC/Driver/Wired.hs": {
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"], "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "compiler/target-layout.c": {
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"], "python": [],
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/run-pure/run-pure.cabal": {
       "junit": [],

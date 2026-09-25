@@ -7,7 +7,7 @@
 module THC.Driver.Installed
   ( InstalledContext(..), InstalledUnit(..), InstalledCore(..), MissingCore(..)
   , installedContext, discoverInstalled, validateReexports, acquireInstalled
-  , installedProvenance, helperCommand
+  , installedProvenance, installedLayoutHeaders, helperCommand
   ) where
 
 import Control.Monad (filterM, forM, forM_, unless)
@@ -26,7 +26,7 @@ import Distribution.InstalledPackageInfo (parseInstalledPackageInfo)
 import Distribution.Pretty (prettyShow)
 import Distribution.Types.ExposedModule (ExposedModule(..))
 import qualified Distribution.Types.InstalledPackageInfo as Package
-import System.Directory (canonicalizePath, doesFileExist)
+import System.Directory (canonicalizePath, doesDirectoryExist, doesFileExist)
 import System.Environment (getEnvironment)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), pathSeparator)
@@ -134,6 +134,41 @@ installedProvenance context unit = object
    "way" .= ("dynamic" :: String), "coverage" .= ("registered-owned-modules" :: String),
    "interfaces" .= [object ["module" .= name, "path" .= path] | (name, path) <- installedInterfaces unit],
    "reexports" .= installedReexports unit, "depends" .= installedDepends unit]
+
+-- Use the selected package database's RTS headers, rather than host headers
+-- or paths inferred from the GHC executable. The registration text is part of
+-- the bundle's build identity so a changed RTS layout cannot reuse a receipt.
+installedLayoutHeaders :: InstalledContext -> InstalledUnit -> IO (String, [FilePath])
+installedLayoutHeaders context unit = do
+  let pkg = installedPackageTool context
+      global = ["--global", "--no-user-package-db", "--expand-pkgroot"]
+      selected = global ++
+        concatMap (\db -> ["--package-db", db]) (installedDatabases context)
+  ids <- words <$> command pkg (global ++ ["field", "rts", "id", "--simple-output"])
+  rtsId <- case ids of
+    [identifier] -> pure identifier
+    _ -> fail "selected GHC has no unique RTS registration"
+  description <- command pkg (global ++ ["--ipid", "describe", rtsId])
+  info <- case parseInstalledPackageInfo (Text.encodeUtf8 (Text.pack description)) of
+    Left errors -> fail ("invalid selected RTS registration: " ++ show errors)
+    Right (_, value) -> pure value
+  unless (prettyShow (Package.installedUnitId info) == rtsId)
+    (fail "selected RTS registration changed")
+  directories <- mapM canonicalizePath (Package.includeDirs info)
+  internal <- mapM canonicalizePath =<< do
+    internalDescription <- command pkg (selected ++ ["--ipid", "describe", registeredId unit])
+    case parseInstalledPackageInfo (Text.encodeUtf8 (Text.pack internalDescription)) of
+      Left errors -> fail ("invalid selected ghc-internal registration: " ++ show errors)
+      Right (_, value) -> do
+        unless (prettyShow (Package.installedUnitId value) == registeredId unit &&
+                internalDescription == registration unit)
+          (fail "selected ghc-internal registration changed")
+        pure (Package.includeDirs value)
+  let includes = nub (directories ++ internal)
+  unless (not (null includes)) (fail "selected RTS include directories are unavailable")
+  found <- mapM doesDirectoryExist includes
+  unless (and found) (fail "selected RTS include directory is missing")
+  pure (description, includes)
 
 helperCommand :: InstalledContext -> InstalledUnit -> (String, FilePath) -> [String]
 helperCommand context unit (name, path) =

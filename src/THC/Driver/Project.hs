@@ -40,7 +40,8 @@ import THC.Driver.ForeignBitcode (linkClockGetTime)
 import THC.Driver.Installed
 import THC.Driver.Run (RunOptions(..))
 import THC.Driver.Zip (decodeZip, encodeZip)
-import THC.Driver.Wired (WiredArtifacts(..), moduleSources, sourceHashes, exportPinnedCore)
+import THC.Driver.Wired (WiredArtifacts(..), moduleSources, sourceHashes,
+                         exportPinnedCore, probeTargetLayout)
 
 -- Cabal performs the project solve, preprocessing, host-tool/TH execution and
 -- native build. Its machine-readable plan and per-component build-info, rather
@@ -64,6 +65,8 @@ data Bundle = Bundle { bundlePath :: FilePath, bundleHash :: String
 
 data InstalledBundle = InstalledBundle
   { installedOwner :: String, installedBundle :: Bundle }
+
+data BundleReceipt = PlainBundle | TargetLayoutBundle | PinnedSourceBundle
 
 data ExportContext = ExportContext
   { contextCompiler :: String, contextAbi :: String, contextPlatform :: String
@@ -167,7 +170,7 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
       require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
         ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
       result <- prepareInstalledBundle cacheRoot (native </> "cache/thc/staging")
-        driverHash helperContext registrationUnit
+        (thcRoot </> "compiler/target-layout.c") driverHash helperContext registrationUnit
       bundle <- either (\missing -> fail
         ("complete-interface-core unavailable for " ++ missingUnit missing ++ ":" ++ missingModule missing ++
          " (dynamic interface " ++ missingInterface missing ++ "). Select a full-Core GHC; " ++
@@ -233,14 +236,17 @@ prepareInterfaceHelper context root = do
 -- Rehydrate before cache lookup: registration/ABI/mtime is not an executable
 -- payload fingerprint. Only generated JSON and THC-owned exporter code are
 -- hashed; no installed GHC binary, interface or library is read for hashing.
-prepareInstalledBundle :: FilePath -> FilePath -> String -> InstalledContext -> InstalledUnit ->
+prepareInstalledBundle :: FilePath -> FilePath -> FilePath -> String -> InstalledContext -> InstalledUnit ->
                           IO (Either MissingCore InstalledBundle)
-prepareInstalledBundle cache staging driverHash context registrationUnit = do
+prepareInstalledBundle cache staging recipe driverHash context registrationUnit = do
   acquired <- acquireInstalled context registrationUnit
   case acquired of
     Left missing -> pure (Left missing)
     Right core -> do
       helperHash <- digestFile (installedHelper context)
+      requireFile recipe
+      recipeHash <- digestFile recipe
+      (rtsRegistration, includes) <- installedLayoutHeaders context registrationUnit
       compilerId <- field (installedCompiler context) "id" :: IO String
       compilerAbi <- field (installedCompiler context) "abi" :: IO String
       compilerPlatform <- field (installedCompiler context) "platform" :: IO String
@@ -255,6 +261,9 @@ prepareInstalledBundle cache staging driverHash context registrationUnit = do
             "unit" .= unit, "compiler" .= installedCompiler context,
             "component" .= object ["kind" .= ("installed-interface" :: String),
                                    "registration" .= installedProvenance context registrationUnit],
+            "rtsRegistration" .= rtsRegistration,
+            "recipeArtifacts" .= [object ["path" .= ("compiler/target-layout.c" :: String),
+                                           "sha256" .= recipeHash]],
             "nativeArtifacts" .= ([] :: [Value]),
             "generatedCore" .= [object ["module" .= name, "sha256" .= shaHex bytes] | (name, bytes) <- modules],
             "dependencies" .= installedDepends registrationUnit]
@@ -263,38 +272,53 @@ prepareInstalledBundle cache staging driverHash context registrationUnit = do
                              "options" .= (["post-tidy", "unit-qualified", "source-notes", "dynamic"] :: [String])] ++
                              ["foreignLinkRecipe" .= ("original-capi-llvm-v4" :: String)
                              | any ((== "System.CPUTime.Posix.ClockGetTime") . fst) modules])
-          exportKey = shaHex (BL.toStrict (encode ("thc-installed-interface-v1" :: String, buildKey, exporter)))
+          exportKey = shaHex (BL.toStrict (encode ("thc-installed-interface-v2" :: String, buildKey, exporter)))
           inputs = object (inputFields ++ ["buildKey" .= buildKey, "exportKey" .= exportKey, "exporter" .= exporter])
           directory = cache </> "core-bundles/v1" </>
             (compilerId ++ "-" ++ compilerAbi ++ "-" ++ compilerPlatform) </> exportKey
           destination = directory </> (registered ++ ".zip")
-          inputBytes = BL.toStrict (encode inputs)
       createDirectoryIfMissing True directory
       bundle <- withLock (destination ++ ".lock") $ do
         present <- doesFileExist destination
-        cached <- if present then readBundle False destination unit buildKey exportKey inputs (map fst modules)
+        cached <- if present then readBundle TargetLayoutBundle destination unit buildKey exportKey inputs (map fst modules)
                   else pure Nothing
         case cached of
           Just hit -> pure hit
           Nothing -> do
-            linked <- forM modules $ \(name, bytes) -> do
-              result <- linkClockGetTime (installedLibdir context) staging
-                compilerPlatform unit name bytes
-              pure (name, result)
-            let members = [("core/" ++ show index ++ ".json", bytes)
-                          | (index, (_, bytes)) <- zip [0 :: Int ..] linked]
-                refs = [object ["name" .= name, "boundary" .= boundary,
-                                "path" .= member, "sha256" .= shaHex bytes]
-                       | ((name, bytes), (member, _)) <- zip linked members]
-                inner = object ["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
-                  "unit" .= unit, "buildKey" .= buildKey, "exportKey" .= exportKey, "modules" .= refs,
-                  "buildInputs" .= object ["path" .= ("inplace-manifest.json" :: String),
-                                           "sha256" .= shaHex inputBytes]]
-            archive <- either fail pure (encodeZip
-              (("manifest.json", BL.toStrict (encode inner)) : ("inplace-manifest.json", inputBytes) : members))
-            -- Keep an existing file intact until the complete replacement is ready.
-            atomicBytes destination (BL.toStrict archive)
-            pure (Bundle destination (shaHex (BL.toStrict archive)) refs buildKey)
+            createDirectoryIfMissing True staging
+            (temporary, handle) <- openTempFile staging "installed-layout-"
+            hClose handle
+            removeFile temporary
+            createDirectory temporary
+            (do
+              layout <- readJson =<< probeTargetLayout includes recipe temporary
+              require (validTargetLayout layout &&
+                       jsonField layout "targetPlatform" == Just compilerPlatform)
+                "installed GHC target layout differs from selected compiler"
+              linked <- forM modules $ \(name, bytes) -> do
+                result <- linkClockGetTime (installedLibdir context) staging
+                  compilerPlatform unit name bytes
+                pure (name, result)
+              let members = [("core/" ++ show index ++ ".json", bytes)
+                            | (index, (_, bytes)) <- zip [0 :: Int ..] linked]
+                  refs = [object ["name" .= name, "boundary" .= boundary,
+                                  "path" .= member, "sha256" .= shaHex bytes]
+                         | ((name, bytes), (member, _)) <- zip linked members]
+                  receiptBytes = BL.toStrict (encode (object (inputFields ++
+                    ["buildKey" .= buildKey, "exportKey" .= exportKey,
+                     "exporter" .= exporter, "targetLayout" .= layout])))
+                  inner = object ["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
+                    "unit" .= unit, "buildKey" .= buildKey, "exportKey" .= exportKey,
+                    "targetLayout" .= layout, "modules" .= refs,
+                    "buildInputs" .= object ["path" .= ("inplace-manifest.json" :: String),
+                                             "sha256" .= shaHex receiptBytes]]
+              archive <- either fail pure (encodeZip
+                (("manifest.json", BL.toStrict (encode inner)) :
+                 ("inplace-manifest.json", receiptBytes) : members))
+              -- Keep an existing file intact until the complete replacement is ready.
+              atomicBytes destination (BL.toStrict archive)
+              pure (Bundle destination (shaHex (BL.toStrict archive)) refs buildKey))
+              `finally` removePathForcibly temporary
       pure (Right (InstalledBundle unit bundle))
 
 installedRecords :: InstalledUnit -> InstalledBundle -> [Value]
@@ -359,7 +383,7 @@ wiredGhcInternal context thcRoot = do
   createDirectoryIfMissing True directory
   bundle <- withLock (destination ++ ".lock") $ do
     cached <- doesFileExist destination
-    hit <- if cached then readBundle True destination unit buildKey exportKey buildInputs (sort names)
+    hit <- if cached then readBundle PinnedSourceBundle destination unit buildKey exportKey buildInputs (sort names)
            else pure Nothing
     case hit of
       Just value -> pure value
@@ -702,7 +726,7 @@ exportUnit context keys unit = do
   createDirectoryIfMissing True directory
   withLock (destination ++ ".lock") $ do
     cached <- doesFileExist destination
-    hit <- if cached then readBundle False destination (unitId unit) buildKey exportKey buildInputs expected
+    hit <- if cached then readBundle PlainBundle destination (unitId unit) buildKey exportKey buildInputs expected
            else pure Nothing
     case hit of
       Just bundle -> pure bundle
@@ -765,8 +789,8 @@ freshExport context component unit buildKey exportKey buildInputs expected desti
     atomicBytes destination (BL.toStrict archive)
     pure (Bundle destination (shaHex (BL.toStrict archive)) modules buildKey)) `finally` cleanup
 
-readBundle :: Bool -> FilePath -> String -> String -> String -> Value -> [String] -> IO (Maybe Bundle)
-readBundle requireDerived path unit buildKey exportKey buildInputs expected = do
+readBundle :: BundleReceipt -> FilePath -> String -> String -> String -> Value -> [String] -> IO (Maybe Bundle)
+readBundle receipt path unit buildKey exportKey buildInputs expected = do
   bytes <- BS.readFile path
   decoded <- decodeZip bytes
   pure $ do
@@ -787,6 +811,9 @@ readBundle requireDerived path unit buildKey exportKey buildInputs expected = do
         innerLayout = jsonField inner "targetLayout" :: Maybe Value
         generated = jsonField storedInputs "generatedSources" :: Maybe [Value]
         innerGenerated = jsonField inner "generatedSources" :: Maybe [Value]
+        compiler = jsonField buildInputs "compiler" :: Maybe Value
+        platform = compiler >>= (`jsonField` "platform") :: Maybe String
+        layoutPlatform = layout >>= (`jsonField` "targetPlatform") :: Maybe String
     let names = [name | Just name <- map (`jsonField` "name") modules]
         paths = [member | Just member <- map (`jsonField` "path") modules]
         validModule item = do
@@ -807,10 +834,15 @@ readBundle requireDerived path unit buildKey exportKey buildInputs expected = do
         jsonField inner "buildKey" == Just buildKey &&
         jsonField inner "exportKey" == Just exportKey &&
         inputPath == "inplace-manifest.json" && shaHex inputBytes == inputHash &&
-        (if requireDerived then storedBase == buildInputs &&
-          layout == innerLayout && generated == innerGenerated &&
-          maybe False validTargetLayout layout && maybe False validGeneratedSources generated
-         else storedInputs == buildInputs) &&
+        (case receipt of
+          PlainBundle -> storedInputs == buildInputs
+          TargetLayoutBundle -> storedBase == buildInputs && layout == innerLayout &&
+            maybe False validTargetLayout layout && layoutPlatform == platform &&
+            generated == Nothing && innerGenerated == Nothing
+          PinnedSourceBundle -> storedBase == buildInputs && layout == innerLayout &&
+            generated == innerGenerated && maybe False validTargetLayout layout &&
+            layoutPlatform == platform &&
+            maybe False validGeneratedSources generated) &&
         length names == length modules && length paths == length modules &&
         length names == length (nub names) && sort names == expected &&
         sort (map fst entries) == sort ("manifest.json" : inputPath : paths) &&
