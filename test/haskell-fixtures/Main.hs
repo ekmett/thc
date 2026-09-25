@@ -34,6 +34,7 @@ import OriginalGmpFixtures (prepareOriginalGmp)
 import OriginalFdReadyFixtures (prepareOriginalFdReady)
 import OriginalRtsLocksFixtures (prepareOriginalRtsLocks)
 import OriginalOpenFixtures (prepareOriginalOpen)
+import OriginalTermiosFixtures (prepareOriginalTermios)
 import OriginalIconvFixtures (prepareOriginalIconv)
 import MutVarFixtures (prepareMutVar)
 import StablePointerFixtures (prepareStablePointers)
@@ -872,6 +873,7 @@ main = do
     ["original-handle-readiness"] -> prepareOriginalHandleReadiness root
     ["original-posix-stat"] -> prepareOriginalPosixStat root
     ["original-open"] -> prepareOriginalOpen root
+    ["original-termios"] -> prepareOriginalTermios root
     ["original-gmp"] -> prepareOriginalGmp root False
     ["original-gmp", "--require-supported"] -> prepareOriginalGmp root True
     ["original-fd-ready"] -> prepareOriginalFdReady root

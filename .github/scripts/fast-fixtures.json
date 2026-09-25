@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.TermiosAbiTest",
     "thc.runtime.NativeFileProviderTest",
     "thc.runtime.ManagedFileCallTest",
     "thc.runtime.ManagedFilesTest",
@@ -34,6 +35,14 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "original-termios": {
+      "junit": ["thc.runtime.OriginalTermiosTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-termios"]}],
+      "outputs": ["build/original-termios"],
+      "sources": ["compiler/test-fixtures/OriginalTermiosAudit.hs", "compiler/test-fixtures/OriginalTermiosNative.hs",
+        "test/haskell-fixtures/OriginalTermiosFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "original-open": {
       "junit": ["thc.runtime.OriginalOpenTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-open"]}],

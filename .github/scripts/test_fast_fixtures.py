@@ -131,6 +131,36 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual({'mode': 'selected', 'rebuilt': [], 'reused': []}, result)
         self.assertEqual([], self.calls)
 
+    def test_original_termios_registration_receipt_and_stale_artifact(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['original-termios']
+        self.assertEqual('original-termios', owners['thc.runtime.OriginalTermiosTest'])
+        self.assertIn('thc.runtime.TermiosAbiTest', manifest['fixtureFreeJunit'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-termios']}], group['commands'])
+        self.assertIn('"$fixture_bin" original-termios', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('build/original-termios', fast_fixtures.FULL_OUTPUT_ROOTS)
+        cache = fast_fixtures.fast_inputs
+        name = 'build/original-termios/manifest.json'
+        with mock.patch.object(cache, 'GMP_NATIVE_HOST', True):
+            artifacts = {}
+            for item in cache.ORIGINAL_TERMIOS_OUTPUTS - {name}:
+                path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
+            receipt = dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
+                           installedArtifactsHashed=False, nativeRows=6,
+                           entries=list(cache.ORIGINAL_TERMIOS_ENTRIES), artifactHashes=artifacts)
+            path = self.root / name; path.write_text(json.dumps(receipt))
+            self.assertEqual(cache.ORIGINAL_TERMIOS_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+            for bad in (dict(receipt, schema=True), dict(receipt, entries=[]),
+                        dict(receipt, artifactHashes={}), dict(receipt, artifactHashes=dict(artifacts, **{'build/original-termios/extra.json': '0'*64}))):
+                with self.assertRaises(cache.CacheMiss): cache.termios_artifact_hashes(bad)
+            artifact = self.root / 'build/original-termios/pre/core/OriginalTermiosAudit.json'
+            artifact.write_text('mutated')
+            with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+            artifact.unlink(); artifact.symlink_to(self.root / 'build/original-termios/oracle.json')
+            with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
+
     def test_original_posix_stat_fixture_registration_and_narrow_cache(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

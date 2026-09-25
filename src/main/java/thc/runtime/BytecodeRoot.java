@@ -932,6 +932,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             TupleResultsKt.requireVoidCarrier(state);
             // One typed instruction avoids another generated-interpreter partition;
             // the exact operation is compile-time metadata, not a guest operand.
+            if (operation.getTermios()) {
+                if (operation == OriginalStdioOp.PTR_C_CC) {
+                    destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, TermiosImage.pointer(address));
+                } else {
+                    long value = TermiosImage.scalar(operation, address, fd);
+                    if (operation.getResult() != null)
+                        destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, value);
+                }
+                return;
+            }
             long result;
             if (operation.getStat()) result = PosixStat.execute(operation, address, fd);
             else if (operation == OriginalStdioOp.FSTAT) result = CoreOriginalStdio.current(node).fstat(fd, address);

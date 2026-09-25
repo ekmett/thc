@@ -367,6 +367,7 @@ jobs:
             build/original-posix-dup/
             build/original-rts-locks/
             build/original-open/
+            build/original-termios/
             build/original-gmp/
             build/address-fields/
             build/data-to-tag/
