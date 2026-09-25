@@ -83,6 +83,28 @@ class VectorAuditTest(unittest.TestCase):
         checker.representation(bad, 'root', 'result')
         self.assertTrue(checker.issues)
 
+    def test_polymorphic_tuple_constructor_uses_instantiated_case_components(self):
+        module = fixture()
+        vector = module['bindings'][0]['expr'][2][1]
+        tuple_rep = dict(kind='unknown', evaluated=True, aggregate='unboxed-tuple',
+                         primReps=VECTOR_REP['primReps'] + LONG['primReps'],
+                         components=[copy.deepcopy(VECTOR_REP), copy.deepcopy(LONG)])
+        unknown = dict(kind='unknown', evaluated=False, primReps=None)
+        module['constructors'] = [dict(id='Tuple2', kind='unboxed-tuple', arity=2,
+            fieldReps=[None, None], fieldTypes=[unknown, unknown],
+            fieldLifted=[None, None], strictFields=[False, False])]
+        pair = ['app', ['con', 'Tuple2', 2], [vector, ['lit', 'int', '13', dict(rep=LONG)]],
+                [False, False], True, True, dict(rep=tuple_rep)]
+        alternative = ['data', 'Tuple2', ['lane', 'bias'], ['lit', 'int', '1', dict(rep=LONG)],
+                       dict(binders=[dict(id='lane', lifted=False, rep=copy.deepcopy(VECTOR_REP)),
+                                     dict(id='bias', lifted=False, rep=LONG)])]
+        module['bindings'][0]['expr'][2] = ['case', pair, 'pair', [alternative],
+            dict(rep=LONG, binder=dict(id='pair', lifted=False, rep=tuple_rep))]
+        cap = dict(CAP, vectorTransport=['tuple-fields'])
+        self.assertTrue(run(module, capability=cap)['accepted'], run(module, capability=cap)['issues'])
+        alternative[4]['binders'][0]['rep'] = copy.deepcopy(VECTOR32_REP)
+        self.assertIn('aggregate-shape', [issue['code'] for issue in run(module, capability=cap)['issues']])
+
     def test_guest_transport_does_not_admit_host_arguments_or_results(self):
         module = self.transport_fixture()
         self.assertTrue(self.transport(module)['accepted'])

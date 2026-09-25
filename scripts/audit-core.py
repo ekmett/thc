@@ -1667,11 +1667,15 @@ class Audit:
                     if kind == 'data':
                         self.constructor(value, owner, altpath, False, len(ids), binder_proof)
                         fields = self.constructors.get(value, {}).get('fieldTypes')
-                        if (isinstance(fields, list) and any(is_vector(field) for field in fields) and
+                        if (self.constructors.get(value, {}).get('kind') != 'unboxed-tuple' and
+                                isinstance(fields, list) and any(is_vector(field) for field in fields) and
                                 (not isinstance(records, list) or len(records) != len(fields))):
                             self.issue('alternative-binder-metadata', owner, altpath,
                                        'Vector constructor pattern requires every exact field binder')
-                        if isinstance(fields, list) and isinstance(records, list) and len(fields) == len(records):
+                        # Polymorphic (#,#) fieldTypes are unknown. Its instantiated
+                        # case-binder components below carry the exact vector proof.
+                        if (self.constructors.get(value, {}).get('kind') != 'unboxed-tuple' and
+                                isinstance(fields, list) and isinstance(records, list) and len(fields) == len(records)):
                             for field, (expected, record) in enumerate(zip(fields, records)):
                                 actual = record.get('rep') if isinstance(record, dict) else None
                                 if is_vector(expected) or is_vector(actual):
