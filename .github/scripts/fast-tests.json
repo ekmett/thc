@@ -24,6 +24,10 @@
       "junit": ["thc.runtime.StablePointerTest"],
       "python": []
     },
+    "src/main/kotlin/thc/runtime/CoreSharedCAFStores.kt": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
     "src/main/kotlin/thc/runtime/FloatingAddresses.kt": {
       "junit": ["thc.runtime.FloatingAddressTest"],
       "python": []

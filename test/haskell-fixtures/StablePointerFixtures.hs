@@ -20,7 +20,7 @@ source = "compiler/test-fixtures/StablePointerAudit.hs"
 directory = "build/stable-pointers"
 
 entries :: [String]
-entries = ["stableComposite", "lazyStable"]
+entries = ["stableComposite", "lazyStable", "sharedEventManagerStore", "sharedSignalHandlerStore"]
 
 values :: [Integer]
 values = [negate (2 ^ (63 :: Int)), -4097, -1, 0, 1, 42, 4097, 2 ^ (63 :: Int) - 1]
@@ -34,6 +34,8 @@ nativeDriver = unlines $
    "dispatch :: [String] -> IO ()", "dispatch [name, input] = case name of",
    "  \"stableComposite\" -> emit name P.stableComposite (read input)",
    "  \"lazyStable\" -> emit name P.lazyStable (read input)",
+   "  \"sharedEventManagerStore\" -> emit name P.sharedEventManagerStore (read input)",
+   "  \"sharedSignalHandlerStore\" -> emit name P.sharedSignalHandlerStore (read input)",
    "  _ -> error \"unknown StablePtr entry\"",
    "dispatch _ = error \"invalid StablePtr row\"",
    "main :: IO ()", "main = getContents >>= mapM_ (dispatch . words) . lines"]

@@ -175,7 +175,10 @@
         "test/haskell-fixtures/StablePointerFixtures.hs",
         "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs",
-        "thc.cabal"
+        "thc.cabal",
+        "scripts/core-capabilities.json",
+        "scripts/core_original_foreign.py",
+        "scripts/audit-core.py"
       ]
     },
     "shrink-bytearrays": {

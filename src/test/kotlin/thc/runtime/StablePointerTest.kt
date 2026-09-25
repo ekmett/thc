@@ -14,11 +14,14 @@ import thc.Json
 import thc.Language
 import java.io.File
 import java.security.MessageDigest
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class StablePointerTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = File(root, "build/stable-pointers")
-    private val entries = listOf("stableComposite", "lazyStable")
+    private val entries = listOf("stableComposite", "lazyStable", "sharedEventManagerStore", "sharedSignalHandlerStore")
 
     private fun json(file: File) = Json.parse(file.readText()) as Map<String, Any?>
     private fun digest(file: File) = MessageDigest.getInstance("SHA-256").digest(file.readBytes())
@@ -48,13 +51,20 @@ class StablePointerTest {
                 assertEquals(emptyList<Any>(), audit["issues"])
                 assertEquals(emptyList<Any>(), audit["missingGlobals"])
                 val primitives = (audit["primitives"] as List<Map<String, Any?>>).map { it["name"] }.toSet()
-                assertTrue(primitives.containsAll(setOf("makeStablePtr#", "deRefStablePtr#") +
-                    if (name == "stableComposite") setOf("eqStablePtr#") else setOf("touch#")))
-                assertEquals(setOf("hs_free_stable_ptr"),
+                val shared = name.startsWith("shared")
+                assertTrue(primitives.containsAll(if (shared) setOf("makeStablePtr#") else
+                    setOf("makeStablePtr#", "deRefStablePtr#") +
+                        if (name == "stableComposite") setOf("eqStablePtr#") else setOf("touch#")))
+                assertEquals(setOf("hs_free_stable_ptr") + (if (shared) setOf(if (name == "sharedEventManagerStore")
+                    SharedCAFStore.EVENT_MANAGER.symbol else SharedCAFStore.SIGNAL_HANDLER.symbol) else emptySet<String>()),
                     (audit["foreignCalls"] as List<Map<String, Any?>>).map { it["symbol"] }.toSet())
                 val cases = rows.getValue(name).map { it[1].toLong() to it[2].toLong() }
                 for ((input, native) in cases)
-                    assertEquals(input + if (name == "stableComposite") 48L else 73L, native,
+                    assertEquals(input + when (name) {
+                        "stableComposite" -> 48L
+                        "lazyStable" -> 73L
+                        else -> 0L
+                    }, native,
                         "Native $name($input)")
                 for (backend in listOf("ast", "bytecode")) context().use { context ->
                     context.initialize("thc"); context.enter()
@@ -126,6 +136,57 @@ class StablePointerTest {
         assertThrows(RuntimeFault::class.java) { registry.dereference(first) }
     }
 
+    @Test fun rtsSharedCAFSlotsInstallOneLiveHandleAndReleaseRootsAtContextClose() {
+        val registry = StablePointers()
+        val foreign = StablePointers()
+        val event = SharedCAFStore.EVENT_MANAGER
+        val signal = SharedCAFStore.SIGNAL_HANDLER
+        val none = ManagedAddress.nullAddress()
+        val first = registry.make(Any())
+        val second = registry.make(Any())
+        assertSame(none, registry.getOrSetSharedCAF(event, none))
+        val start = CountDownLatch(1)
+        val done = CountDownLatch(2)
+        val workers = Executors.newFixedThreadPool(2)
+        val outcomes = arrayOfNulls<ManagedAddress>(2)
+        try {
+            listOf(first, second).forEachIndexed { index, candidate ->
+                workers.submit {
+                    start.await()
+                    try { outcomes[index] = registry.getOrSetSharedCAF(event, candidate) }
+                    finally { done.countDown() }
+                }
+            }
+            start.countDown()
+            assertTrue(done.await(5, TimeUnit.SECONDS))
+            val winner = registry.getOrSetSharedCAF(event, none)
+            val firstWon = registry.equal(winner, first)
+            assertTrue(firstWon || registry.equal(winner, second))
+            assertTrue(outcomes.all { registry.equal(it!!, winner) })
+            registry.free(if (firstWon) second else first)
+            val otherStore = registry.make(Any())
+            assertSame(none, registry.getOrSetSharedCAF(signal, none))
+            assertTrue(registry.equal(registry.getOrSetSharedCAF(signal, otherStore), otherStore))
+            assertFalse(registry.equal(winner, otherStore))
+            val stale = registry.make(Any())
+            registry.free(stale)
+            assertThrows(RuntimeFault::class.java) { registry.getOrSetSharedCAF(event, stale) }
+            assertThrows(RuntimeFault::class.java) {
+                registry.getOrSetSharedCAF(event, ManagedAddress.fromByteArray(byteArrayOf(1)))
+            }
+            assertThrows(RuntimeFault::class.java) { registry.getOrSetSharedCAF(event, foreign.make(Any())) }
+            assertThrows(RuntimeFault::class.java) { registry.free(winner) }
+            assertTrue(registry.equal(registry.getOrSetSharedCAF(event, none), winner))
+            registry.close()
+            assertThrows(RuntimeFault::class.java) { registry.dereference(winner) }
+            assertThrows(RuntimeFault::class.java) { registry.getOrSetSharedCAF(event, none) }
+        } finally {
+            workers.shutdownNow()
+            foreign.close()
+            registry.close()
+        }
+    }
+
     @Test fun installedStablePointerAbiRejectsRetypedAndRelabeledCalls() {
         fun nodes(value: Any?): List<List<Any?>> = when (value) {
             is Map<*, *> -> value.values.flatMap(::nodes)
@@ -157,6 +218,27 @@ class StablePointerTest {
             val output = CoreRepresentations.expression(make)
             operation.validate(input, make[3] as List<*>, output)
             assertThrows(RuntimeFault::class.java) { operation.validate(input, listOf(false, false), output) }
+            val shared = applications.filter { app ->
+                val call = (app.getOrNull(6) as? Map<*, *>)?.get("foreignCall") as? Map<*, *>
+                SharedCAFStore.named((call?.get("target") as? Map<*, *>)?.get("symbol")) != null
+            }
+            assertEquals(2, shared.map { ((it[6] as Map<*, *>)["foreignCall"] as Map<*, *>)
+                .let { call -> (call["target"] as Map<*, *>)["symbol"] } }.toSet().size)
+            for (app in shared) {
+                val proof = app[6] as Map<String, Any?>
+                val operands = (app[2] as List<List<Any?>>).map { CoreRepresentations.metadata(it)?.get("rep") }
+                val call = proof.getValue("foreignCall") as Map<String, Any?>
+                assertNotNull(CoreSharedCAFStores.validate(proof, operands, app[3] as List<*>, proof["rep"]))
+                assertThrows(RuntimeFault::class.java) {
+                    CoreSharedCAFStores.validate(proof + ("foreignCall" to (call + ("safety" to "safe"))),
+                        operands, app[3] as List<*>, proof["rep"])
+                }
+                val target = call.getValue("target") as Map<String, Any?>
+                assertThrows(RuntimeFault::class.java) {
+                    CoreSharedCAFStores.validate(proof + ("foreignCall" to (call + ("target" to
+                        (target + ("unit" to "base"))))), operands, app[3] as List<*>, proof["rep"])
+                }
+            }
         }
     }
 }

@@ -1326,6 +1326,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreRepresentations.metadata(expr)?.get("rep"), foreignLinks)
             val stableFree = CoreStablePointers.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val sharedCAF = CoreSharedCAFStores.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val managedFile = CoreManagedFiles.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val javascript = if (!stackClone && stackInfo == null && originalStdio == null && managedFile == null) CoreJavaScript.validate(expr, defined) else null
@@ -1334,7 +1336,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val gmp = CoreGmpForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && capi == null &&
-                !stableFree && managedFile == null && javascript == null && md5 == null && gmp == null)
+                !stableFree && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null)
                 CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -1479,6 +1481,19 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     e.builder.beginFreeStablePointer()
                     operands.forEach { it.emit(e) }
                     e.builder.endFreeStablePointer()
+                }
+            } else if (sharedCAF != null) {
+                CoreSharedCAFStores.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreSharedCAFStores.validateOperand(index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginRtsSharedCAFStore(destination.single(), sharedCAF)
+                    operands.forEach { it.emit(e) }
+                    e.builder.endRtsSharedCAFStore()
                 }
             } else if (managedFile != null) {
                 CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)

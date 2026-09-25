@@ -7,6 +7,8 @@ module StablePointerAudit where
 import GHC.Exts (Int(I#), Int#, touch#)
 import GHC.IO (IO(..))
 import GHC.Internal.Stable (newStablePtr, deRefStablePtr, freeStablePtr)
+import Foreign.Ptr (Ptr, nullPtr, castPtr)
+import Foreign.StablePtr (castStablePtrToPtr)
 import System.IO.Unsafe (unsafePerformIO)
 
 {-# OPAQUE stableComposite #-}
@@ -37,3 +39,38 @@ lazyStable raw = case unsafePerformIO $ do
   IO (\state -> case touch# value state of next -> (# next, () #))
   freeStablePtr pointer
   pure (I# raw + 73) of I# result -> result
+
+foreign import ccall unsafe "getOrSetSystemEventThreadEventManagerStore"
+  eventManagerStore :: Ptr a -> IO (Ptr a)
+
+foreign import ccall unsafe "getOrSetGHCConcSignalSignalHandlerStore"
+  signalHandlerStore :: Ptr a -> IO (Ptr a)
+
+-- Never free an RTS-owned winner, nor write over a store owned by an
+-- earlier native caller. The losing StablePtr is still ours to free.
+probeStore :: (Ptr Int -> IO (Ptr Int)) -> IO Bool
+probeStore getOrSet = do
+  before <- getOrSet nullPtr
+  if before /= nullPtr then (== before) <$> getOrSet nullPtr
+  else do
+    first <- newStablePtr bottom
+    second <- newStablePtr bottom
+    let winner = castPtr (castStablePtrToPtr first)
+        loser = castPtr (castStablePtrToPtr second)
+    installed <- getOrSet winner
+    repeated <- getOrSet loser
+    queried <- getOrSet nullPtr
+    freeStablePtr second
+    pure (installed == winner && repeated == winner && queried == winner)
+
+{-# OPAQUE sharedEventManagerStore #-}
+sharedEventManagerStore :: Int# -> Int#
+sharedEventManagerStore raw = case unsafePerformIO (probeStore eventManagerStore) of
+  True -> raw
+  False -> case bottom of I# result -> result
+
+{-# OPAQUE sharedSignalHandlerStore #-}
+sharedSignalHandlerStore :: Int# -> Int#
+sharedSignalHandlerStore raw = case unsafePerformIO (probeStore signalHandlerStore) of
+  True -> raw
+  False -> case bottom of I# result -> result
