@@ -7,6 +7,7 @@
 import hashlib
 import json
 from pathlib import Path
+import platform
 import re
 import stat
 import zlib
@@ -18,8 +19,120 @@ BOUNDARY = 'optimized-Core-after-Tidy-before-CorePrep'
 SHA256 = re.compile(r'[0-9a-f]{64}\Z')
 
 
+def capi_kind(call, unit, symbol):
+    def scalar(primitive, evaluated):
+        return dict(kind='void' if primitive is None else 'address' if primitive == 'AddrRep' else 'long',
+                    primReps=[] if primitive is None else [primitive], evaluated=evaluated)
+
+    def expected(kind):
+        zero = kind == 'clock-id'
+        output = 'Word64Rep' if zero else 'Int32Rep'
+        return dict(schema=1, target=dict(kind='static', symbol=symbol, unit=unit, isFunction=True),
+                    convention='capi', safety='unsafe', arity=1 if zero else 3,
+                    suppliedArity=1 if zero else 3,
+                    argumentReps=([scalar(None, False)] if zero else
+                                  [scalar('Word64Rep', False), scalar('AddrRep', False), scalar(None, False)]),
+                    resultRep=dict(kind='unknown', primReps=[output], aggregate='unboxed-tuple',
+                                   components=[scalar(None, True), scalar(output, True)], evaluated=False))
+
+    def exact(value, wanted):
+        if type(value) is not type(wanted):
+            return False
+        if isinstance(wanted, dict):
+            return value.keys() == wanted.keys() and all(exact(value[key], item) for key, item in wanted.items())
+        if isinstance(wanted, list):
+            return len(value) == len(wanted) and all(exact(a, b) for a, b in zip(value, wanted))
+        return value == wanted
+
+    return next((kind for kind in ('clock-id', 'clock-buffer') if exact(call, expected(kind))), None)
+
+
+def linked_foreign(module):
+    """Verify the one fully linked, callback-free CAPI archive admitted so far."""
+    link = module.get('foreignLink')
+    if link is None:
+        return False
+    if (not isinstance(link, dict) or set(link) != {'schema', 'format', 'unit', 'module',
+            'target', 'symbols', 'abi', 'sourceSha256', 'bitcodeSha256', 'bitcodeHex'} or
+            type(link['schema']) is not int or link['schema'] != 2 or
+            link['format'] != 'llvm-bitcode' or link['unit'] != module.get('unit') or
+            link['module'] != module.get('module') or
+            link['module'] != 'System.CPUTime.Posix.ClockGetTime' or
+            not isinstance(link['unit'], str) or not link['unit'].startswith('base-')):
+        raise ValueError('invalid linked foreign owner/schema')
+    target = link['target']
+    machine = platform.machine().lower()
+    host_arch = {'amd64': 'x86_64', 'arm64': 'aarch64'}.get(machine, machine)
+    target_arch = target.split('-', 1)[0] if isinstance(target, str) else ''
+    system = platform.system().lower()
+    compatible_arch = target_arch == host_arch or host_arch == 'aarch64' and target_arch == 'arm64'
+    compatible_system = ((system == 'darwin' and '-darwin' in target) or
+                         (system == 'linux' and target.endswith('linux-gnu'))) if isinstance(target, str) else False
+    if not (compatible_arch and compatible_system):
+        raise ValueError('linked foreign bitcode target differs from audit host')
+    foreign = module.get('foreign')
+    if not isinstance(foreign, dict):
+        raise ValueError('linked foreign module lacks original archive')
+    stubs = foreign.get('stubs')
+    if (not isinstance(stubs, dict) or stubs.get('header') != '' or
+            stubs.get('initializers') != [] or stubs.get('finalizers') != [] or
+            foreign.get('files') != [] or not isinstance(stubs.get('source'), str) or
+            not stubs['source']):
+        raise ValueError('linked foreign module needs unsupported callbacks/files')
+    if (not isinstance(link['sourceSha256'], str) or not SHA256.fullmatch(link['sourceSha256']) or
+            hashlib.sha256(stubs['source'].encode('utf-8')).hexdigest() != link['sourceSha256']):
+        raise ValueError('linked foreign C source hash mismatch')
+    encoded = link['bitcodeHex']
+    try:
+        data = bytes.fromhex(encoded)
+    except (TypeError, ValueError) as error:
+        raise ValueError('invalid linked foreign bitcode encoding') from error
+    if (not isinstance(encoded, str) or not encoded or encoded != data.hex() or
+            not isinstance(link['bitcodeSha256'], str) or
+            not SHA256.fullmatch(link['bitcodeSha256']) or
+            hashlib.sha256(data).hexdigest() != link['bitcodeSha256']):
+        raise ValueError('linked foreign bitcode hash mismatch')
+    symbols = link['symbols']
+    if (not isinstance(symbols, list) or len(symbols) != 3 or
+            any(not isinstance(x, str) or not x for x in symbols) or
+            len(set(symbols)) != 3):
+        raise ValueError('invalid linked foreign symbol inventory')
+    entries = link['abi']
+    if (not isinstance(entries, list) or len(entries) != 3 or
+            any(not isinstance(entry, dict) or set(entry) != {'symbol', 'kind'} or
+                type(entry['symbol']) is not str or type(entry['kind']) is not str or
+                entry['kind'] not in ('clock-id', 'clock-buffer') for entry in entries)):
+        raise ValueError('invalid linked CAPI ABI inventory')
+    abi = {entry['symbol']: entry['kind'] for entry in entries}
+    if (set(abi) != set(symbols) or len(abi) != 3 or
+            list(abi.values()).count('clock-id') != 1 or list(abi.values()).count('clock-buffer') != 2):
+        raise ValueError('linked CAPI ABI differs from original symbols')
+    found = set()
+    def inspect(value):
+        if isinstance(value, dict):
+            call = value.get('foreignCall')
+            if isinstance(call, dict):
+                target = call.get('target')
+                symbol = target.get('symbol') if isinstance(target, dict) else None
+                if not isinstance(symbol, str) or symbol not in abi or \
+                        capi_kind(call, link['unit'], symbol) != abi[symbol]:
+                    raise ValueError('original CAPI call disagrees with linked symbol ABI')
+                found.add(symbol)
+            for item in value.values():
+                inspect(item)
+        elif isinstance(value, list):
+            for item in value:
+                inspect(item)
+    inspect(module.get('bindings', []))
+    if found != set(symbols):
+        raise ValueError('linked foreign symbols differ from original Core')
+    return True
+
+
 def foreign_execution_issue(module):
     """Explain a valid archive-only foreign marker without admitting it as Core."""
+    if 'foreignLink' in module and linked_foreign(module):
+        return None
     foreign = module.get('foreign')
     if (type(module.get('schema')) is int and module['schema'] == 2 and
             isinstance(foreign, dict) and set(foreign) == {'schema', 'execution', 'stubs', 'files'} and
@@ -222,7 +335,13 @@ def _load(path, audit_archives):
                 raise ValueError(f'{path}: unit/module/boundary mismatch: {relative!r}')
             if module.get('ghc') != '9.14.1':
                 raise ValueError(f'{path}: GHC version mismatch: {relative!r}')
-            if type(module.get('schema')) is not int or module['schema'] != 1 or 'foreign' in module:
+            executable = (type(module.get('schema')) is int and module['schema'] == 1 and
+                          'foreign' not in module)
+            if (type(module.get('schema')) is int and module['schema'] == 2 and
+                    'foreignLink' in module):
+                validate_archive_only_foreign(module)
+                executable = linked_foreign(module)
+            if not executable:
                 detail = foreign_execution_issue(module)
                 if audit_archives and detail:
                     try:

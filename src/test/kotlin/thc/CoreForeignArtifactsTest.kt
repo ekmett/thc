@@ -8,8 +8,73 @@ import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Context
 import thc.runtime.Program
 import thc.runtime.BytecodeProgram
+import java.security.MessageDigest
 
 class CoreForeignArtifactsTest {
+    private fun sha(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes)
+        .joinToString("") { "%02x".format(it) }
+
+    @Test fun linkedCapiNeedsExactArchivedSourceSymbolsAndNoCallbacks() {
+        val unit = "base-test-unit"
+        val name = "System.CPUTime.Posix.ClockGetTime"
+        val symbols = (0..2).map { "exact_generated_wrapper_$it" }
+        val source = "/* original C source */\n"
+        val bytecode = byteArrayOf(0x42, 0x43)
+        fun scalar(primitive: String?, evaluated: Boolean) = mapOf(
+            "kind" to when (primitive) { null -> "void"; "AddrRep" -> "address"; else -> "long" },
+            "primReps" to (primitive?.let { listOf(it) } ?: emptyList<String>()), "evaluated" to evaluated)
+        fun tuple(primitive: String) = mapOf("kind" to "unknown", "primReps" to listOf(primitive),
+            "aggregate" to "unboxed-tuple", "components" to listOf(scalar(null, true), scalar(primitive, true)),
+            "evaluated" to false)
+        val abi = symbols.mapIndexed { index, symbol ->
+            mapOf("symbol" to symbol, "kind" to if (index == 0) "clock-id" else "clock-buffer") }
+        val calls = symbols.mapIndexed { index, symbol ->
+            val zero = index == 0
+            mapOf("foreignCall" to mapOf("schema" to 1L,
+                "target" to mapOf("kind" to "static", "isFunction" to true,
+                    "unit" to unit, "symbol" to symbol), "convention" to "capi", "safety" to "unsafe",
+                "arity" to if (zero) 1L else 3L, "suppliedArity" to if (zero) 1L else 3L,
+                "argumentReps" to if (zero) listOf(scalar(null, false)) else
+                    listOf(scalar("Word64Rep", false), scalar("AddrRep", false), scalar(null, false)),
+                "resultRep" to tuple(if (zero) "Word64Rep" else "Int32Rep"))) }
+        val archive = mapOf("schema" to 1L, "execution" to "not-linked", "stubs" to
+            mapOf("header" to "", "source" to source, "initializers" to emptyList<Any>(),
+                "finalizers" to emptyList<Any>()), "files" to emptyList<Any>())
+        val link = mapOf("schema" to 2L, "format" to "llvm-bitcode", "unit" to unit,
+            "module" to name, "target" to if (System.getProperty("os.name").startsWith("Mac"))
+                "${if (System.getProperty("os.arch") == "aarch64") "arm64" else "x86_64"}-apple-darwin"
+                else "${if (System.getProperty("os.arch") == "amd64") "x86_64" else "aarch64"}-unknown-linux-gnu",
+            "symbols" to symbols, "abi" to abi, "sourceSha256" to sha(source.toByteArray()),
+            "bitcodeSha256" to sha(bytecode), "bitcodeHex" to "4243")
+        val linked = mapOf("schema" to 2L, "unit" to unit, "module" to name,
+            "foreign" to archive, "foreignLink" to link, "bindings" to calls)
+        assertEquals(symbols.toSet(), CoreForeignArtifacts.linked(linked)!!.symbols)
+        CoreForeignArtifacts.requireExecutable(linked)
+        val originalStubs = archive["stubs"] as Map<String, Any?>
+        val initializer = mapOf("isInitializer" to true, "unit" to unit,
+            "module" to name, "name" to "boot")
+        val withInitializer = linked + ("foreign" to
+            (archive + ("stubs" to (originalStubs + ("initializers" to listOf(initializer))))))
+        val wrongAbi = abi.mapIndexed { index, entry -> entry + ("kind" to
+            if (index == 0) "clock-buffer" else if (index == 1) "clock-id" else "clock-buffer") }
+        val secondCall = calls[1]["foreignCall"]!!
+        val swappedCall = (secondCall as Map<String, Any?>) + ("target" to
+            mapOf("kind" to "static", "isFunction" to true, "unit" to unit, "symbol" to symbols[0]))
+        for (bad in listOf(
+            linked + ("foreignLink" to (link + ("bitcodeSha256" to "0".repeat(64)))),
+            linked + ("foreignLink" to (link + ("target" to 17L))),
+            linked + ("foreignLink" to (link + ("target" to "riscv64-unknown-linux-gnu"))),
+            linked + ("foreignLink" to (link + ("symbols" to symbols.take(2)))),
+            linked + ("foreignLink" to (link + ("abi" to wrongAbi))),
+            linked + ("foreignLink" to (link + ("abi" to
+                abi.mapIndexed { index, entry -> if (index == 0) entry + ("extra" to "field") else entry }))),
+            linked + ("foreignLink" to (link + ("abi" to
+                abi.mapIndexed { index, entry -> if (index == 0) entry + ("kind" to 1) else entry }))),
+            linked + ("bindings" to (calls + mapOf("foreignCall" to swappedCall))),
+            linked + ("foreignLink" to (link + ("sourceSha256" to "0".repeat(64)))),
+            withInitializer))
+            assertThrows(IllegalArgumentException::class.java) { CoreForeignArtifacts.requireExecutable(bad) }
+    }
     private val label = mapOf("isInitializer" to false, "unit" to "pkg", "module" to "M", "name" to "exit")
     private val stubs = mapOf("header" to "", "source" to "", "initializers" to emptyList<Any>(),
         "finalizers" to listOf(label))

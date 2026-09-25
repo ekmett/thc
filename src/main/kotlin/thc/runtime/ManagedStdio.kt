@@ -19,6 +19,8 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         if (error < 0 || error > Int.MAX_VALUE) fault("Invalid native errno")
         if (error != 0L) lastError.set(error)
     }
+    /** The same original get_errno declaration observes a linked CAPI failure. */
+    internal fun captureForeignErrno(errno: Long) { lastError.set(errno) }
 
     @TruffleBoundary fun read(fd: Long, address: ManagedAddress, count: Long): Long {
         val abi = hostAbi

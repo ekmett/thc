@@ -5,10 +5,11 @@ module InterfaceFixtures (prepareInterfaceCore) where
 
 import Control.Monad (filterM, forM, forM_, unless)
 import qualified Control.Exception as Exception
-import Data.Aeson (Value(..), Result(..), fromJSON, toJSON, object, (.=), decodeStrict')
+import Data.Aeson (Value(..), Result(..), fromJSON, toJSON, object, (.=), decodeStrict', encode)
 import Data.Aeson.Key (Key)
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Lazy as BL
 import Data.Char (isHexDigit)
 import Data.List (isInfixOf, sort)
 import Data.Foldable (toList)
@@ -32,7 +33,9 @@ import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist,
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), makeRelative, splitDirectories, takeExtension, takeDirectory)
+import qualified System.Info as Info
 import THC.Interface
+import THC.Driver.ForeignBitcode (linkClockGetTime)
 import qualified THC.Driver.Installed as Installed
 import qualified THC.Driver.Project as Project
 
@@ -211,7 +214,8 @@ prepareInterfaceCore root = do
         "compiler/test-fixtures/InterfaceForeign.hs", "test/haskell-fixtures/InterfaceFixtures.hs",
         "compiler/test-fixtures/InterfaceForeignAlias.hs", "test/haskell-fixtures/InterfaceForeignFacts.hs",
         "compiler/test-fixtures/CBVCoercionAudit.hs", "compiler/interface/Main.hs",
-        "src/THC/Driver/Installed.hs", "src/THC/Driver/Project.hs", "src/THC/Driver/Zip.hs",
+        "src/THC/Driver/Installed.hs", "src/THC/Driver/Project.hs", "src/THC/Driver/ForeignBitcode.hs",
+        "src/THC/Driver/Zip.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "cabal.project",
         "scripts/audit-core.py", "scripts/core-capabilities.json"] ++
         ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
@@ -226,6 +230,7 @@ prepareInterfaceCore root = do
           "full/CBVCoercionAudit.hi", "thin/CBVCoercionAudit.hi", "source/CBVCoercionAudit.saved",
           "wired-unit.json"]] ++
         [directory </> "packages.json", directory </> "foreign-packages.json", directory </> "InterfaceForeign.json",
+         directory </> "clock-capi.json",
          directory </> "driver-controls.json", directory </> "foreign-association.json",
          directory </> "installed-bound-facts.json", directory </> "installed-wrapper-facts.json", directory </> "foreign-alias/a.json",
          directory </> "foreign-alias/b.json", directory </> "source/InterfaceForeignAlias.hs.saved"] ++
@@ -237,7 +242,8 @@ prepareInterfaceCore root = do
      "unit" .= unitName, "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes,
      "controls" .= (["opaque-body", "private-worker", "recursive-groups", "thin-unavailable",
        "no-source-target", "wrong-module", "wrong-unit", "wrong-way", "foreign-archived", "private-flags", "repeat-load",
-       "helper-protocol", "installed-cbv-worker", "installed-wired-unit", "foreign-association-absence"] :: [String]),
+       "helper-protocol", "installed-cbv-worker", "installed-wired-unit", "foreign-association-absence",
+       "foreign-linked-clock"] :: [String]),
      "commands" .= map commandRecord commands, "runtimeVerified" .= False]
   putStrLn "Prepared complete interface Core: 21 native rows; full/thin/no-source/identity/way/foreign controls passed"
 
@@ -251,7 +257,8 @@ checkDriver root directory ghc ghcPkg helper baseUnit = do
         "platform" .= ("native-fixture" :: String), "way" .= ("dynamic-nonprofiling" :: String)]
       context mode = Installed.installedContext ghc ghcPkg helper
         [root </> directory </> mode </> "package.conf.d"] compiler
-      acquire selected unit = Project.prepareInstalledBundle cache "fixture-driver" selected unit
+      acquire selected unit = Project.prepareInstalledBundle cache
+        (root </> directory </> "native/staging") "fixture-driver" selected unit
       loaded result = case result of Right value -> pure value; Left missing -> die (show missing)
       rejected label expected action = do
         result <- Exception.try action :: IO (Either Exception.IOException (Either Installed.MissingCore Project.InstalledBundle))
@@ -295,6 +302,64 @@ checkDriver root directory ghc ghcPkg helper baseUnit = do
   foreignContext <- context "foreign"
   foreignUnit <- Installed.discoverInstalled foreignContext unitName
   foreignBundle <- loaded =<< acquire foreignContext foreignUnit
+  let capiUnit = "base-fixture" :: String
+      capiName = "System.CPUTime.Posix.ClockGetTime" :: String
+      capiId = "fixture_clock_id" :: String
+      capiSymbols = [capiId, "fixture_clock_time", "fixture_clock_resolution"] :: [String]
+      capiSource = unlines
+        ["#include <time.h>",
+         "HsWord64 fixture_clock_id(void) { return CLOCK_PROCESS_CPUTIME_ID; }",
+         "HsInt32 fixture_clock_time(HsWord64 id, void* out) { return clock_gettime(id, out); }",
+         "HsInt32 fixture_clock_resolution(HsWord64 id, void* out) { return clock_getres(id, out); }"]
+      capiTarget symbol = object ["kind" .= ("static" :: String), "isFunction" .= True,
+                                  "unit" .= capiUnit, "symbol" .= symbol]
+      capiScalar primitive evaluated = object
+        ["kind" .= case primitive of Nothing -> ("void" :: String)
+                                     Just "AddrRep" -> "address"
+                                     Just _ -> "long",
+         "primReps" .= maybe ([] :: [String]) pure primitive, "evaluated" .= evaluated]
+      capiTuple output = object
+        ["kind" .= ("unknown" :: String), "primReps" .= [output],
+         "aggregate" .= ("unboxed-tuple" :: String),
+         "components" .= [capiScalar Nothing True, capiScalar (Just output) True],
+         "evaluated" .= False]
+      capiCall zero symbol = object ["foreignCall" .= object
+        ["target" .= capiTarget symbol, "convention" .= ("capi" :: String),
+         "safety" .= ("unsafe" :: String), "schema" .= (1 :: Int),
+         "arity" .= (if zero then (1 :: Int) else 3),
+         "suppliedArity" .= (if zero then (1 :: Int) else 3),
+         "argumentReps" .= (if zero then [capiScalar Nothing False]
+                             else [capiScalar (Just "Word64Rep") False,
+                                   capiScalar (Just "AddrRep") False, capiScalar Nothing False]),
+         "resultRep" .= capiTuple (if zero then "Word64Rep" else "Int32Rep")]]
+      capiArchiveFor bindings = object ["schema" .= (2 :: Int), "unit" .= capiUnit,
+        "module" .= capiName, "bindings" .= bindings,
+        "foreign" .= object ["schema" .= (1 :: Int), "execution" .= ("not-linked" :: String),
+          "stubs" .= object ["header" .= ("" :: String), "source" .= capiSource,
+            "initializers" .= ([] :: [Value]), "finalizers" .= ([] :: [Value])],
+          "files" .= ([] :: [Value])]]
+      capiArchive = capiArchiveFor (zipWith capiCall [True, False, False] capiSymbols)
+  capiLinked <- linkClockGetTime (Installed.installedLibdir full)
+    (root </> directory </> "native/staging") (Info.arch ++ "-" ++ Info.os)
+    capiUnit capiName (BL.toStrict (encode capiArchive))
+  let capiRecord = maybe Null id (decodeStrict' capiLinked)
+      capiLink = valueAt "foreignLink" capiRecord
+  check (valueAt "format" capiLink == "llvm-bitcode" &&
+         valueAt "symbols" capiLink == toJSON capiSymbols &&
+         valueAt "abi" capiLink == toJSON
+           [object ["symbol" .= symbol, "kind" .= (if zero then "clock-id" else "clock-buffer" :: String)]
+           | (zero, symbol) <- zip [True, False, False] capiSymbols] &&
+         valueAt "sourceSha256" capiLink /= Null &&
+         valueAt "bitcodeSha256" capiLink /= Null)
+    "Original callback-free CAPI source was not acquired as LLVM bitcode"
+  wrongAbi <- Exception.try (linkClockGetTime (Installed.installedLibdir full)
+    (root </> directory </> "native/staging") (Info.arch ++ "-" ++ Info.os)
+    capiUnit capiName (BL.toStrict (encode (capiArchiveFor
+      (capiCall False capiId : zipWith capiCall [True, False, False] capiSymbols)))))
+    :: IO (Either Exception.IOException BS.ByteString)
+  check (case wrongAbi of Left _ -> True; Right _ -> False)
+    "Original CAPI acquisition accepted a symbol with a different ABI"
+  BS.writeFile (root </> directory </> "clock-capi.json") capiLinked
   writeJson (root </> directory </> "foreign-packages.json") $ object
     ["format" .= ("thc-core-packages" :: String), "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
      "units" .= Project.installedRecords foreignUnit foreignBundle]

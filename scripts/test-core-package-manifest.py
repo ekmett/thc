@@ -7,6 +7,7 @@
 import hashlib
 import json
 from pathlib import Path
+import platform
 import subprocess
 from tempfile import TemporaryDirectory
 import unittest
@@ -61,6 +62,54 @@ class PackageManifestTest(unittest.TestCase):
     def test_same_module_name_in_distinct_units_is_unambiguous(self):
         path = self.manifest([self.unit('first'), self.unit('second')])
         self.assertEqual(['first', 'second'], [source['unit'] for _, source in core_package_manifest.load(path)])
+
+    def test_linked_foreign_target_must_match_audit_host(self):
+        machine = platform.machine().lower()
+        arch = {'amd64': 'x86_64', 'arm64': 'aarch64'}.get(machine, machine)
+        target = arch + ('-apple-darwin' if platform.system() == 'Darwin' else '-unknown-linux-gnu')
+        symbols = ['clock_id', 'clock_time', 'clock_resolution']
+        source = 'original C source'
+        bitcode = b'BC'
+        def scalar(primitive, evaluated):
+            return dict(kind='void' if primitive is None else 'address' if primitive == 'AddrRep' else 'long',
+                        primReps=[] if primitive is None else [primitive], evaluated=evaluated)
+        def call(index, symbol):
+            zero = index == 0
+            output = 'Word64Rep' if zero else 'Int32Rep'
+            return dict(foreignCall=dict(schema=1,
+                target=dict(kind='static', unit='base-fixture', isFunction=True, symbol=symbol),
+                convention='capi', safety='unsafe', arity=1 if zero else 3,
+                suppliedArity=1 if zero else 3,
+                argumentReps=([scalar(None, False)] if zero else
+                              [scalar('Word64Rep', False), scalar('AddrRep', False), scalar(None, False)]),
+                resultRep=dict(kind='unknown', primReps=[output], aggregate='unboxed-tuple',
+                               components=[scalar(None, True), scalar(output, True)], evaluated=False)))
+        abi = [dict(symbol=symbol, kind='clock-id' if index == 0 else 'clock-buffer')
+               for index, symbol in enumerate(symbols)]
+        module = dict(unit='base-fixture', module='System.CPUTime.Posix.ClockGetTime',
+                      bindings=[call(index, symbol) for index, symbol in enumerate(symbols)],
+                      foreign=dict(stubs=dict(header='', source=source, initializers=[], finalizers=[]), files=[]),
+                      foreignLink=dict(schema=2, format='llvm-bitcode', unit='base-fixture',
+                          module='System.CPUTime.Posix.ClockGetTime', target=target, symbols=symbols, abi=abi,
+                          sourceSha256=hashlib.sha256(source.encode()).hexdigest(),
+                          bitcodeSha256=hashlib.sha256(bitcode).hexdigest(), bitcodeHex=bitcode.hex()))
+        self.assertTrue(core_package_manifest.linked_foreign(module))
+        swapped = module | dict(bindings=module['bindings'] +
+            [dict(foreignCall=module['bindings'][1]['foreignCall'] |
+                dict(target=module['bindings'][1]['foreignCall']['target'] | dict(symbol=symbols[0])))])
+        with self.assertRaisesRegex(ValueError, 'symbol ABI'):
+            core_package_manifest.linked_foreign(swapped)
+        wrong_abi = [(entry | dict(kind='clock-buffer' if index == 0 else 'clock-id'))
+                     if index < 2 else entry for index, entry in enumerate(abi)]
+        with self.assertRaisesRegex(ValueError, 'symbol ABI'):
+            core_package_manifest.linked_foreign(module | dict(foreignLink=module['foreignLink'] | dict(abi=wrong_abi)))
+        for broken in (abi[0] | dict(extra='field'), abi[0] | dict(kind=1)):
+            with self.assertRaisesRegex(ValueError, 'ABI inventory'):
+                core_package_manifest.linked_foreign(module | dict(foreignLink=module['foreignLink'] |
+                    dict(abi=[broken] + abi[1:])))
+        for invalid in (17, 'riscv64-unknown-linux-gnu'):
+            with self.subTest(target=invalid), self.assertRaisesRegex(ValueError, 'target differs'):
+                core_package_manifest.linked_foreign(module | dict(foreignLink=module['foreignLink'] | dict(target=invalid)))
 
     def test_hash_unit_boundary_and_duplicate_unit_must_match(self):
         unit = self.unit('first')

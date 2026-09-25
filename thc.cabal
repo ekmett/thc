@@ -193,6 +193,7 @@ executable thc
   other-modules:
     THC.Driver.Cabal
     THC.Driver.Cache
+    THC.Driver.ForeignBitcode
     THC.Driver.GhcProxy
     THC.Driver.Installed
     THC.Driver.Json
@@ -284,6 +285,7 @@ executable thc-fixtures
     THC.Driver.Wired
     THC.Driver.Cabal
     THC.Driver.Cache
+    THC.Driver.ForeignBitcode
     THC.Driver.Installed
     THC.Driver.Json
     THC.Driver.Project

@@ -13,9 +13,12 @@ import java.util.function.LongSupplier
 import java.util.concurrent.FutureTask
 import java.util.concurrent.ExecutionException
 import com.oracle.truffle.api.TruffleSafepoint
+import java.util.concurrent.ConcurrentHashMap
+import thc.ForeignBitcode
 
 /** Context-owned original C code and allocation views. No process addresses escape. */
-internal class SulongCbits(env: TruffleLanguage.Env) {
+internal class SulongCbits(private val env: TruffleLanguage.Env) {
+    internal data class CapiResult(val value: Long, val errno: Long)
     private val interop = InteropLibrary.getUncached()
     private fun load(env: TruffleLanguage.Env, name: String): Any {
         val bytes = SulongCbits::class.java.getResourceAsStream("/thc/cbits/$name.bc")?.use { it.readBytes() }
@@ -53,6 +56,72 @@ internal class SulongCbits(env: TruffleLanguage.Env) {
     // Arrays have identity equality. Both sides are weak: a cached view must not
     // keep its weak key alive. A live LLVM pointer strongly retains its view.
     private val buffers = WeakHashMap<Any, WeakReference<CbitsBuffer>>()
+    private val foreign = ConcurrentHashMap<Pair<String, String>, Any>()
+    @Volatile private var foreignErrno: Any? = null
+    @Volatile private var linkedForeign: ForeignBitcode? = null
+
+    private fun sameLink(first: ForeignBitcode, second: ForeignBitcode) =
+        first.unit == second.unit && first.module == second.module && first.target == second.target &&
+            first.symbols == second.symbols && first.abi == second.abi && first.bytes.contentEquals(second.bytes)
+
+    /** Parse and resolve every declared CAPI symbol before a guest entry runs. */
+    fun link(record: ForeignBitcode) {
+        linkedForeign?.let { require(sameLink(it, record)) { "Conflicting CAPI library identity" }; return }
+        val library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(record.bytes),
+            "${record.unit}-${record.module}.bc").build()).call()
+        val resolved = record.symbols.associateWith { symbol ->
+            require(interop.isMemberReadable(library, symbol)) { "Missing compiled original CAPI symbol: $symbol" }
+            interop.readMember(library, symbol)
+        }
+        require(interop.isMemberReadable(library, "thc_capi_errno")) { "CAPI library lacks errno bridge" }
+        val errno = interop.readMember(library, "thc_capi_errno")
+        synchronized(this) {
+            linkedForeign?.let { require(sameLink(it, record)) { "Conflicting CAPI library identity" }; return }
+            foreignErrno = errno
+            for ((symbol, function) in resolved) foreign[record.unit to symbol] = function
+            linkedForeign = record
+        }
+    }
+
+    private fun foreignFunction(unit: String, symbol: String): Any = foreign[unit to symbol]
+        ?: fault("Unlinked original CAPI target: $unit:$symbol")
+
+    fun capiZero(unit: String, symbol: String): Long {
+        val value = interop.execute(foreignFunction(unit, symbol))
+        if (!interop.fitsInLong(value)) fault("CAPI result is not a machine word: $symbol")
+        return interop.asLong(value)
+    }
+
+    fun capiWordAddress(unit: String, symbol: String, word: Long, address: ManagedAddress): CapiResult {
+        // The original wrapper calls libc with a host-owned native timespec.
+        // Its arena closes even if a guest copyback or context cancellation throws.
+        val invoke = {
+            address.requireRange(0, 16, writable = true)
+            val backing = address.cbitsBacking()
+            NativeLimbScope().use { scope ->
+                val native = scope.allocate(16)
+                val result = interop.execute(foreignFunction(unit, symbol), word, native)
+                if (!interop.fitsInInt(result)) fault("CAPI result is not a CInt: $symbol")
+                val value = interop.asInt(result).toLong()
+                if (value != 0L && value != -1L) fault("CAPI clock status is outside the POSIX result domain")
+                val errno = if (value < 0) capiErrno() else 0L
+                if (value == 0L) native.copyTo(backing, address.cbitsOffset().toInt(), 16)
+                CapiResult(value, errno)
+            }
+        }
+        // A guest allocation may be shrunk by another host thread; hold its
+        // owner through preflight, C call, and copyback. This exact CAPI
+        // archive has no callbacks, so no guest execution occurs under it.
+        val owner = address.cbitsOwner()
+        return if (owner == null) invoke() else synchronized(owner) { invoke() }
+    }
+
+    fun capiErrno(): Long {
+        val function = foreignErrno ?: fault("No linked CAPI errno domain")
+        val value = interop.execute(function)
+        if (!interop.fitsInInt(value)) fault("CAPI errno is not a CInt")
+        return interop.asInt(value).toLong()
+    }
 
     @Synchronized internal fun buffer(address: ManagedAddress): CbitsBuffer {
         val bytes = address.cbitsBacking()

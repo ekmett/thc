@@ -63,6 +63,23 @@ class SulongCbitsTest {
         assertArrayEquals(before, bytes)
     }
 
+    @Test fun nativePointerOffsetViewRetainsTheOriginalWritableAllocationAndBounds() {
+        val bytes = ByteArray(24) { 0x5a }
+        val view = CbitsBuffer(bytes, true, { bytes.size.toLong() }, 7)
+        val interop = InteropLibrary.getUncached()
+        assertEquals(17L, interop.getBufferSize(view))
+        interop.writeBufferLong(view, ByteOrder.nativeOrder(), 0, 0x0102030405060708L)
+        assertEquals(0x5a.toByte(), bytes[6])
+        assertEquals(0x0102030405060708L,
+            java.nio.ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder()).getLong(7))
+        assertThrows(InvalidBufferOffsetException::class.java) {
+            interop.writeBufferLong(view, ByteOrder.nativeOrder(), 10, 1)
+        }
+        assertThrows(UnsupportedMessageException::class.java) {
+            interop.writeBufferByte(CbitsBuffer(bytes, false, { bytes.size.toLong() }, 7), 0, 0)
+        }
+    }
+
     @Test fun liveAliasesShareOneContextOwnedViewAndLiteralsStayReadOnly() {
         Context.newBuilder("thc").allowNativeAccess(true).build().use { context ->
             context.initialize("thc"); context.enter()
