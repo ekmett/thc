@@ -54,6 +54,15 @@ host fd reuse during poll; they are unregistered and closed on all exits, includ
 guest async unwind and host cancellation. A token retains no native handle
 between attempts. Wake and cleanup are host FFM calls, not re-entry into LLVM.
 
+The actual Truffle 25.3.4.1 `ThreadLocalHandshake.TruffleSafepointImpl` bytecode
+was inspected: `setFastPendingAndInterrupt`, `takeHandshakes`, `setBlockedImpl`
+and `interruptIfPending` use the same per-target ReentrantLock around interrupt,
+reset and blocked-action removal. Thus eventfd drain followed by flag clear
+does not race another Truffle interrupt. A descriptor-close notification uses
+a separate, persistent closed flag, so a drain cannot lose logical closure.
+Wake failures are accumulated while all descriptor/refcount changes finish;
+physical retirement still runs before the failure is reported.
+
 Readiness duplication shares a short native lifetime lock with physical close,
 not the monitor held across a potentially blocking byte transfer. No registry
 or descriptor IO monitor is held during poll. Logical close may precede completion
@@ -81,6 +90,8 @@ states, logical close/dup2/reuse, native duplicate cleanup, host context
 cancellation and opaque-stream denial. Its small registry polling loop is a
 bounded test barrier only, never the production waiting implementation. These
 are service/protocol tests, not a synthetic replacement for native GHC evidence.
+An internal notifier seam also injects an error after the real eventfd wake to
+check close, dup2 and disposal cannot strand descriptor ownership/refcounts.
 
 Before admission: run focused JVM/native-provider controls under the shared gate;
 add the exact installed blockedOnBadFD dependency using the production complete-Core

@@ -17,6 +17,7 @@ import org.junit.jupiter.api.condition.OS
 import org.junit.jupiter.api.io.TempDir
 import thc.Language
 import thc.NativeIO
+import java.io.IOException
 import java.nio.channels.ClosedChannelException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -227,6 +228,67 @@ class NativeFdWaitTest {
         } finally {
             context.close(true); pool.shutdownNow()
             assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test fun wakeFailureCannotInterruptDescriptorRefcountsOrPhysicalRetirement() {
+        for (operation in listOf("close", "dup2", "dispose")) {
+            val pool = Executors.newSingleThreadExecutor()
+            val context = NativeIO.createContext(emptySet())
+            var files: ManagedFiles? = null
+            try {
+                val pipe = directory.resolve("wake-failure-$operation")
+                val created = ProcessBuilder("mkfifo", pipe.toString()).start()
+                assertTrue(created.waitFor(5, TimeUnit.SECONDS)); assertEquals(0, created.exitValue())
+                val service = entered(context) {
+                    val state = Language.currentState()
+                    ManagedFiles(state.env, state.threads, signalReadinessClose = {
+                        it.descriptorClosed() // Always wake the real native poll.
+                        throw IOException("injected post-wake failure")
+                    }).also { it.installNative(state.nativeFiles!!, emptySet()) }
+                }
+                files = service
+                val read = entered(context) {
+                    val read = service.openOriginal(path(pipe), 0x800, 0)
+                    assertTrue(read >= 3)
+                    assertTrue(service.openOriginal(path(pipe), 0x801, 0) >= 3)
+                    read
+                }
+                val token = entered(context) { service.waitToken(read, false) }
+                val future = pool.submit<Boolean> { entered(context) {
+                    try { token.await(object : Node() {}, false); false }
+                    catch (_: ClosedChannelException) { true }
+                } }
+                awaitRegistered(service, read)
+                entered(context) {
+                    when (operation) {
+                        "close" -> {
+                            assertEquals(-1L, service.close(read), "Close reports the wake error after consuming fd")
+                            assertEquals(-1L, service.close(read)); assertEquals(4L, service.errorKind())
+                        }
+                        "dup2" -> {
+                            val regular = directory.resolve("wake-failure-replacement")
+                            Files.writeString(regular, "replacement")
+                            val source = service.open(path(regular), 0)
+                            assertThrows(IOException::class.java) { service.duplicateTo(source, read) }
+                            assertEquals(1L, service.ready(read, 0), "Replacement is committed despite wake failure")
+                        }
+                        else -> assertThrows(RuntimeFault::class.java) { service.dispose() }
+                    }
+                }
+                assertTrue(future.get(5, TimeUnit.SECONDS))
+                assertEquals(0, service.pendingReadiness(read))
+                entered(context) { service.dispose() }
+                assertEquals(0L, physicalDescriptors(), "Even a failing notifier must retire every native owner")
+            } finally {
+                try { files?.let { service -> entered(context) { service.dispose() } } }
+                finally {
+                    try { context.close(true) } finally {
+                        pool.shutdownNow()
+                        assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS))
+                    }
+                }
+            }
         }
     }
 }

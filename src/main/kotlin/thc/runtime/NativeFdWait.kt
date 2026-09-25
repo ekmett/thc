@@ -70,6 +70,12 @@ internal class NativeFdWait private constructor(private val descriptor: Int, pri
     }
 
     override fun resetInterrupted() {
+        // Verified against Truffle 25.3.4.1 ThreadLocalHandshake:
+        // setFastPendingAndInterrupt, takeHandshakes and setBlockedImpl invoke
+        // interrupt/reset under the same per-target ReentrantLock. Unregister
+        // also holds that lock. Thus no interrupt can land between this drain
+        // and flag clear, nor after blocked-state removal and request cleanup.
+        // descriptorClosed is independent and sticky, even if its wake is drained.
         NativePollApi.drain(wakeFd, drained, drainErrors)
         interrupted.set(false)
     }

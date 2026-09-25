@@ -29,7 +29,9 @@ import thc.NativeIO.StandardEndpoint
  * Transfers are synchronous. Native readiness has a separate cancellable wait
  * capability; this is not a scheduler or interruptible foreign byte transport. */
 internal class ManagedFiles(private val env: TruffleLanguage.Env, private val threads: GuestThreads,
-    private val descriptorLimit: Long = Int.MAX_VALUE.toLong() + 1) {
+    private val descriptorLimit: Long = Int.MAX_VALUE.toLong() + 1,
+    // Internal protocol-test seam; the production notifier is only eventfd IO.
+    private val signalReadinessClose: (NativeFdWait) -> Unit = { it.descriptorClosed() }) {
     private enum class Readiness { REGULAR_FILE, UNAVAILABLE, NATIVE_UNCLASSIFIED }
     private data class FileIdentity(val device: Long, val inode: Long)
     private class OpenClaim(var identity: FileIdentity?, val writable: Boolean, val reserved: Long? = null) {
@@ -92,9 +94,20 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
 
     // Registry held. Wake the original descriptor's waiters before retiring its
     // owner or publishing a reused number; aliases have distinct wait sets.
-    private fun invalidate(entry: Descriptor) {
+    private fun invalidate(entry: Descriptor): Throwable? {
         entry.closed = true
-        entry.readinessWaits.forEach { it.descriptorClosed() }
+        var failure: Throwable? = null
+        for (request in entry.readinessWaits) try { signalReadinessClose(request) }
+            catch (error: Throwable) { failure = combineFailures(failure, error) }
+        // A wake failure must not interrupt registry/refcount mutation or skip
+        // other waiters. Callers finish retirement before surfacing this error.
+        return failure
+    }
+
+    private fun combineFailures(first: Throwable?, next: Throwable?): Throwable? {
+        if (first == null) return next
+        if (next != null && next !== first) first.addSuppressed(next)
+        return first
     }
 
     private inline fun <T> withDescriptor(fd: Long, action: (OpenDescription) -> T): T {
@@ -562,16 +575,19 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
      * callers must not retry it. Embedding streams are flushed, never closed. */
     @TruffleBoundary fun close(fd: Long): Long = result {
         val entry = descriptor(fd)
+        var failure: Throwable? = null
         val last = synchronized(this) {
             if (descriptors[fd] !== entry || entry.closed)
                 fail(4, "Closed or unknown THC file descriptor: $fd")
             descriptors.remove(fd)
-            invalidate(entry)
+            failure = invalidate(entry)
             --entry.owner.references == 0L
         }
         // A blocked byte transfer may delay physical retirement, but must not
         // prevent waiters from observing logical close and releasing their pins.
-        if (last) retire(entry.owner)
+        if (last) try { retire(entry.owner) }
+            catch (error: Throwable) { failure = combineFailures(failure, error) }
+        failure?.let { throw it }
         0L
     }
 
@@ -589,6 +605,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
      * IOException cannot undo replacement or change the successful result. */
     @TruffleBoundary fun duplicateTo(fd: Long, target: Long): Long {
         var retired: OpenDescription? = null
+        var wakeFailure: Throwable? = null
         val installed = result {
             retired = synchronized(this) {
                 val source = descriptors[fd] ?: fail(4, "Closed or unknown THC file descriptor: $fd")
@@ -598,7 +615,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
                 source.owner.references++
                 val old = descriptors.put(target, Descriptor(source.owner))
                 if (old != null) {
-                    invalidate(old)
+                    wakeFailure = invalidate(old)
                     if (--old.owner.references == 0L) old.owner else null
                 } else null
             }
@@ -612,8 +629,13 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
             val previous = threads.enterForeign()
             try { retire(owner) } catch (_: IOException) {
                 // Like native dup2, target-close IO failures are unobservable.
+            } catch (error: Throwable) {
+                wakeFailure = combineFailures(wakeFailure, error)
             } finally { threads.leaveForeign(previous) }
         }
+        // Outside result: a post-commit wake/provider failure cannot masquerade
+        // as -1/errno meaning that the target descriptor was left unchanged.
+        wakeFailure?.let { throw it }
         return installed
     }
 
@@ -678,18 +700,18 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     /** Final disposal cannot run Haskell finalizers or flush GHC's own buffers.
      * Release every owned channel even if one close fails. */
     @TruffleBoundary fun dispose() {
+        var failed: Throwable? = null
         val (entries, pending) = synchronized(this) {
             if (disposed) return
             disposed = true
             val pending = opening.toList()
             opening.clear()
             val entries = owners.toList()
-            descriptors.values.forEach(::invalidate)
+            descriptors.values.forEach { failed = combineFailures(failed, invalidate(it)) }
             entries.forEach { it.references = 0L }
             descriptors.clear()
             entries to pending
         }
-        var failed: Throwable? = null
         // Context teardown may invoke an embedding stream after this context's
         // guest registry has closed. A callback into another context remains
         // under an opaque Java frame and must retain that async origin.
@@ -698,7 +720,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
             for (entry in entries) try {
                 retire(entry)
             } catch (error: Throwable) {
-                if (failed == null) failed = error else if (failed !== error) failed.addSuppressed(error)
+                failed = combineFailures(failed, error)
             }
             // A provider may still be returning a newly acquired channel. Its
             // open observes disposed and closes it before signaling completion.
@@ -713,8 +735,9 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
             if (interrupted) Thread.currentThread().interrupt()
         } finally { threads.leaveForeign(previous) }
         failure.remove()
-        if (failed is IOException)
-            throw RuntimeFault("THC file disposal failed: ${failed.message}").also { it.initCause(failed) }
-        if (failed != null) throw failed
+        val disposalFailure = failed
+        if (disposalFailure is IOException)
+            throw RuntimeFault("THC file disposal failed: ${disposalFailure.message}").also { it.initCause(disposalFailure) }
+        if (disposalFailure != null) throw disposalFailure
     }
 }
