@@ -37,6 +37,11 @@ guides =
 site :: FilePath
 site = "build/site"
 
+-- Dokka fetches this fragment into its sidebar. Adding document chrome here
+-- would duplicate navigation inside every API page.
+isFragment :: FilePath -> Bool
+isFragment = (== "api/jvm/navigation.html")
+
 repo :: String
 repo = "https://github.com/ekmett/thc"
 
@@ -49,6 +54,7 @@ main = do
   case args of
     ["build", revision, pandoc] -> do
       checkRevision revision
+      checkSiteRoot
       forM_ ["haskell", "jvm"] $ \kind -> do
         built <- Text.strip <$> Text.readFile ("build/docs" </> kind <.> "revision")
         unless (built == Text.pack revision) $ die (kind ++ " documentation is from a different revision")
@@ -63,6 +69,16 @@ checkRevision revision = do
     die "Documentation requires a full lowercase Git commit ID"
   current <- Text.strip . Text.pack <$> readProcess "git" ["rev-parse", "HEAD"] ""
   unless (current == Text.pack revision) $ die "Documentation revision must match this checkout's HEAD"
+
+-- Check the ancestor too: checking only build/site would permit a symlinked
+-- build directory to redirect recursive replacement outside the checkout.
+checkSiteRoot :: IO ()
+checkSiteRoot = do
+  root <- getCurrentDirectory >>= canonicalizePath
+  redirected <- pathIsSymbolicLink "build"
+  actual <- canonicalizePath "build"
+  unless (not redirected && actual == root </> "build") $
+    die "Refusing redirected build directory; documentation output must stay in this checkout"
 
 buildSite :: String -> FilePath -> IO ()
 buildSite revision pandoc = do
@@ -83,14 +99,38 @@ buildSite revision pandoc = do
   copyTree "build/docs/jvm" (site </> "api/jvm")
   apiFiles <- filesBelow (site </> "api")
   forM_ (filter ((== ".html") . takeExtension) apiFiles) $ \path -> do
-    html <- Text.readFile path
     let relative = makeRelative site path
-    enhanced <- addChrome revision relative html
-    Text.writeFile path enhanced
+    unless (isFragment relative) $ do
+      html <- Text.readFile path
+      let repaired = if "api/haskell/" `isPrefixOf` relative then repairHaddock html else html
+      enhanced <- addChrome revision relative repaired
+      Text.writeFile path enhanced
   forM_ guides $ \guide@(Guide source _ title) -> renderGuide revision pandoc source (guidePath guide) title
   renderGuide revision pandoc "docs/site/index.md" "index.html" "Haskell on Truffle/Graal"
   Text.writeFile (site </> "revision.txt") (Text.pack (revision ++ "\n"))
   Text.writeFile (site </> ".nojekyll") ""
+
+-- Haddock 2.33 emits instance-method self links without target IDs, even with
+-- dependency interfaces installed. Anchor the actual method declarations; do
+-- not exempt missing fragments from validation. Record selectors can also lack
+-- a source line: their pinned file URL remains useful without a dangling #L.
+repairHaddock :: Text.Text -> Text.Text
+repairHaddock html = Text.pack (renderTags (go anchors tags))
+  where
+    tags = parseTags (Text.unpack html)
+    anchors = Set.fromList [value | TagOpen _ attrs <- tags, ("id", value) <- attrs]
+    go seen (p@(TagOpen "p" attrs) : TagOpen "a" attrs' : rest)
+      | lookup "class" attrs == Just "src"
+      , Just ('#':fragment) <- lookup "href" attrs'
+      , "v:" `isPrefixOf` fragment
+      , Set.notMember fragment seen =
+          p : TagOpen "a" (("id", fragment) : attrs') : go (Set.insert fragment seen) rest
+    go seen (TagOpen tag attrs : rest) = TagOpen tag (map source attrs) : go seen rest
+    go seen (tag : rest) = tag : go seen rest
+    go _ [] = []
+    source ("href", url) | (repo ++ "/blob/") `isPrefixOf` url && "#L" `isSuffixOf` url =
+      ("href", take (length url - 2) url)
+    source attr = attr
 
 filesBelow :: FilePath -> IO [FilePath]
 filesBelow root = do
@@ -216,7 +256,7 @@ checkSite revision = do
           key == "id" || (tag == "a" && key == "name")]
         urls = [value | TagOpen _ attrs <- tags, (key,value) <- attrs, key `elem` ["href", "src"]]
         path = makeRelative site file
-    unless ("class=\"thc-header\"" `Text.isInfixOf` html && Text.pack revision `Text.isInfixOf` html) $
+    unless (isFragment path || ("class=\"thc-header\"" `Text.isInfixOf` html && Text.pack revision `Text.isInfixOf` html)) $
       die ("Missing shared navigation/revision in " ++ path)
     pure (path, (anchors, urls))
   let failures = concat [checkURL inventory pages page url | (page, (_,urls)) <- Map.toList pages, url <- urls]

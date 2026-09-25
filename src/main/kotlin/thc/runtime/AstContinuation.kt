@@ -8,7 +8,7 @@ import com.oracle.truffle.api.nodes.ControlFlowException
 import com.oracle.truffle.api.frame.VirtualFrame
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** A cold AST fragment resumes after its child has produced [input]. */
+/** A cold AST fragment resumes after its child has produced the input value. */
 internal interface AstResumeStep {
     fun resume(frame: VirtualFrame, input: Any?): Any?
 }

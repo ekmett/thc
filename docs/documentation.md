@@ -41,7 +41,10 @@ generating the reference; an upstream minimum-version table is not the test.
 Dokka uses its embedded analysis language version rather than pretending its
 compiler is the project's Kotlin compiler.
 
-Haddock comes from GHC 9.14.1. Only `THC.Plugin` and `THC.Interface` are exposed
+Haddock comes from GHC 9.14.1. Use a compiler installation with its dependency
+Haddock interfaces for cross-package API links; a custom `--docs=none` GHC can
+still generate THC's reference but reports unresolved external type links.
+Only `THC.Plugin` and `THC.Interface` are exposed
 library modules. Driver executables and fixtures are not published as library
 API. Missing documentation warnings remain visible; there is no blanket
 warnings-as-errors policy for the JVM implementation's public declarations.
@@ -65,6 +68,11 @@ fragment IDs, required API/guide pages, mixed-language reference presence, share
 navigation and revision. Root-relative and local filesystem URLs fail validation.
 It does not make live HTTP requests to external sites or prove JavaScript
 behavior in every browser.
+
+Assembly preserves Dokka's sidebar HTML fragment. For Haddock 2.33 it adds the
+missing local anchors to rendered instance-method declarations and removes an
+empty source-line suffix from record-selector file links. All resulting links
+still pass the same checker; missing targets are not exempted.
 
 `.github/workflows/docs.yml` builds a cached, docs-only Pages artifact from
 `main`. Latest-only concurrency cancels obsolete runs. Deployment uses the

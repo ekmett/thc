@@ -194,8 +194,8 @@ separate run.
 * [The documentation site](https://ekmett.github.io/thc/) combines selected
   guides, the mixed Java/Kotlin reference and the Haskell library API.
   [Build it locally](docs/documentation.md) with `make docs` (also needs Pandoc).
-* [Development](docs/contributing.md) covers local checks and the tested merge
-  queue. Update the [primop checklist](docs/primops.md#updating-the-list) when
+* [Development](docs/contributing.md) covers local checks and manual integration
+  of small, reviewed PRs. Update the [primop checklist](docs/primops.md#updating-the-list) when
   adding a primitive.
 * [Cabal integration](docs/cabal.md) describes the limited working `thc run`
   path and the planned `thc build` and GHCi-based `thc repl` commands.

@@ -12,6 +12,14 @@
   color: var(--thc-ink);
   background: var(--thc-paper);
   border-bottom: 1px solid var(--thc-line);
+  /* Dokka's narrow-layout reset targets every header, including this one. */
+  display: block;
+  float: none;
+  width: auto;
+  max-width: none;
+  height: auto;
+  margin: 0;
+  padding: 0;
   position: relative;
   z-index: 1;
 }
@@ -24,9 +32,9 @@
   margin: auto;
   padding: 19px 32px;
 }
-.thc-header a { color: var(--thc-ink); text-decoration: none; }
-.thc-header a:hover { color: var(--thc-accent); text-decoration: underline; }
-.thc-header .thc-brand { font-size: 27px; font-weight: 800; letter-spacing: -1px; }
+.thc-header a:link, .thc-header a:visited { color: var(--thc-ink); text-decoration: none; }
+.thc-header a:hover, .thc-header a:focus { color: var(--thc-accent); text-decoration: underline; }
+.thc-header .thc-brand { flex: none; white-space: nowrap; font-size: 27px; font-weight: 800; letter-spacing: -1px; }
 .thc-brand span { font-size: 16px; font-weight: 400; letter-spacing: 0; color: var(--thc-muted); }
 .thc-links { display: flex; gap: 24px; flex-wrap: wrap; }
 .thc-toolchain {
