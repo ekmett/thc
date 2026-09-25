@@ -23,8 +23,8 @@ class CoreOriginalStdioTest {
         assertTrue(error.message.orEmpty().startsWith("Invalid original stdio call: "), error.message)
     }
 
-    @Test fun allThreeExactContracts() {
-        assertEquals(3, OriginalStdioFixtures.signatures.size)
+    @Test fun allSixExactContracts() {
+        assertEquals(6, OriginalStdioFixtures.signatures.size)
         for (name in OriginalStdioFixtures.signatures.keys) {
             val input = Input(name)
             assertEquals(OriginalStdioFixtures.symbols.getValue(name), input.validate()!!.symbol)

@@ -4,9 +4,22 @@
 package thc.runtime
 
 /** Actual C errno constants from the build host, not the private service categories. */
-internal class StdioHostAbi private constructor(private val errors: Map<String, Long>) {
+internal class StdioHostAbi private constructor(private val errors: Map<String, Long>, private val seek: Map<String, Long>) {
     fun notTerminal(): Long = errors.getValue("ENOTTY")
     fun notSeekable(): Long = errors.getValue("ESPIPE")
+    fun seekConstant(operation: OriginalStdioOp): Long = seek.getValue(when (operation) {
+        OriginalStdioOp.SEEK_SET -> "SEEK_SET"
+        OriginalStdioOp.SEEK_CUR -> "SEEK_CUR"
+        OriginalStdioOp.SEEK_END -> "SEEK_END"
+        else -> throw RuntimeFault("Invalid original seek constant operation")
+    })
+    /** C whence values are independent of the private managed 0/1/2 modes. */
+    fun seekMode(whence: Long): Long? = when (whence) {
+        seek.getValue("SEEK_SET") -> 0L
+        seek.getValue("SEEK_CUR") -> 1L
+        seek.getValue("SEEK_END") -> 2L
+        else -> null
+    }
     fun error(kind: Long): Long = errors.getValue(when (kind) {
         1L -> "ENOENT"
         2L -> "EACCES"
@@ -22,6 +35,7 @@ internal class StdioHostAbi private constructor(private val errors: Map<String, 
     companion object {
         private val widths = mapOf("charBits" to 8L, "pointer" to 8L, "int" to 4L, "bool" to 1L, "size" to 8L, "ssize" to 8L)
         private val errorNames = setOf("ENOENT", "EACCES", "EEXIST", "EBADF", "EINVAL", "EIO", "ENOTSUP", "EBUSY", "EISDIR", "ENOTTY", "ESPIPE")
+        private val seekNames = setOf("SEEK_SET", "SEEK_CUR", "SEEK_END")
         private fun exactInteger(value: Any?): Long? = if (value is Int || value is Long) (value as Number).toLong() else null
         private fun architecture(value: String): String = when (value.lowercase()) {
             "arm64" -> "aarch64"
@@ -49,7 +63,15 @@ internal class StdioHostAbi private constructor(private val errors: Map<String, 
                 requireAbi(number != null && number in 1L..Int.MAX_VALUE.toLong(), "CInt errno $name")
                 number!!
             }
-            return StdioHostAbi(errors)
+            val rawSeek = manifest["seek"] as? Map<*, *>
+            requireAbi(rawSeek != null && rawSeek.keys == seekNames, "seek fields")
+            val seek = seekNames.associateWith { name ->
+                val number = exactInteger(rawSeek!![name])
+                requireAbi(number != null && number in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong(), "CInt $name")
+                number!!
+            }
+            requireAbi(seek.values.toSet().size == seekNames.size, "distinct seek constants")
+            return StdioHostAbi(errors, seek)
         }
         fun load(): StdioHostAbi {
             val document = StdioHostAbi::class.java.getResourceAsStream("/thc/native/stdio-host-abi.json")?.use {

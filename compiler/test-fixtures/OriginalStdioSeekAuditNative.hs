@@ -11,16 +11,29 @@ import GHC.Internal.Int (Int64(I64#))
 import System.Environment (getArgs)
 import System.Posix.IO (OpenMode(ReadOnly), closeFd, createPipe, defaultFileFlags, openFd)
 import System.Posix.Types (Fd(..))
+import GHC.Internal.System.Posix.Internals (sEEK_SET, sEEK_CUR, sEEK_END)
 import qualified OriginalStdioSeekAudit as Original
 
 main :: IO ()
 main = do
-  [entry, scenario, privatePath, resultPath] <- getArgs
+  arguments <- getArgs
+  case arguments of
+    ["constants"] -> print (fromIntegral sEEK_SET :: Int, fromIntegral sEEK_CUR :: Int, fromIntegral sEEK_END :: Int)
+    [entry, scenario, privatePath, resultPath] -> observe entry scenario privatePath resultPath
+    _ -> error "expected constants or entry/scenario/private/result"
+
+observe :: String -> String -> FilePath -> FilePath -> IO ()
+observe entry scenario privatePath resultPath = do
   (fd, release) <- case scenario of
     "invalid" -> pure (Fd (-1), pure ())
     "pipe" -> do
       (reader, writer) <- createPipe
       pure (reader, closeFd reader >> closeFd writer)
+    "closed" -> do
+      writeFile privatePath "abcdef"
+      opened <- openFd privatePath ReadOnly defaultFileFlags
+      closeFd opened
+      pure (opened, pure ())
     _ -> do
       writeFile privatePath "abcdef"
       opened <- openFd privatePath ReadOnly defaultFileFlags
@@ -30,12 +43,15 @@ main = do
         "set" -> (2, 0)
         "cur" -> (2, 1)
         "end" -> (-2, 2)
+        "eof" -> (0, 2)
+        "tell" -> (0, 1)
         "beyond" -> (10, 0)
         "wide" -> (8589934597, 0)
         "negative" -> (-1, 0)
         "bad-whence" -> (0, 9)
         "invalid" -> (0, 0)
         "pipe" -> (0, 0)
+        "closed" -> (0, 0)
         _ -> error "unknown seek scenario"
       seek :: Int -> Int64 -> Int -> Int64
       seek (I# rawFd) (I64# rawDisplacement) (I# rawWhence) =
@@ -43,7 +59,7 @@ main = do
       errno :: Int -> Int64 -> Int -> Int
       errno (I# rawFd) (I64# rawDisplacement) (I# rawWhence) =
         I# (Original.originalSeekErrno rawFd rawDisplacement rawWhence)
-  if scenario == "cur" then do
+  if scenario `elem` ["cur", "tell"] then do
     primed <- evaluate (seek number 3 0)
     unless (primed == 3) (error "unable to prime private file position")
   else pure ()

@@ -151,14 +151,14 @@ ORIGINAL_STDIO_CLOSE_OUTPUTS = frozenset("build/original-stdio-close/" + name fo
 ))
 
 ORIGINAL_STDIO_SEEK_LOGS = (
-    "ghc-version", "ghc-info", "native-build", "pre-export", "post-export",
-) + tuple(f"native-{index}" for index in range(18)) + tuple(
+    "ghc-version", "ghc-info", "native-build", "native-constants", "pre-export", "post-export",
+) + tuple(f"native-{index}" for index in range(24)) + tuple(
     f"{stage}-audit-{entry}" for stage in ("pre", "post")
     for entry in ("originalSeek", "originalSeekErrno"))
 ORIGINAL_STDIO_SEEK_OUTPUTS = frozenset("build/original-stdio-seek/" + name for name in (
     "manifest.json", "oracle.json", "native/oracle",
-    *(f"results/{index}.txt" for index in range(18)),
-    *(f"results/{index}.private" for index in list(range(7)) + list(range(9, 16))),
+    *(f"results/{index}.txt" for index in range(24)),
+    *(f"results/{index}.private" for index in range(24) if index % 12 not in (7, 8)),
     *(f"logs/{label}.{suffix}" for label in ORIGINAL_STDIO_SEEK_LOGS
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (

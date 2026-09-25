@@ -31,7 +31,7 @@ class OriginalStdioSeekNativeTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val fixture = File(root, "build/original-stdio-seek")
     private val names = listOf("originalSeek", "originalSeekErrno")
-    private val scenarios = listOf("set", "cur", "end", "beyond", "wide", "negative", "bad-whence", "invalid", "pipe")
+    private val scenarios = listOf("set", "cur", "end", "beyond", "wide", "negative", "bad-whence", "invalid", "pipe", "eof", "tell", "closed")
     private fun json(path: File) = Json.parse(path.readText()) as Map<String, Any?>
     private fun valid(target: RootCallTarget) = assertEquals(true,
         target.javaClass.getMethod("isValidLastTier").invoke(target))
@@ -57,7 +57,7 @@ class OriginalStdioSeekNativeTest {
     @Test fun originalSeekMatchesNativeAndCompiledTargets() {
         val manifest = json(File(fixture, "manifest.json"))
         assertEquals(1L, manifest["schema"]); assertEquals("9.14.1", manifest["ghc"])
-        assertEquals(names, manifest["entries"]); assertEquals(18L, manifest["nativeRows"])
+        assertEquals(names, manifest["entries"]); assertEquals(24L, manifest["nativeRows"])
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf(
             "compiler/test-fixtures/OriginalStdioSeekAudit.hs",
             "compiler/test-fixtures/OriginalStdioSeekAuditNative.hs",
@@ -70,14 +70,16 @@ class OriginalStdioSeekNativeTest {
         assertEquals(names.flatMap { name -> scenarios.map { name to it } },
             oracle.map { it["entry"] to it["scenario"] })
         val abi = StdioHostAbi.load()
+        assertEquals(listOf(OriginalStdioOp.SEEK_SET, OriginalStdioOp.SEEK_CUR, OriginalStdioOp.SEEK_END)
+            .associate { it.name to abi.seekConstant(it) }, manifest["nativeConstants"])
         val expectedPosition = mapOf("set" to 2L, "cur" to 5L, "end" to 4L, "beyond" to 10L,
-            "wide" to 8589934597L)
+            "wide" to 8589934597L, "eof" to 6L, "tell" to 3L)
         for (row in oracle) {
             val scenario = row["scenario"] as String
             val expected = if (row["entry"] == "originalSeek") expectedPosition[scenario] ?: -1L
                 else when (scenario) {
                     "negative", "bad-whence" -> abi.error(5)
-                    "invalid" -> abi.error(4)
+                    "invalid", "closed" -> abi.error(4)
                     "pipe" -> abi.notSeekable()
                     else -> -2L
                 }
@@ -92,21 +94,23 @@ class OriginalStdioSeekNativeTest {
                 val owner = "main:OriginalStdioSeekAudit.$name"
                 val binding = bindings.single { it["id"] == owner }
                 val calls = OriginalStdioChecks.foreignCalls(binding["expr"])
-                assertEquals(if (name.endsWith("Errno")) 2 else 1, calls.size)
+                assertEquals(if (name.endsWith("Errno")) 5 else 4, calls.size)
                 val symbols = calls.map { app ->
                     val head = app[1] as List<Any?>
                     CoreOriginalStdio.validateHead(head, false)
                     val reps = (app[2] as List<*>).map { ((it as List<*>).last() as Map<*, *>)["rep"] }
                     CoreOriginalStdio.validate(app[6], reps, app[3] as List<*>, (app[6] as Map<*, *>)["rep"])!!.symbol
                 }
-                assertEquals(listOf(OriginalStdioOp.SEEK.symbol) +
-                    if (name.endsWith("Errno")) listOf("__hscore_get_errno") else emptyList(), symbols)
+                assertEquals((listOf(OriginalStdioOp.SEEK.symbol, OriginalStdioOp.SEEK_SET.symbol,
+                    OriginalStdioOp.SEEK_CUR.symbol, OriginalStdioOp.SEEK_END.symbol) +
+                    if (name.endsWith("Errno")) listOf("__hscore_get_errno") else emptyList()).sorted(), symbols.sorted())
                 OriginalStdioChecks.audit(json(File(fixture, "$stage/$name.audit.json")), owner, symbols)
             }
-            for (backend in listOf("ast", "bytecode")) {
+            for (backend in listOf("ast", "bytecode")) for (inlining in listOf(false, true)) {
                 val output = ByteArrayOutputStream(); val errors = ByteArrayOutputStream()
                 Context.newBuilder("thc").allowIO(IOAccess.ALL).`in`(ByteArrayInputStream(byteArrayOf()))
                     .out(output).err(errors).allowExperimentalOptions(true)
+                    .option("compiler.Inlining", inlining.toString())
                     .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                     .option("engine.CompilationFailureAction", "Throw").build().use { context ->
                         context.initialize("thc"); context.enter()
@@ -123,23 +127,31 @@ class OriginalStdioSeekNativeTest {
                                         val privateFile = directory.resolve("$stage-$backend-$name-$scenario-$compiled")
                                         Files.writeString(privateFile, "abcdef")
                                         val files = Language.currentState().files
+                                        val stdio = Language.currentState().stdio
                                         val fd = when (scenario) {
                                             "invalid" -> -1L
                                             "pipe" -> 0L // The embedding input is also nonseekable.
                                             else -> files.open(ManagedAddress.fromByteArray(privateFile.toString().toByteArray() + byteArrayOf(0)), 0L)
                                                 .also { assertTrue(it >= 3L) }
                                         }
-                                        if (scenario == "cur") assertEquals(3L, files.seek(fd, 3L, 0L))
+                                        if (scenario == "closed") assertEquals(0L, files.close(fd))
+                                        if (scenario in listOf("cur", "tell")) assertEquals(3L, files.seek(fd, 3L, 0L))
+                                        // A successful constant lookup/seek must not erase an old C errno.
+                                        assertEquals(-1L, stdio.close(-1L))
+                                        assertEquals(abi.error(4), stdio.errno())
                                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                                         assertEquals(row["result"], Calls.target(entry, arrayOf(0L, fd, row["displacement"], row["whence"])),
-                                            "$stage/$backend/$name/$scenario")
-                                        if (fd >= 3L) {
+                                            "$stage/$backend/$inlining/$name/$scenario")
+                                        if (scenario in expectedPosition.keys) assertEquals(abi.error(4), stdio.errno())
+                                        if (fd >= 3L && scenario != "closed") {
                                             assertEquals(6L, files.size(fd))
                                             assertEquals("abcdef", Files.readString(privateFile))
                                             assertEquals(0L, files.close(fd))
                                         }
-                                        if (compiled) assertEquals(before + 2,
-                                            (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                                        if (compiled) {
+                                            assertEquals(before + 2, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                                            targets(entry).forEach(::valid)
+                                        }
                                     }
                                 }
                                 exercise(false)
