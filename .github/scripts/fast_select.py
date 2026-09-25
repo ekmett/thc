@@ -299,6 +299,10 @@ def junit_info(source):
     test_starts = {item.start() for item, _, _ in ranges}
     declaration_starts = {item.start() for item in declarations}
     for item in re.finditer(r"(?<!:)\b(?:class|object|interface|fun|val|var|typealias)\b", code):
+        # Anonymous objects are expressions inside a helper or initializer.
+        # The enclosing declaration still decides whether that helper is shared.
+        if item[0] == "object" and re.match(r"\s*[:{]", code[item.end():]):
+            continue
         if depths[item.start()] in (0, 1) and item.start() not in declaration_starts:
             unsafe.append("unresolved-test-declaration")
     for item in declarations:

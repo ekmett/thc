@@ -464,6 +464,32 @@ private val text = "class FakeString { @Test }"
             self.commit()
             self.full(reason)
 
+    def test_anonymous_objects_keep_private_helpers_local_without_hiding_shared_ones(self):
+        path = "src/test/kotlin/example/OtherTest.kt"
+        source = ('package example\nimport org.junit.jupiter.api.Test\n'
+                  'private val local = object { val value = 1 }\n'
+                  'class OtherTest {\n'
+                  '  private fun thunk() = Holder(object : RootNode(null) {\n'
+                  '    override fun execute() = local.value\n'
+                  '  })\n'
+                  '  @Test fun works() { assertEquals(1, thunk().execute()) }\n'
+                  '}\n')
+        self.write(path, source)
+        self.base = self.commit()
+        self.write(path, source.replace('val value = 1', 'val value = 2'))
+        self.commit()
+        result = self.plan()
+        self.assertEqual("narrow", result["mode"], result)
+        self.assertEqual(["example.OtherTest"], result["affected"]["junit"])
+        for changed, reason in (
+                (source.replace('private fun thunk', 'fun thunk'), "shared-test-member"),
+                (source.replace('private val local', 'val local'), "shared-test-helper"),
+                (source + 'object Shared { val value = 1 }\n', "shared-test-helper")):
+            with self.subTest(reason=reason):
+                self.write(path, changed)
+                self.commit()
+                self.full(reason)
+
     def test_automation_changes_use_control_tests_and_smoke(self):
         for path in (".github/workflows/fast.yml", ".github/scripts/fast_ci.py"):
             with self.subTest(path=path):
