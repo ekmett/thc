@@ -6,7 +6,7 @@ module SimdFloatFmaFixtures (prepareSimdFloatFma) where
 import Control.Monad (forM_, unless, when)
 import Data.Aeson (object, (.=))
 import Data.Bits (xor)
-import FixtureSupport (hashes, run, runLogged, writeJson)
+import FixtureSupport (hashes, run, runLogged, runLoggedExpect, writeJson)
 import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
@@ -17,6 +17,9 @@ import Text.Read (readMaybe)
 entries :: [String]
 entries = ["addCase", "subCase", "negAddCase", "negSubCase"]
 
+doubleEntries :: [String]
+doubleEntries = ["doubleAddCase", "doubleSubCase", "doubleNegAddCase", "doubleNegSubCase"]
+
 inputs :: [[Integer]]
 inputs = [[0x3f800001 `xor` sx, 0x3f7ffffe `xor` sy, 0xbf800000 `xor` sz] |
   sx <- signs, sy <- signs, sz <- signs] ++
@@ -25,6 +28,15 @@ inputs = [[0x3f800001 `xor` sx, 0x3f7ffffe `xor` sy, 0xbf800000 `xor` sz] |
    [0x3fc00000,0x3f800003,1], [0x7f800000,0,0x3f800000],
    [0x7fc00001,0x3f800000,0], [0x40000000,0x40400000,0x40800000]]
   where signs = [0,0x80000000]
+
+doubleInputs :: [[Integer]]
+doubleInputs = [[0x3ff0000000000001 `xor` sx, 0x3feffffffffffffe `xor` sy, 0xbff0000000000000 `xor` sz] |
+  sx <- signs, sy <- signs, sz <- signs] ++
+  [[x,y,z] | x <- signs, y <- signs, z <- signs] ++
+  [[0x7fefffffffffffff,0x4000000000000000,0xffefffffffffffff], [1,0x3fe0000000000000,1],
+   [0x3ff8000000000000,0x3ff0000000000003,1], [0x7ff0000000000000,0,0x3ff0000000000000],
+   [0x7ff8000000000001,0x3ff0000000000000,0], [0x4000000000000000,0x4008000000000000,0x4010000000000000]]
+  where signs = [0,0x8000000000000000]
 
 prepareSimdFloatFma :: FilePath -> IO ()
 prepareSimdFloatFma root = do
@@ -56,8 +68,15 @@ prepareSimdFloatFma root = do
     _ <- runLogged 120 root (directory </> "logs") (stage ++ "-audit") [] "python3"
       (["scripts/audit-core.py", directory </> stage ++ "-core/SimdFloatFma.json", "--output", audit] ++
        concatMap (\entry -> ["--entry",entry]) entries)
+    -- DoubleX2 candidate remains outside canonical admission until the genuine
+    -- native and compiled gates pass. Preserve that rejection as evidence.
+    _ <- runLoggedExpect 1 120 root (directory </> "logs") (stage ++ "-double-audit") [] "python3"
+      (["scripts/audit-core.py", directory </> stage ++ "-core/SimdFloatFma.json",
+        "--output", directory </> stage ++ "-double-audit.json"] ++
+       concatMap (\entry -> ["--entry",entry]) doubleEntries)
     pure ()
-  let requests = [[entry] ++ map show values ++ [show lane] | entry <- entries, values <- inputs, lane <- [0..3 :: Int]]
+  let requests = [[entry] ++ map show values ++ [show lane] | entry <- entries, values <- inputs, lane <- [0..3 :: Int]] ++
+        [[entry] ++ map show values ++ [show lane] | entry <- doubleEntries, values <- doubleInputs, lane <- [0..1 :: Int]]
       binary = output </> "native/oracle"
   rows <- if exportOnly then pure [] else do
     createDirectoryIfMissing True (output </> "native")
@@ -70,13 +89,16 @@ prepareSimdFloatFma root = do
   inputHashes <- hashes root [source,driver,"test/haskell-fixtures/SimdFloatFmaFixtures.hs",
     "scripts/core_vectors.py","scripts/audit-core.py","scripts/core-capabilities.json","compiler/export.sh"]
   artifactHashes <- hashes root ([directory </> "oracle.txt" | not exportOnly] ++
-    [directory </> stage ++ suffix | stage <- stages, suffix <- ["-core/SimdFloatFma.json","-audit.json"]])
+    [directory </> stage ++ suffix | stage <- stages, suffix <- ["-core/SimdFloatFma.json","-audit.json","-double-audit.json"]])
   writeJson manifest $ object ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),
     "entries" .= entries,"inputs" .= inputs,"stages" .= stages,"nativeFlags" .= nativeFlags,
+    -- Decimal strings preserve unsigned Word64 bits through the JVM JSON reader.
+    "doubleEntries" .= doubleEntries,"doubleInputs" .= map (map show) doubleInputs,
     "nativeRows" .= (if exportOnly then Nothing else Just (length rows)),
     "inputHashes" .= inputHashes,"artifactHashes" .= artifactHashes]
-  putStrLn ("simd-floatx4-fma: " ++ show (length rows) ++ " native rows; canonical audits accepted")
+  putStrLn ("simd-floatx4-fma: " ++ show (length rows) ++ " shared native rows; FloatX4 admitted, DoubleX2 candidate gated")
   where
     valid row = case words row of
-      [_,_,_,_,_,result] -> maybe False (\n -> n >= 0 && n <= 0xffffffff) (readMaybe result :: Maybe Integer)
+      [entry,_,_,_,_,result] -> maybe False (\n -> n >= 0 && n <=
+        (if entry `elem` doubleEntries then 0xffffffffffffffff else 0xffffffff)) (readMaybe result :: Maybe Integer)
       _ -> False

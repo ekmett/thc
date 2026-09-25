@@ -150,37 +150,47 @@ class VectorAuditTest(unittest.TestCase):
                 proof['vector']['lanes'] = count
                 self.assertIsNotNone(proof_error(proof), (original, count))
 
-    def test_floatx4_fused_requires_three_exact_vectors_and_canonical_admission(self):
-        for name in ('fmaddFloatX4#', 'fmsubFloatX4#', 'fnmaddFloatX4#', 'fnmsubFloatX4#'):
-            self.assertEqual(3, CAP['primitives'][name])
+    def test_fused_float_vectors_require_exact_shapes_and_explicit_admission(self):
+        for shape, proof, lane, wrong, admitted in (
+                ('FloatX4', VECTOR_FLOAT_REP, LANE_FLOAT_REP, VECTOR_DOUBLE_REP, True),
+                ('DoubleX2', VECTOR_DOUBLE_REP, LANE_DOUBLE_REP, VECTOR_FLOAT_REP, False)):
+          for prefix in ('fmadd', 'fmsub', 'fnmadd', 'fnmsub'):
+            name = prefix + shape + '#'
+            if admitted:
+                self.assertEqual(3, CAP['primitives'][name])
+            else:
+                self.assertNotIn(name, CAP['primitives'])
+            candidate = copy.deepcopy(CAP)
+            candidate['primitives'][name] = 3
             module = fixture()
             body = module['bindings'][0]['expr'][2]
-            operand = ['app', ['prim', 'broadcastFloatX4#', dict(rep=CLOSURE)],
-                       [['lit', 'float', '1.0', dict(rep=LANE_FLOAT_REP)]], [False], False, True,
-                       dict(rep=copy.deepcopy(VECTOR_FLOAT_REP))]
+            operand = ['app', ['prim', 'broadcast' + shape + '#', dict(rep=CLOSURE)],
+                       [['lit', 'float' if admitted else 'double', '1.0', dict(rep=lane)]], [False], False, True,
+                       dict(rep=copy.deepcopy(proof))]
             body[1] = ['app', ['prim', name, dict(rep=CLOSURE)], [copy.deepcopy(operand) for _ in range(3)],
-                       [False] * 3, False, True, dict(rep=copy.deepcopy(VECTOR_FLOAT_REP))]
-            body[4]['binder']['rep'] = copy.deepcopy(VECTOR_FLOAT_REP)
-            self.assertTrue(run(module)['accepted'], run(module)['issues'])
-            without = copy.deepcopy(CAP)
+                       [False] * 3, False, True, dict(rep=copy.deepcopy(proof))]
+            body[4]['binder']['rep'] = copy.deepcopy(proof)
+            self.assertEqual(admitted, run(module)['accepted'])
+            self.assertTrue(run(module, capability=candidate)['accepted'], run(module, capability=candidate)['issues'])
+            without = copy.deepcopy(candidate)
             del without['primitives'][name]
             self.assertIn('unsupported-primitive', {issue['code'] for issue in run(module, capability=without)['issues']})
             for index in range(3):
                 malformed = copy.deepcopy(module)
-                malformed['bindings'][0]['expr'][2][1][2][index][-1]['rep'] = copy.deepcopy(VECTOR_DOUBLE_REP)
-                self.assertFalse(run(malformed)['accepted'])
+                malformed['bindings'][0]['expr'][2][1][2][index][-1]['rep'] = copy.deepcopy(wrong)
+                self.assertFalse(run(malformed, capability=candidate)['accepted'])
             for count in (2, 4):
                 malformed = copy.deepcopy(module)
                 app = malformed['bindings'][0]['expr'][2][1]
                 app[2] = [copy.deepcopy(operand) for _ in range(count)]
                 app[3] = [False] * count
-                self.assertFalse(run(malformed)['accepted'])
+                self.assertFalse(run(malformed, capability=candidate)['accepted'])
             malformed = copy.deepcopy(module)
-            malformed['bindings'][0]['expr'][2][1][-1]['rep'] = copy.deepcopy(VECTOR_DOUBLE_REP)
-            self.assertFalse(run(malformed)['accepted'])
+            malformed['bindings'][0]['expr'][2][1][-1]['rep'] = copy.deepcopy(wrong)
+            self.assertFalse(run(malformed, capability=candidate)['accepted'])
             malformed = copy.deepcopy(module)
             malformed['bindings'][0]['expr'][2][1][3][1] = True
-            self.assertFalse(run(malformed)['accepted'])
+            self.assertFalse(run(malformed, capability=candidate)['accepted'])
         for name in ('fmaddFloatX8#', 'fmsubFloatX16#', 'fnmaddDoubleX2#', 'fnmsubDoubleX8#'):
             self.assertNotIn(name, CAP['primitives'])
 

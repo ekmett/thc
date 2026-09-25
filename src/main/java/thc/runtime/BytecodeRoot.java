@@ -3274,6 +3274,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation @ConstantOperand(type = int.class, name = "operation")
+    public static final class VectorDoubleFused {
+        @Specialization public static DoubleX2 apply(int operation, DoubleX2 first, DoubleX2 second, DoubleX2 third) {
+            return DoubleX2.fused(operation, first, second, third);
+        }
+    }
+
     /** Evaluates a zero-width field for effects while producing no destination value. */
     @Operation public static final class DiscardVoid {
         @Specialization public static void discard(Object value) { TupleResultsKt.requireVoidCarrier(value); }

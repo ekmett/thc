@@ -78,7 +78,8 @@ internal object CoreVectors {
     val proofDouble = CoreRepresentation(CoreKind.VECTOR, true, true, listOf("VecRep 2 DoubleElemRep"), vector = CoreVector.DOUBLEX2)
     private val laneDouble = CoreRepresentation(CoreKind.DOUBLE, true, true, listOf("DoubleRep"))
     val unpackedDouble = CoreRepresentation(CoreKind.UNKNOWN, true, true, List(2) { "DoubleRep" }, List(2) { laneDouble })
-    val operationsDouble = setOf("packDoubleX2#", "unpackDoubleX2#", "broadcastDoubleX2#", "plusDoubleX2#", "minusDoubleX2#", "timesDoubleX2#")
+    val fusedDouble = listOf("fmaddDoubleX2#", "fmsubDoubleX2#", "fnmaddDoubleX2#", "fnmsubDoubleX2#")
+    val operationsDouble = setOf("packDoubleX2#", "unpackDoubleX2#", "broadcastDoubleX2#", "plusDoubleX2#", "minusDoubleX2#", "timesDoubleX2#") + fusedDouble
     val operations32 = setOf("packInt32X4#", "unpackInt32X4#", "broadcastInt32X4#", "plusInt32X4#", "minusInt32X4#", "negateInt32X4#", "timesInt32X4#")
     val operations = setOf("packInt64X2#", "unpackInt64X2#", "broadcastInt64X2#", "plusInt64X2#", "minusInt64X2#", "negateInt64X2#") + operations32 + operations16 + operations8 + operationsWord8 + operationsWord16 + operationsWord32 + operationsFloat + operationsDouble + GeneratedVectors.operations
     fun requireVariableProof(binding: CoreRepresentation?, occurrence: CoreRepresentation) {
@@ -136,6 +137,7 @@ internal object CoreVectors {
             "broadcastFloatX4#" -> listOf(laneFloat)
             "plusFloatX4#", "minusFloatX4#", "timesFloatX4#" -> listOf(proofFloat, proofFloat)
             in fusedFloat -> listOf(proofFloat, proofFloat, proofFloat)
+            in fusedDouble -> listOf(proofDouble, proofDouble, proofDouble)
             else -> throw UnsupportedCore("Unsupported vector primitive $name")
         }
         val expectedResult = when (name) {

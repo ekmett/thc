@@ -128,6 +128,10 @@ OPERATIONS.update({
     'plusDoubleX2#': ([VECTOR_DOUBLE_REP, VECTOR_DOUBLE_REP], VECTOR_DOUBLE_REP),
     'minusDoubleX2#': ([VECTOR_DOUBLE_REP, VECTOR_DOUBLE_REP], VECTOR_DOUBLE_REP),
     'timesDoubleX2#': ([VECTOR_DOUBLE_REP, VECTOR_DOUBLE_REP], VECTOR_DOUBLE_REP),
+    'fmaddDoubleX2#': ([VECTOR_DOUBLE_REP] * 3, VECTOR_DOUBLE_REP),
+    'fmsubDoubleX2#': ([VECTOR_DOUBLE_REP] * 3, VECTOR_DOUBLE_REP),
+    'fnmaddDoubleX2#': ([VECTOR_DOUBLE_REP] * 3, VECTOR_DOUBLE_REP),
+    'fnmsubDoubleX2#': ([VECTOR_DOUBLE_REP] * 3, VECTOR_DOUBLE_REP),
 })
 
 # The same pinned declarative table drives concrete JVM source generation. This
