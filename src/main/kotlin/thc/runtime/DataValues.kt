@@ -27,7 +27,14 @@ private const val INTLIKE_MAX = 255L
 private const val CHARLIKE_MIN = 0L
 private const val CHARLIKE_MAX = 255L
 
-/** One immutable, constructor-specific layout shared by all values of that constructor. */
+/**
+ * Storage metadata shared by values of one algebraic constructor.
+ *
+ * The layout fixes field representations and authenticates [DataValue] allocations.
+ * Truffle StaticShape supplies their typed storage; executable constructor and case
+ * nodes use this description but are separate objects. The layout contains no
+ * particular constructor value's payload.
+ */
 class DataLayout(
     language: TruffleLanguage<*>,
     val id: String,
@@ -342,7 +349,17 @@ class DataLayout(
     }
 }
 
-/** Public superclass for Truffle's generated storage classes; no generic payload array. */
+/**
+ * Runtime value for an algebraic constructor, including a lifted tuple.
+ *
+ * Generated StaticShape subclasses hold the fields described by [DataLayout],
+ * without a generic payload array. This is guest heap data, not an executable
+ * Truffle node. Unboxed tuple results use their component calling convention
+ * rather than this constructor representation.
+ *
+ * The public superclass is required by generated storage code; allocation still
+ * requires the owning layout's private key.
+ */
 open class DataValue(layout: DataLayout, allocationKey: Any?) :
     ValidatedStorage(layout.checkAllocationKey(allocationKey)) {
     // Concrete getter: StaticShape deliberately rejects abstract superclass methods.

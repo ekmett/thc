@@ -50,13 +50,18 @@
 .thc-nav-link { display: block; border-radius: 6px; margin: 1px 0; padding: 7px 12px; color: var(--thc-ink); text-decoration: none; }
 .thc-nav-link:hover, .thc-nav-link:focus-visible { background: var(--thc-wash); color: var(--thc-heading); }
 .thc-nav-link[aria-current="page"] { background: var(--thc-wash); color: var(--thc-heading); font-weight: 700; }
-.thc-appearance { width: 100%; margin: 4px 0 16px; border: 1px solid var(--thc-line); border-radius: 4px; padding: 6px; background: var(--thc-paper); color: var(--thc-ink); font: inherit; }
+.thc-appearance { min-width: 0; margin: 0 0 12px; padding: 0 10px; border: 0; }
+.thc-appearance legend { margin-bottom: 8px; padding: 0; color: var(--thc-muted); font-size: 11px; }
+.thc-theme-options { display: flex; padding: 3px; border: 1px solid var(--thc-line); border-radius: 7px; background: var(--thc-paper); }
+.thc-theme-options button { flex: 1; min-width: 0; border: 0; border-radius: 4px; padding: 8px 5px; background: transparent; color: var(--thc-muted); font: 600 11px/1.3 system-ui, sans-serif; white-space: nowrap; cursor: pointer; }
+.thc-theme-options button:hover { color: var(--thc-heading); }
+.thc-theme-options button[aria-pressed="true"] { background: var(--thc-wash); color: var(--thc-heading); }
 .thc-rail-footer { border-top: 1px solid var(--thc-line); padding: 16px 12px 0; color: var(--thc-muted); font-size: 11px; }
 .thc-rail-footer p { margin: 0 0 8px; }
 .thc-rail-footer a { color: var(--thc-link); }
 #thc-content { width: 100%; height: 100%; border: 0; background: var(--thc-paper); }
 .thc-menu { display: none; }
-.thc-shell a:focus-visible, .thc-menu:focus-visible { outline: 2px solid var(--thc-accent); outline-offset: 2px; }
+.thc-shell a:focus-visible, .thc-shell button:focus-visible { outline: 2px solid var(--thc-accent); outline-offset: 2px; }
 
 /* Documents remain useful when opened at their direct, shareable URLs. */
 .thc-guide { margin: 0; padding: 48px clamp(20px, 6vw, 88px) 80px; background: var(--thc-paper); color: var(--thc-ink); font: 1.1875rem/1.75 var(--thc-serif); }
@@ -77,8 +82,9 @@
 .thc-prose th { background: var(--thc-pale); }
 .thc-prose blockquote { border-left: 2px solid var(--thc-link); margin-left: 0; padding-left: 24px; color: var(--thc-muted); font-style: italic; }
 .thc-prose img { max-width: 100%; height: auto; }
-.thc-mascot { float: right; width: 240px; max-width: 42%; margin: -20px 0 12px 30px; }
+.thc-mascot { float: right; width: 240px; max-width: 42%; margin: 0 0 12px 28px; }
 .thc-mascot img { display: block; width: 100%; height: auto; }
+.thc-mascot ~ h2 { clear: both; }
 .thc-mascot .thc-bot-dark { display: none; }
 :root[data-thc-theme="dark"] .thc-mascot .thc-bot-light { display: none; }
 :root[data-thc-theme="dark"] .thc-mascot .thc-bot-dark { display: block; }
@@ -114,6 +120,8 @@ body[data-thc-section="jvm"] button { color: var(--thc-ink); }
   .thc-rail.thc-open { display: flex; }
   #thc-content { height: 100%; }
   .thc-guide { padding: 30px 20px 60px; }
+}
+@media (max-width: 540px) {
   .thc-mascot { float: none; width: 220px; max-width: 70%; margin: 0 auto 22px; }
 }
 @media print { .thc-rail, .thc-menu { display: none; } .thc-shell-layout { display: block; } #thc-content { width: 100%; } }

@@ -65,8 +65,8 @@
     menu.setAttribute("aria-expanded", String(open));
     rail.classList.toggle("thc-open", open);
   });
-  document.getElementById("thc-appearance").addEventListener("change", event => {
-    window.thcTheme.set(event.target.value);
+  document.querySelectorAll("[data-thc-appearance]").forEach(control => {
+    control.addEventListener("click", () => window.thcTheme.set(control.dataset.thcAppearance));
   });
 
   function frameRoute() {

@@ -3,8 +3,8 @@
 # thc
 
 <figure class="thc-mascot">
-<img class="thc-bot-light" src="turbo-haskell-bot-light.png" width="240" height="240" alt="A cheerful purple robot with a lambda badge, hovering on little rocket boosters above a soft shadow.">
-<img class="thc-bot-dark" src="turbo-haskell-bot-dark.png" width="240" height="240" alt="A cheerful purple robot with a lambda badge, hovering on little rocket boosters above a soft shadow.">
+<img class="thc-bot-light" src="turbo-haskell-bot-flipped-light.png" width="240" height="240" alt="A cheerful purple robot waving toward the text, with a lambda badge, hovering on little rocket boosters above a soft shadow.">
+<img class="thc-bot-dark" src="turbo-haskell-bot-flipped-dark.png" width="240" height="240" alt="A cheerful purple robot waving toward the text, with a lambda badge, hovering on little rocket boosters above a soft shadow.">
 </figure>
 
 I'm experimenting with using GHC as a frontend for a high performance Haskell
@@ -34,9 +34,8 @@ thc run . --exe my-program
 thc repl
 ```
 
-`thc run` has a working, limited implementation today. `thc build` and `thc repl`
-are planned; the REPL will use GHC's frontend rather than introduce a second
-Haskell parser and type checker. The aim is to run complete programs, including
+`thc run` has a working, limited implementation today. `thc build` is planned;
+`thc repl` is not yet implemented. The aim is to run complete programs, including
 their error paths.
 
 Running on Truffle also gives Haskell a route into other languages. The

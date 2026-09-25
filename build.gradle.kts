@@ -28,6 +28,7 @@ dokka {
         suppressInheritedMembers.set(true)
     }
     dokkaSourceSets.named("main") {
+        includes.from("docs/site/jvm.md")
         sourceRoots.setFrom("src/main/kotlin", "src/main/java")
         classpath.setFrom(configurations.compileClasspath)
         jdkVersion.set(25)

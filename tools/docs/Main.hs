@@ -38,6 +38,9 @@ guides =
 site :: FilePath
 site = "build/site"
 
+mascotAssets :: [FilePath]
+mascotAssets = ["turbo-haskell-bot-flipped-light.png", "turbo-haskell-bot-flipped-dark.png"]
+
 -- Dokka fetches this fragment into its sidebar. Adding document chrome here
 -- would duplicate navigation inside every API page.
 isFragment :: FilePath -> Bool
@@ -93,7 +96,7 @@ buildSite revision pandoc = do
   copyFile "docs/site/site.css" (site </> "assets/site.css")
   copyFile "docs/site/site.js" (site </> "assets/site.js")
   copyFile "docs/site/theme.js" (site </> "assets/theme.js")
-  forM_ ["turbo-haskell-bot-light.png", "turbo-haskell-bot-dark.png"] $ \name ->
+  forM_ mascotAssets $ \name ->
     copyFile ("docs/site" </> name) (site </> "assets" </> name)
   haskellFiles <- filesBelow "build/docs/haskell"
   let roots = [takeDirectory p | p <- haskellFiles, takeFileName p == "THC-Plugin.html"]
@@ -211,14 +214,17 @@ renderShell revision pages = do
         "aria-controls=\"thc-rail\">Documentation menu</button><div class=\"thc-shell-layout\">" ++
         "<aside class=\"thc-rail\" id=\"thc-rail\"><a class=\"thc-brand\" href=\"home.html\" " ++
         "data-page=\"home.html\" target=\"thc-content\">thc<span> / docs</span></a>" ++
+        "<fieldset class=\"thc-appearance\" id=\"thc-appearance\"><legend>Appearance</legend>" ++
+        "<div class=\"thc-theme-options\">" ++
+        "<button type=\"button\" data-thc-appearance=\"light\" aria-pressed=\"false\">Light</button>" ++
+        "<button type=\"button\" data-thc-appearance=\"dark\" aria-pressed=\"false\">Dark</button>" ++
+        "<button type=\"button\" data-thc-appearance=\"system\" aria-pressed=\"true\">Follow OS</button>" ++
+        "</div></fieldset>" ++
         "<nav aria-label=\"THC documentation\"><p class=\"thc-nav-label\">Start</p>" ++
         item "home.html" "Overview" ++ "<p class=\"thc-nav-label\">Guides</p>" ++
         concatMap guideItem guides ++ "<p class=\"thc-nav-label\">Reference</p>" ++
         item "api/haskell/index.html" "Haskell API" ++ item "api/jvm/index.html" "Runtime" ++
-        "</nav><div class=\"thc-rail-footer\"><label for=\"thc-appearance\">Appearance</label>" ++
-        "<select class=\"thc-appearance\" id=\"thc-appearance\" aria-label=\"Appearance\">" ++
-        "<option value=\"system\">System</option><option value=\"light\">Light</option>" ++
-        "<option value=\"dark\">Dark</option></select>" ++
+        "</nav><div class=\"thc-rail-footer\">" ++
         "<p>Experimental · GHC 9.14.1 · GraalVM 25.3.4.1</p>" ++
         link (repo ++ "/tree/" ++ revision) "Source ↗" ++ " · " ++
         link (repo ++ "/commit/" ++ revision) (take 12 revision) ++ "</div></aside>" ++
@@ -262,7 +268,7 @@ guideURL revision source output url
           resolved = collapse (takeDirectory source </> decodeURL path)
           pages = ("docs/site/index.md", "home.html") : [(src, guidePath g) | g@(Guide src _ _) <- guides]
           assets = [("docs/site" </> name, "assets" </> name) |
-            name <- ["turbo-haskell-bot-light.png", "turbo-haskell-bot-dark.png"]]
+            name <- mascotAssets]
       case lookup resolved (pages ++ assets) of
         Just target -> pure (fromPage output target ++ suffix)
         Nothing -> do

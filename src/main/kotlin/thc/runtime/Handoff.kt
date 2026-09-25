@@ -21,7 +21,14 @@ internal const val HANDOFF_PROPERTY = "thc.handoffSlabs"
 private val EMPTY_HANDOFF_ARGUMENTS: Array<Any?> = emptyArray()
 private object HandoffComplete
 
-/** Mutable generated fields; neither payload arrays nor root references live in a loan. */
+/**
+ * Typed runtime transport storage for arguments or results.
+ *
+ * Generated fields carry values under [HandoffLayout]; this object is not a guest
+ * tuple, an executable node or a Truffle invocation frame. Reusable input loans
+ * have a bounded lifetime, while an escaping partial application must own its
+ * retained storage. Neither payload arrays nor root references live in a loan.
+ */
 open class HandoffStorage(val layout: HandoffLayout) {
     internal var generation = 0L
     internal var live = false
@@ -33,7 +40,13 @@ open class HandoffStorage(val layout: HandoffLayout) {
 }
 interface HandoffFactory { fun create(layout: HandoffLayout): HandoffStorage }
 
-/** The key describes physical fields; signedness and liftedness stay in Core proofs. */
+/**
+ * Physical field description for [HandoffStorage], not an argument's Haskell type.
+ *
+ * Signedness and liftedness remain in Core representation proofs. A logical
+ * argument may occupy several physical fields, or none for an erased state token.
+ * The layout creates and accesses storage; it is not executable call machinery.
+ */
 class HandoffLayout(language: Language, val id: Int, val reps: List<String>) {
     @field:CompilationFinal(dimensions = 1)
     private val kinds = reps.map { when (it) {

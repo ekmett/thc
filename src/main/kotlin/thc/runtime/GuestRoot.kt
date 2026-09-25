@@ -10,7 +10,14 @@ import com.oracle.truffle.api.frame.FrameDescriptor
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.RootNode
 
-/** The calling convention is independent of the interpreter's frame layout. */
+/**
+ * Executable Truffle root shared by the AST and bytecode backends.
+ *
+ * A root owns code and fixed calling-convention metadata. A guest closure refers to
+ * its call target and separately owns captured values; the closure is not a node.
+ * Invocation locals live in a [VirtualFrame], whose layout is independent of the
+ * calling convention. This is interpreter structure, not a node in Graal's compiler IR.
+ */
 abstract class GuestRoot(language: TruffleLanguage<*>?, descriptor: FrameDescriptor) : RootNode(language, descriptor) {
     @field:CompilationFinal internal var coreIdentity: CoreFunctionIdentity? = null
         private set
@@ -56,7 +63,13 @@ abstract class GuestRoot(language: TruffleLanguage<*>?, descriptor: FrameDescrip
     abstract fun bloom(frame: VirtualFrame): Long
 }
 
-/** Host entry and diagnostics are shared across executable Core backends. */
+/**
+ * Program linkage and host entrypoints shared across Core backends.
+ *
+ * Implementations construct and retain executable roots; they are neither guest
+ * values nor Truffle expression nodes. Entry values and targets remain subject to
+ * their context's lifetime and the checked host calling convention.
+ */
 interface ExecutableProgram {
     fun hostEntryTarget(arity: Int = 0): RootCallTarget
     fun entryValue(name: String): Any?
