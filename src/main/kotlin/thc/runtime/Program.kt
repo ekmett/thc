@@ -2244,13 +2244,17 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val payload = globals[CoreFileWait.badFd]
                     ?: throw UnsupportedCore("$name requires original blockedOnBadFD payload")
                 WaitFileDescriptor(operands[0], operands[1], payload, name == "waitWrite#", enableAsync, tupleProof)
-            } else if (fn[0] == "prim" && fn[1] in listOf("myThreadId#", "threadStatus#")) {
+            } else if (fn[0] == "prim" && fn[1] in listOf("myThreadId#", "threadStatus#", "labelThread#", "threadLabel#")) {
                 val name = fn[1] as String
                 CoreGuestThreads.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.map { argument(it, scope, false) }
                 CoreGuestThreads.validate(name, operands.map { it.representation }, flags, tupleProof)
-                if (name == "myThreadId#") MyThreadId(operands[0], tupleProof)
-                else ThreadStatus(operands[0], operands[1], tupleProof)
+                when (name) {
+                    "myThreadId#" -> MyThreadId(operands[0], tupleProof)
+                    "threadStatus#" -> ThreadStatus(operands[0], operands[1], tupleProof)
+                    "threadLabel#" -> ThreadLabel(operands[0], operands[1], tupleProof)
+                    else -> LabelThread(operands[0], operands[1], operands[2], tupleProof)
+                }
             } else if (fn[0] == "prim" && fn[1] == "getCurrentCCS#") {
                 CoreCurrentCCS.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 GetCurrentCCS(argument(args[0], scope, true), argument(args[1], scope, false), tupleProof)

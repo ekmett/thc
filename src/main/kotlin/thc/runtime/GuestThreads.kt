@@ -81,6 +81,9 @@ internal class GuestThreads internal constructor(
     // Weak keys release dead Java carriers. Numbers are never recycled, so a
     // retained finished ThreadId still names its original logical capability.
     private val identities = WeakHashMap<Thread, GuestThreadId>()
+    // Like TSO.label, the exact ByteArray# stays live while its ThreadId# does.
+    // Weak keys do not keep a terminated Java carrier or discarded ThreadId alive.
+    private val labels = WeakHashMap<GuestThreadId, Any>()
     // The RTS registration retains the Weak# capability, never its ThreadId#
     // key or a numeric Java-thread snapshot. Signal delivery is not admitted yet.
     private var mainThreadWeak: MainThreadWeakKey? = null
@@ -182,6 +185,20 @@ internal class GuestThreads internal constructor(
             if (it == GuestThreadStatus.RUNTIME_FAILURE)
                 fault("ThreadId# terminated because of a runtime failure")
         }
+    }
+
+    @TruffleBoundary @Synchronized fun label(identity: GuestThreadId, bytes: Any?) {
+        if (closed) fault("Guest context has closed")
+        if (identity.owner !== this) fault("ThreadId# belongs to another guest context")
+        // ByteArray# is opaque here: retain its identity and logical-size owner.
+        // GHC requires UTF-8 but does not decode, validate, or NUL-terminate it.
+        labels[identity] = ManagedByteArray.freezeGuest(bytes)
+    }
+
+    @TruffleBoundary @Synchronized fun label(identity: GuestThreadId): Any? {
+        if (closed) fault("Guest context has closed")
+        if (identity.owner !== this) fault("ThreadId# belongs to another guest context")
+        return labels[identity]
     }
 
     /** Snapshot only: eventual dispatch must check the same identity atomically with enqueue. */
@@ -294,6 +311,7 @@ internal class GuestThreads internal constructor(
         val remaining = synchronized(this) {
             closed = true
             mainThreadWeak = null
+            labels.clear()
             identities.values.forEach { it.status = GuestThreadStatus.RUNTIME_FAILURE }
             threads.values.flatMap { slot ->
                 slot.identity.status = GuestThreadStatus.RUNTIME_FAILURE

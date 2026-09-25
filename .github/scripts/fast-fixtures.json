@@ -20,6 +20,7 @@
     "thc.runtime.AstContinuationTest",
     "thc.runtime.GuestThreadsTest",
     "thc.runtime.GuestThreadStatusTest",
+    "thc.runtime.GuestThreadLabelTest",
     "thc.runtime.BytecodeTypedTupleInputTest",
     "thc.runtime.SimdAstTransportTest",
     "thc.runtime.DoubleArrayTest",
@@ -43,6 +44,14 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "thread-label": {
+      "junit": ["thc.runtime.ThreadLabelNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-label"]}],
+      "outputs": ["build/thread-label"],
+      "sources": ["compiler/test-fixtures/ThreadLabelAudit.hs", "compiler/test-fixtures/ThreadLabelNative.hs",
+        "test/haskell-fixtures/ThreadLabelFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "original-tcsetattr": {
       "junit": ["thc.runtime.OriginalTcsetattrTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-tcsetattr"]}],

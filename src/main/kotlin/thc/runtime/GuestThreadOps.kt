@@ -33,6 +33,12 @@ internal object CoreGuestThreads {
             rep.primReps == listOf("IntRep", "IntRep", "IntRep") && fields?.size == 4 &&
             state(fields[0]) && fields.drop(1).all(::integer)
     }
+    private fun labelResult(rep: CoreRepresentation): Boolean {
+        val fields = rep.components
+        return rep.kind == CoreKind.UNKNOWN && rep.isTuple && !rep.isSum && !rep.isVector &&
+            rep.primReps == listOf("IntRep") + unlifted && fields?.size == 3 &&
+            state(fields[0]) && integer(fields[1]) && thread(fields[2])
+    }
     private fun action(rep: CoreRepresentation) = rep.kind == CoreKind.CLOSURE && lifted(rep)
     private fun threadResult(rep: CoreRepresentation): Boolean {
         val fields = rep.components
@@ -48,6 +54,10 @@ internal object CoreGuestThreads {
                 flags == listOf(false) && threadResult(result)
             "threadStatus#" -> arguments.size == 2 && thread(arguments[0]) && state(arguments[1]) &&
                 flags == listOf(false, false) && statusResult(result)
+            "labelThread#" -> arguments.size == 3 && thread(arguments[0]) && thread(arguments[1]) &&
+                state(arguments[2]) && flags == listOf(false, false, false) && state(result)
+            "threadLabel#" -> arguments.size == 2 && thread(arguments[0]) && state(arguments[1]) &&
+                flags == listOf(false, false) && labelResult(result)
             "killThread#" -> arguments.size == 3 && thread(arguments[0]) && lifted(arguments[1]) &&
                 state(arguments[2]) && flags == listOf(false, true, false) && state(result)
             else -> false
@@ -79,6 +89,32 @@ internal class ThreadStatus(@field:Child private var identity: Expr, @field:Chil
         FrameAccess.writeLong(frame, slots[offset], snapshot.status)
         FrameAccess.writeLong(frame, slots[offset + 1], snapshot.capability)
         FrameAccess.writeLong(frame, slots[offset + 2], snapshot.locked)
+        return null
+    }
+}
+
+internal class LabelThread(@field:Child private var identity: Expr, @field:Child private var bytes: Expr,
+                           @field:Child private var state: Expr, proof: CoreRepresentation) : Expr() {
+    init { representation = proof.copy(evaluated = true) }
+    override fun execute(frame: VirtualFrame): Any {
+        val target = identity.execute(frame)
+        val label = bytes.execute(frame)
+        requireVoidCarrier(state.execute(frame))
+        GuestThreadOps.labelThread(this, target, label)
+        return Unit
+    }
+}
+
+internal class ThreadLabel(@field:Child private var identity: Expr, @field:Child private var state: Expr,
+                           proof: CoreRepresentation) : Expr() {
+    init { representation = proof.copy(evaluated = true) }
+    override fun execute(frame: VirtualFrame): Nothing = fault("threadLabel# requires a tuple destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val target = identity.execute(frame)
+        requireVoidCarrier(state.execute(frame))
+        val label = GuestThreadOps.threadLabel(this, target)
+        FrameAccess.writeLong(frame, slots[offset], if (label == null) 0L else 1L)
+        FrameAccess.write(frame, slots[offset + 1], label)
         return null
     }
 }
@@ -166,6 +202,16 @@ internal object GuestThreadOps {
         val target = id as? GuestThreadId ?: fault("threadStatus# requires a ThreadId#")
         // No forkOn# or affinity operation is admitted, so no thread has TSO_LOCKED.
         return GuestThreadSnapshot(threads.status(target).code, target.capability, 0L)
+    }
+
+    @JvmStatic @TruffleBoundary fun labelThread(node: Node, id: Any?, bytes: Any?) {
+        val target = id as? GuestThreadId ?: fault("labelThread# requires a ThreadId#")
+        Language.currentState(node).threads.label(target, bytes)
+    }
+
+    @JvmStatic @TruffleBoundary fun threadLabel(node: Node, id: Any?): Any? {
+        val target = id as? GuestThreadId ?: fault("threadLabel# requires a ThreadId#")
+        return Language.currentState(node).threads.label(target)
     }
 
     /** Start a real Truffle thread and wait only until its guest registration is visible. */

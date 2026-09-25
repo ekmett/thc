@@ -128,6 +128,7 @@ tasks.withType<Test>().configureEach {
             "synchronous-exceptions/**/*.json", "synchronous-exceptions/*.tsv", "synchronous-exceptions/native/**",
             "core-continuation/**/*.json", "core-continuation/native-output.txt",
             "thread-status/**/*.json", "thread-status/oracle.txt",
+            "thread-label/**/*.json", "thread-label/oracle.txt",
             "uncaught-self/**/*.json", "uncaught-self/native/oracle",
             "mask-functions/**/*.json", "mask-functions/logs/*.stdout", "mask-functions/logs/*.stderr",
             "mask-functions/native/oracle",

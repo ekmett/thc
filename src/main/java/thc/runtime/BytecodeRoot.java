@@ -523,6 +523,27 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation public static final class LabelThread {
+        @Specialization public static void set(Object identity, Object bytes, Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            GuestThreadOps.labelThread(node, identity, bytes);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "present")
+    @ConstantOperand(type = LocalAccessor.class, name = "bytes")
+    public static final class ThreadLabel {
+        @Specialization public static void get(VirtualFrame frame, LocalAccessor present, LocalAccessor bytes,
+                Object identity, Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            Object label = GuestThreadOps.threadLabel(node, identity);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            present.setLong(bytecode, frame, label == null ? 0L : 1L);
+            bytes.setObject(bytecode, frame, label);
+        }
+    }
+
     public enum ThreadPrimitiveKind { MY, FORK, BEGIN_KILL, FINISH_KILL }
 
     /** One cold instruction keeps the generated interpreter below its partition limit. */

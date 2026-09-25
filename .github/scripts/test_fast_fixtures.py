@@ -19,6 +19,18 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_thread_label_uses_its_native_core_fixture_and_baseline_registration(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        self.assertEqual('thread-label', owners['thc.runtime.ThreadLabelNativeTest'])
+        self.assertIn('thc.runtime.GuestThreadLabelTest', manifest['fixtureFreeJunit'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'thread-label']}],
+                         manifest['groups']['thread-label']['commands'])
+        self.assertIn('"$fixture_bin" thread-label', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('build/thread-label/manifest.json', fast_fixtures.fast_inputs.REQUIRED)
+        self.assertEqual(14, len([p for p in fast_fixtures.FULL_REQUIRED if p.startswith('build/thread-label/')]))
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+
     def test_original_tcsetattr_registration_and_closed_native_receipt(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

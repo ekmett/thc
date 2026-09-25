@@ -1279,7 +1279,7 @@ class Audit:
                             return kind == 'void' and reps == []
                         if role == 'int':
                             return kind == 'long' and reps == ['IntRep']
-                        if role == 'threadId':
+                        if role in ('threadId', 'byteArray'):
                             return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
                         if role == 'action':
                             return kind == 'closure' and reps == ['BoxedRep (Just Lifted)']
