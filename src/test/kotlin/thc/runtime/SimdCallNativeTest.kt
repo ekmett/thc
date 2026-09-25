@@ -32,6 +32,79 @@ class SimdCallNativeTest {
             is Map<*, *> -> for (member in value.values) yieldAll(nodes(member))
         }
     }
+    private fun binderId(value: Any?): String? = (value as? Map<*, *>)?.get("id") as? String
+    private fun vectorBinder(value: Any?): String? = (value as? Map<*, *>)?.let { binder ->
+        binderId(binder).takeIf { (binder["rep"] as? Map<*, *>)?.get("kind") == "vector" }
+    }
+    private fun freeVectorIds(value: Any?, bound: Set<String> = emptySet()): Set<String> {
+        val node = value as? List<*> ?: return emptySet()
+        return when (node.firstOrNull()) {
+            "var" -> (node.getOrNull(1) as? String)?.takeIf { id -> id !in bound &&
+                ((node.getOrNull(2) as? Map<*, *>)?.get("rep") as? Map<*, *>)?.get("kind") == "vector" }
+                ?.let { setOf(it) } ?: emptySet()
+            "lam" -> freeVectorIds(node.getOrNull(2), bound +
+                (node.getOrNull(1) as? List<*>)?.mapNotNull(::binderId).orEmpty())
+            "let" -> {
+                val group = (node.getOrNull(2) as? List<*>)?.filterIsInstance<Map<*, *>>().orEmpty()
+                val ids = group.mapNotNull(::binderId).toSet()
+                group.flatMap { freeVectorIds(it["expr"], if (node.getOrNull(1) == true) bound + ids else bound) }.toSet() +
+                    freeVectorIds(node.getOrNull(3), bound + ids)
+            }
+            "case" -> {
+                val caseId = node.getOrNull(2) as? String
+                freeVectorIds(node.getOrNull(1), bound) +
+                    (node.getOrNull(3) as? List<*>)?.flatMap { alternative ->
+                        val arm = alternative as? List<*> ?: return@flatMap emptySet<String>()
+                        freeVectorIds(arm.getOrNull(3), bound + listOfNotNull(caseId) +
+                            (arm.getOrNull(2) as? List<*>)?.filterIsInstance<String>().orEmpty())
+                    }.orEmpty()
+            }
+            "app" -> freeVectorIds(node.getOrNull(1), bound) +
+                (node.getOrNull(2) as? List<*>)?.flatMap { freeVectorIds(it, bound) }.orEmpty()
+            else -> emptySet()
+        }
+    }
+    private fun retainedVectorCaptures(value: Any?): Pair<Boolean, Boolean> {
+        val node = value as? List<*> ?: return false to false
+        fun walk(expr: Any?, outerVectors: Set<String>): Pair<Boolean, Boolean> {
+            val current = expr as? List<*> ?: return false to false
+            return when (current.firstOrNull()) {
+                "lam" -> {
+                    val formals = (current.getOrNull(1) as? List<*>)?.filterIsInstance<Map<*, *>>().orEmpty()
+                    val body = current.getOrNull(2)
+                    val captured = freeVectorIds(body, formals.mapNotNull(::binderId).toSet()).any { it in outerVectors }
+                    val nested = walk(body, outerVectors + formals.mapNotNull(::vectorBinder))
+                    (captured || nested.first) to nested.second
+                }
+                "let" -> {
+                    val group = (current.getOrNull(2) as? List<*>)?.filterIsInstance<Map<*, *>>().orEmpty()
+                    val localVectors = group.mapNotNull(::vectorBinder).toSet()
+                    val liftedCapture = group.any { it["lifted"] == true &&
+                        freeVectorIds(it["expr"]).any { id -> id in outerVectors } }
+                    val rhs = group.map { walk(it["expr"], outerVectors + localVectors) }
+                    val body = walk(current.getOrNull(3), outerVectors + localVectors)
+                    (body.first || rhs.any { it.first }) to (liftedCapture || body.second || rhs.any { it.second })
+                }
+                "case" -> {
+                    val scrutinee = walk(current.getOrNull(1), outerVectors)
+                    val caseVector = vectorBinder((current.getOrNull(4) as? Map<*, *>)?.get("binder"))
+                    val arms = (current.getOrNull(3) as? List<*>)?.mapNotNull { it as? List<*> }.orEmpty().map { arm ->
+                        val binders = ((arm.getOrNull(4) as? Map<*, *>)?.get("binders") as? List<*>)
+                            ?.mapNotNull(::vectorBinder).orEmpty()
+                        walk(arm.getOrNull(3), outerVectors + listOfNotNull(caseVector) + binders)
+                    }
+                    (scrutinee.first || arms.any { it.first }) to (scrutinee.second || arms.any { it.second })
+                }
+                "app" -> {
+                    val parts = listOf(current.getOrNull(1)) + (current.getOrNull(2) as? List<*>).orEmpty()
+                    val found = parts.map { walk(it, outerVectors) }
+                    found.any { it.first } to found.any { it.second }
+                }
+                else -> false to false
+            }
+        }
+        return walk(node, emptySet())
+    }
     /** Inspect exported Core structure, not the Haskell source spelling. */
     private fun retainedHeapCore(source: Map<String, Any?>) {
         val constructors = source["constructors"] as List<Map<String, Any?>>
@@ -46,18 +119,12 @@ class SimdCallNativeTest {
             (it.getOrNull(2) as? List<*>)?.size == 1 }, "Exported Core lacks a vector constructor PAP")
         assertTrue(nodes(bindings).any { it.getOrNull(0) == "data" && it.getOrNull(1) == heapId },
             "Exported Core lacks the real vector constructor case")
-        fun vectorVar(value: Any?): Boolean = nodes(value).any { node ->
-            node.getOrNull(0) == "var" &&
-                ((node.getOrNull(2) as? Map<*, *>)?.get("rep") as? Map<*, *>)?.get("kind") == "vector"
-        }
-        assertTrue(nodes(bindings).any { node -> node.getOrNull(0) == "lam" &&
-            vectorVar(node.getOrNull(2)) && (node.getOrNull(1) as? List<*>)?.none { formal ->
-                (formal as? Map<*, *>)?.get("rep")?.let { (it as? Map<*, *>)?.get("kind") } == "vector"
-            } == true }, "Exported Core lacks a vector captured by a closure")
-        assertTrue(nodes(bindings).any { node -> node.getOrNull(0) == "let" &&
-            (node.getOrNull(2) as? List<*>)?.any { rhs ->
-                (rhs as? Map<*, *>)?.let { it["lifted"] == true && vectorVar(it["expr"]) } == true
-            } == true }, "Exported Core lacks a lifted thunk using a vector capture")
+        val closureRoot = bindings.single { it["name"] == "capturedCase" }
+        val thunkRoot = bindings.single { it["name"] == "thunkCase" }
+        assertTrue(retainedVectorCaptures(closureRoot["expr"]).first,
+            "Exported capturedCase lacks a free vector from an outer lexical binder")
+        assertTrue(retainedVectorCaptures(thunkRoot["expr"]).second,
+            "Exported thunkCase lacks a lifted RHS with an outer free vector")
     }
 
     @Test fun nativeVectorCallsPapAndJoinsKeepCompiledAstAndBytecodeResults() {
