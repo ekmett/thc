@@ -3,7 +3,8 @@
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
 module SimdFloatFma where
 import GHC.Exts
-import GHC.Prim (fmaddFloatX4#, fmsubFloatX4#, fnmaddFloatX4#, fnmsubFloatX4#)
+import GHC.Prim (fmaddFloatX4#, fmsubFloatX4#, fnmaddFloatX4#, fnmsubFloatX4#,
+                 fmaddDoubleX2#, fmsubDoubleX2#, fnmaddDoubleX2#, fnmsubDoubleX2#)
 
 -- GHC 902339d332fb4ce2b3c87dcac1ee6495d41ad886 primops.txt.pp:4289-4308:
 -- x*y+z, x*y-z, -x*y+z, -x*y-z. Keep real vector call/return boundaries.
@@ -35,3 +36,33 @@ addCase = laneBits addWorker
 subCase = laneBits subWorker
 negAddCase = laneBits negAddWorker
 negSubCase = laneBits negSubWorker
+
+-- Share the exporter and native executable with FloatX4. These are distinct
+-- exact DoubleX2 call boundaries, not a conversion through the Float carrier.
+{-# NOINLINE doubleAddWorker #-}
+{-# NOINLINE doubleSubWorker #-}
+{-# NOINLINE doubleNegAddWorker #-}
+{-# NOINLINE doubleNegSubWorker #-}
+doubleAddWorker, doubleSubWorker, doubleNegAddWorker, doubleNegSubWorker :: DoubleX2# -> DoubleX2# -> DoubleX2# -> DoubleX2#
+doubleAddWorker x y z = fmaddDoubleX2# x y z
+doubleSubWorker x y z = fmsubDoubleX2# x y z
+doubleNegAddWorker x y z = fnmaddDoubleX2# x y z
+doubleNegSubWorker x y z = fnmsubDoubleX2# x y z
+
+{-# INLINE doubleLaneBits #-}
+doubleLaneBits :: (DoubleX2# -> DoubleX2# -> DoubleX2# -> DoubleX2#) -> Word# -> Word# -> Word# -> Int# -> Word#
+doubleLaneBits operation xb yb zb lane =
+  case castWord64ToDouble# (wordToWord64# xb) of { x ->
+  case castWord64ToDouble# (wordToWord64# yb) of { y ->
+  case castWord64ToDouble# (wordToWord64# zb) of { z ->
+  case operation (packDoubleX2# (# x, y #))
+                 (packDoubleX2# (# y, z #))
+                 (packDoubleX2# (# z, negateDouble# x #)) of { vector ->
+  case unpackDoubleX2# vector of { (# a, b #) ->
+  word64ToWord# (castDoubleToWord64# (case lane of 0# -> a; _ -> b)) } } } } }
+
+doubleAddCase, doubleSubCase, doubleNegAddCase, doubleNegSubCase :: Word# -> Word# -> Word# -> Int# -> Word#
+doubleAddCase = doubleLaneBits doubleAddWorker
+doubleSubCase = doubleLaneBits doubleSubWorker
+doubleNegAddCase = doubleLaneBits doubleNegAddWorker
+doubleNegSubCase = doubleLaneBits doubleNegSubWorker

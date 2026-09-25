@@ -241,24 +241,29 @@ class VectorAuditTest(unittest.TestCase):
                 proof['vector']['lanes'] = count
                 self.assertIsNotNone(proof_error(proof), (original, count))
 
-    def test_floatx4_fused_requires_three_exact_vectors_and_canonical_admission(self):
-        for name in ('fmaddFloatX4#', 'fmsubFloatX4#', 'fnmaddFloatX4#', 'fnmsubFloatX4#'):
+    def test_fused_float_vectors_require_exact_shapes_and_explicit_admission(self):
+        for shape, proof, lane, wrong, literal in (
+                ('FloatX4', VECTOR_FLOAT_REP, LANE_FLOAT_REP, VECTOR_DOUBLE_REP, 'float'),
+                ('DoubleX2', VECTOR_DOUBLE_REP, LANE_DOUBLE_REP, VECTOR_FLOAT_REP, 'double')):
+          for prefix in ('fmadd', 'fmsub', 'fnmadd', 'fnmsub'):
+            name = prefix + shape + '#'
             self.assertEqual(3, CAP['primitives'][name])
             module = fixture()
             body = module['bindings'][0]['expr'][2]
-            operand = ['app', ['prim', 'broadcastFloatX4#', dict(rep=CLOSURE)],
-                       [['lit', 'float', '1.0', dict(rep=LANE_FLOAT_REP)]], [False], False, True,
-                       dict(rep=copy.deepcopy(VECTOR_FLOAT_REP))]
+            operand = ['app', ['prim', 'broadcast' + shape + '#', dict(rep=CLOSURE)],
+                       [['lit', literal, '1.0', dict(rep=lane)]], [False], False, True,
+                       dict(rep=copy.deepcopy(proof))]
             body[1] = ['app', ['prim', name, dict(rep=CLOSURE)], [copy.deepcopy(operand) for _ in range(3)],
-                       [False] * 3, False, True, dict(rep=copy.deepcopy(VECTOR_FLOAT_REP))]
-            body[4]['binder']['rep'] = copy.deepcopy(VECTOR_FLOAT_REP)
+                       [False] * 3, False, True, dict(rep=copy.deepcopy(proof))]
+            body[4]['binder']['rep'] = copy.deepcopy(proof)
             self.assertTrue(run(module)['accepted'], run(module)['issues'])
             without = copy.deepcopy(CAP)
             del without['primitives'][name]
-            self.assertIn('unsupported-primitive', {issue['code'] for issue in run(module, capability=without)['issues']})
+            self.assertIn(('unsupported-primitive', name),
+                          {(issue['code'], issue['detail']) for issue in run(module, capability=without)['issues']})
             for index in range(3):
                 malformed = copy.deepcopy(module)
-                malformed['bindings'][0]['expr'][2][1][2][index][-1]['rep'] = copy.deepcopy(VECTOR_DOUBLE_REP)
+                malformed['bindings'][0]['expr'][2][1][2][index][-1]['rep'] = copy.deepcopy(wrong)
                 self.assertFalse(run(malformed)['accepted'])
             for count in (2, 4):
                 malformed = copy.deepcopy(module)
@@ -267,12 +272,12 @@ class VectorAuditTest(unittest.TestCase):
                 app[3] = [False] * count
                 self.assertFalse(run(malformed)['accepted'])
             malformed = copy.deepcopy(module)
-            malformed['bindings'][0]['expr'][2][1][-1]['rep'] = copy.deepcopy(VECTOR_DOUBLE_REP)
+            malformed['bindings'][0]['expr'][2][1][-1]['rep'] = copy.deepcopy(wrong)
             self.assertFalse(run(malformed)['accepted'])
             malformed = copy.deepcopy(module)
             malformed['bindings'][0]['expr'][2][1][3][1] = True
             self.assertFalse(run(malformed)['accepted'])
-        for name in ('fmaddFloatX8#', 'fmsubFloatX16#', 'fnmaddDoubleX2#', 'fnmsubDoubleX8#'):
+        for name in ('fmaddFloatX8#', 'fmsubFloatX16#', 'fnmaddDoubleX4#', 'fnmsubDoubleX8#'):
             self.assertNotIn(name, CAP['primitives'])
 
     def test_int32_multiply_requires_two_exact_signed_vectors(self):

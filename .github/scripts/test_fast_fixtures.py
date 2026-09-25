@@ -770,10 +770,10 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('"$fixture_bin" simd-floatx4-fma', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/simd-floatx4-fma', fast_fixtures.FULL_OUTPUT_ROOTS)
-        for suffix in ('manifest.json', 'pre-audit.json', 'pre-core/SimdFloatFma.json'):
+        for suffix in ('manifest.json', 'pre-audit.json', 'pre-double-audit.json', 'pre-core/SimdFloatFma.json'):
             self.assertIn('build/simd-floatx4-fma/' + suffix, fast_fixtures.FULL_REQUIRED)
         native = fast_fixtures.platform.machine().lower() not in ('arm64', 'aarch64')
-        for suffix in ('oracle.txt', 'post-audit.json', 'post-core/SimdFloatFma.json'):
+        for suffix in ('oracle.txt', 'post-audit.json', 'post-double-audit.json', 'post-core/SimdFloatFma.json'):
             self.assertEqual(native, 'build/simd-floatx4-fma/' + suffix in fast_fixtures.FULL_REQUIRED)
         gradle = (project / 'build.gradle.kts').read_text()
         for suffix in ('**/*.json', 'oracle.txt'):

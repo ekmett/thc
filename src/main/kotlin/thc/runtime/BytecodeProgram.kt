@@ -3353,6 +3353,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     b.endBlock()
                 }
                 "broadcastDoubleX2#" -> { b.beginVectorDoubleBroadcast(); operands[0].emit(e); b.endVectorDoubleBroadcast() }
+                in CoreVectors.fusedDouble -> {
+                    b.beginVectorDoubleFused(CoreVectors.fusedDouble.indexOf(name))
+                    operands.forEach { it.emit(e) }; b.endVectorDoubleFused()
+                }
                 else -> {
                     val operation = when (name) { "plusDoubleX2#" -> 0; "minusDoubleX2#" -> 1; "timesDoubleX2#" -> 2; else -> error("Invalid DoubleX2 operation") }
                     b.beginVectorDoubleBinary(operation)

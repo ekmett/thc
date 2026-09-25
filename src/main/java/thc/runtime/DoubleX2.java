@@ -53,4 +53,11 @@ public final class DoubleX2 {
     public static DoubleX2 multiply(DoubleX2 a, DoubleX2 b) { return new DoubleX2(a.vector.mul(b.vector)); }
     public static DoubleX2 negate(DoubleX2 a) { return new DoubleX2(a.vector.neg()); }
     public static DoubleX2 divide(DoubleX2 a, DoubleX2 b) { return new DoubleX2(a.vector.div(b.vector)); }
+    /** Negate operands before the single FMA rounding, including cancellation's signed zero. */
+    public static DoubleX2 fused(int operation, DoubleX2 a, DoubleX2 b, DoubleX2 c) {
+        if (operation < 0 || operation > 3) throw new RuntimeFault("Invalid DoubleX2 fused operation");
+        DoubleVector left = operation >= 2 ? a.vector.neg() : a.vector;
+        DoubleVector addend = (operation & 1) != 0 ? c.vector.neg() : c.vector;
+        return new DoubleX2(left.fma(b.vector, addend));
+    }
 }

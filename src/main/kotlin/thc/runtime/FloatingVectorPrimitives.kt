@@ -66,6 +66,7 @@ internal class VectorDoubleUnpack(@field:Child private var argument: Expr) : Exp
 internal class VectorDoubleOperation(name: String, @field:Children private var arguments: Array<Expr>) : Expr() {
     private val operation = when (name) {
         "broadcastDoubleX2#" -> 0; "plusDoubleX2#" -> 1; "minusDoubleX2#" -> 2; "timesDoubleX2#" -> 3
+        in CoreVectors.fusedDouble -> 4 + CoreVectors.fusedDouble.indexOf(name)
         else -> throw RuntimeFault("Invalid DoubleX2 operation")
     }
     init { representation = CoreVectors.proofDouble }
@@ -74,6 +75,7 @@ internal class VectorDoubleOperation(name: String, @field:Children private var a
         1 -> DoubleX2.add(vector(frame, 0), vector(frame, 1))
         2 -> DoubleX2.subtract(vector(frame, 0), vector(frame, 1))
         3 -> DoubleX2.multiply(vector(frame, 0), vector(frame, 1))
+        in 4..7 -> DoubleX2.fused(operation - 4, vector(frame, 0), vector(frame, 1), vector(frame, 2))
         else -> fault("Invalid DoubleX2 operation")
     }
     private fun vector(frame: VirtualFrame, index: Int): DoubleX2 = arguments[index].execute(frame) as? DoubleX2 ?: fault("Expected DoubleX2#")

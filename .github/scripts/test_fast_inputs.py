@@ -24,7 +24,7 @@ class FastInputTests(unittest.TestCase):
     def test_floatx4_fma_payload_is_closed_and_preserves_original_provenance(self):
         manifest_path = 'build/simd-floatx4-fma/manifest.json'
         self.assertIn(manifest_path, DECLARED_REQUIRED)
-        self.assertEqual(6, len(cache.SIMD_FLOAT_FMA_OUTPUTS))
+        self.assertEqual(8, len(cache.SIMD_FLOAT_FMA_OUTPUTS))
         artifacts = cache.SIMD_FLOAT_FMA_OUTPUTS - {manifest_path}
         for path in artifacts:
             self.assertTrue(cache.allowed_payload(path, {}), path)
