@@ -60,10 +60,9 @@ class SimdVectorTest {
                 assertThrows(RuntimeFault::class.java, { CoreRepresentations.parse(record(count)) }, "$vector lanes=$count")
         }
     }
-    @Test fun vectorCallAndResultBoundariesStayExplicitlyUnsupported() = withLanguage { language ->
+    @Test fun vectorCallsLoadButConflictingResultAndHiddenFormalProofsFail() = withLanguage { language ->
         for (backend in listOf("ast", "bytecode")) {
-            val error = assertThrows(UnsupportedCore::class.java) { program(language, backend, module(), "branchCase") }
-            assertTrue(error.message.orEmpty().contains("vector"), "$backend: ${error.message}")
+            assertNotNull(program(language, backend, module(), "branchCase"))
             val m = module().toMutableMap()
             val binding = (m["bindings"] as List<Map<String, Any?>>).single { it["name"] == "vectorCase" }
             val expression = (binding["expr"] as List<Any?>).toMutableList()
@@ -71,7 +70,9 @@ class SimdVectorTest {
                 "vector" to mapOf("lanes" to 2L, "element" to "Int64ElemRep"))
             expression[3] = (expression[3] as Map<String, Any?>) + ("resultRep" to vector)
             m["bindings"] = listOf(binding + ("expr" to expression))
-            assertThrows(UnsupportedCore::class.java) { program(language, backend, m, "vectorCase") }
+            val error = assertThrows(RuntimeFault::class.java) { program(language, backend, m, "vectorCase") }
+            assertTrue(error.message.orEmpty().contains("Conflicting Core vector representation proofs"),
+                "$backend: ${error.message}")
             // An occurrence proof cannot smuggle a vector through an untyped formal.
             val hidden = module().toMutableMap()
             val hBinding = (hidden["bindings"] as List<Map<String, Any?>>).single { it["name"] == "vectorCase" }
