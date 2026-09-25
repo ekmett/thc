@@ -110,6 +110,13 @@
         "test/haskell-fixtures/OriginalOpenFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
+    "rts-diagnostics": {
+      "junit": ["thc.runtime.RtsDiagnosticsTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "rts-diagnostics"]}],
+      "outputs": ["build/rts-diagnostics"],
+      "sources": ["compiler/test-fixtures/RtsDiagnosticsNative.hs", "test/haskell-fixtures/RtsDiagnosticFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "original-rts-locks": {
       "junit": ["thc.runtime.OriginalRtsLocksTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-rts-locks", "--require-supported"]}],
