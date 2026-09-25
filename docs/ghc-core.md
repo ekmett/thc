@@ -63,13 +63,56 @@ Cross-module home-package/hs-boot cycles are not yet an integration-tested use.
 Serialization shares `THC.Plugin.serializePostTidyCore` with the late plugin,
 including exact recursive groups, representations, existing CBV proofs and
 optional `source-notes`/`unit-qualified` metadata. No source target is required;
-missing source text stays absent. This API does not add a CLI, wire the driver
-cache, link dependencies, or establish runtime support for an entire package.
+missing source text stays absent. This API does not wire the driver cache, link
+dependencies, or establish runtime support for an entire package.
 
 The `thc-fixtures interface-core` control separately registers full and thin
 synthetic packages, recovers an `OPAQUE` entry/private worker, checks identity,
 way and foreign rejection, then supplies the recovered JSON and native results
 to `InterfaceCoreNativeTest` for strict AST/bytecode execution.
+
+## Selected-compiler helper
+
+Build `exe:thc-interface` with the selected compiler, separately from the generic
+driver's GHC-independent process. Invoke the helper directly (not `cabal run`,
+whose build messages are not part of the protocol):
+
+```sh
+cabal build exe:thc-interface --with-compiler=/path/to/ghc
+cabal list-bin exe:thc-interface
+/path/to/thc-interface --libdir /path/from/selected-ghc-print-libdir \
+  --unit exact-installed-unit-id --module Package.Module \
+  --interface /path/to/Package/Module.hi --package-db /path/to/package.conf.d \
+  --way vanilla --source-notes
+```
+
+`--libdir`, `--unit`, `--module` and `--interface` are required. Package databases
+may be repeated in GHC stack order. The stack is explicitly the selected libdir's
+global database plus those arguments: implicit user databases and package
+environments are disabled. The helper does not discover packages, rebuild them,
+or run guest code. The caller must select a helper built against the same GHC
+API/installation as that libdir; changing libdir is not GHC API compatibility.
+Ways are `vanilla` (default), `dynamic`, or `profiling`; the interface header must
+match the requested way. Only vanilla/dynamic synthetic packages are tested.
+
+Except for `--help`, stdout is one UTF-8 JSON object with `schema: 1`:
+
+| Exit | Status | Payload |
+| --- | --- | --- |
+| 0 | `loaded` | `core` contains the existing post-Tidy module JSON |
+| 3 | `unavailable` | `capability: "complete-interface-core"`, unit/module/way/path; no Core |
+| 1 | `error` | `category: "interface"` and a diagnostic message; no Core |
+| 2 | `error` | `category: "usage"`, diagnostic and usage; no Core |
+
+The complete serialized Core is forced before any success bytes are emitted.
+Cancellation is not converted to a missing-capability result. An unavailable
+result never substitutes inline unfoldings. The driver may make an explicit
+source-fallback decision later; this change does not wire that policy/cache.
+
+The fixture now feeds helper JSON through AST/bytecode execution and checks the
+installed `CBVCoercionAudit` worker's real `idCbvMarks_maybe`/`entryStrict` against
+the direct late-plugin export from its native compilation. No inferred marks
+are allowed in this comparison.
 
 ## Build a patched compiler
 
