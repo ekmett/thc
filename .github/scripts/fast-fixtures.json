@@ -35,6 +35,13 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "libdw-unavailable": {
+      "junit": ["thc.runtime.LibdwUnavailableTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "libdw-unavailable"]}],
+      "outputs": ["build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json"],
+      "sources": ["compiler/test-fixtures/LibdwUnavailableNative.hs", "test/haskell-fixtures/LibdwUnavailableFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "original-open": {
       "junit": ["thc.runtime.OriginalOpenTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-open"]}],
