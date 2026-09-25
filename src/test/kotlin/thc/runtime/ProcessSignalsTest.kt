@@ -111,7 +111,7 @@ class ProcessSignalsTest {
         assertThrows(RuntimeFault::class.java) { CoreSignalForeign.validateHeads(forged) }
     }
 
-    @Test fun astRejectsDeliveryAndInstalledBytecodeCannotAcquireEmbeddingSignals() = inside { language ->
+    @Test fun astRejectsDeliveryAndCompiledEmbeddingDenialInvalidatesAsHostFault() = inside { language ->
         assertThrows(UnsupportedCore::class.java) { Program(language, module()) }
         val program = BytecodeProgram(language, module(), true)
         val target = program.entryTarget("install")
@@ -122,6 +122,7 @@ class ProcessSignalsTest {
                 val failure = assertThrows(RuntimeFault::class.java) {
                     Calls.target(target, arrayOf(0L, 2L, -5L, ManagedAddress.nullAddress(), token))
                 }
+                assertEquals(RuntimeFault::class.java, failure.javaClass)
                 if (token === Unit) assertTrue(failure.message!!.contains("launcher authority"))
             }
             reject(); reject(1L)
@@ -130,8 +131,14 @@ class ProcessSignalsTest {
             val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
             reject()
             assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
-            assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+            // Bytecode DSL resolveThrowable invalidates ordinary host faults;
+            // only AbstractTruffleException and ControlFlowException bypass it.
+            // Authority denial stays a RuntimeFault, not a catchable guest error.
+            assertEquals(false, target.javaClass.getMethod("isValidLastTier").invoke(target))
             assertEquals(0, language.handoffState.get().results.depth)
+            assertEquals(0, language.handoffState.get().results.retainedReferences())
+            assertEquals(0, language.handoffState.get().arguments.depth)
+            assertEquals(0, language.handoffState.get().arguments.retainedReferences())
         } finally { state.threads.leaveCurrent(GuestThreadStatus.FINISHED) }
     }
 
