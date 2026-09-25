@@ -4,6 +4,9 @@ Pull requests run `automation` and `fast-check`. The automation job tests the CI
 scripts with normal Python and `-O`, then lints the workflows. A PR from this
 repository runs `fast-check` on the persistent Linux runner, reusing its toolchain,
 Gradle dependencies, build outputs and daemon. Fork PRs use a GitHub-hosted runner.
+Closing or merging a PR cancels its pending or running Fast check through that
+PR's concurrency group; the closed event runs no test jobs. Checks queued before
+this group change retain their old group and may need one-time manual cancellation.
 The event is checked before selecting the persistent runner and checked again on
 that runner before checkout. The pinned Graal/JDK and GHC versions are verified;
 the input identity does not hash the installed GHC library tree.

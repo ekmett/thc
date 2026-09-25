@@ -5,6 +5,7 @@ name: Fast checks
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, closed]
   push:
     branches: [main]
   workflow_dispatch:
@@ -21,7 +22,9 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: fast-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
+  # Closed PRs share their open PR's number even after a merge changes GITHUB_REF
+  # to main. Missing PR metadata stays in a run-specific PR group, never main's.
+  group: fast-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number || github.run_id) || format('ref-{0}', github.ref) }}
   cancel-in-progress: true
 
 jobs:
@@ -29,7 +32,7 @@ jobs:
     # GitHub can suppress the entire pull_request workflow for a commit tag.
     # A title-only tag still starts the workflow, so skip its costly jobs here;
     # trusted metadata reconciliation publishes required-tests.
-    if: github.event_name != 'pull_request' || !contains(github.event.pull_request.title, '[ci skip]')
+    if: github.event_name != 'pull_request' || ((github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.action == 'reopened') && !contains(github.event.pull_request.title, '[ci skip]'))
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
