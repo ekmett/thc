@@ -1725,7 +1725,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void doubleValue(DataLayout layout, int index, DataValue value, double field) {
             layout.initializeDouble(value, index, field);
         }
-        @Specialization public static void object(DataLayout layout, int index, DataValue value, Object field) {
+        @Specialization(replaces = {"number", "floating", "doubleValue"})
+        public static void object(DataLayout layout, int index, DataValue value, Object field) {
             layout.initialize(value, index, field);
         }
     }
