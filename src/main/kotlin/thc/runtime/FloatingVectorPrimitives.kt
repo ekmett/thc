@@ -5,6 +5,7 @@ package thc.runtime
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.frame.VirtualFrame
+import jdk.incubator.vector.FloatVector
 
 internal class VectorFloatPack(@field:Child private var argument: Expr,
     @field:CompilationFinal(dimensions = 1) private val slots: IntArray) : Expr() {
@@ -79,4 +80,30 @@ internal class VectorDoubleOperation(name: String, @field:Children private var a
         else -> fault("Invalid DoubleX2 operation")
     }
     private fun vector(frame: VirtualFrame, index: Int): DoubleX2 = arguments[index].execute(frame) as? DoubleX2 ?: fault("Expected DoubleX2#")
+}
+
+/** Only transient Vector API values; the existing FloatX8 owns eight primitive fields. */
+internal object FloatX8Fused {
+    private fun vector(a: FloatX8): FloatVector = FloatVector.broadcast(FloatVector.SPECIES_256, a.lane0)
+        .withLane(1, a.lane1).withLane(2, a.lane2).withLane(3, a.lane3)
+        .withLane(4, a.lane4).withLane(5, a.lane5).withLane(6, a.lane6).withLane(7, a.lane7)
+
+    @JvmStatic fun apply(operation: Int, a: FloatX8, b: FloatX8, c: FloatX8): FloatX8 {
+        if (operation !in 0..3) fault("Invalid FloatX8 fused operation")
+        // Negate operands before the single rounding, not the rounded result.
+        val left = vector(a).let { if (operation >= 2) it.neg() else it }
+        val addend = vector(c).let { if (operation and 1 != 0) it.neg() else it }
+        val result = left.fma(vector(b), addend)
+        return FloatX8(result.lane(0), result.lane(1), result.lane(2), result.lane(3),
+            result.lane(4), result.lane(5), result.lane(6), result.lane(7))
+    }
+}
+
+internal class VectorFloat8Fused(name: String, @field:Children private var arguments: Array<Expr>) : Expr() {
+    private val operation = CoreVectors.fusedFloat8.indexOf(name)
+    init { representation = GeneratedVectors.proofFloatX8 }
+    override fun execute(frame: VirtualFrame): FloatX8 =
+        FloatX8Fused.apply(operation, vector(frame, 0), vector(frame, 1), vector(frame, 2))
+    private fun vector(frame: VirtualFrame, index: Int): FloatX8 =
+        arguments[index].execute(frame) as? FloatX8 ?: fault("Expected FloatX8#")
 }

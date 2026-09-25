@@ -17,6 +17,9 @@ import Text.Read (readMaybe)
 entries :: [String]
 entries = ["addCase", "subCase", "negAddCase", "negSubCase"]
 
+wideEntries :: [String]
+wideEntries = ["wideAddCase", "wideSubCase", "wideNegAddCase", "wideNegSubCase"]
+
 doubleEntries :: [String]
 doubleEntries = ["doubleAddCase", "doubleSubCase", "doubleNegAddCase", "doubleNegSubCase"]
 
@@ -47,7 +50,9 @@ prepareSimdFloatFma root = do
       manifest = output </> "manifest.json"
       exportOnly = arch == "aarch64"
       stages = if exportOnly then ["pre"] else ["pre","post"]
-      nativeFlags = ["-mavx","-mfma"]
+      -- GHC requires AVX2 for 256-bit workers; its NCG cannot insert FloatX8
+      -- lanes, so both genuine Core export and the oracle use the LLVM backend.
+      nativeFlags = ["-fllvm","-mavx2","-mfma"]
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
   when present (removeFile manifest)
@@ -57,7 +62,7 @@ prepareSimdFloatFma root = do
   unless exportOnly $ do
     unless (arch == "x86_64" && os == "linux") (die "Native FloatX4 FMA oracle requires Linux x86_64")
     cpu <- readFile "/proc/cpuinfo"
-    unless (all (`elem` words cpu) ["avx","fma"]) (die "Native FloatX4 FMA oracle requires AVX and FMA hardware")
+    unless (all (`elem` words cpu) ["avx","avx2","fma"]) (die "Native SIMD FMA oracle requires AVX2 and FMA hardware")
   forM_ stages $ \stage -> do
     _ <- run root [("THC_CORE_OUT", output </> stage ++ "-core"),
                   ("THC_GHC_OUT", output </> stage ++ "-ghc")]
@@ -67,13 +72,14 @@ prepareSimdFloatFma root = do
     let audit = directory </> stage ++ "-audit.json"
     _ <- runLogged 120 root (directory </> "logs") (stage ++ "-audit") [] "python3"
       (["scripts/audit-core.py", directory </> stage ++ "-core/SimdFloatFma.json", "--output", audit] ++
-       concatMap (\entry -> ["--entry",entry]) entries)
+       concatMap (\entry -> ["--entry",entry]) (entries ++ wideEntries))
     _ <- runLogged 120 root (directory </> "logs") (stage ++ "-double-audit") [] "python3"
       (["scripts/audit-core.py", directory </> stage ++ "-core/SimdFloatFma.json",
         "--output", directory </> stage ++ "-double-audit.json"] ++
        concatMap (\entry -> ["--entry",entry]) doubleEntries)
     pure ()
   let requests = [[entry] ++ map show values ++ [show lane] | entry <- entries, values <- inputs, lane <- [0..3 :: Int]] ++
+        [[entry] ++ map show values ++ [show lane] | entry <- wideEntries, values <- inputs, lane <- [0..7 :: Int]] ++
         [[entry] ++ map show values ++ [show lane] | entry <- doubleEntries, values <- doubleInputs, lane <- [0..1 :: Int]]
       binary = output </> "native/oracle"
   rows <- if exportOnly then pure [] else do
@@ -89,12 +95,12 @@ prepareSimdFloatFma root = do
   artifactHashes <- hashes root ([directory </> "oracle.txt" | not exportOnly] ++
     [directory </> stage ++ suffix | stage <- stages, suffix <- ["-core/SimdFloatFma.json","-audit.json","-double-audit.json"]])
   writeJson manifest $ object ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),
-    "entries" .= entries,"inputs" .= inputs,"stages" .= stages,"nativeFlags" .= nativeFlags,
+    "entries" .= entries,"wideEntries" .= wideEntries,"inputs" .= inputs,"stages" .= stages,"nativeFlags" .= nativeFlags,
     -- Decimal strings preserve unsigned Word64 bits through the JVM JSON reader.
     "doubleEntries" .= doubleEntries,"doubleInputs" .= map (map show) doubleInputs,
     "nativeRows" .= (if exportOnly then Nothing else Just (length rows)),
     "inputHashes" .= inputHashes,"artifactHashes" .= artifactHashes]
-  putStrLn ("simd-floatx4-fma: " ++ show (length rows) ++ " shared native rows; FloatX4 and DoubleX2 admitted")
+  putStrLn ("simd-floatx4-fma: " ++ show (length rows) ++ " shared native rows; FloatX4, FloatX8 and DoubleX2 admitted")
   where
     valid row = case words row of
       [entry,_,_,_,_,result] -> maybe False (\n -> n >= 0 && n <=

@@ -16,6 +16,8 @@ main = getContents >>= mapM_ row . lines
           let operation = case name of
                 "addCase" -> addCase; "subCase" -> subCase
                 "negAddCase" -> negAddCase; "negSubCase" -> negSubCase
+                "wideAddCase" -> wideAddCase; "wideSubCase" -> wideSubCase
+                "wideNegAddCase" -> wideNegAddCase; "wideNegSubCase" -> wideNegSubCase
                 "doubleAddCase" -> doubleAddCase; "doubleSubCase" -> doubleSubCase
                 "doubleNegAddCase" -> doubleNegAddCase; "doubleNegSubCase" -> doubleNegSubCase
                 _ -> error "Unknown fused vector entry"

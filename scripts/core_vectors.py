@@ -116,6 +116,10 @@ OPERATIONS.update({
     'fnmaddFloatX4#': ([VECTOR_FLOAT_REP] * 3, VECTOR_FLOAT_REP),
     'fnmsubFloatX4#': ([VECTOR_FLOAT_REP] * 3, VECTOR_FLOAT_REP),
 })
+VECTOR_FLOAT8_REP = {'kind': 'vector', 'primReps': ['VecRep 8 FloatElemRep'], 'evaluated': True,
+                     'vector': {'lanes': 8, 'element': 'FloatElemRep'}}
+OPERATIONS.update({name + 'FloatX8#': ([VECTOR_FLOAT8_REP] * 3, VECTOR_FLOAT8_REP)
+                   for name in ('fmadd', 'fmsub', 'fnmadd', 'fnmsub')})
 VECTOR_DOUBLE_REP = {'kind': 'vector', 'primReps': ['VecRep 2 DoubleElemRep'], 'evaluated': True,
                     'vector': {'lanes': 2, 'element': 'DoubleElemRep'}}
 LANE_DOUBLE_REP = {'kind': 'double', 'primReps': ['DoubleRep'], 'evaluated': True}
