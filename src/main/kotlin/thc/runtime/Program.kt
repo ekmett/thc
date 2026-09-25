@@ -2529,7 +2529,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val body = construct(id, fields, layout)
                 val root = FunctionRoot(language, layout.build(), "constructor $id", null, intArrayOf(),
                     argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics,
-                    argumentProofs.toTypedArray(), coreSourceLocation = rootSource(body), inputLayout = inputLayout)
+                    argumentProofs.toTypedArray(), coreSourceLocation = rootSource(body),
+                    entryStrict = strictConstructorFields(id, arity), inputLayout = inputLayout)
                 if (language is thc.Language) root.configureTypedInput(TypedInputLayout.create(language, inputLayout, false))
                 val target = root.callTarget
                 MakeClosure(target, arity, null, intArrayOf())

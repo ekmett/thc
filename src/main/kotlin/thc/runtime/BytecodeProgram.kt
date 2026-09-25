@@ -2868,7 +2868,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val strict = strictConstructorFields(id, arity)
             val layout = dataLayout(id)
             if (arity == 0) construct(layout, emptyList()) else {
-                val context = FunctionContext(arity)
+                // A PAP keeps its prefix lazy; saturation discharges worker
+                // strictness before restoring the post-worker field proofs.
+                val context = FunctionContext(arity, strict)
                 val constructorScope = Scope(context)
                 val records = constructors.getValue(id)["fieldTypes"] as? List<*>
                 if (records != null && records.size != arity) throw RuntimeFault("Constructor field type count mismatch: $id")
