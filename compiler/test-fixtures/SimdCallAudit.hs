@@ -6,6 +6,47 @@ module SimdCallAudit where
 
 import GHC.Exts
 
+data Heap = Heap Int16X8# Int#
+
+{-# OPAQUE consumeHeap #-}
+consumeHeap :: Heap -> Int#
+consumeHeap (Heap vector bias) = vectorWorker vector bias
+
+{-# OPAQUE applyHeapPartial #-}
+applyHeapPartial :: (Int# -> Heap) -> Int#
+applyHeapPartial partial = consumeHeap (partial 13#)
+
+{-# OPAQUE heapCase #-}
+heapCase :: Int# -> Int#
+heapCase x = consumeHeap (Heap (vectorReturn x) 13#)
+
+{-# OPAQUE heapPapCase #-}
+heapPapCase :: Int# -> Int#
+heapPapCase x = applyHeapPartial (Heap (vectorReturn x))
+
+{-# OPAQUE applyCaptured #-}
+applyCaptured :: (Int# -> Int#) -> Int#
+applyCaptured f = f 13#
+
+{-# OPAQUE capturedCase #-}
+capturedCase :: Int# -> Int#
+capturedCase x = case vectorReturn x of
+  vector -> applyCaptured (\bias -> case bias of
+    0# -> 0#
+    _ -> vectorWorker vector bias)
+
+{-# OPAQUE selectBox #-}
+selectBox :: Int# -> Int -> Int#
+selectBox gate boxed = case gate of
+  0# -> 13#
+  _ -> case boxed of I# value -> value
+
+{-# OPAQUE thunkCase #-}
+thunkCase :: Int# -> Int#
+thunkCase x = case vectorReturn x of
+  vector -> let boxed = I# (vectorWorker vector 13#)
+            in selectBox x boxed
+
 {-# OPAQUE vectorReturn #-}
 vectorReturn :: Int# -> Int16X8#
 vectorReturn x = broadcastInt16X8# (intToInt16# x)

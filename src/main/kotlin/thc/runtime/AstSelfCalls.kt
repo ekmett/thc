@@ -28,7 +28,8 @@ internal class AstSelfLayout(
     @field:CompilationFinal(dimensions = 1) private val argumentSlots: IntArray,
     @field:CompilationFinal(dimensions = 1) private val argumentProofs: Array<CoreRepresentation>,
     @field:CompilationFinal(dimensions = 1) val entryStrict: BooleanArray,
-    val inputLayout: ArgumentLayout? = null
+    val inputLayout: ArgumentLayout? = null,
+    @field:CompilationFinal(dimensions = 2) private val environmentVectorSlots: Array<IntArray?> = emptyArray()
 ) {
     val arity: Int get() = argumentSlots.size
     @field:CompilationFinal(dimensions = 1)
@@ -39,7 +40,11 @@ internal class AstSelfLayout(
         // change a pending operand, even when the callee has a new environment.
         if (captureLayout != null) {
             val environment = function.environment ?: fault("Invalid captured frame")
-            for (i in environmentSlots.indices) captureLayout.restore(environment, i, frame, environmentSlots[i])
+            for (i in environmentSlots.indices) {
+                val lanes = environmentVectorSlots.getOrNull(i)
+                if (lanes == null) captureLayout.restore(environment, i, frame, environmentSlots[i])
+                else captureLayout.restoreVector(environment, i, frame, lanes, 0)
+            }
         }
         for (i in argumentSlots.indices) {
             val destination = argumentSlots[i]

@@ -21,8 +21,8 @@ class OriginalStackDecoderCallTest {
     private fun resource() = Json.parse(javaClass.getResource("/core/original-stack-decoder-calls.json")!!.readText())
         as Map<String, Any?>
     private val closure = mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)
-    private val hot = setOf("getStackFieldszh", "getSmallBitmapzh", "advanceStackFrameLocationzh")
-    private val cold = setOf("getWordzh", "getStackClosurezh", "getLargeBitmapzh", "getBCOLargeBitmapzh",
+    private val hot = setOf("getStackFieldszh", "getSmallBitmapzh", "advanceStackFrameLocationzh", "getWordzh")
+    private val cold = setOf("getStackClosurezh", "getLargeBitmapzh", "getBCOLargeBitmapzh",
         "getRetFunLargeBitmapzh", "getRetFunSmallBitmapzh", "isArgGenBigRetFunTypezh", "getUnderflowFrameNextChunkzh")
     private fun name(symbol: String, field: Int) = "$symbol-$field"
 
@@ -65,7 +65,7 @@ class OriginalStackDecoderCallTest {
             })
     }
 
-    private fun context(inlining: Boolean) = Context.newBuilder("thc").allowExperimentalOptions(true)
+    private fun context(inlining: Boolean) = Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
         .option("compiler.Inlining", inlining.toString()).option("engine.BackgroundCompilation", "false")
         .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
         .option("engine.SingleTierCompilationThreshold", "10000000").build()
@@ -208,6 +208,11 @@ class OriginalStackDecoderCallTest {
                     for (snapshot in listOf(single, multiple)) {
                         assertEquals(snapshot.frames.size.toLong(), call("getStackFieldszh", 0, snapshot))
                         for (offset in snapshot.frames.indices) {
+                            val key = ManagedStackRuntime.frameInfo(snapshot, offset.toLong(),
+                                StackInfoTestLayout.layout()).second
+                            val bits = call("getWordzh", 0, snapshot, offset.toLong()) as Long
+                            assertEquals(key.toNativeBits(), bits)
+                            assertTrue(key.sameLocation(NativeAddresses.current(null).recover(bits)))
                             assertEquals(0L, call("getSmallBitmapzh", 0, snapshot, offset.toLong()))
                             assertEquals(0L, call("getSmallBitmapzh", 1, snapshot, offset.toLong()))
                             val more = offset + 1 < snapshot.frames.size
@@ -231,7 +236,7 @@ class OriginalStackDecoderCallTest {
                 for (symbol in cold) assertThrows(RuntimeFault::class.java, {
                     call(symbol, 0, multiple, 0L)
                 }, "$backend/$symbol must reject absent payload or incompatible frame kind")
-                for (symbol in listOf("getSmallBitmapzh", "advanceStackFrameLocationzh"))
+                for (symbol in listOf("getSmallBitmapzh", "advanceStackFrameLocationzh", "getWordzh"))
                     for (offset in listOf(-1L, 2L, Long.MAX_VALUE, Long.MIN_VALUE))
                         assertThrows(RuntimeFault::class.java) { call(symbol, 0, multiple, offset) }
                 assertThrows(RuntimeFault::class.java) { call("getStackFieldszh", 0, null) }

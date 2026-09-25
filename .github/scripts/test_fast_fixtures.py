@@ -19,6 +19,21 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_full_core_decoder_is_explicit_but_getter_controls_remain_baseline(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        self.assertNotIn('original-stack-decoder', manifest['groups'])
+        self.assertNotIn('thc.runtime.OriginalStackDecoderTest', owners)
+        self.assertEqual('original-stack', owners['thc.runtime.OriginalStackDecoderCallTest'])
+        for name in ('OriginalStackDecoderCallTest', 'ManagedStackRuntimeTest'):
+            self.assertTrue((project / f'src/test/kotlin/thc/runtime/{name}.kt').is_file())
+        self.assertNotIn('build/original-stack-decoder', fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertNotIn('build/original-stack-decoder/manifest.json', fast_fixtures.FULL_REQUIRED)
+        self.assertNotIn('"$fixture_bin" original-stack-decoder', (project / 'scripts/prepare-tests.sh').read_text())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertFalse((project / 'src/test/kotlin/thc/runtime/OriginalStackDecoderTest.kt').exists())
+        self.assertTrue((project / 'src/fullCoreTest/kotlin/thc/runtime/OriginalStackDecoderTest.kt').is_file())
+
     def test_explicit_weak_fixture_registration_preserves_native_and_strict_inputs(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
