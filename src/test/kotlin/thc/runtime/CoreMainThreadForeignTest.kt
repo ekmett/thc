@@ -4,6 +4,8 @@
 package thc.runtime
 
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.Truffle
+import com.oracle.truffle.api.frame.FrameDescriptor
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
@@ -88,8 +90,15 @@ class CoreMainThreadForeignTest {
                     val wrongValue = Any()
                     val first = runtime.weaks.make(key, wrongValue, null)
                     val second = runtime.weaks.make(key, Any(), null)
-                    fun call(handle: Any?, token: Any? = Unit): Any? =
-                        Calls.target(target, arrayOf(0L, handle, token))
+                    val resultShape = TupleShape(CoreRepresentations.parse(tuple(false)), language)
+                    val destination = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameDescriptor.newBuilder().build())
+                    fun call(handle: Any?, token: Any? = Unit) {
+                        val result = Calls.target(target, arrayOf(0L, handle, token))
+                        // Even a zero-width State tuple owns a completion loan.
+                        resultShape.consume(destination, result, intArrayOf(), 0)
+                        assertEquals(0, language.handoffState.get().results.depth)
+                        assertEquals(0, language.handoffState.get().results.retainedReferences())
+                    }
                     call(first)
                     val initial = threads.mainThreadRegistration()!!
                     assertEquals(Thread.currentThread().threadId(), initial.liveJavaId())
