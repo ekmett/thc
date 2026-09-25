@@ -1,6 +1,8 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.CoreGmpForeignTest",
+    "thc.runtime.SulongLimbProviderTest",
     "thc.runtime.AstContinuationTest",
     "thc.runtime.GuestThreadsTest",
     "thc.runtime.BytecodeTypedTupleInputTest",
@@ -24,6 +26,16 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "original-gmp": {
+      "junit": ["thc.runtime.OriginalGmpTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-gmp", "--require-supported"]}],
+      "outputs": ["build/original-gmp"],
+      "sources": [
+        "compiler/test-fixtures/OriginalGmpAudit.hs", "compiler/test-fixtures/OriginalGmpNative.hs",
+        "test/haskell-fixtures/OriginalGmpFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"
+      ]
+    },
     "original-posix-stat": {
       "junit": ["thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-posix-stat"]}],

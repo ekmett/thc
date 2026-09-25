@@ -26,6 +26,7 @@ import tarfile
 import zlib
 
 SCHEMA = 1
+GMP_NATIVE_HOST = platform.system() == "Linux" and platform.machine() == "x86_64"
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 SELF = ".github/scripts/fast_inputs.py"
 COMPILER_BUILD_INPUTS = ("thc.cabal", "cabal.project", "Setup.hs", "Makefile")
@@ -58,6 +59,7 @@ CORE_DIRS = ("build/core", "build/aggregate-core", "build/aggregate-post-core",
              "build/cbv-post-core", "build/source-core", "build/map/core", "build/map/boot-core")
 REQUIRED = tuple(sorted({
     *(f"build/{d}/manifest.json" for d in MANIFEST_DIRS),
+    *(["build/original-gmp/manifest.json"] if GMP_NATIVE_HOST else []),
     *(f"build/{d}/provenance.json" for d in PROVENANCE_DIRS),
     *(f"build/{d}/checks.json" for d in CHECK_DIRS),
     "build/floating/checks.json", "build/primop-coverage.json",
@@ -75,7 +77,7 @@ REQUIRED = tuple(sorted({
     *(f"build/cbv-post-core/{n}.json" for n in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
     "build/source-core/SourceNotes.json", "build/source-core/RepresentationAudit.json",
 }))
-BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["floating", "corpus",
+BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["original-gmp", "floating", "corpus",
     "scalar-signatures", "aggregate-native", "native", "map"] +
     [PurePosixPath(p).name for p in CORE_DIRS])
 MAX_FILES = 30000
@@ -93,6 +95,7 @@ NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate",
     "build/original-fd-ready/native/oracle",
     "build/original-handle-readiness/native/oracle",
     "build/original-posix-stat/native/oracle",
+    "build/original-gmp/native/oracle",
     *(f"build/{name}/native/{name}" for name in
       ("state-tuple", "tuple-input", "tuple-return", "empty-tuple-input"))})
 # The original stdio manifest fingerprints its commands, raw streams and numeric
@@ -139,6 +142,23 @@ ORIGINAL_HANDLE_READINESS_OUTPUTS = frozenset("build/original-handle-readiness/"
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
         "core/OriginalHandleReadinessAudit.json", "core/THC.InterfaceClosure.json",
         "originalIsTerminal.audit.json", "originalIsTerminalErrno.audit.json")),
+))
+
+# One native oracle, two original Core stages and their exact logged commands.
+# The exposed registration is evidence only: no package-db directory is cached.
+ORIGINAL_GMP_ENTRIES = ("originalAdd", "originalAddWord", "originalCmp", "originalDivWord",
+                        "originalModWord", "originalMul", "originalMulWord", "originalSub",
+                        "originalQuotRem", "originalQuot", "originalRem")
+ORIGINAL_GMP_OUTPUTS = frozenset("build/original-gmp/" + name for name in (
+    "manifest.json", "oracle.json", "native/oracle", "exposed-ghc-internal.conf",
+    *(f"logs/{label}.{suffix}" for label in (
+        "ghc-version", "ghc-info", "original-registration", "package-init", "package-register",
+        "native-build", "native-observations", "pre-export", "post-export",
+        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_GMP_ENTRIES))
+      for suffix in ("stdout", "stderr", "command.json")),
+    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
+        "core/OriginalGmpAudit.json", "core/THC.InterfaceClosure.json",
+        *(f"{entry}.audit.json" for entry in ORIGINAL_GMP_ENTRIES))),
 ))
 
 ORIGINAL_POSIX_STAT_ENTRIES = ("originalStatSize", "originalStatDev", "originalStatIno",
@@ -389,6 +409,18 @@ def formatter_artifact_hashes(root, manifest):
     return artifacts
 
 
+def gmp_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and manifest.get("strictAccepted") is True,
+            "Missing accepted GMP fixture receipt")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) ==
+            ORIGINAL_GMP_OUTPUTS - {"build/original-gmp/manifest.json"},
+            "Incomplete/unreviewed GMP artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid GMP artifact hash")
+    return artifacts
+
+
 def command(argv, root):
     return subprocess.check_output(list(map(str, argv)), cwd=root, text=True).strip()
 
@@ -516,6 +548,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_HANDLE_READINESS_OUTPUTS
     if parts[1] == "original-posix-stat":
         return name in ORIGINAL_POSIX_STAT_OUTPUTS
+    if parts[1] == "original-gmp":
+        return name in ORIGINAL_GMP_OUTPUTS
     if parts[1] == "original-stack":
         return name == "build/original-stack/manifest.json" or original_stack_artifact(name)
     if parts[1] == "original-stack-formatter":
@@ -610,6 +644,8 @@ def inventory(root, current, read, core_files, verified=None):
         doc = json.loads(data)
         if name == "build/original-stack-formatter/manifest.json":
             formatter_artifact_hashes(root, doc)
+        if name == "build/original-gmp/manifest.json":
+            gmp_artifact_hashes(doc)
         # Core is data, not a provenance map: representation payloads must not be
         # interpreted as filesystem paths. All other preparation JSON is scanned.
         if isinstance(doc, dict) and "bindings" in doc and "module" in doc:

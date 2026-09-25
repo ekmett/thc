@@ -112,6 +112,8 @@ tasks.withType<Test>().configureEach {
             "original-handle-readiness/logs/*.stdout", "original-handle-readiness/logs/*.stderr",
             "original-posix-stat/**/*.json", "original-posix-stat/native/oracle",
             "original-posix-stat/logs/*.stdout", "original-posix-stat/logs/*.stderr",
+            "original-gmp/**/*.json", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
+            "original-gmp/logs/*.stdout", "original-gmp/logs/*.stderr",
             "original-stdio-close/**/*.json", "original-stdio-close/results/*.txt", "original-stdio-close/results/*.private",
             "original-stdio-close/native/**", "original-stdio-close/logs/*.stdout", "original-stdio-close/logs/*.stderr",
             "original-stdio-seek/**/*.json", "original-stdio-seek/results/*.txt", "original-stdio-seek/results/*.private",
@@ -307,6 +309,7 @@ tasks.withType<JavaCompile>().configureEach { options.compilerArgs.addAll(listOf
 // remains an optional execution path; no native pointer is exposed to Core.
 val compileCbits by tasks.registering(Exec::class) {
     inputs.files("scripts/build-cbits.py", "src/main/c/md5-api.c", "src/main/c/iconv-api.c",
+        "src/main/c/gmp-api.c",
         "bench/experiments/pinned-addresses/reference/md5.c",
         "bench/experiments/pinned-addresses/reference/md5.h")
     outputs.dir(layout.buildDirectory.dir("generated/cbits"))

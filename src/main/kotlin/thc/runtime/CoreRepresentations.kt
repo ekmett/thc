@@ -18,6 +18,11 @@ internal data class CoreRepresentation(
     val tagSlot: Int? = null,
     val alternativeSlots: List<List<Int>>? = null
 ) {
+    // Compute from immutable load-time metadata, not via ArrayList.equals in
+    // a frame read. The latter has a concurrent-modification exception path
+    // that can force a VirtualFrame to escape during partial evaluation.
+    val isEvaluatedUnliftedObject: Boolean = evaluated && kind == CoreKind.OBJECT &&
+        primReps == listOf("BoxedRep (Just Unlifted)")
     val isVector: Boolean get() = vector != null
     val isTuple: Boolean get() = components != null
     val isSum: Boolean get() = alternatives != null

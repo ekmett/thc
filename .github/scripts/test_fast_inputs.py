@@ -50,6 +50,86 @@ class FastInputTests(unittest.TestCase):
                            'build/simd-capability-smoke/native/unreviewed'):
             self.assertFalse(cache.allowed_payload(unexpected, {}))
 
+    def gmp_fixture(self):
+        manifest_path = 'build/original-gmp/manifest.json'
+        artifacts = cache.ORIGINAL_GMP_OUTPUTS - {manifest_path}
+        for name in artifacts:
+            self.put(name, b'{}\n' if name.endswith('.json') else b'\x00\x80\xff\n')
+        (self.root / 'build/original-gmp/native/oracle').chmod(0o755)
+        manifest = {'schema': 1, 'strictAccepted': True, 'installedArtifactsHashed': False,
+                    'inputHashes': self.manifest['inputHashes'],
+                    'artifactHashes': {name: cache.digest(self.root / name) for name in artifacts}}
+        self.put(manifest_path, json.dumps(manifest))
+        # These intermediates must not enter the cache, even when present.
+        self.put('build/original-gmp/package-db-0/package.cache', 'test-local registration database')
+        self.put('build/original-gmp/native/OriginalGmpNative.o', 'native object')
+        return manifest_path, artifacts, manifest
+
+    def test_gmp_exact_payload_and_executable_scope(self):
+        self.assertEqual(123, len(cache.ORIGINAL_GMP_OUTPUTS))
+        self.assertEqual(cache.GMP_NATIVE_HOST, 'build/original-gmp/manifest.json' in DECLARED_REQUIRED)
+        self.assertIn('original-gmp', cache.BUILD_DIRS)
+        for name in cache.ORIGINAL_GMP_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(name, {}), name)
+            if name == 'build/original-gmp/native/oracle':
+                self.assertEqual(0o755, cache.safe_mode(0o755, name))
+            else:
+                with self.assertRaises(cache.CacheMiss):
+                    cache.safe_mode(0o755, name)
+        for name in ('package-db-0/package.cache', 'package-db-1/ghc-internal.conf',
+                     'another.conf', 'native/other-oracle', 'native/OriginalGmpNative.o',
+                     'logs/extra.stdout', 'pre/core/Other.json', 'attempt-0/oracle.json',
+                     'logs/pre-audit-other.stdout', 'test-results/pass.json'):
+            self.assertFalse(cache.allowed_payload('build/original-gmp/' + name, {}), name)
+        for name in ('../original-stdio/manifest.json', 'native/../../outside'):
+            with self.assertRaises(cache.CacheMiss):
+                cache.allowed_payload('build/original-gmp/' + name, {})
+
+    def test_gmp_archive_roundtrip_retains_metadata_not_package_database(self):
+        path, artifacts, original = self.gmp_fixture()
+        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, path)):
+            manifest = self.pack()
+            self.assertTrue(cache.ORIGINAL_GMP_OUTPUTS <= manifest['payload'].keys())
+            self.assertFalse(any('package-db-' in name or name.endswith('.o') for name in manifest['payload']))
+            self.remove_payload(manifest)
+            cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(original, json.loads((self.root / path).read_text()))
+            self.assertEqual(0o755, (self.root / 'build/original-gmp/native/oracle').stat().st_mode & 0o7777)
+            for name in artifacts:
+                self.assertEqual(manifest['payload'][name], cache.digest(self.root / name))
+            self.remove_payload(manifest)
+            for missing in ('logs/package-register.command.json', 'exposed-ghc-internal.conf',
+                            'pre/originalCmp.audit.json', 'post/core/THC.InterfaceClosure.json'):
+                changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                    if member.name != 'files/build/original-gmp/' + missing])
+                self.rejected_without_writes(changed)
+            changed = self.rewrite(lambda entries: [(member, data + b'changed' if member.name ==
+                'files/build/original-gmp/exposed-ghc-internal.conf' else data) for member, data in entries])
+            self.rejected_without_writes(changed)
+
+    def test_gmp_rejects_missing_forged_rejected_and_linked_receipts(self):
+        path, _, original = self.gmp_fixture()
+        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, path)):
+            for change in ('missing', 'forged', 'rejected', 'bad-hash'):
+                changed = copy.deepcopy(original)
+                if change == 'missing':
+                    del changed['artifactHashes']['build/original-gmp/logs/ghc-version.stdout']
+                elif change == 'forged':
+                    changed['artifactHashes']['build/original-gmp/package-db-0/package.cache'] = '0' * 64
+                elif change == 'rejected':
+                    changed['strictAccepted'] = False
+                else:
+                    changed['artifactHashes']['build/original-gmp/oracle.json'] = 123
+                self.put(path, json.dumps(changed))
+                with self.assertRaises(cache.CacheMiss, msg=change):
+                    self.pack()
+            self.put(path, json.dumps(original))
+            registration = self.root / 'build/original-gmp/exposed-ghc-internal.conf'
+            registration.unlink()
+            registration.symlink_to(self.root / 'build/original-gmp/package-db-0/package.cache')
+            with self.assertRaises(cache.CacheMiss):
+                self.pack()
+
     def formatter_fixture(self):
         project = Path(__file__).resolve().parents[2]
         self.put(cache.WIRED_SOURCE, (project / cache.WIRED_SOURCE).read_bytes())

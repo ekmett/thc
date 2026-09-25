@@ -19,6 +19,118 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_original_gmp_registration_platform_and_exact_cache(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['original-gmp']
+        self.assertEqual('original-gmp', owners['thc.runtime.OriginalGmpTest'])
+        for name in ('CoreGmpForeignTest', 'SulongLimbProviderTest'):
+            self.assertIsNone(owners['thc.runtime.' + name])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
+                                   'original-gmp', '--require-supported']}], group['commands'])
+        self.assertTrue(all((project / path).is_file() for path in group['sources']))
+        script = (project / 'scripts/prepare-tests.sh').read_text()
+        self.assertIn('case "$(uname -s)-$(uname -m)" in\n'
+                      '  Linux-x86_64) "$fixture_bin" original-gmp --require-supported ;;\nesac', script)
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/original-gmp', fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertEqual(fast_fixtures.fast_inputs.GMP_NATIVE_HOST,
+                         'build/original-gmp/manifest.json' in fast_fixtures.FULL_REQUIRED)
+        gradle = (project / 'build.gradle.kts').read_text()
+        for name in ('**/*.json', 'native/oracle', 'exposed-ghc-internal.conf', 'logs/*.stdout', 'logs/*.stderr'):
+            self.assertIn('"original-gmp/' + name + '"', gradle)
+        self.assertIn('build/original-gmp/', (project / '.github/workflows/build.yml').read_text())
+        for workflow in ('build.yml', 'fast.yml'):
+            self.assertIn('install --yes clang libgmp-dev', (project / '.github/workflows' / workflow).read_text())
+        policy = json.loads((project / '.github/scripts/fast-tests.json').read_text())
+        for source in ('compiler/test-fixtures/OriginalGmpAudit.hs',
+                       'compiler/test-fixtures/OriginalGmpNative.hs',
+                       'test/haskell-fixtures/OriginalGmpFixtures.hs', 'test/haskell-fixtures/Main.hs'):
+            self.assertIn('thc.runtime.OriginalGmpTest', policy['owners'][source]['junit'])
+
+    def gmp_preparation(self):
+        project = Path(__file__).resolve().parents[2]
+        group = fast_fixtures._manifest(project)[0]['groups']['original-gmp']
+        self.manifest['groups']['original-gmp'] = group
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        for name in group['sources']:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes((project / name).read_bytes())
+        def run(name, argv, stdout=None):
+            self.fake_run(name, argv, stdout)
+            if argv != group['commands'][0]['argv']:
+                return
+            artifacts = {}
+            for name in fast_fixtures.fast_inputs.ORIGINAL_GMP_OUTPUTS - {'build/original-gmp/manifest.json'}:
+                path = self.root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b'{}\n' if name.endswith('.json') else b'\x00\x80\xff\n')
+                artifacts[name] = fast_fixtures._digest(path)
+            (self.root / 'build/original-gmp/native/oracle').chmod(0o755)
+            (self.root / 'build/original-gmp/manifest.json').write_text(json.dumps(
+                {'strictAccepted': True, 'artifactHashes': artifacts}))
+            database = self.root / 'build/original-gmp/package-db-0'
+            database.mkdir(exist_ok=True)
+            link = database / 'installed-interface.hi'
+            if not link.is_symlink():
+                link.symlink_to(self.root / 'fixtures/alpha.hs')
+        def prepare():
+            with mock.patch.object(fast_fixtures.fast_inputs, 'GMP_NATIVE_HOST', True):
+                return fast_fixtures.prepare(self.root, self.selection(*group['junit']), run, self.toolchain)
+        return group, prepare
+
+    def test_gmp_selected_reuse_and_full_receipt_exclude_package_database(self):
+        group, prepare = self.gmp_preparation()
+        self.assertEqual(['original-gmp'], prepare()['rebuilt'])
+        self.calls.clear()
+        self.assertEqual(['original-gmp'], prepare()['reused'])
+        self.assertEqual([], self.calls)
+        expected = fast_fixtures.fast_inputs.ORIGINAL_GMP_OUTPUTS
+        self.assertEqual(expected, fast_fixtures._output_hashes(self.root, group).keys())
+        with mock.patch.object(fast_fixtures, 'FULL_OUTPUT_ROOTS', {'build/original-gmp'}), \
+                mock.patch.object(fast_fixtures, 'FULL_REQUIRED', {'build/original-gmp/manifest.json'}), \
+                mock.patch.object(fast_fixtures.fast_inputs, 'GMP_NATIVE_HOST', True):
+            full = fast_fixtures._full_output_hashes(self.root)
+            self.assertEqual(expected, full.keys())
+            self.assertEqual(0o755, full['build/original-gmp/native/oracle']['mode'])
+        for source in group['sources']:
+            with (self.root / source).open('a') as stream:
+                stream.write('\n-- changed source\n')
+            self.assertEqual(['original-gmp'], prepare()['rebuilt'], source)
+
+    def test_gmp_selected_receipt_rejects_stale_missing_linked_and_unreviewed_artifacts(self):
+        group, prepare = self.gmp_preparation()
+        for change in ('bytes', 'missing', 'symlink', 'unknown', 'rejected'):
+            prepare()
+            path = self.root / 'build/original-gmp/logs/native-observations.stdout'
+            manifest_path = self.root / 'build/original-gmp/manifest.json'
+            if change == 'bytes':
+                path.write_bytes(b'changed')
+            elif change == 'missing':
+                path.unlink()
+            elif change == 'symlink':
+                path.unlink()
+                path.symlink_to(self.root / 'fixtures/alpha.hs')
+            else:
+                manifest = json.loads(manifest_path.read_text())
+                if change == 'unknown':
+                    manifest['artifactHashes']['build/original-gmp/package-db-0/package.cache'] = '0' * 64
+                else:
+                    manifest['strictAccepted'] = False
+                manifest_path.write_text(json.dumps(manifest))
+            with self.assertRaises((RuntimeError, FileNotFoundError), msg=change):
+                fast_fixtures._output_hashes(self.root, group)
+            if path.is_symlink():
+                path.unlink()
+
+    def test_gmp_other_platforms_do_not_invoke_native_preparation(self):
+        group, _ = self.gmp_preparation()
+        with mock.patch.object(fast_fixtures.fast_inputs, 'GMP_NATIVE_HOST', False):
+            result = fast_fixtures.prepare(self.root, self.selection(*group['junit']), self.fake_run, self.toolchain)
+        self.assertEqual({'mode': 'selected', 'rebuilt': [], 'reused': []}, result)
+        self.assertEqual([], self.calls)
+
     def test_original_posix_stat_fixture_registration_and_narrow_cache(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

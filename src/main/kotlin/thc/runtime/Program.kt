@@ -274,8 +274,7 @@ internal class LocalRead(private val slot: Int, private val cell: Boolean = true
         // returned by original foreign protocols (the terminal stack location).
         // It is already bound; unlike unknown locals or unpublished RecCells,
         // null here describes the value, not its initialization state.
-        if (!cell && representation.evaluated && representation.kind == CoreKind.OBJECT &&
-            representation.primReps == listOf("BoxedRep (Just Unlifted)")) return value
+        if (!cell && representation.isEvaluatedUnliftedObject) return value
         if (!cell || value !is RecCell) return value ?: fault("Uninitialized local binding")
         if (!value.initialized) fault("Recursive binding read before initialization")
         return value.value
@@ -1701,6 +1700,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         CoreStablePointers.validateHeads(bindings)
         CoreManagedFiles.validateHeads(bindings)
         CoreMd5Foreign.validateHeads(bindings)
+        CoreGmpForeign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(bindings, constructors)
             CoreInputCalls.validate(bindings, constructors)
@@ -1958,7 +1958,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val javascript = if (!stackClone && stackInfo == null && originalStdio == null && managedFile == null) CoreJavaScript.validate(expr, defined) else null
             val md5 = if (javascript == null) CoreMd5Foreign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
-            val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && capi == null && !stableFree && managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
+            val gmp = CoreGmpForeign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && capi == null &&
+                !stableFree && managedFile == null && javascript == null && md5 == null && gmp == null)
+                CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val state = args.single()
@@ -1998,6 +2002,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (managedFile != null) {
                 CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 ManagedFileExpression(managedFile, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
+            } else if (gmp != null) {
+                CoreGmpForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreGmpForeign.validateOperand(gmp, index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                GmpForeignExpression(gmp, operands.toTypedArray(), tupleProof)
             } else if (md5 != null) {
                 CoreMd5Foreign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 Md5ForeignExpression(md5, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)

@@ -8,6 +8,23 @@ These declarations alone do not enable complete decoding or remote capture.
 """
 
 STACK_CLONE = 'stg_cloneMyStackzh'
+GMP_ARRAY = 'BoxedRep (Just Unlifted)'
+# Actual ghc-internal primitive FCallId shapes, not the source IO wrapper types.
+# Even source-pure cmp/mod carry State; q/r return the singleton State tuple.
+GMP_OPERATIONS = {
+    '__gmpn_add': ((GMP_ARRAY, GMP_ARRAY, 'IntRep', GMP_ARRAY, 'IntRep', None), (None, 'WordRep')),
+    '__gmpn_add_1': ((GMP_ARRAY, GMP_ARRAY, 'IntRep', 'WordRep', None), (None, 'WordRep')),
+    '__gmpn_cmp': ((GMP_ARRAY, GMP_ARRAY, 'IntRep', None), (None, 'IntRep')),
+    '__gmpn_divrem_1': ((GMP_ARRAY, 'IntRep', GMP_ARRAY, 'IntRep', 'WordRep', None), (None, 'WordRep')),
+    '__gmpn_mod_1': ((GMP_ARRAY, 'IntRep', 'WordRep', None), (None, 'WordRep')),
+    '__gmpn_mul': ((GMP_ARRAY, GMP_ARRAY, 'IntRep', GMP_ARRAY, 'IntRep', None), (None, 'WordRep')),
+    '__gmpn_mul_1': ((GMP_ARRAY, GMP_ARRAY, 'IntRep', 'WordRep', None), (None, 'WordRep')),
+    '__gmpn_sub': ((GMP_ARRAY, GMP_ARRAY, 'IntRep', GMP_ARRAY, 'IntRep', None), (None, 'WordRep')),
+    '__gmpn_tdiv_qr': ((GMP_ARRAY, GMP_ARRAY, 'IntRep', GMP_ARRAY, 'IntRep', GMP_ARRAY, 'IntRep', None), (None,)),
+    'integer_gmp_mpn_tdiv_q': ((GMP_ARRAY, GMP_ARRAY, 'IntRep', GMP_ARRAY, 'IntRep', None), (None,)),
+    'integer_gmp_mpn_tdiv_r': ((GMP_ARRAY, GMP_ARRAY, 'IntRep', GMP_ARRAY, 'IntRep', None), (None,)),
+}
+GMP_SYMBOLS = frozenset(GMP_OPERATIONS)
 SEEK_CONSTANTS = frozenset((
     'ghczuwrapperZC1ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuSET',
     'ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR',
@@ -19,6 +36,8 @@ STACK_INFO = frozenset(('getStackInfoTableAddrzh', 'getInfoTableAddrszh', 'looku
     'getStackFieldszh', 'advanceStackFrameLocationzh'))
 
 OPERATIONS = {
+    **{symbol: ('ccall', 'unsafe', arguments, output)
+       for symbol, (arguments, output) in GMP_OPERATIONS.items()},
     '__hscore_sizeof_stat': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
     '__hscore_st_dev': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Word64Rep')),
     '__hscore_st_ino': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Word64Rep')),

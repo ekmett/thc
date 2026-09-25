@@ -175,6 +175,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         CoreStablePointers.validateHeads(bindings)
         CoreManagedFiles.validateHeads(bindings)
         CoreMd5Foreign.validateHeads(bindings)
+        CoreGmpForeign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(bindings, constructors)
             CoreInputCalls.validate(bindings, constructors)
@@ -1330,7 +1331,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val javascript = if (!stackClone && stackInfo == null && originalStdio == null && managedFile == null) CoreJavaScript.validate(expr, defined) else null
             val md5 = if (javascript == null) CoreMd5Foreign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
-            val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && capi == null && !stableFree && managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
+            val gmp = CoreGmpForeign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && capi == null &&
+                !stableFree && managedFile == null && javascript == null && md5 == null && gmp == null)
+                CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val state = args.single()
@@ -1494,6 +1499,39 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ManagedFileOp.IS_TERMINAL -> b.endFileIsTerminal()
                         ManagedFileOp.DEVICE_TYPE -> b.endFileDeviceType()
                     }
+                }
+            } else if (gmp != null) {
+                CoreGmpForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreGmpForeign.validateOperand(gmp, index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    b.beginBlock()
+                    // Evaluate each original operand once in source order, then
+                    // load its exact typed lane into the shared instruction.
+                    val locals = operands.mapIndexed { index, operand ->
+                        b.createLocal("GMP operand $index", if (index in gmp.longIndices) "primitive" else "object").also {
+                            b.beginStoreLocal(it); operand.emit(e); b.endStoreLocal()
+                        }
+                    }
+                    val result = if (gmp.result != null) destination.single()
+                        else b.createLocal("unused GMP State destination", "primitive")
+                    b.beginOriginalGmpCall(result, gmp)
+                    for (lane in 0 until 4) {
+                        val index = gmp.objectIndices.getOrNull(lane)
+                        if (index == null) b.emitLoadNull() else b.emitLoadLocal(locals[index])
+                    }
+                    for (lane in 0 until 3) {
+                        val index = gmp.longIndices.getOrNull(lane)
+                        if (index == null) b.emitLoadConstant(0L) else b.emitLoadLocal(locals[index])
+                    }
+                    b.emitLoadLocal(locals.last())
+                    b.endOriginalGmpCall()
+                    b.endBlock()
                 }
             } else if (md5 != null) {
                 CoreMd5Foreign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)

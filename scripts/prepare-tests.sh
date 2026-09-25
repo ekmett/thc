@@ -71,6 +71,10 @@ python3 scripts/prepare-managed-md5.py
 "$fixture_bin" original-stdio-read
 "$fixture_bin" original-handle-readiness
 "$fixture_bin" original-posix-stat
+# Genuine GMP fixture and managed provider are currently Linux x86_64 only.
+case "$(uname -s)-$(uname -m)" in
+  Linux-x86_64) "$fixture_bin" original-gmp --require-supported ;;
+esac
 "$fixture_bin" original-stdio-close
 "$fixture_bin" original-stdio-seek
 "$fixture_bin" original-stdio-truncate

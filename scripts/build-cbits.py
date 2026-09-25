@@ -78,15 +78,30 @@ def main():
                    "-o", str(output / (name + ".bc"))]
         subprocess.run(command, cwd=ROOT, check=True)
         commands.append(command)
+    source_files = [reference / n for n in PINNED] + list(sources.values())
+    artifacts = [output / (name + ".bc") for name in sources]
+    # The first native limb provider is intentionally Linux x86_64 only. Keep
+    # the embedded LLVM container's DT_NEEDED entry: GMP receives real native
+    # arena pointers, not the managed buffers used by original MD5.
+    if system == "Linux" and arch == "x86_64":
+        source = ROOT / "src/main/c/gmp-api.c"
+        artifact = output / "gmp-api.so"
+        command = [*compiler, "-O1", "-g", "-fembed-bitcode", "-shared", "-fPIC",
+                   f"-ffile-prefix-map={ROOT}=.", f"-fdebug-prefix-map={ROOT}=.",
+                   str(source.relative_to(ROOT)), "-lgmp", "-o", str(artifact)]
+        subprocess.run(command, cwd=ROOT, check=True)
+        commands.append(command)
+        source_files.append(source)
+        artifacts.append(artifact)
     record = lambda p: {"path": str(p), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
     manifest = {"schema": 1, "target": target, "compilerDefaultTarget": default_target,
                 "system": system, "architecture": arch,
                 "clangVersion": subprocess.check_output([clang, "--version"], text=True),
                 "ghc": "9.14.1", "commands": commands,
-                "sources": [record(reference / n) for n in PINNED] + [record(p) for p in sources.values()],
-                "artifacts": [record(output / (n + ".bc")) for n in sources]}
+                "sources": [record(p) for p in source_files],
+                "artifacts": [record(p) for p in artifacts]}
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    print(f"Compiled C resources {', '.join(sources)} for {target}")
+    print(f"Compiled C resources {', '.join(p.name for p in artifacts)} for {target}")
 
 
 if __name__ == "__main__":

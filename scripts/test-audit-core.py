@@ -1765,5 +1765,204 @@ class OriginalStackInfoAuditTest(unittest.TestCase):
             self.reject(module)
 
 
+class OriginalGmpAuditTest(unittest.TestCase):
+    """Synthetic structural controls; genuine native/pre/post proof is Haskell/Kotlin.
+
+    Recognition is tested with an explicit local capability override. This class
+    never mutates the production capability inventory or claims native execution.
+    The signatures below were checked against both genuine original-gmp stages.
+    """
+    array = 'BoxedRep (Just Unlifted)'
+    signatures = {
+        '__gmpn_add': ((array, array, 'IntRep', array, 'IntRep', None), 'WordRep'),
+        '__gmpn_add_1': ((array, array, 'IntRep', 'WordRep', None), 'WordRep'),
+        '__gmpn_cmp': ((array, array, 'IntRep', None), 'IntRep'),
+        '__gmpn_divrem_1': ((array, 'IntRep', array, 'IntRep', 'WordRep', None), 'WordRep'),
+        '__gmpn_mod_1': ((array, 'IntRep', 'WordRep', None), 'WordRep'),
+        '__gmpn_mul': ((array, array, 'IntRep', array, 'IntRep', None), 'WordRep'),
+        '__gmpn_mul_1': ((array, array, 'IntRep', 'WordRep', None), 'WordRep'),
+        '__gmpn_sub': ((array, array, 'IntRep', array, 'IntRep', None), 'WordRep'),
+        '__gmpn_tdiv_qr': ((array, array, 'IntRep', array, 'IntRep', array, 'IntRep', None), None),
+        'integer_gmp_mpn_tdiv_q': ((array, array, 'IntRep', array, 'IntRep', None), None),
+        'integer_gmp_mpn_tdiv_r': ((array, array, 'IntRep', array, 'IntRep', None), None),
+    }
+
+    def fixture(self, symbol):
+        def scalar(primitive, evaluated):
+            return dict(kind='void' if primitive is None else 'object' if primitive == self.array else 'long',
+                        primReps=[] if primitive is None else [primitive], evaluated=evaluated)
+        arguments, output = self.signatures[symbol]
+        parameters = [dict(id=f'a{i}', lifted=False, rep=scalar(p, True)) for i, p in enumerate(arguments)]
+        result = tuple_rep(*(scalar(p, True) for p in ((None,) if output is None else (None, output))))
+        result['evaluated'] = False
+        descriptor = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='ghc-internal', isFunction=True),
+                          convention='ccall', safety='unsafe', arity=len(arguments), suppliedArity=len(arguments),
+                          argumentReps=[scalar(p, False) for p in arguments], resultRep=copy.deepcopy(result))
+        call = ['app', ['var', 'original-foreign', dict(rep=CLOSURE)],
+                [['var', p['id'], dict(rep=copy.deepcopy(p['rep']))] for p in parameters],
+                [False] * len(arguments), False, False, dict(rep=result, foreignCall=descriptor)]
+        case = ['case', call, 'result', [['default', None, [], [*lit(0), dict(rep=LONG)]]],
+                dict(rep=LONG, binder=dict(id='result', lifted=False, rep=dict(result, evaluated=True)))]
+        root = dict(bind('synthetic-consumer', ['lam', parameters, case, dict(rep=CLOSURE, resultRep=LONG)]),
+                    rep=CLOSURE, arity=len(parameters))
+        return copy.deepcopy(dict(schema=1, ghc='9.14.1', bindings=[root], constructors=[]))
+
+    @staticmethod
+    def call(module):
+        return module['bindings'][0]['expr'][2][1]
+
+    def audit(self, module, enabled=True):
+        capabilities = [s for s in CAP['managedForeignCalls'] if s not in self.signatures]
+        if enabled: capabilities.extend(self.signatures)
+        return audit_core.Audit([('synthetic-original-gmp-control.json', module)],
+            dict(CAP, managedForeignCalls=capabilities)).run(['synthetic-consumer'])
+
+    def reject(self, module, detail=None):
+        report = self.audit(module)
+        self.assertFalse(report['accepted'], report)
+        self.assertEqual([], report['foreignCalls'], report)
+        if detail is not None:
+            self.assertTrue(any(detail in str(i['detail']) for i in report['issues']), report)
+
+    def test_exact_eleven_shapes_require_explicit_capability(self):
+        self.assertEqual(set(self.signatures), core_original_foreign.GMP_SYMBOLS)
+        for symbol in self.signatures:
+            module = self.fixture(symbol)
+            report = self.audit(module)
+            self.assertTrue(report['accepted'], report)
+            self.assertEqual([symbol], [c['symbol'] for c in report['foreignCalls']])
+            self.assertEqual([], report['missingGlobals'])
+            disabled = self.audit(module, enabled=False)
+            self.assertFalse(disabled['accepted'])
+            self.assertEqual([], disabled['foreignCalls'])
+            self.assertTrue(any('capability disabled' in i['detail'] for i in disabled['issues']))
+            self.call(module)[1][1] = 'another-package:InlinedCaller.foreign'
+            self.assertTrue(self.audit(module)['accepted'])
+
+    def test_descriptor_unit_calling_convention_safety_and_integer_fields_are_exact(self):
+        for symbol in self.signatures:
+            for key in ('schema', 'arity', 'suppliedArity'):
+                for value in (None, True, False, 1.0, '1', -1, 0, 1 << 32):
+                    module = self.fixture(symbol); self.call(module)[6]['foreignCall'][key] = value
+                    self.reject(module)
+            for key, values in {'convention': ('capi', 'prim', 'javascript', None),
+                                'safety': ('safe', 'interruptible', None), 'extra': (None,)}.items():
+                for value in values:
+                    module = self.fixture(symbol); self.call(module)[6]['foreignCall'][key] = value
+                    self.reject(module)
+            for key, values in {'kind': ('dynamic', None), 'unit': ('main', 'ghc-bignum', '', None),
+                                'isFunction': (False, 1, None), 'extra': (None,)}.items():
+                for value in values:
+                    module = self.fixture(symbol); self.call(module)[6]['foreignCall']['target'][key] = value
+                    self.reject(module)
+
+    def test_operand_widths_carriers_flags_and_declared_evaluation_are_exact(self):
+        bad_proofs = [dict(LONG, kind='unknown'), REFERENCE, CLOSURE,
+            dict(kind='address', primReps=['AddrRep'], evaluated=True),
+            dict(kind='object', primReps=['BoxedRep Nothing'], evaluated=True), tuple_rep(),
+            dict(kind='long', primReps=['Word64Rep'], evaluated=True)]
+        for symbol in self.signatures:
+            for index in range(len(self.signatures[symbol][0])):
+                for bad in bad_proofs:
+                    for declared in (False, True):
+                        module = self.fixture(symbol); call = self.call(module)
+                        if declared: call[6]['foreignCall']['argumentReps'][index] = copy.deepcopy(bad)
+                        else: call[2][index][2]['rep'] = copy.deepcopy(bad)
+                        self.reject(module)
+                for key, value in (('evaluated', 1), ('extra', None), ('vector', {}), ('aggregate', 'unboxed-tuple')):
+                    module = self.fixture(symbol); self.call(module)[2][index][2]['rep'][key] = value
+                    self.reject(module)
+                module = self.fixture(symbol)
+                self.call(module)[6]['foreignCall']['argumentReps'][index]['evaluated'] = True
+                self.reject(module)
+                for value in (True, 0, 1, None):
+                    module = self.fixture(symbol); self.call(module)[3][index] = value; self.reject(module)
+            for field in ('arguments', 'declared', 'flags'):
+                module = self.fixture(symbol); call = self.call(module)
+                (call[2] if field == 'arguments' else call[3] if field == 'flags'
+                 else call[6]['foreignCall']['argumentReps']).pop()
+                self.reject(module)
+
+    def test_all_three_result_proofs_preserve_state_and_singleton_tuple(self):
+        for symbol, (_, output) in self.signatures.items():
+            for site in ('declared', 'actual'):
+                for key, value in (('kind', 'void'), ('aggregate', 'unboxed-sum'), ('evaluated', 0),
+                                   ('primReps', ['AddrRep']), ('components', []), ('extra', None)):
+                    module = self.fixture(symbol); meta = self.call(module)[6]
+                    (meta['foreignCall']['resultRep'] if site == 'declared' else meta['rep'])[key] = value
+                    self.reject(module)
+                for index in range(1 if output is None else 2):
+                    for key, value in (('kind', 'unknown'), ('evaluated', False), ('primReps', ['Int32Rep']), ('extra', None)):
+                        module = self.fixture(symbol); meta = self.call(module)[6]
+                        (meta['foreignCall']['resultRep'] if site == 'declared' else meta['rep'])['components'][index][key] = value
+                        self.reject(module)
+            module = self.fixture(symbol); call = self.call(module)
+            with self.assertRaises(ValueError):
+                core_original_foreign.validate(call[6], [a[2]['rep'] for a in call[2]], call[3], None)
+            call[6]['foreignCall']['resultRep']['evaluated'] = True; self.reject(module)
+            if output is None:
+                module = self.fixture(symbol); meta = self.call(module)[6]
+                meta['rep'] = copy.deepcopy(meta['rep']['components'][0]); self.reject(module)
+
+    def test_foreign_head_must_be_exact_and_unbound(self):
+        for symbol in self.signatures:
+            for head in ([], ['var', None], ['var', ''], ['var', 3], ['prim', symbol], ['var', 'unproved']):
+                module = self.fixture(symbol); self.call(module)[1] = head; self.reject(module)
+            for key, value in (('kind', 'object'), ('primReps', [self.array]), ('evaluated', False),
+                               ('evaluated', 1), ('extra', None)):
+                module = self.fixture(symbol); self.call(module)[1][2]['rep'][key] = value; self.reject(module)
+            for identifier in ('a0', 'synthetic-consumer'):
+                module = self.fixture(symbol); self.call(module)[1][1] = identifier; self.reject(module)
+
+    def test_stored_array_scalar_and_state_cannot_be_relabelled(self):
+        bad_proofs = [LONG, REFERENCE, CLOSURE, dict(kind='void', primReps=[], evaluated=True),
+            dict(kind='address', primReps=['AddrRep'], evaluated=True),
+            dict(kind='unknown', primReps=['IntRep'], evaluated=True),
+            dict(kind='unknown', primReps=['BoxedRep Nothing'], evaluated=True), tuple_rep(),
+            dict(kind='unknown', primReps=None, evaluated=False, vector={})]
+        for symbol, (arguments, _) in self.signatures.items():
+            for index, primitive in enumerate(arguments):
+                expected = self.call(self.fixture(symbol))[2][index][2]['rep']
+                for bad in bad_proofs:
+                    if bad.get('kind') in (expected['kind'], 'unknown') and bad.get('primReps') == expected['primReps']: continue
+                    for scope in ('formal', 'global'):
+                        module = self.fixture(symbol)
+                        if scope == 'formal': module['bindings'][0]['expr'][1][index]['rep'] = copy.deepcopy(bad)
+                        else:
+                            module['bindings'].append(dict(bind('stored', lit(7), False), rep=copy.deepcopy(bad)))
+                            self.call(module)[2][index][1] = 'stored'
+                        self.reject(module, 'stored operand')
+                for reps in (None, [] if primitive is None else [primitive]):
+                    module = self.fixture(symbol)
+                    module['bindings'][0]['expr'][1][index]['rep'] = dict(kind='unknown', primReps=reps, evaluated=False)
+                    self.assertTrue(self.audit(module)['accepted'])
+
+    def test_intrinsic_and_composite_values_cannot_forge_foreign_carriers(self):
+        for symbol, (arguments, _) in self.signatures.items():
+            for index, primitive in enumerate(arguments):
+                metadata = self.call(self.fixture(symbol))[2][index][2]
+                wrong = [['lit', 'int8', '1', metadata], ['con', 'synthetic-box', 0, metadata],
+                    ['lam', [], [*lit(0), dict(rep=LONG)], dict(metadata, resultRep=LONG)]]
+                for operand in wrong:
+                    for composite in ('direct', 'let', 'case'):
+                        module = self.fixture(symbol); wrapped = copy.deepcopy(operand)
+                        if composite == 'let': wrapped = ['let', False, [], wrapped, metadata]
+                        if composite == 'case': wrapped = ['case', [*lit(0), dict(rep=LONG)], 'unused',
+                            [['default', None, [], wrapped]], dict(metadata, binder=dict(id='unused', lifted=False, rep=LONG))]
+                        self.call(module)[2][index] = wrapped; self.reject(module, 'lowered operand')
+                if primitive != self.array:
+                    module = self.fixture(symbol)
+                    self.call(module)[2][index] = ['void', metadata] if primitive is None else [
+                        'lit', 'word' if primitive == 'WordRep' else 'int', '0', metadata]
+                    self.assertTrue(self.audit(module)['accepted'])
+
+    def test_alias_symbols_and_unimplemented_gmp_calls_stay_unknown(self):
+        for symbol in ('mpn_add', '__gmpn_add2', 'prefix__gmpn_add', '__gmpn_sub_1',
+                       '__gmpn_gcd', 'integer_gmp_mpn_tdiv_qr'):
+            self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
+            module = self.fixture('__gmpn_add'); self.call(module)[6]['foreignCall']['target']['symbol'] = symbol
+            self.reject(module)
+
+
 if __name__ == '__main__':
     unittest.main()

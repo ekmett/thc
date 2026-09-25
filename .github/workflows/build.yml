@@ -92,6 +92,9 @@ jobs:
         run: python3 scripts/primop-coverage.py --check
       - name: Resolve Cabal driver dependencies
         run: cabal build exe:thc
+      - name: Install Linux native GMP build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes clang libgmp-dev
       - name: Build and test from source
         run: scripts/try.sh --fail-fast
       - name: Check Haskell calls into JavaScript
@@ -354,6 +357,7 @@ jobs:
             build/boxed-array-extensions/
             build/original-stack-formatter/
             build/original-posix-stat/
+            build/original-gmp/
             build/address-fields/
             build/data-to-tag/
             build/scalar-bitcasts/

@@ -23,7 +23,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "2b55ef1b69f2648921fcde2b3ee73faf93b758aff6c86aacc0cd77713d9610c4"
+FULL_PREPARATION_PLAN = "9f2c61bbd3ba339991b2019ff65ff759f9763524da0bd3bffb71c22856df38d2"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -256,6 +256,8 @@ def cache_key(root, group_id, group, toolchain):
 def _output_hashes(root, group):
     if group["outputs"] == ["build/original-stack-formatter"]:
         return _formatter_output_hashes(root)
+    if group["outputs"] == ["build/original-gmp"]:
+        return _gmp_output_hashes(root)
     files = set()
     for output in group["outputs"]:
         path = root / _relative(output)
@@ -291,6 +293,22 @@ def _formatter_output_hashes(root):
         actual = _digest(fast_inputs.file_path(root, artifact))
         if actual != recorded:
             raise RuntimeError("Stale formatter artifact: " + artifact)
+        result[artifact] = actual
+    return result
+
+
+def _gmp_output_hashes(root):
+    # Never traverse or fingerprint the test-local package database or installed
+    # interfaces. The receipt names every consumed artifact, including the
+    # exposed registration as inert provenance, with an exact closed inventory.
+    name = "build/original-gmp/manifest.json"
+    path = fast_inputs.file_path(root, name)
+    expected = fast_inputs.gmp_artifact_hashes(json.loads(path.read_text()))
+    result = {name: _digest(path)}
+    for artifact, recorded in sorted(expected.items()):
+        actual = _digest(fast_inputs.file_path(root, artifact))
+        if actual != recorded:
+            raise RuntimeError("Stale GMP artifact: " + artifact)
         result[artifact] = actual
     return result
 
@@ -355,6 +373,10 @@ def _full_output_hashes(root):
             raise RuntimeError(f"Unexpected full fixture root: {name}")
         if name == "build/original-stack-formatter":
             files.update(_formatter_output_hashes(root))
+            continue
+        if name == "build/original-gmp":
+            if fast_inputs.GMP_NATIVE_HOST:
+                files.update(_gmp_output_hashes(root))
             continue
         for member in path.rglob("*"):
             # GHC's output directories can contain links to installed package
@@ -424,7 +446,8 @@ def prepare(root, selection, run, toolchain):
     if selection.get("mode") != "narrow":
         raise ValueError("Invalid selected test mode")
 
-    groups = sorted({owners[name] for name in classes if owners[name] is not None})
+    groups = sorted({owners[name] for name in classes if owners[name] is not None
+                     and (owners[name] != "original-gmp" or fast_inputs.GMP_NATIVE_HOST)})
     def classify():
         state = []
         for group_id in groups:

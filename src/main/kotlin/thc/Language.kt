@@ -241,6 +241,31 @@ class Language : TruffleLanguage<Language.State>() {
             singleThreadedAssumption.invalidate("A second guest thread entered the context")
         }
         private val nativeCbits = AtomicReference<FutureTask<thc.runtime.SulongCbits>?>()
+        private val nativeLimbs = AtomicReference<FutureTask<thc.runtime.LimbProvider>?>()
+        @CompilerDirectives.TruffleBoundary
+        internal fun limbs(): thc.runtime.LimbProvider {
+            if (!env.isNativeAccessAllowed)
+                throw thc.runtime.RuntimeFault("Native GMP arithmetic requires native access")
+            var task = nativeLimbs.get()
+            if (task == null) {
+                val candidate = FutureTask<thc.runtime.LimbProvider> { thc.runtime.SulongLimbProvider(env) }
+                if (nativeLimbs.compareAndSet(null, candidate)) {
+                    task = candidate
+                    candidate.run() // Parse LLVM without holding a monitor across guest code.
+                } else task = nativeLimbs.get()
+            }
+            return try {
+                val selected = task!!
+                if (selected.isDone) selected.get()
+                else TruffleSafepoint.setBlockedThreadInterruptibleFunction(null,
+                    TruffleSafepoint.InterruptibleFunction<FutureTask<thc.runtime.LimbProvider>, thc.runtime.LimbProvider> {
+                        waiting -> waiting.get()
+                    }, selected)
+            } catch (failure: ExecutionException) {
+                nativeLimbs.compareAndSet(task, null)
+                throw (failure.cause ?: failure)
+            }
+        }
         @CompilerDirectives.TruffleBoundary
         internal fun cbits(): thc.runtime.SulongCbits {
             if (!env.isNativeAccessAllowed)

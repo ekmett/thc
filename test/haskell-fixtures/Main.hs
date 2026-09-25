@@ -28,6 +28,7 @@ import OriginalStdioSeekFixtures (prepareOriginalStdioSeek)
 import OriginalStdioTruncateFixtures (prepareOriginalStdioTruncate)
 import OriginalHandleReadinessFixtures (prepareOriginalHandleReadiness)
 import OriginalPosixStatFixtures (prepareOriginalPosixStat)
+import OriginalGmpFixtures (prepareOriginalGmp)
 import OriginalFdReadyFixtures (prepareOriginalFdReady)
 import OriginalIconvFixtures (prepareOriginalIconv)
 import MutVarFixtures (prepareMutVar)
@@ -864,6 +865,8 @@ main = do
     "original-stdio-read":[] -> prepareOriginalStdioRead root
     ["original-handle-readiness"] -> prepareOriginalHandleReadiness root
     ["original-posix-stat"] -> prepareOriginalPosixStat root
+    ["original-gmp"] -> prepareOriginalGmp root False
+    ["original-gmp", "--require-supported"] -> prepareOriginalGmp root True
     ["original-fd-ready"] -> prepareOriginalFdReady root
     ["original-iconv"] -> prepareOriginalIconv root
     ["mutvar"] -> prepareMutVar root
@@ -889,4 +892,4 @@ main = do
     ["interface-core"] -> prepareInterfaceCore root
     ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (interface-core|core-continuation|mask-functions|live-async|thread-async|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|original-stdio-read|original-handle-readiness|original-stdio-close|original-stdio-seek|original-stdio-truncate|original-fd-ready|mutvar|stable-pointers|shrink-bytearrays|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|sqrt|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|managed-address-reads|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (interface-core|core-continuation|mask-functions|live-async|thread-async|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|original-stdio-read|original-handle-readiness|original-stdio-close|original-stdio-seek|original-stdio-truncate|original-fd-ready|original-gmp [--require-supported]|mutvar|stable-pointers|shrink-bytearrays|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|sqrt|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|managed-address-reads|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
