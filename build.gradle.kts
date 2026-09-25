@@ -91,6 +91,7 @@ tasks.withType<Test>().configureEach {
             "integer-primops/core/**/*.json", "integer-primops/manifest.json", "integer-primops/oracle.tsv",
             "mutvar/**/*.json", "mutvar/oracle.tsv", "mutvar/NativeMutVar.hs",
             "stable-pointers/**/*.json", "stable-pointers/oracle.tsv", "stable-pointers/NativeStablePointer.hs",
+            "weak-explicit/**/*.json", "weak-explicit/oracle.tsv", "weak-explicit/NativeWeak.hs",
             "shrink-bytearrays/**/*.json", "shrink-bytearrays/oracle.tsv", "shrink-bytearrays/NativeShrinkByteArrays.hs",
             "fetch-add-int-array/**/*.json", "fetch-add-int-array/oracle.tsv", "fetch-add-int-array/NativeFetchAddIntArray.hs",
             "managed-mvars/**/*.json", "managed-mvars/*.tsv", "managed-mvars/native/**",

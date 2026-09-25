@@ -235,6 +235,7 @@ class Language : TruffleLanguage<Language.State>() {
         internal val stackSnapshots = thc.runtime.ManagedStackRegistry()
         internal val capturedAsyncRequests = thc.runtime.CapturedAsyncRequests()
         internal val stablePointers = thc.runtime.StablePointers()
+        internal val weaks = thc.runtime.ManagedWeaks()
         // A future SHARED policy may keep the lockless thunk path while this is valid.
         // The transition is one-way and belongs to this context, not to Language.
         internal val singleThreadedAssumption = Truffle.getRuntime().createAssumption("THC single-threaded context")
@@ -311,7 +312,9 @@ class Language : TruffleLanguage<Language.State>() {
                     }
                 }
             }
-        } finally { context.stablePointers.close() }
+        } finally {
+            try { context.weaks.close() } finally { context.stablePointers.close() }
+        }
     }
     override fun initializeThread(context: State, thread: Thread) = context.noteThread(thread)
     override fun initializeMultiThreading(context: State) = context.markMultithreaded()
