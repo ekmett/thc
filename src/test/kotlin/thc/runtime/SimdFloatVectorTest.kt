@@ -101,7 +101,7 @@ class SimdFloatVectorTest {
             { it + ("primReps" to List(4) { "FloatRep" }) },
             { it + mapOf("primReps" to listOf("VecRep 4 Int32ElemRep"), "vector" to mapOf("lanes" to 4L, "element" to "Int32ElemRep")) })
         for (backend in listOf("ast", "bytecode")) {
-            assertThrows(UnsupportedCore::class.java) { program(language, backend, input, "vectorArgument") }
+            assertNotNull(program(language, backend, input, "vectorArgument"))
             val unsupported = rewrite(input) { it + mapOf("primReps" to listOf("VecRep 3 FloatElemRep"),
                 "vector" to mapOf("lanes" to 3L, "element" to "FloatElemRep")) } as Map<String, Any?>
             assertThrows(UnsupportedCore::class.java) { program(language, backend, unsupported, "plusCase") }

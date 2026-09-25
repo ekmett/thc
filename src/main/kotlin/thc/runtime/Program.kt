@@ -2492,7 +2492,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val field = component.refine(raw)
                 val width = TupleShape.flatten(component).size
                 val offset = shape.offsets[index]
-                if (component.isTuple) local.bindTuple(id, component.copy(evaluated = true), slots.copyOfRange(offset, offset + width))
+                if (component.isTypedTransport) local.bindTuple(id, component.copy(evaluated = true), slots.copyOfRange(offset, offset + width))
                 else if (component.kind == CoreKind.VOID) local.bindVoid(id, field)
                 else local.bindSlot(id, Local(slots[offset], component.isLong, field.copy(evaluated = component.isLong || component.evaluated), false))
             }

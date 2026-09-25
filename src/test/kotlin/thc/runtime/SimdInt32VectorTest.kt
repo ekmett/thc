@@ -45,7 +45,7 @@ class SimdInt32VectorTest {
         assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(metadata + mapOf("primReps" to listOf("VecRep 3 Int32ElemRep"),
             "vector" to mapOf("lanes" to 3L, "element" to "Int32ElemRep"))) }
     }
-    @Test fun vectorFormalJoinRemainsUnsupported() = withLanguage { language ->
+    @Test fun vectorFormalJoinLoadsWithExactLaneProof() = withLanguage { language ->
         val m = module().toMutableMap()
         val binding = (m["bindings"] as List<Map<String, Any?>>).single { it["name"] == "branchCase" }
         val expression = (binding["expr"] as List<Any?>).toMutableList()
@@ -59,9 +59,8 @@ class SimdInt32VectorTest {
         }
         expression[2] = inline(outer[3]); m["bindings"] = listOf(binding + ("expr" to expression))
         for (backend in listOf("ast", "bytecode")) {
-            assertThrows(UnsupportedCore::class.java) { program(language, backend, module(), "branchCase") }
-            val failure = assertThrows(UnsupportedCore::class.java) { program(language, backend, m, "branchCase") }
-            assertEquals("Unsupported Core vector boundary: join argument", failure.message, backend)
+            assertNotNull(program(language, backend, module(), "branchCase"))
+            assertNotNull(program(language, backend, m, "branchCase"))
         }
     }
     @Test fun realInt32CorePreservesSignedLanesAndEntersCompiledCodeForEveryRow() {

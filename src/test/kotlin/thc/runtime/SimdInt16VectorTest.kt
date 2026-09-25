@@ -127,7 +127,7 @@ class SimdInt16VectorTest {
             else -> value
         }
         for (backend in listOf("ast", "bytecode")) {
-            assertThrows(UnsupportedCore::class.java) { program(language, backend, module(), "vectorArgument") }
+            assertNotNull(program(language, backend, module(), "vectorArgument"))
             for (diagnostic in listOf(false, true)) {
                 val modified = rewrite(module()) { it - "vector" } as Map<String, Any?>
                 assertThrows(RuntimeFault::class.java) { program(language, backend, modified, "plusCase", diagnostic) }
