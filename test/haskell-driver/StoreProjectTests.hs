@@ -6,12 +6,13 @@ module StoreProjectTests (tests) where
 import Control.Exception (bracket)
 import Control.Monad (unless)
 import Data.List (isPrefixOf)
-import System.Directory (Permissions(executable), getModificationTime, getPermissions, removeFile,
+import System.Directory (getModificationTime, getPermissions, removeFile,
                          removePathForcibly, setPermissions)
+import qualified System.Directory as Directory
 import System.Environment (getEnvironment, lookupEnv, setEnv, unsetEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeDirectory, takeFileName)
-import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
+import qualified System.Process as Process
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
 
@@ -30,12 +31,12 @@ proxyOptionsTest env = TestLabel "global Core replay opts into foreign import pr
                     ("THC_PROXY_ARGUMENTS", arguments)]
     writeText compiler "#!/bin/sh\nprintf 'BEGIN\\n' >> \"$THC_PROXY_ARGUMENTS\"\nprintf '%s\\n' \"$@\" >> \"$THC_PROXY_ARGUMENTS\"\n"
     permissions <- getPermissions compiler
-    setPermissions compiler permissions { executable = True }
+    setPermissions compiler permissions { Directory.executable = True }
     original <- getEnvironment
     let environment = settings ++ filter ((`notElem` map fst settings) . fst) original
-        command = (proc (driver env) ["ghc-proxy", "--make", "-this-unit-id", "sample"])
-          { cwd = Just project, env = Just environment }
-    (status, _, stderr) <- readCreateProcessWithExitCode command ""
+        command = (Process.proc (driver env) ["ghc-proxy", "--make", "-this-unit-id", "sample"])
+          { Process.cwd = Just project, Process.env = Just environment }
+    (status, _, stderr) <- Process.readCreateProcessWithExitCode command ""
     assertEqual stderr ExitSuccess status
     calls <- lines <$> readText arguments
     let (_, replay) = break (== "BEGIN") (drop 1 calls)
