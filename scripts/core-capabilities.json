@@ -806,6 +806,8 @@
     "minusInt32X8#": 2,
     "timesInt32X8#": 2,
     "negateInt32X8#": 1,
+    "minInt32X8#": 2,
+    "maxInt32X8#": 2,
     "packInt32X16#": 1,
     "unpackInt32X16#": 1,
     "broadcastInt32X16#": 1,
