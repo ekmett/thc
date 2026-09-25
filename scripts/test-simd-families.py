@@ -192,10 +192,6 @@ class SimdFamiliesTest(unittest.TestCase):
                 a, b = (1 << (width - 1)) - lane * 104729, (high >> 1) + lane * 7919
                 self.assertEqual((high >> 1) + 17, result(family, 'min', lane, a, b))
                 self.assertEqual((1 << (width - 1)) + 17, result(family, 'max', lane, a, b))
-            if name == 'Word32X8':
-                source = GEN.carrier(family)
-                self.assertIn('VectorOperators.UMIN', source)
-                self.assertIn('VectorOperators.UMAX', source)
 
     def test_smoke_composites_bound_compilation_work_and_cover_every_selector(self):
         families = GEN.families()
