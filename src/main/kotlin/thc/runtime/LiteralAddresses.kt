@@ -106,10 +106,10 @@ internal class ManagedAddress private constructor(
     /** GHC pointer equality compares allocation identity and byte offset. */
     fun sameLocation(other: ManagedAddress): Boolean {
         if (capabilities != null || other.capabilities != null) {
-            (capabilities ?: other.capabilities)?.let {
-                if (Language.currentState(null).threads !== it)
-                    fault("RTS data label belongs to another THC context")
-            }
+            val current = Language.currentState(null).threads
+            if (capabilities != null && capabilities !== current ||
+                other.capabilities != null && other.capabilities !== current)
+                fault("RTS data label belongs to another THC context")
             return capabilities != null && capabilities === other.capabilities
         }
         native?.requireLive(); other.native?.requireLive()

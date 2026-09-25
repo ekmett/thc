@@ -92,12 +92,17 @@ class EnabledCapabilitiesTest {
                 assertThrows(RuntimeFault::class.java) { CoreDataLabels.fromCore("enabled_capabilities",
                     CoreRepresentations.parse(address + ("evaluated" to false))) }
 
-                context().use { foreign ->
+                val foreignCell = context().use { foreign ->
                     foreign.initialize("thc"); foreign.enter()
-                    try { assertThrows(RuntimeFault::class.java) { ManagedAddressRead.WORD32.read(cell, 0) } }
+                    try {
+                        assertThrows(RuntimeFault::class.java) { ManagedAddressRead.WORD32.read(cell, 0) }
+                        CoreDataLabels.fromCore("enabled_capabilities", CoreRepresentations.parse(address))
+                    }
                     finally { foreign.leave() }
                 }
                 assertEquals(2L, ManagedAddressRead.WORD32.read(cell, 0))
+                assertTrue(cell.sameLocation(cell))
+                assertThrows(RuntimeFault::class.java) { cell.sameLocation(foreignCell) }
                 } finally { threads.leaveCurrent() }
             } finally { context.leave() }
         }
