@@ -275,6 +275,14 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
                 if (error.errno == StdioHostAbi.load().notTerminal().toInt()) 0L else throw error
             }
         }
+        override fun writeTermios(action: Int, image: ByteArray): Unit = live {
+            if (image.size != termiosSize) fault("Native termios image has the wrong size")
+            NativeLimbScope().use { scope ->
+                val bytes = scope.allocate((termiosSize.toLong() + 7) and -8L)
+                bytes.copyFrom(image, 0, image.size)
+                result("tcsetattr", lease, action, bytes)
+            }
+        }
         override fun read(destination: ByteBuffer): Int = live {
             if (!readable) throw NonReadableChannelException()
             if (destination.isReadOnly) throw ReadOnlyBufferException()

@@ -790,6 +790,15 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                           "thc.SignedNarrowPrimopsTest"},
                          set(owners["src/test/kotlin/thc/PrimopTestContext.kt"]["junit"]))
 
+    def test_tcsetattr_sources_select_the_original_native_comparison(self):
+        for path in ("compiler/test-fixtures/OriginalTcsetattrAudit.hs", "compiler/test-fixtures/OriginalTcsetattrNative.hs",
+                     "test/haskell-fixtures/OriginalTcsetattrFixtures.hs", "src/main/c/native-file-api.c",
+                     "src/main/kotlin/thc/runtime/NativeFileProvider.kt", "src/main/kotlin/thc/runtime/NativeOpenRequest.kt",
+                     "src/main/kotlin/thc/runtime/ManagedStdio.kt", "src/main/kotlin/thc/runtime/ManagedFiles.kt",
+                     "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt", "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt",
+                     "test/haskell-fixtures/Main.hs"):
+            self.assertIn("thc.runtime.OriginalTcsetattrTest", self.policy["owners"][path]["junit"], path)
+
     def test_tcgetattr_sources_select_the_original_native_comparison(self):
         for path in ("compiler/test-fixtures/OriginalTcgetattrAudit.hs", "compiler/test-fixtures/OriginalTcgetattrNative.hs",
                      "test/haskell-fixtures/OriginalTcgetattrFixtures.hs", "src/main/c/native-file-api.c",

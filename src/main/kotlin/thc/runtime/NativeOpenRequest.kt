@@ -50,6 +50,7 @@ internal interface NativeFileResource : SeekableByteChannel {
     fun statImage(): ByteArray
     fun readTermios(image: ByteArray)
     fun terminalStatus(): Long
+    fun writeTermios(action: Int, image: ByteArray)
     fun requireLive()
     fun readinessWait(): NativeFdWait
 }
@@ -61,6 +62,7 @@ internal class OpenedNativeFile(private val channel: SeekableByteChannel,
     override fun statImage(): ByteArray = metadata.statImage()
     override fun readTermios(image: ByteArray) = metadata.readTermios(image)
     override fun terminalStatus(): Long = metadata.terminalStatus()
+    override fun writeTermios(action: Int, image: ByteArray) = metadata.writeTermios(action, image)
     override fun requireLive() = metadata.requireLive()
     override fun readinessWait(): NativeFdWait = metadata.readinessWait()
     override fun close() {

@@ -41,6 +41,7 @@ import OriginalFdReadyFixtures (prepareOriginalFdReady)
 import OriginalRtsLocksFixtures (prepareOriginalRtsLocks)
 import OriginalOpenFixtures (prepareOriginalOpen)
 import OriginalTermiosFixtures (prepareOriginalTermios)
+import OriginalTcsetattrFixtures (prepareOriginalTcsetattr)
 import OriginalTcgetattrFixtures (prepareOriginalTcgetattr)
 import OriginalSigsetFixtures (prepareOriginalSigset)
 import OriginalIconvFixtures (prepareOriginalIconv)
@@ -887,6 +888,7 @@ main = do
     ["original-open"] -> prepareOriginalOpen root
     ["libdw-unavailable"] -> prepareLibdwUnavailable root
     ["original-termios"] -> prepareOriginalTermios root
+    ["original-tcsetattr"] -> prepareOriginalTcsetattr root
     ["original-tcgetattr"] -> prepareOriginalTcgetattr root
     ["original-sigset"] -> prepareOriginalSigset root
     ["native-addresses"] -> prepareNativeAddress root

@@ -39,7 +39,7 @@ MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 thread-status boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array
-narrow-literal-proofs native-addresses libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-termios original-tcgetattr original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+narrow-literal-proofs native-addresses libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-termios original-tcsetattr original-tcgetattr original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
 SIMD_FLOAT_FMA_OUTPUTS = frozenset("build/simd-floatx4-fma/" + name for name in (
     "manifest.json", "oracle.txt", "pre-core/SimdFloatFma.json", "post-core/SimdFloatFma.json",
@@ -97,6 +97,7 @@ NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate",
     "build/original-stdio-seek/native/oracle",
     "build/original-open/native/oracle",
     "build/original-termios/native/oracle",
+    "build/original-tcsetattr/native/oracle",
     "build/original-tcgetattr/native/oracle",
     "build/original-sigset/native/oracle",
     "build/original-termios/saved/native/oracle",
@@ -210,6 +211,18 @@ ORIGINAL_TERMIOS_OUTPUTS = frozenset("build/original-termios/" + name for name i
     *(f"saved/{stage}/{name}" for stage in ("pre", "post") for name in (
         "core/OriginalSavedTermiosAudit.json", "core/THC.InterfaceClosure.json",
         *(f"{entry}.audit.json" for entry in ORIGINAL_SAVED_TERMIOS_ENTRIES))),
+))
+
+ORIGINAL_TCSETATTR_ENTRIES = ("originalTcsetattr",)
+ORIGINAL_TCSETATTR_OUTPUTS = frozenset("build/original-tcsetattr/" + name for name in (
+    "manifest.json", "oracle.json", "native/oracle",
+    *(f"logs/{label}.{suffix}" for label in (
+        "ghc-version", "ghc-info", "native-build", "native-run", "pre-export", "post-export",
+        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_TCSETATTR_ENTRIES))
+      for suffix in ("stdout", "stderr", "command.json")),
+    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
+        "core/OriginalTcsetattrAudit.json", "core/THC.InterfaceClosure.json",
+        *(f"{entry}.audit.json" for entry in ORIGINAL_TCSETATTR_ENTRIES))),
 ))
 
 ORIGINAL_TCGETATTR_ENTRIES = ("originalTcgetattr",)
@@ -552,6 +565,23 @@ def termios_artifact_hashes(manifest):
     return artifacts
 
 
+def tcsetattr_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1,
+            "Invalid original tcsetattr manifest")
+    if not GMP_NATIVE_HOST:
+        require(manifest.get("supported") is False and manifest.get("artifactHashes") == {}, "Unsupported tcsetattr host")
+        return {}
+    require(manifest.get("supported") is True and manifest.get("entries") == list(ORIGINAL_TCSETATTR_ENTRIES) and
+            manifest.get("strictAccepted") is True and manifest.get("runtimeVerified") is False and
+            manifest.get("installedArtifactsHashed") is False and
+            type(manifest.get("nativeRows")) is int and manifest.get("nativeRows") == 22,
+            "Invalid original tcsetattr proof")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) == ORIGINAL_TCSETATTR_OUTPUTS - {"build/original-tcsetattr/manifest.json"},
+            "Incomplete/unreviewed original tcsetattr artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid tcsetattr hash")
+    return artifacts
+
 def tcgetattr_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1,
             "Invalid original tcgetattr manifest")
@@ -742,6 +772,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_OPEN_OUTPUTS
     if parts[1] == "original-termios":
         return name in ORIGINAL_TERMIOS_OUTPUTS
+    if parts[1] == "original-tcsetattr":
+        return name in ORIGINAL_TCSETATTR_OUTPUTS
     if parts[1] == "original-tcgetattr":
         return name in ORIGINAL_TCGETATTR_OUTPUTS
     if parts[1] == "original-sigset":
@@ -860,6 +892,8 @@ def inventory(root, current, read, core_files, verified=None):
             original_open_artifact_hashes(doc)
         if name == "build/original-termios/manifest.json":
             termios_artifact_hashes(doc)
+        if name == "build/original-tcsetattr/manifest.json":
+            tcsetattr_artifact_hashes(doc)
         if name == "build/original-tcgetattr/manifest.json":
             tcgetattr_artifact_hashes(doc)
         if name == "build/original-sigset/manifest.json":
