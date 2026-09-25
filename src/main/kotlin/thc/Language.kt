@@ -47,10 +47,15 @@ object CoreModules {
         val sourceSpans = linkedMapOf<String, Map<String, Any?>>()
         val bindingOrigins = linkedMapOf<String, Map<String, String>>()
         val foreignLinks = linkedMapOf<Pair<String, String>, ForeignBitcode>()
+        val archiveBindings = linkedMapOf<String, String>()
         val moduleKeys = hashSetOf<Pair<String, String>>()
         for (module in modules) {
-            CoreForeignArtifacts.requireExecutable(module)
-            CoreForeignArtifacts.linked(module)?.let { link ->
+            CoreForeignArtifacts.validateArchive(module)
+            val link = CoreForeignArtifacts.linked(module)
+            val archiveOnly = module["schema"] == 2L || module["schema"] == 2
+            if (archiveOnly && link == null && CoreForeignArtifacts.hasRegistrationObligations(module))
+                CoreForeignArtifacts.requireExecutable(module)
+            link?.let {
                 require(foreignLinks.putIfAbsent(link.unit to link.module, link) == null) {
                     "Duplicate linked foreign module: ${link.unit}:${link.module}"
                 }
@@ -77,6 +82,8 @@ object CoreModules {
             for (b in module["bindings"] as List<Map<String, Any?>>) {
                 val id = b["id"] as String
                 require(bindings.putIfAbsent(id, b) == null) { "Duplicate binding: $id" }
+                if (archiveOnly && link == null)
+                    archiveBindings[id] = "${module["unit"]}:${module["module"]}"
                 // The merged bundle has no single unit/module. Preserve the exact
                 // exporting module for globally named bindings; synthetic entries
                 // and interface fragments must not acquire a guessed owner.
@@ -96,20 +103,24 @@ object CoreModules {
         return mapOf("schema" to 1L, "ghc" to "9.14.1", "module" to "THC.Bundle",
             "bindings" to bindings.values.toList(), "constructors" to constructors.values.toList(),
             "bindingOrigins" to bindingOrigins,
+            "archiveBindings" to archiveBindings,
             "foreignLinks" to foreignLinks.values.toList(),
             "sourceFiles" to sourceFiles.values.toList(), "sourceSpans" to sourceSpans.values.toList())
     }
 
     @Suppress("UNCHECKED_CAST")
-    fun reachable(module: Map<String, Any?>, entry: String, strictLink: Boolean = false): Map<String, Any?> {
-        CoreForeignArtifacts.requireExecutableInput(module)
+    fun reachable(module: Map<String, Any?>, entry: String, strictLink: Boolean = false): Map<String, Any?> =
+        reachable(module, listOf(entry), strictLink)
+
+    @Suppress("UNCHECKED_CAST")
+    fun reachable(module: Map<String, Any?>, entries: List<String>, strictLink: Boolean = false): Map<String, Any?> {
+        if (module.containsKey("archiveBindings")) CoreForeignArtifacts.validateArchive(module)
+        else CoreForeignArtifacts.requireExecutableInput(module)
         val bindings = module["bindings"] as List<Map<String, Any?>>
         val byId = bindings.associateBy { it["id"] as String }
         val constructorIds = (module["constructors"] as? List<Map<String, Any?>>)
             ?.mapTo(hashSetOf()) { it["id"] as String } ?: emptySet()
-        val exact = byId[entry]
-        val roots = if (exact != null) listOf(exact) else bindings.filter { it["name"] == entry }
-        require(roots.size == 1) { "Missing or ambiguous entry: $entry" }
+        require(entries.isNotEmpty() && entries.distinct().size == entries.size) { "Missing or duplicate Core entries" }
         val reachable = linkedSetOf<String>()
         val pending = ArrayDeque<String>()
         val missing = linkedMapOf<String, MutableSet<String>>()
@@ -162,9 +173,13 @@ object CoreModules {
                 "con" -> constructor(expr[1] as String)
             }
         }
-        val root = roots.single()["id"] as String
-        reachable.add(root)
-        pending.addLast(root)
+        for (entry in entries) {
+            val exact = byId[entry]
+            val roots = if (exact != null) listOf(exact) else bindings.filter { it["name"] == entry }
+            require(roots.size == 1) { "Missing or ambiguous entry: $entry" }
+            val root = roots.single()["id"] as String
+            if (reachable.add(root)) pending.addLast(root)
+        }
         while (pending.isNotEmpty()) {
             owner = pending.removeFirst()
             visit(byId.getValue(owner)["expr"] as List<Any?>, emptySet())
@@ -175,7 +190,12 @@ object CoreModules {
         require(missingConstructors.isEmpty()) {
             "Unlinked Core constructors: " + missingConstructors.entries.joinToString { (id, uses) -> "$id referenced by ${uses.joinToString()}" }
         }
-        return module + ("bindings" to bindings.filter { it["id"] in reachable })
+        val archived = module["archiveBindings"] as? Map<String, String> ?: emptyMap()
+        for (id in reachable) archived[id]?.let { owner ->
+            throw IllegalArgumentException("Unsupported foreign code/registration for $owner: " +
+                "Core schema 2 is archive-only; native stubs, initializers, finalizers and callbacks are not linked")
+        }
+        return (module - "archiveBindings") + ("bindings" to bindings.filter { it["id"] in reachable })
     }
 
     fun request(paths: List<String>, entry: String, instrument: Boolean = true, diagnosticUnsupported: Boolean = false,
