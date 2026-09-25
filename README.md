@@ -36,8 +36,9 @@ incremental. `make runtime` and `make haskell` build either part separately.
 share a cache across checkouts.
 
 `make check-ghc-core GHC=/path/to/ghc` checks whether an installation carries
-complete Core for `ghc-internal`. The [compiler build guide](docs/ghc-core.md)
-includes a one-line GHC patch and source-build instructions. This prepares the
+complete Core for `ghc-internal`, `base`, and their package dependencies. The
+[compiler build guide](docs/ghc-core.md) includes a Hadrian settings file and
+source-build instructions. This prepares the
 replacement for our pinned library sources; exporter API support is still
 limited to the GHC version above.
 

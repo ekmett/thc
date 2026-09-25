@@ -1,8 +1,0 @@
-diff --git a/libraries/ghc-internal/ghc-internal.cabal.in b/libraries/ghc-internal/ghc-internal.cabal.in
---- a/libraries/ghc-internal/ghc-internal.cabal.in
-+++ b/libraries/ghc-internal/ghc-internal.cabal.in
-@@ -554,3 +554,4 @@
- 
-     -- Make sure we don't accidentally regress into anti-patterns
-     ghc-options: -Wcompat -Wnoncanonical-monad-instances
-+    ghc-options: -fwrite-if-simplified-core
