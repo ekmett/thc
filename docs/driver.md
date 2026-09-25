@@ -169,15 +169,19 @@ original `flushStdHandles` after successful completion, sharing one program's
 Handle CAFs. Relative file paths are resolved from the Cabal project directory.
 The default `pinned` provider retains the limited raw-IO entry convention.
 
-General file IO is still incomplete. The latest strict audit of the separate
-`file-lifecycle-full-core` fixture reports zero missing bindings and zero issues;
-that is load-time evidence, not a completed native-versus-THC execution proof.
-Enable it explicitly with `cabal test file-lifecycle-full-core -ffull-core-tests`;
+General file IO is still incomplete. On Linux x86_64 with a complete GHC 9.14.1
+installation, the separate `file-lifecycle-full-core` fixture passed native GHC
+comparison through the ordinary production driver and bytecode backend. Its
+strict audit supplied 72,884 bindings, reached 2,207, and reported zero missing
+bindings, issues or unsupported traps. The fixture verified UTF-8 file reads and
+writes, append, absolute and end-relative seek, EOF, a caught missing-path
+`IOException`, and original shutdown flushing. Its exact output was `file
+lifecycle ok` without a newline. This run had `compiledEntries=0`, so it does
+not establish a JIT-compiled path. Enable the opt-in test with
+`cabal test file-lifecycle-full-core -ffull-core-tests`;
 `THC_INSTALLED_CORE_GHC`, `THC_INSTALLED_CORE_GHC_PKG`, and
 `THC_INSTALLED_CORE_GHC_SOURCE` select the complete installation and its configured
-source tree. It checks UTF-8 files, append, seek, EOF, a caught missing-path error,
-and final output without a newline against native GHC once the full closure is
-accepted. It is not part of the stock-GHC test suite.
+source tree. The test is not part of the stock-GHC suite.
 
 The driver builds the selected-compiler `thc-interface` helper, discovers exact
 pre-existing registrations in the selected global package database, and reads
