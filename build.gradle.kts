@@ -146,6 +146,7 @@ tasks.withType<Test>().configureEach {
             "original-posix-stat/logs/*.stdout", "original-posix-stat/logs/*.stderr",
             "libdw-unavailable/manifest.json", "libdw-unavailable/oracle.json", "libdw-unavailable/foreign-labels.json",
             "native-addresses/manifest.json", "native-addresses/oracle.json",
+            "native-malloc/manifest.json", "native-malloc/oracle.txt",
             "original-gmp/**/*.json", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
             "original-gmp/logs/*.stdout", "original-gmp/logs/*.stderr",
             "original-stdio-close/**/*.json", "original-stdio-close/results/*.txt", "original-stdio-close/results/*.private",
@@ -161,6 +162,11 @@ tasks.withType<Test>().configureEach {
             "original-rts-locks/**/*.json", "original-rts-locks/logs/*.stdout", "original-rts-locks/logs/*.stderr",
             "original-open/**/*.json", "original-open/logs/*.stdout", "original-open/logs/*.stderr", "original-open/native/oracle",
             "original-termios/**/*.json", "original-termios/logs/*.stdout", "original-termios/logs/*.stderr", "original-termios/native/oracle",
+            "original-tcsetattr/**/*.json", "original-tcsetattr/logs/*.stdout", "original-tcsetattr/logs/*.stderr", "original-tcsetattr/native/oracle",
+            "original-sigprocmask/**/*.json", "original-sigprocmask/logs/*.stdout", "original-sigprocmask/logs/*.stderr", "original-sigprocmask/native/oracle",
+            "original-tcgetattr/**/*.json", "original-tcgetattr/logs/*.stdout", "original-tcgetattr/logs/*.stderr", "original-tcgetattr/native/oracle",
+            "original-sigset/**/*.json", "original-sigset/logs/*.stdout", "original-sigset/logs/*.stderr", "original-sigset/native/oracle",
+            "original-termios/saved/native/oracle",
             "original-fd-ready/logs/*.stdout", "original-fd-ready/logs/*.stderr",
             "original-iconv/**/*.json", "original-iconv/native/oracle",
             "original-iconv/logs/*.stdout", "original-iconv/logs/*.stderr",
@@ -315,6 +321,24 @@ tasks.register<Test>("originalStackDecoderFullCoreTest") {
         }
     }
 }
+tasks.register<Test>("arithmeticExceptionsFullCoreTest") {
+    group = "verification"
+    description = "Tests original arithmetic exception payloads using the explicitly prepared full-Core GHC fixture."
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    inputs.files(fileTree("build/arithmetic-exceptions") {
+        include("**/*.json", "installed/bundles/*.zip", "logs/*.stdout", "logs/*.stderr", "native/oracle")
+    })
+    useJUnitPlatform()
+    filter { includeTestsMatching("thc.runtime.ArithmeticExceptionsNativeTest") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Full-Core native/compiled evidence requires a fresh test process") { true }
+    doFirst {
+        check(file("build/arithmetic-exceptions/manifest.json").isFile) {
+            "Missing arithmetic-exceptions fixture: select a full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- arithmetic-exceptions"
+        }
+    }
+}
 tasks.register<Test>("simdFamiliesExperimentTest") {
     group = "verification"
     description = "Runs the prepared generated SIMD Core, native-oracle, and compiled-path experiment."
@@ -402,6 +426,28 @@ val compileNativeFiles by tasks.registering {
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-files")) }
 tasks.processResources { dependsOn(compileNativeFiles) }
+
+// Partial original sigprocmask, loaded only with explicit native authority.
+val compileNativeSignals by tasks.registering {
+    dependsOn("generateStdioAbi")
+    val source = layout.projectDirectory.file("src/main/c/native-signal-api.c")
+    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    val output = layout.buildDirectory.dir("generated/native-signals")
+    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output)
+    doLast {
+        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
+            val destination = output.get().asFile.resolve("thc/native/native-signal-api.so")
+            destination.parentFile.mkdirs()
+            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-fembed-bitcode", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+        }
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-signals")) }
+tasks.processResources { dependsOn(compileNativeSignals) }
 
 // Original stdio FCalls use target C widths/errno, not JVM or private-ABI values.
 val generateStdioAbi by tasks.registering {
@@ -511,3 +557,32 @@ val generateTermiosAbi by tasks.registering {
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/termios-abi")) }
 tasks.processResources { dependsOn(generateTermiosAbi) }
+
+val generateSigsetAbi by tasks.registering {
+    dependsOn(generateStdioAbi)
+    val source = layout.projectDirectory.file("src/main/c/sigset-abi-probe.c").asFile
+    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    val output = layout.buildDirectory.dir("generated/sigset-abi")
+    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output); outputs.upToDateWhen { false }
+    doLast {
+        fun run(command: List<String>) = providers.exec { commandLine(command) }.standardOutput.asText.get()
+        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
+        val target = host["target"] as String
+        val command = listOf(clang.get()) + if (host["system"] == "Linux") listOf("--target=$target") else emptyList()
+        require(run(command + "-dumpmachine").trim() == target) { "Sigset compiler target changed" }
+        val executable = temporaryDir.resolve("sigset-abi-probe")
+        run(command + listOf("-std=c11", source.path, "-o", executable.path))
+        val probe = JsonSlurper().parseText(run(listOf(executable.path))) as Map<*, *>
+        val manifest = linkedMapOf<String, Any?>("schema" to 1, "system" to host["system"],
+            "architecture" to host["architecture"], "target" to target,
+            "sourceSha256" to MessageDigest.getInstance("SHA-256").digest(source.readBytes()).joinToString("") { "%02x".format(it) },
+            "sigset" to probe)
+        val destination = output.get().asFile.resolve("thc/native/sigset-abi.json")
+        destination.parentFile.mkdirs()
+        destination.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n")
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/sigset-abi")) }
+tasks.processResources { dependsOn(generateSigsetAbi) }

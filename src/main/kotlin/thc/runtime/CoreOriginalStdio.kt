@@ -9,6 +9,14 @@ import thc.Language
 /** Exact pinned GHC declarations, not aliases for arbitrary POSIX imports. */
 internal enum class OriginalStdioOp(val symbol: String, val convention: String, val safety: String,
     val arguments: List<String?>, val result: String?) {
+    GET_SAVED_TERMIOS("__hscore_get_saved_termios", "ccall", "unsafe", listOf("Int32Rep", null), "AddrRep"),
+    SET_SAVED_TERMIOS("__hscore_set_saved_termios", "ccall", "unsafe", listOf("Int32Rep", "AddrRep", null), null),
+    SIGPROCMASK("ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask", "capi", "unsafe",
+        listOf("Int32Rep", "AddrRep", "AddrRep", null), "Int32Rep"),
+    TCGETATTR("ghczuwrapperZC10ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCtcgetattr", "capi", "unsafe",
+        listOf("Int32Rep", "AddrRep", null), "Int32Rep"),
+    TCSETATTR("ghczuwrapperZC9ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCtcsetattr", "capi", "unsafe",
+        listOf("Int32Rep", "Int32Rep", "AddrRep", null), "Int32Rep"),
     LFLAG("__hscore_lflag", "ccall", "unsafe", listOf("AddrRep", null), "Word32Rep"),
     POKE_LFLAG("__hscore_poke_lflag", "ccall", "unsafe", listOf("AddrRep", "Word32Rep", null), null),
     PTR_C_CC("__hscore_ptr_c_cc", "ccall", "unsafe", listOf("AddrRep", null), "AddrRep"),
@@ -22,6 +30,10 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     SIGTTOU("__hscore_sigttou", "ccall", "unsafe", listOf(null), "Int32Rep"),
     SIG_BLOCK("__hscore_sig_block", "ccall", "unsafe", listOf(null), "Int32Rep"),
     SIG_SETMASK("__hscore_sig_setmask", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    SIGEMPTYSET("ghczuwrapperZC13ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigemptyset", "capi", "unsafe",
+        listOf("AddrRep", null), "Int32Rep"),
+    SIGADDSET("ghczuwrapperZC12ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigaddset", "capi", "unsafe",
+        listOf("AddrRep", "Int32Rep", null), "Int32Rep"),
     READ_SAFE("ghczuwrapperZC22ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread", "capi", "safe",
         listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep"),
     READ_UNSAFE("ghczuwrapperZC23ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread", "capi", "unsafe",
@@ -71,12 +83,15 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     val stat: Boolean get() = this == SIZEOF_STAT || statField ||
         this == IS_REG || this == IS_CHR || this == IS_BLK || this == IS_DIR || this == IS_FIFO || this == IS_SOCK
     val statField: Boolean get() = this == ST_DEV || this == ST_INO || this == ST_MODE || this == ST_SIZE
+    val readImage: Boolean get() = this == FSTAT || this == TCGETATTR
     val iconv: Boolean get() = this == LOCALE || this == ICONV_OPEN || this == ICONV_CLOSE || this == ICONV
     val strerror: Boolean get() = this == STRERROR
     val termios: Boolean get() = this == LFLAG || this == POKE_LFLAG || this == PTR_C_CC ||
         this == SIZEOF_TERMIOS || this == ECHO || this == ICANON || this == VMIN || this == VTIME || this == TCSANOW ||
         this == SIZEOF_SIGSET || this == SIGTTOU || this == SIG_BLOCK || this == SIG_SETMASK
     val termiosAddress: Boolean get() = this == LFLAG || this == POKE_LFLAG || this == PTR_C_CC
+    val sigset: Boolean get() = this == SIGEMPTYSET || this == SIGADDSET
+    val savedTermios: Boolean get() = this == GET_SAVED_TERMIOS || this == SET_SAVED_TERMIOS
 }
 
 internal object CoreOriginalStdio {
@@ -98,7 +113,7 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation == OriginalStdioOp.FSTAT || operation == OriginalStdioOp.OPEN || operation.iconv || operation.strerror || operation.duplication || operation.locking,
+        requireProof(operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation == OriginalStdioOp.TCSETATTR || operation == OriginalStdioOp.OPEN || operation.iconv || operation.strerror || operation.duplication || operation.locking,
             "strict operand operation")
         val primitive = operation.arguments[index]
         val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }

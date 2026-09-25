@@ -372,9 +372,16 @@ jobs:
             build/libdw-unavailable/foreign-labels.json
             build/libdw-unavailable/logs/
             build/original-termios/
+            build/original-tcsetattr/
+            build/original-tcgetattr/
+            build/original-sigprocmask/
+            build/original-sigset/
             build/native-addresses/manifest.json
             build/native-addresses/oracle.json
             build/native-addresses/logs/
+            build/native-malloc/manifest.json
+            build/native-malloc/oracle.txt
+            build/native-malloc/logs/
             build/original-gmp/
             build/address-fields/
             build/data-to-tag/

@@ -33,6 +33,8 @@ LIBDW_UNAVAILABLE = {
     'libdwPoolClear': ((None,), (None,)),
 }
 TERMIOS_OPERATIONS = {
+    '__hscore_get_saved_termios': (('Int32Rep', None), (None, 'AddrRep')),
+    '__hscore_set_saved_termios': (('Int32Rep', 'AddrRep', None), (None,)),
     '__hscore_lflag': (('AddrRep', None), (None, 'Word32Rep')),
     '__hscore_poke_lflag': (('AddrRep', 'Word32Rep', None), (None,)),
     '__hscore_ptr_c_cc': (('AddrRep', None), (None, 'AddrRep')),
@@ -42,6 +44,12 @@ TERMIOS_OPERATIONS = {
        for name in ('echo', 'icanon', 'vmin', 'vtime', 'tcsanow', 'sigttou', 'sig_block', 'sig_setmask')},
 }
 TERMIOS_SYMBOLS = frozenset(TERMIOS_OPERATIONS)
+SIGSET_OPERATIONS = {
+    'ghczuwrapperZC13ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigemptyset':
+        (('AddrRep', None), (None, 'Int32Rep')),
+    'ghczuwrapperZC12ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigaddset':
+        (('AddrRep', 'Int32Rep', None), (None, 'Int32Rep')),
+}
 SEEK_CONSTANTS = frozenset((
     'ghczuwrapperZC1ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuSET',
     'ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR',
@@ -52,7 +60,21 @@ STACK_INFO = frozenset(('getStackInfoTableAddrzh', 'getInfoTableAddrszh', 'looku
     'getSmallBitmapzh', 'getRetFunSmallBitmapzh', 'getStackClosurezh',
     'getStackFieldszh', 'advanceStackFrameLocationzh'))
 
+TCSETATTR_SYMBOL = 'ghczuwrapperZC9ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCtcsetattr'
+TCGETATTR_SYMBOL = 'ghczuwrapperZC10ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCtcgetattr'
+
 OPERATIONS = {
+    TCSETATTR_SYMBOL:
+        ('capi', 'unsafe', ('Int32Rep', 'Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),
+    'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask':
+        ('capi', 'unsafe', ('Int32Rep', 'AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
+    TCGETATTR_SYMBOL:
+        ('capi', 'unsafe', ('Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),
+
+    'malloc': ('ccall', 'unsafe', ('Word64Rep', None), (None, 'AddrRep')),
+    'free': ('ccall', 'unsafe', ('AddrRep', None), (None,)),
+    **{symbol: ('capi', 'unsafe', arguments, output)
+       for symbol, (arguments, output) in SIGSET_OPERATIONS.items()},
     'rtsSupportsBoundThreads': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
     **{symbol: ('ccall', 'unsafe', arguments, output)
        for symbol, (arguments, output) in LIBDW_UNAVAILABLE.items()},

@@ -204,6 +204,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         CoreMd5Foreign.validateHeads(bindings)
         CoreGmpForeign.validateHeads(bindings)
         CoreLibdwForeign.validateHeads(bindings)
+        CoreNativeAllocationForeign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(bindings, constructors)
             CoreInputCalls.validate(bindings, constructors)
@@ -711,7 +712,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val fn = function(label, emptyList(), expr, scope)
         (fn.target.rootNode as GuestRoot).tupleResult?.let { CoreRepresentations.requireScalar(it.proof, "thunk") }
         val template = BytecodeRoot.ClosureTemplate(fn.target, 0, fn.captureLayout)
-        return sourced(Expression { e ->
+        // Preserve the denoted value's proof without treating its thunk as WHNF.
+        return sourced(ProvenExpression(Expression { e ->
             if (fn.hasVectorCaptures) {
                 e.builder.emitMakeVectorCapture(BytecodeRoot.VectorCaptureSource(template,
                     fn.captures.map { LocalAccessor.constantOf(e.locals.getValue(it.id)) }.toTypedArray(), true))
@@ -720,7 +722,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 fn.captures.forEach { read(it, false).emit(e) }
                 e.builder.endMakeThunk()
             }
-        }, sources.expression(expr, scope.source))
+        }, CoreRepresentations.expression(expr).copy(evaluated = false)), sources.expression(expr, scope.source))
     }
     private fun closure(fn: FunctionSpec, arity: Int): Expression {
         val template = BytecodeRoot.ClosureTemplate(fn.target, arity, fn.captureLayout)
@@ -774,6 +776,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         "string-bytes" -> ManagedAddress.fromHex(value)
         "null-addr" -> if (value == "0") ManagedAddress.nullAddress() else throw UnsupportedCore("Malformed null Addr# literal")
         "function-addr" -> CFinalizerLabels.fromCore(value, proof)
+        "data-addr" -> CoreDataLabels.fromCore(value, proof)
         "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
@@ -1420,10 +1423,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
             val gmp = CoreGmpForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val nativeAllocation = CoreNativeAllocationForeign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && capi == null &&
-                !stableFree && !mainThreadForeign && !boundThreadForeign && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null)
+                !stableFree && !mainThreadForeign && !boundThreadForeign && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null)
                 CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -1487,7 +1492,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio == OriginalStdioOp.FSTAT || originalStdio == OriginalStdioOp.OPEN ||
+                        if (originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio == OriginalStdioOp.OPEN ||
                             originalStdio.iconv || originalStdio.strerror || originalStdio.duplication || originalStdio.locking)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
@@ -1505,18 +1510,25 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.createLocal("original open path", "object").also {
                             b.beginStoreLocal(it); operands[0].emit(e); b.endStoreLocal()
                         } else null
-                    val status = originalStdio.termios || originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
-                        originalStdio == OriginalStdioOp.CLOSE || originalStdio == OriginalStdioOp.DUP || originalStdio == OriginalStdioOp.FSTAT || originalStdio == OriginalStdioOp.UNLOCK || originalStdio.seekConstant || originalStdio.stat
-                    // Setter declares address before value. Store that operand
+                    // tcsetattr declares descriptor/action/address/State. Evaluate
+                    // both integers first, then share the transfer instruction's
+                    // long/address/long lanes without reordering guest effects.
+                    val termiosArguments = if (originalStdio == OriginalStdioOp.TCSETATTR)
+                        (0..1).map { index -> b.createLocal("original tcsetattr integer $index", "primitive").also {
+                            b.beginStoreLocal(it); operands[index].emit(e); b.endStoreLocal()
+                        } } else null
+                    val status = originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
+                        originalStdio == OriginalStdioOp.CLOSE || originalStdio == OriginalStdioOp.DUP || originalStdio.readImage || originalStdio == OriginalStdioOp.UNLOCK || originalStdio.seekConstant || originalStdio.stat
+                    // Image updates declare address before value. Store that operand
                     // once before filling the shared long/address/State lanes.
-                    val termiosAddress = if (originalStdio == OriginalStdioOp.POKE_LFLAG)
-                        b.createLocal("termios setter address", "object").also {
+                    val imageAddress = if (originalStdio == OriginalStdioOp.POKE_LFLAG || originalStdio == OriginalStdioOp.SIGADDSET)
+                        b.createLocal("original image address", "object").also {
                             b.beginStoreLocal(it); operands[0].emit(e); b.endStoreLocal()
                         } else null
                     if (originalStdio == OriginalStdioOp.LOCALE) b.beginOriginalLocale(result)
                     else if (originalStdio == OriginalStdioOp.ICONV_OPEN) b.beginOriginalIconvOpen(result)
                     else if (originalStdio == OriginalStdioOp.ICONV_CLOSE) b.beginOriginalIconvClose(result)
-                    else if (originalStdio == OriginalStdioOp.ICONV) b.beginOriginalIconv(result)
+                    else if (originalStdio == OriginalStdioOp.ICONV || originalStdio == OriginalStdioOp.SIGPROCMASK) b.beginOriginalIconv(result, originalStdio)
                     else if (originalStdio == OriginalStdioOp.STRERROR) b.beginOriginalStrerror(result)
                     else if (originalStdio.readiness || originalStdio == OriginalStdioOp.LOCK) b.beginOriginalStdioReady(result, originalStdio)
                     else if (originalStdio == OriginalStdioOp.SEEK) b.beginFileSeek(result)
@@ -1528,10 +1540,24 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (originalStdio == OriginalStdioOp.OPEN) {
                         operands[1].emit(e); b.emitLoadLocal(openPath!!)
                         operands[2].emit(e); operands[3].emit(e)
-                    } else if (originalStdio.termios) {
-                        if (originalStdio == OriginalStdioOp.POKE_LFLAG) operands[1].emit(e) else b.emitLoadConstant(0L)
-                        if (termiosAddress != null) b.emitLoadLocal(termiosAddress)
-                        else if (originalStdio.termiosAddress) operands[0].emit(e)
+                    } else if (originalStdio == OriginalStdioOp.TCSETATTR) {
+                        b.emitLoadLocal(termiosArguments!![0]); operands[2].emit(e)
+                        b.emitLoadLocal(termiosArguments[1]); operands[3].emit(e)
+                    } else if (originalStdio == OriginalStdioOp.SIGPROCMASK) {
+                        operands.take(3).forEach { it.emit(e) }
+                        b.emitLoadConstant(ManagedAddress.nullAddress())
+                        b.emitLoadConstant(ManagedAddress.nullAddress())
+                        operands.last().emit(e)
+                    } else if (originalStdio.savedTermios) {
+                        operands[0].emit(e)
+                        if (originalStdio == OriginalStdioOp.SET_SAVED_TERMIOS) operands[1].emit(e)
+                        else b.emitLoadConstant(ManagedAddress.nullAddress())
+                        operands.last().emit(e)
+                    } else if (originalStdio.termios || originalStdio.sigset) {
+                        if (originalStdio == OriginalStdioOp.POKE_LFLAG || originalStdio == OriginalStdioOp.SIGADDSET)
+                            operands[1].emit(e) else b.emitLoadConstant(0L)
+                        if (imageAddress != null) b.emitLoadLocal(imageAddress)
+                        else if (originalStdio.termiosAddress || originalStdio.sigset) operands[0].emit(e)
                         else b.emitLoadConstant(ManagedAddress.nullAddress())
                         operands.last().emit(e)
                     } else if (status) {
@@ -1539,7 +1565,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                             originalStdio == OriginalStdioOp.SIZEOF_STAT || originalStdio.statField)
                             b.emitLoadConstant(0L) else operands[0].emit(e)
                         if (originalStdio.statField) operands[0].emit(e)
-                        else if (originalStdio == OriginalStdioOp.FSTAT) operands[1].emit(e)
+                        else if (originalStdio.readImage) operands[1].emit(e)
                         else b.emitLoadConstant(ManagedAddress.nullAddress())
                         operands.last().emit(e)
                     } else if (originalStdio == OriginalStdioOp.SEEK) {
@@ -1561,7 +1587,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (originalStdio == OriginalStdioOp.LOCALE) b.endOriginalLocale()
                     else if (originalStdio == OriginalStdioOp.ICONV_OPEN) b.endOriginalIconvOpen()
                     else if (originalStdio == OriginalStdioOp.ICONV_CLOSE) b.endOriginalIconvClose()
-                    else if (originalStdio == OriginalStdioOp.ICONV) b.endOriginalIconv()
+                    else if (originalStdio == OriginalStdioOp.ICONV || originalStdio == OriginalStdioOp.SIGPROCMASK) b.endOriginalIconv()
                     else if (originalStdio == OriginalStdioOp.STRERROR) b.endOriginalStrerror()
                     else if (originalStdio.readiness || originalStdio == OriginalStdioOp.LOCK) b.endOriginalStdioReady()
                     else if (originalStdio == OriginalStdioOp.SEEK) b.endFileSeek()
@@ -1658,6 +1684,24 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ManagedFileOp.IS_TERMINAL -> b.endFileIsTerminal()
                         ManagedFileOp.DEVICE_TYPE -> b.endFileDeviceType()
                     }
+                }
+            } else if (nativeAllocation != null) {
+                CoreNativeAllocationForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreNativeAllocationForeign.validateOperand(nativeAllocation, index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    if (nativeAllocation == NativeAllocationOp.MALLOC) e.builder.beginNativeMalloc(destination.single())
+                    else {
+                        if (destination.isNotEmpty()) fault("Native free has no result field")
+                        e.builder.beginNativeFree()
+                    }
+                    operands.forEach { it.emit(e) }
+                    if (nativeAllocation == NativeAllocationOp.MALLOC) e.builder.endNativeMalloc()
+                    else e.builder.endNativeFree()
                 }
             } else if (libdw != null) {
                 CoreLibdwForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -1790,6 +1834,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreVectors.validate(name, args.map(CoreVectors::argumentProof), tupleProof)
                 CoreVectors.validateFlags(flags)
                 vectorPrimitive(name, args.map { compile(it, scope, false) })
+            } else if (fn[0] == "prim" && CoreArithmeticExceptions.payload(fn[1] as String) != null) {
+                val name = fn[1] as String
+                CoreArithmeticExceptions.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operand = argument(args.single(), scope, false, allowEmpty = true)
+                CoreArithmeticExceptions.validate(name, listOf(operand.proof), flags, tupleProof)
+                val id = CoreArithmeticExceptions.payload(name)!!
+                val payload = globals[id] ?: throw UnsupportedCore("Unresolved implicit exception binding $id")
+                ProvenExpression(ResultExpression { e, destination ->
+                    val b = e.builder
+                    b.beginBlock()
+                    operand.emitTuple(e, emptyList())
+                    if (destination != null) b.beginStoreLocal(b.createLocal("non-returning arithmetic exception", null))
+                    b.beginRaise(); b.emitReadGlobal(payload); b.endRaise()
+                    if (destination != null) b.endStoreLocal()
+                    b.endBlock()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && fn[1] in setOf("raiseIO#", "catch#", "getMaskingState#",
                     "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#")) {
                 val name = fn[1] as String
@@ -2793,6 +2853,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "default" -> 0; "data" -> 1; else -> 2
             } }, alternatives.all { it.kind != "lit" || it.value is Long })
             val resultProof = CoreRepresentations.expression(expr)
+            CoreRepresentations.validateDeclaredCaseResult(resultProof, alternatives.map { it.body.proof })
             CoreRepresentations.validateAggregateCaseResult(resultProof, alternatives.map { it.body.proof })
             CoreRepresentations.validateFloatingCaseResult(resultProof, alternatives.map { it.body.proof })
             // A missing outer case record must not erase an exact aggregate

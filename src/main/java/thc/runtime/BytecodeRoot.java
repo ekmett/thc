@@ -976,6 +976,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             ManagedStdio stdio = CoreOriginalStdio.current(node);
             long result;
             if (operation == OriginalStdioOp.OPEN) result = stdio.open(address, fd, count);
+            else if (operation == OriginalStdioOp.TCSETATTR) result = stdio.tcsetattr(fd, count, address);
             else if (operation == OriginalStdioOp.READ_SAFE || operation == OriginalStdioOp.READ_UNSAFE)
                 result = stdio.read(fd, address, count);
             else result = stdio.write(fd, address, count);
@@ -992,6 +993,25 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             TupleResultsKt.requireVoidCarrier(state);
             long result = CoreCapiForeign.zero(node, call);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class NativeMalloc {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                long size, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedAddress result = ManagedNativeAllocations.current(node).malloc(size);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    public static final class NativeFree {
+        @Specialization public static void apply(ManagedAddress address, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedNativeAllocations.current(node).free(address);
         }
     }
 
@@ -1016,6 +1036,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             TupleResultsKt.requireVoidCarrier(state);
             // One typed instruction avoids another generated-interpreter partition;
             // the exact operation is compile-time metadata, not a guest operand.
+            if (operation.getSavedTermios()) {
+                ManagedAddress result = SavedTermios.execute(node, operation, fd, address);
+                if (operation == OriginalStdioOp.GET_SAVED_TERMIOS)
+                    destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+                return;
+            }
             if (operation.getTermios()) {
                 if (operation == OriginalStdioOp.PTR_C_CC) {
                     destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, TermiosImage.pointer(address));
@@ -1027,7 +1053,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 return;
             }
             long result;
-            if (operation.getStat()) result = PosixStat.execute(operation, address, fd);
+            if (operation.getSigset()) result = SigsetImage.execute(operation, address, fd, CoreOriginalStdio.current(node));
+            else if (operation.getStat()) result = PosixStat.execute(operation, address, fd);
+            else if (operation == OriginalStdioOp.TCGETATTR) result = CoreOriginalStdio.current(node).tcgetattr(fd, address);
             else if (operation == OriginalStdioOp.FSTAT) result = CoreOriginalStdio.current(node).fstat(fd, address);
             else if (operation == OriginalStdioOp.UNLOCK) result = CoreOriginalStdio.locks(node).unlock(fd);
             else if (operation == OriginalStdioOp.ERRNO) result = CoreOriginalStdio.current(node).errno();
@@ -1240,12 +1268,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
+    // SIGPROCMASK shares the primitive handle/two-address prefix. Its remaining
+    // address lanes are constant nulls, avoiding another DSL instruction family.
     public static final class OriginalIconv {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination, OriginalStdioOp operation,
                 long handle, ManagedAddress input, ManagedAddress inputCount,
                 ManagedAddress output, ManagedAddress outputCount, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            long result = CoreOriginalStdio.iconv(node).convert(handle, input, inputCount, output, outputCount);
+            long result = operation == OriginalStdioOp.SIGPROCMASK
+                ? ManagedSignalMask.execute(node, handle, input, inputCount)
+                : CoreOriginalStdio.iconv(node).convert(handle, input, inputCount, output, outputCount);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }

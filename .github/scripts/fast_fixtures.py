@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "4c4e6b7926a62540b51c3da2aae8e5d7aaad2bc67dd7b4886fefcab9ec62a774"
+FULL_PREPARATION_PLAN = "ed98f44f85c3a18a5226a07623be15a1e5d4d1b27fb29b3db87584acf3ddcd84"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -34,6 +34,7 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
     "build/original-fd-ready", "build/simd-calls",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    "build/native-malloc/oracle.txt",
     "build/simd-calls/manifest.json", "build/simd-calls/pre-core/SimdCallAudit.json",
     "build/simd-calls/pre-audit.json",
     "build/simd-floatx4-fma/manifest.json", "build/simd-floatx4-fma/pre-core/SimdFloatFma.json",
@@ -62,6 +63,10 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/interface-core/foreign-association.json", "build/interface-core/installed-bound-facts.json",
     "build/interface-core/foreign-alias/a.json", "build/interface-core/foreign-alias/b.json",
     "build/interface-core/source/InterfaceForeignAlias.hs.saved",
+    *[f"build/interface-core/import-stubs/{variant}.json" for variant in ("plain", "extra-file", "wrapper", "instrumented")],
+    "build/interface-core/source/ForeignImportStubs.hs.saved",
+    "build/interface-core/import-stubs/plain/ForeignImportStubs.hi",
+    "build/interface-core/logs/import-stubs-native-oracle.stdout",
     "build/addr-identity/oracle.txt", "build/addr-identity/pre.audit.json", "build/addr-identity/post.audit.json",
     "build/core-continuation/core/CoreContinuationAudit.json", "build/core-continuation/audit.json",
     "build/core-continuation/application-audit.json",
@@ -154,6 +159,10 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     *fast_inputs.ORIGINAL_RTS_LOCK_OUTPUTS,
     *(fast_inputs.ORIGINAL_OPEN_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-open/manifest.json"}),
     *(fast_inputs.ORIGINAL_TERMIOS_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-termios/manifest.json"}),
+    *(fast_inputs.ORIGINAL_TCSETATTR_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-tcsetattr/manifest.json"}),
+    *(fast_inputs.ORIGINAL_TCGETATTR_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-tcgetattr/manifest.json"}),
+    *(fast_inputs.ORIGINAL_SIGPROCMASK_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-sigprocmask/manifest.json"}),
+    *(fast_inputs.ORIGINAL_SIGSET_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-sigset/manifest.json"}),
     "build/original-handle-readiness/manifest.json",
     "build/small-arrays/manifest.json",
     "build/simd-capability-smoke/manifest.json",
@@ -288,6 +297,22 @@ def _output_hashes(root, group):
         name = "build/original-termios/manifest.json"
         expected = fast_inputs.termios_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
         return _manifest_output_hashes(root, name, expected)
+    if group["outputs"] == ["build/original-tcsetattr"]:
+        name = "build/original-tcsetattr/manifest.json"
+        expected = fast_inputs.tcsetattr_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
+    if group["outputs"] == ["build/original-tcgetattr"]:
+        name = "build/original-tcgetattr/manifest.json"
+        expected = fast_inputs.tcgetattr_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
+    if group["outputs"] == ["build/original-sigprocmask"]:
+        name = "build/original-sigprocmask/manifest.json"
+        expected = fast_inputs.sigprocmask_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
+    if group["outputs"] == ["build/original-sigset"]:
+        name = "build/original-sigset/manifest.json"
+        expected = fast_inputs.sigset_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
     files = set()
     for output in group["outputs"]:
         path = root / _relative(output)
@@ -413,7 +438,7 @@ def _full_output_hashes(root):
             if fast_inputs.GMP_NATIVE_HOST:
                 files.update(_gmp_output_hashes(root))
             continue
-        if name in ("build/original-rts-locks", "build/original-open", "build/original-termios"):
+        if name in ("build/original-rts-locks", "build/original-open", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr", "build/original-sigprocmask", "build/original-sigset"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
         for member in path.rglob("*"):

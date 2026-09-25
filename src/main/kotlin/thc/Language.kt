@@ -28,14 +28,20 @@ import com.oracle.truffle.api.nodes.RootNode
 import thc.runtime.Program
 import thc.runtime.BytecodeProgram
 import thc.runtime.ExecutableProgram
+import thc.runtime.CoreArithmeticExceptions
 import thc.runtime.CoreRepresentations
 import thc.runtime.CoreRepresentation
 import thc.runtime.IoMainRoot
 import thc.runtime.TargetLayout
 import java.io.File
+import java.security.MessageDigest
+import java.security.SecureRandom
+import java.util.Base64
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.FutureTask
 import java.util.concurrent.atomic.AtomicReference
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 
 /**
  * Internal Core assembly and request serialization shared by the launcher and tests.
@@ -44,29 +50,50 @@ import java.util.concurrent.atomic.AtomicReference
  * embedding callers should normally use [loadEntry].
  */
 object CoreModules {
-    @Suppress("UNCHECKED_CAST")
-    fun merge(modules: List<Map<String, Any?>>): Map<String, Any?> = merge(modules, emptyList())
+    // Only the host-side request builder can authorize a deferred file read.
+    // Arbitrary guest Source JSON must never acquire a new host-filesystem API.
+    private val packageKey = ByteArray(32).also { SecureRandom().nextBytes(it) }
+    private fun packageCapability(path: String, sha256: String): String {
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(packageKey, "HmacSHA256"))
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(
+            mac.doFinal((path.length.toString() + ":" + path + ":" + sha256).toByteArray(Charsets.UTF_8)))
+    }
 
-    internal fun mergeManagedExports(modules: List<Map<String, Any?>>, admissions: List<ManagedExportAdmission>): Map<String, Any?> =
-        merge(modules, admissions)
+    private fun admission(module: Map<String, Any?>): ManagedExportAdmission? =
+        if ((module["schema"] == 2L || module["schema"] == 2) &&
+            module.containsKey("staticForeignExportRegistration") &&
+            CoreForeignArtifacts.hasRegistrationObligations(module)) ManagedExportAdmission.read(module) else null
 
-    @Suppress("UNCHECKED_CAST")
-    private fun merge(modules: List<Map<String, Any?>>, admissions: List<ManagedExportAdmission>): Map<String, Any?> {
-        require(modules.isNotEmpty()) { "No Core modules supplied" }
-        val bindings = linkedMapOf<String, Map<String, Any?>>()
-        val constructors = linkedMapOf<String, Map<String, Any?>>()
-        val sourceFiles = linkedMapOf<String, Map<String, Any?>>()
-        val sourceSpans = linkedMapOf<String, Map<String, Any?>>()
-        val bindingOrigins = linkedMapOf<String, Map<String, String>>()
-        val foreignLinks = linkedMapOf<Pair<String, String>, ForeignBitcode>()
-        val archiveBindings = linkedMapOf<String, String>()
-        val moduleKeys = hashSetOf<Pair<String, String>>()
-        for (module in modules) {
+    fun merge(modules: List<Map<String, Any?>>): Map<String, Any?> = Merger().also { merger ->
+        modules.forEach { merger.add(it) }
+    }.finish()
+
+    /** Retain only linked definitions, never the complete raw package request. */
+    internal class Merger {
+        private var count = 0
+        private val admissions = arrayListOf<ManagedExportAdmission>()
+        private val bindings = linkedMapOf<String, Map<String, Any?>>()
+        private val constructors = linkedMapOf<String, Map<String, Any?>>()
+        private val sourceFiles = linkedMapOf<String, Map<String, Any?>>()
+        private val sourceSpans = linkedMapOf<String, Map<String, Any?>>()
+        private val bindingOrigins = linkedMapOf<String, Map<String, String>>()
+        private val foreignLinks = linkedMapOf<Pair<String, String>, ForeignBitcode>()
+        private val archiveBindings = linkedMapOf<String, String>()
+        private val moduleKeys = hashSetOf<Pair<String, String>>()
+        @Suppress("UNCHECKED_CAST")
+        fun add(module: Map<String, Any?>, admission: ManagedExportAdmission? = CoreModules.admission(module)) {
+            require(admission == null || admission.module === module) {
+                "Managed export admission belongs to a different Core module"
+            }
+            count++
+            if (admission != null) admissions.add(admission)
             CoreForeignArtifacts.validateArchive(module)
             val link = CoreForeignArtifacts.linked(module)
             val archiveOnly = module["schema"] == 2L || module["schema"] == 2
-            val managedExport = admissions.any { it.module === module }
-            if (archiveOnly && link == null && !managedExport && CoreForeignArtifacts.hasRegistrationObligations(module))
+            val managedExport = admission != null
+            val managedImports = ManagedImportAdmission.read(module) != null
+            if (archiveOnly && link == null && !managedExport && !managedImports && CoreForeignArtifacts.hasRegistrationObligations(module))
                 CoreForeignArtifacts.requireExecutable(module)
             link?.let {
                 require(foreignLinks.putIfAbsent(link.unit to link.module, link) == null) {
@@ -95,7 +122,7 @@ object CoreModules {
             for (b in module["bindings"] as List<Map<String, Any?>>) {
                 val id = b["id"] as String
                 require(bindings.putIfAbsent(id, b) == null) { "Duplicate binding: $id" }
-                if (archiveOnly && link == null && !managedExport)
+                if (archiveOnly && link == null && !managedExport && !managedImports)
                     archiveBindings[id] = "${module["unit"]}:${module["module"]}"
                 // The merged bundle has no single unit/module. Preserve the exact
                 // exporting module for globally named bindings; synthetic entries
@@ -113,12 +140,16 @@ object CoreModules {
                 }
             }
         }
-        return mapOf("schema" to 1L, "ghc" to "9.14.1", "module" to "THC.Bundle",
-            "bindings" to bindings.values.toList(), "constructors" to constructors.values.toList(),
-            "bindingOrigins" to bindingOrigins,
-            "archiveBindings" to archiveBindings,
-            "foreignLinks" to foreignLinks.values.toList(),
-            "sourceFiles" to sourceFiles.values.toList(), "sourceSpans" to sourceSpans.values.toList())
+        fun finish(): Map<String, Any?> {
+            require(count != 0) { "No Core modules supplied" }
+            return mapOf("schema" to 1L, "ghc" to "9.14.1", "module" to "THC.Bundle",
+                "bindings" to bindings.values.toList(), "constructors" to constructors.values.toList(),
+                "bindingOrigins" to bindingOrigins,
+                "archiveBindings" to archiveBindings,
+                "managedRegistrations" to admissions.toList(),
+                "foreignLinks" to foreignLinks.values.toList(),
+                "sourceFiles" to sourceFiles.values.toList(), "sourceSpans" to sourceSpans.values.toList())
+        }
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -183,14 +214,19 @@ object CoreModules {
                         visit(alt[3] as List<Any?>, bound + (expr[2] as String) + (alt[2] as List<String>))
                     }
                 }
+                "prim" -> CoreArithmeticExceptions.payload(expr[1] as String)?.let { reference(it, emptySet()) }
                 "con" -> constructor(expr[1] as String)
             }
         }
-        for (entry in entries) {
+        // Constructing a retained closure still requires a supported body. This
+        // validates its dependencies; registration never invokes it.
+        val registrations = module["managedRegistrations"] as? List<ManagedExportAdmission> ?: emptyList()
+        val roots = (entries + registrations.flatMap { it.exports }.map { it.binder }).distinct()
+        for (entry in roots) {
             val exact = byId[entry]
-            val roots = if (exact != null) listOf(exact) else bindings.filter { it["name"] == entry }
-            require(roots.size == 1) { "Missing or ambiguous entry: $entry" }
-            val root = roots.single()["id"] as String
+            val matches = if (exact != null) listOf(exact) else bindings.filter { it["name"] == entry }
+            require(matches.size == 1) { "Missing or ambiguous entry: $entry" }
+            val root = matches.single()["id"] as String
             if (reachable.add(root)) pending.addLast(root)
         }
         while (pending.isNotEmpty()) {
@@ -215,6 +251,8 @@ object CoreModules {
      * Serialize one load request from Core files or a singleton `@manifest` path.
      * Manifest loading validates its archive and selects strict linking. This step
      * does not execute the entry or bypass the backend's support audit.
+     * Large manifest requests are process-local capabilities; replay revalidates
+     * the unchanged manifest and every referenced artifact in this JVM.
      */
     fun request(paths: List<String>, entry: String, instrument: Boolean = true, diagnosticUnsupported: Boolean = false,
                 backend: String = defaultBackend(), sourceNotesEnabled: Boolean = true, ioMain: Boolean = false,
@@ -237,27 +275,72 @@ object CoreModules {
         requestDocument(paths, mapOf("mode" to "managed-exports", "backend" to backend,
             "instrument" to instrument, "strictLink" to true))
 
+    @Suppress("UNCHECKED_CAST")
+    internal fun visitRequestModules(input: Map<String, Any?>, accept: (Map<String, Any?>) -> Unit): TargetLayout? {
+        val manifest = input["packageManifest"]
+        if (manifest != null) {
+            require(manifest is String && input["modules"] == null && input["targetLayout"] == null) {
+                "Package request must not mix manifest and inline modules"
+            }
+            val expected = input["packageManifestSha256"] as? String
+                ?: error("Missing package manifest identity")
+            val supplied = input["packageCapability"] as? String
+                ?: error("Missing package request capability")
+            require(MessageDigest.isEqual(supplied.toByteArray(Charsets.US_ASCII),
+                packageCapability(manifest, expected).toByteArray(Charsets.US_ASCII))) {
+                "Invalid package request capability"
+            }
+            return CorePackageManifest.visitModules(manifest, expected) { module, _ -> accept(module) }.targetLayout
+        }
+        require(input["packageManifestSha256"] == null && input["packageCapability"] == null) {
+            "Orphan package manifest identity"
+        }
+        val modules = input["modules"] as? List<Map<String, Any?>> ?: error("Expected modules array")
+        modules.forEach(accept)
+        return input["targetLayout"]?.let(TargetLayout::fromDocument)
+    }
+
     private fun requestDocument(paths: List<String>, settings: Map<String, Any>): String {
         val manifest = paths.singleOrNull()?.takeIf { it.startsWith("@") }?.drop(1)
         val options = StringBuilder().also { Json.appendObjectDocument(it,
             Json.stringify(settings)) }
+        if (manifest != null) {
+            // Small requests retain their established JSON shape. Large package
+            // sets carry a content-bound manifest reference, never a combined
+            // multi-gigabyte module document or raw modules array.
+            val limit = 2 * 1024 * 1024
+            var inline: StringBuilder? = StringBuilder()
+            var count = 0
+            val result = CorePackageManifest.visitModules(manifest) { _, source ->
+                val destination = inline
+                if (destination != null) {
+                    if (destination.length + source.length > limit) inline = null
+                    else {
+                        if (count++ != 0) destination.append(',')
+                        Json.appendObjectDocument(destination, source)
+                    }
+                }
+            }
+            if (inline == null) return Json.stringify(settings + mapOf(
+                "packageManifest" to result.manifestPath,
+                "packageManifestSha256" to result.manifestSha256,
+                "packageCapability" to packageCapability(result.manifestPath, result.manifestSha256)))
+            return buildString {
+                append(options, 0, options.length - 1)
+                append(",\"modules\":[").append(inline).append(']')
+                result.targetLayout?.let { append(",\"targetLayout\":").append(Json.stringify(it.document())) }
+                append('}')
+            }
+        }
         return buildString {
             append(options, 0, options.length - 1)
             append(",\"modules\":[")
-            val layout = if (manifest != null) CorePackageManifest.appendModules(this, manifest) else {
-                paths.forEachIndexed { index, path ->
-                    if (index != 0) append(',')
-                    // Validate each complete document before embedding it. Language.parse
-                    // materializes the modules once; all bindings and metadata travel intact.
-                    Json.appendObjectDocument(this, File(path).readText())
-                }
-                null
+            paths.forEachIndexed { index, path ->
+                if (index != 0) append(',')
+                // Loose files preserve the existing explicit document protocol.
+                Json.appendObjectDocument(this, File(path).readText())
             }
             append(']')
-            if (layout != null) {
-                append(",\"targetLayout\":")
-                append(Json.stringify(layout.document()))
-            }
             append('}')
         }
     }
@@ -272,6 +355,7 @@ class Language : TruffleLanguage<Language.State>() {
     internal val handoffState = locals.createContextThreadLocal { _, _ -> thc.runtime.HandoffState() }
     class State(val env: Env, language: Language) {
         internal val managedExports = ManagedExportRegistry(this, language)
+        internal val foreignRoots = ManagedForeignRoots(this)
         internal val handoffLayouts = thc.runtime.HandoffLayouts(language)
         internal val javaScriptImports = thc.runtime.JavaScriptImports()
         internal val maskingState = ThreadLocal.withInitial { thc.runtime.MaskingState.UNMASKED }
@@ -283,12 +367,15 @@ class Language : TruffleLanguage<Language.State>() {
         // the CLI and explicit NativeIO factory install the fixed native provider.
         internal var nativeFiles: thc.runtime.NativeFileProvider? = null
         internal val stdio = thc.runtime.ManagedStdio(files)
+        internal val signalMask = thc.runtime.ManagedSignalMask(this)
+        internal val savedTermios = thc.runtime.SavedTermios(this)
         internal val iconv = thc.runtime.ManagedIconv({ cbits() }, stdio, threads)
         internal val strerror = thc.runtime.ManagedStrerror({ cbits() }, threads)
         internal val stackSnapshots = thc.runtime.ManagedStackRegistry()
         internal val capturedAsyncRequests = thc.runtime.CapturedAsyncRequests()
         internal val stablePointers = thc.runtime.StablePointers()
         internal val nativeAddresses = thc.runtime.NativeAddresses(env)
+        internal val nativeAllocations = thc.runtime.ManagedNativeAllocations(env)
         internal val weaks = thc.runtime.ManagedWeaks()
         // A future SHARED policy may keep the lockless thunk path while this is valid.
         // The transition is one-way and belongs to this context, not to Language.
@@ -358,6 +445,8 @@ class Language : TruffleLanguage<Language.State>() {
     override fun finalizeContext(context: State) { context.iconv.dispose() }
     override fun disposeContext(context: State) {
         context.managedExports.close()
+        context.foreignRoots.close()
+        context.savedTermios.close()
         try {
             try { context.threads.close() } finally {
                 try { context.capturedAsyncRequests.close() } finally {
@@ -370,7 +459,9 @@ class Language : TruffleLanguage<Language.State>() {
             }
         } finally {
             try { context.weaks.close() } finally {
-                try { context.stablePointers.close() } finally { context.nativeAddresses.close() }
+                try { context.stablePointers.close() } finally {
+                    try { context.nativeAddresses.close() } finally { context.nativeAllocations.close() }
+                }
             }
         }
     }
@@ -390,7 +481,7 @@ class Language : TruffleLanguage<Language.State>() {
                 override fun getName() = "THC load managed exports"
             }.callTarget
         }
-        val modules = input["modules"] as? List<Map<String, Any?>> ?: error("Expected modules array")
+        val merger = CoreModules.Merger()
         val entry = input["entry"] as? String ?: error("Expected entry name")
         val shutdownEntry = input["shutdownEntry"] as? String
         require(input["shutdownEntry"] == null ||
@@ -400,14 +491,13 @@ class Language : TruffleLanguage<Language.State>() {
         require(input["ioMain"] != true || input["diagnosticUnsupported"] != true) {
             "IO main requires strict unsupported-Core rejection"
         }
-        val layout = input["targetLayout"]?.let(TargetLayout::fromDocument)
-        val linked = CoreModules.reachable(CoreModules.merge(modules),
+        val layout = CoreModules.visitRequestModules(input) { merger.add(it) }
+        val linked = CoreModules.reachable(merger.finish(),
             if (shutdownEntry == null) listOf(entry) else listOf(entry, shutdownEntry),
             input["strictLink"] == true) + mapOf("instrument" to (input["instrument"] != false),
             "diagnosticUnsupported" to (input["diagnosticUnsupported"] == true),
             "sourceNotesEnabled" to (input["sourceNotesEnabled"] != false)) +
             (if (layout == null) emptyMap() else mapOf("targetLayout" to layout))
-        (linked["foreignLinks"] as List<ForeignBitcode>).forEach { currentState(null).cbits().link(it) }
         val bindings = linked["bindings"] as List<Map<String, Any?>>
         val selected = bindings.singleOrNull { it["id"] == entry } ?: bindings.single { it["name"] == entry }
         val selectedExpression = selected["expr"] as List<Any?>
@@ -433,15 +523,22 @@ class Language : TruffleLanguage<Language.State>() {
             if (input["diagnosticUnsupported"] != true) throw gap
             gap.message
         }
-        val program = when (val backend = input["backend"] ?: defaultBackend()) {
-            "ast" -> Program(this, linked)
-            "bytecode" -> BytecodeProgram(this, linked, true)
-            else -> throw IllegalArgumentException("Unknown THC backend: $backend")
-        }
-        val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), hostResultFault, ioResult, this,
-            shutdownEntry, shutdownResult)
+        val backend = input["backend"] ?: defaultBackend()
+        require(backend == "ast" || backend == "bytecode") { "Unknown THC backend: $backend" }
+        val registrations = linked["managedRegistrations"] as List<ManagedExportAdmission>
         return object : RootNode(this) {
-            override fun execute(frame: VirtualFrame): Any = value
+            override fun execute(frame: VirtualFrame): Any {
+                // Parsed roots can be shared by an Engine. Programs, CAFs and
+                // registration roots belong to the Context executing the load.
+                val owner = currentState(this)
+                (linked["foreignLinks"] as List<ForeignBitcode>).forEach { owner.cbits().link(it) }
+                val program = if (backend == "ast") Program(this@Language, linked)
+                    else BytecodeProgram(this@Language, linked, true)
+                val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), hostResultFault,
+                    ioResult, this@Language, shutdownEntry, shutdownResult)
+                owner.foreignRoots.retain(program, registrations)
+                return value
+            }
             override fun getName(): String = "THC load $entry"
         }.callTarget
     }

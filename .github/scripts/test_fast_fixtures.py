@@ -19,6 +19,130 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_original_tcsetattr_registration_and_closed_native_receipt(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['original-tcsetattr']
+        self.assertEqual('original-tcsetattr', owners['thc.runtime.OriginalTcsetattrTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-tcsetattr']}], group['commands'])
+        self.assertIn('"$fixture_bin" original-tcsetattr', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/original-tcsetattr', fast_fixtures.FULL_OUTPUT_ROOTS)
+        cache = fast_fixtures.fast_inputs
+        name = 'build/original-tcsetattr/manifest.json'
+        with mock.patch.object(cache, 'GMP_NATIVE_HOST', True):
+            artifacts = {}
+            for item in cache.ORIGINAL_TCSETATTR_OUTPUTS - {name}:
+                path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
+            receipt = dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
+                           installedArtifactsHashed=False, nativeRows=22,
+                           entries=list(cache.ORIGINAL_TCSETATTR_ENTRIES), artifactHashes=artifacts)
+            path = self.root / name; path.write_text(json.dumps(receipt))
+            self.assertEqual(cache.ORIGINAL_TCSETATTR_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+            for bad in (dict(receipt, schema=True), dict(receipt, entries=[]), dict(receipt, nativeRows=21),
+                        dict(receipt, nativeRows=True), dict(receipt, runtimeVerified=True),
+                        dict(receipt, artifactHashes={}), dict(receipt, artifactHashes=dict(artifacts, **{'build/original-tcsetattr/extra.json': '0'*64}))):
+                with self.assertRaises(cache.CacheMiss): cache.tcsetattr_artifact_hashes(bad)
+            artifact = self.root / 'build/original-tcsetattr/pre/core/OriginalTcsetattrAudit.json'
+            artifact.write_text('mutated')
+            with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+            artifact.unlink(); artifact.symlink_to(self.root / 'build/original-tcsetattr/oracle.json')
+            with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
+
+    def test_original_tcgetattr_registration_and_closed_native_receipt(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['original-tcgetattr']
+        self.assertEqual('original-tcgetattr', owners['thc.runtime.OriginalTcgetattrTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-tcgetattr']}], group['commands'])
+        self.assertIn('"$fixture_bin" original-tcgetattr', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/original-tcgetattr', fast_fixtures.FULL_OUTPUT_ROOTS)
+        cache = fast_fixtures.fast_inputs
+        name = 'build/original-tcgetattr/manifest.json'
+        with mock.patch.object(cache, 'GMP_NATIVE_HOST', True):
+            artifacts = {}
+            for item in cache.ORIGINAL_TCGETATTR_OUTPUTS - {name}:
+                path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
+            receipt = dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
+                           installedArtifactsHashed=False, nativeRows=12,
+                           entries=list(cache.ORIGINAL_TCGETATTR_ENTRIES), artifactHashes=artifacts)
+            path = self.root / name; path.write_text(json.dumps(receipt))
+            self.assertEqual(cache.ORIGINAL_TCGETATTR_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+            for bad in (dict(receipt, schema=True), dict(receipt, entries=[]), dict(receipt, nativeRows=11),
+                        dict(receipt, nativeRows=True), dict(receipt, runtimeVerified=True),
+                        dict(receipt, artifactHashes={}), dict(receipt, artifactHashes=dict(artifacts, **{'build/original-tcgetattr/extra.json': '0'*64}))):
+                with self.assertRaises(cache.CacheMiss): cache.tcgetattr_artifact_hashes(bad)
+            artifact = self.root / 'build/original-tcgetattr/pre/core/OriginalTcgetattrAudit.json'
+            artifact.write_text('mutated')
+            with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+            artifact.unlink(); artifact.symlink_to(self.root / 'build/original-tcgetattr/oracle.json')
+            with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
+
+    def test_original_sigprocmask_registration_and_closed_native_receipt(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['original-sigprocmask']
+        self.assertEqual('original-sigprocmask', owners['thc.runtime.OriginalSigprocmaskTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-sigprocmask']}], group['commands'])
+        self.assertIn('"$fixture_bin" original-sigprocmask', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/original-sigprocmask', fast_fixtures.FULL_OUTPUT_ROOTS)
+        cache = fast_fixtures.fast_inputs
+        name = 'build/original-sigprocmask/manifest.json'
+        with mock.patch.object(cache, 'GMP_NATIVE_HOST', True):
+            artifacts = {}
+            for item in cache.ORIGINAL_SIGPROCMASK_OUTPUTS - {name}:
+                path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
+            receipt = dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
+                           installedArtifactsHashed=False, nativeRows=8,
+                           entries=list(cache.ORIGINAL_SIGPROCMASK_ENTRIES), artifactHashes=artifacts)
+            path = self.root / name; path.write_text(json.dumps(receipt))
+            self.assertEqual(cache.ORIGINAL_SIGPROCMASK_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+            for bad in (dict(receipt, schema=True), dict(receipt, entries=[]), dict(receipt, nativeRows=7),
+                        dict(receipt, nativeRows=True), dict(receipt, runtimeVerified=True),
+                        dict(receipt, artifactHashes={}), dict(receipt, artifactHashes=dict(artifacts, **{'build/original-sigprocmask/extra.json': '0'*64}))):
+                with self.assertRaises(cache.CacheMiss): cache.sigprocmask_artifact_hashes(bad)
+            artifact = self.root / 'build/original-sigprocmask/pre/core/OriginalSigprocmaskAudit.json'
+            artifact.write_text('mutated')
+            with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+            artifact.unlink(); artifact.symlink_to(self.root / 'build/original-sigprocmask/oracle.json')
+            with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
+
+    def test_original_sigset_registration_and_closed_native_receipt(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['original-sigset']
+        self.assertEqual('original-sigset', owners['thc.runtime.OriginalSigsetTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-sigset']}], group['commands'])
+        self.assertIn('"$fixture_bin" original-sigset', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/original-sigset', fast_fixtures.FULL_OUTPUT_ROOTS)
+        cache = fast_fixtures.fast_inputs
+        name = 'build/original-sigset/manifest.json'
+        with mock.patch.object(cache, 'GMP_NATIVE_HOST', True):
+            artifacts = {}
+            for item in cache.ORIGINAL_SIGSET_OUTPUTS - {name}:
+                path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
+            receipt = dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
+                           installedArtifactsHashed=False, nativeRows=532,
+                           entries=list(cache.ORIGINAL_SIGSET_ENTRIES), artifactHashes=artifacts)
+            path = self.root / name; path.write_text(json.dumps(receipt))
+            self.assertEqual(cache.ORIGINAL_SIGSET_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+            for bad in (dict(receipt, schema=True), dict(receipt, entries=[]), dict(receipt, nativeRows=531),
+                        dict(receipt, nativeRows=True), dict(receipt, runtimeVerified=True),
+                        dict(receipt, artifactHashes={}), dict(receipt, artifactHashes=dict(artifacts, **{'build/original-sigset/extra.json': '0'*64}))):
+                with self.assertRaises(cache.CacheMiss): cache.sigset_artifact_hashes(bad)
+            artifact = self.root / 'build/original-sigset/pre/core/OriginalSigsetAudit.json'
+            artifact.write_text('mutated')
+            with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+            artifact.unlink(); artifact.symlink_to(self.root / 'build/original-sigset/oracle.json')
+            with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
+
     def test_full_core_decoder_is_explicit_but_getter_controls_remain_baseline(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
@@ -81,17 +205,29 @@ class FixturePreparationTest(unittest.TestCase):
         manifest, owners = fast_fixtures._manifest(project)
         group = manifest['groups']['native-addresses']
         self.assertEqual('native-addresses', owners['thc.runtime.NativeAddressTest'])
+        self.assertEqual('native-addresses', owners['thc.runtime.NativeMallocTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
                                    'native-addresses']}], group['commands'])
-        self.assertEqual(['build/native-addresses/manifest.json', 'build/native-addresses/oracle.json'], group['outputs'])
+        self.assertEqual(['build/native-addresses/manifest.json', 'build/native-addresses/oracle.json',
+                          'build/native-malloc/manifest.json', 'build/native-malloc/oracle.txt'], group['outputs'])
+        self.assertIn('compiler/test-fixtures/NativeMallocNative.hs', group['sources'])
+        self.assertIn('src/test/resources/core/original-malloc-descriptors.json', group['sources'])
         self.assertTrue(all((project / path).is_file() for path in group['sources']))
         self.assertIn('"$fixture_bin" native-addresses', (project / 'scripts/prepare-tests.sh').read_text())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/native-addresses/manifest.json', fast_fixtures.FULL_REQUIRED)
+        self.assertIn('build/native-malloc/manifest.json', fast_fixtures.FULL_REQUIRED)
+        self.assertIn('build/native-malloc/oracle.txt', fast_fixtures.FULL_REQUIRED)
         for suffix in ('manifest.json', 'oracle.json'):
             self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/native-addresses/' + suffix, {}))
             self.assertIn('"native-addresses/' + suffix + '"', (project / 'build.gradle.kts').read_text())
         self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/native-addresses/native/oracle', {}))
+        for suffix in ('manifest.json', 'oracle.txt'):
+            path = 'build/native-malloc/' + suffix
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path, {}))
+            self.assertIn('"native-malloc/' + suffix + '"', (project / 'build.gradle.kts').read_text())
+            self.assertIn(path, (project / '.github/workflows/build.yml').read_text())
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/native-malloc/native/oracle', {}))
 
     def test_original_gmp_registration_platform_and_exact_cache(self):
         project = Path(__file__).resolve().parents[2]
@@ -210,7 +346,11 @@ class FixturePreparationTest(unittest.TestCase):
         manifest, owners = fast_fixtures._manifest(project)
         group = manifest['groups']['original-termios']
         self.assertEqual('original-termios', owners['thc.runtime.OriginalTermiosTest'])
+        self.assertEqual('original-termios', owners['thc.runtime.OriginalSavedTermiosTest'])
         self.assertIn('thc.runtime.TermiosAbiTest', manifest['fixtureFreeJunit'])
+        self.assertIn('thc.runtime.SavedTermiosTest', manifest['fixtureFreeJunit'])
+        for fixture in ('Audit', 'Native'):
+            self.assertIn(f'compiler/test-fixtures/OriginalSavedTermios{fixture}.hs', group['sources'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-termios']}], group['commands'])
         self.assertIn('"$fixture_bin" original-termios', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/original-termios', fast_fixtures.FULL_OUTPUT_ROOTS)
@@ -229,11 +369,19 @@ class FixturePreparationTest(unittest.TestCase):
             for bad in (dict(receipt, schema=True), dict(receipt, entries=[]),
                         dict(receipt, artifactHashes={}), dict(receipt, artifactHashes=dict(artifacts, **{'build/original-termios/extra.json': '0'*64}))):
                 with self.assertRaises(cache.CacheMiss): cache.termios_artifact_hashes(bad)
-            artifact = self.root / 'build/original-termios/pre/core/OriginalTermiosAudit.json'
-            artifact.write_text('mutated')
-            with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
-            artifact.unlink(); artifact.symlink_to(self.root / 'build/original-termios/oracle.json')
-            with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
+            for missing in ('saved/native/oracle', 'saved/pre/core/OriginalSavedTermiosAudit.json',
+                            'saved/post/originalSetSavedTermios.audit.json', 'logs/saved-native-run.stdout'):
+                incomplete = dict(artifacts); del incomplete['build/original-termios/' + missing]
+                with self.assertRaises(cache.CacheMiss):
+                    cache.termios_artifact_hashes(dict(receipt, artifactHashes=incomplete))
+            for relative in ('pre/core/OriginalTermiosAudit.json', 'saved/pre/core/OriginalSavedTermiosAudit.json',
+                             'saved/native/oracle', 'logs/saved-native-run.stdout'):
+                artifact = self.root / 'build/original-termios' / relative
+                artifact.write_text('mutated')
+                with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+                artifact.unlink(); artifact.symlink_to(self.root / 'build/original-termios/oracle.json')
+                with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
+                artifact.unlink(); artifact.write_text('fixture\n')
 
     def test_original_posix_stat_fixture_registration_and_narrow_cache(self):
         project = Path(__file__).resolve().parents[2]
@@ -387,6 +535,7 @@ class FixturePreparationTest(unittest.TestCase):
         manifest, owners = fast_fixtures._manifest(project)
         group = manifest['groups']['interface-core']
         self.assertEqual('interface-core', owners['thc.runtime.InterfaceCoreNativeTest'])
+        self.assertEqual('interface-core', owners['thc.ManagedImportStubsNativeTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
                                    'interface-core']}], group['commands'])
         self.assertEqual(['build/interface-core'], group['outputs'])
@@ -410,7 +559,10 @@ class FixturePreparationTest(unittest.TestCase):
                      'InterfaceForeign.json', 'foreign-packages.json',
                      'foreign-association.json', 'installed-bound-facts.json',
                      'foreign-alias/a.json', 'foreign-alias/b.json',
-                     'source/InterfaceForeignAlias.hs.saved'):
+                     'source/InterfaceForeignAlias.hs.saved', 'import-stubs/plain.json', 'import-stubs/extra-file.json',
+                     'import-stubs/wrapper.json', 'import-stubs/instrumented.json',
+                     'source/ForeignImportStubs.hs.saved', 'import-stubs/plain/ForeignImportStubs.hi',
+                     'logs/import-stubs-native-oracle.stdout'):
             self.assertIn('build/interface-core/' + name, fast_fixtures.FULL_REQUIRED)
         self.assertIn('"interface-core/**/*.json"', (project / 'build.gradle.kts').read_text())
 

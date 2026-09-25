@@ -14,7 +14,7 @@ internal class PosixStat private constructor(val size: Long, private val fields:
     private val types: Map<String, Long>) {
     private data class Field(val offset: Long, val width: Int)
 
-    fun field(name: String, address: ManagedAddress): Long {
+    fun field(name: String, address: ManagedAddress): Long = address.withNativeBorrow {
         val field = fields.getValue(name)
         address.requireRange(field.offset, field.width.toLong())
         // readWord8 preserves managed pointer-cell protection, unlike rawBacking.
@@ -24,7 +24,7 @@ internal class PosixStat private constructor(val size: Long, private val fields:
             val shift = (if (little) index else field.width - 1 - index) * 8
             value = value or (address.readWord8(field.offset + index) shl shift)
         }
-        return value
+        value
     }
 
     fun isType(name: String, mode: Long): Long {

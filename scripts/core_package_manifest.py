@@ -129,6 +129,207 @@ def linked_foreign(module):
     return True
 
 
+def managed_registration(module):
+    """Validate retained-root evidence, never native callback callability."""
+    if 'staticForeignExportRegistration' not in module:
+        return None
+    def require(condition, detail):
+        if not condition:
+            raise ValueError('Invalid managed foreign registration: ' + detail)
+    def record(value, keys):
+        require(isinstance(value, dict) and set(value) == set(keys.split()), 'record fields')
+        return value
+    def text(value):
+        require(isinstance(value, str) and value and '\0' not in value, 'text')
+        return value
+    def identity(value):
+        record(value, 'unit module occurrence namespace')
+        for item in value.values(): text(item)
+        return value
+    def typ(value):
+        require(isinstance(value, dict), 'type')
+        kind = value.get('kind')
+        if kind == 'tycon':
+            record(value, 'kind name arguments'); identity(value['name'])
+            require(isinstance(value['arguments'], list), 'type arguments')
+            for item in value['arguments']: typ(item)
+        elif kind in ('application', 'function'):
+            fields = 'function argument' if kind == 'application' else 'multiplicity argument result'
+            record(value, 'kind ' + fields)
+            for key in fields.split(): typ(value[key])
+        else: require(False, 'type constructor')
+        return value
+    def nominal(value, name, namespace, arity=0):
+        return (value['kind'] == 'tycon' and value['name'] == dict(unit='ghc-internal',
+                module='GHC.Internal.Types', occurrence=name, namespace=namespace) and
+                len(value['arguments']) == arity)
+    def exact(value, wanted):
+        if type(value) is not type(wanted): return False
+        if isinstance(wanted, dict):
+            return value.keys() == wanted.keys() and all(exact(value[key], item) for key, item in wanted.items())
+        if isinstance(wanted, list):
+            return len(value) == len(wanted) and all(exact(a, b) for a, b in zip(value, wanted))
+        return value == wanted
+    require(type(module.get('schema')) is int and module['schema'] == 2 and 'foreignLink' not in module,
+            'original unlinked schema 2 required')
+    unit, name = text(module.get('unit')), text(module.get('module'))
+    inventory = record(module.get('staticForeignExports'), 'schema producer scope execution unit module exports')
+    require(type(inventory['schema']) is int and inventory['schema'] == 1 and
+            inventory['producer'] == 'THC.Plugin/typeCheckResultAction' and
+            inventory['scope'] == 'static-export-associations' and inventory['execution'] == 'not-linked' and
+            inventory['unit'] == unit and inventory['module'] == name, 'inventory owner/schema')
+    proof = record(module['staticForeignExportRegistration'],
+                   'schema scope execution profile status roots wordBits expectedForeign expectedExports')
+    require(type(proof['schema']) is int and proof['schema'] == 2 and proof['scope'] == 'retained-foreign-products' and
+            proof['execution'] == 'not-linked' and proof['status'] == 'verified' and
+            proof['profile'] in ('ghc-9.14.1-thc-only-native-static-ccall-v1',
+                                 'ghc-9.14.1-thc-only-native-static-ccall-imports-v2') and
+            type(proof['wordBits']) is int and proof['wordBits'] == 64, 'verified producer profile')
+    require(exact(proof['expectedForeign'], module.get('foreign')) and exact(proof['expectedExports'], inventory),
+            'whole archived product/inventory changed')
+    foreign = record(module.get('foreign'), 'schema execution stubs files')
+    validate_archive_only_foreign(module)
+    stubs = foreign['stubs']
+    require(type(foreign['schema']) is int and foreign['schema'] == 1 and foreign['execution'] == 'not-linked' and
+            foreign['files'] == [] and stubs is not None and stubs['finalizers'] == [], 'foreign products')
+    initializers = stubs['initializers']
+    require(len(initializers) == 1 and initializers[0]['unit'] == unit and initializers[0]['module'] == name,
+            'initializer owner')
+    declarations = inventory['exports']
+    require(isinstance(declarations, list) and declarations, 'export inventory')
+    roots, ids, symbols = [], [], set()
+    for declaration in declarations:
+        record(declaration, 'binder symbol convention declaredType normalizedType normalizationRole arguments result effect')
+        binder = identity(declaration['binder'])
+        require(binder['unit'] == unit and binder['module'] == name and binder['namespace'] == 'value', 'binder owner')
+        key = f"{unit}:{name}.{binder['occurrence']}"
+        require(sum(binding.get('id') == key for binding in module.get('bindings', [])) == 1, 'actual binder')
+        symbol = text(declaration['symbol'])
+        require(symbol not in symbols, 'duplicate symbol'); symbols.add(symbol)
+        require(declaration['convention'] == 'ccall' and declaration['normalizationRole'] == 'representational', 'convention')
+        typ(declaration['declaredType']); remaining = typ(declaration['normalizedType'])
+        arguments = []
+        while remaining['kind'] == 'function':
+            require(nominal(remaining['multiplicity'], 'Many', 'data'), 'multiplicity')
+            arguments.append(remaining['argument']); remaining = remaining['result']
+        require(declaration['effect'] in ('io', 'pure'), 'effect')
+        if declaration['effect'] == 'io':
+            require(nominal(remaining, 'IO', 'type', 1), 'IO result')
+            remaining = remaining['arguments'][0]
+        else: require(not nominal(remaining, 'IO', 'type', 1), 'pure result')
+        require(arguments == declaration['arguments'] and remaining == declaration['result'], 'signature projections')
+        roots.append(binder); ids.append(key)
+    require(proof['roots'] == roots, 'ordered registration roots')
+    return ids
+
+
+def managed_import_stubs(module):
+    """Admit inert stock import products, never an arbitrary native call."""
+    if 'staticForeignImportStubs' not in module:
+        return False
+    def require(ok, detail):
+        if not ok: raise ValueError('Invalid managed static-import provenance: ' + detail)
+    def record(value, fields):
+        require(isinstance(value, dict) and set(value) == set(fields.split()), 'record fields')
+        return value
+    def text(value):
+        require(isinstance(value, str) and bool(value) and '\0' not in value, 'text')
+        return value
+    def nullable(value):
+        if value is not None: text(value)
+    def identity(value):
+        record(value, 'unit module occurrence namespace')
+        for item in value.values(): text(item)
+        require(value['namespace'] in ('value', 'type', 'data'), 'name namespace')
+        return value
+    def typ(value):
+        require(isinstance(value, dict), 'type')
+        kind = value.get('kind')
+        if kind == 'tycon':
+            record(value, 'kind name arguments'); identity(value['name'])
+            require(isinstance(value['arguments'], list), 'type arguments')
+            for item in value['arguments']: typ(item)
+        elif kind in ('application', 'function'):
+            fields = 'function argument' if kind == 'application' else 'multiplicity argument result'
+            record(value, 'kind ' + fields)
+            for key in fields.split(): typ(value[key])
+        else: require(False, 'unknown type')
+    def exact(value, expected):
+        if type(value) is not type(expected): return False
+        if isinstance(value, dict):
+            return value.keys() == expected.keys() and all(exact(value[k], v) for k, v in expected.items())
+        if isinstance(value, list): return len(value) == len(expected) and all(map(lambda p: exact(*p), zip(value, expected)))
+        return value == expected
+    def calls(value):
+        if isinstance(value, dict):
+            return ([value['foreignCall']] if 'foreignCall' in value else []) + sum((calls(v) for v in value.values()), [])
+        if isinstance(value, list): return sum((calls(v) for v in value), [])
+        return []
+    require(type(module.get('schema')) is int and module['schema'] == 2 and 'foreignLink' not in module, 'archive schema/link')
+    raw = module['staticForeignImportStubs']
+    require(isinstance(raw, dict), 'proof record')
+    verified = raw.get('status') == 'verified'
+    proof = record(raw, 'schema scope execution profile unit module status ' +
+                   ('wordBits expectedForeign imports expectedCalls' if verified else 'reason'))
+    require(type(proof['schema']) is int and proof['schema'] == 1 and
+            proof['scope'] == 'retained-static-import-products' and proof['execution'] == 'not-linked' and
+            proof['profile'] == 'ghc-9.14.1-thc-only-static-c-imports-v1' and module.get('ghc') == '9.14.1' and
+            proof['unit'] == module.get('unit') and proof['module'] == module.get('module'), 'schema/profile/owner')
+    text(proof['unit']); text(proof['module'])
+    if not verified:
+        require(proof['status'] in ('unclassified', 'rejected'), 'status'); text(proof['reason'])
+        return False
+    require(type(proof['wordBits']) is int and proof['wordBits'] == 64, 'word width')
+    require(exact(proof['expectedForeign'], module.get('foreign')), 'retained foreign product differs')
+    foreign = record(module.get('foreign'), 'schema execution stubs files')
+    require(type(foreign['schema']) is int and foreign['schema'] == 1 and foreign['execution'] == 'not-linked', 'foreign schema/execution')
+    validate_archive_only_foreign(module)
+    stubs = record(foreign['stubs'], 'header source initializers finalizers')
+    require(stubs['header'] == '' and stubs['initializers'] == [] and stubs['finalizers'] == [] and foreign['files'] == [], 'unclassified native obligations')
+    text(stubs['source'])
+    imports = proof['imports']
+    require(isinstance(imports, list) and imports, 'import inventory')
+    binders, generated = set(), {}
+    primitives = {'void', 'IntRep', 'WordRep', 'Int8Rep', 'Word8Rep', 'Int16Rep', 'Word16Rep',
+                  'Int32Rep', 'Word32Rep', 'Int64Rep', 'Word64Rep', 'AddrRep', 'FloatRep', 'DoubleRep'}
+    def scalar(primitive, evaluated):
+        return dict(kind={'void': 'void', 'AddrRep': 'address', 'FloatRep': 'float', 'DoubleRep': 'double'}.get(primitive, 'long'),
+                    primReps=[] if primitive == 'void' else [primitive], evaluated=evaluated)
+    for item in imports:
+        record(item, 'binder header symbol unit isFunction convention safety declaredType normalizedType normalizationRole emitted')
+        binder = identity(item['binder']); key = tuple(binder[k] for k in ('unit', 'module', 'occurrence', 'namespace'))
+        require(binder['unit'] == module['unit'] and binder['module'] == module['module'] and
+                binder['namespace'] == 'value' and key not in binders, 'duplicate or foreign import binder'); binders.add(key)
+        nullable(item['header']); nullable(item['unit']); text(item['symbol'])
+        require(item['convention'] in ('ccall', 'capi') and item['safety'] in ('safe', 'unsafe', 'interruptible') and
+                type(item['isFunction']) is bool and (item['isFunction'] or item['convention'] == 'capi') and
+                item['normalizationRole'] == 'representational', 'static import declaration')
+        typ(item['declaredType']); typ(item['normalizedType'])
+        emitted = record(item['emitted'], 'symbol unit convention safety arguments result')
+        text(emitted['symbol']); nullable(emitted['unit'])
+        require(all(emitted[k] == item[k] for k in ('unit', 'convention', 'safety')), 'emitted call ownership/convention')
+        args, result = emitted['arguments'], emitted['result']
+        require(all(isinstance(v, list) and v and all(isinstance(p, str) and p in primitives for p in v) for v in (args, result)), 'scalar carriers')
+        require(args[-1] == 'void' and 'void' not in args[:-1] and result[0] == 'void' and
+                len(result) in (1, 2) and 'void' not in result[1:], 'State/result shape')
+        if item['convention'] == 'ccall': require(emitted['symbol'] == item['symbol'], 'direct C symbol changed')
+        else:
+            key = (emitted['unit'], emitted['symbol']); require(key not in generated, 'duplicate generated CAPI target')
+            generated[key] = dict(schema=1, target=dict(kind='static', symbol=emitted['symbol'], unit=emitted['unit'], isFunction=True),
+                convention=emitted['convention'], safety=emitted['safety'], arity=len(args), suppliedArity=len(args),
+                argumentReps=[scalar(p, False) for p in args], resultRep=dict(kind='unknown', primReps=[p for p in result if p != 'void'],
+                aggregate='unboxed-tuple', components=[scalar(p, True) for p in result], evaluated=False))
+    require(generated, 'no generated CAPI products')
+    actual = calls(module.get('bindings'))
+    require(isinstance(proof['expectedCalls'], list) and exact(proof['expectedCalls'], actual), 'Core foreign-call inventory differs')
+    for call in actual:
+        target = call.get('target') if isinstance(call, dict) else None
+        if isinstance(target, dict):
+            expected = generated.get((target.get('unit'), target.get('symbol')))
+            if expected is not None: require(exact(call, expected), 'generated CAPI call ABI differs')
+    return True
+
+
 def foreign_execution_issue(module):
     """Explain a valid archive-only foreign marker without admitting it as Core."""
     if 'foreignLink' in module and linked_foreign(module):
@@ -341,6 +542,8 @@ def _load(path, audit_archives):
                     'foreignLink' in module):
                 validate_archive_only_foreign(module)
                 executable = linked_foreign(module)
+            if 'staticForeignImportStubs' in module:
+                executable = managed_import_stubs(module) or executable
             if not executable:
                 detail = foreign_execution_issue(module)
                 if audit_archives and detail:

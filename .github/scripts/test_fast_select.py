@@ -732,8 +732,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         return self.families["src/main/kotlin/thc/runtime/" + name + ".kt"]
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
-        self.assertEqual({"AddressIdentity", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArrays", "ManagedMutVars", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
-                          "IntegerVectorPrimitives", "FloatingVectorPrimitives"},
+        self.assertEqual({"AddressIdentity", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArrays", "ManagedMutVars", "ManagedNativeAllocations", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
+                          "IntegerVectorPrimitives", "FloatingVectorPrimitives", "CoreDataLabels"},
                          {Path(path).stem for path in self.families})
         for path, group in self.families.items():
             with self.subTest(path=path):
@@ -751,6 +751,32 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertEqual({"junit": ["thc.runtime.CoreBoundThreadForeignTest"],
                           "python": ["scripts/test-audit-core.py"]},
                          self.family("CoreBoundThreadForeign"))
+
+    def test_native_malloc_source_and_composite_owners_select_both_consumers(self):
+        malloc = "thc.runtime.NativeMallocTest"
+        addresses = "thc.runtime.NativeAddressTest"
+        self.assertEqual([malloc], self.family("ManagedNativeAllocations")["junit"])
+        owners = self.policy["owners"]
+        self.assertEqual([malloc], owners["src/main/java/thc/runtime/NativeMallocAllocation.java"]["junit"])
+        self.assertEqual({malloc, addresses},
+                         set(owners["test/haskell-fixtures/NativeAddressFixtures.hs"]["junit"]))
+        self.assertEqual({malloc, addresses},
+                         set(owners["src/main/kotlin/thc/runtime/NativeAddresses.kt"]["junit"]))
+        for path in ("compiler/test-fixtures/NativeMallocNative.hs",
+                     "src/test/resources/core/original-malloc-descriptors.json"):
+            self.assertEqual([malloc], owners[path]["junit"])
+        self.assertIn(malloc, owners["test/haskell-fixtures/Main.hs"]["junit"])
+
+    def test_saved_termios_owners_select_pointer_and_original_fixture_controls(self):
+        owners = self.policy["owners"]
+        original = "thc.runtime.OriginalSavedTermiosTest"
+        self.assertEqual({"thc.runtime.SavedTermiosTest", original},
+                         set(owners["src/main/kotlin/thc/runtime/SavedTermios.kt"]["junit"]))
+        for fixture in ("Audit", "Native"):
+            self.assertEqual([original], owners[f"compiler/test-fixtures/OriginalSavedTermios{fixture}.hs"]["junit"])
+        for path in ("test/haskell-fixtures/OriginalTermiosFixtures.hs", "test/haskell-fixtures/Main.hs",
+                     "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt", "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt"):
+            self.assertIn(original, owners[path]["junit"])
 
     def test_fixture_owners_match_the_preparation_manifest(self):
         fixture = json.loads(Path(__file__).with_name("fast-fixtures.json").read_text())
@@ -778,6 +804,30 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertEqual({"thc.runtime.BitPrimopsTest", "thc.IntegerPrimopsTest",
                           "thc.SignedNarrowPrimopsTest"},
                          set(owners["src/test/kotlin/thc/PrimopTestContext.kt"]["junit"]))
+
+    def test_tcsetattr_sources_select_the_original_native_comparison(self):
+        for path in ("compiler/test-fixtures/OriginalTcsetattrAudit.hs", "compiler/test-fixtures/OriginalTcsetattrNative.hs",
+                     "test/haskell-fixtures/OriginalTcsetattrFixtures.hs", "src/main/c/native-file-api.c",
+                     "src/main/kotlin/thc/runtime/NativeFileProvider.kt", "src/main/kotlin/thc/runtime/NativeOpenRequest.kt",
+                     "src/main/kotlin/thc/runtime/ManagedStdio.kt", "src/main/kotlin/thc/runtime/ManagedFiles.kt",
+                     "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt", "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt",
+                     "test/haskell-fixtures/Main.hs"):
+            self.assertIn("thc.runtime.OriginalTcsetattrTest", self.policy["owners"][path]["junit"], path)
+    def test_sigprocmask_sources_select_the_platform_thread_controls(self):
+        for path in ("compiler/test-fixtures/OriginalSigprocmaskAudit.hs", "compiler/test-fixtures/OriginalSigprocmaskNative.hs",
+                     "test/haskell-fixtures/OriginalSigprocmaskFixtures.hs", "src/main/c/native-signal-api.c",
+                     "src/main/kotlin/thc/runtime/ManagedSignalMask.kt", "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
+                     "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt", "test/haskell-fixtures/Main.hs"):
+            self.assertIn("thc.runtime.OriginalSigprocmaskTest", self.policy["owners"][path]["junit"], path)
+
+    def test_tcgetattr_sources_select_the_original_native_comparison(self):
+        for path in ("compiler/test-fixtures/OriginalTcgetattrAudit.hs", "compiler/test-fixtures/OriginalTcgetattrNative.hs",
+                     "test/haskell-fixtures/OriginalTcgetattrFixtures.hs", "src/main/c/native-file-api.c",
+                     "src/main/kotlin/thc/runtime/NativeFileProvider.kt", "src/main/kotlin/thc/runtime/NativeOpenRequest.kt",
+                     "src/main/kotlin/thc/runtime/ManagedStdio.kt", "src/main/kotlin/thc/runtime/ManagedFiles.kt",
+                     "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt", "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt",
+                     "test/haskell-fixtures/Main.hs"):
+            self.assertIn("thc.runtime.OriginalTcgetattrTest", self.policy["owners"][path]["junit"], path)
 
     def test_array_core_helper_selects_all_consuming_suites(self):
         group = self.policy["owners"]["src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt"]

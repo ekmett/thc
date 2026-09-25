@@ -63,6 +63,7 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
     private val leases = linkedSetOf<NativeFileLease>()
     private var disposed = false
     private val statSize: Int
+    private val termiosSize: Int
 
     init {
         if (!env.isNativeAccessAllowed || !env.isFileIOAllowed)
@@ -75,6 +76,9 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
         statSize = interop.asLong(interop.execute(interop.readMember(library, "thc_file_stat_size"))).toInt()
         val expected = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.nullAddress(), 0)
         if (statSize.toLong() != expected) fault("Native file provider/stat image ABI mismatch")
+        termiosSize = interop.asLong(interop.execute(interop.readMember(library, "thc_file_termios_size"))).toInt()
+        if (termiosSize.toLong() != TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.nullAddress(), 0))
+            fault("Native file provider/termios image ABI mismatch")
         env.registerOnDispose(this)
     }
 
@@ -254,6 +258,29 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
                 val image = scope.allocate(statSize.toLong())
                 result("stat", lease, image)
                 ByteArray(statSize).also { image.copyTo(it, 0, it.size) }
+            }
+        }
+        override fun readTermios(image: ByteArray): Unit = live {
+            if (image.size != termiosSize) fault("Native termios image has the wrong size")
+            NativeLimbScope().use { scope ->
+                val bytes = scope.allocate((termiosSize.toLong() + 7) and -8L)
+                bytes.copyFrom(image, 0, image.size)
+                try { result("tcgetattr", lease, bytes) }
+                finally { bytes.copyTo(image, 0, image.size) }
+            }
+        }
+        override fun terminalStatus(): Long = live {
+            try { result("isatty", lease) }
+            catch (error: NativeFileException) {
+                if (error.errno == StdioHostAbi.load().notTerminal().toInt()) 0L else throw error
+            }
+        }
+        override fun writeTermios(action: Int, image: ByteArray): Unit = live {
+            if (image.size != termiosSize) fault("Native termios image has the wrong size")
+            NativeLimbScope().use { scope ->
+                val bytes = scope.allocate((termiosSize.toLong() + 7) and -8L)
+                bytes.copyFrom(image, 0, image.size)
+                result("tcsetattr", lease, action, bytes)
             }
         }
         override fun read(destination: ByteBuffer): Int = live {

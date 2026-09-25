@@ -14,6 +14,7 @@ description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/G
 extra-source-files:
   compiler/pinned-ghc-internal/cbits/strerror.c
   compiler/test-fixtures/OriginalStrerrorNative.hs
+  compiler/test-fixtures/NativeMallocNative.hs
   compiler/test-fixtures/CBVCoercionAudit.hs
   compiler/test-fixtures/InterfaceLibrary.hs
   compiler/test-fixtures/InterfaceNative.hs
@@ -21,6 +22,8 @@ extra-source-files:
   compiler/test-fixtures/InterfaceForeignAlias.hs
   compiler/test-fixtures/ForeignExportSignatures.hs
   compiler/test-fixtures/ForeignExportManaged.hs
+  compiler/test-fixtures/ForeignExportRegistration.hs
+  compiler/test-fixtures/RegistrationNative.hs
   compiler/test-fixtures/ManagedExportNative.hs
   scripts/check-ghc-core.hs
   test/check-ghc-core.sh
@@ -43,7 +46,17 @@ extra-source-files:
   compiler/test-fixtures/OriginalOpenAudit.hs
   compiler/test-fixtures/OriginalOpenNative.hs
   compiler/test-fixtures/OriginalTermiosAudit.hs
+  compiler/test-fixtures/OriginalSavedTermiosAudit.hs
+  compiler/test-fixtures/OriginalSavedTermiosNative.hs
   compiler/test-fixtures/OriginalTermiosNative.hs
+  compiler/test-fixtures/OriginalTcsetattrAudit.hs
+  compiler/test-fixtures/OriginalTcgetattrAudit.hs
+  compiler/test-fixtures/OriginalTcsetattrNative.hs
+  compiler/test-fixtures/OriginalTcgetattrNative.hs
+  compiler/test-fixtures/OriginalSigprocmaskAudit.hs
+  compiler/test-fixtures/OriginalSigprocmaskNative.hs
+  compiler/test-fixtures/OriginalSigsetAudit.hs
+  compiler/test-fixtures/OriginalSigsetNative.hs
   compiler/test-fixtures/OriginalFdReadyAuditNative.hs
   compiler/test-fixtures/OriginalIconvAudit.hs
   compiler/test-fixtures/OriginalIconvAuditNative.hs
@@ -73,6 +86,7 @@ extra-source-files:
   docs/interface-foreign.md
   docs/original-posix-dup.md
   docs/original-termios.md
+  docs/original-sigset.md
   compiler/ghc-core.settings
   compiler/patches/ghc-libraries-simplified-core.patch
   compiler/pinned-ghc-internal/GHC/Internal/Arr.hs
@@ -207,6 +221,7 @@ library
     THC.Demands
     THC.ForeignExports
     THC.ForeignExportProvenance
+    THC.ForeignImportProvenance
     THC.Sources
     THC.Wired
   build-depends:
@@ -308,6 +323,7 @@ executable thc-fixtures
     ThreadStatusFixtures
     ThreadAsyncFixtures
     UncaughtSelfFixtures
+    ArithmeticExceptionFixtures
     MaskFunctionFixtures
     InterfaceFixtures
     InterfaceForeignFacts
@@ -337,6 +353,10 @@ executable thc-fixtures
     OriginalRtsLocksFixtures
     OriginalOpenFixtures
     OriginalTermiosFixtures
+    OriginalTcsetattrFixtures
+    OriginalTcgetattrFixtures
+    OriginalSigprocmaskFixtures
+    OriginalSigsetFixtures
     OriginalIconvFixtures
     MutVarFixtures
     StablePointerFixtures

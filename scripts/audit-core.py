@@ -33,6 +33,12 @@ POLYGLOT_ABI = json.loads((Path(__file__).resolve().parent.parent /
     'src/main/resources/thc/polyglot-abi.json').read_text())
 
 
+# Original implicit RTS dependencies, not host exceptions or fabricated dictionaries.
+ARITHMETIC_EXCEPTIONS = {name: 'ghc-internal:GHC.Internal.Exception.Type.' + payload for name, payload in (
+    ('raiseDivZero#', 'divZeroException'), ('raiseOverflow#', 'overflowException'),
+    ('raiseUnderflow#', 'underflowException'))}
+
+
 class Audit:
     def __init__(self, modules, capabilities):
         self.cap = capabilities
@@ -51,15 +57,29 @@ class Audit:
         self.queue = deque()
         self.linked_foreign = {}
         self.archive_bindings = {}
+        self.retained_exports = []
         for source, module in modules:
-            linked = (type(module.get('schema')) is int and module['schema'] == 2 and
-                      'foreignLink' in module and core_package_manifest.linked_foreign(module))
-            archive = core_package_manifest.foreign_execution_issue(module) if not linked else None
             foreign = module.get('foreign')
             stubs = foreign.get('stubs') if isinstance(foreign, dict) else None
             registration = ((isinstance(foreign, dict) and bool(foreign.get('files'))) or
                             (isinstance(stubs, dict) and
                              bool(stubs.get('initializers') or stubs.get('finalizers'))))
+            retained = None
+            if module.get('schema') == 2 and registration and 'staticForeignExportRegistration' in module:
+                try:
+                    retained = core_package_manifest.managed_registration(module)
+                except (ValueError, KeyError, TypeError) as error:
+                    self.issue('module-format', None, source, str(error))
+            if retained:
+                self.retained_exports.extend(retained)
+            managed_imports = False
+            try:
+                managed_imports = core_package_manifest.managed_import_stubs(module)
+            except (ValueError, KeyError, TypeError) as error:
+                self.issue('module-format', None, source, str(error))
+            linked = (type(module.get('schema')) is int and module['schema'] == 2 and
+                      'foreignLink' in module and core_package_manifest.linked_foreign(module))
+            archive = core_package_manifest.foreign_execution_issue(module) if not linked and not retained and not managed_imports else None
             if archive:
                 try:
                     core_package_manifest.validate_archive_only_foreign(module)
@@ -72,9 +92,9 @@ class Audit:
                         self.issue('module-format', None, source, 'Duplicate linked CAPI symbol ' + symbol)
                     self.linked_foreign[key] = module['foreignLink']
             if (type(module.get('schema')) is not int or
-                    (module['schema'] != 1 and not linked and not archive) or
+                    (module['schema'] != 1 and not linked and not archive and not retained and not managed_imports) or
                     module.get('ghc') != '9.14.1' or
-                    ('foreign' in module and not linked and not archive) or registration):
+                    ('foreign' in module and not linked and not archive and not retained and not managed_imports) or (registration and not retained)):
                 self.issue('module-format', None, source,
                            archive or
                            'Requires executable Core schema 1 / GHC 9.14.1 without foreign artifacts')
@@ -253,6 +273,8 @@ class Audit:
             return
         if kind == 'function-addr' and value not in self.cap.get('functionLabels', []):
             self.issue('unsupported-literal', owner, path, f'uncertified C function label {value}')
+        if kind == 'data-addr' and value not in self.cap.get('dataLabels', []):
+            self.issue('unsupported-literal', owner, path, f'unsupported C data label {value}')
         if kind == 'bignat':
             if not isinstance(value, str) or not value or any(c not in '0123456789' for c in value) or len(value) > 1 and value[0] == '0':
                 self.issue('invalid-literal-value', owner, path, 'bignat requires canonical nonnegative decimal')
@@ -448,7 +470,7 @@ class Audit:
                 return dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
             if expr[1] in narrow:
                 return dict(kind='long', primReps=[narrow[expr[1]]], evaluated=True)
-            if expr[1] in ('null-addr', 'function-addr'):
+            if expr[1] in ('null-addr', 'function-addr', 'data-addr'):
                 return dict(kind='address', primReps=['AddrRep'], evaluated=True)
             kind = {'float': 'float', 'double': 'double', 'string-bytes': 'address',
                     **dict.fromkeys(('int', 'word', 'char', 'int8', 'int16', 'int32', 'int64',
@@ -626,9 +648,12 @@ class Audit:
                         or symbol in core_original_foreign.GMP_SYMBOLS
                         or symbol in core_original_foreign.LIBDW_UNAVAILABLE
                         or symbol in core_original_foreign.TERMIOS_SYMBOLS
+                        or symbol in (core_original_foreign.TCGETATTR_SYMBOL, core_original_foreign.TCSETATTR_SYMBOL)
+                        or symbol in core_original_foreign.SIGSET_OPERATIONS
+                        or symbol == 'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask'
                         or symbol in ('getOrSetSystemEventThreadEventManagerStore',
                                       'getOrSetGHCConcSignalSignalHandlerStore')
-                        or symbol in ('rts_setMainThread', 'rtsSupportsBoundThreads', 'lockFile', 'unlockFile', '__hscore_fstat', '__hscore_open', 'dup', 'dup2', 'fdReady', 'localeEncoding', 'hs_iconv_open', 'hs_iconv_close', 'hs_iconv',
+                        or symbol in ('malloc', 'free', 'rts_setMainThread', 'rtsSupportsBoundThreads', 'lockFile', 'unlockFile', '__hscore_fstat', '__hscore_open', 'dup', 'dup2', 'fdReady', 'localeEncoding', 'hs_iconv_open', 'hs_iconv_close', 'hs_iconv',
                                       'base_strerror_r')):
                     for index, (argument, primitive) in enumerate(zip(arguments, core_original_foreign.OPERATIONS[symbol][2])):
                         self.original_stack_operand(argument, primitive, bound, index)
@@ -999,12 +1024,15 @@ class Audit:
                     if (not isinstance(proof, dict) or proof.get('kind') != 'object' or
                             proof.get('primReps') != ['BoxedRep (Just Unlifted)'] or 'aggregate' in proof or is_vector(proof)):
                         self.issue('scalar-representation', owner, path + '/rep', 'BigNat literal requires exact unlifted ByteArray# identity')
-                if expr[1] == 'function-addr':
+                if expr[1] in ('function-addr', 'data-addr'):
                     raw = expr[3].get('rep') if len(expr) > 3 and isinstance(expr[3], dict) else None
                     if (not isinstance(raw, dict) or raw.get('kind') != 'address' or
                             raw.get('primReps') != ['AddrRep'] or 'aggregate' in raw or is_vector(raw)):
                         self.issue('scalar-representation', owner, path + '/rep',
-                                   'Original C function label requires explicit exact AddrRep proof')
+                                   'Original C label requires explicit exact AddrRep proof')
+                    if expr[1] == 'data-addr' and (not isinstance(raw, dict) or raw.get('evaluated') is not True):
+                        self.issue('scalar-representation', owner, path + '/rep',
+                                   'RTS data label requires evaluated AddrRep proof')
             elif tag == 'void':
                 self.compare_shapes(self.expression_rep(expr), self.literal_rep(expr), owner, path + '/rep')
             elif tag == 'lam':
@@ -1092,6 +1120,14 @@ class Audit:
                 enum_application = function[0] == 'prim' and function[1] == 'tagToEnum#'
                 if enum_application:
                     self.tag_to_enum(expr, bound, owner, path)
+                arithmetic_exception = function[0] == 'prim' and function[1] in ARITHMETIC_EXCEPTIONS
+                if arithmetic_exception:
+                    if (len(arguments) != 1 or flags != [False] or
+                            not self.is_empty_tuple(self.expression_rep(arguments[0]))):
+                        self.issue('primitive-representation', owner, path,
+                                   function[1] + ': expected one exact unlifted empty tuple argument')
+                    if contains_sum(proof):
+                        self.issue('aggregate-boundary', owner, path, 'arithmetic exception sum result')
                 if function[0] == 'prim':
                     self.scalar_primitive(function[1], arguments, proof, bound, owner, path)
                 tuple_primitive = self.cap.get('tuplePrimitives', {}).get(function[1]) if function[0] == 'prim' else None
@@ -1337,6 +1373,10 @@ class Audit:
                             ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)'])
                     actual = [self.expression_rep(argument) for argument in arguments]
                     expected = weak['arguments']
+                    if (function[1] == 'addCFinalizerToWeak#' and arguments and
+                            arguments[0][0] == 'lit' and arguments[0][1] != 'function-addr'):
+                        self.issue('primitive-representation', owner, path,
+                                   'addCFinalizerToWeak#: data addresses cannot denote a C finalizer')
                     expected_flags = [isinstance(rep, dict) and rep.get('primReps') == ['BoxedRep (Just Lifted)'] for rep in actual]
                     if (len(actual) != len(expected) or not isinstance(flags, list) or
                             any(type(flag) is not bool for flag in flags) or flags != expected_flags or
@@ -1553,7 +1593,8 @@ class Audit:
                             join = isinstance(target, dict) and '_join_arity' in target
                             ordinary = function[0] not in ('prim', 'con') and not join
                             supported = self.supported_empty_join_input(argument_rep) if join else (
-                                ordinary and self.supported_tuple_input(argument_rep))
+                                ordinary and self.supported_tuple_input(argument_rep) or
+                                arithmetic_exception and self.is_empty_tuple(argument_rep))
                             if not supported:
                                 self.issue('aggregate-boundary', owner, f'{path}/arguments/{index}', 'unboxed-tuple argument')
                             if (self.is_tuple(argument_rep) and isinstance(flags, list) and
@@ -1699,9 +1740,9 @@ class Audit:
                         self.literal(value[0], value[1], owner, altpath + '/literal')
                         if value[0] == 'bignat':
                             self.issue('alternative-kind', owner, altpath, 'BigNat literal alternatives are invalid GHC Core')
-                        if value[0] in ('float', 'double', 'function-addr'):
+                        if value[0] in ('float', 'double', 'function-addr', 'data-addr'):
                             self.issue('alternative-kind', owner, altpath,
-                                       'Floating and C function literal alternatives are invalid GHC Core')
+                                       'Floating and C label literal alternatives are invalid GHC Core')
                     elif kind != 'default':
                         self.issue('alternative-kind', owner, altpath, kind)
                     if self.is_tuple(binder_proof) and (kind not in ('data', 'default') or kind == 'default' and ids):
@@ -1719,6 +1760,8 @@ class Audit:
             elif tag == 'prim':
                 name = expr[1]
                 self.primitives.setdefault(name, []).append(dict(self.location(owner, path), arity=primitive_arity))
+                if name in ARITHMETIC_EXCEPTIONS:
+                    self.reference(ARITHMETIC_EXCEPTIONS[name], owner, path + '/implicit-exception')
                 expected = self.cap['primitives'].get(name)
                 if expected is None:
                     self.issue('unsupported-primitive', owner, path, name)
@@ -1794,6 +1837,12 @@ class Audit:
                 if key not in self.chains:
                     self.chains[key] = [key]
                     self.queue.append(key)
+        # Retention does not call an export. The current backends must still
+        # lower its closure body, so unsupported retained bodies remain gaps.
+        for key in self.retained_exports:
+            if key not in self.chains:
+                self.chains[key] = [key]
+                self.queue.append(key)
         reported_archives = set()
         while self.queue:
             key = self.queue.popleft()
@@ -1815,7 +1864,7 @@ class Audit:
                 issue['reachableVia'] = self.chains[issue['owner']]
         missing = [dict(id=key, reachableVia=self.chains[uses[0]['owner']] + [key], references=uses)
                    for key, uses in sorted(self.missing.items())]
-        return dict(schema=1, audit='syntactic-reachable-core', roots=roots,
+        return dict(schema=1, audit='syntactic-reachable-core', roots=roots, retainedExports=self.retained_exports,
                     capabilityProfile=self.cap.get('name'), accepted=not self.issues and not missing,
                     summary=dict(suppliedBindings=len(self.bindings), reachableBindings=len(self.reachable),
                                  missingGlobals=len(missing), issues=len(self.issues)),

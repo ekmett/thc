@@ -17,7 +17,7 @@ import Data.Maybe (isNothing)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import FixtureSupport (CommandResult(..), hashes, runLogged, runLoggedExpect, writeJson)
-import InterfaceForeignFacts (prepareForeignAssociation, prepareTypedForeignAssociation, inspectInstalledBound)
+import InterfaceForeignFacts (prepareForeignAssociation, prepareTypedForeignAssociation, prepareImportStubs, inspectInstalledBound)
 import GHC hiding (exprType, entry)
 import GHC.Plugins
 import GHC.Core.TyCo.Compare (eqType)
@@ -197,6 +197,7 @@ prepareInterfaceCore root = do
   helperCommands <- checkHelper root directory libdir helper
   associationCommands <- prepareForeignAssociation root directory ghc libdir unitName
   typedAssociationCommands <- prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUnit pluginDb pluginUnit
+  importCommands <- prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb pluginUnit
   wiredCommands <- checkWiredHelper root directory libdir helper wiredUnit baseUnit
   wrapperFacts <- decodeFile (root </> directory </> "installed-wrapper-facts.json")
   let wrapperArtifacts = case wrapperFacts of
@@ -216,6 +217,9 @@ prepareInterfaceCore root = do
         "compiler/test-fixtures/InterfaceForeignAlias.hs", "test/haskell-fixtures/InterfaceForeignFacts.hs",
         "compiler/test-fixtures/ForeignExportSignatures.hs",
         "compiler/test-fixtures/ForeignExportManaged.hs", "compiler/test-fixtures/ManagedExportNative.hs",
+        "compiler/test-fixtures/ForeignExportRegistration.hs",
+        "compiler/test-fixtures/RegistrationNative.hs",
+        "compiler/test-fixtures/ForeignImportStubs.hs", "compiler/test-fixtures/ImportStubsNative.hs",
         "compiler/test-fixtures/CBVCoercionAudit.hs", "compiler/interface/Main.hs",
         "src/THC/Driver/Installed.hs", "src/THC/Driver/Project.hs", "src/THC/Driver/Wired.hs",
         "src/THC/Driver/ForeignBitcode.hs", "compiler/target-layout.c",
@@ -226,7 +230,7 @@ prepareInterfaceCore root = do
         ["scripts" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
       commands = [helperBuild, helperLocation, pluginBuild, version, libdirResult, baseResult, wiredResult] ++
         concat builds ++ [foreignBuild] ++ foreignInit ++ [foreignRegistered, nativeBuild, oracle] ++
-        helperCommands ++ associationCommands ++ typedAssociationCommands ++ wiredCommands ++ audits
+        helperCommands ++ associationCommands ++ typedAssociationCommands ++ importCommands ++ wiredCommands ++ audits
       artifacts = concatMap commandArtifacts commands ++ wrapperArtifacts ++
         [directory </> name | name <- ["InterfaceLibrary.json", "full/InterfaceLibrary.hi", "thin/InterfaceLibrary.hi",
           "full/InterfaceLibrary.dyn_hi", "full/InterfaceForeign.hi", "native/oracle", "source/InterfaceLibrary.saved"]] ++
@@ -240,9 +244,13 @@ prepareInterfaceCore root = do
          directory </> "foreign-alias/b.json", directory </> "source/InterfaceForeignAlias.hs.saved"] ++
         [directory </> "typed-foreign-exports.json"] ++
         [directory </> "typed-foreign-exports" </> variant ++ ".json" |
-          variant <- ["a", "b", "signatures", "static-signatures", "foreign-file", "instrumented", "managed"]] ++
+          variant <- ["a", "b", "signatures", "static-signatures", "foreign-file", "instrumented", "managed", "registration"]] ++
         [directory </> "typed-foreign-exports/managed/ForeignExportManaged.hi",
-         directory </> "typed-export-source/ForeignExportManaged.hs.saved"] ++
+         directory </> "typed-export-source/ForeignExportManaged.hs.saved",
+         directory </> "typed-foreign-exports/registration/ForeignExportRegistration.hi",
+         directory </> "typed-export-source/ForeignExportRegistration.hs.saved"] ++
+        [directory </> "import-stubs" </> variant ++ ".json" | variant <- ["plain", "extra-file", "wrapper", "instrumented"]] ++
+        [directory </> "source/ForeignImportStubs.hs.saved", directory </> "import-stubs/plain/ForeignImportStubs.hi"] ++
         [directory </> entry ++ "-audit.json" | entry <- entries]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts

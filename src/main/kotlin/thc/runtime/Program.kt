@@ -1747,6 +1747,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         CoreMd5Foreign.validateHeads(bindings)
         CoreGmpForeign.validateHeads(bindings)
         CoreLibdwForeign.validateHeads(bindings)
+        CoreNativeAllocationForeign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(bindings, constructors)
             CoreInputCalls.validate(bindings, constructors)
@@ -1953,6 +1954,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "string-bytes" -> ManagedAddress.fromHex(value)
         "null-addr" -> if (value == "0") ManagedAddress.nullAddress() else throw UnsupportedCore("Malformed null Addr# literal")
         "function-addr" -> CFinalizerLabels.fromCore(value, proof)
+        "data-addr" -> CoreDataLabels.fromCore(value, proof)
         "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
@@ -2037,10 +2039,12 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
             val gmp = CoreGmpForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val nativeAllocation = CoreNativeAllocationForeign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && capi == null &&
-                !stableFree && !mainThreadForeign && !boundThreadForeign && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null)
+                !stableFree && !mainThreadForeign && !boundThreadForeign && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null)
                 CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -2064,7 +2068,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio == OriginalStdioOp.FSTAT || originalStdio == OriginalStdioOp.OPEN ||
+                        if (originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio == OriginalStdioOp.OPEN ||
                             originalStdio.iconv || originalStdio.strerror || originalStdio.duplication || originalStdio.locking)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.representation, if (argument[0] == "var")
@@ -2108,6 +2112,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (managedFile != null) {
                 CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 ManagedFileExpression(managedFile, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
+            } else if (nativeAllocation != null) {
+                CoreNativeAllocationForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreNativeAllocationForeign.validateOperand(nativeAllocation, index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                NativeAllocationExpression(nativeAllocation, operands.toTypedArray(), tupleProof)
             } else if (libdw != null) {
                 CoreLibdwForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
@@ -2183,6 +2196,14 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     in CoreVectors.operationsWord32 -> VectorWord32Operation(name, operands)
                     else -> VectorOperation(name, operands)
                 }
+            } else if (fn[0] == "prim" && CoreArithmeticExceptions.payload(fn[1] as String) != null) {
+                val name = fn[1] as String
+                CoreArithmeticExceptions.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operand = argument(args.single(), scope, false, allowEmpty = true)
+                CoreArithmeticExceptions.validate(name, listOf(operand.representation), flags, tupleProof)
+                val id = CoreArithmeticExceptions.payload(name)!!
+                val payload = globals[id] ?: throw UnsupportedCore("Unresolved implicit exception binding $id")
+                RaiseArithmeticException(operand, RaiseException(GlobalRead(payload)))
             } else if (fn[0] == "prim" && fn[1] in setOf("raiseIO#", "catch#", "getMaskingState#",
                     "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#")) {
                 val name = fn[1] as String
@@ -2476,6 +2497,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             if (!CoreRepresentations.expression(expr).isAggregate && alternatives.any { it.body.representation.isAggregate } &&
                 alternatives.any { !it.body.representation.isAggregate })
                 throw RuntimeFault("Missing exact aggregate case result proof")
+            CoreRepresentations.validateDeclaredCaseResult(CoreRepresentations.expression(expr), alternatives.map { it.body.representation })
             CoreRepresentations.validateAggregateCaseResult(CoreRepresentations.expression(expr), alternatives.map { it.body.representation })
             CoreRepresentations.validateFloatingCaseResult(CoreRepresentations.expression(expr),
                 alternatives.map { it.body.representation })

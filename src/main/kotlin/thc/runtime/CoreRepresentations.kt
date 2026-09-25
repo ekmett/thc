@@ -86,6 +86,10 @@ internal data class CoreRepresentation(
 internal object CoreRepresentations {
     private val longs = setOf("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep",
         "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep")
+    /** Check each arm against the declaration without inferring an unknown arm from its siblings. */
+    fun validateDeclaredCaseResult(declared: CoreRepresentation, alternatives: List<CoreRepresentation>) {
+        alternatives.forEach { declared.refine(it) }
+    }
     /** Validate every known arm, but never infer an unknown arm from its peers. */
     fun validateFloatingCaseResult(declared: CoreRepresentation, alternatives: List<CoreRepresentation>) {
         val proofs = listOf(declared) + alternatives

@@ -1,9 +1,9 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
-module InterfaceForeignFacts (prepareForeignAssociation, prepareTypedForeignAssociation, inspectInstalledBound) where
+module InterfaceForeignFacts (prepareForeignAssociation, prepareTypedForeignAssociation, prepareImportStubs, inspectInstalledBound) where
 
-import Control.Monad (forM, unless)
+import Control.Monad (forM, forM_, unless)
 import Data.Aeson (Value(..), object, (.=), eitherDecodeStrict')
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Char8 as BSC
@@ -14,7 +14,7 @@ import Data.Maybe (isJust, mapMaybe)
 import qualified Data.Text as Text
 import GHC hiding (exprType)
 import GHC.Plugins
-import GHC.Cmm.CLabel (mkClosureLabel, pprCLabel)
+import GHC.Cmm.CLabel (mkClosureLabel, pprCLabel, CStubLabel(..))
 import GHC.Iface.Binary (readBinIface, CheckHiWay(..), TraceBinIFace(..))
 import GHC.Iface.Ext.Fields (getExtensibleFields)
 import GHC.Tc.Utils.TcType (tcSplitPiTys, tcSplitIOType_maybe)
@@ -25,7 +25,7 @@ import qualified GHC.Unit.Module.WholeCoreBindings as ForeignCore
 import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist, renameFile)
 import System.Exit (die)
 import System.FilePath ((</>), takeDirectory)
-import FixtureSupport (CommandResult, runLogged, writeJson)
+import FixtureSupport (CommandResult(..), runLogged, writeJson)
 import THC.Interface
 import THC.Plugin (serializePostTidyCoreWithAnnotations)
 
@@ -143,11 +143,12 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
                   ("static-signatures", "ForeignExportSignatures", "unused"),
                   ("foreign-file", "InterfaceForeign", "unused"),
                   ("instrumented", "InterfaceForeignAlias", "thc_interface_instrumented"),
-                  ("managed", "ForeignExportManaged", "unused")]
+                  ("managed", "ForeignExportManaged", "unused"),
+                  ("registration", "ForeignExportRegistration", "unused")]
       sourceFor name = directory </> "typed-export-source" </> name ++ ".hs"
   createDirectoryIfMissing True (root </> directory </> "typed-export-source")
   mapM_ (\name -> copyFile (root </> "compiler/test-fixtures" </> name ++ ".hs") (root </> sourceFor name))
-    ["InterfaceForeignAlias", "ForeignExportSignatures", "InterfaceForeign", "ForeignExportManaged"]
+    ["InterfaceForeignAlias", "ForeignExportSignatures", "InterfaceForeign", "ForeignExportManaged", "ForeignExportRegistration"]
   commands <- forM variants $ \(variant, name, symbol) -> do
     let output = directory </> "typed-foreign-exports" </> variant
     createDirectoryIfMissing True (root </> output)
@@ -179,8 +180,16 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
      "-odir", managed, "-hidir", managed, "compiler/test-fixtures/ManagedExportNative.hs",
      managed </> "ForeignExportManaged.o", "-o", managed </> "oracle"]
   nativeResult <- nativeRun "native-oracle" (root </> managed </> "oracle") []
+  let registration = directory </> "typed-foreign-exports/registration"
+  registrationBuild <- nativeRun "registration-native-build" ghc
+    ["--make", "-O2", "-fforce-recomp", "-i", "-package-db", registration </> "package.conf.d", "-package-id", unitName,
+     "-odir", registration, "-hidir", registration, "compiler/test-fixtures/RegistrationNative.hs",
+     registration </> "ForeignExportRegistration.o", "-o", registration </> "oracle"]
+  registrationResult <- nativeRun "registration-native-oracle" (root </> registration </> "oracle") []
+  check (BSC.words (commandStdout registrationResult) == [BSC.pack "7"])
+    "Original registered native StablePtr callback did not run its action"
   mapM_ (\name -> renameFile (root </> sourceFor name) (root </> sourceFor name ++ ".saved"))
-    ["InterfaceForeignAlias", "ForeignExportSignatures", "InterfaceForeign", "ForeignExportManaged"]
+    ["InterfaceForeignAlias", "ForeignExportSignatures", "InterfaceForeign", "ForeignExportManaged", "ForeignExportRegistration"]
   records <- forM variants $ \(variant, name, _) -> runGhc (Just libdir) $ do
     initial <- getSessionDynFlags
     initialEnv <- getSession
@@ -217,6 +226,10 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
         (field "expectedForeign" provenance == field "foreign" value && field "expectedExports" provenance == metadata &&
          field "wordBits" provenance == Number 64)
         "Verified registration lost its exact retained product or native word width"
+      if variant /= "registration" then pure () else check
+        (field "profile" provenance == String "ghc-9.14.1-thc-only-native-static-ccall-imports-v2" &&
+         length (entries metadata) == 2)
+        "Direct-import registration lost its distinct verified profile or export roots"
       if variant /= "static-signatures" then pure () else do
         let constructorIds = case field "constructors" value of
               Array values -> map (field "id") (toList values)
@@ -247,7 +260,7 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
       writeJson (root </> directory </> "typed-foreign-exports" </> variant ++ ".json") value
       pure (metadata, provenance)
   case records of
-    [(first, _), (second, _), (signatures, _), (staticSignatures, _), _, _, (managedSignatures, _)] -> do
+    [(first, _), (second, _), (signatures, _), (staticSignatures, _), _, _, (managedSignatures, _), _] -> do
       let a = singleExport first
           b = singleExport second
           allSignatures = entries signatures
@@ -286,7 +299,7 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
          "retainedRegistrationControls" .= map snd records,
          "changedProductControls" .= (["header", "body", "initializer", "finalizer"] :: [String])])
     _ -> die "Expected typed alias and signature controls"
-  pure (concat commands ++ [nativeBuild, nativeResult])
+  pure (concat commands ++ [nativeBuild, nativeResult, registrationBuild, registrationResult])
   where
     field key (Object fields) = maybe Null id (KeyMap.lookup key fields)
     field _ _ = Null
@@ -317,3 +330,94 @@ inspectInstalledBound environment charPath output = do
         "interfaceExtensionFields" .= Map.keys (getExtensibleFields (mi_ext_fields raw)),
         "executableAssociation" .= False])
   writeJson output value
+
+-- Stock import products are inert, but arbitrary C files and wrapper callbacks
+-- are not. Recover the exact annotation through a fresh interface session.
+prepareImportStubs :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> String -> String -> FilePath -> String -> IO [CommandResult]
+prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb pluginUnit = do
+  let variants = [("plain", []), ("extra-file", ["-DTHC_EXTRA_FILE"]),
+                  ("wrapper", ["-DTHC_WRAPPER"]), ("instrumented", ["-finfo-table-map"])]
+      source = directory </> "source/ForeignImportStubs.hs"
+      output variant = directory </> "import-stubs" </> variant
+      run label = runLogged 180 root (directory </> "logs") ("import-stubs-" ++ label) []
+  copyFile (root </> "compiler/test-fixtures/ForeignImportStubs.hs") (root </> source)
+  commands <- forM variants $ \(variant, extra) -> do
+    let destination = output variant
+        database = root </> destination </> "package.conf.d"
+        conf = root </> destination </> "package.conf"
+    createDirectoryIfMissing True (root </> destination)
+    compiled <- run (variant ++ "-compile") ghc $
+      ["-c", "-O2", "-fforce-recomp", "-dcore-lint", "-this-unit-id", unitName, "-fwrite-if-simplified-core",
+       "-package-db", pluginDb, "-plugin-package-id", pluginUnit, "-fplugin=THC.Plugin",
+       "-fplugin-opt=THC.Plugin:" ++ destination </> "direct", "-fplugin-opt=THC.Plugin:post-tidy",
+       "-fplugin-opt=THC.Plugin:foreign-import-provenance", "-odir", destination, "-hidir", destination,
+       "-stubdir", destination, source] ++ extra
+    exists <- doesDirectoryExist database
+    initialized <- if exists then pure [] else (:[]) <$> run (variant ++ "-init") ghcPkg ["init", database]
+    writeFile conf $ unlines ["name: thc-interface-fixture", "version: 0.1", "id: " ++ unitName,
+      "key: " ++ unitName, "exposed: True", "exposed-modules: ForeignImportStubs",
+      "import-dirs: " ++ show (root </> destination), "depends: " ++ baseUnit]
+    registered <- run (variant ++ "-register") ghcPkg ["--package-db", database, "update", conf]
+    pure ([compiled] ++ initialized ++ [registered])
+  built <- run "native-build" ghc ["--make", "-O2", "-fforce-recomp", "-i",
+    "-package-db", output "plain" </> "package.conf.d", "-package-id", unitName,
+    "-odir", output "plain", "-hidir", output "plain", "compiler/test-fixtures/ImportStubsNative.hs",
+    output "plain" </> "ForeignImportStubs.o", "-o", output "plain" </> "oracle"]
+  native <- run "native-oracle" (root </> output "plain" </> "oracle") []
+  check (BSC.words (commandStdout native) == ["(12,8,9,0,11)"]) "Original import wrapper oracle changed"
+  renameFile (root </> source) (root </> source ++ ".saved")
+  forM_ variants $ \(variant, _) -> runGhc (Just libdir) $ do
+    initial <- getSessionDynFlags
+    initialEnv <- getSession
+    (flags, leftovers, _) <- parseDynamicFlags (hsc_logger initialEnv) initial
+      (map noLoc ["-package-db", root </> output variant </> "package.conf.d", "-package-id", unitName])
+    liftIO $ check (null leftovers) "Unexpected import provenance flags"
+    _ <- setSessionDynFlags flags
+    environment <- getSession
+    liftIO $ do
+      let expected = mkModule (stringToUnit unitName) (mkModuleName "ForeignImportStubs")
+      loaded <- loadInterfaceCore environment expected (root </> output variant </> "ForeignImportStubs.hi")
+      core <- maybe (die "Import provenance control lost complete Core") pure loaded
+      rendered <- interfaceCoreJSON ["unit-qualified"] core
+      value <- either die pure (eitherDecodeStrict' (BSC.pack rendered))
+      let field name (Object fields) = KeyMap.lookup name fields
+          field _ _ = Nothing
+          proof = maybe Null id (field "staticForeignImportStubs" value)
+          (status, reason) = case variant of
+            "plain" -> ("verified", "")
+            "extra-file" -> ("rejected", "additional-foreign-files")
+            "wrapper" -> ("unclassified", "non-static-c-import-declaration")
+            _ -> ("unclassified", "unclassified-target-or-instrumentation")
+      check (field "status" proof == Just (String status) &&
+        (Text.null reason || field "reason" proof == Just (String reason)))
+        ("Unexpected import provenance " ++ variant ++ ": " ++ show proof)
+      check (field "schema" value == Just (Number 2) &&
+        (field "execution" =<< field "foreign" value) == Just (String "not-linked"))
+        "Import provenance changed native link state"
+      if variant /= "plain" then pure () else do
+        check (field "expectedForeign" proof == field "foreign" value) "Import product equality lost"
+        let imports = case field "imports" proof of Just (Array values) -> toList values; _ -> []
+            aliases = filter ((== Just (String "abs")) . field "symbol") imports
+        check (length imports == 4 && case aliases of
+          [a,b] -> field "emitted" a /= field "emitted" b
+          _ -> False)
+          "Distinct CAPI aliases lost their original emitted wrappers"
+        case interfaceForeign core of
+          ForeignCore.IfaceForeign (Just (ForeignCore.IfaceCStubs header body initializers finalizers)) [] -> do
+            let details = interfaceDetails core
+                label kind = ForeignCore.IfaceCLabel CStubLabel { csl_is_initializer = kind,
+                  csl_module = expected, csl_name = fsLit "extra" }
+                altered = [ForeignCore.IfaceCStubs (header ++ "extra") body initializers finalizers,
+                           ForeignCore.IfaceCStubs header (body ++ "extra") initializers finalizers,
+                           ForeignCore.IfaceCStubs header body [label True] finalizers,
+                           ForeignCore.IfaceCStubs header body initializers [label False]]
+            forM_ altered $ \stubs -> do
+              changedText <- serializePostTidyCoreWithAnnotations (hsc_dflags environment) ["unit-qualified"] expected
+                (typeEnvTyCons (md_types details)) (interfaceBindings core)
+                (ForeignCore.IfaceForeign (Just stubs) []) (md_anns details)
+              changed <- either die pure (eitherDecodeStrict' (BSC.pack changedText))
+              check ((field "status" =<< field "staticForeignImportStubs" changed) == Just (String "rejected"))
+                "Changed C stub product retained managed import admission"
+          _ -> die "Original CAPI control lost its products"
+      writeFile (root </> directory </> "import-stubs" </> variant ++ ".json") rendered
+  pure (concat commands ++ [built, native])

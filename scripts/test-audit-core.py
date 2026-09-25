@@ -69,6 +69,20 @@ class ArchiveReachabilityTest(unittest.TestCase):
             self.assertIn('archive-only', str(report['issues']))
 
 
+    def test_unknown_managed_import_evidence_does_not_bypass_archive_validation(self):
+        # Deliberately malformed provenance: no synthetic verified producer.
+        for schema in (1, 2):
+            for proof in (None, {}, {'status': 'verified', 'profile': 'invented'}):
+                module = dict(schema=schema, ghc='9.14.1', unit='pkg', module='M',
+                              bindings=[bind('root', lit(7))], constructors=[], staticForeignImportStubs=proof)
+                if schema == 2:
+                    module['foreign'] = dict(schema=1, execution='not-linked', stubs=dict(
+                        header='', source='int unknown(void) { return 7; }', initializers=[], finalizers=[]), files=[])
+                report = audit_core.Audit([('unknown.json', module)], CAP).run(['root'])
+                self.assertFalse(report['accepted'], report)
+                self.assertIn('module-format', {issue['code'] for issue in report['issues']})
+
+
 def tuple_rep(*components):
     return dict(aggregate='unboxed-tuple', kind='unknown', evaluated=True,
                 components=list(components), primReps=[r for c in components for r in c['primReps']])
@@ -910,6 +924,27 @@ class AuditTest(unittest.TestCase):
         self.assertEqual({i['code'] for i in report['issues']}, {'primitive-arity', 'unsupported-literal', 'unsupported-primitive'})
         self.assertEqual([p['name'] for p in report['primitives']], ['+#', 'unsupported#'])
 
+    def test_arithmetic_raises_require_empty_tuple_and_link_original_implicit_payloads(self):
+        empty = tuple_rep()
+        constructor = dict(id='Empty', kind='unboxed-tuple', arity=0,
+                           fieldReps=[], strictFields=[], fieldLifted=[])
+        for name, payload in audit_core.ARITHMETIC_EXCEPTIONS.items():
+            good = ['app', ['prim', name], [['con', 'Empty', 0, dict(rep=empty)]],
+                    [False], False, False, dict(rep=REFERENCE)]
+            with self.subTest(name=name):
+                missing = run(good, constructors=[constructor])
+                self.assertEqual([payload], [item['id'] for item in missing['missingGlobals']])
+                supplied = run(good, [bind(payload, var('coldPayloadDependency'))], [constructor])
+                self.assertEqual(['coldPayloadDependency'], [item['id'] for item in supplied['missingGlobals']])
+                self.assertIn(payload, [item['id'] for item in supplied['reachableBindings']])
+                self.assertNotIn('aggregate-boundary', {i['code'] for i in supplied['issues']})
+                for argument, flags in [(['void', dict(rep=dict(kind='void', primReps=[], evaluated=True))], [False]),
+                                        (good[2][0], [True]),
+                                        ([*lit(0), dict(rep=LONG)], [False])]:
+                    bad = copy.deepcopy(good)
+                    bad[2], bad[3] = [argument], flags
+                    self.assertIn('primitive-representation', {i['code'] for i in run(bad, constructors=[constructor])['issues']})
+
     def test_synchronous_exception_primops_require_exact_boxed_state_tuple_contract(self):
         state = dict(kind='void', primReps=[], evaluated=True)
         result = tuple_rep(state, REFERENCE)
@@ -1548,6 +1583,34 @@ class LibdwUnavailableAuditTest(unittest.TestCase):
             self.assertEqual([], result['foreignCalls'])
 
 
+class NativeMallocDeclarationTest(unittest.TestCase):
+    """Original descriptors for the bounded, owned native allocation protocol."""
+    def test_two_exact_declarations_and_capability_gate(self):
+        resource = ROOT.parent / 'src/test/resources/core/original-malloc-descriptors.json'
+        declarations = json.loads(resource.read_text())
+        self.assertEqual(['malloc', 'free'], [d['target']['symbol'] for d in declarations])
+        fixture = LibdwUnavailableAuditTest()
+        disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s not in ('malloc', 'free')])
+        for declaration in declarations:
+            module = fixture.fixture(declaration)
+            self.assertTrue(fixture.audit(module)['accepted'])
+            self.assertFalse(fixture.audit(module, disabled)['accepted'])
+            for key, value in [('safety', 'safe'), ('arity', 3), ('convention', 'capi'), ('schema', 1.0)]:
+                wrong = copy.deepcopy(declaration); wrong[key] = value
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+            wrong = copy.deepcopy(declaration); wrong['target']['unit'] = 'other'
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+            # Occurrence annotations cannot hide a differently represented argument.
+            for index in range(len(declaration['argumentReps'])):
+                wrong = fixture.fixture(declaration)
+                wrong['bindings'][0]['expr'][1][index]['rep'] = CLOSURE
+                result = fixture.audit(wrong)
+                self.assertFalse(result['accepted'], result)
+                self.assertEqual([], result['foreignCalls'])
+        for symbol in ('calloc', 'realloc', 'prefixmalloc', 'free2'):
+            self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
+
+
 class OriginalStackInfoAuditTest(unittest.TestCase):
     """Genuine unchanged FCall applications in explicitly synthetic scalar consumers.
 
@@ -2068,6 +2131,8 @@ class OriginalGmpAuditTest(unittest.TestCase):
 class OriginalDupAuditTest(unittest.TestCase):
     """Original scalar/State controls; genuine declarations live in Haskell fixtures."""
     termios = {
+        '__hscore_get_saved_termios': (('Int32Rep', None), 'AddrRep'),
+        '__hscore_set_saved_termios': (('Int32Rep', 'AddrRep', None), None),
         '__hscore_lflag': (('AddrRep', None), 'Word32Rep'),
         '__hscore_poke_lflag': (('AddrRep', 'Word32Rep', None), None),
         '__hscore_ptr_c_cc': (('AddrRep', None), 'AddrRep'),
@@ -2076,21 +2141,27 @@ class OriginalDupAuditTest(unittest.TestCase):
         **{f'__hscore_{name}': ((None,), 'Int32Rep')
            for name in ('echo', 'icanon', 'vmin', 'vtime', 'tcsanow', 'sigttou', 'sig_block', 'sig_setmask')},
     }
-    symbols = ('dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile', *termios)
+    sigset = {
+        'ghczuwrapperZC13ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigemptyset': (('AddrRep', None), 'Int32Rep'),
+        'ghczuwrapperZC12ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigaddset': (('AddrRep', 'Int32Rep', None), 'Int32Rep'),
+        'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask': (('Int32Rep', 'AddrRep', 'AddrRep', None), 'Int32Rep'),
+    }
+    symbols = (core_original_foreign.TCSETATTR_SYMBOL, core_original_foreign.TCGETATTR_SYMBOL, 'dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile', *termios, *sigset)
     def fixture(self, symbol):
-        arguments = (('Word64Rep', 'Word64Rep', 'Word64Rep', 'Int32Rep', None) if symbol == 'lockFile' else
+        arguments = (('Int32Rep', 'Int32Rep', 'AddrRep', None) if symbol == core_original_foreign.TCSETATTR_SYMBOL else
+                     ('Word64Rep', 'Word64Rep', 'Word64Rep', 'Int32Rep', None) if symbol == 'lockFile' else
                      ('Word64Rep', None) if symbol == 'unlockFile' else
-                     ('Int32Rep', 'AddrRep', None) if symbol == '__hscore_fstat' else
+                     ('Int32Rep', 'AddrRep', None) if symbol in ('__hscore_fstat', core_original_foreign.TCGETATTR_SYMBOL) else
                      ('AddrRep', 'Int32Rep', 'Word32Rep', None) if symbol == '__hscore_open' else
                      ('Int32Rep', None) if symbol == 'dup' else ('Int32Rep', 'Int32Rep', None))
-        arguments, output = self.termios.get(symbol, (arguments, 'Int32Rep'))
+        arguments, output = (self.termios | self.sigset).get(symbol, (arguments, 'Int32Rep'))
         scalar = lambda rep, evaluated: dict(kind='void' if rep is None else 'address' if rep == 'AddrRep' else 'long',
             primReps=[] if rep is None else [rep], evaluated=evaluated)
         parameters = [dict(id=f'a{i}', lifted=False, rep=scalar(p, True)) for i, p in enumerate(arguments)]
         result = tuple_rep(*(scalar(rep, True) for rep in ((None,) if output is None else (None, output))))
         result['evaluated'] = False
         descriptor = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='ghc-internal', isFunction=True),
-            convention='ccall', safety='unsafe', arity=len(arguments), suppliedArity=len(arguments),
+            convention='capi' if symbol in self.sigset or symbol in (core_original_foreign.TCGETATTR_SYMBOL, core_original_foreign.TCSETATTR_SYMBOL) else 'ccall', safety='unsafe', arity=len(arguments), suppliedArity=len(arguments),
             argumentReps=[scalar(p, False) for p in arguments], resultRep=copy.deepcopy(result))
         call = ['app', ['var', 'original-foreign', dict(rep=CLOSURE)],
             [['var', p['id'], dict(rep=copy.deepcopy(p['rep']))] for p in parameters],
@@ -2121,7 +2192,7 @@ class OriginalDupAuditTest(unittest.TestCase):
     def test_descriptor_flags_head_and_raw_representation_forgery_reject(self):
         for symbol in self.symbols:
             mutations = [(key, value) for key in ('schema', 'arity', 'suppliedArity')
-                for value in (None, True, 2.0, '2', 0, 1 << 32)] + [('convention', 'capi'), ('safety', 'safe'), ('safety', 'interruptible'), ('extra', None)]
+                for value in (None, True, 2.0, '2', 0, 1 << 32)] + [('convention', 'ccall' if symbol in self.sigset or symbol in (core_original_foreign.TCGETATTR_SYMBOL, core_original_foreign.TCSETATTR_SYMBOL) else 'capi'), ('safety', 'safe'), ('safety', 'interruptible'), ('extra', None)]
             for key, value in mutations:
                 module = self.fixture(symbol); self.call(module)[6]['foreignCall'][key] = value
                 self.assertFalse(self.audit(module)['accepted'], (symbol, key, value))
@@ -2141,7 +2212,9 @@ class OriginalDupAuditTest(unittest.TestCase):
                         proof = module['bindings'][0]['expr'][1][i]['rep'] if stored else self.call(module)[2][i][2]['rep']
                         if proof['primReps'] == [rep]: continue
                         proof['primReps'] = [rep]
-                        self.assertFalse(self.audit(module)['accepted'])
+                        report = self.audit(module)
+                        self.assertFalse(report['accepted'])
+                        self.assertEqual([], report['foreignCalls'])
                 module = self.fixture(symbol); self.call(module)[2][i][2]['rep']['aggregate'] = 'unboxed-tuple'
                 self.assertFalse(self.audit(module)['accepted'])
             for declared in (False, True):
@@ -2152,8 +2225,9 @@ class OriginalDupAuditTest(unittest.TestCase):
 
     def test_termios_state_only_result_and_excluded_terminal_calls(self):
         self.assertEqual(set(self.termios), core_original_foreign.TERMIOS_SYMBOLS)
-        for symbol in self.termios:
-            output = self.termios[symbol][1]
+        self.assertEqual(set(self.sigset), set(core_original_foreign.SIGSET_OPERATIONS) | {
+            "ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask"})
+        for symbol, (_, output) in (self.termios | self.sigset).items():
             if output is not None:
                 # A mutually consistent descriptor/call-site forgery still
                 # cannot change the original declaration's result width.
@@ -2176,7 +2250,8 @@ class OriginalDupAuditTest(unittest.TestCase):
                     if mutation == 'sum': result['aggregate'] = 'unboxed-sum'
                     self.assertFalse(self.audit(module)['accepted'])
         for symbol in ('prefix__hscore_lflag', 'tcgetattr', 'tcsetattr', 'sigprocmask', 'sigemptyset', 'sigaddset',
-                       'prefix__hscore_sigttou', 'prefix__hscore_sizeof_sigset_t', '__hscore_get_saved_termios', '__hscore_set_saved_termios'):
+                       'prefix__hscore_sigttou', 'prefix__hscore_sizeof_sigset_t', 'prefix__hscore_get_saved_termios', 'prefix__hscore_set_saved_termios',
+                       *('prefix' + name for name in self.sigset)):
             self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
             module = self.fixture('__hscore_lflag')
             self.call(module)[6]['foreignCall']['target']['symbol'] = symbol
@@ -2360,6 +2435,27 @@ class ExplicitWeakContractTest(unittest.TestCase):
             elif mutation == 'rep': label[3]['rep']['primReps'] = ['IntRep']
             else: label[3]['rep']['aggregate'] = 'unboxed-tuple'
             report = run_tuple(module)
+            self.assertFalse(report['accepted'], (mutation, report))
+            self.assertIn('scalar-representation', {issue['code'] for issue in report['issues']})
+
+
+class RTSDataLabelTest(unittest.TestCase):
+    def test_only_enabled_capabilities_with_evaluated_address_proof_is_admitted(self):
+        label = ['lit', 'data-addr', 'enabled_capabilities',
+                 dict(rep=dict(kind='address', primReps=['AddrRep'], evaluated=True))]
+        self.assertTrue(run(label)['accepted'])
+        self.assertFalse(run(label, cap=dict(CAP, dataLabels=[]))['accepted'])
+        for symbol in ('other', 'enabled_capabilities_extra', 'n_capabilities'):
+            wrong = copy.deepcopy(label); wrong[2] = symbol
+            self.assertFalse(run(wrong)['accepted'])
+        for mutation in ('missing', 'kind', 'width', 'evaluated', 'aggregate'):
+            wrong = copy.deepcopy(label)
+            if mutation == 'missing': wrong.pop()
+            elif mutation == 'kind': wrong[3]['rep']['kind'] = 'long'
+            elif mutation == 'width': wrong[3]['rep']['primReps'] = ['WordRep']
+            elif mutation == 'evaluated': wrong[3]['rep']['evaluated'] = False
+            else: wrong[3]['rep']['aggregate'] = 'unboxed-tuple'
+            report = run(wrong)
             self.assertFalse(report['accepted'], (mutation, report))
             self.assertIn('scalar-representation', {issue['code'] for issue in report['issues']})
 

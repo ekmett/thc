@@ -1,6 +1,8 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.EnabledCapabilitiesTest",
+    "thc.runtime.SavedTermiosTest",
     "thc.runtime.TermiosAbiTest",
     "thc.runtime.NativeFileProviderTest",
     "thc.runtime.NativeFdWaitTest",
@@ -40,6 +42,38 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "original-tcsetattr": {
+      "junit": ["thc.runtime.OriginalTcsetattrTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-tcsetattr"]}],
+      "outputs": ["build/original-tcsetattr"],
+      "sources": ["compiler/test-fixtures/OriginalTcsetattrAudit.hs", "compiler/test-fixtures/OriginalTcsetattrNative.hs",
+        "test/haskell-fixtures/OriginalTcsetattrFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
+    "original-tcgetattr": {
+      "junit": ["thc.runtime.OriginalTcgetattrTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-tcgetattr"]}],
+      "outputs": ["build/original-tcgetattr"],
+      "sources": ["compiler/test-fixtures/OriginalTcgetattrAudit.hs", "compiler/test-fixtures/OriginalTcgetattrNative.hs",
+        "test/haskell-fixtures/OriginalTcgetattrFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
+    "original-sigprocmask": {
+      "junit": ["thc.runtime.OriginalSigprocmaskTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-sigprocmask"]}],
+      "outputs": ["build/original-sigprocmask"],
+      "sources": ["compiler/test-fixtures/OriginalSigprocmaskAudit.hs", "compiler/test-fixtures/OriginalSigprocmaskNative.hs",
+        "test/haskell-fixtures/OriginalSigprocmaskFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
+    "original-sigset": {
+      "junit": ["thc.runtime.OriginalSigsetTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-sigset"]}],
+      "outputs": ["build/original-sigset"],
+      "sources": ["compiler/test-fixtures/OriginalSigsetAudit.hs", "compiler/test-fixtures/OriginalSigsetNative.hs",
+        "test/haskell-fixtures/OriginalSigsetFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "libdw-unavailable": {
       "junit": ["thc.runtime.LibdwUnavailableTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "libdw-unavailable"]}],
@@ -50,18 +84,21 @@
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-termios": {
-      "junit": ["thc.runtime.OriginalTermiosTest"],
+      "junit": ["thc.runtime.OriginalTermiosTest", "thc.runtime.OriginalSavedTermiosTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-termios"]}],
       "outputs": ["build/original-termios"],
       "sources": ["compiler/test-fixtures/OriginalTermiosAudit.hs", "compiler/test-fixtures/OriginalTermiosNative.hs",
+        "compiler/test-fixtures/OriginalSavedTermiosAudit.hs", "compiler/test-fixtures/OriginalSavedTermiosNative.hs",
         "test/haskell-fixtures/OriginalTermiosFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "native-addresses": {
-      "junit": ["thc.runtime.NativeAddressTest"],
+      "junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "native-addresses"]}],
-      "outputs": ["build/native-addresses/manifest.json", "build/native-addresses/oracle.json"],
-      "sources": ["compiler/test-fixtures/NativeAddressNative.hs", "test/haskell-fixtures/NativeAddressFixtures.hs",
+      "outputs": ["build/native-addresses/manifest.json", "build/native-addresses/oracle.json",
+        "build/native-malloc/manifest.json", "build/native-malloc/oracle.txt"],
+      "sources": ["compiler/test-fixtures/NativeAddressNative.hs", "compiler/test-fixtures/NativeMallocNative.hs",
+        "src/test/resources/core/original-malloc-descriptors.json", "test/haskell-fixtures/NativeAddressFixtures.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-open": {
@@ -249,10 +286,10 @@
       ]
     },
     "interface-core": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest"],
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.ManagedImportStubsNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "interface-core"]}],
       "outputs": ["build/interface-core"],
-      "sources": ["test/haskell-fixtures/InterfaceFixtures.hs", "test/haskell-fixtures/InterfaceForeignFacts.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "compiler/test-fixtures/InterfaceLibrary.hs", "compiler/test-fixtures/InterfaceNative.hs", "compiler/test-fixtures/InterfaceForeign.hs", "compiler/test-fixtures/InterfaceForeignAlias.hs", "compiler/test-fixtures/CBVCoercionAudit.hs", "compiler/interface/Main.hs", "compiler/THC/Interface.hs", "compiler/target-layout.c", "src/THC/Driver/Installed.hs", "src/THC/Driver/Project.hs", "src/THC/Driver/Wired.hs", "src/THC/Driver/Zip.hs", "thc.cabal"]
+      "sources": ["test/haskell-fixtures/InterfaceFixtures.hs", "test/haskell-fixtures/InterfaceForeignFacts.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "compiler/test-fixtures/InterfaceLibrary.hs", "compiler/test-fixtures/InterfaceNative.hs", "compiler/test-fixtures/InterfaceForeign.hs", "compiler/test-fixtures/InterfaceForeignAlias.hs", "compiler/test-fixtures/ForeignImportStubs.hs", "compiler/test-fixtures/ImportStubsNative.hs", "compiler/THC/ForeignImportProvenance.hs", "compiler/test-fixtures/CBVCoercionAudit.hs", "compiler/interface/Main.hs", "compiler/THC/Interface.hs", "compiler/target-layout.c", "src/THC/Driver/Installed.hs", "src/THC/Driver/Project.hs", "src/THC/Driver/Wired.hs", "src/THC/Driver/Zip.hs", "thc.cabal"]
     },
     "fused-floating": {
       "junit": ["thc.runtime.FusedFloatingTest"],
