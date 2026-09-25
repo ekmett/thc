@@ -172,6 +172,8 @@ def lexical_source(source, comments_only=False):
     comparison retains string bytes and replaces each comment with a stable
     delimiter, so a changed literal or non-comment token cannot pass as prose.
     """
+    if comments_only and any(separator in source for separator in ("\r", "\u0085", "\u2028", "\u2029")):
+        raise SelectionError("non-LF source line separator")
     result = []
     index = 0
     previous = 0

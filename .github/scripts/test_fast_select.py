@@ -437,6 +437,9 @@ private val text = "class FakeString { @Test }"
                        'val x = """${foo("// old")}""" // changed\n'):
             with self.subTest(source=source), self.assertRaises(select.SelectionError):
                 select.lexical_source(source, comments_only=True)
+        for separator in ('\r', '\u0085', '\u2028', '\u2029'):
+            with self.subTest(separator=repr(separator)), self.assertRaises(select.SelectionError):
+                select.lexical_source('val x = 1 // comment' + separator + 'val y = 2\n', comments_only=True)
 
     def test_class_literals_private_generic_helpers_and_tempdir_are_local_test_syntax(self):
         path = "src/test/kotlin/example/OtherTest.kt"
