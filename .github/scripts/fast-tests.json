@@ -12,6 +12,10 @@
     ]
   },
   "leafSources": {
+    "src/main/kotlin/thc/runtime/CoreDataLabels.kt": {
+      "junit": ["thc.runtime.EnabledCapabilitiesTest"],
+      "python": ["scripts/test-audit-core.py"]
+    },
     "src/main/kotlin/thc/runtime/ManagedWeaks.kt": {
       "junit": ["thc.runtime.ManagedWeakTest"],
       "python": []

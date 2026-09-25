@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.EnabledCapabilitiesTest",
     "thc.runtime.SavedTermiosTest",
     "thc.runtime.TermiosAbiTest",
     "thc.runtime.NativeFileProviderTest",
