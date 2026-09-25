@@ -46,6 +46,8 @@ docs-haskell:
 	$(CABAL) haddock lib:thc $(DOCS_CABAL_FLAGS) --haddock-html --haddock-quickjump \
 	  --haddock-output-dir='$(CURDIR)/build/docs/haskell' \
 	  --haddock-html-location='https://hackage.haskell.org/package/$$pkg-$$version/docs' \
+	  --haddock-option='--theme=$(CURDIR)/docs/site/haddock.css' \
+	  --haddock-option=--built-in-themes \
 	  --haddock-option='--source-base=https://github.com/ekmett/thc/tree/$(DOCS_REVISION)/compiler' \
 	  --haddock-option='--source-module=https://github.com/ekmett/thc/blob/$(DOCS_REVISION)/compiler/%{MODULE/.//}.hs' \
 	  --haddock-option='--source-entity=https://github.com/ekmett/thc/blob/$(DOCS_REVISION)/compiler/%{MODULE/.//}.hs#L%L'

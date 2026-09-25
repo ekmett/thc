@@ -4,7 +4,7 @@
 module Main (main) where
 
 import Control.Monad (forM, forM_, unless, when)
-import Data.Char (chr, digitToInt, isHexDigit)
+import Data.Char (chr, digitToInt, isHexDigit, ord)
 import Data.List (isPrefixOf, isSuffixOf, sort)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
@@ -16,6 +16,7 @@ import System.Exit (die)
 import System.FilePath
 import System.Process (readProcess)
 import Text.HTML.TagSoup
+import Numeric (showHex)
 
 data Guide = Guide FilePath String String
 
@@ -90,6 +91,10 @@ buildSite revision pandoc = do
     removeDirectoryRecursive site
   createDirectoryIfMissing True (site </> "assets")
   copyFile "docs/site/site.css" (site </> "assets/site.css")
+  copyFile "docs/site/site.js" (site </> "assets/site.js")
+  copyFile "docs/site/theme.js" (site </> "assets/theme.js")
+  forM_ ["turbo-haskell-bot-light.png", "turbo-haskell-bot-dark.png"] $ \name ->
+    copyFile ("docs/site" </> name) (site </> "assets" </> name)
   haskellFiles <- filesBelow "build/docs/haskell"
   let roots = [takeDirectory p | p <- haskellFiles, takeFileName p == "THC-Plugin.html"]
   haskellRoot <- case roots of
@@ -103,10 +108,13 @@ buildSite revision pandoc = do
     unless (isFragment relative) $ do
       html <- Text.readFile path
       let repaired = if "api/haskell/" `isPrefixOf` relative then repairHaddock html else html
-      enhanced <- addChrome revision relative repaired
+      enhanced <- stylePage revision relative repaired
       Text.writeFile path enhanced
   forM_ guides $ \guide@(Guide source _ title) -> renderGuide revision pandoc source (guidePath guide) title
-  renderGuide revision pandoc "docs/site/index.md" "index.html" "Haskell on Truffle/Graal"
+  renderGuide revision pandoc "docs/site/index.md" "home.html" "Haskell on Truffle/Graal"
+  renderShell revision ("home.html" : map guidePath guides ++
+    [makeRelative site path | path <- apiFiles, takeExtension path == ".html",
+      not (isFragment (makeRelative site path))])
   Text.writeFile (site </> "revision.txt") (Text.pack (revision ++ "\n"))
   Text.writeFile (site </> ".nojekyll") ""
 
@@ -161,42 +169,75 @@ escape value = renderTags [TagText value]
 link :: String -> String -> String
 link url title = "<a href=\"" ++ escape url ++ "\">" ++ escape title ++ "</a>"
 
-navigation :: String -> FilePath -> String
-navigation revision page =
-  "<header class=\"thc-header\"><nav aria-label=\"THC documentation\">" ++
-  "<a class=\"thc-brand\" href=\"" ++ fromPage page "index.html" ++ "\">thc<span> / docs</span></a>" ++
-  "<div class=\"thc-links\">" ++
-  link (fromPage page "guides/driver.html") "Guides" ++
-  link (fromPage page "api/jvm/index.html") "JVM reference" ++
-  link (fromPage page "api/haskell/index.html") "Haskell API" ++
-  link (repo ++ "/tree/" ++ revision) "Source ↗" ++ "</div></nav>" ++
-  "<div class=\"thc-toolchain\">Experimental · GHC 9.14.1 · cabal-install 3.16 · " ++
-  "GraalVM 25.3.4.1 / JDK 25 · Kotlin 2.4.20 <span>" ++
-  link (repo ++ "/commit/" ++ revision) (take 12 revision) ++ "</span></div></header>"
-
-addChrome :: String -> FilePath -> Text.Text -> IO Text.Text
-addChrome revision page html = do
+-- Keep generator documents independently usable. The shell owns site navigation;
+-- Haddock and Dokka keep their own symbol search, index, anchors and source links.
+stylePage :: String -> FilePath -> Text.Text -> IO Text.Text
+stylePage revision page html = do
   let stylesheet = "<link rel=\"stylesheet\" href=\"" ++ fromPage page "assets/site.css" ++ "\">"
+      theme = "<script src=\"" ++ fromPage page "assets/theme.js" ++ "\"></script>"
+      metadata = "<meta name=\"thc-revision\" content=\"" ++ revision ++ "\">"
+      section = if "api/haskell/" `isPrefixOf` page then "haskell" else
+        if "api/jvm/" `isPrefixOf` page then "jvm" else "guide"
       (beforeBody, body) = Text.breakOn "<body" html
       (opening, remainder) = Text.breakOn ">" body
   unless (not (Text.null body) && not (Text.null remainder) && "</head>" `Text.isInfixOf` html) $
     die ("Expected an HTML document: " ++ page)
-  pure $ Text.replace "</head>" (Text.pack stylesheet <> "</head>") $
-    beforeBody <> opening <> ">" <> Text.pack (navigation revision page) <> Text.drop 1 remainder
+  pure $ Text.replace "</head>" (Text.pack (metadata ++ theme ++ stylesheet) <> "</head>") $
+    beforeBody <> opening <> Text.pack (" data-thc-section=\"" ++ section ++ "\">") <> Text.drop 1 remainder
+
+jsonString :: String -> String
+jsonString value = '"' : concatMap encode value ++ "\""
+  where
+    encode '"' = "\\\""
+    encode '\\' = "\\\\"
+    encode '<' = "\\u003c"
+    encode c | ord c < 32 = "\\u" ++ replicate (4 - length hex) '0' ++ hex
+      where hex = showHex (ord c) ""
+    encode c = [c]
+
+renderShell :: String -> [FilePath] -> IO ()
+renderShell revision pages = do
+  let item page label = "<a class=\"thc-nav-link\" data-page=\"" ++ escape page ++
+        "\" href=\"" ++ escape page ++ "\" target=\"thc-content\">" ++ escape label ++ "</a>"
+      guideItem guide@(Guide _ _ title) = item (guidePath guide) title
+      manifest = "<script type=\"application/json\" id=\"thc-pages\">[" ++
+        concat (zipWith (++) ("" : repeat ",") (map jsonString pages)) ++ " ]</script>"
+      html = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">" ++
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" ++
+        "<meta name=\"thc-revision\" content=\"" ++ revision ++ "\">" ++
+        "<title>THC documentation</title><script src=\"assets/theme.js\"></script>" ++
+        "<link rel=\"stylesheet\" href=\"assets/site.css\"></head>" ++
+        "<body class=\"thc-shell\"><button class=\"thc-menu\" type=\"button\" aria-expanded=\"false\" " ++
+        "aria-controls=\"thc-rail\">Documentation menu</button><div class=\"thc-shell-layout\">" ++
+        "<aside class=\"thc-rail\" id=\"thc-rail\"><a class=\"thc-brand\" href=\"home.html\" " ++
+        "data-page=\"home.html\" target=\"thc-content\">thc<span> / docs</span></a>" ++
+        "<nav aria-label=\"THC documentation\"><p class=\"thc-nav-label\">Start</p>" ++
+        item "home.html" "Overview" ++ "<p class=\"thc-nav-label\">Guides</p>" ++
+        concatMap guideItem guides ++ "<p class=\"thc-nav-label\">Reference</p>" ++
+        item "api/haskell/index.html" "Haskell API" ++ item "api/jvm/index.html" "Runtime" ++
+        "</nav><div class=\"thc-rail-footer\"><label for=\"thc-appearance\">Appearance</label>" ++
+        "<select class=\"thc-appearance\" id=\"thc-appearance\" aria-label=\"Appearance\">" ++
+        "<option value=\"system\">System</option><option value=\"light\">Light</option>" ++
+        "<option value=\"dark\">Dark</option></select>" ++
+        "<p>Experimental · GHC 9.14.1 · GraalVM 25.3.4.1</p>" ++
+        link (repo ++ "/tree/" ++ revision) "Source ↗" ++ " · " ++
+        link (repo ++ "/commit/" ++ revision) (take 12 revision) ++ "</div></aside>" ++
+        "<iframe id=\"thc-content\" name=\"thc-content\" title=\"THC documentation content\" " ++
+        "src=\"home.html\"></iframe></div>" ++ manifest ++
+        "<script src=\"assets/site.js\" defer></script></body></html>"
+  Text.writeFile (site </> "index.html") (Text.pack html)
 
 renderGuide :: String -> FilePath -> FilePath -> FilePath -> String -> IO ()
 renderGuide revision pandoc source output title = do
   fragment <- readProcess pandoc ["--from=gfm", "--to=html5", "--wrap=none", source] ""
   tags <- mapM rewriteTag (parseTags fragment)
-  let sidebar = "<aside class=\"thc-sidebar\"><p>In this documentation</p>" ++
-        concat [link (fromPage output (guidePath guide)) label | guide@(Guide _ _ label) <- guides] ++ "</aside>"
-      content = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">" ++
+  let content = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">" ++
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>" ++ escape title ++
-        " · THC</title></head><body class=\"thc-guide\"><div class=\"thc-layout\">" ++ sidebar ++
+        " · THC</title></head><body class=\"thc-guide\">" ++
         "<main class=\"thc-prose\" id=\"main\">" ++ renderTags tags ++
         "<footer class=\"thc-footer\">" ++ link (repo ++ "/blob/" ++ revision ++ "/" ++ source) "View this page's source" ++
-        " · UPL-1.0 AND BSD-3-Clause</footer></main></div></body></html>"
-  html <- addChrome revision output (Text.pack content)
+        " · UPL-1.0 AND BSD-3-Clause</footer></main></body></html>"
+  html <- stylePage revision output (Text.pack content)
   createDirectoryIfMissing True (takeDirectory (site </> output))
   Text.writeFile (site </> output) html
   where
@@ -219,8 +260,10 @@ guideURL revision source output url
   | otherwise = do
       let (path, suffix) = break (`elem` ("?#" :: String)) url
           resolved = collapse (takeDirectory source </> decodeURL path)
-          pages = ("docs/site/index.md", "index.html") : [(src, guidePath g) | g@(Guide src _ _) <- guides]
-      case lookup resolved pages of
+          pages = ("docs/site/index.md", "home.html") : [(src, guidePath g) | g@(Guide src _ _) <- guides]
+          assets = [("docs/site" </> name, "assets" </> name) |
+            name <- ["turbo-haskell-bot-light.png", "turbo-haskell-bot-dark.png"]]
+      case lookup resolved (pages ++ assets) of
         Just target -> pure (fromPage output target ++ suffix)
         Nothing -> do
           exists <- doesPathExist resolved
@@ -256,16 +299,25 @@ checkSite revision = do
           key == "id" || (tag == "a" && key == "name")]
         urls = [value | TagOpen _ attrs <- tags, (key,value) <- attrs, key `elem` ["href", "src"]]
         path = makeRelative site file
-    unless (isFragment path || ("class=\"thc-header\"" `Text.isInfixOf` html && Text.pack revision `Text.isInfixOf` html)) $
-      die ("Missing shared navigation/revision in " ++ path)
+    unless (isFragment path || ("name=\"thc-revision\"" `Text.isInfixOf` html &&
+            "assets/site.css" `Text.isInfixOf` html &&
+            "assets/theme.js" `Text.isInfixOf` html && Text.pack revision `Text.isInfixOf` html)) $
+      die ("Missing shared theme/revision in " ++ path)
     pure (path, (anchors, urls))
   let failures = concat [checkURL inventory pages page url | (page, (_,urls)) <- Map.toList pages, url <- urls]
-      required = ["index.html", "api/jvm/index.html", "api/haskell/index.html",
+      required = ["index.html", "home.html", "assets/site.js", "assets/theme.js",
+        "assets/turbo-haskell-bot-light.png", "assets/turbo-haskell-bot-dark.png",
+        "api/jvm/index.html", "api/haskell/index.html",
         "api/haskell/THC-Plugin.html", "api/haskell/THC-Interface.html"] ++ map guidePath guides
       excluded = [path | path <- Set.toList inventory, any (`isSuffixOf` path) [".bgv", ".log", ".zip", ".tar.xz"]]
       missing = [path | path <- required, Set.notMember path inventory]
   unless (null (failures ++ missing ++ excluded)) $
     die (unlines (take 50 (failures ++ map ("Missing page: " ++) missing ++ map ("Unexpected evidence: " ++) excluded)))
+  shell <- Text.readFile (site </> "index.html")
+  unless ("id=\"thc-pages\"" `Text.isInfixOf` shell &&
+          "id=\"thc-content\"" `Text.isInfixOf` shell &&
+          "id=\"thc-appearance\"" `Text.isInfixOf` shell) $
+    die "Missing site route inventory, content frame, or appearance control"
   -- Check that source analysis documented both languages, not just an empty index.
   unless (any ("/-calls/" `Text.isInfixOf`) (map Text.pack (Set.toList inventory)) &&
           any ("execution-context.html" `isSuffixOf`) (Set.toList inventory)) $

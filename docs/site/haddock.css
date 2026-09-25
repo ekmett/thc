@@ -1,0 +1,32 @@
+/* SPDX-FileCopyrightText: 2026 Edward Kmett
+ * SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause */
+/* Haddock copies its built-in structural theme via --built-in-themes. Keep its
+ * quickjump, synopsis folding, module lists and hidden/shown controls intact. */
+@import url("linuwial.css");
+:root { color-scheme: light dark; }
+body { margin: 0; background: var(--thc-paper); color: var(--thc-ink); font: 1rem/1.6 Georgia, "Times New Roman", serif; }
+a, a:visited { color: var(--thc-link); text-decoration-color: var(--thc-line); }
+a:hover { text-decoration-color: currentColor; }
+a:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--thc-accent); outline-offset: 2px; }
+h1, h2, h3, h4 { color: var(--thc-heading); font-family: Georgia, "Times New Roman", serif; font-weight: 400; line-height: 1.25; }
+h1 { font-size: clamp(2rem, 4vw, 3rem); letter-spacing: -1px; }
+h2 { font-size: 1.75rem; }
+#package-header, #page-header, #module-header, .top, .links, #menu, #module-list { font-family: system-ui, sans-serif; }
+#package-header, #page-header, .top { background: var(--thc-pale); border-bottom: 1px solid var(--thc-line); }
+#package-header .caption, #package-header #page-menu a:link,
+#package-header #page-menu a:visited { color: var(--thc-ink); }
+#content { max-width: 1120px; margin: auto; padding: 24px clamp(20px, 4vw, 48px); }
+#interface, .interface { max-width: 100%; }
+.decl, .doc, .subs, .instances, .src { border-color: var(--thc-line); }
+.doc, .top .doc { font-family: Georgia, "Times New Roman", serif; }
+.src, .inline-code { background: var(--thc-inline-code); color: var(--thc-ink); }
+pre, code, tt, .mono { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
+pre { overflow-x: auto; background: var(--thc-code); border: 1px solid var(--thc-line); padding: 16px; }
+code, tt { background: var(--thc-inline-code); }
+.quickjump, #search { color: var(--thc-ink); background: var(--thc-paper); border: 1px solid var(--thc-line); }
+#content, #description, #interface, #synopsis, #table-of-contents,
+#module-header, #module-list, .doc, .subs, .decl, table { color: var(--thc-ink); background-color: var(--thc-paper); }
+#synopsis summary, #table-of-contents .caption, .caption,
+#search-form input, #search-results { color: var(--thc-ink); background: var(--thc-pale); border-color: var(--thc-line); }
+html, body, blockquote { background-color: var(--thc-paper); color: var(--thc-ink); }
+@media (max-width: 800px) { #content { padding: 20px; } pre { max-width: 100%; } }

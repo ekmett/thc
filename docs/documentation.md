@@ -15,7 +15,7 @@ generation:
 | --- | --- |
 | `make docs-haskell` | Haddock for `lib:thc` under `build/docs/haskell/` |
 | `make docs-jvm` | Mixed Java/Kotlin Dokka under `build/docs/jvm/` |
-| `make docs` | Both references, ten curated guides and validation in `build/site/` |
+| `make docs` | Both references, ten curated guides and one navigable site in `build/site/` |
 | `make docs-check` | Recheck the assembled site's links, fragments, assets and revision |
 
 `docs` runs the two generators sequentially, with at most two compiler workers.
@@ -26,8 +26,18 @@ needed to document the exporter library. No installed compiler artifacts are
 rebuilt or hashed by this workflow.
 
 Serve `build/site/` with any static HTTP server. Dokka expects HTTP serving for
-its search and navigation scripts. All site links and assets are relative, so
-the same output works at the server root or at the project's `/thc/` Pages path.
+its search and navigation scripts. `index.html` keeps a persistent left rail;
+the selected guide, Haddock page, or Runtime page appears in a titled,
+same-origin frame. The shell accepts only HTML paths in the generated page
+inventory, including generator search queries and symbol fragments on those
+pages. Navigation updates the URL and browser history, so a copied
+`?page=api/haskell/THC-Plugin.html` link opens the same view. The rail's
+System/Light/Dark control follows the comonad.com palette in the shell and
+content; a direct API URL follows the saved choice or system preference. Direct guide and
+API URLs remain usable outside the shell with their native anchors, search,
+index, and source links. External source and dependency links open outside the
+frame. All site links and assets are relative, so the same output works at the
+server root or at the project's `/thc/` Pages path.
 
 ## Generators and source identity
 
@@ -49,7 +59,8 @@ library modules. Driver executables and fixtures are not published as library
 API. Missing documentation warnings remain visible; there is no blanket
 warnings-as-errors policy for the JVM implementation's public declarations.
 
-Every generated page has a source revision and toolchain banner. Dokka and
+The persistent rail shows the source revision and toolchain. Every generated
+HTML document retains revision metadata. Dokka and
 Haddock declaration source links use the full Git commit ID. Each partial build
 records that ID, and assembly refuses references from a different revision.
 Commit edits before producing a publishable site: a local dirty build is useful
@@ -69,7 +80,13 @@ navigation and revision. Root-relative and local filesystem URLs fail validation
 It does not make live HTTP requests to external sites or prove JavaScript
 behavior in every browser.
 
-Assembly preserves Dokka's sidebar HTML fragment. For Haddock 2.33 it adds the
+The rail owns global navigation. Generator-local search, symbol lists and
+indices remain in the content frame. Haddock uses its supported `--theme` CSS
+option for typography and color alongside its built-in structural stylesheet,
+including quickjump and collapse controls; it does not offer a full HTML shell template.
+The assembler adds the shared stylesheet to standalone pages without replacing
+generator markup. Assembly preserves Dokka's sidebar HTML fragment. For Haddock
+2.33 it adds the
 missing local anchors to rendered instance-method declarations and removes an
 empty source-line suffix from record-selector file links. All resulting links
 still pass the same checker; missing targets are not exempted.
