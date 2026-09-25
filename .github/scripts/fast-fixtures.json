@@ -572,6 +572,7 @@
       "outputs": ["build/arithmetic-exceptions"],
       "sources": [
         "test/haskell-fixtures/ArithmeticExceptionFixtures.hs",
+        "test/haskell-fixtures/InstalledCoreFixtures.hs",
         "test/haskell-fixtures/FixtureSupport.hs",
         "src/THC/Driver/Wired.hs",
         "compiler/test-fixtures/ArithmeticExceptionsAudit.hs",
