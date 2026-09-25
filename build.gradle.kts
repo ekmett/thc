@@ -135,6 +135,8 @@ tasks.withType<Test>().configureEach {
             "interface-core/**/*.hi", "interface-core/**/*.dyn_hi", "interface-core/native/oracle",
             "interface-core/**/*.zip",
             "interface-core/source/*.saved",
+            "interface-core/cache-controls/helper-calls",
+            "interface-core/cache-controls/logs/*.stdout", "interface-core/cache-controls/logs/*.stderr",
             "original-stdio/**/*.json", "original-stdio/results/*.txt", "original-stdio/native/**",
             "original-stdio/logs/*.stdout", "original-stdio/logs/*.stderr",
             "original-stdio-read/**/*.json", "original-stdio-read/results/*.txt", "original-stdio-read/native/**",

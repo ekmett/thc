@@ -167,7 +167,11 @@ are allowed in this comparison.
 It also probes the selected installation's actual `GHC.Internal.Char` interface:
 stock thin interfaces must report missing capability, not wrong-unit failure.
 If that installation carries full Core, the control requires successful loading
-with the original wired owner. The installed interface is not copied or hashed.
+with the original wired owner. This control reads the installed interface in
+place. The [driver's installed-Core cache](driver.md) separately fingerprints
+GHC's full retained interface bytes and checks dependency providers and source
+observations before avoiding hydration. GHC remains version-gated; compiler
+executables are not hashed.
 
 ## Build a compiler with complete Core
 

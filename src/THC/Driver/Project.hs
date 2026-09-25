@@ -6,7 +6,7 @@
 module THC.Driver.Project
   (runProject, Bundle(..), InstalledBundle(..), prepareInstalledBundle, installedRecords) where
 
-import Control.Exception (bracket, finally)
+import Control.Exception (bracket, evaluate, finally)
 import Control.Monad (filterM, forM, forM_, unless, when)
 import Data.Char (isAlphaNum, isHexDigit)
 import qualified Crypto.Hash.SHA256 as SHA
@@ -20,6 +20,7 @@ import Data.List (isSuffixOf, nub, sort, sortOn)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 import Numeric (showHex)
 import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMissing,
                          doesDirectoryExist, doesFileExist, findExecutable, getPermissions,
@@ -30,7 +31,9 @@ import System.Exit (ExitCode(..))
 import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
 import System.FilePath ((</>), isAbsolute, makeRelative, normalise, splitDirectories,
                         takeDirectory, takeExtension, takeFileName, joinPath, replaceExtension)
-import System.IO (SeekMode(AbsoluteSeek), hClose, openTempFile, stderr)
+import System.IO (IOMode(ReadMode), SeekMode(AbsoluteSeek), hClose, hGetContents,
+                  hSetEncoding, openTempFile, stderr, utf8, withFile)
+import System.IO.Error (tryIOError)
 import qualified System.Posix.IO as Posix
 import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, waitForProcess,
                        readCreateProcessWithExitCode)
@@ -233,12 +236,117 @@ prepareInterfaceHelper context root = do
     ["id" .= contextCompiler context, "abi" .= contextAbi context,
      "platform" .= contextPlatform context, "way" .= ("dynamic-nonprofiling" :: String)])
 
--- Rehydrate before cache lookup: registration/ABI/mtime is not an executable
--- payload fingerprint. Only generated JSON and THC-owned exporter code are
--- hashed; no installed GHC binary, interface or library is read for hashing.
+-- The optional index avoids hydration on proven hits, but never replaces the
+-- existing JSON-derived bundle identity or its complete archive validation.
+-- Registered IDs/ABI/mtime alone cannot identify mutable installed payloads.
 prepareInstalledBundle :: FilePath -> FilePath -> FilePath -> String -> InstalledContext -> InstalledUnit ->
                           IO (Either MissingCore InstalledBundle)
 prepareInstalledBundle cache staging recipe driverHash context registrationUnit = do
+  evidence <- optionalIO $ do
+    helperHash <- digestFile (installedHelper context)
+    recipeHash <- digestFile recipe
+    (rtsRegistration, _) <- installedLayoutHeaders context registrationUnit
+    probe <- probeInstalled context registrationUnit
+    let identity = object ["schema" .= (1 :: Int), "helperHash" .= helperHash,
+          "driverHash" .= driverHash, "recipeHash" .= recipeHash,
+          "rtsRegistration" .= rtsRegistration,
+          "registration" .= installedProvenance context registrationUnit]
+        index = cache </> "installed-probes/v1" </> shaHex (BL.toStrict (encode identity)) ++ ".json"
+    pure (identity, probe, index)
+  case evidence of
+    Nothing -> acquireInstalledBundle cache staging recipe driverHash context registrationUnit (\_ _ _ -> pure ())
+    Just (identity, probe, index) -> do
+      hit <- optionalIO $ do
+        envelope <- readJson index
+        record <- field envelope "record"
+        require (jsonField envelope "sha256" == Just (shaHex (BL.toStrict (encode record))))
+          "corrupt installed probe index"
+        require (jsonField record "identity" == Just identity && jsonField record "probe" == Just probe)
+          "installed probe cache miss"
+        sources <- field record "sources"
+        validateSourceObservations sources
+        inputs <- field record "inputs"
+        owner <- field inputs "unit"
+        buildKey <- field inputs "buildKey"
+        exportKey <- field inputs "exportKey"
+        partition <- installedPartition context
+        require (length exportKey == 64 && all isHexDigit exportKey) "invalid installed export key"
+        let destination = cache </> "core-bundles/v1" </> partition </> exportKey </> registeredId registrationUnit ++ ".zip"
+        loaded <- readBundle TargetLayoutBundle destination owner buildKey exportKey inputs
+          (map fst (installedInterfaces registrationUnit))
+        bundle <- maybe (fail "invalid indexed installed bundle") pure loaded
+        require (jsonField record "bundleSha256" == Just (bundleHash bundle)) "changed indexed installed bundle"
+        after <- probeInstalled context registrationUnit
+        require (after == probe) "installed payload changed while validating cached bundle"
+        validateSourceObservations sources
+        pure (InstalledBundle owner bundle)
+      case hit of
+        Just bundle -> pure (Right bundle)
+        Nothing -> acquireInstalledBundle cache staging recipe driverHash context registrationUnit $ \bundle inputs modules -> do
+          _ <- optionalIO $ do
+            sources <- installedSourceObservations modules
+            validateSourceObservations sources
+            after <- probeInstalled context registrationUnit
+            require (after == probe) "installed payload changed during acquisition"
+            let record = object ["identity" .= identity, "probe" .= probe,
+                  "sources" .= sources, "inputs" .= inputs,
+                  "bundleSha256" .= bundleHash (installedBundle bundle)]
+            atomicJson index (object ["record" .= record, "sha256" .= shaHex (BL.toStrict (encode record))])
+          pure ()
+
+-- Cache hints may be absent, stale, corrupt or unsupported by an older helper.
+-- Cancellation remains observable; only ordinary IO/protocol failures fall back.
+optionalIO :: IO a -> IO (Maybe a)
+optionalIO action = either (const Nothing) Just <$> tryIOError action
+
+installedPartition :: InstalledContext -> IO FilePath
+installedPartition context = do
+  fields <- mapM (field (installedCompiler context)) ["id", "abi", "platform"] :: IO [String]
+  require (all (\value -> not (null value) && all (\c -> isAlphaNum c || c `elem` ("-._" :: String)) value) fields)
+    "invalid installed compiler cache partition"
+  pure (foldl1 (\left right -> left ++ "-" ++ right) fields)
+
+-- Match THC.Sources' UTF-8 content/absence semantics, including relative paths
+-- and unreadable files. These are the exact files the archived Core observed;
+-- changed interface bytes invalidate the index before this list can be reused.
+sourceObservation :: FilePath -> Maybe String -> IO Value
+sourceObservation path contents = do
+  absolute <- makeAbsolute path
+  pure (object ["path" .= path, "resolved" .= absolute,
+    "contentSha256" .= fmap (shaHex . Text.encodeUtf8 . Text.pack) contents])
+
+installedSourceObservations :: [(String, BS.ByteString)] -> IO [Value]
+installedSourceObservations modules = do
+  observations <- fmap concat $ forM modules $ \(_, bytes) -> do
+    core <- either fail pure (eitherDecodeStrict' bytes)
+    sources <- field core "sourceFiles" :: IO [Value]
+    forM sources $ \source -> do
+      path <- field source "path"
+      content <- field source "content"
+      record <- sourceObservation path content
+      pure (path, record)
+  let unique = Map.fromList observations
+  require (all (\(path, record) -> Map.lookup path unique == Just record) observations)
+    "source changed between installed module exports"
+  pure (Map.elems unique)
+
+validateSourceObservations :: [Value] -> IO ()
+validateSourceObservations sources = forM_ sources $ \expected -> do
+  path <- field expected "path"
+  contents <- optionalIO $ withFile path ReadMode $ \handle -> do
+    hSetEncoding handle utf8
+    text <- hGetContents handle
+    _ <- evaluate (length text)
+    pure text
+  actual <- sourceObservation path contents
+  require (actual == expected) "installed source observation changed"
+
+-- Ordinary acquisition remains authoritative, including when the optional
+-- probe cannot establish complete evidence. Compiler binaries are not hashed.
+acquireInstalledBundle :: FilePath -> FilePath -> FilePath -> String -> InstalledContext -> InstalledUnit ->
+                          (InstalledBundle -> Value -> [(String, BS.ByteString)] -> IO ()) ->
+                          IO (Either MissingCore InstalledBundle)
+acquireInstalledBundle cache staging recipe driverHash context registrationUnit remember = do
   acquired <- acquireInstalled context registrationUnit
   case acquired of
     Left missing -> pure (Left missing)
@@ -319,7 +427,9 @@ prepareInstalledBundle cache staging recipe driverHash context registrationUnit 
               atomicBytes destination (BL.toStrict archive)
               pure (Bundle destination (shaHex (BL.toStrict archive)) refs buildKey))
               `finally` removePathForcibly temporary
-      pure (Right (InstalledBundle unit bundle))
+      let result = InstalledBundle unit bundle
+      remember result inputs modules
+      pure (Right result)
 
 installedRecords :: InstalledUnit -> InstalledBundle -> [Value]
 installedRecords registrationUnit artifact =

@@ -445,6 +445,15 @@
     "test/haskell-fixtures/InterfaceFixtures.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.ManagedImportStubsNativeTest"], "python": []
     },
+    "test/haskell-fixtures/InstalledCacheFixtures.hs": {
+      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
+    },
+    "compiler/test-fixtures/InterfaceCacheRoot.hs": {
+      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
+    },
+    "compiler/test-fixtures/InterfaceCacheDependency.hs": {
+      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
+    },
     "compiler/test-fixtures/InterfaceLibrary.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
     },

@@ -1,7 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE GADTs, PatternSynonyms #-}
 -- | Recover complete installed Core with the selected GHC 9.14.1 session.
 --
 -- Call 'loadInterfaceCore' with an exact resolved unit/module and interface
@@ -10,24 +10,32 @@
 -- serialization do not link native foreign products or authorize execution.
 module THC.Interface
   ( InterfaceCore, interfaceModule, interfaceDetails, interfaceBindings, interfaceForeign
-  , InterfaceError(..), loadInterfaceCore, interfaceCoreJSON
+  , InterfaceError(..), loadInterfaceCore, interfaceCoreJSON, probeInterface
   ) where
 
 import Control.Exception (Exception, throwIO)
 import Control.Monad (unless)
-import Data.IORef (newIORef, writeIORef)
+import Data.IORef (newIORef, writeIORef, readIORef, modifyIORef')
 import Data.List (sortOn)
+import qualified Data.Set as Set
 import GHC.Plugins
 import GHC.Driver.Env (hscSetFlags)
 import GHC.Driver.Env.KnotVars (KnotVars(..), lookupKnotVars)
 import GHC.Iface.Binary (readBinIface, CheckHiWay(..), TraceBinIFace(..))
+import GHC.Iface.Recomp.Binary (fingerprintBinMem, putNameLiterally)
+import GHC.Iface.Type (putIfaceType)
+import qualified GHC.Data.Strict as Strict
 import GHC.IfaceToCore (typecheckIface, typecheckWholeCoreBindings)
 import GHC.Tc.Utils.Monad (initIfaceCheck)
 import GHC.Types.TypeEnv (emptyTypeEnv, typeEnvIds, typeEnvTyCons)
 import GHC.Unit.Module.Location (pattern ModLocation)
 import GHC.Unit.Module.ModDetails (ModDetails(..))
+import GHC.Unit.Module.Deps
 import GHC.Unit.Module.ModIface
 import GHC.Unit.Module.WholeCoreBindings (WholeCoreBindings(..), IfaceForeign)
+import GHC.Utils.Binary (openBinMem, putFullBinData, put_, putFS, setWriterUserData,
+                        mkWriterUserData, mkSomeBinaryWriter, mkWriter, simpleBindingNameWriter)
+import GHC.Utils.Fingerprint (Fingerprint)
 import System.FilePath (replaceExtension)
 import THC.Plugin (serializePostTidyCoreWithAnnotations)
 
@@ -55,6 +63,65 @@ instance Exception InterfaceError
 
 identity :: Module -> String
 identity m = unitString (moduleUnit m) ++ ":" ++ moduleNameString (moduleName m)
+
+-- | Fingerprint the bytes retained by GHC's interface reader, including its
+-- tables, complete Core, annotations, foreign products and extensible fields.
+-- 'mi_iface_hash' is insufficient: GHC excludes complete Core/foreign payloads
+-- from that recompilation hash. No Core hydration or JSON rendering occurs.
+-- The caller must also account for dependency interfaces and source-note text.
+probeInterface :: HscEnv -> Set.Set String -> Set.Set (String, String) -> Module -> FilePath -> IO (Fingerprint, Bool)
+probeInterface environment units modules expected path = do
+  iface <- readBinIface (targetProfile (hsc_dflags environment))
+    (hsc_NC environment) CheckHiWay QuietBinIFace path
+  unless (mi_module iface == expected)
+    (throwIO (InterfaceModuleMismatch expected (mi_module iface)))
+  -- GHC's loader can resolve Names through the entire selected UnitState,
+  -- even when a stale registration omits a real dependency/module. Such a
+  -- registration is not enough evidence for this cache. Installed imports use
+  -- ordinary interfaces, including references recorded as boot imports.
+  let deps = mi_deps iface
+      moduleIdentity m = (unitString (moduleUnit m), moduleNameString (moduleName m))
+      localIdentity u n = (unitIdString u, moduleNameString n)
+      providers = [localIdentity u (gwib_mod n) | (_, u, n) <- Set.toList (dep_direct_mods deps)] ++
+        [localIdentity u (gwib_mod n) | (u, n) <- Set.toList (dep_boot_mods deps)] ++
+        map moduleIdentity (dep_orphs deps ++ dep_finsts deps)
+      packages = [unitIdString u | (_, u) <- Set.toList (dep_direct_pkgs deps)] ++
+        map unitIdString (Set.toList (dep_trusted_pkgs deps))
+      usageProviders UsagePackageModule{usg_mod = m} = [moduleIdentity m]
+      usageProviders UsageHomeModule{usg_unit_id = u, usg_mod_name = n} = [localIdentity u n]
+      usageProviders UsageHomeModuleInterface{usg_unit_id = u, usg_mod_name = n} = [localIdentity u n]
+      usageProviders UsageMergedRequirement{usg_mod = m} = [moduleIdentity m]
+      usageProviders UsageFile{} = [] -- compile-time inputs; their products are already retained
+      usages = maybe [] (concatMap usageProviders) (mi_usages iface)
+  used <- binaryProviders iface
+  unless (null (dep_sig_mods deps) && all (`Set.member` units) packages && all (`Set.member` modules) (providers ++ usages ++ used))
+    (fail "Interface dependency lies outside the probed registered inventory")
+  digest <- case mi_hi_bytes iface of
+    FullIfaceBinHandle (Strict.Just bytes) -> do
+      buffer <- openBinMem 4096
+      putFullBinData buffer bytes
+      fingerprintBinMem buffer
+    FullIfaceBinHandle Strict.Nothing -> fail "Interface reader did not retain its complete bytes"
+  pure (digest, maybe False (const True) (mi_simplified_core iface))
+
+-- Recompilation usages can omit wired-in or later-introduced Names. GHC's own
+-- Binary writer enumerates the retained Names without hydration or a THC
+-- interface-AST traversal, including known-key Names that bypass its reader's
+-- symbol table.
+-- Extensible-field bytes are fingerprinted above; THC does not hydrate them.
+binaryProviders :: ModIface -> IO [(String, String)]
+binaryProviders iface = do
+  providers <- newIORef Set.empty
+  buffer <- openBinMem 4096
+  let nameWriter handle name = do
+        let m = nameModule name
+        modifyIORef' providers (Set.insert (unitString (moduleUnit m), moduleNameString (moduleName m)))
+        putNameLiterally handle name
+      writer = setWriterUserData buffer $ mkWriterUserData
+        [mkSomeBinaryWriter (mkWriter putIfaceType), mkSomeBinaryWriter (mkWriter nameWriter),
+         mkSomeBinaryWriter (simpleBindingNameWriter (mkWriter nameWriter)), mkSomeBinaryWriter (mkWriter putFS)]
+  put_ writer iface
+  Set.toAscList <$> readIORef providers
 
 -- | Read a raw installed interface with the selected GHC session's target,
 -- package database and NameCache. The expected Module includes the exact unit
