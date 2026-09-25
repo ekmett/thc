@@ -508,10 +508,26 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         return result { withDescriptor(fd) { entry ->
             if (!entry.readable) fail(4, "THC file descriptor is not readable: $fd")
             if (count == 0L) 0L else {
-                val bytes = address.rawBacking()
-                val offset = address.cbitsOffset().toInt()
-                val n = entry.input?.read(bytes, offset, count.toInt())
-                    ?: entry.channel!!.read(ByteBuffer.wrap(bytes, offset, count.toInt()))
+                val n = if (address.nativeAllocation() != null) address.withNativeSegment { segment ->
+                    // Descriptor before allocation, as for terminal-image IO.
+                    // Recheck after borrowing: free may win after the preflight.
+                    address.requireRange(0, count, true)
+                    val window = segment.asSlice(0, minOf(count, Int.MAX_VALUE.toLong())).asByteBuffer()
+                    if (entry.input == null) entry.channel!!.read(window)
+                    else {
+                        // Embedding streams require arrays. A bounded short
+                        // read is valid; never report/copy an unreceived suffix.
+                        val bytes = ByteArray(minOf(window.remaining(), 1024 * 1024))
+                        val received = entry.input.read(bytes, 0, bytes.size)
+                        if (received > 0) window.put(bytes, 0, received)
+                        received
+                    }
+                } else {
+                    val bytes = address.rawBacking()
+                    val offset = address.cbitsOffset().toInt()
+                    entry.input?.read(bytes, offset, count.toInt())
+                        ?: entry.channel!!.read(ByteBuffer.wrap(bytes, offset, count.toInt()))
+                }
                 if (n < 0) 0L else if (n == 0) fail(6, "THC input made no progress") else n.toLong()
             }
         } }
@@ -603,12 +619,24 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         return result { withDescriptor(fd) { entry ->
             if (!entry.writable) fail(4, "THC file descriptor is not writable: $fd")
             if (count == 0L) 0L else {
-                val bytes = address.rawBacking()
-                val offset = address.cbitsOffset().toInt()
-                if (entry.output != null) {
-                    entry.output.write(bytes, offset, count.toInt())
-                    count
-                } else entry.channel!!.write(ByteBuffer.wrap(bytes, offset, count.toInt())).toLong()
+                if (address.nativeAllocation() != null) address.withNativeSegment { segment ->
+                    address.requireRange(0, count)
+                    val window = segment.asSlice(0, minOf(count, Int.MAX_VALUE.toLong())).asByteBuffer().asReadOnlyBuffer()
+                    if (entry.output == null) entry.channel!!.write(window).toLong()
+                    else {
+                        val bytes = ByteArray(minOf(window.remaining(), 1024 * 1024))
+                        window.get(bytes)
+                        entry.output.write(bytes, 0, bytes.size)
+                        bytes.size.toLong()
+                    }
+                } else {
+                    val bytes = address.rawBacking()
+                    val offset = address.cbitsOffset().toInt()
+                    if (entry.output != null) {
+                        entry.output.write(bytes, offset, count.toInt())
+                        count
+                    } else entry.channel!!.write(ByteBuffer.wrap(bytes, offset, count.toInt())).toLong()
+                }
             }
         } }
     }

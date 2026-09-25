@@ -755,9 +755,10 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_native_malloc_source_and_composite_owners_select_both_consumers(self):
         malloc = "thc.runtime.NativeMallocTest"
         addresses = "thc.runtime.NativeAddressTest"
-        self.assertEqual([malloc], self.family("ManagedNativeAllocations")["junit"])
+        buffers = "thc.runtime.NativeFileBuffersTest"
+        self.assertEqual([buffers, malloc], self.family("ManagedNativeAllocations")["junit"])
         owners = self.policy["owners"]
-        self.assertEqual([malloc], owners["src/main/java/thc/runtime/NativeMallocAllocation.java"]["junit"])
+        self.assertEqual([buffers, malloc], owners["src/main/java/thc/runtime/NativeMallocAllocation.java"]["junit"])
         self.assertEqual({malloc, addresses},
                          set(owners["test/haskell-fixtures/NativeAddressFixtures.hs"]["junit"]))
         self.assertEqual({malloc, addresses},
@@ -961,7 +962,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertLessEqual(native, set(owners[path]["junit"]))
                 self.assertNotIn(path, self.families)  # Preserve the foreign callback lane.
-        self.assertLessEqual({"thc.runtime.ManagedFilesTest", "thc.runtime.GuestThreadsTest",
+        self.assertLessEqual({"thc.runtime.NativeFileBuffersTest", "thc.runtime.ManagedFilesTest", "thc.runtime.GuestThreadsTest",
                               "thc.GuestExceptionsTest"}, set(owners["src/main/kotlin/thc/runtime/ManagedFiles.kt"]["junit"]))
         self.assertLessEqual({"thc.runtime.CoreManagedFilesTest", "thc.runtime.ManagedFileCallTest"},
                              set(owners["src/main/kotlin/thc/runtime/CoreManagedFiles.kt"]["junit"]))

@@ -52,6 +52,15 @@ Metadata therefore follows host chmod, size changes, rename, replacement and
 unlink without reopening a path. The existing native ABI probe checks the image
 layout; returned snapshots do not expose descriptor integers to Core.
 
+Read and write accept both managed byte storage and live, context-owned malloc
+allocations. Native aliases retain their exact byte offset. The complete requested
+region is validated before IO, then borrowed under the descriptor owner until
+the transfer and read copyback finish; concurrent free waits for that borrow.
+Channels receive a bounded native byte-buffer view. Embedding streams use at most
+1 MiB of staging storage and report the actual short transfer, preserving bytes
+outside a successful read. Freed, foreign-context and unowned numeric pointers
+remain rejected. This adds no descriptor or foreign-call authority.
+
 Managed native opens register pending acquisition before provider calls, claim
 the actual opened identity before truncation, and publish one shared owner.
 `dup`/`dup2` aliases share that owner, its IO monitor and metadata capability;
