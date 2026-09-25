@@ -98,7 +98,14 @@ internal class KillThread(@field:Child private var identity: Expr, @field:Child 
         }
     }
 
-    private fun finish(sent: AsyncRequest): Any {
+    private class ResumeCompleted : AstResumeStep {
+        override fun resume(frame: VirtualFrame, input: Any?): Any {
+            if (input !== Unit) fault("Invalid completed killThread# continuation")
+            return Unit
+        }
+    }
+
+    internal fun finish(sent: AsyncRequest): Any {
         val enteredCompiled = CompilerDirectives.inCompiledCode()
         try { GuestThreadOps.finishKill(this, sent) }
         catch (blocked: AsyncBlocked) {
@@ -108,9 +115,15 @@ internal class KillThread(@field:Child private var identity: Expr, @field:Child 
                 .append(ResumeWait(this, sent))
         }
         GuestThreads.pollCurrent(this, false)?.let { incoming ->
-            if (incoming === sent && !sent.forceSelf) fault("killThread# claimed a non-self request")
+            if (sent.forceSelf) {
+                if (incoming !== sent) fault("Self-directed killThread# claimed a different request")
+                incoming.compiledCapture = CompilerDirectives.inCompiledCode()
+                throw AsyncDelivery(incoming, this)
+            }
+            if (incoming === sent) fault("killThread# claimed its completed outbound request")
+            if (!captureWait) fault("Nonresumable AST sender claimed an external request")
             incoming.compiledCapture = CompilerDirectives.inCompiledCode()
-            throw AsyncDelivery(incoming, this)
+            throw AstCapture(incoming, SynchronousMasking.current(this)).append(ResumeCompleted())
         }
         if (sent.forceSelf) fault("Self-directed killThread# was not delivered at its guest poll")
         return Unit
