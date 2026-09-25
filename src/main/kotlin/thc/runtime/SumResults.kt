@@ -26,7 +26,7 @@ internal object SumShape {
         if (alternatives.size != 2)
             throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum requires two alternatives")
         val fields = alternatives.map { alternative ->
-            val leaves = TupleShape.flatten(alternative)
+            val leaves = TupleShape.logicalLeaves(alternative)
             if (leaves.any { it.isSum || it.isVector || it.kind !in setOf(CoreKind.LONG, CoreKind.FLOAT,
                     CoreKind.DOUBLE, CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) })
                 throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum payload")

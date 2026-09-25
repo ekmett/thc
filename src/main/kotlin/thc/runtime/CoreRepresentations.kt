@@ -27,6 +27,8 @@ internal data class CoreRepresentation(
     val isTuple: Boolean get() = components != null
     val isSum: Boolean get() = alternatives != null
     val isAggregate: Boolean get() = isTuple || isSum
+    /** A vector remains one logical value, but crosses calls through primitive lane storage. */
+    val isTypedTransport: Boolean get() = isAggregate || isVector
     val isEmptyTuple: Boolean get() = present && kind == CoreKind.UNKNOWN && components?.isEmpty() == true && primReps?.isEmpty() == true
     val isLong: Boolean get() = kind == CoreKind.LONG
     val isFloat: Boolean get() = kind == CoreKind.FLOAT
@@ -162,17 +164,23 @@ internal object CoreRepresentations {
             TupleShape.validate(proof)
             if (TupleShape.flatten(proof).any { it.primReps == listOf("BoxedRep Nothing") })
                 throw UnsupportedCore("Unsupported Core tuple input with unknown boxed levity")
-        } else requireScalar(proof, "argument")
+        } else if (proof.isVector) VectorLayout.validate(proof)
+        else requireScalar(proof, "argument")
     }
     /** Joins retain logical arity; only the exact nullary tuple has no input slot. */
     fun requireJoinInput(proof: CoreRepresentation) {
-        if (!proof.isEmptyTuple) requireScalar(proof, "join argument")
+        if (proof.isVector) VectorLayout.validate(proof)
+        else if (!proof.isEmptyTuple) requireScalar(proof, "join argument")
     }
     fun requireJoinArgument(expected: CoreRepresentation, actual: CoreRepresentation) {
         requireJoinInput(actual)
         if (expected.isEmptyTuple || actual.isEmptyTuple) {
             if (!expected.isEmptyTuple || !actual.isEmptyTuple)
                 throw RuntimeFault("Local join requires matching exact empty tuple argument proof")
+        }
+        if (expected.isVector || actual.isVector) {
+            if (!expected.isVector || !actual.isVector || !TupleShape.compatible(expected, actual))
+                throw RuntimeFault("Local join requires matching exact vector argument proof")
         }
     }
     fun requireScalar(proof: CoreRepresentation, boundary: String) {

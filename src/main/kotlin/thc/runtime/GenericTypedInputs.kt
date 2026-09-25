@@ -104,7 +104,7 @@ private fun forceActuals(frame: VirtualFrame, node: Node, function: Closure, sou
         val proof = source.layout?.proof(i)
         // Tuple WHNF says nothing about its lifted leaves; primitive scalars
         // also need no force even if a less precise formal uses a reference slot.
-        if (proof?.isTuple == true || proof?.isLong == true || proof?.isFloat == true || proof?.isDouble == true) continue
+        if (proof?.isTuple == true || proof?.isVector == true || proof?.isLong == true || proof?.isFloat == true || proof?.isDouble == true) continue
         if (strict.contains(function.suppliedCount + i - offset)) {
             val physical = ArgumentLayout.offset(source.layout, i)
             source.setReference(frame, node, values, physical, force.execute(frame, source.reference(frame, node, values, physical)))
@@ -160,7 +160,7 @@ internal fun genericScalarValues(frame: VirtualFrame, node: Node, source: InputS
     for (i in 0 until maximum) if (i >= offset && i < offset + count) {
         val proof = source.layout?.proof(i)
         if (proof?.isEmptyTuple == true) continue
-        if (proof?.isTuple == true) fault("Tuple input cannot enter a scalar packet")
+        if (proof?.isTuple == true || proof?.isVector == true) fault("Typed input cannot enter a scalar packet")
         val physical = ArgumentLayout.offset(source.layout, i)
         result[physical - from] = when {
             proof?.isLong == true -> source.long(frame, node, values, physical)
