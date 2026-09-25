@@ -44,6 +44,8 @@ extra-source-files:
   compiler/test-fixtures/OriginalGmpNative.hs
   compiler/test-fixtures/OriginalPosixDupAudit.hs
   compiler/test-fixtures/OriginalPosixDupAuditNative.hs
+  compiler/test-fixtures/TopHandlerMainThreadAbi.hs
+  compiler/test-fixtures/TopHandlerMainThreadAbiNative.hs
   README.md
   docs/driver.md
   docs/ghc-core.md
