@@ -14,13 +14,18 @@ interface closure, the strict auditor, and runtime linking retain this implicit
 RTS dependency. There is no substitute `IOException` or Java exception value.
 The state argument is validated before the wait starts. Opaque embedding
 streams have no native readiness contract, and this partial capability does not
-claim arbitrary host descriptors or platforms. The selected macOS GHC 9.14.1
-threaded I/O manager reports these primops unavailable, so the full native
-fixture and JVM check are Linux-only.
+claim arbitrary host descriptors or platforms. The native oracle uses GHC
+9.14.1's non-threaded select I/O manager: its threaded manager does not implement
+these raw primops. The full fixture is Linux-only because of THC's current
+native descriptor provider; THC's managed runtime still supports concurrent
+guest threads.
 
 The ordinary Linux `FileWaitPrimitiveTest` checks first-installed AST and
 bytecode execution on a real native-backed file, exact lazy payload identity
-for invalid and closed descriptors, and retention of compiled code. The
+for invalid and closed descriptors, and retention of compiled code after
+profiling the error path. The first cold async capture must originate in compiled
+code; Graal may deoptimize while learning its handler and continuation types.
+The test recompiles that learned path before checking subsequent compiled waits. The
 separate full-Core fixture uses the selected GHC's original installed Core,
 strict pre/post audits, and a native pipe oracle. It is explicit rather than
 part of stock-GHC fixture preparation:
