@@ -261,6 +261,25 @@ class OriginalStackConsumerProofTest {
         assertEquals(15, specs.size)
     }
 
+    @Test fun completePinnedSourceLinksTheOriginalDecoderAndRenderer() {
+        val formatterRoot = File(root, "build/original-stack-formatter").canonicalFile.toPath()
+        val sourceReceipt = read("build/original-stack-formatter/manifest.json")
+        val originals = (sourceReceipt["originals"] as List<String>).map { path ->
+            val file = File(root, path).canonicalFile
+            require(file.toPath().startsWith(formatterRoot) && path.endsWith(".json"))
+            read(path)
+        }
+        require(originals.any { it["module"] == "GHC.Internal.Stack.Decode" })
+        for (paths in (manifest()["stages"] as Map<String, List<String>>).values) {
+            val consumer = read(paths.single { it.endsWith("/OriginalStackAudit.json") })
+            val linked = CoreModules.reachable(CoreModules.merge(originals + consumer),
+                "renderOriginalNames", strictLink = true)
+            val ids = (linked["bindings"] as List<Map<String, Any?>>).map { it["id"] }.toSet()
+            assertTrue(ids.any { it is String && it.startsWith("ghc-internal:GHC.Internal.Stack.Decode.") })
+            assertTrue("${consumer["unit"]}:OriginalStackAudit.renderOriginalNames" in ids)
+        }
+    }
+
     @Test fun descriptorAndInventoryCorruptionCannotHideColdUnsupportedOperations() {
         manifest()
         val proof = proof()

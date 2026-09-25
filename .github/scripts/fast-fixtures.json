@@ -344,7 +344,7 @@
       ]
     },
     "original-stack-formatter": {
-      "junit": ["thc.runtime.OriginalStackFormatterTest"],
+      "junit": ["thc.runtime.OriginalStackFormatterTest", "thc.runtime.OriginalStackConsumerProofTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack-formatter"]}],
       "outputs": ["build/original-stack-formatter"],
       "sources": [
