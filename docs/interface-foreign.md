@@ -18,16 +18,22 @@ string, including control characters; it is not a path to reopen or text to
 execute. No C, object file, symbol or lifecycle entry is synthesized. The ZIP
 and its generated-Core hash cover these fields as part of the module document.
 
-Schema 2 is deliberately **archive-only**. Older schema-1 readers reject it;
-the current checked ZIP reader validates and transports its metadata, but the
-runtime refuses it before combining modules, pruning bindings, or executing any
-guest code. Both backend constructors also enforce this before their first
-property initialization; direct construction cannot bypass the loader guard.
-Unversioned synthetic backend test inputs remain allowed only without foreign
-metadata. Diagnostic mode does not bypass this boundary. A schema-1 document
-cannot hide a `foreign` field. The strict Core auditor continues to reject
-schema 2 rather than silently treating foreign registration as implemented.
-This slice does not change the ordinary source-plugin foreign-output contract.
+Schema 2 records foreign artifacts; it does not by itself authorize execution.
+Older schema-1 readers reject it. The checked ZIP reader verifies the archive
+and module hashes, schema and foreign metadata for **every** supplied module.
+Modules with a verified native link have their declared foreign calls checked
+against that link. An unlinked module with initializers, finalizers or extra
+foreign files is rejected even when none of its Core bindings is reachable:
+those artifacts may have startup or shutdown effects independent of a Core
+entry. For other unlinked modules, the linker checks the complete reachable
+closure of the requested entry roots and rejects any binding owned by one of
+them. An unrelated archived binding may remain in the bundle without granting
+its foreign calls executable status. Direct backend construction still rejects
+unresolved archive metadata, and diagnostic mode does not bypass the boundary.
+Unversioned synthetic backend inputs remain allowed only without foreign
+metadata; a schema-1 document cannot hide a `foreign` field. The strict Core
+auditor applies the same reachability and global-obligation boundary. This
+does not change the ordinary source-plugin foreign-output contract.
 
 ## Why compiling the stubs through Sulong is insufficient
 
@@ -54,9 +60,10 @@ initializers nor claims `forkOS` support.
 The Haskell producer compares every serialized field against the actual binary
 interface, using a real foreign export and a TH-added C file. A separate private
 registration exercises production helper acquisition and checked ZIP transport.
-Kotlin verifies exact metadata preservation and rejection in AST and bytecode,
-with diagnostic mode both enabled and disabled. Malformed/downgraded archives,
-finalizer-only records and foreign-file contents have separate controls.
+Kotlin verifies exact metadata preservation, unreachable archive admission and
+reachable foreign-call rejection in AST and bytecode, with diagnostic mode both
+enabled and disabled. Malformed/downgraded archives, finalizer-only records and
+foreign-file contents have separate controls.
 The original 21-row opaque/private/CBV fixture remains executable schema 1.
 
 ## What survives an installed interface
