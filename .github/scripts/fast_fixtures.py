@@ -256,6 +256,8 @@ def cache_key(root, group_id, group, toolchain):
 
 
 def _output_hashes(root, group):
+    if group["outputs"] == ["build/original-stack", "build/original-stack-formatter"]:
+        return _output_hashes(root, {"outputs": ["build/original-stack"]}) | _formatter_output_hashes(root)
     if group["outputs"] == ["build/original-stack-formatter"]:
         return _formatter_output_hashes(root)
     if group["outputs"] == ["build/original-gmp"]:

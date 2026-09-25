@@ -344,7 +344,7 @@
       ]
     },
     "original-stack-formatter": {
-      "junit": ["thc.runtime.OriginalStackFormatterTest", "thc.runtime.OriginalStackConsumerProofTest"],
+      "junit": ["thc.runtime.OriginalStackFormatterTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack-formatter"]}],
       "outputs": ["build/original-stack-formatter"],
       "sources": [
@@ -387,9 +387,12 @@
       ]
     },
     "original-stack": {
-      "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackDecoderCallTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack"]}],
-      "outputs": ["build/original-stack"],
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackDecoderCallTest", "thc.runtime.OriginalStackDecoderExecutionTest"],
+      "commands": [
+        {"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack"]},
+        {"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack-formatter"]}
+      ],
+      "outputs": ["build/original-stack", "build/original-stack-formatter"],
       "sources": [
         "compiler/test-fixtures/OriginalStackAudit.hs",
         "compiler/test-fixtures/OriginalStackAuditNative.hs",
@@ -399,6 +402,10 @@
         "compiler/pinned-ghc-internal/GHC/Internal/Stack/Decode.hs",
         "compiler/pinned-ghc-internal/GHC/Internal/InfoProv/Types.hsc",
         "compiler/pinned-ghc-internal/GHC/Internal/Heap/InfoTable.hsc",
+        "compiler/test-fixtures/OriginalStackFormatter.hs",
+        "compiler/test-fixtures/OriginalStackFormatterNative.hs",
+        "src/THC/Driver/Wired.hs",
+        "compiler/target-layout.c",
         "test/haskell-fixtures/StackFixtures.hs",
         "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs",

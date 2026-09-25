@@ -769,8 +769,10 @@ class FixturePreparationTest(unittest.TestCase):
         manifest, owners = fast_fixtures._manifest(project)
         group = manifest["groups"]["original-stack"]
         self.assertEqual("original-stack", owners["thc.runtime.OriginalStackConsumerProofTest"])
-        self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack"]}], group["commands"])
-        self.assertEqual(["build/original-stack"], group["outputs"])
+        self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", name]}
+                          for name in ("original-stack", "original-stack-formatter")], group["commands"])
+        self.assertEqual(["build/original-stack", "build/original-stack-formatter"], group["outputs"])
+        self.assertEqual("original-stack", owners["thc.runtime.OriginalStackDecoderExecutionTest"])
         self.assertTrue(all((project / name).is_file() for name in group["sources"]))
         self.assertIn('"$fixture_bin" original-stack', (project / "scripts/prepare-tests.sh").read_text().splitlines())
         self.assertIn("build/original-stack", fast_fixtures.FULL_OUTPUT_ROOTS)

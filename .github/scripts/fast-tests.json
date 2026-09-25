@@ -382,11 +382,11 @@
       "python": []
     },
     "compiler/test-fixtures/OriginalStackFormatter.hs": {
-      "junit": ["thc.runtime.OriginalStackFormatterTest"],
+      "junit": ["thc.runtime.OriginalStackFormatterTest", "thc.runtime.OriginalStackDecoderExecutionTest"],
       "python": []
     },
     "compiler/test-fixtures/OriginalStackFormatterNative.hs": {
-      "junit": ["thc.runtime.OriginalStackFormatterTest"],
+      "junit": ["thc.runtime.OriginalStackFormatterTest", "thc.runtime.OriginalStackDecoderExecutionTest"],
       "python": []
     },
     "scripts/prepare-boxed-arrays.py": {
@@ -410,19 +410,19 @@
       "python": []
     },
     "compiler/test-fixtures/OriginalStackAudit.hs": {
-      "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackDecoderExecutionTest"],
       "python": []
     },
     "compiler/test-fixtures/OriginalStackAuditNative.hs": {
-      "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackDecoderExecutionTest"],
       "python": []
     },
     "compiler/test-fixtures/OriginalStackProof.json": {
-      "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackDecoderCallTest"],
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackDecoderCallTest", "thc.runtime.OriginalStackDecoderExecutionTest"],
       "python": []
     },
     "test/haskell-fixtures/StackFixtures.hs": {
-      "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackFormatterTest"],
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackFormatterTest", "thc.runtime.OriginalStackDecoderExecutionTest"],
       "python": []
     },
     "src/test/kotlin/thc/runtime/ManagedStackInfoImageTest.kt": {
@@ -978,6 +978,7 @@
         "thc.runtime.ShrinkByteArrayTest",
         "thc.runtime.FetchAddIntArrayTest",
         "thc.runtime.OriginalStackConsumerProofTest",
+        "thc.runtime.OriginalStackDecoderExecutionTest",
         "thc.runtime.BoxedArrayExtensionsTest",
         "thc.runtime.BitPrimopsTest",
         "thc.IntegerPrimopsTest",
