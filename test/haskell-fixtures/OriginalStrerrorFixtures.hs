@@ -5,7 +5,7 @@
 module OriginalStrerrorFixtures (prepareOriginalStrerror) where
 
 import Control.Monad (unless)
-import Data.Aeson (object, toJSON, (.=))
+import Data.Aeson (object, (.=))
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Map.Strict as Map
 import FixtureSupport
@@ -30,15 +30,22 @@ prepareOriginalStrerror root = do
     "-package", "ghc-internal", "-odir", root </> native, "-hidir", root </> native,
     source, "-o", root </> binary]
   observed <- execute "native-oracle" [("LC_ALL", "C")] (root </> binary) []
-  rows <- maybe (die "Malformed original strerror native oracle") pure
-    (readMaybe (BS.unpack (commandStdout observed)) :: Maybe [(Int, String)])
-  unless (map fst rows == [2, 22] && all (not . null . snd) rows &&
+  (messages, raw) <- maybe (die "Malformed original strerror native oracle") pure
+    (readMaybe (BS.unpack (commandStdout observed)) :: Maybe ([(Int, String)], [(Int, Int, Int, [Int])]))
+  unless (map fst messages == [2, 22] && all (not . null . snd) messages &&
+          map (\(number, size, _, _) -> (number, size)) raw ==
+            [(22, 512), (999999, 512), (22, 4), (22, 8)] &&
+          all (\(_, size, _, bytes) -> size == length bytes && all (\byte -> byte >= 0 && byte <= 255) bytes) raw &&
           BS.null (commandStderr observed)) (die "Incomplete original strerror native oracle")
   let oracle = directory </> "oracle.json"
       manifest = directory </> "manifest.json"
-  writeJson (root </> oracle) (toJSON [object ["errno" .= number, "message" .= message] | (number, message) <- rows])
+  writeJson (root </> oracle) $ object
+    ["messages" .= [object ["errno" .= number, "message" .= message] | (number, message) <- messages],
+     "raw" .= [object ["errno" .= number, "length" .= size, "status" .= status, "bytes" .= bytes]
+       | (number, size, status, bytes) <- raw]]
   sourceHash <- hashFile (root </> source)
   oracleHash <- hashFile (root </> oracle)
   writeJson (root </> manifest) $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
-    "nativeRows" .= length rows, "inputHashes" .= Map.singleton source sourceHash,
+    "locale" .= ("C" :: String), "nativeRows" .= (length messages + length raw),
+    "inputHashes" .= Map.singleton source sourceHash,
     "artifactHashes" .= Map.singleton oracle oracleHash]

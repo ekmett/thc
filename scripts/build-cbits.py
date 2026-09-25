@@ -75,7 +75,8 @@ def main():
     output = args.output.resolve() / "thc/cbits"
     output.mkdir(parents=True, exist_ok=True)
     commands = []
-    sources = {"md5": ROOT / "src/main/c/md5-api.c", "strerror": strerror}
+    sources = {"md5": ROOT / "src/main/c/md5-api.c", "strerror": strerror,
+               "strerror-locale": ROOT / "src/main/c/strerror-locale.c"}
     if system == "Linux":
         sources["iconv"] = ROOT / "src/main/c/iconv-api.c"
     for name, source in sources.items():

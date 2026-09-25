@@ -207,6 +207,9 @@
     }
   },
   "owners": {
+    "src/main/c/strerror-locale.c": {
+      "junit": ["thc.runtime.OriginalStrerrorNativeTest"], "python": ["scripts/test-build-cbits.py"]
+    },
     "src/main/kotlin/thc/runtime/ManagedStrerror.kt": {
       "junit": ["thc.runtime.OriginalStrerrorNativeTest"], "python": []
     },

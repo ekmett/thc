@@ -41,6 +41,14 @@ The errno slot belongs to a context and Java thread, preserving the existing gue
 thread identity. Supporting safe/unsafe descriptors does not make these foreign
 operations asynchronously interruptible or establish migratable IO scheduling.
 
+The separate exact `base_strerror_r` safe ccall runs the unchanged GHC C wrapper
+against a checked native copy of the caller's whole buffer. It copies every byte
+back on ordinary C returns, including error returns. A native thread-local scope
+sets only `LC_MESSAGES` to C and restores the previous locale in `finally`;
+guest async delivery is deferred across that foreign extent. Forced host
+cancellation or LLVM context termination can prevent native restoration because
+the cleanup must re-enter LLVM; this path is not host-cancellation safe.
+
 ## Original seek constants
 
 The three exact original capi wrappers consume State and return State/Int32;

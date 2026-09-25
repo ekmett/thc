@@ -7,8 +7,8 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.interop.InteropLibrary
 
 /** Original GHC's POSIX base_strerror_r over a bounded native scratch buffer.
- * Native pointers are never guest Addr# values; only the terminating message
- * bytes are copied back to the caller's checked mutable allocation. */
+ * Native pointers are never guest Addr# values; the full caller buffer is
+ * copied back, including bytes written before an ordinary error return. */
 internal class ManagedStrerror(private val cbits: () -> SulongCbits, private val threads: GuestThreads) {
     private val interop = InteropLibrary.getUncached()
 
@@ -18,24 +18,37 @@ internal class ManagedStrerror(private val cbits: () -> SulongCbits, private val
         // Haskell caller supplies 512; reject unsafe or unbounded other sizes.
         if (length !in 4L..65536L) fault("strerror output length outside supported range")
         output.requireByteRegion(length, writable = true)
-        val library = cbits().strerrorLibrary()
+        val nativeCode = cbits()
+        val library = nativeCode.strerrorLibrary()
+        val localeLibrary = nativeCode.strerrorLocaleLibrary()
+        val original = interop.readMember(library, "base_strerror_r")
+        val enterLocale = interop.readMember(localeLibrary, "thc_strerror_locale_enter")
+        val leaveLocale = interop.readMember(localeLibrary, "thc_strerror_locale_leave")
         val invoke = {
             output.requireByteRegion(length, writable = true)
             NativeLimbScope().use { scope ->
+                val bytes = ByteArray(length.toInt()) { output.readWord8(it.toLong()).toByte() }
                 val native = scope.allocate((length + 7L) and -8L)
+                native.copyFrom(bytes, 0, bytes.size)
+                // Keep the whole native locale/call/restore sequence outside
+                // guest delivery. Hard host cancellation inside C is not an
+                // unwindable guest safepoint.
                 val previous = threads.enterForeign()
                 val status = try {
-                    interop.execute(interop.readMember(library, "base_strerror_r"), error.toInt(), native, length)
+                    val locale = interop.execute(enterLocale)
+                    if (interop.isNull(locale)) fault("Native strerror message locale unavailable")
+                    try {
+                        interop.execute(original, error.toInt(), native, length)
+                    } finally {
+                        val restored = interop.execute(leaveLocale, locale)
+                        if (!interop.fitsInInt(restored) || interop.asInt(restored) != 1)
+                            fault("Native strerror message locale restore failed")
+                    }
                 } finally { threads.leaveForeign(previous) }
                 if (!interop.fitsInInt(status)) fault("Invalid native strerror CInt result")
                 val result = interop.asInt(status)
-                if (result == 0) {
-                    val bytes = ByteArray(length.toInt())
-                    native.copyTo(bytes, 0, bytes.size)
-                    val terminator = bytes.indexOf(0)
-                    if (terminator < 0) fault("Native strerror omitted its terminator")
-                    for (i in 0..terminator) output.writeWord8(i.toLong(), bytes[i].toLong())
-                }
+                native.copyTo(bytes, 0, bytes.size)
+                for (i in bytes.indices) output.writeWord8(i.toLong(), bytes[i].toLong())
                 result.toLong()
             }
         }

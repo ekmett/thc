@@ -92,7 +92,7 @@ class CompilerTargetTest(unittest.TestCase):
             source = root / "src/main/c/md5-api.c"
             source.parent.mkdir(parents=True)
             source.write_bytes(b"/* synthetic ABI wrapper */\n")
-            for name in ("iconv-api.c", "gmp-api.c"):
+            for name in ("iconv-api.c", "gmp-api.c", "strerror-locale.c"):
                 (source.parent / name).write_bytes(b"/* synthetic ABI wrapper */\n")
             original = root / "compiler/pinned-ghc-internal/cbits/strerror.c"
             original.parent.mkdir(parents=True)
@@ -132,9 +132,9 @@ class CompilerTargetTest(unittest.TestCase):
             self.assertEqual(target, manifest["target"])
             self.assertEqual("Linux", manifest["system"])
             self.assertEqual("x86_64", manifest["architecture"])
-            self.assertEqual(4, len(manifest["commands"]))
-            self.assertEqual(6, len(manifest["sources"]))
-            self.assertEqual(4, len(manifest["artifacts"]))
+            self.assertEqual(5, len(manifest["commands"]))
+            self.assertEqual(7, len(manifest["sources"]))
+            self.assertEqual(5, len(manifest["artifacts"]))
             for entry in manifest["sources"] + manifest["artifacts"]:
                 self.assertEqual(hashlib.sha256(Path(entry["path"]).read_bytes()).hexdigest(), entry["sha256"])
 

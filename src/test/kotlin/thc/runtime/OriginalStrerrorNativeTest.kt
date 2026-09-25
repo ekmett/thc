@@ -24,12 +24,17 @@ class OriginalStrerrorNativeTest {
     @Test fun originalMessagesSurviveNativeCopyAndCompiledCalls() {
         val manifest = json(File(fixture, "manifest.json"))
         assertEquals(1L, manifest["schema"]); assertEquals("9.14.1", manifest["ghc"])
-        assertEquals(2L, manifest["nativeRows"])
+        assertEquals("C", manifest["locale"])
+        assertEquals(6L, manifest["nativeRows"])
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf("compiler/test-fixtures/OriginalStrerrorNative.hs"))
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf("build/original-strerror/oracle.json"),
             "build/original-strerror/")
-        val rows = Json.parse(File(fixture, "oracle.json").readText()) as List<Map<String, Any?>>
-        assertEquals(listOf(2L, 22L), rows.map { it["errno"] })
+        val oracle = json(File(fixture, "oracle.json"))
+        val messages = oracle["messages"] as List<Map<String, Any?>>
+        val raw = oracle["raw"] as List<Map<String, Any?>>
+        assertEquals(listOf(2L, 22L), messages.map { it["errno"] })
+        assertEquals(listOf(22L to 512L, 999999L to 512L, 22L to 4L, 22L to 8L),
+            raw.map { it["errno"] to it["length"] })
         for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").allowNativeAccess(true)
             .allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
             .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
@@ -42,7 +47,7 @@ class OriginalStrerrorNativeTest {
                         else BytecodeProgram(language, module)
                     val entry = program.entryTarget("strerror")
                     fun replay(compiled: Boolean) {
-                        for (row in rows) {
+                        for (row in messages) {
                             val bytes = ByteArray(512) { 0x55 }
                             val address = ManagedAddress.fromByteArray(bytes)
                             val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
@@ -54,7 +59,20 @@ class OriginalStrerrorNativeTest {
                             val end = bytes.indexOf(0)
                             assertTrue(end in 1..511)
                             assertEquals(row["message"], String(bytes, 0, end, Charsets.US_ASCII))
-                            assertTrue(bytes.drop(end + 1).all { it == 0x55.toByte() }, "copyback touched bytes after NUL")
+                        }
+                        for (row in raw) {
+                            val length = (row["length"] as Number).toInt()
+                            val bytes = ByteArray(length) { 0x55 }
+                            val address = ManagedAddress.fromByteArray(bytes)
+                            val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                            assertEquals((row["status"] as Number).toLong(),
+                                Calls.target(entry, arrayOf(0L, row["errno"], address, length.toLong(), Unit)))
+                            if (compiled) {
+                                assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                                valid(entry)
+                            }
+                            assertEquals((row["bytes"] as List<Number>).map { it.toLong() },
+                                bytes.map { (it.toInt() and 0xff).toLong() }, "native strerror buffer for ${row["errno"]}/$length")
                         }
                     }
                     replay(false)
