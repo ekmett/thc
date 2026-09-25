@@ -37,7 +37,10 @@ class SimdVectorTest {
         assertThrows(RuntimeFault::class.java) { CoreRepresentations.parse(metadata - "vector") }
         assertThrows(RuntimeFault::class.java) { CoreRepresentations.parse(metadata + ("kind" to "unknown")) }
         assertThrows(RuntimeFault::class.java) { CoreRepresentations.parse(metadata + ("primReps" to listOf("Int64Rep", "Int64Rep"))) }
-        assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(metadata + mapOf("primReps" to listOf("VecRep 4 Int64ElemRep"), "vector" to mapOf("lanes" to 4L, "element" to "Int64ElemRep"))) }
+        assertEquals(CoreVector(4, "Int64ElemRep"), CoreRepresentations.parse(metadata + mapOf(
+            "primReps" to listOf("VecRep 4 Int64ElemRep"), "vector" to mapOf("lanes" to 4L, "element" to "Int64ElemRep"))).vector)
+        assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(metadata + mapOf(
+            "primReps" to listOf("VecRep 3 Int64ElemRep"), "vector" to mapOf("lanes" to 3L, "element" to "Int64ElemRep"))) }
         assertEquals(listOf(Long::class.javaPrimitiveType, Long::class.javaPrimitiveType), Int64X2::class.java.declaredFields.map { it.type })
         assertThrows(RuntimeFault::class.java) { CoreVectors.proof.refine(CoreVectors.unpacked) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packInt64X2#", listOf(CoreVectors.proof), CoreVectors.proof) }
@@ -60,10 +63,9 @@ class SimdVectorTest {
                 assertThrows(RuntimeFault::class.java, { CoreRepresentations.parse(record(count)) }, "$vector lanes=$count")
         }
     }
-    @Test fun vectorCallAndResultBoundariesStayExplicitlyUnsupported() = withLanguage { language ->
+    @Test fun vectorCallsLoadButConflictingResultAndHiddenFormalProofsFail() = withLanguage { language ->
         for (backend in listOf("ast", "bytecode")) {
-            val error = assertThrows(UnsupportedCore::class.java) { program(language, backend, module(), "branchCase") }
-            assertTrue(error.message.orEmpty().contains("vector"), "$backend: ${error.message}")
+            assertNotNull(program(language, backend, module(), "branchCase"))
             val m = module().toMutableMap()
             val binding = (m["bindings"] as List<Map<String, Any?>>).single { it["name"] == "vectorCase" }
             val expression = (binding["expr"] as List<Any?>).toMutableList()
@@ -71,7 +73,9 @@ class SimdVectorTest {
                 "vector" to mapOf("lanes" to 2L, "element" to "Int64ElemRep"))
             expression[3] = (expression[3] as Map<String, Any?>) + ("resultRep" to vector)
             m["bindings"] = listOf(binding + ("expr" to expression))
-            assertThrows(UnsupportedCore::class.java) { program(language, backend, m, "vectorCase") }
+            val error = assertThrows(RuntimeFault::class.java) { program(language, backend, m, "vectorCase") }
+            assertTrue(error.message.orEmpty().contains("Conflicting Core vector representation proofs"),
+                "$backend: ${error.message}")
             // An occurrence proof cannot smuggle a vector through an untyped formal.
             val hidden = module().toMutableMap()
             val hBinding = (hidden["bindings"] as List<Map<String, Any?>>).single { it["name"] == "vectorCase" }
@@ -86,7 +90,7 @@ class SimdVectorTest {
             assertThrows(RuntimeFault::class.java) { program(language, backend, hidden, "vectorCase") }
         }
     }
-    @Test fun vectorJoinFormalRejectsWithoutAnEarlierVectorLet() = withLanguage { language ->
+    @Test fun vectorJoinFormalLoadsWithoutAnEarlierVectorLet() = withLanguage { language ->
         val m = module().toMutableMap()
         val binding = (m["bindings"] as List<Map<String, Any?>>).single { it["name"] == "branchCase" }
         val expression = (binding["expr"] as List<Any?>).toMutableList()
@@ -103,11 +107,10 @@ class SimdVectorTest {
         expression[2] = inline(outer[3])
         m["bindings"] = listOf(binding + ("expr" to expression))
         for (backend in listOf("ast", "bytecode")) {
-            val error = assertThrows(UnsupportedCore::class.java) { program(language, backend, m, "branchCase") }
-            assertEquals("Unsupported Core vector boundary: join argument", error.message, backend)
+            assertNotNull(program(language, backend, m, "branchCase"))
         }
     }
-    @Test fun caseCannotHideAVectorBoundaryWhenMetadataIsMissing() = withLanguage { language ->
+    @Test fun inferredVectorCaseResultRetainsItsShapeAndCannotBecomeAScalar() = withLanguage { language ->
         val m = module().toMutableMap()
         val binding = (m["bindings"] as List<Map<String, Any?>>).single { it["name"] == "vectorCase" }
         val expression = (binding["expr"] as List<Any?>).toMutableList()
@@ -122,12 +125,26 @@ class SimdVectorTest {
             mapOf("rep" to first["rep"]))
         val join = listOf("let", false, listOf(mapOf("id" to "vector-join", "name" to "vector-join", "lifted" to false,
             "joinValueArity" to 0L, "expr" to hiddenCase)), listOf("var", "vector-join"))
-        for ((boundary, body) in listOf("function result" to hiddenCase, "argument" to argument, "join result" to join))
-          for (backend in listOf("ast", "bytecode")) {
-            expression[2] = body
+        for (backend in listOf("ast", "bytecode")) {
+            // The branch supplies an exact vector proof even without an outer
+            // case/lambda result record. Guest returns now preserve that shape.
+            expression[2] = hiddenCase
             m["bindings"] = listOf(binding + ("expr" to expression.toList()))
-            val error = assertThrows(UnsupportedCore::class.java) { program(language, backend, m, "vectorCase") }
-            assertEquals("Unsupported Core vector boundary: $boundary", error.message, backend)
+            val inferred = program(language, backend, m, "vectorCase")
+            val resultProof = (inferred.entryTarget("vectorCase").rootNode as GuestRoot).tupleResult?.proof
+            assertNotNull(resultProof, backend)
+            assertTrue(TupleShape.compatible(CoreVectors.proof, resultProof!!), backend)
+            val scalarDiagnostic = if (backend == "ast")
+                "Primitive representation mismatch: +# argument 0 expects IntRep"
+                else "Unsupported Core vector boundary: argument"
+            for ((body, message) in listOf(
+                argument to scalarDiagnostic,
+                join to "Conflicting logical tuple representation proofs")) {
+                expression[2] = body
+                m["bindings"] = listOf(binding + ("expr" to expression.toList()))
+                val error = assertThrows(RuntimeFault::class.java) { program(language, backend, m, "vectorCase") }
+                assertTrue(error.message.orEmpty().startsWith(message), "$backend: ${error.message}")
+            }
         }
     }
     @Test fun exactVectorCaseStaysLocalAndExecutesCompiled() = withLanguage { language ->

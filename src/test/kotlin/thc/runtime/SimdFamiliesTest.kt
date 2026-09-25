@@ -125,7 +125,13 @@ class SimdFamiliesTest {
             for (arity in listOf(0, 1, 3)) assertThrows(RuntimeFault::class.java) {
                 CoreVectors.validate("times$name#", List(arity) { vector }, vector)
             }
-            assertThrows(UnsupportedCore::class.java) { CoreRepresentations.requireInput(vector) }
+            CoreRepresentations.requireInput(vector)
+            val input = ArgumentLayout.fromProofs(listOf(vector))!!
+            assertTrue(input.requiresTyped)
+            assertEquals(vector.vector!!.lanes, input.physicalArity)
+            assertThrows(RuntimeFault::class.java) {
+                ArgumentLayout.validate(input, 0, ArgumentLayout.fromProofs(listOf(tuple)), 0, 1)
+            }
         }
         for (flags in listOf(listOf(true), listOf(null), listOf(0L))) assertThrows(RuntimeFault::class.java) {
             CoreVectors.validateFlags(flags)

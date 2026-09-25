@@ -11,6 +11,7 @@ complete preparation script instead of assuming it has no native inputs.
 import hashlib
 import json
 from pathlib import Path
+import platform
 import re
 import stat
 import sys
@@ -23,16 +24,21 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "f9c0094e9b4e8c3b617713e11a7fcc96ecac3323ed4806d1f089adc9382cfb51"
+FULL_PREPARATION_PLAN = "ce3156c0fb04b56b9a09c48be65e592c8ecbf1d74ea0c8be768819041514434e"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
     "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/thread-status", "build/uncaught-self", "build/small-arrays", "build/floating-address",
     "build/floating-byte-offset", "build/narrow-byte-offset", "build/int32-byte-offset",
     "build/explicit64-arrays", "build/mask-functions", "build/interface-core",
-    "build/original-fd-ready",
+    "build/original-fd-ready", "build/simd-calls",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    "build/simd-calls/manifest.json", "build/simd-calls/pre-core/SimdCallAudit.json",
+    "build/simd-calls/pre-audit.json",
+    *([] if platform.machine().lower() in ("arm64", "aarch64") else
+      ["build/simd-calls/oracle.tsv", "build/simd-calls/post-core/SimdCallAudit.json",
+       "build/simd-calls/post-audit.json"]),
     "build/interface-core/manifest.json", "build/interface-core/InterfaceLibrary.json",
     "build/interface-core/logs/native-oracle.stdout", "build/interface-core/native/oracle",
     "build/interface-core/full/InterfaceLibrary.hi", "build/interface-core/thin/InterfaceLibrary.hi",

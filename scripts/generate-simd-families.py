@@ -128,6 +128,54 @@ def carrier(f):
     return '\n'.join(lines + ['    }', '}']) + '\n'
 
 
+def transport_code(fs):
+    """Concrete lane codecs: no reflection, payload arrays, or boxed lane lists."""
+    fields = 'first second third fourth fifth sixth seventh eighth ninth tenth eleventh twelfth thirteenth fourteenth fifteenth sixteenth'.split()
+    lines = [HEADER, 'package thc.runtime',
+             'import com.oracle.truffle.api.frame.VirtualFrame',
+             'import com.oracle.truffle.api.bytecode.BytecodeNode',
+             'import com.oracle.truffle.api.bytecode.LocalAccessor',
+             '', 'internal object GeneratedVectorTransport {']
+    lines += [f'    private val shape{f["name"]} = CoreVector({f["lanes"]}, "{f["element"]}")' for f in fs]
+    for bytecode in (False, True):
+        parameters = ('bytecode: BytecodeNode, frame: VirtualFrame, slots: Array<LocalAccessor>' if bytecode
+                      else 'frame: VirtualFrame, slots: IntArray')
+        lines += [f'    fun write(shape: CoreVector, {parameters}, offset: Int, raw: Any?) {{',
+                  '        when (shape) {']
+        for f in fs:
+            n, count = f['name'], f['lanes']
+            scalar, _, _, access = LANES[f['laneRep']]
+            lines += [f'            shape{n} -> {{',
+                      f'                val value = raw as? {n} ?: fault("Expected exact {n}# carrier")']
+            for i in range(count):
+                lane = (f'value.lane{i}' if f['newCarrier'] else f'value.lane({i})'
+                        if n in ('FloatX4', 'DoubleX2') else f'value.{fields[i]}')
+                if access == 'Long' and scalar != 'long':
+                    lane += '.toLong()'
+                    if f['laneRep'] in UNSIGNED_MASK:
+                        lane += ' and ' + UNSIGNED_MASK[f['laneRep']]
+                setter = (f'slots[offset + {i}].set{access}(bytecode, frame, {lane})' if bytecode
+                          else f'FrameAccess.write{access}(frame, slots[offset + {i}], {lane})')
+                lines.append('                ' + setter)
+            lines += ['            }']
+        lines += ['            else -> fault("Unsupported vector transport shape")', '        }', '    }',
+                  f'    fun read(shape: CoreVector, {parameters}, offset: Int): Any = when (shape) {{']
+        for f in fs:
+            n, count = f['name'], f['lanes']
+            scalar, _, _, access = LANES[f['laneRep']]
+            values = []
+            for i in range(count):
+                value = (f'slots[offset + {i}].get{access}(bytecode, frame)' if bytecode
+                         else f'frame.get{access}(slots[offset + {i}])')
+                if scalar in ('byte', 'short', 'int'):
+                    value += f'.to{scalar.capitalize()}()'
+                values.append(value)
+            constructor = n + '.pack' if n in ('FloatX4', 'DoubleX2') else n
+            lines.append(f'        shape{n} -> {constructor}(' + ', '.join(values) + ')')
+        lines += ['        else -> fault("Unsupported vector transport shape")', '    }']
+    return '\n'.join(lines + ['}']) + '\n'
+
+
 def proof_code(fs):
     lines = [HEADER, 'package thc.runtime\n', 'internal object GeneratedVectors {',
              '    private val index = CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep"))']
@@ -499,6 +547,7 @@ def main():
     outputs={'kotlin/thc/runtime/GeneratedVectorProofs.kt':proof_code(fs),'kotlin/thc/runtime/GeneratedVectorExpressions.kt':ast_code(fs)}
     outputs.update({f'kotlin/thc/runtime/{f["name"]}.kt':carrier(f) for f in fs if f['newCarrier']})
     outputs['kotlin/thc/runtime/GeneratedVectorInsert.kt'] = legacy_insert_code(fs)
+    outputs['kotlin/thc/runtime/GeneratedVectorTransport.kt'] = transport_code(fs)
     outputs.update(fixture_sources(fs))
     outputs.update(smoke_sources(fs))
     # Remove only the former generated carrier files when switching an existing build.

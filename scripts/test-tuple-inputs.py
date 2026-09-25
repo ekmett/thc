@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('tuple_input_audit', ROOT / 'audit-core.py')
 audit = importlib.util.module_from_spec(spec); spec.loader.exec_module(audit)
 from core_tuple_inputs import LONG_REPS, proof_error
+from core_vectors import VECTOR_REP, LANE_REP
 
 CAP = json.loads((ROOT / 'core-capabilities.json').read_text())
 ENABLED = dict(CAP, aggregateInputs=['empty-unboxed-tuple', 'unboxed-tuple'])
@@ -93,16 +94,33 @@ class TupleInputs(unittest.TestCase):
             self.accepted(module)
 
     def test_unknown_and_unsupported_leaf_proofs_fail_even_in_unused_formals(self):
+        # A valid SIMD leaf is supported with tuple-fields enabled. Its negative
+        # specimen must instead contradict the exact physical VecRep annotation.
         bad=[dict(kind='unknown',primReps=None,evaluated=True),dict(REF,primReps=['BoxedRep Nothing']),
              dict(kind='address',primReps=['AddrRep'],evaluated=True),
-             dict(kind='vector',primReps=['VecRep 2 Int64ElemRep'],vector=dict(lanes=2,element='Int64ElemRep'),evaluated=True),
+             dict(kind='vector',primReps=['VecRep 2 Int64ElemRep'],vector=dict(lanes=4,element='Int64ElemRep'),evaluated=True),
              dict(kind='unknown',aggregate='unboxed-sum',alternatives=None,primReps=None,evaluated=True),
              dict(LONG,primReps=[]),dict(STATE,primReps=['IntRep'])]
         for leaf in bad:
             shape=tup(LONG);shape['components']=[leaf];shape['primReps']=leaf['primReps']
-            self.assertIsNotNone(proof_error(shape))
+            self.assertIsNotNone(proof_error(shape, allow_vectors=True))
             module=fixture([tup(LONG)]);module['bindings'][1]['expr'][1][0]['rep']=shape
             self.rejected(module,detail='unboxed-tuple formal argument')
+
+    def test_exact_vector_tuple_component_obeys_transport_capability(self):
+        shape=tup(copy.deepcopy(VECTOR_REP))
+        self.assertIsNone(proof_error(shape, allow_vectors=True))
+        self.assertIsNotNone(proof_error(shape, allow_vectors=False))
+        module=fixture([shape])
+        # Supply a real vector producer to the guest worker's tuple argument;
+        # the generic scalar fixture literal cannot establish this proof.
+        module['bindings'][0]['expr'][2][0][2][0]=[
+            'app',['prim','broadcastInt64X2#',dict(rep=copy.deepcopy(CLOSURE))],
+            [['lit','int64','1',dict(rep=copy.deepcopy(LANE_REP))]],
+            [False],False,False,dict(rep=copy.deepcopy(VECTOR_REP))]
+        self.accepted(module)
+        disabled=dict(ENABLED,vectorTransport=[name for name in ENABLED['vectorTransport'] if name!='tuple-fields'])
+        self.rejected(module,cap=disabled,detail='unboxed-tuple formal argument')
 
     def test_null_missing_and_malformed_logical_layouts_are_not_flat_register_inference(self):
         for change in [dict(components=None),dict(components=[]),dict(kind='long'),dict(primReps=None),dict(evaluated=None)]:

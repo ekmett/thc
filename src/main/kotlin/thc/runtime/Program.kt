@@ -208,11 +208,24 @@ internal class Metrics(val enabled: Boolean) {
 internal abstract class Expr : Node() {
     // Assigned during lowering, before adoption. Evaluatedness describes our stored value.
     @CompilationFinal var representation: CoreRepresentation = CoreRepresentation.UNKNOWN
+        set(value) {
+            field = value
+            vectorLayout = if (value.isVector) VectorLayout(value) else null
+        }
+    @CompilationFinal private var vectorLayout: VectorLayout? = null
+    protected val typedVectorLayout: VectorLayout? get() = vectorLayout
     @CompilationFinal var coreSourceLocation: CoreSourceLocation? = null
     fun located(location: CoreSourceLocation?): Expr { coreSourceLocation = location; return this }
     override fun getSourceSection(): SourceSection? = coreSourceLocation?.section ?: parent?.encapsulatingSourceSection
     fun proven(proof: CoreRepresentation): Expr { representation = proof; return this }
-    open fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int = 0): Any? { fault("Expression does not produce a tuple") }
+    open fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int = 0): Any? {
+        val layout = vectorLayout
+        if (layout != null) {
+            layout.write(frame, slots, offset, execute(frame))
+            return null
+        }
+        fault("Expression does not produce a tuple")
+    }
     abstract fun execute(frame: VirtualFrame): Any?
     @Throws(UnexpectedResultException::class)
     open fun executeLong(frame: VirtualFrame): Long {
@@ -937,7 +950,8 @@ private class Application(function: Expr,
 }
 /** Each cloned root owns its widening state; recursive RHSs stay raw until publication. */
 internal class LocalBinding(private val slot: Int, @field:Child private var value: Expr,
-                           preferLong: Boolean) : Node() {
+                           preferLong: Boolean,
+                           @field:CompilationFinal(dimensions = 1) private val vectorSlots: IntArray? = null) : Node() {
     private val exactLong = value.representation.isLong
     private val referenceKind = if (value.representation.evaluated) value.representation.kind else CoreKind.UNKNOWN
     @CompilationFinal private var generic = !preferLong ||
@@ -949,6 +963,7 @@ internal class LocalBinding(private val slot: Int, @field:Child private var valu
         return value.execute(frame)
     }
     fun write(frame: VirtualFrame) {
+        if (vectorSlots != null) { value.executeTuple(frame, vectorSlots, 0); return }
         if (exactLong) { FrameAccess.writeLong(frame, slot, value.executeRequiredLong(frame)); return }
         if (value.representation.isFloat) { FrameAccess.writeFloat(frame, slot, value.executeRequiredFloat(frame)); return }
         if (value.representation.isDouble) { FrameAccess.writeDouble(frame, slot, value.executeRequiredDouble(frame)); return }
@@ -965,10 +980,11 @@ internal class LocalBinding(private val slot: Int, @field:Child private var valu
 }
 private class Let(@field:CompilationFinal(dimensions = 1) private val slots: IntArray,
                   rhs: Array<Expr>, primitiveEligible: BooleanArray,
-                  @field:Child private var body: Expr, private val recursive: Boolean) : Expr() {
+                  @field:Child private var body: Expr, private val recursive: Boolean,
+                  private val vectorSlots: Array<IntArray?> = arrayOfNulls(rhs.size)) : Expr() {
     init { representation = body.representation }
     @Children private var bindings = Array(rhs.size) { index ->
-        LocalBinding(slots[index], rhs[index], !recursive && primitiveEligible[index])
+        LocalBinding(slots[index], rhs[index], !recursive && primitiveEligible[index], vectorSlots[index])
     }
     override fun execute(frame: VirtualFrame): Any? {
         initialize(frame)
@@ -1774,7 +1790,6 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private fun function(label: String, args: List<Map<String, Any?>>, expression: List<Any?>, outer: Scope,
                          resultProof: CoreRepresentation = CoreRepresentations.expression(expression),
                          entryStrict: BooleanArray = BooleanArray(args.size)): FunctionSpec {
-        CoreRepresentations.requireNoVector(resultProof, "function result")
         if (entryStrict.size != args.size) throw RuntimeFault("Function entry contract arity mismatch")
         val scope = Scope(FrameLayout())
         val free = freeVariables(expression)
@@ -1797,10 +1812,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         for ((index, arg) in args.withIndex()) {
             val lifted = representation(arg)
             val proof = CoreRepresentations.binder(arg).let { if (lifted) it.copy(evaluated = entryStrict[index]) else it }
-            if (proof.isTuple) {
-                if (lifted) throw RuntimeFault("Tuple formal cannot be lifted")
+            if (proof.isTypedTransport) {
+                if (lifted) throw RuntimeFault("Typed formal cannot be lifted")
                 val fields = TupleShape.flatten(proof)
-                val slots = IntArray(fields.size) { leaf -> scope.layout.bind("${arg["id"]} tuple input $leaf") }
+                val slots = IntArray(fields.size) { leaf -> scope.layout.bind("${arg["id"]} typed input $leaf") }
                 scope.bindTuple(arg["id"] as String, proof, slots)
                 fields.forEachIndexed { leaf, field ->
                     argumentIndices += ArgumentLayout.offset(inputLayout, index) + leaf
@@ -1820,7 +1835,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val allArgumentSlots = IntArray(args.size) { -1 }
         val allArgumentProofs = Array(args.size) { CoreRepresentation.UNKNOWN }
         args.forEachIndexed { index, arg ->
-            scope.locals[arg["id"]]?.takeIf { !it.proof.isTuple }?.let { local ->
+            scope.locals[arg["id"]]?.takeIf { !it.proof.isTypedTransport }?.let { local ->
                 allArgumentSlots[index] = local.slot
                 allArgumentProofs[index] = local.proof
             }
@@ -1834,9 +1849,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         if ((body.representation.isSum || resultProof.isSum) && (!body.representation.isSum || !resultProof.isSum))
             throw RuntimeFault("Sum function requires exact body and declared result proofs")
         val effectiveResult = body.representation.refine(resultProof)
-        CoreRepresentations.requireNoVector(effectiveResult, "function result")
-        val tuple = if (effectiveResult.isAggregate) TupleShape(effectiveResult, language as thc.Language) else null
-        val tupleSlots = IntArray(tuple?.width ?: 0) { scope.layout.bind("<tuple return $it>") }
+        val tuple = if (effectiveResult.isTypedTransport) TupleShape(effectiveResult, language as thc.Language) else null
+        val tupleSlots = IntArray(tuple?.width ?: 0) { scope.layout.bind("<typed return $it>") }
         val root = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
             argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics, argumentProofs.toTypedArray(), resultProof,
             rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync)
@@ -1855,16 +1869,17 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk", allowEmpty: Boolean = false, declaredLifted: Boolean = lifted): Expr {
         val proof = CoreRepresentations.expression(expr)
         fun check(value: CoreRepresentation) {
-            if (allowEmpty) CoreRepresentations.requireInput(value) else CoreRepresentations.requireScalar(value, "argument")
-            if (value.isTuple && declaredLifted) throw RuntimeFault("Tuple argument cannot be lifted")
+            if (allowEmpty || value.isVector) CoreRepresentations.requireInput(value)
+            else CoreRepresentations.requireScalar(value, "argument")
+            if (value.isTypedTransport && declaredLifted) throw RuntimeFault("Typed argument cannot be lifted")
         }
         check(proof)
         val lexical = if (expr[0] == "var") scope.locals[expr[1]]?.proof else null
         lexical?.let(::check)
-        if (proof.isTuple || lexical?.isTuple == true) {
-            if (declaredLifted) throw RuntimeFault("Tuple argument cannot be lifted")
+        if (proof.isTypedTransport || lexical?.isTypedTransport == true) {
+            if (declaredLifted) throw RuntimeFault("Typed argument cannot be lifted")
             return compile(expr, scope, false).also {
-                if (!it.representation.isTuple) throw RuntimeFault("Missing exact tuple argument proof")
+                if (!it.representation.isTypedTransport) throw RuntimeFault("Missing exact typed argument proof")
             }
         }
         if (!lifted) return Evaluate(compile(expr, scope, false).also { check(it.representation) }, metrics)
@@ -1882,7 +1897,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             return compile(expr, scope, false).also { check(it.representation) }
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }.also { check(it.representation) }
     }
-    private fun literal(kind: String, value: String): Any = when (kind) {
+    private fun literal(kind: String, value: String, proof: CoreRepresentation? = null): Any = when (kind) {
         "int8" -> int8Literal(value)
         "int16" -> int16Literal(value)
         "int32" -> int32Literal(value)
@@ -1895,6 +1910,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
         "string-bytes" -> ManagedAddress.fromHex(value)
         "null-addr" -> if (value == "0") ManagedAddress.nullAddress() else throw UnsupportedCore("Malformed null Addr# literal")
+        "function-addr" -> CFinalizerLabels.fromCore(value, proof)
         "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
@@ -1925,14 +1941,18 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             CoreVectors.requireVariableProof(scope.locals[id]?.proof ?: globalProofs[id], CoreRepresentations.expression(expr))
             scope.joins[id]?.let { joinJump(it, emptyList(), emptyList<Boolean>(), scope) }
                 ?: scope.locals[id]?.let {
-                    if (it.tupleSlots != null) TupleLocalRead(TupleShape(it.proof, language as thc.Language), it.tupleSlots)
+                    if (it.tupleSlots != null) {
+                        val shape = TupleShape(it.proof, language as thc.Language)
+                        if (it.proof.isVector) VectorLocalRead(shape, it.tupleSlots)
+                        else TupleLocalRead(shape, it.tupleSlots)
+                    }
                     else if (it.slot < 0 && it.proof.kind == CoreKind.VOID) Literal(Unit).proven(it.proof)
                     else LocalRead(it.slot, it.cell).proven(it.proof)
                 }
                 ?: globals[id]?.let { GlobalRead(it).proven(globalProofs.getValue(id)) }
                 ?: throw UnsupportedCore("Unresolved external binding $id")
         }
-        "lit" -> Literal(literal(expr[1] as String, expr[2] as String)).let {
+        "lit" -> Literal(literal(expr[1] as String, expr[2] as String, CoreRepresentations.expression(expr))).let {
             if (expr[1] in listOf("int8", "word8", "int16", "word16", "int32", "word32")) it.proven(CoreRepresentations.narrowLiteralProof(expr))
             else if (expr[1] == "bignat") it.proven(BigNatLiterals.proof(expr)) else it
         }
@@ -2262,7 +2282,6 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (fn[0] == "var" && fn[1] in scope.joins) {
                 joinJump(scope.joins.getValue(fn[1] as String), args, flags, scope, callStrict)
             } else {
-            CoreRepresentations.requireNoVector(tupleProof, "call result")
             val constructorStrictFields = if (fn[0] == "con" && (fn[2] as Number).toInt() == args.size)
                 strictConstructorFields(fn[1] as String, args.size) else null
             val entryStrict = when (fn[0]) {
@@ -2288,8 +2307,12 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     val function = compile(fn, scope, false)
                     if (ArgumentLayout.fromProofs(nodes.map { it.representation })?.requiresTyped == true)
                         AstTypedApplication(function, nodes, scope.layout, tail, metrics,
-                            if (tupleProof.isAggregate) TupleShape(tupleProof, language as thc.Language) else null)
-                    else if (tupleProof.isAggregate) TupleApplication(language as thc.Language, TupleShape(tupleProof, language), function, nodes, tail, metrics)
+                            if (tupleProof.isTypedTransport) TupleShape(tupleProof, language as thc.Language) else null)
+                    else if (tupleProof.isTypedTransport) {
+                        val shape = TupleShape(tupleProof, language as thc.Language)
+                        val vectorSlots = if (tupleProof.isVector) IntArray(shape.width) { scope.layout.bind("<vector call result $it>") } else null
+                        TupleApplication(language as thc.Language, shape, function, nodes, tail, metrics, vectorSlots)
+                    }
                     else {
                     val self = scope.self
                     if (tail && self != null && self.inputLayout == null && nodes.none { it.representation.isEmptyTuple } && self.arity > 0 && nodes.size <= self.arity) {
@@ -2305,11 +2328,26 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val recursive = expr[1] as Boolean; val group = expr[2] as List<Map<String, Any?>>
             val definitions = CoreJoins.definitions(group)
             if (definitions != null) compileJoins(expr, scope, tail, definitions) else {
-                group.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "let binding") }
+                group.forEach {
+                    val proof = CoreRepresentations.binder(it)
+                    if (proof.isVector) {
+                        if (recursive || representation(it)) throw UnsupportedCore("Vector let binding must be nonrecursive and unlifted")
+                        CoreRepresentations.requireInput(proof)
+                    } else CoreRepresentations.requireScalar(proof, "let binding")
+                }
                 val local = scope.child()
-                val slots = group.map { local.bind(it["id"] as String, !representation(it),
-                    CoreRepresentations.binder(it).copy(evaluated = false), cell = recursive, entry = CoreEntries.binding(it),
-                    arityCertificate = CoreApplicationCertificates.binding(it)).slot }.toIntArray()
+                val vectorSlots = arrayOfNulls<IntArray>(group.size)
+                val slots = group.mapIndexed { index, binding ->
+                    val proof = CoreRepresentations.binder(binding)
+                    if (proof.isVector) {
+                        val fields = TupleShape.flatten(proof)
+                        val lanes = IntArray(fields.size) { local.layout.bind("${binding["id"]} vector let lane $it") }
+                        vectorSlots[index] = lanes
+                        local.bindTuple(binding["id"] as String, proof, lanes).slot
+                    } else local.bind(binding["id"] as String, !representation(binding),
+                        proof.copy(evaluated = false), cell = recursive, entry = CoreEntries.binding(binding),
+                        arityCertificate = CoreApplicationCertificates.binding(binding)).slot
+                }.toIntArray()
                 val rhs = group.map { binding -> withSource(sources.binding(binding, currentSource)) {
                     val it = binding
                     val rhsExpr = it["expr"] as List<Any?>; val lifted = representation(it)
@@ -2323,7 +2361,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 // Only the body sees the values published after the entire group.
                 group.forEachIndexed { index, binding -> local.publish(binding["id"] as String, rhs[index].representation) }
                 Let(slots, rhs, group.map { !representation(it) }.toBooleanArray(),
-                    compile(expr[3] as List<Any?>, local, tail), recursive)
+                    compile(expr[3] as List<Any?>, local, tail), recursive, vectorSlots)
             }
         }
         "case" -> {
@@ -2337,7 +2375,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             }
             val binderProof = scrutinee.representation.refine(CoreRepresentations.caseBinder(expr).copy(evaluated = false)).copy(evaluated = true)
             if (binderProof.isSum) compileSumCase(expr, scrutinee, binderProof, local, tail)
-            else if (binderProof.isTuple) compileTupleCase(expr, scrutinee, binderProof, local, tail) else {
+            else if (binderProof.isTuple) compileTupleCase(expr, scrutinee, binderProof, local, tail)
+            else if (binderProof.isVector) compileVectorCase(expr, scrutinee, binderProof, local, tail)
+            else {
             val binder = local.bind(expr[2] as String, !binderProof.present || binderProof.isLong, binderProof).slot
             val alternatives = (expr[3] as List<List<Any?>>).map { alt ->
                 val child = local.child(); val kind = alt[0] as String
@@ -2448,13 +2488,27 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private fun compileVectorReadCase(read: VectorReadCase, scope: Scope, tail: Boolean): Expr {
         val local = scope.child()
         local.bindVoid(read.stateBinder, CoreVectorMemory.stateProof)
-        val vector = local.bind(read.vectorBinder, false, read.operation.vectorProof)
+        val vectorProof = read.operation.vectorProof
+        val lanes = IntArray(TupleShape.flatten(vectorProof).size) { local.layout.bind("<vector read lane $it>") }
+        local.bindTuple(read.vectorBinder, vectorProof, lanes)
         val operands = read.arguments.map { compile(it, scope, false) }.toTypedArray()
         val value = VectorByteArrayExpression(read.operation, operands).located(currentSource)
         val body = compile(read.body, local, tail)
         // The whole tuple binder is deliberately absent from local scope.
         // Store the vector only after all operand/State checks and the load finish.
-        return Let(intArrayOf(vector.slot), arrayOf(value), booleanArrayOf(false), body, false)
+        return Let(intArrayOf(-1), arrayOf(value), booleanArrayOf(false), body, false, arrayOf(lanes))
+    }
+    private fun compileVectorCase(expr: List<Any?>, scrutinee: Expr, proof: CoreRepresentation,
+                                  scope: Scope, tail: Boolean): Expr {
+        CoreRepresentations.requireInput(proof)
+        val alternatives = expr[3] as List<List<Any?>>
+        val only = alternatives.singleOrNull() ?: throw RuntimeFault("Vector case requires one default alternative")
+        if (only[0] != "default" || (only[2] as List<*>).isNotEmpty())
+            throw RuntimeFault("Vector case requires one default alternative")
+        val lanes = IntArray(TupleShape.flatten(proof).size) { scope.layout.bind("<vector case lane $it>") }
+        scope.bindTuple(expr[2] as String, proof, lanes)
+        return Let(intArrayOf(-1), arrayOf(scrutinee), booleanArrayOf(false),
+            compile(only[3] as List<Any?>, scope, tail), false, arrayOf(lanes))
     }
     private fun compileTupleCase(expr: List<Any?>, scrutinee: Expr, proof: CoreRepresentation, local: Scope, tail: Boolean): Expr {
         val shape = TupleShape(proof, language as thc.Language)
@@ -2476,7 +2530,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val field = component.refine(raw)
                 val width = TupleShape.flatten(component).size
                 val offset = shape.offsets[index]
-                if (component.isTuple) local.bindTuple(id, component.copy(evaluated = true), slots.copyOfRange(offset, offset + width))
+                if (component.isTypedTransport) local.bindTuple(id, component.copy(evaluated = true), slots.copyOfRange(offset, offset + width))
                 else if (component.kind == CoreKind.VOID) local.bindVoid(id, field)
                 else local.bindSlot(id, Local(slots[offset], component.isLong, field.copy(evaluated = component.isLong || component.evaluated), false))
             }
@@ -2493,8 +2547,17 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 CoreRepresentations.requireJoinArgument(target.proofs[index], it.representation)
             }
         }.toTypedArray()
-        val temps = IntArray(nodes.size) { if (target.proofs[it].isEmptyTuple) -1 else scope.layout.bind("<join argument $it>") }
-        return LocalJoinCall(target, nodes, temps, metrics)
+        val vectorTemps = arrayOfNulls<IntArray>(nodes.size)
+        val temps = IntArray(nodes.size) { index ->
+            if (target.proofs[index].isVector) {
+                vectorTemps[index] = IntArray(TupleShape.flatten(target.proofs[index]).size) {
+                    scope.layout.bind("<join vector argument $index lane $it>")
+                }
+                -1
+            } else if (target.proofs[index].isEmptyTuple) -1
+            else scope.layout.bind("<join argument $index>")
+        }
+        return LocalJoinCall(target, nodes, temps, metrics, vectorTemps)
     }
     private fun compileJoins(expr: List<Any?>, outer: Scope, tail: Boolean,
                              definitions: List<CoreJoinDefinition>): Expr {
@@ -2504,12 +2567,12 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             definition.parameters.forEach {
                 val proof = CoreRepresentations.binder(it)
                 CoreRepresentations.requireJoinInput(proof)
-                if (proof.isEmptyTuple && representation(it)) throw RuntimeFault("Tuple join formal must be unlifted")
+                if (proof.isTypedTransport && representation(it)) throw RuntimeFault("Typed join formal must be unlifted")
             }
             val formals = definition.parameters.map { it["id"] as String }.toSet()
             (freeVariables(definition.body) - formals - shadowed).forEach { id ->
                 outer.locals[id]?.let { captured ->
-                    if (captured.proof.isTuple) {
+                    if (captured.proof.isTypedTransport) {
                         // A join stays in this activation: its lexical tuple is already
                         // held in typed frame slots, not in a closure environment.
                         CoreRepresentations.requireInput(captured.proof)
@@ -2532,7 +2595,12 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             definition.parameters.forEachIndexed { index, parameter ->
                 val lifted = representation(parameter)
                 val proof = CoreRepresentations.binder(parameter).let { if (lifted) it.copy(evaluated = entryStrict[index]) else it }
-                if (proof.isEmptyTuple) scope.bindTuple(parameter["id"] as String, proof.copy(evaluated = true), intArrayOf())
+                if (proof.isVector) {
+                    val lanes = IntArray(TupleShape.flatten(proof).size) {
+                        scope.layout.bind("${parameter["id"]} join vector lane $it")
+                    }
+                    scope.bindTuple(parameter["id"] as String, proof.copy(evaluated = true), lanes)
+                } else if (proof.isEmptyTuple) scope.bindTuple(parameter["id"] as String, proof.copy(evaluated = true), intArrayOf())
                 else scope.bind(parameter["id"] as String, !lifted && parameter["coercion"] != true, proof)
             }
             scope
@@ -2540,7 +2608,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val targets = definitions.mapIndexed { index, definition ->
             val parameters = definition.parameters.map { bodyScopes[index].locals.getValue(it["id"] as String) }
             LocalJoinTarget(identity, index + 1, parameters.map { it.slot }.toIntArray(),
-                parameters.map { it.proof }.toTypedArray(), entryContracts[index], definition.result)
+                parameters.map { it.proof }.toTypedArray(), entryContracts[index], definition.result,
+                parameters.map { parameter -> if (parameter.proof.isVector) parameter.tupleSlots else null }.toTypedArray())
         }
         definitions.forEachIndexed { index, definition -> local.bindJoin(definition.id, targets[index]) }
         if (recursive) bodyScopes.forEachIndexed { index, scope ->
@@ -2550,12 +2619,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             }
         }
         val entry = compile(expr[3] as List<Any?>, local, tail)
-        CoreRepresentations.requireNoVector(entry.representation, "join result")
         CoreRepresentations.requireNoSum(entry.representation, "join result")
         val bodies = definitions.mapIndexed { index, definition ->
             withSource(sources.binding(definition.binding, currentSource)) {
                 compile(definition.body, bodyScopes[index], tail).also { node ->
-                    CoreRepresentations.requireNoVector(node.representation, "join result")
                     CoreRepresentations.requireNoSum(node.representation, "join result")
                     node.representation = node.representation.refine(definition.result.copy(evaluated = false))
                 }
@@ -2566,7 +2633,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             bodies.forEach { TupleShape.requireCompatible(inferred, it.representation) }
             inferred.copy(evaluated = entry.representation.evaluated && bodies.all { it.representation.evaluated })
         }
-        val tuple = if (result.isTuple) TupleShape(result, language as thc.Language) else null
+        val tuple = if (result.isTypedTransport) TupleShape(result, language as thc.Language) else null
         val tupleSlots = IntArray(tuple?.width ?: 0) { local.layout.bind("<join tuple result $it>") }
         return LocalJoinRegion(identity, local.layout.bind("<join selector>"), local.layout.bind("<join result>"),
             (listOf(entry) + bodies).toTypedArray(), result, recursive, tuple, tupleSlots)

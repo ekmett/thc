@@ -51,6 +51,9 @@ class HandoffLayout(language: Language, val id: Int, val reps: List<String>) {
     @field:CompilationFinal(dimensions = 1)
     private val kinds = reps.map { when (it) {
         "long" -> 0; "float" -> 1; "double" -> 2; "reference" -> 3
+        "int8-lane" -> 4; "word8-lane" -> 5
+        "int16-lane" -> 6; "word16-lane" -> 7
+        "int32-lane" -> 8; "word32-lane" -> 9
         else -> fault("Invalid physical handoff field: $it")
     } }.toIntArray()
     @field:CompilationFinal(dimensions = 1)
@@ -60,27 +63,45 @@ class HandoffLayout(language: Language, val id: Int, val reps: List<String>) {
             0 -> Long::class.javaPrimitiveType!!
             1 -> Float::class.javaPrimitiveType!!
             2 -> Double::class.javaPrimitiveType!!
+            4, 5 -> Byte::class.javaPrimitiveType!!
+            6, 7 -> Short::class.javaPrimitiveType!!
+            8, 9 -> Int::class.javaPrimitiveType!!
             else -> Any::class.java
         }, false) }
     }.build(HandoffStorage::class.java, HandoffFactory::class.java)
     fun create(): HandoffStorage = shape.factory.create(this)
-    fun isLong(index: Int): Boolean = kinds[index] == 0
+    fun isLong(index: Int): Boolean = kinds[index] == 0 || kinds[index] >= 4
     fun isFloat(index: Int): Boolean = kinds[index] == 1
     fun isDouble(index: Int): Boolean = kinds[index] == 2
     fun isObject(index: Int): Boolean = kinds[index] == 3
-    fun getLong(storage: HandoffStorage, index: Int): Long = fields[index].getLong(storage)
+    fun getLong(storage: HandoffStorage, index: Int): Long = when (kinds[index]) {
+        0 -> fields[index].getLong(storage)
+        4 -> fields[index].getByte(storage).toLong()
+        5 -> fields[index].getByte(storage).toLong() and 255L
+        6 -> fields[index].getShort(storage).toLong()
+        7 -> fields[index].getShort(storage).toLong() and 65535L
+        8 -> fields[index].getInt(storage).toLong()
+        9 -> fields[index].getInt(storage).toLong() and 4294967295L
+        else -> fault("Expected integral handoff field")
+    }
     fun getFloat(storage: HandoffStorage, index: Int): Float = fields[index].getFloat(storage)
     fun getDouble(storage: HandoffStorage, index: Int): Double = fields[index].getDouble(storage)
     fun getObject(storage: HandoffStorage, index: Int): Any? = fields[index].getObject(storage)
     fun setObject(storage: HandoffStorage, index: Int, value: Any?) = fields[index].setObject(storage, value)
-    fun setLong(storage: HandoffStorage, index: Int, value: Long) = fields[index].setLong(storage, value)
+    fun setLong(storage: HandoffStorage, index: Int, value: Long) = when (kinds[index]) {
+        0 -> fields[index].setLong(storage, value)
+        4, 5 -> fields[index].setByte(storage, value.toByte())
+        6, 7 -> fields[index].setShort(storage, value.toShort())
+        8, 9 -> fields[index].setInt(storage, value.toInt())
+        else -> fault("Expected integral handoff field")
+    }
     fun setFloat(storage: HandoffStorage, index: Int, value: Float) = fields[index].setFloat(storage, value)
     fun setDouble(storage: HandoffStorage, index: Int, value: Double) = fields[index].setDouble(storage, value)
     @ExplodeLoop fun copyIn(storage: HandoffStorage, values: Array<Any?>) {
         check(values.size == fields.size)
         for (i in fields.indices) {
             when (kinds[i]) {
-                0 -> fields[i].setLong(storage, values[i] as? Long ?: fault("Invalid primitive handoff field"))
+                0, 4, 5, 6, 7, 8, 9 -> setLong(storage, i, values[i] as? Long ?: fault("Invalid primitive handoff field"))
                 1 -> fields[i].setFloat(storage, values[i] as? Float ?: fault("Invalid Float handoff field"))
                 2 -> fields[i].setDouble(storage, values[i] as? Double ?: fault("Invalid Double handoff field"))
                 else -> fields[i].setObject(storage, values[i])
@@ -96,6 +117,12 @@ class HandoffLayout(language: Language, val id: Int, val reps: List<String>) {
         internal fun supports(rep: String): Boolean = rep in LONG_REPS || rep.startsWith("BoxedRep ")
         internal fun supportsResult(rep: String): Boolean = supports(rep) || rep in setOf("FloatRep", "DoubleRep", "AddrRep")
         internal fun fieldKind(rep: String): String = when {
+            rep == "VectorLane Int8Rep" -> "int8-lane"
+            rep == "VectorLane Word8Rep" -> "word8-lane"
+            rep == "VectorLane Int16Rep" -> "int16-lane"
+            rep == "VectorLane Word16Rep" -> "word16-lane"
+            rep == "VectorLane Int32Rep" -> "int32-lane"
+            rep == "VectorLane Word32Rep" -> "word32-lane"
             rep in LONG_REPS -> "long"
             rep == "FloatRep" -> "float"
             rep == "DoubleRep" -> "double"

@@ -445,6 +445,14 @@
       "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest", "thc.runtime.FusedFloatingTest"],
       "python": []
     },
+    "compiler/test-fixtures/SimdCallAudit.hs": {
+      "junit": ["thc.runtime.SimdCallNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/SimdCallNative.hs": {
+      "junit": ["thc.runtime.SimdCallNativeTest"],
+      "python": []
+    },
     "compiler/test-fixtures/OriginalStackAudit.hs": {
       "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
       "python": []
@@ -1006,6 +1014,7 @@
         "thc.runtime.FloatingAddressTest",
         "thc.runtime.FloatingByteOffsetTest",
         "thc.runtime.FusedFloatingTest",
+        "thc.runtime.SimdCallNativeTest",
         "thc.runtime.SqrtPrimitiveTest",
         "thc.runtime.WordFloatingTest",
         "thc.runtime.OriginalStackFormatterTest",
@@ -1173,6 +1182,10 @@
     },
     "test/haskell-fixtures/FusedFloatingFixtures.hs": {
       "junit": ["thc.runtime.FusedFloatingTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/SimdCallFixtures.hs": {
+      "junit": ["thc.runtime.SimdCallNativeTest"],
       "python": []
     },
     "test/haskell-fixtures/WordFloatingFixtures.hs": {
