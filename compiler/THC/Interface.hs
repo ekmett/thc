@@ -29,7 +29,7 @@ import GHC.Unit.Module.ModDetails (ModDetails(..))
 import GHC.Unit.Module.ModIface
 import GHC.Unit.Module.WholeCoreBindings (WholeCoreBindings(..), IfaceForeign)
 import System.FilePath (replaceExtension)
-import THC.Plugin (serializePostTidyCore)
+import THC.Plugin (serializePostTidyCoreWithAnnotations)
 
 -- | Original GHC identities, declarations, recursive groups and foreign
 -- metadata. Loading is archival: accompanying foreign build products are
@@ -121,6 +121,6 @@ loadInterfaceCore environment expected path = do
 -- or a source target. Source-note paths survive even if source text is absent.
 -- This does not link dependencies or certify runtime support for the module.
 interfaceCoreJSON :: [CommandLineOption] -> InterfaceCore -> IO String
-interfaceCoreJSON options core = serializePostTidyCore (interfaceFlags core) options
+interfaceCoreJSON options core = serializePostTidyCoreWithAnnotations (interfaceFlags core) options
   (interfaceModule core) (typeEnvTyCons (md_types (interfaceDetails core))) (interfaceBindings core)
-  (interfaceForeign core)
+  (interfaceForeign core) (md_anns (interfaceDetails core))
