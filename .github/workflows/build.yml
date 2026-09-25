@@ -373,6 +373,7 @@ jobs:
             build/libdw-unavailable/logs/
             build/original-termios/
             build/original-tcgetattr/
+            build/original-sigprocmask/
             build/original-sigset/
             build/native-addresses/manifest.json
             build/native-addresses/oracle.json

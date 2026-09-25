@@ -1488,7 +1488,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio == OriginalStdioOp.OPEN ||
+                        if (originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio == OriginalStdioOp.OPEN ||
                             originalStdio.iconv || originalStdio.strerror || originalStdio.duplication || originalStdio.locking)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
@@ -1517,7 +1517,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (originalStdio == OriginalStdioOp.LOCALE) b.beginOriginalLocale(result)
                     else if (originalStdio == OriginalStdioOp.ICONV_OPEN) b.beginOriginalIconvOpen(result)
                     else if (originalStdio == OriginalStdioOp.ICONV_CLOSE) b.beginOriginalIconvClose(result)
-                    else if (originalStdio == OriginalStdioOp.ICONV) b.beginOriginalIconv(result)
+                    else if (originalStdio == OriginalStdioOp.ICONV || originalStdio == OriginalStdioOp.SIGPROCMASK) b.beginOriginalIconv(result, originalStdio)
                     else if (originalStdio == OriginalStdioOp.STRERROR) b.beginOriginalStrerror(result)
                     else if (originalStdio.readiness || originalStdio == OriginalStdioOp.LOCK) b.beginOriginalStdioReady(result, originalStdio)
                     else if (originalStdio == OriginalStdioOp.SEEK) b.beginFileSeek(result)
@@ -1529,6 +1529,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (originalStdio == OriginalStdioOp.OPEN) {
                         operands[1].emit(e); b.emitLoadLocal(openPath!!)
                         operands[2].emit(e); operands[3].emit(e)
+                    } else if (originalStdio == OriginalStdioOp.SIGPROCMASK) {
+                        operands.take(3).forEach { it.emit(e) }
+                        b.emitLoadConstant(ManagedAddress.nullAddress())
+                        b.emitLoadConstant(ManagedAddress.nullAddress())
+                        operands.last().emit(e)
                     } else if (originalStdio.savedTermios) {
                         operands[0].emit(e)
                         if (originalStdio == OriginalStdioOp.SET_SAVED_TERMIOS) operands[1].emit(e)
@@ -1568,7 +1573,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (originalStdio == OriginalStdioOp.LOCALE) b.endOriginalLocale()
                     else if (originalStdio == OriginalStdioOp.ICONV_OPEN) b.endOriginalIconvOpen()
                     else if (originalStdio == OriginalStdioOp.ICONV_CLOSE) b.endOriginalIconvClose()
-                    else if (originalStdio == OriginalStdioOp.ICONV) b.endOriginalIconv()
+                    else if (originalStdio == OriginalStdioOp.ICONV || originalStdio == OriginalStdioOp.SIGPROCMASK) b.endOriginalIconv()
                     else if (originalStdio == OriginalStdioOp.STRERROR) b.endOriginalStrerror()
                     else if (originalStdio.readiness || originalStdio == OriginalStdioOp.LOCK) b.endOriginalStdioReady()
                     else if (originalStdio == OriginalStdioOp.SEEK) b.endFileSeek()

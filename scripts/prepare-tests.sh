@@ -84,6 +84,7 @@ esac
 "$fixture_bin" original-open
 "$fixture_bin" original-termios
 "$fixture_bin" original-tcgetattr
+"$fixture_bin" original-sigprocmask
 "$fixture_bin" original-sigset
 "$fixture_bin" original-rts-locks --require-supported
 "$fixture_bin" original-stdio-seek

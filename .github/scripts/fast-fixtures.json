@@ -49,6 +49,14 @@
         "test/haskell-fixtures/OriginalTcgetattrFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
+    "original-sigprocmask": {
+      "junit": ["thc.runtime.OriginalSigprocmaskTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-sigprocmask"]}],
+      "outputs": ["build/original-sigprocmask"],
+      "sources": ["compiler/test-fixtures/OriginalSigprocmaskAudit.hs", "compiler/test-fixtures/OriginalSigprocmaskNative.hs",
+        "test/haskell-fixtures/OriginalSigprocmaskFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "original-sigset": {
       "junit": ["thc.runtime.OriginalSigsetTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-sigset"]}],

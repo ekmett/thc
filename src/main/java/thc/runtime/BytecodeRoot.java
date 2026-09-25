@@ -1248,12 +1248,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
+    // SIGPROCMASK shares the primitive handle/two-address prefix. Its remaining
+    // address lanes are constant nulls, avoiding another DSL instruction family.
     public static final class OriginalIconv {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination, OriginalStdioOp operation,
                 long handle, ManagedAddress input, ManagedAddress inputCount,
                 ManagedAddress output, ManagedAddress outputCount, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            long result = CoreOriginalStdio.iconv(node).convert(handle, input, inputCount, output, outputCount);
+            long result = operation == OriginalStdioOp.SIGPROCMASK
+                ? ManagedSignalMask.execute(node, handle, input, inputCount)
+                : CoreOriginalStdio.iconv(node).convert(handle, input, inputCount, output, outputCount);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }

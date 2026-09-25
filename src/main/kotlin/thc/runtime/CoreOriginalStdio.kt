@@ -11,6 +11,8 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     val arguments: List<String?>, val result: String?) {
     GET_SAVED_TERMIOS("__hscore_get_saved_termios", "ccall", "unsafe", listOf("Int32Rep", null), "AddrRep"),
     SET_SAVED_TERMIOS("__hscore_set_saved_termios", "ccall", "unsafe", listOf("Int32Rep", "AddrRep", null), null),
+    SIGPROCMASK("ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask", "capi", "unsafe",
+        listOf("Int32Rep", "AddrRep", "AddrRep", null), "Int32Rep"),
     TCGETATTR("ghczuwrapperZC10ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCtcgetattr", "capi", "unsafe",
         listOf("Int32Rep", "AddrRep", null), "Int32Rep"),
     LFLAG("__hscore_lflag", "ccall", "unsafe", listOf("AddrRep", null), "Word32Rep"),
@@ -109,7 +111,7 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation == OriginalStdioOp.OPEN || operation.iconv || operation.strerror || operation.duplication || operation.locking,
+        requireProof(operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation == OriginalStdioOp.OPEN || operation.iconv || operation.strerror || operation.duplication || operation.locking,
             "strict operand operation")
         val primitive = operation.arguments[index]
         val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }
