@@ -2740,8 +2740,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         }
                         val layout = alt.value as DataLayout
                         if (layout.isVector(index)) {
-                            b.beginTransferDataVector(layout, index,
-                                fields.map { LocalAccessor.constantOf(e.locals.getValue(it.id)) }.toTypedArray(), false)
+                            b.beginTransferDataVector(BytecodeRoot.DataVectorTransfer(layout, index,
+                                fields.map { LocalAccessor.constantOf(e.locals.getValue(it.id)) }.toTypedArray(), false))
                             read(binder, false).emit(e)
                             b.endTransferDataVector()
                         } else {
@@ -3463,7 +3463,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             b.beginStoreLocal(value); b.emitAllocateData(layout); b.endStoreLocal()
             fields.forEachIndexed { index, slots ->
                 if (layout.isVector(index)) {
-                    b.beginTransferDataVector(layout, index, slots.map(LocalAccessor::constantOf).toTypedArray(), true)
+                    b.beginTransferDataVector(BytecodeRoot.DataVectorTransfer(layout, index,
+                        slots.map(LocalAccessor::constantOf).toTypedArray(), true))
                     b.emitLoadLocal(value); b.endTransferDataVector()
                 } else {
                     b.beginInitializeDataScalar(layout, index)

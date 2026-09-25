@@ -1731,17 +1731,30 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** A constant descriptor lets partial evaluation see each bytecode local. */
+    public static final class DataVectorTransfer {
+        public final DataLayout layout;
+        public final int index;
+        public final boolean initialize;
+        @CompilerDirectives.CompilationFinal(dimensions = 1)
+        public final LocalAccessor[] lanes;
+        public DataVectorTransfer(DataLayout layout, int index, LocalAccessor[] lanes, boolean initialize) {
+            this.layout = layout;
+            this.index = index;
+            this.lanes = lanes;
+            this.initialize = initialize;
+        }
+    }
+
     @Operation
-    @ConstantOperand(type = DataLayout.class, name = "layout")
-    @ConstantOperand(type = int.class, name = "index")
-    @ConstantOperand(type = LocalAccessor[].class, name = "lanes")
-    @ConstantOperand(type = boolean.class, name = "initialize")
+    @ConstantOperand(type = DataVectorTransfer.class, name = "descriptor")
     public static final class TransferDataVector {
-        @Specialization public static void transfer(VirtualFrame frame, DataLayout layout, int index,
-                LocalAccessor[] lanes, boolean initialize, DataValue value, @Bind("$node") Node node) {
+        @Specialization public static void transfer(VirtualFrame frame, DataVectorTransfer descriptor,
+                DataValue value, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            if (initialize) layout.initializeVector(value, index, bytecode, frame, lanes, 0);
-            else layout.restoreVector(value, index, bytecode, frame, lanes, 0);
+            if (descriptor.initialize) descriptor.layout.initializeVector(value, descriptor.index, bytecode,
+                    frame, descriptor.lanes, 0);
+            else descriptor.layout.restoreVector(value, descriptor.index, bytecode, frame, descriptor.lanes, 0);
         }
     }
 
