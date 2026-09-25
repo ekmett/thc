@@ -36,7 +36,7 @@ internal class ManagedAddress private constructor(
         if (native == null) body() else native.borrow().use { body() }
     internal fun <T> withNativeSegment(body: (MemorySegment) -> T): T =
         (native ?: fault("Address has no owned native allocation")).access { body(it.asSlice(offset)) }
-    private fun <T> withNativeBorrows(other: ManagedAddress, body: () -> T): T {
+    internal fun <T> withNativeBorrows(other: ManagedAddress, body: () -> T): T {
         if (native == null) return other.withNativeBorrow(body)
         if (other.native == null || native === other.native) return withNativeBorrow(body)
         // Ordered acquisition also prevents two copies from deadlocking behind

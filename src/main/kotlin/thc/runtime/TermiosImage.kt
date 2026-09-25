@@ -76,6 +76,16 @@ internal class TermiosImage private constructor(val size: Long, private val lfla
             val stream = TermiosImage::class.java.getResourceAsStream("/thc/native/termios-abi.json") ?: fault("Missing termios ABI probe")
             stream.use { parse(Json.parse(it.reader().readText()), System.getProperty("os.name"), System.getProperty("os.arch")) }
         }
+        /** Keep the complete image live through the foreign operation and its
+         * copyback, including libc errors. Const input never copies back. */
+        @TruffleBoundary internal fun <T> transfer(address: ManagedAddress, copyBack: Boolean, operation: (ByteArray) -> T): T =
+            host.image(address, copyBack) {
+                val bytes = ByteArray(host.size.toInt()) { address.readWord8(it.toLong()).toByte() }
+                try { operation(bytes) }
+                finally {
+                    if (copyBack) ManagedAddress.fromByteArray(bytes).copyNonOverlappingTo(address, host.size)
+                }
+            }
         @JvmStatic @TruffleBoundary fun scalar(operation: OriginalStdioOp, address: ManagedAddress, value: Long): Long {
             if (operation == OriginalStdioOp.LFLAG) return host.lflag(address)
             if (operation == OriginalStdioOp.POKE_LFLAG) { host.poke(address, value); return 0L }
