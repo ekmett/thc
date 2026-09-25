@@ -224,6 +224,9 @@ class Language : TruffleLanguage<Language.State>() {
         internal val maskingState = ThreadLocal.withInitial { thc.runtime.MaskingState.UNMASKED }
         internal val threads = thc.runtime.GuestThreads(env, maskingState)
         internal val files = thc.runtime.ManagedFiles(env, threads)
+        // Installed only by the explicit fixed-filesystem NativeIO factory.
+        // Ordinary Context builders and the CLI retain the existing file service.
+        internal var nativeFiles: thc.runtime.NativeFileProvider? = null
         internal val stdio = thc.runtime.ManagedStdio(files)
         internal val iconv = thc.runtime.ManagedIconv({ cbits() }, stdio, threads)
         internal val strerror = thc.runtime.ManagedStrerror({ cbits() }, threads)

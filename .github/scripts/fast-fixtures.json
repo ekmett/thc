@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.NativeFileProviderTest",
     "thc.runtime.ManagedDescriptorDupTest",
     "thc.runtime.CoreGmpForeignTest",
     "thc.runtime.SulongLimbProviderTest",
