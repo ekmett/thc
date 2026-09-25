@@ -2373,10 +2373,11 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class IndexByteArray {
         @Specialization public static long index(Object value, long offset) { return ManagedByteArray.readGuest(value, offset, true); }
     }
+    /** Typed machine-Int array access; the constant mode selects a read or atomic fetch-add. */
     @Operation
     @ConstantOperand(type = boolean.class, name = "fetchAdd")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    public static final class ReadIntArray {
+    public static final class IntArrayAccess {
         @Specialization public static void read(VirtualFrame frame, boolean fetchAdd, LocalAccessor destination,
                 Object value, long index, long delta, Object state, @Bind("$node") Node node) {
             ManagedByteArray.requireState(state);

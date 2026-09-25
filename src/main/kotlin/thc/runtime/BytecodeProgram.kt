@@ -2111,7 +2111,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.FREEZE -> e.builder.beginFreezeByteArray(destination[0])
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD,
                         ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64,
-                        ByteArrayOp.FETCH_ADD_INT -> e.builder.beginReadIntArray(
+                        ByteArrayOp.FETCH_ADD_INT -> e.builder.beginIntArrayAccess(
                             operation == ByteArrayOp.FETCH_ADD_INT, destination[0])
                         ByteArrayOp.READ_DOUBLE, ByteArrayOp.READ_WORD8_AS_DOUBLE ->
                             e.builder.beginReadDoubleArray(operation == ByteArrayOp.READ_WORD8_AS_DOUBLE, destination[0])
@@ -2148,7 +2148,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.FREEZE -> e.builder.endFreezeByteArray()
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD,
                         ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64,
-                        ByteArrayOp.FETCH_ADD_INT -> e.builder.endReadIntArray()
+                        ByteArrayOp.FETCH_ADD_INT -> e.builder.endIntArrayAccess()
                         ByteArrayOp.READ_DOUBLE, ByteArrayOp.READ_WORD8_AS_DOUBLE -> e.builder.endReadDoubleArray()
                         ByteArrayOp.READ_FLOAT, ByteArrayOp.READ_WORD8_AS_FLOAT -> e.builder.endReadFloatArray()
                         ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8, ByteArrayOp.READ_CHAR -> e.builder.endReadByteArray()
