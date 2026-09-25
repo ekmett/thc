@@ -35,6 +35,7 @@ import qualified THC.CBV as CBV
 import qualified THC.Demands as Demands
 import qualified THC.ForeignExports as Exports
 import qualified THC.ForeignExportProvenance as ExportProvenance
+import qualified THC.ForeignImportProvenance as ImportProvenance
 import THC.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid)
 import GHC.Types.Tickish (CoreTickish, tickishFloatable)
 import GHC.Types.Literal
@@ -72,7 +73,7 @@ plugin = defaultPlugin
   { parsedResultAction = rewriteJavaScriptImports
   , typeCheckResultAction = \options summary environment ->
       validateJavaScriptTypes options summary environment >>= Exports.recordStaticExports options
-        >>= ExportProvenance.recordProvenance options
+        >>= ExportProvenance.recordProvenance options >>= ImportProvenance.recordImports options
   , installCoreToDos = \opts passes -> pure (if "post-tidy" `elem` opts then passes else passes ++ [CoreDoPluginPass "THC rich Core export" (exportModule opts)])
   , latePlugin = exportLate
   , pluginRecompile = \_ -> pure ForceRecompile
@@ -885,7 +886,8 @@ serializePostTidyCoreWithAnnotations flags opts m tycons program foreignArtifact
   (_,result) <- postTidyModule flags opts m (tycons ++ signatureTycons) program
   exports <- staticExportFields m annotations program
   provenance <- exportProvenanceFields m annotations program foreignArtifacts
-  let annotated = case result of O fields -> O (fields ++ exports ++ provenance); _ -> result
+  imports <- importProvenanceFields m annotations foreignArtifacts result
+  let annotated = case result of O fields -> O (fields ++ exports ++ provenance ++ imports); _ -> result
   pure (json (withForeignArtifacts foreignArtifacts annotated) ++ "\n")
   where
     exportKey (Exports.ExportName unit modName occurrence _) = unit ++ ":" ++ modName ++ "." ++ occurrence
@@ -931,6 +933,43 @@ exportProvenanceFields owner annotations program original = do
     checked = either (ioError . userError . ("THC: " ++)) pure
     identity (Exports.ExportName unit modName occurrence namespace) = O
       [("unit",S unit),("module",S modName),("occurrence",S occurrence),("namespace",S namespace)]
+
+-- The complete archived product is compared before producing managed-stub
+-- evidence. The execution label remains not-linked: no C code is registered.
+importProvenanceFields :: Module -> [Annotation] -> ForeignCore.IfaceForeign -> J -> IO [(String,J)]
+importProvenanceFields _ _ (ForeignCore.IfaceForeign Nothing []) _ = pure []
+importProvenanceFields _ _ (ForeignCore.IfaceForeign (Just (ForeignCore.IfaceCStubs "" "" [] [])) []) _ = pure []
+importProvenanceFields owner annotations original core = do
+  verdict <- either (ioError . userError . ("THC: " ++)) pure
+    (ImportProvenance.inspectImports owner annotations original)
+  pure $ case verdict of
+    Nothing -> []
+    Just value -> [("staticForeignImportStubs", O (common ++ details value))]
+  where
+    common = [("schema",num (1::Int)),("scope",S "retained-static-import-products"),("execution",S "not-linked"),
+      ("profile",S "ghc-9.14.1-thc-only-static-c-imports-v1"),
+      ("unit",S (unitString (moduleUnit owner))),("module",S (moduleNameString (moduleName owner)))]
+    details (ImportProvenance.Unknown reason) = [("status",S "unclassified"),("reason",S reason)]
+    details (ImportProvenance.Rejected reason) = [("status",S "rejected"),("reason",S reason)]
+    details (ImportProvenance.Verified imports) = [("status",S "verified"),("wordBits",num (64::Int)),
+      ("expectedForeign",foreignArtifactRecord original),("imports",A (map imported imports)),
+      ("expectedCalls",A (calls core))]
+    calls (O fields) = [value | (key,value) <- fields, key == "foreignCall"] ++ concatMap (calls . snd) fields
+    calls (A values) = concatMap calls values
+    calls _ = []
+    identity (Exports.ExportName unit modName occurrence namespace) = O
+      [("unit",S unit),("module",S modName),("occurrence",S occurrence),("namespace",S namespace)]
+    ty (Exports.ExportTyCon name arguments) = O [("kind",S "tycon"),("name",identity name),("arguments",A (map ty arguments))]
+    ty (Exports.ExportApp function argument) = O [("kind",S "application"),("function",ty function),("argument",ty argument)]
+    ty (Exports.ExportArrow multiplicity argument result) = O
+      [("kind",S "function"),("multiplicity",ty multiplicity),("argument",ty argument),("result",ty result)]
+    imported (ImportProvenance.Import binder header symbol unit function conv safe declared normalized emitted) = O
+      [("binder",identity binder),("header",maybe Z S header),("symbol",S symbol),("unit",maybe Z S unit),
+       ("isFunction",B function),("convention",S conv),("safety",S safe),("declaredType",ty declared),
+       ("normalizedType",ty normalized),("normalizationRole",S "representational"),("emitted",call emitted)]
+    call (ImportProvenance.Call symbol unit conv safe arguments result) = O
+      [("symbol",S symbol),("unit",maybe Z S unit),("convention",S conv),("safety",S safe),
+       ("arguments",A (map S arguments)),("result",A (map S result))]
 
 staticExportFields :: Module -> [Annotation] -> CoreProgram -> IO [(String,J)]
 staticExportFields owner annotations bindings = do

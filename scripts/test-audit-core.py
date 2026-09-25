@@ -69,6 +69,20 @@ class ArchiveReachabilityTest(unittest.TestCase):
             self.assertIn('archive-only', str(report['issues']))
 
 
+    def test_unknown_managed_import_evidence_does_not_bypass_archive_validation(self):
+        # Deliberately malformed provenance: no synthetic verified producer.
+        for schema in (1, 2):
+            for proof in (None, {}, {'status': 'verified', 'profile': 'invented'}):
+                module = dict(schema=schema, ghc='9.14.1', unit='pkg', module='M',
+                              bindings=[bind('root', lit(7))], constructors=[], staticForeignImportStubs=proof)
+                if schema == 2:
+                    module['foreign'] = dict(schema=1, execution='not-linked', stubs=dict(
+                        header='', source='int unknown(void) { return 7; }', initializers=[], finalizers=[]), files=[])
+                report = audit_core.Audit([('unknown.json', module)], CAP).run(['root'])
+                self.assertFalse(report['accepted'], report)
+                self.assertIn('module-format', {issue['code'] for issue in report['issues']})
+
+
 def tuple_rep(*components):
     return dict(aggregate='unboxed-tuple', kind='unknown', evaluated=True,
                 components=list(components), primReps=[r for c in components for r in c['primReps']])

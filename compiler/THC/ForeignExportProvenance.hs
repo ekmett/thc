@@ -4,7 +4,7 @@
 -- | Provenance of retained foreign products in a closed compiler profile.
 -- This is not native-image certification or authorization to run a callback.
 module THC.ForeignExportProvenance
-  ( Provenance(..), recordProvenance, inspectProvenance ) where
+  ( Provenance(..), recordProvenance, inspectProvenance, knownPipeline ) where
 
 import Control.Monad (unless)
 import Data.Data (Data)

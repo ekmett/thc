@@ -124,7 +124,7 @@ internal object CoreForeignArtifacts {
 
     fun validateArchive(module: Map<*, *>) {
         if (version(module["schema"], 1)) {
-            require(!module.containsKey("foreign")) { "Foreign artifacts require Core schema 2" }
+            require(!module.containsKey("foreign") && !module.containsKey("staticForeignImportStubs")) { "Foreign artifacts require Core schema 2" }
             return
         }
         require(version(module["schema"], 2)) { "Unsupported Core schema: ${module["schema"]}" }
@@ -170,6 +170,7 @@ internal object CoreForeignArtifacts {
         }
         require(nonempty) { "Core schema 2 requires foreign artifacts" }
         if (module.containsKey("foreignLink")) linked(module)
+        ManagedImportAdmission.read(module)
     }
 
     /** Registrations and opaque foreign files can run independently of Core reachability. */
@@ -185,7 +186,7 @@ internal object CoreForeignArtifacts {
 
     fun requireExecutable(module: Map<*, *>) {
         validateArchive(module)
-        require(version(module["schema"], 1) || linked(module) != null) {
+        require(version(module["schema"], 1) || linked(module) != null || ManagedImportAdmission.read(module) != null) {
             "Unsupported foreign code/registration for ${module["unit"]}:${module["module"]}: " +
                 "Core schema 2 is archive-only; native stubs, initializers, finalizers and callbacks are not linked"
         }

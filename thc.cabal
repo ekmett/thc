@@ -221,6 +221,7 @@ library
     THC.Demands
     THC.ForeignExports
     THC.ForeignExportProvenance
+    THC.ForeignImportProvenance
     THC.Sources
     THC.Wired
   build-depends:

@@ -244,6 +244,11 @@
     }
   },
   "owners": {
+    "src/main/kotlin/thc/ManagedImportMetadata.kt": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/test/kotlin/thc/ManagedImportStubsNativeTest.kt": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
+    "compiler/THC/ForeignImportProvenance.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
+    "compiler/test-fixtures/ForeignImportStubs.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
+    "compiler/test-fixtures/ImportStubsNative.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/OriginalTcsetattrAudit.hs": {"junit": ["thc.runtime.OriginalTcsetattrTest"], "python": []},
     "compiler/test-fixtures/OriginalSigprocmaskAudit.hs": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
     "compiler/test-fixtures/OriginalSigprocmaskNative.hs": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
@@ -438,7 +443,7 @@
       "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
     },
     "test/haskell-fixtures/InterfaceFixtures.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.ManagedImportStubsNativeTest"], "python": []
     },
     "compiler/test-fixtures/InterfaceLibrary.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
@@ -453,7 +458,7 @@
       "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
     },
     "test/haskell-fixtures/InterfaceForeignFacts.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.ManagedImportStubsNativeTest"], "python": []
     },
     "compiler/test-fixtures/LiveAsyncAudit.hs": {
       "junit": ["thc.runtime.LiveAsyncNativeTest", "thc.runtime.AsyncStrictEntryNativeTest"],
@@ -685,7 +690,7 @@
       "python": []
     },
     "src/main/kotlin/thc/CoreForeignArtifacts.kt": {
-      "junit": ["thc.CoreForeignArtifactsTest", "thc.runtime.InterfaceCoreNativeTest"], "python": []
+      "junit": ["thc.CoreForeignArtifactsTest", "thc.runtime.InterfaceCoreNativeTest", "thc.ManagedImportStubsNativeTest"], "python": []
     },
     "src/test/kotlin/thc/CoreForeignArtifactsTest.kt": {
       "junit": ["thc.CoreForeignArtifactsTest"], "python": []

@@ -92,7 +92,8 @@ object CoreModules {
             val link = CoreForeignArtifacts.linked(module)
             val archiveOnly = module["schema"] == 2L || module["schema"] == 2
             val managedExport = admission != null
-            if (archiveOnly && link == null && !managedExport && CoreForeignArtifacts.hasRegistrationObligations(module))
+            val managedImports = ManagedImportAdmission.read(module) != null
+            if (archiveOnly && link == null && !managedExport && !managedImports && CoreForeignArtifacts.hasRegistrationObligations(module))
                 CoreForeignArtifacts.requireExecutable(module)
             link?.let {
                 require(foreignLinks.putIfAbsent(link.unit to link.module, link) == null) {
@@ -121,7 +122,7 @@ object CoreModules {
             for (b in module["bindings"] as List<Map<String, Any?>>) {
                 val id = b["id"] as String
                 require(bindings.putIfAbsent(id, b) == null) { "Duplicate binding: $id" }
-                if (archiveOnly && link == null && !managedExport)
+                if (archiveOnly && link == null && !managedExport && !managedImports)
                     archiveBindings[id] = "${module["unit"]}:${module["module"]}"
                 // The merged bundle has no single unit/module. Preserve the exact
                 // exporting module for globally named bindings; synthetic entries

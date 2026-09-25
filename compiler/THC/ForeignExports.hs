@@ -9,7 +9,7 @@
 -- an ordinary code-generation interface; missing metadata remains unknown.
 module THC.ForeignExports
   ( ExportName(..), ExportType(..), StaticExport(..), StaticExports(..)
-  , recordStaticExports, readStaticExports
+  , recordStaticExports, readStaticExports, nameIdentity, typeIdentity
   ) where
 
 import Control.Monad (unless)
