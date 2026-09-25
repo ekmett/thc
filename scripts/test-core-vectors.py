@@ -137,6 +137,55 @@ class VectorAuditTest(unittest.TestCase):
         module['bindings'][0]['expr'][3]['resultRep'] = CLOSURE
         report = self.transport(module)
         self.assertIn(('vector-boundary', 'vector capture'), {(i['code'], i['detail']) for i in report['issues']})
+        enabled = dict(CAP, vectorTransport=['arguments', 'results', 'join-arguments', 'join-results',
+            'join-captures', 'tuple-fields', 'let-bindings', 'captures'])
+        self.assertTrue(run(module, capability=enabled)['accepted'], run(module, capability=enabled)['issues'])
+        recursive = fixture()
+        arm = recursive['bindings'][0]['expr'][2][3][0]
+        arm[3] = ['let', True, [dict(id='recursive-vector', name='recursive-vector', lifted=False,
+            rep=copy.deepcopy(VECTOR_REP), expr=copy.deepcopy(recursive['bindings'][0]['expr'][2][1]))],
+            ['lit', 'int', '1', dict(rep=LONG)], dict(rep=LONG)]
+        self.assertIn('recursive-unlifted', [i['code'] for i in run(recursive, capability=enabled)['issues']])
+
+    def test_heap_vector_fields_and_thunk_captures_require_exact_independent_capabilities(self):
+        module = fixture()
+        body = module['bindings'][0]['expr'][2]
+        vector = body[1]
+        boxed = dict(kind='data', primReps=['BoxedRep (Just Lifted)'], evaluated=True)
+        module['constructors'].append(dict(id='Heap', name='Heap', kind='boxed', arity=2,
+            fieldReps=[VECTOR_REP['primReps'], LONG['primReps']],
+            fieldTypes=[copy.deepcopy(VECTOR_REP), copy.deepcopy(LONG)],
+            fieldLifted=[False, False], strictFields=[False, False]))
+        heap = ['app', ['con', 'Heap', 2], [['var', 'v', dict(rep=copy.deepcopy(VECTOR_REP))],
+            ['lit', 'int', '13', dict(rep=LONG)]], [False, False], False, False, dict(rep=boxed)]
+        thunk = dict(id='saved', name='saved', lifted=True, rep=boxed, expr=heap)
+        body[3][0][3] = ['let', False, [thunk],
+            ['case', ['var', 'saved', dict(rep=boxed)], 'object',
+                [['data', 'Heap', ['lane', 'bias'], ['lit', 'int', '1', dict(rep=LONG)],
+                  dict(binders=[dict(id='lane', lifted=False, rep=copy.deepcopy(VECTOR_REP)),
+                                dict(id='bias', lifted=False, rep=LONG)])]],
+                dict(rep=LONG, binder=dict(id='object', lifted=True, rep=boxed))], dict(rep=LONG)]
+        capabilities = ('arguments', 'results', 'join-arguments', 'join-results', 'join-captures',
+                        'tuple-fields', 'let-bindings', 'captures', 'heap-fields')
+        def check(without=()):
+            return run(module, capability=dict(CAP, vectorTransport=[name for name in capabilities if name not in without]))
+        self.assertTrue(check()['accepted'], check()['issues'])
+        self.assertIn('vector heap field', ' '.join(i['detail'] for i in check(('heap-fields',))['issues']))
+        self.assertIn('vector thunk capture', [i['detail'] for i in check(('captures',))['issues']])
+        lifted_pattern = copy.deepcopy(module)
+        outer_arm = lifted_pattern['bindings'][0]['expr'][2][3][0]
+        heap_case = outer_arm[3][3]
+        heap_case[3][0][4]['binders'][0]['lifted'] = True
+        self.assertIn('application-levity', [i['code'] for i in run(lifted_pattern,
+            capability=dict(CAP, vectorTransport=capabilities))['issues']])
+        for mutation in ('missing-type', 'wrong-rep', 'lifted', 'unevaluated'):
+            changed = copy.deepcopy(module)
+            field = changed['constructors'][0]
+            if mutation == 'missing-type': del field['fieldTypes']
+            elif mutation == 'wrong-rep': field['fieldTypes'][0] = copy.deepcopy(VECTOR32_REP)
+            elif mutation == 'lifted': field['fieldLifted'][0] = True
+            else: field['fieldTypes'][0]['evaluated'] = False
+            self.assertFalse(run(changed, capability=dict(CAP, vectorTransport=capabilities))['accepted'], mutation)
 
     def test_all_vector_families_require_integer_json_lane_counts(self):
         for original in (VECTOR_REP, VECTOR32_REP, VECTOR16_REP, VECTOR8_REP,

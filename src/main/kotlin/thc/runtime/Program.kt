@@ -2439,6 +2439,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                         else raw.copy(evaluated = strict?.get(index) == true ||
                             ((constructors[alt[1] as? String]?.get("fieldLifted") as? List<*>)?.getOrNull(index) == false))
                     if (vector != null) {
+                        if (metadata.getOrNull(index)?.get("lifted") != false)
+                            throw UnsupportedCore("Vector constructor binder must be unlifted")
                         val lanes = IntArray(vector.vector!!.lanes) { lane -> child.layout.bind("$id constructor vector lane $lane") }
                         vectorFields[index] = lanes
                         child.bindTuple(id, proof, lanes).slot
