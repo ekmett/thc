@@ -43,6 +43,8 @@ carrier, `I` is exact `IntRep`, and `A` is exact `AddrRep` backed by managed mem
 
 Open modes are Read 0, Write 1, Append 2, and ReadWrite 3. Seek modes are
 absolute 0, relative 1, and end 2. Device types are regular file 0 and stream 1.
+Extending an append-mode file with `set_size` remains unsupported; the original
+GHC `c_ftruncate` bridge reports host `ENOTSUP` for that case.
 The embedding exposes no terminal identity, so valid descriptors currently
 report `is_terminal = 0`. Paths and error messages are NUL-terminated UTF-8.
 Error messages are immutable managed addresses. Read returns zero at EOF;
