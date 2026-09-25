@@ -237,8 +237,10 @@ class LeadingCaseReturnTest {
             val fn = p.entryValue("used"); val stop = p.entryValue("stop")
             repeat(25) { assertEquals(12L, run(p, "driver", fn, 11L, stop, 3L)) }
             compile(p.entryTarget("driver"))
-            val expected = if (backend == "ast") RuntimeFault::class.java else ClassCastException::class.java
-            assertThrows(expected) { run(p, "driver", fn, 11L, stop, "invalid primitive carrier") }
+            val failure = assertThrows(RuntimeFault::class.java) {
+                run(p, "driver", fn, 11L, stop, "invalid primitive carrier")
+            }
+            assertEquals(if (backend == "ast") "Expected primitive Long argument" else "Expected primitive Long", failure.message)
             assertEquals(0L, count(p))
         }
     }
