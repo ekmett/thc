@@ -27,6 +27,7 @@ import OriginalStdioCloseFixtures (prepareOriginalStdioClose)
 import OriginalStdioSeekFixtures (prepareOriginalStdioSeek)
 import OriginalStdioTruncateFixtures (prepareOriginalStdioTruncate)
 import OriginalHandleReadinessFixtures (prepareOriginalHandleReadiness)
+import OriginalFdReadyFixtures (prepareOriginalFdReady)
 import MutVarFixtures (prepareMutVar)
 import StablePointerFixtures (prepareStablePointers)
 import ShrinkByteArrayFixtures (prepareShrinkByteArrays)
@@ -857,6 +858,7 @@ main = do
     ["original-stdio-truncate"] -> prepareOriginalStdioTruncate root
     "original-stdio-read":[] -> prepareOriginalStdioRead root
     ["original-handle-readiness"] -> prepareOriginalHandleReadiness root
+    ["original-fd-ready"] -> prepareOriginalFdReady root
     ["mutvar"] -> prepareMutVar root
     ["stable-pointers"] -> prepareStablePointers root
     ["shrink-bytearrays"] -> prepareShrinkByteArrays root
@@ -879,4 +881,4 @@ main = do
     ["interface-core"] -> prepareInterfaceCore root
     ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (interface-core|core-continuation|mask-functions|live-async|thread-async|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|original-stdio-read|original-handle-readiness|original-stdio-close|original-stdio-seek|original-stdio-truncate|mutvar|stable-pointers|shrink-bytearrays|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|sqrt|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|managed-address-reads|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (interface-core|core-continuation|mask-functions|live-async|thread-async|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|original-stdio-read|original-handle-readiness|original-stdio-close|original-stdio-seek|original-stdio-truncate|original-fd-ready|mutvar|stable-pointers|shrink-bytearrays|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|sqrt|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|managed-address-reads|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

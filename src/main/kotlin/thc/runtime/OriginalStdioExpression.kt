@@ -16,6 +16,13 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
         val result = if (operation == OriginalStdioOp.ERRNO) {
             requireVoidCarrier(operands[0].execute(frame))
             CoreOriginalStdio.current(this).errno()
+        } else if (operation.readiness) {
+            val fd = operands[0].executeRequiredLong(frame)
+            val writing = operands[1].executeRequiredLong(frame)
+            val milliseconds = operands[2].executeRequiredLong(frame)
+            val socket = operands[3].executeRequiredLong(frame)
+            requireVoidCarrier(operands[4].execute(frame))
+            CoreOriginalStdio.current(this).ready(fd, writing, milliseconds, socket)
         } else if (operation == OriginalStdioOp.ISATTY || operation == OriginalStdioOp.CLOSE) {
             val fd = operands[0].executeRequiredLong(frame)
             requireVoidCarrier(operands[1].execute(frame))

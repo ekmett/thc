@@ -29,6 +29,7 @@ OPERATIONS = {
         ('capi', 'unsafe', ('Int32Rep', 'Int64Rep', 'Int32Rep', None), (None, 'Int64Rep')),
     '__hscore_ftruncate': ('ccall', 'unsafe', ('Int32Rep', 'Int64Rep', None), (None, 'Int32Rep')),
     'isatty': ('ccall', 'unsafe', ('Int32Rep', None), (None, 'Int32Rep')),
+    'fdReady': ('ccall', ('safe', 'unsafe'), ('Int32Rep', 'Word8Rep', 'Int64Rep', 'Word8Rep', None), (None, 'Int32Rep')),
     'hs_free_stable_ptr': ('ccall', 'unsafe', ('AddrRep', None), (None,)),
     STACK_CLONE: ('prim', 'safe', (None,), (None, 'BoxedRep (Just Unlifted)')),
     'getStackInfoTableAddrzh': ('prim', 'safe', ('BoxedRep (Just Unlifted)',), 'AddrRep'),
@@ -136,7 +137,8 @@ def validate(metadata, argument_reps, flags, result_rep):
     require(target.keys() == {'kind', 'symbol', 'unit', 'isFunction'} and target.get('kind') == 'static'
             and target.get('isFunction') is True and target.get('unit') == 'ghc-internal',
             'static ghc-internal function target')
-    require(descriptor.get('convention') == convention and descriptor.get('safety') == safety, 'calling convention/safety')
+    allowed_safety = safety if isinstance(safety, tuple) else (safety,)
+    require(descriptor.get('convention') == convention and descriptor.get('safety') in allowed_safety, 'calling convention/safety')
     require(all(type(descriptor.get(k)) is int and descriptor[k] == len(expected) for k in ('arity', 'suppliedArity')),
             'saturated arity')
     declared = descriptor.get('argumentReps')

@@ -25,6 +25,7 @@
     "ghczuwrapperZC19ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZClseek",
     "__hscore_ftruncate",
     "isatty",
+    "fdReady",
     "hs_free_stable_ptr",
     "__hsbase_MD5Init", "__hsbase_MD5Update", "__hsbase_MD5Final",
     "thc_io_v1_open", "thc_io_v1_read", "thc_io_v1_write", "thc_io_v1_close",

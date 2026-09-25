@@ -1364,13 +1364,20 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 }
             } else if (originalStdio != null) {
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
-                val operands = args.map { compile(it, scope, false) }
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        if (originalStdio.readiness) CoreOriginalStdio.validateReadyOperand(originalStdio, index,
+                            operand.proof, if (argument[0] == "var")
+                                scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
                 tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
                     val result = destination.single()
                     val status = originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
                         originalStdio == OriginalStdioOp.CLOSE
-                    if (originalStdio == OriginalStdioOp.SEEK) b.beginFileSeek(result)
+                    if (originalStdio.readiness) b.beginOriginalStdioReady(result)
+                    else if (originalStdio == OriginalStdioOp.SEEK) b.beginFileSeek(result)
                     else if (originalStdio == OriginalStdioOp.TRUNCATE) b.beginFileSetSize(result)
                     else if (status) b.beginOriginalStdioStatus(result, originalStdio)
                     else b.beginOriginalStdioTransfer(result,
@@ -1394,7 +1401,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.emitLoadConstant(OriginalStdioOp.TRUNCATE)
                         b.endBlock()
                     } else operands.forEach { it.emit(e) }
-                    if (originalStdio == OriginalStdioOp.SEEK) b.endFileSeek()
+                    if (originalStdio.readiness) b.endOriginalStdioReady()
+                    else if (originalStdio == OriginalStdioOp.SEEK) b.endFileSeek()
                     else if (originalStdio == OriginalStdioOp.TRUNCATE) b.endFileSetSize()
                     else if (status) b.endOriginalStdioStatus() else b.endOriginalStdioTransfer()
                 }

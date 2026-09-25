@@ -1975,7 +1975,14 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 OriginalStackInfoExpression(stackInfo, layout, operands.toTypedArray(), tupleProof)
             } else if (originalStdio != null) {
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
-                OriginalStdioExpression(originalStdio, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        if (originalStdio.readiness) CoreOriginalStdio.validateReadyOperand(originalStdio, index,
+                            operand.representation, if (argument[0] == "var")
+                                scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                OriginalStdioExpression(originalStdio, operands.toTypedArray(), tupleProof)
             } else if (stableFree) {
                 CoreStablePointers.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 FreeStablePointer(compile(args[0], scope, false), compile(args[1], scope, false))

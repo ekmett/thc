@@ -37,7 +37,7 @@ class StdioHostAbiTest {
             "target" to "aarch64", "target" to null))
             assertThrows(RuntimeFault::class.java) { parse(original + (key to value)) }
         val widths = original["widths"] as Map<*, *>
-        for ((name, wrong) in listOf("charBits" to 16, "int" to 8, "pointer" to 4, "size" to 4, "ssize" to 4,
+        for ((name, wrong) in listOf("charBits" to 16, "int" to 8, "bool" to 4, "pointer" to 4, "size" to 4, "ssize" to 4,
             "int" to 4.0, "pointer" to null))
             assertThrows(RuntimeFault::class.java) { parse(original + ("widths" to (widths + (name to wrong)))) }
         val errors = original["errno"] as Map<*, *>
