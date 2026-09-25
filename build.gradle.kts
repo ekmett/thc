@@ -4,13 +4,42 @@
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import java.security.MessageDigest
+import java.net.URI
 
 plugins {
     application
     kotlin("jvm") version "2.4.20"
     kotlin("kapt") version "2.4.20"
+    id("org.jetbrains.dokka") version "2.2.0"
 }
 repositories { mavenCentral() }
+
+// Documentation reads handwritten sources; it does not compile the runtime,
+// generate Truffle DSL classes, or prepare native/Core fixtures.
+val docsRevision = providers.gradleProperty("thc.docsRevision").orElse(
+    providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.map { it.trim() })
+dokka {
+    moduleName.set("THC")
+    moduleVersion.set(docsRevision.map { it.take(12) })
+    dokkaPublications.html {
+        outputDirectory.set(layout.buildDirectory.dir("docs/jvm"))
+        includes.from("docs/site/jvm.md")
+        failOnWarning.set(false)
+        suppressInheritedMembers.set(true)
+    }
+    dokkaSourceSets.named("main") {
+        sourceRoots.setFrom("src/main/kotlin", "src/main/java")
+        classpath.setFrom(configurations.compileClasspath)
+        jdkVersion.set(25)
+        reportUndocumented.set(false)
+        suppressGeneratedFiles.set(true)
+        sourceLink {
+            localDirectory.set(file("src/main"))
+            remoteUrl.set(docsRevision.map { URI("https://github.com/ekmett/thc/blob/$it/src/main") })
+            remoteLineSuffix.set("#L")
+        }
+    }
+}
 // The checked family table generates concrete primitive carriers and typed nodes.
 // BytecodeRoot's DSL requires nested declarations; its marked regions are checked,
 // never rewritten by a build. Refresh them explicitly with the generator --write.

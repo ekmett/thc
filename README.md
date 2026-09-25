@@ -41,9 +41,10 @@ share a cache across checkouts.
 `make check-ghc-core GHC=/path/to/ghc` checks whether an installation carries
 complete Core for `ghc-internal`, `base`, and their package dependencies. The
 [compiler build guide](docs/ghc-core.md) includes a Hadrian settings file and
-source-build instructions. This prepares the
-replacement for our pinned library sources; exporter API support is still
-limited to the GHC version above.
+source-build instructions. Project runs can select complete installed Core
+with `--installed-core required`; the default `pinned` provider remains a
+separate, explicit choice. Exporter API support is limited to the GHC version
+above.
 
 Use `make test` for the test suite and `make clean` to remove build products.
 `make distclean` also removes the checkout's Gradle and Kotlin caches.
@@ -190,6 +191,9 @@ separate run.
 * [`scripts/`](scripts/) contains build, audit, benchmark and graph drivers.
 * [The documentation index](docs/README.md) groups coverage and design reports;
   [`research/`](research/) contains the earlier design investigation.
+* [The documentation site](https://ekmett.github.io/thc/) combines selected
+  guides, the mixed Java/Kotlin reference and the Haskell library API.
+  [Build it locally](docs/documentation.md) with `make docs` (also needs Pandoc).
 * [Development](docs/contributing.md) covers local checks and the tested merge
   queue. Update the [primop checklist](docs/primops.md#updating-the-list) when
   adding a primitive.

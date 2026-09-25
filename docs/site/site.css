@@ -1,0 +1,73 @@
+/* SPDX-FileCopyrightText: 2026 Edward Kmett
+ * SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause */
+:root {
+  --thc-ink: #243b3b;
+  --thc-muted: #586963;
+  --thc-accent: #146c5c;
+  --thc-paper: #faf9f5;
+  --thc-line: #dbe2db;
+}
+.thc-header {
+  font: 14px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--thc-ink);
+  background: var(--thc-paper);
+  border-bottom: 1px solid var(--thc-line);
+  position: relative;
+  z-index: 1;
+}
+.thc-header nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  max-width: 1440px;
+  margin: auto;
+  padding: 19px 32px;
+}
+.thc-header a { color: var(--thc-ink); text-decoration: none; }
+.thc-header a:hover { color: var(--thc-accent); text-decoration: underline; }
+.thc-header .thc-brand { font-size: 27px; font-weight: 800; letter-spacing: -1px; }
+.thc-brand span { font-size: 16px; font-weight: 400; letter-spacing: 0; color: var(--thc-muted); }
+.thc-links { display: flex; gap: 24px; flex-wrap: wrap; }
+.thc-toolchain {
+  padding: 10px 32px;
+  color: var(--thc-muted);
+  background: #eef2eb;
+  border-top: 1px solid var(--thc-line);
+  font-size: 12px;
+}
+.thc-toolchain span { margin-left: 16px; font-family: ui-monospace, monospace; }
+.thc-guide { margin: 0; background: var(--thc-paper); color: var(--thc-ink); font: 16px/1.75 system-ui, sans-serif; }
+.thc-layout { display: grid; grid-template-columns: 220px minmax(0, 850px); max-width: 1270px; margin: 0 auto; gap: 56px; padding: 48px 32px 80px; }
+.thc-sidebar { border-right: 1px solid var(--thc-line); font-size: 14px; }
+.thc-sidebar p { color: var(--thc-muted); text-transform: uppercase; letter-spacing: .08em; font-size: 10px; margin: 6px 0 20px; }
+.thc-sidebar a { display: block; padding: 7px 18px 7px 0; color: var(--thc-muted); text-decoration: none; }
+.thc-sidebar a:hover { color: var(--thc-accent); text-decoration: underline; }
+.thc-prose { min-width: 0; }
+.thc-prose h1, .thc-prose h2, .thc-prose h3 { line-height: 1.2; letter-spacing: -.035em; color: var(--thc-ink); }
+.thc-prose h1 { font-size: clamp(32px, 4.5vw, 52px); margin: 0 0 28px; max-width: 760px; }
+.thc-prose h2 { font-size: 25px; margin: 48px 0 18px; padding-top: 10px; }
+.thc-prose h3 { font-size: 20px; margin-top: 32px; }
+.thc-prose p { margin: 18px 0; }
+.thc-prose a { color: var(--thc-accent); text-underline-offset: 3px; }
+.thc-prose li { margin: 8px 0; }
+.thc-prose pre { padding: 22px; overflow: auto; border: 1px solid var(--thc-line); border-radius: 8px; background: #f0f2ec; font-size: 13px; line-height: 1.7; }
+.thc-prose code { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: .87em; }
+.thc-prose :not(pre) > code { background: #edf0e9; padding: 2px 4px; border-radius: 3px; }
+.thc-prose table { display: block; overflow-x: auto; border-collapse: collapse; width: 100%; font-size: 14px; }
+.thc-prose th, .thc-prose td { border-bottom: 1px solid var(--thc-line); padding: 12px 16px; text-align: left; }
+.thc-prose th { background: #eef2eb; }
+.thc-prose blockquote { border-left: 3px solid var(--thc-accent); margin-left: 0; padding-left: 22px; color: var(--thc-muted); }
+.thc-prose img { max-width: 100%; height: auto; }
+.thc-prose .thc-eyebrow { text-transform: uppercase; letter-spacing: .12em; color: var(--thc-accent); font-size: 11px; font-weight: 650; margin: 0 0 18px; }
+.thc-footer { border-top: 1px solid var(--thc-line); margin-top: 64px; padding-top: 20px; font-size: 12px; color: var(--thc-muted); }
+.thc-guide a:focus-visible, .thc-header a:focus-visible { outline: 2px solid var(--thc-accent); outline-offset: 4px; }
+@media (max-width: 800px) {
+  .thc-header nav { align-items: flex-start; padding: 16px 20px; }
+  .thc-links { gap: 8px 16px; justify-content: flex-end; font-size: 12px; }
+  .thc-toolchain { padding: 10px 20px; }
+  .thc-layout { display: block; padding: 32px 20px; }
+  .thc-sidebar { border: 0; border-bottom: 1px solid var(--thc-line); padding-bottom: 20px; margin-bottom: 32px; }
+  .thc-sidebar a { display: inline-block; margin-right: 12px; padding: 4px 0; }
+}
+@media print { .thc-sidebar, .thc-links { display: none; } .thc-layout { display: block; } }

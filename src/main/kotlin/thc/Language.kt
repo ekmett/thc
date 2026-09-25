@@ -37,6 +37,12 @@ import java.util.concurrent.ExecutionException
 import java.util.concurrent.FutureTask
 import java.util.concurrent.atomic.AtomicReference
 
+/**
+ * Internal Core assembly and request serialization shared by the launcher and tests.
+ * Original unit identities, foreign obligations and strict reachable references
+ * remain subject to validation. These map-based structures are not a stable host ABI;
+ * embedding callers should normally use [loadEntry].
+ */
 object CoreModules {
     @Suppress("UNCHECKED_CAST")
     fun merge(modules: List<Map<String, Any?>>): Map<String, Any?> {
@@ -198,6 +204,11 @@ object CoreModules {
         return (module - "archiveBindings") + ("bindings" to bindings.filter { it["id"] in reachable })
     }
 
+    /**
+     * Serialize one load request from Core files or a singleton `@manifest` path.
+     * Manifest loading validates its archive and selects strict linking. This step
+     * does not execute the entry or bypass the backend's support audit.
+     */
     fun request(paths: List<String>, entry: String, instrument: Boolean = true, diagnosticUnsupported: Boolean = false,
                 backend: String = defaultBackend(), sourceNotesEnabled: Boolean = true, ioMain: Boolean = false,
                 shutdownEntry: String? = null): String {

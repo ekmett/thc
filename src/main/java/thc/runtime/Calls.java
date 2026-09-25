@@ -9,7 +9,12 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 
-/** Cadenza's Java bridge avoids Kotlin's defensive spread-argument array copy. */
+/**
+ * Internal Java bridge that avoids Kotlin's defensive spread-argument array copy.
+ * Callers supply the runtime's exact argument array and target convention; this
+ * class neither converts host values nor establishes a stable embedding ABI.
+ * Host applications should use THC's polyglot entry-loading helpers instead.
+ */
 public final class Calls {
     private Calls() {}
     public static Object direct(DirectCallNode node, Object[] args) { return node.call(args); }

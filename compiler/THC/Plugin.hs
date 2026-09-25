@@ -2,6 +2,13 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE LambdaCase #-}
+-- | GHC 9.14.1 plugin and direct serializers for THC's executable Core format.
+--
+-- Use @-fplugin=THC.Plugin@ with the output directory as the first plugin
+-- option. Package exports require @post-tidy@ and @unit-qualified@; add
+-- @source-notes@ to retain source-location metadata. The direct serializers
+-- consume genuine GHC Core and do not establish runtime support or link native
+-- foreign products. This library is tied to the selected GHC API version.
 module THC.Plugin (plugin, serializeOptimizedCore, serializePostTidyCore) where
 
 import GHC.Plugins
@@ -48,8 +55,12 @@ import Numeric (showHex)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>), takeDirectory)
 
--- This plugin intentionally runs last in the ordinary Core pipeline, before
--- Tidy. It exports executable trees, never parses a pretty-printed Core dump.
+-- | Export executable trees from GHC's Core pipeline. Without @post-tidy@ the
+-- pass runs last before Tidy; that option selects the late plugin boundary
+-- after Tidy and before CorePrep, where package identities agree with emitted
+-- interfaces. The first option is the destination directory (default
+-- @build/core@). GHC compilations using the plugin are forced to recompile so
+-- the export is not silently skipped by native recompilation checks.
 plugin :: Plugin
 plugin = defaultPlugin
   { parsedResultAction = rewriteJavaScriptImports
