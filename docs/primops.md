@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 329 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 853 | No declared lowering. |
+| Partial | 330 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 852 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -689,6 +689,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeWord8OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeWordArray#` — arity 4 — Managed byte storage
 - [ ] `writeWordOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
+- [ ] `yield#` — arity 1 — Specialized lowering; see capability and coverage limits
 
 ## Missing forms
 
@@ -1547,6 +1548,5 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeWord8X32OffAddr#` — arity 4
 - [ ] `writeWord8X64Array#` — arity 4
 - [ ] `writeWord8X64OffAddr#` — arity 4
-- [ ] `yield#` — arity 1
 
 </details>

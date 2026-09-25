@@ -1913,6 +1913,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation public static final class YieldThread {
+        @Specialization public static Object giveWay(Object state) {
+            TupleResultsKt.requireVoidCarrier(state);
+            CoreYield.giveWay();
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+
     @Operation public static final class AddressPlus {
         @Specialization public static ManagedAddress plus(ManagedAddress address, long displacement) { return address.plus(displacement); }
         @Fallback public static ManagedAddress invalid(Object address, Object displacement) {

@@ -13,6 +13,23 @@ data Cells = Cells (MVar# RealWorld Box) (MVar# RealWorld Box)
   (MVar# RealWorld Box) (MVar# RealWorld ThreadBox)
   (MutVar# RealWorld Box)
 
+-- yield# consumes and returns exactly State#. The second root proves that
+-- yielding does not change an uninterruptible Haskell mask.
+{-# OPAQUE yieldProbe #-}
+yieldProbe :: Int# -> Int#
+yieldProbe token = runRW# (\s0 ->
+  case yield# s0 of { s1 ->
+  case getMaskingState# s1 of { (# _, mask #) -> token +# 37# +# mask } })
+
+{-# OPAQUE yieldMasked #-}
+yieldMasked :: Int# -> Int#
+yieldMasked token =
+  case maskUninterruptible# (\s0 ->
+    case yield# s0 of { s1 ->
+    case getMaskingState# s1 of { (# s2, mask #) ->
+      (# s2, Box (token +# 38# +# mask) #) } }) realWorld# of
+    (# _, Box answer #) -> answer
+
 -- All cells are fresh for each call. The worker and the caller receive the
 -- same lifted thunk, so an interruption must not replay its prefix.
 {-# OPAQUE makeShared #-}

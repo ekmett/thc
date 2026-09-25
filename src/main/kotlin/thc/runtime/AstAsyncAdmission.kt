@@ -59,6 +59,8 @@ internal object AstAsyncAdmission {
             val capturedRoute = when (name) {
                 "takeMVar#", "readMVar#" -> Route.TUPLE
                 "putMVar#" -> Route.OTHER
+                "yield#" -> if (declared.kind == CoreKind.VOID && declared.primReps == emptyList<String>())
+                    Route.OTHER else null
                 else -> null
             }
             // Unlifted operands pass through Evaluate. Their lexical carrier,

@@ -1707,6 +1707,17 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.endBlock()
                     }
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && fn[1] == "yield#") {
+                CoreYield.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operand = argument(args[0], scope, false)
+                ProvenExpression(Expression { e ->
+                    val b = e.builder
+                    b.beginBlock()
+                    b.beginYieldThread(); operand.emit(e); b.endYieldThread()
+                    if (enableAsync) emitAsyncPoll(e)
+                    b.emitLoadConstant(Unit)
+                    b.endBlock()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && fn[1] == "getCurrentCCS#") {
                 CoreCurrentCCS.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 argument(args[0], scope, true) // Compile/prove the lifted dummy, never enter it.

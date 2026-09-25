@@ -26,7 +26,8 @@ prepareThreadAsync root = do
       driver = "compiler/test-fixtures/ThreadAsyncNative.hs"
       lazySource = "compiler/test-fixtures/LazyForkAudit.hs"
       lazyDriver = "compiler/test-fixtures/LazyForkNative.hs"
-      entries = ["forkAndThrow", "killUncaught", "selfThrow", "maskedUnmaskSelf"]
+      entries = ["forkAndThrow", "killUncaught", "selfThrow", "maskedUnmaskSelf",
+        "yieldProbe", "yieldMasked"]
       stages = ["pre", "post"]
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
@@ -77,6 +78,10 @@ prepareThreadAsync root = do
     ["extras", "+RTS", "-N2", "-RTS"] ""
   unless (extras == "5\n-1\n-1\n") (die "Public thread uncaught/self delivery oracle disagreed")
   writeFile (output </> "extra-oracle.txt") extras
+  yielded <- runWithTimeout (Just (30 * 1000000)) root [] (native </> "oracle")
+    ["yield", "+RTS", "-N2", "-RTS"] ""
+  unless (yielded == "37\n39\n") (die "Public thread yield# State/mask oracle disagreed")
+  writeFile (output </> "yield-oracle.txt") yielded
   _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-threaded", "-dcore-lint", "-dstg-lint",
     "-i" ++ root </> "compiler/test-fixtures", "-odir", native, "-hidir", native,
     root </> lazyDriver, "-o", native </> "lazy-oracle"] ""
@@ -92,7 +97,8 @@ prepareThreadAsync root = do
         "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
         ["compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
         ["scripts" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
-      artifacts = [directory </> "oracle.txt", directory </> "extra-oracle.txt", directory </> "lazy-oracle.txt"] ++
+      artifacts = [directory </> "oracle.txt", directory </> "extra-oracle.txt",
+        directory </> "yield-oracle.txt", directory </> "lazy-oracle.txt"] ++
         [directory </> stage </> suffix | stage <- stages,
           suffix <- ["core/ThreadAsyncAudit.json", "core/LazyForkAudit.json", "lazyFork-audit.json"] ++
                     [entry ++ "-audit.json" | entry <- entries]]
@@ -101,6 +107,7 @@ prepareThreadAsync root = do
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
     "entry" .= ("forkAndThrow" :: String), "entries" .= entries, "stages" .= stages,
     "native" .= ([43, 44] :: [Int]), "extraNative" .= ([5, -1, -1] :: [Int]),
+    "yieldNative" .= ([37, 39] :: [Int]),
     "lazyNative" .= ([52, 53] :: [Int]),
     "inputHashes" .= sourceHashes,
     "artifactHashes" .= artifactHashes, "installedArtifactsHashed" .= False]
@@ -123,6 +130,8 @@ supportedThreadContract entry (Object report) = hasPublicThreadPrimitives && cas
               "maskedUnmaskSelf" -> ["myThreadId#", "killThread#", "catch#",
                 "maskUninterruptible#", "unmaskAsyncExceptions#", "getMaskingState#"]
               "lazyFork" -> ["fork#", "killThread#"]
+              "yieldProbe" -> ["yield#", "getMaskingState#"]
+              "yieldMasked" -> ["yield#", "maskUninterruptible#", "getMaskingState#"]
               _ -> []
         in not (null required) && all ((`elem` names) . Just . String) required &&
            Just "noDuplicate#" `notElem` names

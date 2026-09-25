@@ -176,6 +176,39 @@ internal class NoDuplicate(@field:Child private var state: Expr, proof: CoreRepr
     }
 }
 
+/** yield# validates its State# before scheduling, then checks only a resumable guest cut. */
+internal object CoreYield {
+    fun validate(arguments: List<CoreRepresentation>, flags: List<*>, result: CoreRepresentation) {
+        fun state(proof: CoreRepresentation) = !proof.isAggregate && !proof.isVector &&
+            proof.kind == CoreKind.VOID && proof.primReps == emptyList<String>()
+        if (arguments.size != 1 || !state(arguments[0]) || flags != listOf(false) || !state(result))
+            throw RuntimeFault("yield#: exact State# input and result required")
+    }
+
+    @JvmStatic @TruffleBoundary fun giveWay() { Thread.yield() }
+}
+
+internal class YieldThread(@field:Child private var state: Expr, private val async: Boolean,
+    proof: CoreRepresentation) : Expr() {
+    init { representation = proof.copy(evaluated = true) }
+
+    private object Resume : AstResumeStep {
+        override fun resume(frame: VirtualFrame, input: Any?): Any {
+            if (input !== Unit) fault("Invalid yield# continuation")
+            return Unit
+        }
+    }
+
+    override fun execute(frame: VirtualFrame): Any {
+        requireVoidCarrier(state.execute(frame))
+        CoreYield.giveWay()
+        if (async) GuestThreads.pollCurrent(this, false)?.let { request ->
+            throw AstCapture(request, SynchronousMasking.current(this)).append(Resume)
+        }
+        return Unit
+    }
+}
+
 /**
  * GHC 9.14.1 rts/Exception.cmm: stg_raisezh passes its exception closure unchanged
  * to the handler; it does not enter that closure. In particular, a handler that
