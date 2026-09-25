@@ -275,10 +275,10 @@
       ]
     },
     "interface-core": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest"],
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.ManagedImportStubsNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "interface-core"]}],
       "outputs": ["build/interface-core"],
-      "sources": ["test/haskell-fixtures/InterfaceFixtures.hs", "test/haskell-fixtures/InterfaceForeignFacts.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "compiler/test-fixtures/InterfaceLibrary.hs", "compiler/test-fixtures/InterfaceNative.hs", "compiler/test-fixtures/InterfaceForeign.hs", "compiler/test-fixtures/InterfaceForeignAlias.hs", "compiler/test-fixtures/CBVCoercionAudit.hs", "compiler/interface/Main.hs", "compiler/THC/Interface.hs", "compiler/target-layout.c", "src/THC/Driver/Installed.hs", "src/THC/Driver/Project.hs", "src/THC/Driver/Wired.hs", "src/THC/Driver/Zip.hs", "thc.cabal"]
+      "sources": ["test/haskell-fixtures/InterfaceFixtures.hs", "test/haskell-fixtures/InterfaceForeignFacts.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "compiler/test-fixtures/InterfaceLibrary.hs", "compiler/test-fixtures/InterfaceNative.hs", "compiler/test-fixtures/InterfaceForeign.hs", "compiler/test-fixtures/InterfaceForeignAlias.hs", "compiler/test-fixtures/ForeignImportStubs.hs", "compiler/test-fixtures/ImportStubsNative.hs", "compiler/THC/ForeignImportProvenance.hs", "compiler/test-fixtures/CBVCoercionAudit.hs", "compiler/interface/Main.hs", "compiler/THC/Interface.hs", "compiler/target-layout.c", "src/THC/Driver/Installed.hs", "src/THC/Driver/Project.hs", "src/THC/Driver/Wired.hs", "src/THC/Driver/Zip.hs", "thc.cabal"]
     },
     "fused-floating": {
       "junit": ["thc.runtime.FusedFloatingTest"],

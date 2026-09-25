@@ -492,6 +492,7 @@ class FixturePreparationTest(unittest.TestCase):
         manifest, owners = fast_fixtures._manifest(project)
         group = manifest['groups']['interface-core']
         self.assertEqual('interface-core', owners['thc.runtime.InterfaceCoreNativeTest'])
+        self.assertEqual('interface-core', owners['thc.ManagedImportStubsNativeTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
                                    'interface-core']}], group['commands'])
         self.assertEqual(['build/interface-core'], group['outputs'])
@@ -515,7 +516,10 @@ class FixturePreparationTest(unittest.TestCase):
                      'InterfaceForeign.json', 'foreign-packages.json',
                      'foreign-association.json', 'installed-bound-facts.json',
                      'foreign-alias/a.json', 'foreign-alias/b.json',
-                     'source/InterfaceForeignAlias.hs.saved'):
+                     'source/InterfaceForeignAlias.hs.saved', 'import-stubs/plain.json', 'import-stubs/extra-file.json',
+                     'import-stubs/wrapper.json', 'import-stubs/instrumented.json',
+                     'source/ForeignImportStubs.hs.saved', 'import-stubs/plain/ForeignImportStubs.hi',
+                     'logs/import-stubs-native-oracle.stdout'):
             self.assertIn('build/interface-core/' + name, fast_fixtures.FULL_REQUIRED)
         self.assertIn('"interface-core/**/*.json"', (project / 'build.gradle.kts').read_text())
 

@@ -72,9 +72,14 @@ class Audit:
                     self.issue('module-format', None, source, str(error))
             if retained:
                 self.retained_exports.extend(retained)
+            managed_imports = False
+            try:
+                managed_imports = core_package_manifest.managed_import_stubs(module)
+            except (ValueError, KeyError, TypeError) as error:
+                self.issue('module-format', None, source, str(error))
             linked = (type(module.get('schema')) is int and module['schema'] == 2 and
                       'foreignLink' in module and core_package_manifest.linked_foreign(module))
-            archive = core_package_manifest.foreign_execution_issue(module) if not linked and not retained else None
+            archive = core_package_manifest.foreign_execution_issue(module) if not linked and not retained and not managed_imports else None
             if archive:
                 try:
                     core_package_manifest.validate_archive_only_foreign(module)
@@ -87,9 +92,9 @@ class Audit:
                         self.issue('module-format', None, source, 'Duplicate linked CAPI symbol ' + symbol)
                     self.linked_foreign[key] = module['foreignLink']
             if (type(module.get('schema')) is not int or
-                    (module['schema'] != 1 and not linked and not archive and not retained) or
+                    (module['schema'] != 1 and not linked and not archive and not retained and not managed_imports) or
                     module.get('ghc') != '9.14.1' or
-                    ('foreign' in module and not linked and not archive and not retained) or (registration and not retained)):
+                    ('foreign' in module and not linked and not archive and not retained and not managed_imports) or (registration and not retained)):
                 self.issue('module-format', None, source,
                            archive or
                            'Requires executable Core schema 1 / GHC 9.14.1 without foreign artifacts')
