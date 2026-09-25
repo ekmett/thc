@@ -12,6 +12,14 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
     override fun execute(frame: VirtualFrame): Nothing = fault("Original stdio call requires a State/result tuple destination")
 
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        if (operation == OriginalStdioOp.SIGPROCMASK) {
+            val how = operands[0].executeRequiredLong(frame)
+            val set = operands[1].executeRequiredAddress(frame)
+            val oldset = operands[2].executeRequiredAddress(frame)
+            requireVoidCarrier(operands[3].execute(frame))
+            FrameAccess.writeLong(frame, slots[offset], ManagedSignalMask.execute(this, how, set, oldset))
+            return null
+        }
         if (operation.sigset) {
             val address = operands[0].executeRequiredAddress(frame)
             val signal = if (operation == OriginalStdioOp.SIGADDSET) operands[1].executeRequiredLong(frame) else 0L

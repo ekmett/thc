@@ -374,6 +374,7 @@ jobs:
             build/original-termios/
             build/original-tcsetattr/
             build/original-tcgetattr/
+            build/original-sigprocmask/
             build/original-sigset/
             build/native-addresses/manifest.json
             build/native-addresses/oracle.json

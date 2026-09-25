@@ -68,6 +68,8 @@ OPERATIONS = {
     'free': ('ccall', 'unsafe', ('AddrRep', None), (None,)),
     TCSETATTR_SYMBOL:
         ('capi', 'unsafe', ('Int32Rep', 'Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),
+    'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask':
+        ('capi', 'unsafe', ('Int32Rep', 'AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
     TCGETATTR_SYMBOL:
         ('capi', 'unsafe', ('Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),
     **{symbol: ('capi', 'unsafe', arguments, output)

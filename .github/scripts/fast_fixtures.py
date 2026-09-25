@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "b23ee9ff897d0d6fd52554329c01b5b108ea83ad7e37d33bfd43e34185177dc1"
+FULL_PREPARATION_PLAN = "ed98f44f85c3a18a5226a07623be15a1e5d4d1b27fb29b3db87584acf3ddcd84"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -156,6 +156,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     *(fast_inputs.ORIGINAL_TERMIOS_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-termios/manifest.json"}),
     *(fast_inputs.ORIGINAL_TCSETATTR_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-tcsetattr/manifest.json"}),
     *(fast_inputs.ORIGINAL_TCGETATTR_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-tcgetattr/manifest.json"}),
+    *(fast_inputs.ORIGINAL_SIGPROCMASK_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-sigprocmask/manifest.json"}),
     *(fast_inputs.ORIGINAL_SIGSET_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-sigset/manifest.json"}),
     "build/original-handle-readiness/manifest.json",
     "build/small-arrays/manifest.json",
@@ -298,6 +299,10 @@ def _output_hashes(root, group):
     if group["outputs"] == ["build/original-tcgetattr"]:
         name = "build/original-tcgetattr/manifest.json"
         expected = fast_inputs.tcgetattr_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
+    if group["outputs"] == ["build/original-sigprocmask"]:
+        name = "build/original-sigprocmask/manifest.json"
+        expected = fast_inputs.sigprocmask_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
         return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/original-sigset"]:
         name = "build/original-sigset/manifest.json"

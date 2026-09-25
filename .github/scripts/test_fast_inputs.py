@@ -91,6 +91,41 @@ class FastInputTests(unittest.TestCase):
                 if member.name != 'files/' + binary])
             self.rejected_without_writes(changed)
 
+    def test_sigprocmask_exact_native_image_fixture_inventory(self):
+        self.assertEqual(33, len(cache.ORIGINAL_SIGPROCMASK_OUTPUTS))
+        self.assertIn('build/original-sigprocmask/manifest.json', DECLARED_REQUIRED)
+        for name in cache.ORIGINAL_SIGPROCMASK_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(name, {}), name)
+            if name == 'build/original-sigprocmask/native/oracle':
+                self.assertEqual(0o755, cache.safe_mode(0o755, name))
+            else:
+                with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, name)
+        for suffix in ('native/other', 'logs/extra.stdout', 'pre/unknown.audit.json',
+                       'attempt-0/oracle.json', 'pre/core/Other.json', 'native/OriginalSigprocmaskNative.o'):
+            self.assertFalse(cache.allowed_payload('build/original-sigprocmask/' + suffix, {}), suffix)
+        for suffix in ('../outside', 'logs/../../outside'):
+            with self.assertRaises(cache.CacheMiss): cache.file_path(self.root, 'build/original-sigprocmask/' + suffix)
+        name = 'build/original-sigprocmask/manifest.json'
+        artifacts = cache.ORIGINAL_SIGPROCMASK_OUTPUTS - {name}
+        binary = 'build/original-sigprocmask/native/oracle'
+        for path in artifacts:
+            self.put(path, b'{}\n' if path.endswith('.json') else b'\x00\x80\xff\n')
+        (self.root / binary).chmod(0o755)
+        original = json.dumps(dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
+            installedArtifactsHashed=False, nativeRows=8, entries=['originalSigprocmask'],
+            inputHashes=self.manifest['inputHashes'],
+            artifactHashes={path: cache.digest(self.root / path) for path in artifacts}))
+        self.put(name, original)
+        with patch.object(cache, 'GMP_NATIVE_HOST', True), patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
+            packed = self.pack(); self.remove_payload(packed)
+            cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(original, (self.root / name).read_text())
+            self.assertEqual(0o755, (self.root / binary).stat().st_mode & 0o7777)
+            self.remove_payload(packed)
+            changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                if member.name != 'files/' + binary])
+            self.rejected_without_writes(changed)
+
     def test_sigset_exact_native_image_fixture_inventory(self):
         self.assertEqual(41, len(cache.ORIGINAL_SIGSET_OUTPUTS))
         self.assertIn('build/original-sigset/manifest.json', DECLARED_REQUIRED)
