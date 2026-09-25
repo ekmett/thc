@@ -9,6 +9,7 @@ import Data.Aeson (Value(..), Result(..), fromJSON, toJSON, object, (.=), decode
 import Data.Aeson.Key (Key)
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Char8 as BS
+import Data.Char (isHexDigit)
 import Data.List (isInfixOf, sort)
 import Data.Foldable (toList)
 import Data.Maybe (isNothing)
@@ -25,7 +26,7 @@ import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist,
                          listDirectory, renameFile, withCurrentDirectory)
 import System.Environment (lookupEnv)
 import System.Exit (die)
-import System.FilePath ((</>), takeExtension)
+import System.FilePath ((</>), makeRelative, splitDirectories, takeExtension)
 import THC.Interface
 import qualified THC.Driver.Installed as Installed
 import qualified THC.Driver.Project as Project
@@ -238,6 +239,14 @@ checkDriver root directory ghc ghcPkg helper baseUnit = do
   Installed.validateReexports [unit]
   first <- loaded =<< acquire full unit
   let artifact = Project.installedBundle first
+      location = splitDirectories (makeRelative cache (Project.bundlePath artifact))
+  case location of
+    ["core-bundles", "v1", partition, exportKey, archive] ->
+      check (partition == "ghc-9.14.1-fixture-native-fixture" &&
+             length exportKey == 64 && all isHexDigit exportKey &&
+             archive == unitName ++ ".zip")
+        "Installed Core cache lost the compiler partition or registered package-cache ID"
+    _ -> die "Installed Core bundle has an unexpected cache path"
   before <- BS.readFile (Project.bundlePath artifact)
   second <- loaded =<< acquire full unit
   check (Project.installedOwner first == unitName &&
