@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 379 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 803 | No declared lowering. |
+| Partial | 392 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 790 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -467,6 +467,19 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexWord8OffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `indexWordArray#` — arity 2 — Managed byte storage
 - [ ] `indexWordOffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
+- [ ] `insertDoubleX4#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `insertDoubleX8#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `insertFloatX16#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `insertFloatX8#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `insertInt32X16#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `insertInt32X8#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `insertInt64X4#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `insertInt64X8#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `insertWord32X16#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `insertWord32X8#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `insertWord64X2#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `insertWord64X4#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `insertWord64X8#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `isEmptyMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `keepAlive#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `killThread#` — arity 3 — Specialized lowering; see capability and coverage limits
@@ -989,32 +1002,19 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexWord8X64Array#` — arity 2
 - [ ] `indexWord8X64OffAddr#` — arity 2
 - [ ] `insertDoubleX2#` — arity 3
-- [ ] `insertDoubleX4#` — arity 3
-- [ ] `insertDoubleX8#` — arity 3
-- [ ] `insertFloatX16#` — arity 3
 - [ ] `insertFloatX4#` — arity 3
-- [ ] `insertFloatX8#` — arity 3
 - [ ] `insertInt16X16#` — arity 3
 - [ ] `insertInt16X32#` — arity 3
 - [ ] `insertInt16X8#` — arity 3
-- [ ] `insertInt32X16#` — arity 3
 - [ ] `insertInt32X4#` — arity 3
-- [ ] `insertInt32X8#` — arity 3
 - [ ] `insertInt64X2#` — arity 3
-- [ ] `insertInt64X4#` — arity 3
-- [ ] `insertInt64X8#` — arity 3
 - [ ] `insertInt8X16#` — arity 3
 - [ ] `insertInt8X32#` — arity 3
 - [ ] `insertInt8X64#` — arity 3
 - [ ] `insertWord16X16#` — arity 3
 - [ ] `insertWord16X32#` — arity 3
 - [ ] `insertWord16X8#` — arity 3
-- [ ] `insertWord32X16#` — arity 3
 - [ ] `insertWord32X4#` — arity 3
-- [ ] `insertWord32X8#` — arity 3
-- [ ] `insertWord64X2#` — arity 3
-- [ ] `insertWord64X4#` — arity 3
-- [ ] `insertWord64X8#` — arity 3
 - [ ] `insertWord8X16#` — arity 3
 - [ ] `insertWord8X32#` — arity 3
 - [ ] `insertWord8X64#` — arity 3

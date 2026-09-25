@@ -43,16 +43,29 @@ def inputs(generator):
             one, two, sign = ((0x3f800000, 0x40000000, 1 << 31) if rep == 'FloatRep'
                              else (0x3ff0000000000000, 0x4000000000000000, 1 << 63))
             pairs = ((one, two), (one | sign, two), (sign, one))
+            if operation == 'insert':
+                nan = (0x7fc01234 if rep == 'FloatRep' else 0x7ff8000000001234)
+                pairs = ((one, two), (one, sign), (sign, one), (one, one | sign),
+                         (one, nan), (nan, one), (1, 3))
         else:
             width = family['bits'] // family['lanes']
             pairs = ((7, -3), (-1, 2), ((1 << (width - 1)) - 1, 2),
                      (-(1 << (width - 1)), -1), ((1 << width) - 1, 1))
+            if operation == 'insert':
+                pairs = ((7, -3), (-1, 2), (7, (1 << (width - 1)) - 1),
+                         (7, -(1 << (width - 1))), (7, (1 << width) - 1))
+        if operation == 'insert':
+            for inserted in range(family['lanes']):
+                for lane in range(family['lanes']):
+                    for left, right in pairs if inserted == lane else pairs[:1]:
+                        yield owners[index], index * 256 + inserted * 16 + lane, signed(left - lane * 104729), signed(right)
+            continue
         # Every lane is observed once; first/last lanes also get wrap and sign edges.
         for lane in range(family['lanes']):
             for left, right in pairs if lane in (0, family['lanes'] - 1) else pairs[:1]:
                 a = signed(left if operation == 'broadcast' else left - lane * 104729)
                 b = signed(right + lane * 7919)
-                yield owners[index], index * 16 + lane, a, b
+                yield owners[index], index * 256 + lane, a, b
 
 
 def main():

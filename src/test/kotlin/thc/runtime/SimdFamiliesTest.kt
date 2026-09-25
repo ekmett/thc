@@ -73,7 +73,7 @@ class SimdFamiliesTest {
     }
 
     @Test fun exactLaneSignWidthLogicalTupleAndCallingProofsRemainRequired() {
-        assertEquals(95, GeneratedVectors.operations.size)
+        assertEquals(108, GeneratedVectors.operations.size)
         for ((name, tuple, vector) in listOf(
             Triple("Word64X2", GeneratedVectors.unpackedWord64X2, GeneratedVectors.proofWord64X2),
             Triple("Word32X8", GeneratedVectors.unpackedWord32X8, GeneratedVectors.proofWord32X8),
@@ -91,6 +91,15 @@ class SimdFamiliesTest {
             CoreVectors.validate("pack$name#", listOf(tuple), vector)
             CoreVectors.validate("times$name#", listOf(vector, vector), vector)
             CoreVectors.validate("unpack$name#", listOf(vector), tuple)
+            val lane = tuple.components!!.first()
+            val index = CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep"))
+            CoreVectors.validate("insert$name#", listOf(vector, lane, index), vector)
+            assertThrows(RuntimeFault::class.java) {
+                CoreVectors.validate("insert$name#", listOf(vector, lane, index.copy(primReps = listOf("WordRep"))), vector)
+            }
+            assertThrows(RuntimeFault::class.java) {
+                CoreVectors.validate("insert$name#", listOf(vector, lane.copy(primReps = listOf("IntRep")), index), vector)
+            }
             for (index in tuple.components!!.indices) {
                 val wrong = tuple.copy(components = tuple.components.mapIndexed { i, proof ->
                     if (i == index) proof.copy(primReps = listOf("WordRep")) else proof })
@@ -107,6 +116,13 @@ class SimdFamiliesTest {
         }
         for (flags in listOf(listOf(true), listOf(null), listOf(0L))) assertThrows(RuntimeFault::class.java) {
             CoreVectors.validateFlags(flags)
+        }
+    }
+
+    @Test fun insertRejectsInvalidMachineIndicesBeforeAnyNarrowing() {
+        val original = Word64X2(1L, 2L)
+        for (index in listOf(-1L, 2L, Long.MIN_VALUE, Long.MAX_VALUE, 0x1_0000_0000L)) {
+            assertThrows(RuntimeFault::class.java) { Word64X2.insert(original, -1L, index) }
         }
     }
 
