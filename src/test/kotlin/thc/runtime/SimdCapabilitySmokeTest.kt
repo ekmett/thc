@@ -51,7 +51,7 @@ class SimdCapabilitySmokeTest {
     @Test fun finiteLocalVectorsCompileOnAstAndBytecode() {
         val manifest = Json.parse(File(directory, "manifest.json").readText()) as Map<String, Any?>
         assertEquals("9.14.1", manifest["ghcVersion"])
-        assertEquals(4886L, (manifest["rows"] as Number).toLong())
+        assertEquals(4962L, (manifest["rows"] as Number).toLong())
         assertTrue(manifest["nativeOracle"] in listOf("scalar", "scalar-and-vector"))
         for (item in (manifest["inputs"] as List<Map<String, String>>) +
                 (manifest["artifacts"] as List<Map<String, String>>)) {
