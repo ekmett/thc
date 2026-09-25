@@ -3,6 +3,7 @@
 
 package thc.runtime
 
+import com.oracle.truffle.api.nodes.Node
 import org.graalvm.polyglot.Context
 import org.graalvm.polyglot.io.FileSystem
 import org.graalvm.polyglot.io.IOAccess
@@ -15,6 +16,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.nio.channels.SeekableByteChannel
 import java.nio.file.Files
+import java.nio.file.InvalidPathException
 import java.nio.file.OpenOption
 import java.nio.file.Path
 import java.nio.file.attribute.FileAttribute
@@ -35,6 +37,68 @@ class ManagedDescriptorDupTest {
         context.initialize("thc"); context.enter()
         return try { action(Language.currentState()) } finally { context.leave() }
     }
+
+    private fun replacementFlushFailure(error: Exception) {
+        val node = object : Node() {}
+        lateinit var threads: GuestThreads
+        var armed = false
+        var oldFlushes = 0
+        var replacementFlushes = 0
+        val old = object : ByteArrayOutputStream() {
+            override fun flush() {
+                oldFlushes++
+                if (armed) {
+                    assertNull(threads.poll(node), "Retirement callback must remain foreign execution")
+                    throw error
+                }
+            }
+        }
+        val replacement = object : ByteArrayOutputStream() {
+            override fun flush() { replacementFlushes++ }
+        }
+        builder().out(old).err(replacement).build().use { context -> entered(context) { state ->
+            threads = state.threads
+            val id = threads.enterCurrent()
+            try {
+                val files = state.files; val stdio = state.stdio
+                assertEquals(-1L, stdio.close(-1))
+                val errno = stdio.errno(); val kind = files.errorKind()
+                val pending = threads.send(id, "after retirement")
+                val oldBefore = oldFlushes; val replacementBefore = replacementFlushes
+                armed = true
+                try {
+                    if (error is IOException) assertEquals(1L, stdio.duplicateTo(2, 1))
+                    else assertSame(error, assertThrows(error.javaClass) { stdio.duplicateTo(2, 1) })
+                } finally { armed = false } // Polyglot may flush its embeddings at Context.close.
+                assertEquals(errno, stdio.errno()); assertEquals(kind, files.errorKind())
+                assertSame(pending, threads.poll(node), "Exceptional retirement restores guest delivery permission")
+                pending.acknowledge()
+                assertEquals(oldBefore + 1, oldFlushes)
+                assertEquals(0L, files.close(2))
+                assertEquals(2L, files.write(1, address(byteArrayOf(7, 8)), 2))
+                assertArrayEquals(byteArrayOf(7, 8), replacement.toByteArray())
+                assertEquals(0, old.size(), "The installed replacement survives the callback failure")
+                assertEquals(replacementBefore, replacementFlushes, "Closing one alias does not retire its owner")
+                assertEquals(0L, files.close(1))
+                assertEquals(replacementBefore + 1, replacementFlushes)
+                files.dispose()
+                assertEquals(oldBefore + 1, oldFlushes, "Failed retirement is never retried")
+                assertEquals(replacementBefore + 1, replacementFlushes, "Shared replacement retires exactly once")
+            } finally { armed = false; threads.leaveCurrent() }
+        } }
+    }
+
+    @Test fun replacementSecurityFailureEscapesWithoutErrnoConversion() =
+        replacementFlushFailure(SecurityException("flush denied"))
+
+    @Test fun replacementUnsupportedFailureEscapesWithoutErrnoConversion() =
+        replacementFlushFailure(UnsupportedOperationException("flush unsupported"))
+
+    @Test fun replacementInvalidPathFailureEscapesWithoutErrnoConversion() =
+        replacementFlushFailure(InvalidPathException("provider", "flush path failure"))
+
+    @Test fun replacementCheckedFlushFailureRemainsSilent() =
+        replacementFlushFailure(IOException("checked flush failure"))
 
     @Test fun aliasesShareOffsetsAndClaimUntilTheLastIndependentClose() {
         val file = directory.resolve("shared"); Files.write(file, byteArrayOf(10, 20, 30, 40))

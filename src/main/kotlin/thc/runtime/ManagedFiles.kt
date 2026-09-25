@@ -309,22 +309,33 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
 
     /** Install atomically before retiring the replaced owner. A target close
      * IOException cannot undo replacement or change the successful result. */
-    @TruffleBoundary fun duplicateTo(fd: Long, target: Long): Long = result {
-        val retired = synchronized(this) {
-            val source = descriptors[fd] ?: fail(4, "Closed or unknown THC file descriptor: $fd")
-            if (target < 0 || target >= descriptorLimit) fail(4, "THC dup2 target is out of range: $target")
-            if (fd == target) return@result target
-            source.owner.references++
-            val old = descriptors.put(target, Descriptor(source.owner))
-            if (old != null) {
-                old.closed = true
-                if (--old.owner.references == 0L) old.owner else null
-            } else null
+    @TruffleBoundary fun duplicateTo(fd: Long, target: Long): Long {
+        var retired: OpenDescription? = null
+        val installed = result {
+            retired = synchronized(this) {
+                val source = descriptors[fd] ?: fail(4, "Closed or unknown THC file descriptor: $fd")
+                if (target < 0 || target >= descriptorLimit) fail(4, "THC dup2 target is out of range: $target")
+                if (fd == target) return@result target
+                source.owner.references++
+                val old = descriptors.put(target, Descriptor(source.owner))
+                if (old != null) {
+                    old.closed = true
+                    if (--old.owner.references == 0L) old.owner else null
+                } else null
+            }
+            target
         }
-        if (retired != null) try { retire(retired) } catch (_: IOException) {
-            // Like native dup2, target-close failures are deliberately unobservable.
+        val owner = retired
+        if (owner != null) {
+            // The replacement is committed. An unchecked provider failure must
+            // escape, not become -1/errno implying an unchanged target. Keep the
+            // opaque callback foreign, outside result's exception conversion.
+            val previous = threads.enterForeign()
+            try { retire(owner) } catch (_: IOException) {
+                // Like native dup2, target-close IO failures are unobservable.
+            } finally { threads.leaveForeign(previous) }
         }
-        target
+        return installed
     }
 
     /** Absolute0/Relative1/End2, with checked signed offsets. */
