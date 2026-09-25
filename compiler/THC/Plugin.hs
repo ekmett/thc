@@ -1078,6 +1078,16 @@ exportInterfaceClosure hsc opts dir rootCtx roots = do
       originCtx v = case nameModule_maybe (varName v) of
         Nothing -> rootCtx
         Just m -> rootCtx { modulePrefix = unitString (moduleUnit m) ++ ":" ++ moduleNameString (moduleName m) }
+      -- The RTS raises this original closure for both descriptor waits, even
+      -- though it is absent from the primop's explicit Core operands.
+      waitPayloadId = do
+        name <- initIfaceCheck (text "THC implicit descriptor-wait exception") hsc $
+          lookupOrig (mkModule ghcInternalUnit (mkModuleName "GHC.Internal.Event.Thread"))
+            (mkVarOcc "blockedOnBadFD")
+        thing <- lookupGlobal hsc name
+        case thing of
+          AnId v -> pure v
+          _ -> error "THC implicit descriptor-wait exception is not an Id"
       -- Exception.cmm supplies these closures implicitly. Resolve their real
       -- installed Ids/unfoldings in the current GHC session so the normal
       -- dependency walk retains the SomeException dictionary and Typeable data.
@@ -1095,6 +1105,10 @@ exportInterfaceClosure hsc opts dir rootCtx roots = do
       walk seen (v:todo) found missing
         | v `elemVarSet` seen = walk seen todo found missing
         | Just op <- isPrimOpId_maybe v
+        , occNameString (primOpOcc op) `elem` ["waitRead#", "waitWrite#"] = do
+            payload <- waitPayloadId
+            walk seen' (payload : todo) found missing
+        | Just op <- isPrimOpId_maybe v
         , Just occurrence <- arithmeticException op = do
             payload <- exceptionId occurrence
             walk seen' (payload : todo) found missing
@@ -1108,7 +1122,8 @@ exportInterfaceClosure hsc opts dir rootCtx roots = do
         | otherwise = walk seen' todo found ((originCtx v,v):missing)
         where seen' = extendVarSet seen v
   (imports,missing) <- walk emptyVarSet roots [] []
-  let -- Interfaces do not retain complete source recursive-group boundaries.
+  let
+      -- Interfaces do not retain complete source recursive-group boundaries.
       -- Conservatively forbid speculation of every imported definition while
       -- exporting their RHSs; this preserves recursive dictionary guards.
       recIds = mkVarSet [v | (_,v,_,_) <- imports]

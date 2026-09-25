@@ -1130,6 +1130,17 @@ class Audit:
                         self.issue('aggregate-boundary', owner, path, 'arithmetic exception sum result')
                 if function[0] == 'prim':
                     self.scalar_primitive(function[1], arguments, proof, bound, owner, path)
+                    if function[1] in ('waitRead#', 'waitWrite#'):
+                        def exact(rep, kind, registers):
+                            return (isinstance(rep, dict) and rep.get('kind') == kind and
+                                    rep.get('primReps') == registers and 'aggregate' not in rep and
+                                    'vector' not in rep)
+                        actual = [self.expression_rep(arg) for arg in arguments]
+                        if (len(actual) != 2 or flags != [False, False] or
+                                not exact(actual[0], 'long', ['IntRep']) or
+                                not exact(actual[1], 'void', []) or not exact(proof, 'void', [])):
+                            self.issue('primitive-representation', owner, path,
+                                       function[1] + ': expected Int#, State# -> State#')
                 tuple_primitive = self.cap.get('tuplePrimitives', {}).get(function[1]) if function[0] == 'prim' else None
                 if tuple_primitive is not None:
                     expected_args = [('scalar', (rep,)) for rep in tuple_primitive['arguments']]
@@ -1759,6 +1770,8 @@ class Audit:
                 self.constructor(expr[1], owner, path, True, expr[2], tuple_result or self.expression_rep(expr))
             elif tag == 'prim':
                 name = expr[1]
+                if name in ('waitRead#', 'waitWrite#'):
+                    self.reference('ghc-internal:GHC.Internal.Event.Thread.blockedOnBadFD', owner, path + '/badFD')
                 self.primitives.setdefault(name, []).append(dict(self.location(owner, path), arity=primitive_arity))
                 if name in ARITHMETIC_EXCEPTIONS:
                     self.reference(ARITHMETIC_EXCEPTIONS[name], owner, path + '/implicit-exception')

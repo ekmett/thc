@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 467 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 715 | No declared lowering. |
+| Partial | 469 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 713 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -39,6 +39,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 
 ## Current aggregate and address limits
 
+- waitRead#/waitWrite# admit exact Int# and State# contracts for live context-owned native descriptors. A logical wait token retains its original descriptor identity across async suspension and rejects close or number reuse. Bad descriptors raise the original lazy ghc-internal blockedOnBadFD payload; arbitrary host streams and nonnative readiness providers have no general readiness guarantee.
 - Arithmetic exception primops require an exact empty unboxed tuple and retain the original ghc-internal SomeException CAF as an implicit dependency. Scalar and concrete tuple bottom results reuse guest raise semantics; vector and sum results remain rejected.
 - Original Stack.Decode getters consume only context-owned immutable managed snapshots: a nonempty, zero-slack sequence of one-word, zero-payload RET_SMALL frames with authentic detached guest provenance. getWordzh reads the real owned native bits of each header's info-table key and requires native access. Payload, RET_BIG, BCO, RET_FUN and UNDERFLOW getters reject incompatible frame kinds, bad offsets and foreign/expired snapshots; none of those frame kinds can be produced by this snapshot constructor. Descriptor admission permits the unchanged decoder over this closed managed domain, not native RTS stack memory or resumable continuations.
 - addr2Int#/int2Addr# preserve real machine address bits. Null and arbitrary integer bit patterns roundtrip; unowned numeric addresses cannot be dereferenced or passed to native code. Immutable literals and pointer-free immutable images acquire one owned native allocation per backing in the current native-enabled context; live registered ranges recover their original managed aliases. Integer values do not root allocations. Mutable managed storage and opaque StablePtr numeric projection remain unsupported; no JVM identity hashes or borrowed scratch pointers are exposed.
@@ -790,6 +791,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `unsafeFreezeSmallArray#` — arity 2 — Managed lifted arrays
 - [ ] `unsafeThawArray#` — arity 2 — Managed lifted arrays
 - [ ] `unsafeThawSmallArray#` — arity 2 — Managed lifted arrays
+- [ ] `waitRead#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `waitWrite#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `writeAddrArray#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeAddrOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeArray#` — arity 4 — Managed lifted arrays
@@ -1417,8 +1420,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `unpackWord8X32#` — arity 1
 - [ ] `unpackWord8X64#` — arity 1
 - [ ] `unsafeThawByteArray#` — arity 2
-- [ ] `waitRead#` — arity 2
-- [ ] `waitWrite#` — arity 2
 - [ ] `whereFrom#` — arity 3
 - [ ] `writeDoubleArrayAsDoubleX4#` — arity 4
 - [ ] `writeDoubleArrayAsDoubleX8#` — arity 4

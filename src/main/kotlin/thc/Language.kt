@@ -183,6 +183,11 @@ object CoreModules {
         fun visit(expr: List<Any?>, bound: Set<String>) {
             when (expr[0]) {
                 "var" -> reference(expr[1] as String, bound)
+                "prim" -> {
+                    val name = expr[1] as String
+                    if (thc.runtime.CoreFileWait.named(name)) reference(thc.runtime.CoreFileWait.badFd, emptySet())
+                    CoreArithmeticExceptions.payload(name)?.let { reference(it, emptySet()) }
+                }
                 "lam" -> {
                     val ids = (expr[1] as List<Map<String, Any?>>).map { it["id"] as String }
                     visit(expr[2] as List<Any?>, bound + ids)
@@ -214,7 +219,6 @@ object CoreModules {
                         visit(alt[3] as List<Any?>, bound + (expr[2] as String) + (alt[2] as List<String>))
                     }
                 }
-                "prim" -> CoreArithmeticExceptions.payload(expr[1] as String)?.let { reference(it, emptySet()) }
                 "con" -> constructor(expr[1] as String)
             }
         }
