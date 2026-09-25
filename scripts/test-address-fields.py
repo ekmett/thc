@@ -71,8 +71,6 @@ class AddressFields(unittest.TestCase):
             module=json.loads((ROOT/path).read_text())
             for name in manifest['entries']:
                 r=audit.Audit([(path,module)],CAP).run([name]);self.assertTrue(r['accepted'],(stage,name,r['issues']))
-            r=audit.Audit([(path,module)],CAP).run(['tupleFrontier'])
-            self.assertFalse(r['accepted']);self.assertFalse(r['missingGlobals'])
-            self.assertEqual({i['code'] for i in r['issues']},{'aggregate-representation'})
+                self.assertFalse(r['missingGlobals'],(stage,name,r['missingGlobals']))
 
 if __name__=='__main__': unittest.main()

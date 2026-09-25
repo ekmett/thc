@@ -48,7 +48,11 @@ class ModelTest(unittest.TestCase):
         hashes = {item['path']: item['sha256'] for item in provenance['artifacts']}
         fixture_hash = next(item['sha256'] for item in provenance['sources']
                             if item['path'] == 'compiler/test-fixtures/SimdWord32X4ByteArray.hs')
-        self.assertEqual(hashlib.sha256(prepare.FIXTURE.read_bytes()).hexdigest(), fixture_hash)
+        # The retained capture predates the added SPDX notice; its source body is unchanged.
+        source = prepare.FIXTURE.read_bytes()
+        header = b'-- SPDX-FileCopyrightText: 2026 Edward Kmett\n-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause\n\n'
+        self.assertTrue(source.startswith(header))
+        self.assertEqual(hashlib.sha256(source[len(header):]).hexdigest(), fixture_hash)
         modules = []
         for stage in ('pre', 'post'):
             path = retained/f'{stage}-core.json.gz'

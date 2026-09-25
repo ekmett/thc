@@ -279,8 +279,10 @@ class ManagedMVarContracts(unittest.TestCase):
         module['bindings'][0]['expr'][1][0]['rep'] = leaf('unknown', 'IntRep')
         self.reject_primitive(module)
 
-    def test_no_guest_fork_async_delivery_or_full_handle_claim(self):
-        for name in ('fork#', 'forkOn#', 'killThread#', 'catchRetry#', 'atomically#'):
+    def test_supported_threads_do_not_claim_fork_on_or_stm(self):
+        self.assertEqual({name: CAP['primitives'][name] for name in ('fork#', 'myThreadId#', 'killThread#')},
+                         {'fork#': 2, 'myThreadId#': 1, 'killThread#': 3})
+        for name in ('forkOn#', 'catchRetry#', 'atomically#'):
             self.assertNotIn(name, CAP['primitives'])
 
 
