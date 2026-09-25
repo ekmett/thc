@@ -1,6 +1,6 @@
 # Local Word8X16 vectors
 
-The bounded contract is exactly six GHC 9.14.1 primitives:
+The original slice measured on this page covers six GHC 9.14.1 primitives:
 `packWord8X16#`, `unpackWord8X16#`, `broadcastWord8X16#`,
 `plusWord8X16#`, `minusWord8X16#`, and `timesWord8X16#`.
 GHC provides no `negateWord8X16#`. The exact vector representation is
@@ -11,8 +11,11 @@ the payload has the same number of bits.
 Pack takes **one logical sixteen-component unboxed tuple** and unpack returns
 that scalar-lane tuple. Arithmetic wraps modulo 256, including low-byte products
 and unsigned subtraction underflow. Widened lanes are 0..255: a high byte such
-as 255 must not become -1. Vectors remain local; vector formals, function results,
-captures, heap fields, and vector-containing tuple ABIs remain unsupported.
+as 255 must not become -1. These measurements keep vectors local. Current
+transport also supports exact vector arguments/results, PAP prefixes, joins,
+tuple fields, owned captures and boxed constructor fields; see the
+[current vector contract and limits](primops.md#current-aggregate-and-address-limits).
+The [checklist](primops.md) records later additions to the operation family.
 
 The runtime stores exactly sixteen final primitive `byte` fields in a distinct
 `Word8X16` carrier: 16 bytes of lane payload, not total object size. Transient

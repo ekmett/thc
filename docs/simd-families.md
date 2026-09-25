@@ -1,21 +1,25 @@
 # Generated SIMD families
 
-The repository capability table advertises these 47 generated **local** vector
-operations after native GHC validation in [PR #90](https://github.com/ekmett/thc/pull/90).
-It does not advertise a vector calling convention. Ordinary CI exports their
-real scalar-entry Core, strictly audits every operation against the canonical
-table, and runs a 48-row finite smoke on interpreted and explicitly compiled
-AST and bytecode paths. The large native/model corpus remains an explicit
-experiment rather than work repeated on every pull request.
+The initial generated-family checkpoint in
+[PR #90](https://github.com/ekmett/thc/pull/90) admitted 47 local vector operations
+and used a 48-row finite smoke on interpreted and compiled AST/bytecode paths.
+The counts and measurements below describe that checkpoint. Current operations
+and transport limits are recorded in the [capability contract](../scripts/core-capabilities.json)
+and [generated checklist](primops.md#current-aggregate-and-address-limits).
+The large native/model corpus remains an explicit experiment rather than work
+repeated on every pull request.
 
-The declarative table is `scripts/simd-families.json`. It currently describes
+The declarative table is `scripts/simd-families.json`. At that checkpoint it described
 local pack, unpack, broadcast and arithmetic for Word64X2, Word32X8, Int32X8 and Int32X16,
 plus Int64X2 multiplication, FloatX4/DoubleX2 negation and division, and
 FloatX8/DoubleX4 pack, unpack, broadcast, add, subtract, multiply, negate and divide. Existing
-carrier class names and memory operations remain unchanged. Vector arguments,
-returns, captures, heap fields and join boundaries remain unsupported.
+carrier class names and memory operations were unchanged. Current transport
+supports 24 exact `VecRep` shapes through arguments/results, PAP prefixes, joins,
+tuple fields, owned closure/thunk captures and boxed constructor fields.
+Recursive or lifted vector let bindings, sum fields and public host vector
+arguments/results remain outside that contract.
 
-The generator emits six concrete carriers with final primitive fields, typed
+The initial generator emitted six concrete carriers with final primitive fields, typed
 AST nodes and exact proof checks under `build/generated/simd`. Each arithmetic
 method uses a fixed Vector API species. Two marked regions in the existing
 bytecode loader/root contain concrete operation calls and specializations;
@@ -33,18 +37,19 @@ selected fixed signatures. It compares exact vector/lane PrimReps and logical
 tuple positions, rather than interpreting printed Haskell types. Unsupported
 runtime-polymorphic signatures are never passed to a partial placement API.
 
-Prepare the ordinary compact smoke without native code generation:
+Prepare the ordinary compact smoke with a native scalar oracle, without native
+vector code generation:
 
 ```sh
 python3 scripts/prepare-simd-capability-smoke.py
 ./gradlew --no-daemon test --tests thc.runtime.SimdCapabilitySmokeTest --rerun
 ```
 
-The preparer requires GHC 9.14.1, verifies its 47 machine signatures, and
-checks all 25 reachable scalar entries with the normal capability contract.
-The JVM test checks every new carrier through six representative entries,
-including each floating composite operation and first/last lane, without
-requiring native code generation or AVX512. It verifies the actual compiled
+At the initial checkpoint the preparer verified 47 GHC 9.14.1 machine signatures
+and 25 reachable scalar entries; the JVM test used six representative entries.
+The current preparer derives the operations and corpus from the declarative
+table and checks every composite against the canonical capability contract.
+Its native scalar oracle does not require AVX512. The JVM test verifies the actual compiled
 target graph and exact guest-entry counts; its finite rows do not replace the
 separate native edge corpus.
 
@@ -54,14 +59,15 @@ Prepare the larger scalar-entry experiment without native code generation:
 python3 scripts/prepare-simd-families.py --export-only
 ```
 
-This produces pre-Tidy Core and 84,162 independent model rows. Integer arithmetic uses mathematical modular
+The initial experiment produced pre-Tidy Core and 84,162 independent model rows. Integer arithmetic uses mathematical modular
 arithmetic. Floating arithmetic uses rational arithmetic with ties-to-even
 rounding for this fixed corpus; arithmetic NaNs are normalized. JVM behavior
 follows Java Vector API semantics, without a general GHC bit-equivalence claim
 for NaN payloads or platform-specific edge cases. Every selected lane is
-observed separately. One dynamic scalar selector per new floating shape keeps
-all six operations and every lane in the same compiled entry graph. OPAQUE
-workers provide real residual calls without a vector calling convention.
+observed separately. At that checkpoint, one dynamic scalar selector per new
+floating shape kept all six operations and every lane in the same compiled entry
+graph. OPAQUE workers provided real residual calls through scalar entries; those measurements
+do not establish the separate vector transport contract.
 
 A full native preparation omits `--export-only` on a suitable GHC9.14.1 x86 host.
 Target flags may be passed explicitly as `--ghc-option=...`; the manifest records

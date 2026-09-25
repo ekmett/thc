@@ -58,9 +58,11 @@ Double-mediated Float rounding, malformed ternary proofs and incomplete receipts
 Generic function call packets and root returns still use the existing Object
 ABI. Non-inlined floating calls can therefore allocate wrapper objects. The
 optional integer/reference handoff ABI does not cover floating values. The
-public embedding interface still accepts integer inputs; the fixtures enter
-through `Int# -> Int#` wrappers. This does not establish an unboxed scalar floating
-calling convention across residual calls.
+`loadEntry` integer-kernel interface used by these fixtures accepts integer
+inputs through `Int# -> Int#` wrappers. The separate
+[managed-export interface](site/embedding.md) accepts its declared scalar
+signatures, including Float and Double. These measurements do not establish an
+unboxed scalar floating calling convention across residual calls.
 
 Exact floating [unboxed tuple results](tuple-results.md) use primitive float/double
 fields and typed destination slots on both backends. Ordinary GHC CPR can turn a
@@ -68,8 +70,10 @@ boxed producer into such a worker; the original `floatingTupleFrontier` now runs
 as a positive native control. A separate suite executes public `Data.Complex`
 multiplication and `conjugate` through real floating CPR workers. The boxed-field
 control keeps its `OPAQUE` producer to preserve the boxed boundary under test.
-Aggregate arguments/captures, vector ABI expansion and unboxed sums remain
-unsupported. Floating literal case alternatives are invalid GHC Core and fail closed.
+Current tuple, vector and bounded sum transport is specified by the
+[capability contract and limits](primops.md#current-aggregate-and-address-limits);
+the measurements here establish only the stated floating slice. Floating literal
+case alternatives are invalid GHC Core and fail closed.
 
 `scripts/prepare-floating-audit.py` builds the native oracle, exports current
 GHC 9.14.1 Core, checks all 28 primops, verifies concrete worker results/arguments,

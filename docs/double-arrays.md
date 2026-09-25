@@ -64,5 +64,7 @@ enabled. Bounds and malformed proof controls never compare invalid native reads.
 General dynamic-index error closures, copying freeze/thaw and array updates
 using FFI `memcpy`, pinned/raw addresses, concurrent access, unsafe alias misuse,
 uninitialized reads and cross-endian exports remain outside this slice. It does
-not expand aggregate arguments or the public integer-only embedding interface,
-and makes no throughput or allocation-elimination claim.
+not expand aggregate transport or the `loadEntry` integer-kernel interface used
+by these fixtures, and makes no throughput or allocation-elimination claim.
+The separate [managed-export interface](site/embedding.md) supports its declared
+scalar signatures, including Float and Double.
