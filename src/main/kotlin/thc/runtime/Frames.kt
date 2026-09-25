@@ -256,6 +256,8 @@ class CaptureLayout private constructor(language: TruffleLanguage<*>, primitiveE
             else if (field.exactLong) field.initializeLong(environment, sourceSlots[offset].getLong(bytecode, frame))
             else if (field.exactFloat) field.initializeFloat(environment, sourceSlots[offset].getFloat(bytecode, frame))
             else if (field.exactDouble) field.initializeDouble(environment, sourceSlots[offset].getDouble(bytecode, frame))
+            // LocalAccessor.getObject is the generic value accessor: unlike
+            // Frame.getObject, it also boxes primitive locals for adaptive fields.
             else field.initialize(environment, sourceSlots[offset].getObject(bytecode, frame))
         }
         return environment
@@ -336,7 +338,8 @@ class CaptureLayout private constructor(language: TruffleLanguage<*>, primitiveE
         fun isLong(storage: CapturedFrame): Boolean = exactLong || primitiveEligible && hasPrimitive.getBoolean(storage)
         fun isObject(storage: CapturedFrame): Boolean = vector == null && !exactLong && !exactFloat && !exactDouble && (!primitiveEligible || !hasPrimitive.getBoolean(storage))
         fun kind(storage: CapturedFrame): FrameSlotKind =
-            if (exactFloat) FrameSlotKind.Float else if (exactDouble) FrameSlotKind.Double
+            if (vector != null) fault("Vector capture requires a typed destination")
+            else if (exactFloat) FrameSlotKind.Float else if (exactDouble) FrameSlotKind.Double
             else if (isObject(storage)) FrameSlotKind.Object else FrameSlotKind.Long
 
         fun read(storage: CapturedFrame): Any? =

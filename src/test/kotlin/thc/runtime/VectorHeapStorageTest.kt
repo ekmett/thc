@@ -4,6 +4,9 @@ package thc.runtime
 
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.bytecode.BytecodeConfig
+import com.oracle.truffle.api.bytecode.LocalAccessor
+import com.oracle.truffle.api.frame.FrameSlotKind
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.RootNode
 import org.graalvm.polyglot.Context
@@ -113,6 +116,10 @@ class VectorHeapStorageTest {
                 assertSame(thunk, constructor.read(value, 2)); assertEquals(0, thunk.state)
                 assertEquals(Long.MAX_VALUE, constructor.readLong(value, 1))
                 assertThrows(RuntimeFault::class.java) { captures.read(environment, 0) }
+                assertThrows(RuntimeFault::class.java) { captures.readLong(environment, 0) }
+                assertThrows(RuntimeFault::class.java) { captures.readFloat(environment, 0) }
+                assertThrows(RuntimeFault::class.java) { captures.readDouble(environment, 0) }
+                assertThrows(RuntimeFault::class.java) { captures.readObject(environment, 0) }
                 assertThrows(IllegalStateException::class.java) { captures.captureValues(arrayOf(null, 0L, cell)) }
                 assertThrows(RuntimeFault::class.java) { constructor.create(arrayOf(null, 0L, thunk)) }
                 assertThrows(RuntimeFault::class.java) { constructor.read(value, 0) }
@@ -134,6 +141,62 @@ class VectorHeapStorageTest {
                 }
                 assertEquals(0, language.handoffState.get().arguments.depth)
                 assertEquals(0, language.handoffState.get().results.depth)
+            }
+        }
+    }
+
+    @Test fun bytecodePrimitiveLocalsPreserveAdaptiveCapturesBesideOwnedVectorLanes() {
+        for (strategy in listOf("field-based", "array-based")) inLanguage(strategy) { language ->
+            for (proof in vectors()) {
+                val vector = VectorLayout(proof)
+                val lanes = vector.lanes
+                val expected = Slots(lanes); fill(proof, expected)
+                val captures = CaptureLayout.withVectors(language, arrayOf(proof, null, null, null, null),
+                    booleanArrayOf(false, true, true, true, false))
+                val locals = mutableListOf<LocalAccessor>()
+                val root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+                    b.beginRoot()
+                    repeat(captures.storageSize) { locals += LocalAccessor.constantOf(b.createLocal("source $it", null)) }
+                    b.beginReturn(); b.emitLoadConstant(0L); b.endReturn()
+                    b.endRoot()
+                }.getNode(0)
+                val bytecode = root.bytecodeNode
+                // Use the generated node's actual descriptor and typed local APIs,
+                // including their primitive type profiles, without an AST slot shim.
+                val frame = Truffle.getRuntime().createVirtualFrame(arrayOf(0L), root.frameDescriptor)
+                val slots = locals.toTypedArray()
+                for (index in 0 until lanes) when {
+                    vector.lane.isFloat -> slots[index].setFloat(bytecode, frame, expected.frame.getFloat(expected.slots[index]))
+                    vector.lane.isDouble -> slots[index].setDouble(bytecode, frame, expected.frame.getDouble(expected.slots[index]))
+                    else -> slots[index].setLong(bytecode, frame, expected.frame.getLong(expected.slots[index]))
+                }
+                val float = Float.fromBits(0x7fc01234)
+                val double = Double.fromBits(0x7ff8000000001234L)
+                val cell = RecCell()
+                slots[lanes].setLong(bytecode, frame, Long.MIN_VALUE)
+                slots[lanes + 1].setFloat(bytecode, frame, float)
+                slots[lanes + 2].setDouble(bytecode, frame, double)
+                slots[lanes + 3].setObject(bytecode, frame, cell)
+                for ((offset, kind) in listOf(0 to FrameSlotKind.Long, 1 to FrameSlotKind.Float, 2 to FrameSlotKind.Double)) {
+                    assertEquals(kind, bytecode.locals.single { it.name == "source ${lanes + offset}" }.typeProfile)
+                }
+                val environment = captures.captureLocals(bytecode, frame, slots)
+                slots.forEach { it.clear(bytecode, frame) }
+                assertTrue(slots.all { it.isCleared(bytecode, frame) })
+                assertTrue(captures.isLong(environment, 1))
+                assertEquals(Long.MIN_VALUE, captures.readLong(environment, 1))
+                assertTrue(captures.isObject(environment, 2)); assertTrue(captures.isObject(environment, 3))
+                assertEquals(float.toRawBits(), (captures.readObject(environment, 2) as Float).toRawBits())
+                assertEquals(double.toRawBits(), (captures.readObject(environment, 3) as Double).toRawBits())
+                assertSame(cell, captures.readObject(environment, 4)); assertFalse(cell.initialized)
+                captures.restoreVector(environment, 0, bytecode, frame, slots, 0)
+                for (index in 0 until lanes) when {
+                    vector.lane.isFloat -> assertEquals(expected.frame.getFloat(expected.slots[index]).toRawBits(),
+                        slots[index].getFloat(bytecode, frame).toRawBits())
+                    vector.lane.isDouble -> assertEquals(expected.frame.getDouble(expected.slots[index]).toRawBits(),
+                        slots[index].getDouble(bytecode, frame).toRawBits())
+                    else -> assertEquals(expected.frame.getLong(expected.slots[index]), slots[index].getLong(bytecode, frame))
+                }
             }
         }
     }
