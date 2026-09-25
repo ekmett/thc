@@ -31,6 +31,11 @@ SCALAR_SIGNATURES = json.loads((Path(__file__).resolve().parent.parent /
     'src/main/resources/thc/scalar-primop-signatures.json').read_text())['primitives']
 POLYGLOT_ABI = json.loads((Path(__file__).resolve().parent.parent /
     'src/main/resources/thc/polyglot-abi.json').read_text())
+ARITHMETIC_EXCEPTION_PAYLOADS = {
+    'raiseDivZero#': 'ghc-internal:GHC.Internal.Exception.Type.divZeroException',
+    'raiseUnderflow#': 'ghc-internal:GHC.Internal.Exception.Type.underflowException',
+    'raiseOverflow#': 'ghc-internal:GHC.Internal.Exception.Type.overflowException',
+}
 
 
 class Audit:
@@ -975,6 +980,13 @@ class Audit:
                     self.tag_to_enum(expr, bound, owner, path)
                 if function[0] == 'prim':
                     self.scalar_primitive(function[1], arguments, proof, bound, owner, path)
+                    payload = ARITHMETIC_EXCEPTION_PAYLOADS.get(function[1])
+                    if payload is not None:
+                        self.reference(payload, owner, path + '/wired-exception-payload')
+                        actual = [self.effective_rep(argument, bound) for argument in arguments]
+                        if (len(actual) != 1 or not self.is_empty_tuple(actual[0]) or flags != [False]):
+                            self.issue('primitive-representation', owner, path,
+                                       function[1] + ': exact unlifted (# #) argument required')
                 tuple_primitive = self.cap.get('tuplePrimitives', {}).get(function[1]) if function[0] == 'prim' else None
                 if tuple_primitive is not None:
                     expected_args = [('scalar', (rep,)) for rep in tuple_primitive['arguments']]
@@ -1360,7 +1372,10 @@ class Audit:
                         if self.is_tuple(argument_rep) or self.is_tuple(stored):
                             join = isinstance(target, dict) and '_join_arity' in target
                             ordinary = function[0] not in ('prim', 'con') and not join
-                            supported = self.supported_empty_join_input(argument_rep) if join else (
+                            arithmetic_raise = (function[0] == 'prim' and
+                                                function[1] in ARITHMETIC_EXCEPTION_PAYLOADS and
+                                                index == 0 and self.is_empty_tuple(argument_rep))
+                            supported = self.supported_empty_join_input(argument_rep) if join else arithmetic_raise or (
                                 ordinary and self.supported_tuple_input(argument_rep))
                             if not supported:
                                 self.issue('aggregate-boundary', owner, f'{path}/arguments/{index}', 'unboxed-tuple argument')

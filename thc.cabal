@@ -248,6 +248,7 @@ test-suite driver-tests
 executable thc-fixtures
   main-is: Main.hs
   other-modules:
+    ArithmeticExceptionFixtures
     AggregateFixtures
     ContinuationFixtures
     LiveAsyncFixtures

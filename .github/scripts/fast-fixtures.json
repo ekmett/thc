@@ -24,6 +24,19 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "arithmetic-exceptions": {
+      "junit": ["thc.runtime.ArithmeticExceptionsNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "arithmetic-exceptions"]}],
+      "outputs": ["build/arithmetic-exceptions"],
+      "sources": [
+        "compiler/test-fixtures/ArithmeticExceptionsAudit.hs",
+        "compiler/test-fixtures/ArithmeticExceptionsNative.hs",
+        "test/haskell-fixtures/ArithmeticExceptionFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal"
+      ]
+    },
     "original-fd-ready": {
       "junit": ["thc.runtime.OriginalFdReadyNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-fd-ready"]}],

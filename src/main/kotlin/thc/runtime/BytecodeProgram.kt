@@ -1542,6 +1542,27 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreVectors.validate(name, args.map(CoreVectors::argumentProof), tupleProof)
                 CoreVectors.validateFlags(flags)
                 vectorPrimitive(name, args.map { compile(it, scope, false) })
+            } else if (fn[0] == "prim" && CoreArithmeticExceptions.payload(fn[1] as String) != null) {
+                val name = fn[1] as String
+                CoreArithmeticExceptions.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val payloadId = checkNotNull(CoreArithmeticExceptions.payload(name))
+                val payload = globals[payloadId]
+                    ?: throw UnsupportedCore("Missing wired arithmetic exception payload $payloadId")
+                val empty = compile(args[0], scope, false)
+                if (!empty.proof.isEmptyTuple) throw RuntimeFault("$name: missing exact empty tuple operand")
+                val raised = Expression { e ->
+                    val b = e.builder
+                    b.beginBlock()
+                    empty.emitTuple(e, emptyList())
+                    b.beginRaise(); b.emitReadGlobal(payload); b.endRaise()
+                    b.endBlock()
+                }
+                if (tupleProof.isTuple) tupleExpression(tupleProof) { e, _ ->
+                    val b = e.builder
+                    b.beginBlock()
+                    b.beginStoreLocal(b.createLocal("non-returning aggregate", null)); raised.emit(e); b.endStoreLocal()
+                    b.endBlock()
+                } else ProvenExpression(raised, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && fn[1] in setOf("raiseIO#", "catch#", "getMaskingState#",
                     "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#")) {
                 val name = fn[1] as String

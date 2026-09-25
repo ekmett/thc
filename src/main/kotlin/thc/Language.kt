@@ -30,6 +30,7 @@ import thc.runtime.BytecodeProgram
 import thc.runtime.ExecutableProgram
 import thc.runtime.CoreRepresentations
 import thc.runtime.CoreRepresentation
+import thc.runtime.CoreArithmeticExceptions
 import thc.runtime.IoMainRoot
 import thc.runtime.TargetLayout
 import java.io.File
@@ -127,6 +128,8 @@ object CoreModules {
                 }
                 "app" -> {
                     val function = expr[1] as List<Any?>
+                    if (function.firstOrNull() == "prim")
+                        CoreArithmeticExceptions.payload(function[1] as String)?.let { reference(it, bound) }
                     // FCallIds name foreign declarations, not Haskell globals.
                     // Lowering validates the complete ABI and rejects unsupported
                     // targets. Defined heads and all operands still participate

@@ -56,6 +56,7 @@ python3 scripts/prepare-data-to-tag.py
 "$fixture_bin" mutvar
 "$fixture_bin" stable-pointers
 "$fixture_bin" shrink-bytearrays
+"$fixture_bin" arithmetic-exceptions
 "$fixture_bin" fetch-add-int-array
 python3 scripts/prepare-managed-mvars.py --refresh
 rm -rf -- build/synchronous-exceptions

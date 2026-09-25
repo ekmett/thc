@@ -887,6 +887,26 @@ class AuditTest(unittest.TestCase):
                 with self.subTest(name=name, field=field):
                     self.assertIn('primitive-representation', {issue['code'] for issue in run(bad)['issues']})
 
+    def test_wired_arithmetic_raises_link_real_payload_and_require_empty_tuple(self):
+        empty = tuple_rep()
+        constructor = dict(id='Empty', kind='unboxed-tuple', arity=0, fieldReps=[],
+                           strictFields=[], fieldLifted=[])
+        operand = ['con', 'Empty', 0, dict(rep=empty)]
+        for name, payload in audit_core.ARITHMETIC_EXCEPTION_PAYLOADS.items():
+            expression = ['app', ['prim', name], [copy.deepcopy(operand)], [False], False, False,
+                          dict(rep=copy.deepcopy(LONG))]
+            supplied = run(expression, [bind(payload, lit(1))], [constructor])
+            self.assertTrue(supplied['accepted'], (name, supplied['issues'], supplied['missingGlobals']))
+            self.assertIn(payload, [edge['dependency'] for edge in supplied['dependencies']])
+            missing = run(expression, constructors=[constructor])
+            self.assertEqual([item['id'] for item in missing['missingGlobals']], [payload])
+            for bad_operand, bad_flags in ((['void', dict(rep=dict(kind='void', primReps=[], evaluated=True))], [False]),
+                                           (copy.deepcopy(operand), [True])):
+                changed = copy.deepcopy(expression)
+                changed[2][0], changed[3] = bad_operand, bad_flags
+                report = run(changed, [bind(payload, lit(1))], [constructor])
+                self.assertIn('primitive-representation', {issue['code'] for issue in report['issues']})
+
     def test_public_thread_primops_require_exact_thread_id_and_lazy_payload(self):
         state = dict(kind='void', primReps=[], evaluated=True)
         thread = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)

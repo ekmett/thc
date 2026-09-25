@@ -883,6 +883,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.ArithmeticExceptionsNativeTest",
         "thc.runtime.OriginalFdReadyNativeTest",
         "thc.runtime.ManagedAddressReadTest",
         "thc.runtime.ThreadAsyncNativeTest",
@@ -930,6 +931,18 @@
     },
     "test/haskell-fixtures/ContinuationFixtures.hs": {
       "junit": ["thc.runtime.CoreContinuationNativeTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/ArithmeticExceptionFixtures.hs": {
+      "junit": ["thc.runtime.ArithmeticExceptionsNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/ArithmeticExceptionsAudit.hs": {
+      "junit": ["thc.runtime.ArithmeticExceptionsNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/ArithmeticExceptionsNative.hs": {
+      "junit": ["thc.runtime.ArithmeticExceptionsNativeTest"],
       "python": []
     },
     "test/haskell-fixtures/OriginalHandleReadinessFixtures.hs": {

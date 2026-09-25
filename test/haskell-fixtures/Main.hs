@@ -37,6 +37,7 @@ import SmallArrayFixtures (prepareSmallArrays)
 import BoxedArrayExtensionsFixtures (prepareBoxedArrayExtensions)
 import WideCharAddressFixtures (prepareWideCharAddress)
 import ManagedAddressReadFixtures (prepareManagedAddressReads)
+import ArithmeticExceptionFixtures (prepareArithmeticExceptions)
 import Control.Monad (forM, forM_, unless, when)
 import Data.Aeson (Value (..), decodeStrict', object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -872,6 +873,7 @@ main = do
     ["boxed-array-extensions"] -> prepareBoxedArrayExtensions root
     ["wide-char-address"] -> prepareWideCharAddress root
     ["managed-address-reads"] -> prepareManagedAddressReads root
+    ["arithmetic-exceptions"] -> prepareArithmeticExceptions root
     ["bit"] -> prepare root Bit
     ["integer"] -> prepare root IntegerWord
     ["signed-narrow"] -> prepare root SignedNarrow
@@ -885,4 +887,4 @@ main = do
     ["interface-core"] -> prepareInterfaceCore root
     ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (interface-core|core-continuation|mask-functions|live-async|thread-async|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|original-stdio-read|original-handle-readiness|original-stdio-close|original-stdio-seek|original-stdio-truncate|original-fd-ready|mutvar|stable-pointers|shrink-bytearrays|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|sqrt|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|managed-address-reads|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (arithmetic-exceptions|interface-core|core-continuation|mask-functions|live-async|thread-async|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|original-stdio-read|original-handle-readiness|original-stdio-close|original-stdio-seek|original-stdio-truncate|original-fd-ready|mutvar|stable-pointers|shrink-bytearrays|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|sqrt|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|managed-address-reads|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

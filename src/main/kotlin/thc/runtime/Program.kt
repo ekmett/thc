@@ -2047,6 +2047,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     in CoreVectors.operationsWord32 -> VectorWord32Operation(name, operands)
                     else -> VectorOperation(name, operands)
                 }
+            } else if (fn[0] == "prim" && CoreArithmeticExceptions.payload(fn[1] as String) != null) {
+                val name = fn[1] as String
+                CoreArithmeticExceptions.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val payloadId = checkNotNull(CoreArithmeticExceptions.payload(name))
+                val payload = globals[payloadId]
+                    ?: throw UnsupportedCore("Missing wired arithmetic exception payload $payloadId")
+                RaiseArithmeticException(payload, argument(args[0], scope, false, allowEmpty = true), tupleProof)
             } else if (fn[0] == "prim" && fn[1] in setOf("raiseIO#", "catch#", "getMaskingState#",
                     "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#")) {
                 val name = fn[1] as String

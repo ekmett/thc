@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 330 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 852 | No declared lowering. |
+| Partial | 333 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 849 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -537,7 +537,10 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `quotRemInt#` — arity 2 — Exact tuple arithmetic
 - [ ] `quotRemWord#` — arity 2 — Exact tuple arithmetic
 - [ ] `raise#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `raiseDivZero#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `raiseIO#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `raiseOverflow#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `raiseUnderflow#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `readAddrArray#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readAddrOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readArray#` — arity 3 — Managed lifted arrays
@@ -1163,9 +1166,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `quotWord8X16#` — arity 2
 - [ ] `quotWord8X32#` — arity 2
 - [ ] `quotWord8X64#` — arity 2
-- [ ] `raiseDivZero#` — arity 1
-- [ ] `raiseOverflow#` — arity 1
-- [ ] `raiseUnderflow#` — arity 1
 - [ ] `readDoubleArrayAsDoubleX4#` — arity 3
 - [ ] `readDoubleArrayAsDoubleX8#` — arity 3
 - [ ] `readDoubleOffAddrAsDoubleX2#` — arity 3
