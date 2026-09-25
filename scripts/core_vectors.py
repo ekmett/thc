@@ -111,6 +111,10 @@ OPERATIONS.update({
     'plusFloatX4#': ([VECTOR_FLOAT_REP, VECTOR_FLOAT_REP], VECTOR_FLOAT_REP),
     'minusFloatX4#': ([VECTOR_FLOAT_REP, VECTOR_FLOAT_REP], VECTOR_FLOAT_REP),
     'timesFloatX4#': ([VECTOR_FLOAT_REP, VECTOR_FLOAT_REP], VECTOR_FLOAT_REP),
+    'fmaddFloatX4#': ([VECTOR_FLOAT_REP] * 3, VECTOR_FLOAT_REP),
+    'fmsubFloatX4#': ([VECTOR_FLOAT_REP] * 3, VECTOR_FLOAT_REP),
+    'fnmaddFloatX4#': ([VECTOR_FLOAT_REP] * 3, VECTOR_FLOAT_REP),
+    'fnmsubFloatX4#': ([VECTOR_FLOAT_REP] * 3, VECTOR_FLOAT_REP),
 })
 VECTOR_DOUBLE_REP = {'kind': 'vector', 'primReps': ['VecRep 2 DoubleElemRep'], 'evaluated': True,
                     'vector': {'lanes': 2, 'element': 'DoubleElemRep'}}

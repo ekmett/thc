@@ -49,8 +49,11 @@ class ManagedStackFrame internal constructor(
 }
 
 /**
- * A local, immutable snapshot of live THC GuestRoots, newest first. This is not a native StgStack
- * layout or an IPE table. No call targets, nodes, frames, arguments or Source objects escape capture.
+ * Detached inspection data captured from live THC [GuestRoot]s, newest first.
+ *
+ * The snapshot records names and source coordinates; it is not an executable
+ * continuation, native StgStack layout or IPE table. It cannot resume a computation.
+ * No call targets, nodes, frames, arguments or Source objects escape capture.
  */
 class ManagedStackSnapshot private constructor(frames: List<ManagedStackFrame>, internal val ownerToken: Any?) {
     val frames: List<ManagedStackFrame> = immutableStackList(frames)

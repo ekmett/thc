@@ -144,7 +144,13 @@ internal const val STATIC_SHAPE_UNCHECKED_PROPERTY = "thc.staticShapeUnchecked"
  * cannot resurrect an unauthenticated object from a finalizer. No key is stored. */
 abstract class ValidatedStorage protected constructor(@Suppress("UNUSED_PARAMETER") checked: Unit)
 
-/** A closure/thunk's selective capture representation, fixed during root compilation. */
+/**
+ * Storage description for the values retained by a closure or thunk.
+ *
+ * Fixed during root construction, this metadata chooses exact or adaptive fields
+ * for [CapturedFrame] instances. It is neither an invocation frame nor an executable
+ * node; the resulting captures can outlive the invocation that created them.
+ */
 class CaptureLayout private constructor(language: TruffleLanguage<*>, primitiveEligible: BooleanArray,
     exactLong: BooleanArray, exactReference: Array<Class<*>?>, exactFloat: BooleanArray,
     exactDouble: BooleanArray, vectorProofs: Array<CoreRepresentation?>) {
@@ -380,7 +386,14 @@ class CaptureLayout private constructor(language: TruffleLanguage<*>, primitiveE
     }
 }
 
-/** Public superclass and constructor for Truffle's generated StaticShape subclasses. */
+/**
+ * Retained runtime storage for a closure or thunk's selected free variables.
+ *
+ * This is heap data described by [CaptureLayout], not a Truffle `VirtualFrame` or
+ * a saved execution stack. It retains values rather than an entire invocation.
+ * Public visibility lets StaticShape generate subclasses; the layout authenticates
+ * their allocation.
+ */
 open class CapturedFrame(val layout: CaptureLayout, allocationKey: Any?) :
     ValidatedStorage(layout.checkAllocationKey(allocationKey)) {
     fun getValue(index: Int): Any? = layout.read(this, index)

@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "ce3156c0fb04b56b9a09c48be65e592c8ecbf1d74ea0c8be768819041514434e"
+FULL_PREPARATION_PLAN = "4c4e6b7926a62540b51c3da2aae8e5d7aaad2bc67dd7b4886fefcab9ec62a774"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -36,9 +36,12 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/simd-calls/manifest.json", "build/simd-calls/pre-core/SimdCallAudit.json",
     "build/simd-calls/pre-audit.json",
+    "build/simd-floatx4-fma/manifest.json", "build/simd-floatx4-fma/pre-core/SimdFloatFma.json",
+    "build/simd-floatx4-fma/pre-audit.json",
     *([] if platform.machine().lower() in ("arm64", "aarch64") else
       ["build/simd-calls/oracle.tsv", "build/simd-calls/post-core/SimdCallAudit.json",
-       "build/simd-calls/post-audit.json"]),
+       "build/simd-calls/post-audit.json", "build/simd-floatx4-fma/oracle.txt",
+       "build/simd-floatx4-fma/post-core/SimdFloatFma.json", "build/simd-floatx4-fma/post-audit.json"]),
     "build/interface-core/manifest.json", "build/interface-core/InterfaceLibrary.json",
     "build/interface-core/logs/native-oracle.stdout", "build/interface-core/native/oracle",
     "build/interface-core/full/InterfaceLibrary.hi", "build/interface-core/thin/InterfaceLibrary.hi",

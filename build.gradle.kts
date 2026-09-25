@@ -28,6 +28,7 @@ dokka {
         suppressInheritedMembers.set(true)
     }
     dokkaSourceSets.named("main") {
+        includes.from("docs/site/jvm.md")
         sourceRoots.setFrom("src/main/kotlin", "src/main/java")
         classpath.setFrom(configurations.compileClasspath)
         jdkVersion.set(25)
@@ -209,6 +210,7 @@ tasks.withType<Test>().configureEach {
             "explicit64-primops/core/**/*.json", "explicit64-primops/manifest.json", "explicit64-primops/oracle.tsv",
             "simd-int32x4/pre-core/**/*.json", "simd-int32x4/post-core/**/*.json", "simd-int32x4/oracle.tsv",
             "simd-floatx4/**/*.json", "simd-floatx4/*.tsv",
+            "simd-floatx4-fma/**/*.json", "simd-floatx4-fma/oracle.txt",
             "simd-doublex2/**/*.json", "simd-doublex2/*.tsv",
             "simd-int16x8/**/*.json", "simd-int16x8/*.tsv", "simd-int16x8/native/int16x8-oracle",
             "simd-int8x16/**/*.json", "simd-int8x16/*.tsv", "simd-int8x16/native/int8x16-oracle",

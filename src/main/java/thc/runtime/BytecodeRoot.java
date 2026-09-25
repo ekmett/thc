@@ -24,7 +24,14 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import thc.Language;
 
-/** Concrete Core instructions sharing the AST backend's heap and application ABI. */
+/**
+ * Executable Truffle root for Core lowered through the Bytecode DSL.
+ *
+ * <p>The nested operation declarations define interpreter instructions; generated
+ * bytecode nodes execute them using invocation locals and runtime values. Neither
+ * the root nor its operation nodes are Haskell heap values or Graal compiler IR.
+ * Heap representation and application conventions are shared with the AST backend.
+ */
 // Generate only the cached interpreter. The former uncached threshold of zero
 // transitioned before executing even the first guest instruction.
 @GenerateBytecode(languageClass = Language.class, enableYield = true,
@@ -2464,6 +2471,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             throw fail("Expected managed Addr# for RTS shared CAF store");
         }
     }
+    /** Capability query only. HsBool is StgInt; THC has no bound-thread/TLS ABI. */
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class BoundThreadSupport {
+        @Specialization public static void query(VirtualFrame frame, LocalAccessor destination,
+                Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, 0L);
+        }
+    }
     @Operation public static final class RegisterMainThread {
         @Specialization public static void register(Object weak, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
@@ -3312,6 +3329,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 case 2 -> FloatX4.multiply(first, second);
                 default -> throw new RuntimeFault("Invalid FloatX4 operation");
             };
+        }
+    }
+    @Operation @ConstantOperand(type = int.class, name = "operation")
+    public static final class VectorFloatFused {
+        @Specialization public static FloatX4 apply(int operation, FloatX4 first, FloatX4 second, FloatX4 third) {
+            return FloatX4.fused(operation, first, second, third);
         }
     }
     @Operation
