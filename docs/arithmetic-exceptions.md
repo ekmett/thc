@@ -59,6 +59,12 @@ never overlays both definitions of an original module. Its current helper
 refreshes structured function labels while reusing the selected compiler and
 production package cache. `--core-only` refreshes all exports/audits without
 building or running the native oracle or writing a complete fixture manifest.
+Preparation first removes prior success manifests and audit reports, preserving
+the independent native receipt. All twelve strict audits are attempted after
+successful exports; any rejected root retains its report/logs and fails the
+preparation before either success manifest is written. A controlled compiler
+failure verified stale manifests/reports disappear while the native receipt
+remains unchanged.
 Full preparation reuses the native oracle only when a separate receipt matches
 its exact source inputs, compilation arguments, selected compiler/registration
 and all output hashes. The provider passes GHC 9.14.1 `-fno-code -Wall -Werror`;
