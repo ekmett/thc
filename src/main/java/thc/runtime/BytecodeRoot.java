@@ -886,22 +886,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    public static final class OriginalStdioErrno {
+    @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
+    public static final class OriginalStdioStatus {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
-                Object state, @Bind("$node") Node node) {
+                OriginalStdioOp operation, long fd, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            long result = CoreOriginalStdio.current(node).errno();
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
-        }
-    }
-
-    @Operation
-    @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    public static final class OriginalStdioIsTerminal {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
-                long fd, Object state, @Bind("$node") Node node) {
-            TupleResultsKt.requireVoidCarrier(state);
-            long result = CoreOriginalStdio.current(node).isTerminal(fd);
+            // One typed instruction avoids another generated-interpreter partition;
+            // the exact operation is compile-time metadata, not a guest operand.
+            long result;
+            if (operation == OriginalStdioOp.ERRNO) result = CoreOriginalStdio.current(node).errno();
+            else if (operation == OriginalStdioOp.ISATTY) result = CoreOriginalStdio.current(node).isTerminal(fd);
+            else throw new RuntimeFault("Invalid original stdio status operation");
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }

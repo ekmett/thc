@@ -5,6 +5,9 @@ package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.bytecode.Instruction
+import com.oracle.truffle.api.nodes.DirectCallNode
+import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
 import org.graalvm.polyglot.io.IOAccess
 import org.junit.jupiter.api.Assertions.*
@@ -14,6 +17,8 @@ import thc.Json
 import thc.Language
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.Collections
+import java.util.IdentityHashMap
 
 /** The FCall is GHC's installed c_isatty declaration, not a synthetic alias. */
 class OriginalHandleReadinessNativeTest {
@@ -23,6 +28,24 @@ class OriginalHandleReadinessNativeTest {
     private fun json(path: String) = Json.parse(File(root, path).readText()) as Map<String, Any?>
     private fun valid(target: RootCallTarget) = assertEquals(true,
         target.javaClass.getMethod("isValidLastTier").invoke(target))
+    private fun targets(entry: RootCallTarget): List<RootCallTarget> {
+        val seen = Collections.newSetFromMap(IdentityHashMap<RootCallTarget, Boolean>())
+        val result = mutableListOf<RootCallTarget>()
+        fun visit(target: RootCallTarget) {
+            if (!seen.add(target)) return
+            val body = target.rootNode
+            val nodes = if (body is BytecodeRoot) listOf(body) + body.bytecodeNode.instructions.flatMap { it.arguments }
+                .filter { it.kind == Instruction.Argument.Kind.NODE_PROFILE }.mapNotNull { it.asCachedNode() }
+                else listOf(body)
+            for (call in nodes.flatMap { NodeUtil.findAllNodeInstances(it, DirectCallNode::class.java) }) {
+                val callee = call.currentCallTarget as? RootCallTarget ?: continue
+                if (callee.rootNode is GuestRoot) visit(callee)
+            }
+            result.add(target)
+        }
+        visit(entry)
+        return result
+    }
 
     @Test fun originalIsattyAndErrnoMatchNativeBeforeAndAfterExplicitCompilation() {
         val manifest = json("build/original-handle-readiness/manifest.json")
@@ -55,6 +78,20 @@ class OriginalHandleReadinessNativeTest {
                 val audit = json("$prefix/$name.audit.json")
                 assertEquals(true, audit["accepted"]); assertEquals(emptyList<Any?>(), audit["issues"])
                 assertEquals(emptyList<Any?>(), audit["missingGlobals"])
+                // runRW# exports as an immediately applied local State# lambda.
+                // It is a second instrumented root, not another top-level binding.
+                val binding = (module["bindings"] as List<Map<String, Any?>>).single { it["name"] == name }
+                val entry = binding["expr"] as List<*>
+                assertEquals("lam", entry[0])
+                val application = entry[2] as List<*>
+                assertEquals("app", application[0])
+                val local = application[1] as List<*>
+                assertEquals("lam", local[0])
+                val formal = (local[1] as List<Map<String, Any?>>).single()
+                assertEquals("State# RealWorld", formal["type"])
+                assertEquals(false, formal["lifted"])
+                assertEquals(mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true), formal["rep"])
+                assertEquals("void", ((application[2] as List<*>).single() as List<*>)[0])
             }
             for (backend in listOf("ast", "bytecode")) {
                 val output = ByteArrayOutputStream(); val errors = ByteArrayOutputStream()
@@ -70,6 +107,7 @@ class OriginalHandleReadinessNativeTest {
                                 if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
                             }
                             val targets = programs.mapValues { (name, program) -> program.entryTarget(name) }
+                            var active = emptyMap<String, List<RootCallTarget>>()
                             fun exercise(compiled: Boolean) {
                                 for (row in rows) for (name in targets.keys) {
                                     val program = programs.getValue(name); val target = targets.getValue(name)
@@ -78,8 +116,10 @@ class OriginalHandleReadinessNativeTest {
                                     val expected = if (name == "originalIsTerminal") row.getValue("result") else row.getValue("errno")
                                     assertEquals(expected.toLong(), actual, "$stage/$backend/$name/$row")
                                     if (compiled) {
-                                        assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
-                                        valid(target)
+                                        assertEquals(before + 2, (program.diagnostics().getValue("compiledEntries") as Number).toLong(),
+                                            "$stage/$backend/$name/$row: entry plus runRW local lambda")
+                                        assertEquals(active.getValue(name), targets(target), "First-installed target identities must remain unchanged")
+                                        active.getValue(name).forEach(::valid)
                                     }
                                 }
                                 assertEquals(0, output.size()); assertEquals(0, errors.size())
@@ -88,7 +128,10 @@ class OriginalHandleReadinessNativeTest {
                                 assertEquals(0, handoff.results.retainedReferences())
                             }
                             exercise(false)
-                            for (target in targets.values) {
+                            active = targets.mapValues { (_, target) -> targets(target).also {
+                                assertEquals(2, it.size, "$stage/$backend: exactly entry and runRW local lambda")
+                            } }
+                            for (target in active.values.flatten()) {
                                 target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
                                 valid(target)
                             }
