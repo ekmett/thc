@@ -3,7 +3,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module BoundThreadQueryFixtures (prepareBoundThreadQuery) where
 
-import Control.Monad (forM, unless, when)
+import Control.Exception (try)
+import Control.Monad (forM, forM_, unless, when)
 import Data.Aeson (Value(..), FromJSON, Result(..), fromJSON, eitherDecode, object, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -17,7 +18,7 @@ import qualified THC.Driver.Installed as Installed
 import qualified THC.Driver.Project as Project
 import System.Directory (copyFile, createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
 import System.Environment (getExecutablePath, lookupEnv)
-import System.Exit (die)
+import System.Exit (ExitCode, die)
 import System.FilePath ((</>), takeExtension)
 import Text.Read (readMaybe)
 
@@ -45,8 +46,12 @@ prepareBoundThreadQuery root = do
       manifest = output </> "manifest.json"
       execute label = runLogged 180 root (directory </> "logs") label
   createDirectoryIfMissing True output
-  old <- doesFileExist manifest
-  when old (removeFile manifest)
+  -- Rejected refreshes must not leave stale successful closure/native receipts.
+  -- Command streams remain separate; native success is recorded before auditing.
+  forM_ ["manifest.json", "native-receipt.json", "pre/audit.json", "post/audit.json"] $ \name -> do
+    let path = output </> name
+    old <- doesFileExist path
+    when old (removeFile path)
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
@@ -127,6 +132,14 @@ prepareBoundThreadQuery root = do
     unless (parsed == Just expected) (die "Native bound-thread query scalar projection mismatch")
     writeFile (root </> oracle) (unlines rows)
     pure (mode, controls, oracle, commandArtifacts built ++ commandArtifacts observed)
+  nativeInputHashes <- hashes root [source, nativeSource]
+  nativeArtifactHashes <- hashes root $ concat
+    [(directory </> mode </> "oracle") : oracle : logs | (mode, _, oracle, logs) <- nativeRuns]
+  writeJson (output </> "native-receipt.json") $ object
+    ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "producerRoot" .= root,
+     "installedCompiler" .= Installed.installedCompiler selected, "ghcLibdir" .= BS.unpack (commandStdout libdir),
+     "nativeRowsPerMode" .= length values, "nativeControls" .= Map.fromList [(mode, flags) | (mode, flags, _, _) <- nativeRuns],
+     "inputHashes" .= nativeInputHashes, "artifactHashes" .= nativeArtifactHashes, "runtimeVerified" .= False]
   stages <- forM ["pre", "post"] $ \stage -> do
     let stageDir = directory </> stage
         core = stageDir </> "core"
@@ -137,9 +150,14 @@ prepareBoundThreadQuery root = do
     actual <- sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
     unless (actual == ["BoundThreadQueryAudit.json", "THC.InterfaceClosure.json"])
       (die ("Unexpected bound-thread query module inventory: " ++ show actual))
-    audited <- execute (stage ++ "-audit") [] "python3" (["scripts/audit-core.py", "--package-manifest", packagePath, "--entry", "boundThreadQuery",
-      "--output", stageDir </> "audit.json"] ++ modules)
-    report <- readJson (root </> stageDir </> "audit.json")
+    audited <- try (execute (stage ++ "-audit") [] "python3" (["scripts/audit-core.py", "--package-manifest", packagePath, "--entry", "boundThreadQuery",
+      "--output", stageDir </> "audit.json"] ++ modules)) :: IO (Either ExitCode CommandResult)
+    pure (stage, modules, stageDir </> "audit.json", exported, audited)
+  let failed = [stage | (stage, _, _, _, Left _) <- stages]
+  unless (null failed) (die ("Bound-thread query strict audits failed: " ++ unwords failed ++
+    ". Both attempts and native-receipt.json retained; no complete success manifest written."))
+  forM_ stages $ \(_, _, audit, _, _) -> do
+    report <- readJson (root </> audit)
     case report of
       Object fields | KeyMap.lookup "accepted" fields == Just (Bool True),
         KeyMap.lookup "issues" fields == Just (Array mempty),
@@ -149,7 +167,6 @@ prepareBoundThreadQuery root = do
     symbols <- mapM (`field` "symbol") calls :: IO [String]
     unless (not (null symbols) && all (== "rtsSupportsBoundThreads") symbols)
       (die "Original installed bound-thread query missing or unexpected foreign obligation")
-    pure (stage, modules, stageDir </> "audit.json", commandArtifacts exported ++ commandArtifacts audited)
   plugins <- listDirectory (root </> "compiler/THC")
   drivers <- listDirectory (root </> "src/THC/Driver")
   scripts <- listDirectory (root </> "scripts")
@@ -163,7 +180,8 @@ prepareBoundThreadQuery root = do
         ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
       artifacts = packagePath : map snd bundles ++ concatMap commandArtifacts [version, libdir, helperBuild, helperLocation, registration] ++
         concat [oracle:logs | (_, _, oracle, logs) <- nativeRuns] ++
-        concat [modules ++ audit:logs | (_, modules, audit, logs) <- stages] ++
+        [directory </> "native-receipt.json"] ++
+        concat [modules ++ audit : commandArtifacts exported ++ commandArtifacts audited | (_, modules, audit, exported, Right audited) <- stages] ++
         [directory </> stage </> "core/THC.InterfaceClosure.json" | stage <- ["pre", "post"]]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
@@ -172,6 +190,6 @@ prepareBoundThreadQuery root = do
     "installedArtifactsHashed" .= False, "entry" .= ("boundThreadQuery" :: String),
     "packageManifest" .= packagePath, "installedCompiler" .= Installed.installedCompiler selected,
     "nativeRowsPerMode" .= length values, "nativeControls" .= Map.fromList [(mode, flags) | (mode, flags, _, _) <- nativeRuns],
-    "stages" .= Map.fromList [(stage, modules) | (stage, modules, _, _) <- stages],
+    "stages" .= Map.fromList [(stage, modules) | (stage, modules, _, _, _) <- stages],
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]
   putStrLn "bound-thread-query: original import, 8 rows in each native RTS mode, pre/post strict closure; negative THC capability only"
