@@ -2067,8 +2067,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 } else ProvenExpression(Expression { e ->
                     when (operation) {
                         PinnedMemoryOp.CONTENTS, PinnedMemoryOp.MUTABLE_CONTENTS -> e.builder.beginByteArrayContents()
-                        PinnedMemoryOp.WRITE_ADDR -> e.builder.beginWriteAddrOffAddr()
-                        PinnedMemoryOp.COPY_ADDR_NON_OVERLAPPING -> e.builder.beginWriteAddrOffAddr()
+                        PinnedMemoryOp.WRITE_ADDR -> e.builder.beginAddressWrite()
+                        PinnedMemoryOp.COPY_ADDR_NON_OVERLAPPING -> e.builder.beginAddressWrite()
                         PinnedMemoryOp.WRITE_ADDR_ARRAY -> e.builder.beginWriteAddrArray()
                         PinnedMemoryOp.WRITE_INT16, PinnedMemoryOp.WRITE_WORD16 -> e.builder.beginWriteWord16OffAddr()
                         PinnedMemoryOp.WRITE_INT32, PinnedMemoryOp.WRITE_WORD32,
@@ -2086,8 +2086,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     operands.forEach { it.emit(e) }
                     when (operation) {
                         PinnedMemoryOp.CONTENTS, PinnedMemoryOp.MUTABLE_CONTENTS -> e.builder.endByteArrayContents()
-                        PinnedMemoryOp.WRITE_ADDR -> e.builder.endWriteAddrOffAddr()
-                        PinnedMemoryOp.COPY_ADDR_NON_OVERLAPPING -> e.builder.endWriteAddrOffAddr()
+                        PinnedMemoryOp.WRITE_ADDR -> e.builder.endAddressWrite()
+                        PinnedMemoryOp.COPY_ADDR_NON_OVERLAPPING -> e.builder.endAddressWrite()
                         PinnedMemoryOp.WRITE_ADDR_ARRAY -> e.builder.endWriteAddrArray()
                         PinnedMemoryOp.WRITE_INT16, PinnedMemoryOp.WRITE_WORD16 -> e.builder.endWriteWord16OffAddr()
                         PinnedMemoryOp.WRITE_INT32, PinnedMemoryOp.WRITE_WORD32, PinnedMemoryOp.WRITE_WIDE_CHAR,
