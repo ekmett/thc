@@ -54,7 +54,7 @@ prepareLibdwUnavailable root = do
   let cParsed = case lines (BS.unpack (commandStdout cFinalizers)) of
         ["USE_LIBDW=0", observations] -> readMaybe observations :: Maybe [Bool]
         _ -> Nothing
-  unless (cParsed == Just (replicate 14 True) && BS.null (commandStderr cFinalizers))
+  unless (cParsed == Just (replicate 18 True) && BS.null (commandStderr cFinalizers))
     (die "Original C finalizer oracle failed")
   library <- execute "ghc-libdir" [] ghc ["--print-libdir"]
   libdir <- case lines (BS.unpack (commandStdout library)) of
@@ -70,7 +70,7 @@ prepareLibdwUnavailable root = do
   artifactHashes <- hashes root [oracle, labelsFile]
   writeJson (root </> manifest) $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]
-  putStrLn "libdw-unavailable: eight original calls, fourteen native C-finalizer checks, exact function/data labels"
+  putStrLn "libdw-unavailable: eight original calls, eighteen native C-finalizer checks, exact function/data labels"
 
 -- Compile actual typed Core through the same serializer, with no native link
 -- needed for the separate data-symbol obligation. No pretty-printed parsing.
@@ -107,7 +107,8 @@ exportLabels libdir source = do
       hasFinalizer _ = False
       proof = Just (object ["kind" .= ("address" :: String), "primReps" .= ["AddrRep" :: String], "evaluated" .= True])
   unless (sort (nub [(kind, symbol) | (kind, symbol, _) <- found]) ==
-    [("data-addr", "enabled_capabilities"), ("function-addr", "backtraceFree"), ("function-addr", "libdwPoolRelease")] &&
+    [("data-addr", "enabled_capabilities"), ("function-addr", "backtraceFree"),
+     ("function-addr", "free"), ("function-addr", "libdwPoolRelease")] &&
     all (\(_, _, representation) -> representation == proof) found && hasFinalizer value)
     (die "GHC function/data labels or AddrRep certificates changed")
   pure value

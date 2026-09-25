@@ -8,7 +8,7 @@ module Main (main) where
 import Control.Monad (unless)
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.Word (Word8)
-import Foreign.Marshal.Alloc (allocaBytes)
+import Foreign.Marshal.Alloc (allocaBytes, mallocBytes)
 import Foreign.Marshal.Array (peekArray)
 import Foreign.Marshal.Utils (fillBytes)
 import Foreign.Ptr (FunPtr, Ptr, castPtr, nullFunPtr)
@@ -19,6 +19,7 @@ import GHC.Ptr (FunPtr(..), Ptr(..))
 
 foreign import ccall unsafe "&libdwPoolRelease" poolRelease :: FunPtr (Ptr () -> IO ())
 foreign import ccall unsafe "&backtraceFree" backtraceFree :: FunPtr (Ptr () -> IO ())
+foreign import ccall unsafe "stdlib.h &free" freeFunction :: FunPtr (Ptr () -> IO ())
 foreign import ccall unsafe "libdwPoolRelease" releaseNow :: Ptr () -> IO ()
 foreign import ccall unsafe "backtraceFree" freeNow :: Ptr () -> IO ()
 
@@ -73,12 +74,18 @@ main = allocaBytes 16 $ \bytes -> do
   action
   after <- readIORef marker
   mixedDead <- attach mixed backtraceFree pointer
+  owned <- mallocBytes 8
+  ownedWeak <- make key Nothing
+  freeAdded <- attach ownedWeak freeFunction owned
+  (ownedFlag, _) <- finalize ownedWeak
+  freeDead <- attach ownedWeak freeFunction owned
   unchanged <- (== replicate 16 (165 :: Word8)) <$> peekArray 16 bytes
   touch key
   let observations = [poolRelease /= nullFunPtr, backtraceFree /= nullFunPtr,
         directUnchanged, first == 1, second == 1, plainFlag == 0, dead == 0,
         again == 0, mixedAdded == 1, mixedFlag == 1, before == 0, after == 1,
-        mixedDead == 0, unchanged]
+        mixedDead == 0, unchanged, freeFunction /= nullFunPtr,
+        freeAdded == 1, ownedFlag == 0, freeDead == 0]
   unless (and observations) (fail (show observations))
   putStrLn "USE_LIBDW=0"
   print observations

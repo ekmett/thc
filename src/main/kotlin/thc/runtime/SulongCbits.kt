@@ -55,6 +55,7 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
             CFinalizerFunction(this, symbol, callable)
         }
     }
+    private val ownedFree = CFinalizerFunction(this, "free", null)
     private fun originalFinalizers(): Map<String, CFinalizerFunction> {
         finalizerTask.run()
         return try {
@@ -64,20 +65,24 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
                     Map<String, CFinalizerFunction>> { it.get() }, finalizerTask)
         } catch (failure: ExecutionException) { throw (failure.cause ?: failure) }
     }
-    /** Only the two source-certified USE_LIBDW=0 void(void*) labels have this ABI. */
+    /** &free consumes only a context-owned malloc base; the libdw labels are original C. */
     internal fun finalizerLabel(symbol: String): ManagedAddress =
-        ManagedAddress.fromCFinalizer(originalFinalizers()[symbol]
+        ManagedAddress.fromCFinalizer((if (symbol == "free") ownedFree else originalFinalizers()[symbol])
             ?: fault("Unsupported original C function label: $symbol"))
 
     internal fun invokeFinalizer(function: CFinalizerFunction, address: ManagedAddress) {
         function.requireOwner(this)
+        if (function.symbol == "free") {
+            Language.currentState(null).nativeAllocations.free(address)
+            return
+        }
         val pointer = if (address === ManagedAddress.nullAddress()) 0L else {
             address.requireByteRegion(0)
             pointerTransport(address)
         }
         val threads = Language.currentState(null).threads
         val previous = threads.enterForeign()
-        try { executeWithOwners(function.callable, pointer) }
+        try { executeWithOwners(function.callable ?: fault("Missing original C finalizer"), pointer) }
         finally {
             threads.leaveForeign(previous)
             Reference.reachabilityFence(address)
@@ -228,9 +233,9 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
     }
 }
 
-/** A callable Sulong member, never a synthetic address or untyped symbol lookup. */
+/** An opaque, context-owned C label; &free delegates to checked native ownership. */
 internal class CFinalizerFunction internal constructor(
-    private val owner: SulongCbits, val symbol: String, internal val callable: Any
+    private val owner: SulongCbits, val symbol: String, internal val callable: Any?
 ) {
     fun requireOwner(provider: SulongCbits) {
         if (provider !== owner) fault("C function label belongs to another THC context")

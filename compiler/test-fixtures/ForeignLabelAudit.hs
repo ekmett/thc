@@ -1,7 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE ForeignFunctionInterface, MagicHash, UnboxedTuples #-}
-module ForeignLabelAudit (poolRelease, backtraceFree, enabledCapabilities,
+module ForeignLabelAudit (poolRelease, backtraceFree, freeFunction, enabledCapabilities,
   WeakBox(..), makePlain, attachPool, finalizePlain) where
 
 import Foreign.Ptr (FunPtr, Ptr)
@@ -13,6 +13,7 @@ import GHC.Ptr (FunPtr(..), Ptr(..))
 
 foreign import ccall unsafe "&libdwPoolRelease" poolRelease :: FunPtr (Ptr () -> IO ())
 foreign import ccall unsafe "&backtraceFree" backtraceFree :: FunPtr (Ptr () -> IO ())
+foreign import ccall unsafe "stdlib.h &free" freeFunction :: FunPtr (Ptr () -> IO ())
 foreign import ccall unsafe "&enabled_capabilities" enabledCapabilities :: Ptr Word32
 
 data WeakBox = WeakBox (Weak# ())

@@ -49,12 +49,7 @@ internal class ManagedNativeAllocations(private val env: TruffleLanguage.Env) {
     @TruffleBoundary fun free(address: ManagedAddress) {
         current()
         val owner = synchronized(this) {
-            if (closed) fault("Native allocation registry is closed")
-            if (address === ManagedAddress.nullAddress()) return
-            val allocation = address.nativeAllocation() ?: fault("Native free requires an owned malloc base")
-            if (allocation !in live || allocation in freeing) fault("Native free requires a live allocation from this context")
-            if (!address.isNativeBase()) fault("Native free requires the allocation base")
-            allocation.requireFreeable()
+            val allocation = freeableOwner(address) ?: return
             freeing.add(allocation)
             allocation
         }
@@ -66,6 +61,20 @@ internal class ManagedNativeAllocations(private val env: TruffleLanguage.Env) {
             synchronized(this) { live.remove(owner); freeing.remove(owner) }
             threads.leaveForeign(previous)
         }
+    }
+    /** Check the same ownership contract when installing an &free callback. */
+    @Synchronized @TruffleBoundary fun requireFreeTarget(address: ManagedAddress) {
+        current()
+        freeableOwner(address)
+    }
+    private fun freeableOwner(address: ManagedAddress): Owner? {
+        if (closed) fault("Native allocation registry is closed")
+        if (address === ManagedAddress.nullAddress()) return null // libc free(NULL) is valid.
+        val owner = address.nativeAllocation() ?: fault("Native free requires an owned malloc base")
+        if (owner !in live || owner in freeing) fault("Native free requires a live allocation from this context")
+        if (!address.isNativeBase()) fault("Native free requires the allocation base")
+        owner.requireFreeable()
+        return owner
     }
     @TruffleBoundary fun close() {
         val pending = synchronized(this) {

@@ -117,7 +117,7 @@
     "function-addr",
     "data-addr"
   ],
-  "functionLabels": ["libdwPoolRelease", "backtraceFree"],
+  "functionLabels": ["libdwPoolRelease", "backtraceFree", "free"],
   "dataLabels": ["enabled_capabilities"],
   "integerLiteralRanges": {
     "int8": [
