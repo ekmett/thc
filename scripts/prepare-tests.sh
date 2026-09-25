@@ -63,6 +63,7 @@ python3 scripts/prepare-synchronous-exceptions.py
 "$fixture_bin" core-continuation
 "$fixture_bin" live-async
 "$fixture_bin" thread-async
+"$fixture_bin" thread-status
 "$fixture_bin" uncaught-self
 "$fixture_bin" mask-functions
 "$fixture_bin" interface-core

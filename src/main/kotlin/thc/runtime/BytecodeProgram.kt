@@ -1816,6 +1816,15 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     state.emit(e)
                     e.builder.endGetCurrentCCS()
                 }
+            } else if (fn[0] == "prim" && fn[1] == "threadStatus#") {
+                CoreGuestThreads.validate("threadStatus#", args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.map { argument(it, scope, false) }
+                CoreGuestThreads.validate("threadStatus#", operands.map { it.proof }, flags, tupleProof)
+                tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginThreadStatus(destination[0], destination[1], destination[2])
+                    operands.forEach { it.emit(e) }
+                    e.builder.endThreadStatus()
+                }
             } else if (fn[0] == "prim" && fn[1] in listOf("fork#", "myThreadId#", "killThread#")) {
                 val name = fn[1] as String
                 CoreGuestThreads.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)

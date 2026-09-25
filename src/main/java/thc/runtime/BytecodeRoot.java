@@ -447,6 +447,22 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "status")
+    @ConstantOperand(type = LocalAccessor.class, name = "capability")
+    @ConstantOperand(type = LocalAccessor.class, name = "locked")
+    public static final class ThreadStatus {
+        @Specialization public static void observe(VirtualFrame frame, LocalAccessor status,
+                LocalAccessor capability, LocalAccessor locked, Object identity, Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            GuestThreadSnapshot snapshot = GuestThreadOps.threadStatus(node, identity);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            status.setLong(bytecode, frame, snapshot.getStatus());
+            capability.setLong(bytecode, frame, snapshot.getCapability());
+            locked.setLong(bytecode, frame, snapshot.getLocked());
+        }
+    }
+
     public enum ThreadPrimitiveKind { MY, FORK, BEGIN_KILL, FINISH_KILL }
 
     /** One cold instruction keeps the generated interpreter below its partition limit. */

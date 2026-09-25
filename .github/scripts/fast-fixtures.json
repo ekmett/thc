@@ -13,6 +13,7 @@
     "thc.runtime.SulongLimbProviderTest",
     "thc.runtime.AstContinuationTest",
     "thc.runtime.GuestThreadsTest",
+    "thc.runtime.GuestThreadStatusTest",
     "thc.runtime.BytecodeTypedTupleInputTest",
     "thc.runtime.DoubleArrayTest",
     "thc.runtime.DoubleVectorMemoryProofTest",
@@ -526,6 +527,14 @@
         "compiler/test-fixtures/LazyIOCallbackAudit.hs",
         "compiler/test-fixtures/LazyIOCallbackNative.hs"
       ]
+    },
+    "thread-status": {
+      "junit": ["thc.runtime.ThreadStatusNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-status"]}],
+      "outputs": ["build/thread-status"],
+      "sources": ["compiler/test-fixtures/ThreadStatusAudit.hs", "compiler/test-fixtures/ThreadStatusNative.hs",
+        "test/haskell-fixtures/ThreadStatusFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "thread-async": {
       "junit": ["thc.runtime.ThreadAsyncNativeTest"],

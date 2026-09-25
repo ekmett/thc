@@ -396,15 +396,20 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
         }
         val threads = Language.currentState(dispatch).threads
         threads.enterCurrent()
+        var outcome = thc.runtime.GuestThreadStatus.FINISHED
         try {
-            return thc.runtime.AsyncContinuations.publicResult(
-                dispatch.executePublic(guestTarget, arrayOf(guestEntry, normalized)), dispatch)
-        } catch (suspended: thc.runtime.ThunkSuspended) {
-            thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
-        } catch (suspended: thc.runtime.CallSegmentSuspended) {
-            thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
-        }
-        finally { threads.leaveCurrent() }
+            try {
+                return thc.runtime.AsyncContinuations.publicResult(
+                    dispatch.executePublic(guestTarget, arrayOf(guestEntry, normalized)), dispatch)
+            } catch (suspended: thc.runtime.ThunkSuspended) {
+                thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
+            } catch (suspended: thc.runtime.CallSegmentSuspended) {
+                thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
+            }
+        } catch (failure: Throwable) {
+            outcome = thc.runtime.GuestThreadStatus.uncaught(failure)
+            throw failure
+        } finally { threads.leaveCurrent(outcome) }
     }
     @ExportMessage fun hasMembers() = true
     @ExportMessage fun getMembers(includeInternal: Boolean): Any = MemberNames(
@@ -428,13 +433,18 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
             require(arguments.isEmpty()) { "runIO takes no arguments" }
             val threads = Language.currentState(dispatch).threads
             threads.enterCurrent()
-            try { dispatch.execute(ioTarget, arrayOf(guestEntry)) }
-            catch (suspended: thc.runtime.ThunkSuspended) {
-                thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
-            } catch (suspended: thc.runtime.CallSegmentSuspended) {
-                thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
-            }
-            finally { threads.leaveCurrent() }
+            var outcome = thc.runtime.GuestThreadStatus.FINISHED
+            try {
+                try { dispatch.execute(ioTarget, arrayOf(guestEntry)) }
+                catch (suspended: thc.runtime.ThunkSuspended) {
+                    thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
+                } catch (suspended: thc.runtime.CallSegmentSuspended) {
+                    thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
+                }
+            } catch (failure: Throwable) {
+                outcome = thc.runtime.GuestThreadStatus.uncaught(failure)
+                throw failure
+            } finally { threads.leaveCurrent(outcome) }
             return true
         }
         if (member != "compile") throw UnknownIdentifierException.create(member)

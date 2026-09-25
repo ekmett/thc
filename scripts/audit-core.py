@@ -1165,6 +1165,8 @@ class Audit:
                         kind, reps = rep.get('kind'), rep.get('primReps')
                         if role == 'state':
                             return kind == 'void' and reps == []
+                        if role == 'int':
+                            return kind == 'long' and reps == ['IntRep']
                         if role == 'threadId':
                             return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
                         if role == 'action':
@@ -1189,7 +1191,7 @@ class Audit:
                         valid = (self.is_tuple(proof) and proof.get('kind') == 'unknown' and
                                  isinstance(fields, list) and len(fields) == len(result) and
                                  all(thread_role(rep, role) for rep, role in zip(fields, result)) and
-                                 proof.get('primReps') == ['BoxedRep (Just Unlifted)'])
+                                 proof.get('primReps') == [rep for field in fields for rep in field['primReps']])
                     else:
                         valid = thread_role(proof, result)
                     if not valid:

@@ -23,11 +23,11 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "1651fa18356d9acc433cbd6f955c346fb7b58f91d36aa7cbe85b679c598e7d1e"
+FULL_PREPARATION_PLAN = "b260cf4f8b5a1dc58818516e54ea5327a4a4ef65983b7f658df2f9ffa796e809"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
-    "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/uncaught-self", "build/small-arrays", "build/floating-address",
+    "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/thread-status", "build/uncaught-self", "build/small-arrays", "build/floating-address",
     "build/floating-byte-offset", "build/narrow-byte-offset", "build/int32-byte-offset",
     "build/explicit64-arrays", "build/mask-functions", "build/interface-core",
     "build/original-fd-ready",
@@ -74,6 +74,10 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/live-async/pre/prefixCount-audit.json", "build/live-async/post/prefixCount-audit.json",
     "build/live-async/pre/warmLoop-audit.json", "build/live-async/post/warmLoop-audit.json",
     "build/live-async/pre/asyncPayload-audit.json", "build/live-async/post/asyncPayload-audit.json",
+    "build/thread-status/manifest.json", "build/thread-status/oracle.txt",
+    *[f"build/thread-status/{stage}/{suffix}" for stage in ("pre", "post")
+      for suffix in ("core/ThreadStatusAudit.json", "selfStatus-audit.json", "maskedStatus-audit.json",
+                     "finishedStatus-audit.json", "diedStatus-audit.json", "blockedStatus-audit.json")],
     "build/thread-async/manifest.json", "build/thread-async/oracle.txt", "build/thread-async/extra-oracle.txt",
     "build/thread-async/lazy-oracle.txt",
     "build/thread-async/pre/core/ThreadAsyncAudit.json", "build/thread-async/post/core/ThreadAsyncAudit.json",
