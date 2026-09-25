@@ -16,6 +16,7 @@ import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import org.junit.jupiter.api.io.TempDir
 import thc.CoreModules
+import thc.ContextProfile
 import thc.Json
 import thc.Language
 import thc.NativeIO.StandardEndpoint
@@ -98,7 +99,7 @@ class OriginalFstatTest {
             assertEquals(1, fstats.size)
             assertEquals(OriginalStdioOp.FSTAT, validate(fstats.single()))
             for (backend in listOf("ast", "bytecode"))
-                NativeFileProvider.createContext(emptySet(), synchronousCompilation = true).use { context -> entered(context) { language ->
+                NativeFileProvider.createContext(emptySet(), ContextProfile.SYNCHRONOUS_TEST).use { context -> entered(context) { language ->
                     val state = Language.currentState(); val files = state.files; val stdio = state.stdio
                     val program = load(language, backend, linked); val entry = program.entryTarget(name)
                     var active = emptyList<RootCallTarget>()
@@ -170,7 +171,7 @@ class OriginalFstatTest {
 
     @Test fun stateAndFullWritableByteRegionPrecedeAnyObservationOrMutation() {
         val size = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.nullAddress(), 0).toInt()
-        for (backend in listOf("ast", "bytecode")) NativeFileProvider.createContext(StandardEndpoint.entries.toSet(), true).use { context ->
+        for (backend in listOf("ast", "bytecode")) NativeFileProvider.createContext(StandardEndpoint.entries.toSet(), ContextProfile.SYNCHRONOUS_TEST).use { context ->
             entered(context) { language ->
                 val state = Language.currentState(); val bytes = ByteArray(size + 2) { 90 }
                 val program = load(language, backend, OriginalPosixStatTest().rawModule(original()))
