@@ -1170,7 +1170,7 @@
       "haskell": ["driver-tests"]
     },
     "src/main/kotlin/thc/runtime/TargetLayout.kt": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"],
+      "junit": ["thc.CoreZipBundleTest", "thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"],
       "python": []
     },
     "src/THC/Driver/Wired.hs": {
