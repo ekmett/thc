@@ -104,6 +104,7 @@ class FileWaitPrimitiveTest {
                         val failure = assertThrows(GuestException::class.java) { call(bad) }
                         assertSame(original, failure.payload)
                         assertEquals(0, original.state, "RTS payload must remain lazy")
+                        assertTrue(valid(target), "$backend/$name remains installed after bad FD $bad")
                     }
                     assertTrue(valid(target), "$backend/$name remains installed after bad FD")
                 }
@@ -162,6 +163,7 @@ class FileWaitPrimitiveTest {
                     } finally { state.threads.leaveCurrent(); context.leave() }
                 }
                 awaitBlocked(future)
+                assertTrue(valid(target), "Target invalidated on worker entry before the async cut")
                 val request = state.threads.send(id.get(), "interrupt descriptor wait")
                 val saved = future.get(5, TimeUnit.SECONDS) as ContinuationResult
                 assertSame(request, AsyncContinuations.request(saved))
@@ -173,6 +175,7 @@ class FileWaitPrimitiveTest {
 
             val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
             val (ready, firstRequest) = cut(MaskingState.UNMASKED)
+            assertTrue(valid(target), "Target invalidated by first async cut")
             assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
             assertEquals(AsyncRequestState.ACKNOWLEDGED, firstRequest.state)
             context.enter()
@@ -180,6 +183,7 @@ class FileWaitPrimitiveTest {
                 assertEquals(1L, state.stdio.write(write, ManagedAddress.fromByteArray(byteArrayOf(9)), 1))
                 assertSame(Unit, ready.continueWith(Unit))
                 assertEquals(1L, state.stdio.read(read, ManagedAddress.fromByteArray(byteArrayOf(0)), 1))
+                assertTrue(valid(target), "Target invalidated by continuation resume")
             } finally { context.leave() }
 
             val id = AtomicLong(-1)
@@ -196,6 +200,7 @@ class FileWaitPrimitiveTest {
                 } finally { state.threads.leaveCurrent(); context.leave() }
             }
             awaitBlocked(masked)
+            assertTrue(valid(target), "Target invalidated on masked worker entry")
             val maskedRequest = state.threads.send(id.get(), "masked descriptor wait")
             assertEquals(AsyncRequestState.PENDING, maskedRequest.state)
             assertFalse(masked.isDone, "Uninterruptibly masked wait cannot claim the request")
