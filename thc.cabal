@@ -245,6 +245,7 @@ executable thc-fixtures
     THC.Driver.Wired
     BoxedArrayExtensionsFixtures
     WideCharAddressFixtures
+    ManagedAddressReadFixtures
   hs-source-dirs: test/haskell-fixtures, src
   build-depends:
     base >= 4.22 && < 4.23,

@@ -21,6 +21,29 @@ import java.security.MessageDigest
 
 class ManagedAddressReadTest {
     private val root = File(System.getProperty("thc.projectRoot"))
+    private val nativeEntries = linkedMapOf("word32Read" to 4, "wordRead" to 8,
+        "int32Read" to 4, "intRead" to 8)
+    private val nativeSeeds = listOf(Long.MIN_VALUE, -4294967296L, -2147483649L,
+        -2147483648L, -1L, 0L, 1L, 127L, 128L, 255L, 256L, 2147483647L,
+        2147483648L, 4294967295L, Long.MAX_VALUE)
+    private fun nativeModel(row: List<String>): Long {
+        val (name, rawText, baseText, offsetText) = row
+        val raw = rawText.toLong()
+        val width = nativeEntries.getValue(name)
+        val start = baseText.toInt() + offsetText.toInt() * width
+        val bytes = ByteBuffer.allocate(32).order(ByteOrder.nativeOrder())
+        for (word in listOf(raw, raw xor 0x0123456789abcdefL, raw.inv(),
+            raw xor 0xaaaaaaaaaaaaaaaaUL.toLong())) bytes.putLong(word)
+        fun read(): Long = when (name) {
+            "word32Read" -> bytes.getInt(start).toLong() and 0xffffffffL
+            "wordRead", "intRead" -> bytes.getLong(start)
+            "int32Read" -> bytes.getInt(start).toLong()
+            else -> error("Unknown native address read $name")
+        }
+        val before = read()
+        bytes.put(start, (raw + 173).toByte())
+        return 3 * before + 5 * read()
+    }
     private val operations = listOf(PinnedMemoryOp.READ_WORD16, PinnedMemoryOp.READ_INT16,
         PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
         PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT)
@@ -44,7 +67,8 @@ class ManagedAddressReadTest {
     @Test fun genuineGhcNativeOracleMatchesBothBackends() {
         val manifest = Json.parse(File(root, "build/managed-address-reads/manifest.json").readText()) as Map<String, Any?>
         assertEquals(true, manifest["strictAccepted"])
-        assertEquals(48L, manifest["negativeProofs"])
+        assertEquals(8L, manifest["strictAudits"])
+        assertEquals(64L, manifest["wordBits"])
         for (kind in listOf("inputHashes", "artifactHashes"))
             for ((path, expected) in manifest[kind] as Map<String, String>) {
                 val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
@@ -52,11 +76,33 @@ class ManagedAddressReadTest {
                 assertEquals(expected, actual, "Stale address-read evidence: $path")
             }
         val rows = File(root, "build/managed-address-reads/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
-        assertEquals((manifest["entries"] as List<String>).toSet(), rows.keys)
+        assertEquals(nativeEntries.keys, (manifest["entries"] as List<String>).toSet())
+        assertEquals(nativeEntries.keys, rows.keys)
         assertEquals(1800, rows.values.sumOf { it.size })
         assertEquals(1800L, manifest["nativeRows"])
+        val requests = nativeEntries.flatMap { (name, width) -> nativeSeeds.flatMap { raw ->
+            (0..32 step 8).flatMap { base -> (0..32 - width step width).map { start ->
+                listOf(name, raw.toString(), base.toString(), ((start - base) / width).toString())
+            } }
+        } }
+        assertEquals(requests, File(root, "build/managed-address-reads/requests.tsv").readLines().map { it.split('\t') })
+        val orderedRows = File(root, "build/managed-address-reads/oracle.tsv").readLines().map { it.split('\t') }
+        for ((request, row) in requests.zip(orderedRows)) {
+            assertEquals(request, row.take(4))
+            assertEquals(nativeModel(request), row[4].toLong(), "Native address read $row")
+        }
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) {
             val source = CoreModules.merge(paths.map { Json.parse(File(root, it).readText()) as Map<String, Any?> })
+            val fixture = paths.map { Json.parse(File(root, it).readText()) as Map<String, Any?> }
+                .single { it["module"] == "ManagedAddressReadAudit" }
+            assertEquals(if (stage == "pre") "optimized-Core-before-Tidy" else
+                "optimized-Core-after-Tidy-before-CorePrep", fixture["boundary"])
+            for ((name, primitive) in nativeEntries.keys.zip(listOf("readWord32OffAddr#",
+                "readWordOffAddr#", "readInt32OffAddr#", "readIntOffAddr#"))) {
+                val report = Json.parse(File(root, "build/managed-address-reads/$stage-$name.audit.json").readText()) as Map<String, Any?>
+                assertEquals(true, report["accepted"], "$stage/$name")
+                assertTrue((report["primitives"] as List<Map<String, Any?>>).any { it["name"] == primitive }, "$stage/$name")
+            }
             for ((name, cases) in rows) for (backend in listOf("ast", "bytecode")) context().use { context ->
                 context.initialize("thc"); context.enter()
                 try {
