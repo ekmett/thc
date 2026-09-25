@@ -64,7 +64,8 @@ class SimdFamiliesTest {
             Triple(Int64X4::class.java, 4, Long::class.javaPrimitiveType), Triple(Int64X8::class.java, 8, Long::class.javaPrimitiveType),
             Triple(Word64X4::class.java, 4, Long::class.javaPrimitiveType), Triple(Word64X8::class.java, 8, Long::class.javaPrimitiveType),
             Triple(Word32X16::class.java, 16, Int::class.javaPrimitiveType),
-            Triple(FloatX16::class.java, 16, Float::class.javaPrimitiveType), Triple(DoubleX8::class.java, 8, Double::class.javaPrimitiveType))) {
+            Triple(FloatX16::class.java, 16, Float::class.javaPrimitiveType), Triple(DoubleX8::class.java, 8, Double::class.javaPrimitiveType),
+            Triple(Int16X16::class.java, 16, Short::class.javaPrimitiveType), Triple(Word16X16::class.java, 16, Short::class.javaPrimitiveType))) {
             val fields = carrier.declaredFields.filterNot { Modifier.isStatic(it.modifiers) }
             assertEquals(count, fields.size)
             assertTrue(fields.all { it.type == primitive && Modifier.isFinal(it.modifiers) && !Modifier.isStatic(it.modifiers) })
@@ -73,7 +74,7 @@ class SimdFamiliesTest {
     }
 
     @Test fun exactLaneSignWidthLogicalTupleAndCallingProofsRemainRequired() {
-        assertEquals(117, GeneratedVectors.operations.size)
+        assertEquals(132, GeneratedVectors.operations.size)
         for ((name, tuple, vector) in listOf(
             Triple("Word64X2", GeneratedVectors.unpackedWord64X2, GeneratedVectors.proofWord64X2),
             Triple("Word32X8", GeneratedVectors.unpackedWord32X8, GeneratedVectors.proofWord32X8),
@@ -88,6 +89,8 @@ class SimdFamiliesTest {
             Triple("Word32X16", GeneratedVectors.unpackedWord32X16, GeneratedVectors.proofWord32X16),
             Triple("FloatX16", GeneratedVectors.unpackedFloatX16, GeneratedVectors.proofFloatX16),
             Triple("DoubleX8", GeneratedVectors.unpackedDoubleX8, GeneratedVectors.proofDoubleX8),
+            Triple("Int16X16", GeneratedVectors.unpackedInt16X16, GeneratedVectors.proofInt16X16),
+            Triple("Word16X16", GeneratedVectors.unpackedWord16X16, GeneratedVectors.proofWord16X16),
             Triple("Int8X16", CoreVectors.unpacked8, CoreVectors.proof8),
             Triple("Word8X16", CoreVectors.unpackedWord8, CoreVectors.proofWord8),
             Triple("Int16X8", CoreVectors.unpacked16, CoreVectors.proof16),
