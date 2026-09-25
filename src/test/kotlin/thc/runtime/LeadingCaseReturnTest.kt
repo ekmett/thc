@@ -240,7 +240,12 @@ class LeadingCaseReturnTest {
             val failure = assertThrows(RuntimeFault::class.java) {
                 run(p, "driver", fn, 11L, stop, "invalid primitive carrier")
             }
-            assertEquals(if (backend == "ast") "Expected primitive Long argument" else "Expected primitive Long", failure.message)
+            val expectedMessage = when {
+                backend == "ast" && java.lang.Boolean.getBoolean(HANDOFF_PROPERTY) -> "Invalid primitive handoff field"
+                backend == "ast" -> "Expected primitive Long argument"
+                else -> "Expected primitive Long"
+            }
+            assertEquals(expectedMessage, failure.message)
             assertEquals(0L, count(p))
         }
     }
