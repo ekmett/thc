@@ -1076,6 +1076,20 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = GmpForeignOp.class, name = "operation")
+    public static final class OriginalGmpCall {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                GmpForeignOp operation, Object first, Object second, Object third, Object fourth,
+                long a, long b, long c, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = ManagedGmp.invoke(node, operation, first, second, third, fourth, a, b, c);
+            if (operation.getResult() != null)
+                destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
     public static final class Md5Update {
         @Specialization public static void apply(ManagedAddress context, ManagedAddress input, long length, Object state) {
             ManagedByteArray.requireState(state);
