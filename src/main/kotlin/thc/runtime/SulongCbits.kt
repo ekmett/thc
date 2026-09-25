@@ -15,6 +15,7 @@ import thc.ForeignBitcode
 
 /** Context-owned original C code and allocation views. No process addresses escape. */
 internal class SulongCbits(env: TruffleLanguage.Env) {
+    internal data class CapiResult(val value: Long, val errno: Long)
     private val interop = InteropLibrary.getUncached()
     private fun load(env: TruffleLanguage.Env, name: String): Any {
         val bytes = SulongCbits::class.java.getResourceAsStream("/thc/cbits/$name.bc")?.use { it.readBytes() }
@@ -43,7 +44,9 @@ internal class SulongCbits(env: TruffleLanguage.Env) {
     private val buffers = WeakHashMap<Any, WeakReference<CbitsBuffer>>()
     private val foreign = ConcurrentHashMap<Pair<String, String>, Any>()
     @Volatile private var foreignErrno: Any? = null
-    @Volatile private var foreignWordAddress: Any? = null
+    @Volatile private var foreignAlloc: Any? = null
+    @Volatile private var foreignCopy: Any? = null
+    @Volatile private var foreignFree: Any? = null
     @Volatile private var linkedForeign: ForeignBitcode? = null
 
     private fun sameLink(first: ForeignBitcode, second: ForeignBitcode) =
@@ -60,13 +63,18 @@ internal class SulongCbits(env: TruffleLanguage.Env) {
             interop.readMember(library, symbol)
         }
         require(interop.isMemberReadable(library, "thc_capi_errno")) { "CAPI library lacks errno bridge" }
-        require(interop.isMemberReadable(library, "thc_capi_word_address")) { "CAPI library lacks native pointer bridge" }
+        for (name in listOf("thc_capi_alloc_timespec", "thc_capi_copy_timespec", "thc_capi_free_timespec"))
+            require(interop.isMemberReadable(library, name)) { "CAPI library lacks native pointer bridge: $name" }
         val errno = interop.readMember(library, "thc_capi_errno")
-        val wordAddress = interop.readMember(library, "thc_capi_word_address")
+        val allocation = interop.readMember(library, "thc_capi_alloc_timespec")
+        val copy = interop.readMember(library, "thc_capi_copy_timespec")
+        val free = interop.readMember(library, "thc_capi_free_timespec")
         synchronized(this) {
             linkedForeign?.let { require(sameLink(it, record)) { "Conflicting CAPI library identity" }; return }
             foreignErrno = errno
-            foreignWordAddress = wordAddress
+            foreignAlloc = allocation
+            foreignCopy = copy
+            foreignFree = free
             for ((symbol, function) in resolved) foreign[record.unit to symbol] = function
             linkedForeign = record
         }
@@ -81,17 +89,30 @@ internal class SulongCbits(env: TruffleLanguage.Env) {
         return interop.asLong(value)
     }
 
-    fun capiWordAddress(unit: String, symbol: String, word: Long, address: ManagedAddress): Long {
-        // The foreign pointer is an offset view of the same guest allocation.
-        // Validate the complete timespec before C can write either of its words.
-        // ManagedAddress rejects pointer-bearing aliases before native exposure.
-        address.requireRange(0, 16, writable = true)
-        val pointer = CbitsBuffer(address.cbitsBacking(), address.cbitsWritable(),
-            LongSupplier { address.cbitsSize() }, address.cbitsOffset())
-        val bridge = foreignWordAddress ?: fault("No linked CAPI native pointer bridge")
-        val value = interop.execute(bridge, foreignFunction(unit, symbol), word, pointer)
-        if (!interop.fitsInInt(value)) fault("CAPI result is not a CInt: $symbol")
-        return interop.asInt(value).toLong()
+    fun capiWordAddress(unit: String, symbol: String, word: Long, address: ManagedAddress): CapiResult {
+        // The original wrapper calls libc with a malloc-owned timespec. Only
+        // the completed result crosses into the checked managed Addr# view.
+        val invoke = {
+            address.requireRange(0, 16, writable = true)
+            val pointer = CbitsBuffer(address.cbitsBacking(), address.cbitsWritable(),
+                LongSupplier { address.cbitsSize() }, address.cbitsOffset())
+            val alloc = foreignAlloc ?: fault("No linked CAPI native allocation bridge")
+            val copy = foreignCopy ?: fault("No linked CAPI native copy bridge")
+            val free = foreignFree ?: fault("No linked CAPI native release bridge")
+            val native = interop.execute(alloc)
+            if (interop.isNull(native)) CapiResult(-1, capiErrno()) else try {
+                val result = interop.execute(foreignFunction(unit, symbol), word, native)
+                if (!interop.fitsInInt(result)) fault("CAPI result is not a CInt: $symbol")
+                val value = interop.asInt(result).toLong()
+                val errno = if (value < 0) capiErrno() else 0L
+                if (value == 0L) interop.execute(copy, native, pointer)
+                CapiResult(value, errno)
+            } finally { interop.execute(free, native) }
+        }
+        // A guest allocation may be shrunk by another host thread; hold its
+        // owner through preflight, C call, copyback, and native release.
+        val owner = address.cbitsOwner()
+        return if (owner == null) invoke() else synchronized(owner) { invoke() }
     }
 
     fun capiErrno(): Long {

@@ -105,13 +105,13 @@ class InterfaceCoreNativeTest {
                 val clock = cbits.capiZero(link.unit, "fixture_clock_id")
                 val bytes = ByteArray(32) { 0x5a }
                 val address = ManagedAddress.fromByteArray(bytes).plus(5)
-                assertEquals(0L, cbits.capiWordAddress(link.unit, "fixture_clock_time", clock, address))
+                assertEquals(0L, cbits.capiWordAddress(link.unit, "fixture_clock_time", clock, address).value)
                 val view = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.nativeOrder())
                 assertTrue(view.getLong(5) >= 0)
                 assertTrue(view.getLong(13) in 0 until 1_000_000_000L)
                 assertEquals(0x5a.toByte(), bytes[4])
                 assertEquals(0x5a.toByte(), bytes[21])
-                assertEquals(0L, cbits.capiWordAddress(link.unit, "fixture_clock_resolution", clock, address))
+                assertEquals(0L, cbits.capiWordAddress(link.unit, "fixture_clock_resolution", clock, address).value)
                 assertTrue(view.getLong(13) in 0 until 1_000_000_000L)
             } finally { context.leave() }
         }

@@ -7,6 +7,7 @@
 import hashlib
 import json
 from pathlib import Path
+import platform
 import re
 import stat
 import zlib
@@ -31,6 +32,16 @@ def linked_foreign(module):
             link['module'] != 'System.CPUTime.Posix.ClockGetTime' or
             not isinstance(link['unit'], str) or not link['unit'].startswith('base-')):
         raise ValueError('invalid linked foreign owner/schema')
+    target = link['target']
+    machine = platform.machine().lower()
+    host_arch = {'amd64': 'x86_64', 'arm64': 'aarch64'}.get(machine, machine)
+    target_arch = target.split('-', 1)[0] if isinstance(target, str) else ''
+    system = platform.system().lower()
+    compatible_arch = target_arch == host_arch or host_arch == 'aarch64' and target_arch == 'arm64'
+    compatible_system = ((system == 'darwin' and '-darwin' in target) or
+                         (system == 'linux' and target.endswith('linux-gnu'))) if isinstance(target, str) else False
+    if not (compatible_arch and compatible_system):
+        raise ValueError('linked foreign bitcode target differs from audit host')
     foreign = module.get('foreign')
     if not isinstance(foreign, dict):
         raise ValueError('linked foreign module lacks original archive')

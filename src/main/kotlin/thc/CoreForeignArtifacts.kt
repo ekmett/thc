@@ -51,11 +51,15 @@ internal object CoreForeignArtifacts {
         require(encoded.isNotEmpty() && encoded.all { it in '0'..'9' || it in 'a'..'f' } &&
             hash?.matches(sha) == true && digest(bytes) == hash) { "Foreign bitcode hash mismatch" }
         val target = link["target"] as? String ?: error("Missing foreign target")
-        val system = System.getProperty("os.name").let { if (it.startsWith("Mac")) "darwin" else it.lowercase() }
+        val system = System.getProperty("os.name").let {
+            when { it.startsWith("Mac") -> "darwin"; it.startsWith("Linux") -> "linux-gnu"; else -> "unsupported" }
+        }
         val arch = when (System.getProperty("os.arch").lowercase()) {
             "amd64" -> "x86_64"; "arm64" -> "aarch64"; else -> System.getProperty("os.arch").lowercase()
         }
-        require(target.contains(system) && (target.startsWith(arch) || arch == "aarch64" && target.startsWith("arm64"))) {
+        val hostSystem = if (system == "darwin") "-darwin" in target else target.endsWith("-linux-gnu")
+        require(system != "unsupported" && hostSystem &&
+            (target.startsWith("$arch-") || arch == "aarch64" && target.startsWith("arm64-"))) {
             "Foreign bitcode target differs from this runtime"
         }
         val symbols = (link["symbols"] as? List<*>)?.map {

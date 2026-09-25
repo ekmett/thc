@@ -22,9 +22,9 @@ internal object CoreCapiForeign {
         val state = Language.currentState(node)
         val previous = state.threads.enterForeign()
         try {
-            return state.cbits().capiWordAddress(call.unit, call.symbol, word, address).also {
-                if (it < 0) state.stdio.captureForeignErrno(state.cbits().capiErrno())
-            }
+            val result = state.cbits().capiWordAddress(call.unit, call.symbol, word, address)
+            if (result.value < 0) state.stdio.captureForeignErrno(result.errno)
+            return result.value
         } finally { state.threads.leaveForeign(previous) }
     }
     private val scalarKeys = setOf("kind", "primReps", "evaluated")

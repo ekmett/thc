@@ -7,6 +7,7 @@
 import hashlib
 import json
 from pathlib import Path
+import platform
 import subprocess
 from tempfile import TemporaryDirectory
 import unittest
@@ -61,6 +62,27 @@ class PackageManifestTest(unittest.TestCase):
     def test_same_module_name_in_distinct_units_is_unambiguous(self):
         path = self.manifest([self.unit('first'), self.unit('second')])
         self.assertEqual(['first', 'second'], [source['unit'] for _, source in core_package_manifest.load(path)])
+
+    def test_linked_foreign_target_must_match_audit_host(self):
+        machine = platform.machine().lower()
+        arch = {'amd64': 'x86_64', 'arm64': 'aarch64'}.get(machine, machine)
+        target = arch + ('-apple-darwin' if platform.system() == 'Darwin' else '-unknown-linux-gnu')
+        symbols = ['clock_id', 'clock_time', 'clock_resolution']
+        source = 'original C source'
+        bitcode = b'BC'
+        module = dict(unit='base-fixture', module='System.CPUTime.Posix.ClockGetTime',
+                      bindings=[dict(foreignCall=dict(target=dict(kind='static', unit='base-fixture',
+                          isFunction=True, symbol=symbol), convention='capi', safety='unsafe'))
+                          for symbol in symbols],
+                      foreign=dict(stubs=dict(header='', source=source, initializers=[], finalizers=[]), files=[]),
+                      foreignLink=dict(schema=1, format='llvm-bitcode', unit='base-fixture',
+                          module='System.CPUTime.Posix.ClockGetTime', target=target, symbols=symbols,
+                          sourceSha256=hashlib.sha256(source.encode()).hexdigest(),
+                          bitcodeSha256=hashlib.sha256(bitcode).hexdigest(), bitcodeHex=bitcode.hex()))
+        self.assertTrue(core_package_manifest.linked_foreign(module))
+        for invalid in (17, 'riscv64-unknown-linux-gnu'):
+            with self.subTest(target=invalid), self.assertRaisesRegex(ValueError, 'target differs'):
+                core_package_manifest.linked_foreign(module | dict(foreignLink=module['foreignLink'] | dict(target=invalid)))
 
     def test_hash_unit_boundary_and_duplicate_unit_must_match(self):
         unit = self.unit('first')

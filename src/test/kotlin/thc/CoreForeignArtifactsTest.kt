@@ -38,6 +38,8 @@ class CoreForeignArtifactsTest {
         CoreForeignArtifacts.requireExecutable(linked)
         for (bad in listOf(
             linked + ("foreignLink" to (link + ("bitcodeSha256" to "0".repeat(64)))),
+            linked + ("foreignLink" to (link + ("target" to 17L))),
+            linked + ("foreignLink" to (link + ("target" to "riscv64-unknown-linux-gnu"))),
             linked + ("foreignLink" to (link + ("symbols" to symbols.take(2)))),
             linked + ("foreignLink" to (link + ("sourceSha256" to "0".repeat(64)))),
             linked + ("foreign" to (archive + ("stubs" to ((archive["stubs"] as Map<*, *>) +
