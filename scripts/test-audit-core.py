@@ -2276,7 +2276,8 @@ class ExplicitWeakContractTest(unittest.TestCase):
     def fixture(self, name):
         state = dict(kind='void', primReps=[], evaluated=True)
         weak = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
-        roles = dict(state=state, weak=weak, boxed=REFERENCE, action=CLOSURE, flag=LONG)
+        roles = dict(state=state, weak=weak, boxed=REFERENCE, action=CLOSURE, flag=LONG,
+                     address=dict(kind='address', primReps=['AddrRep'], evaluated=True))
         contract = CAP['managedWeakPrimitives'][name]
         parameters = [dict(id=f'a{i}', lifted=roles[role]['primReps'] == ['BoxedRep (Just Lifted)'],
                            rep=copy.deepcopy(roles[role])) for i, role in enumerate(contract['arguments'])]
@@ -2292,16 +2293,16 @@ class ExplicitWeakContractTest(unittest.TestCase):
     def call(self, module):
         return module['bindings'][0]['expr'][2][1]
 
-    def test_four_exact_contracts_are_partial_and_c_finalizers_stay_rejected(self):
-        self.assertEqual({'mkWeak#', 'mkWeakNoFinalizer#', 'deRefWeak#', 'finalizeWeak#'},
+    def test_five_exact_contracts_admit_only_the_typed_c_finalizer(self):
+        self.assertEqual({'mkWeak#', 'mkWeakNoFinalizer#', 'deRefWeak#', 'finalizeWeak#', 'addCFinalizerToWeak#'},
                          set(CAP['managedWeakPrimitives']))
         for name in CAP['managedWeakPrimitives']:
             module = self.fixture(name)
             report = run_tuple(module)
             self.assertTrue(report['accepted'], report['issues'])
-            self.call(module)[1][1] = 'addCFinalizerToWeak#'
+            self.call(module)[1][1] = 'notAWeakPrimitive#'
             self.assertFalse(run_tuple(module)['accepted'])
-        self.assertNotIn('addCFinalizerToWeak#', CAP['primitives'])
+        self.assertEqual(6, CAP['primitives']['addCFinalizerToWeak#'])
 
     def test_flags_arity_state_logical_tuple_and_lexical_proofs_cannot_be_forged(self):
         for name in CAP['managedWeakPrimitives']:
@@ -2317,10 +2318,34 @@ class ExplicitWeakContractTest(unittest.TestCase):
                 elif mutation == 3:
                     call[6]['rep']['components'].pop(0)  # Identical physical reps, missing logical State.
                 else:
-                    module['bindings'][0]['expr'][1][0]['rep'] = dict(kind='address', primReps=['AddrRep'])
+                    module['bindings'][0]['expr'][1][0]['rep'] = dict(kind='long', primReps=['WordRep'])
                 report = run_tuple(module)
                 self.assertFalse(report['accepted'], (name, mutation))
                 self.assertIn('primitive-representation', {issue['code'] for issue in report['issues']})
+
+    def test_only_source_certified_function_labels_are_admitted(self):
+        for symbol in ('libdwPoolRelease', 'backtraceFree', 'enabled_capabilities', 'notACallback'):
+            module = self.fixture('addCFinalizerToWeak#')
+            self.call(module)[2][0] = ['lit', 'function-addr', symbol,
+                dict(rep=dict(kind='address', primReps=['AddrRep'], evaluated=True))]
+            report = run_tuple(module)
+            self.assertEqual(symbol in ('libdwPoolRelease', 'backtraceFree'), report['accepted'], (symbol, report))
+        module = self.fixture('addCFinalizerToWeak#')
+        self.call(module)[2][0] = ['lit', 'data-addr', 'enabled_capabilities',
+            dict(rep=dict(kind='address', primReps=['AddrRep'], evaluated=True))]
+        self.assertFalse(run_tuple(module)['accepted'])
+        for mutation in ('missing', 'kind', 'rep', 'aggregate'):
+            module = self.fixture('addCFinalizerToWeak#')
+            label = ['lit', 'function-addr', 'libdwPoolRelease',
+                dict(rep=dict(kind='address', primReps=['AddrRep'], evaluated=True))]
+            self.call(module)[2][0] = label
+            if mutation == 'missing': label.pop()
+            elif mutation == 'kind': label[3]['rep']['kind'] = 'long'
+            elif mutation == 'rep': label[3]['rep']['primReps'] = ['IntRep']
+            else: label[3]['rep']['aggregate'] = 'unboxed-tuple'
+            report = run_tuple(module)
+            self.assertFalse(report['accepted'], (mutation, report))
+            self.assertIn('scalar-representation', {issue['code'] for issue in report['issues']})
 
 
 if __name__ == '__main__':

@@ -92,7 +92,7 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
             val milliseconds = operands[2].executeRequiredLong(frame)
             val socket = operands[3].executeRequiredLong(frame)
             requireVoidCarrier(operands[4].execute(frame))
-            CoreOriginalStdio.current(this).ready(fd, writing, milliseconds, socket)
+            CoreOriginalStdio.current(this).ready(fd, writing, milliseconds, socket, this)
         } else if (operation == OriginalStdioOp.ISATTY || operation == OriginalStdioOp.CLOSE || operation == OriginalStdioOp.DUP) {
             val fd = operands[0].executeRequiredLong(frame)
             requireVoidCarrier(operands[1].execute(frame))

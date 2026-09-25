@@ -8,11 +8,23 @@ import org.graalvm.polyglot.PolyglotException
 import org.graalvm.polyglot.Value
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import thc.runtime.BytecodeRoot
 import java.io.File
 import java.security.MessageDigest
 
 /** Actual GHC primops, unsigned mathematical results and installed guest code. */
 class IntegerPrimopsTest {
+    @Test fun bytecodeSignedRemainderPreservesLongBoundaries() {
+        val values = longArrayOf(Long.MIN_VALUE, Long.MIN_VALUE + 1, -37, -10, -2, -1,
+            0, 1, 2, 10, 37, Long.MAX_VALUE - 1, Long.MAX_VALUE)
+        for (left in values) for (right in values) {
+            if (right == 0L) assertThrows(ArithmeticException::class.java) {
+                BytecodeRoot.Remainder.apply(left, right)
+            } else assertEquals(left % right, BytecodeRoot.Remainder.apply(left, right),
+                "remainder($left, $right)")
+        }
+    }
+
     private val root = File(System.getProperty("thc.projectRoot"))
     private fun manifest(): Map<String, Any?> =
         Json.parse(File(root, "build/integer-primops/manifest.json").readText()) as Map<String, Any?>

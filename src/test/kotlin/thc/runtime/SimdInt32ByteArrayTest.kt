@@ -122,16 +122,20 @@ class SimdInt32ByteArrayTest {
             validateMode(exported + ("toolchain" to mapOf("architecture" to "aarch64")), "amd64")
         }
     }
-    @Test fun genuineExportedVectorBoundariesRemainRejected() {
+    @Test fun genuineVectorCallBindingsLoadBeforePublicHostAdmission() {
         val provenance = provenance()
         for (stage in provenance["stages"] as List<String>) for (backend in listOf("ast", "bytecode")) withLanguage(true) { language ->
             val module = Json.parse(File(directory, "$stage-core/SimdInt32X4ByteArray.json").readText()) as Map<String, Any?>
-            for (name in listOf("vectorArgument", "readTupleEscape", "readVectorEscape")) {
+            for (name in listOf("vectorArgument", "readVectorEscape")) {
                 val linked = CoreModules.reachable(module, name)
-                assertThrows(RuntimeFault::class.java, {
-                    if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
-                }, "$stage/$backend/$name")
+                assertNotNull(if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked),
+                    "$stage/$backend/$name")
             }
+            val directRead = CoreModules.reachable(module, "readTupleEscape")
+            val error = assertThrows(UnsupportedCore::class.java) {
+                if (backend == "ast") Program(language, directRead) else BytecodeProgram(language, directRead)
+            }
+            assertEquals("Vector ByteArray read requires an immediate exact case", error.message)
         }
     }
     @Test fun publicHostTupleResultsRejectAtLoadOrTrapBeforeArgumentNormalization() {

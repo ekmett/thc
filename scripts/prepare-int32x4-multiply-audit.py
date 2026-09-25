@@ -197,7 +197,7 @@ def main():
                          for name in [e['name'] for e in entries()]+['vectorArgument']}
         frontier = audits[stage]['vectorArgument']
         check(not frontier['accepted'] and not frontier['missingGlobals'] and len(frontier['issues']) == 1 and
-              {(i['code'], i['detail']) for i in frontier['issues']} == {('vector-boundary', 'vector formal argument')},
+              {(i['code'], i['detail']) for i in frontier['issues']} == {('vector-boundary', 'vector host argument' if 'arguments' in capabilities.get('vectorTransport', []) else 'vector formal argument')},
               'Vector-formal frontier must be rejected for exactly its actual boundary')
         audit_path = OUT/f'{stage}-audit.json'
         audit_path.write_text(json.dumps(audits[stage], indent=2)+'\n')
@@ -232,7 +232,7 @@ def main():
                *[ROOT/'compiler'/name for name in ('build.sh', 'export.sh', 'toolchain.sh')]]
     provenance = dict(schema=1, vector='int32x4-multiply', stages=stages, nativeRows=native_rows,
         modelMatched=True if native_rows is not None else None, modelRows=len(wanted), entries=entries(),
-        frontiers=[dict(name='vectorArgument', arity=1, reason='vector formal argument remains unsupported')],
+        frontiers=[dict(name='vectorArgument', arity=1, reason='public host vector arguments are unsupported')],
         positiveAuditsAccepted=True, audits=audits, structure=structure, commands=commands,
         signedUnsignedNegativeControls=unsigned_controls,
         expectedGuestCallsByEntry=EXPECTED_CALLS, checkedGuestCallsByStage=guest_calls,
@@ -244,7 +244,7 @@ def main():
               if native_rows is not None else 'Pre-Tidy Core and independent integer model only; NO native/post-Tidy validation.',
         limitations=['Int# host inputs require a 64-bit machine; lane arithmetic wraps modulo 2^32.',
                      'Vectors remain local; only Int scalar arguments/results and a four-Int32 tuple result cross helper boundaries.',
-                     'Vector formals, results, captures, heap fields and vector-containing tuple fields are not enabled.'])
+                     'This corpus tests local operations; guest vector transport has separate evidence. Public host vector values, heap captures and fields remain unsupported.'])
     (OUT/'provenance.json').write_text(json.dumps(provenance, indent=2)+'\n')
     print(f'Int32X4 multiply stages={stages}, native rows={native_rows}, model rows={len(wanted)}, positive strict audits=True')
 

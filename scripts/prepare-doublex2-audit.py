@@ -143,7 +143,7 @@ def main():
         audits[stage] = {name: auditor.Audit([(str(module_path), module)], capabilities).run([name])
                          for name in [e['name'] for e in entries()] + ['vectorArgument']}
         check(not audits[stage]['vectorArgument']['accepted'] and any(
-              i['code'] == 'vector-boundary' and i['detail'] == 'vector formal argument'
+              i['code'] == 'vector-boundary' and i['detail'] == ('vector host argument' if 'arguments' in capabilities.get('vectorTransport', []) else 'vector formal argument')
               for i in audits[stage]['vectorArgument']['issues']), 'Vector ABI frontier was not rejected specifically')
         audit_path = OUT / f'{stage}-audit.json'
         audit_path.write_text(json.dumps(audits[stage], indent=2)+'\n')
@@ -171,7 +171,7 @@ def main():
     positives = all(audits[s][e['name']]['accepted'] for s in stages for e in entries())
     provenance = dict(schema=1, vector='doublex2', stages=stages, nativeRows=native_rows,
         modelMatched=True if native_rows is not None else None, modelRows=len(wanted), entries=entries(),
-        frontiers=[dict(name='vectorArgument', arity=1, reason='vector formal argument remains unsupported')],
+        frontiers=[dict(name='vectorArgument', arity=1, reason='public host vector arguments are unsupported')],
         positiveAuditsAccepted=positives, audits=audits, structure=structure, commands=commands,
         sources=[record(p) for p in sources], artifacts=[record(p) for p in artifacts],
         toolchain=dict(ghcVersion='9.14.1', host=platform.node(), machine=platform.machine(), system=platform.platform(),
@@ -180,7 +180,7 @@ def main():
               if native_rows is not None else 'Pre-Tidy Core and independent model only; NO native/post-Tidy validation.',
         limitations=['Non-NaN Double results compare raw 64-bit encodings; arithmetic NaNs compare by class.',
                      'Finite arithmetic checks use bounded double2Int signatures; exceptional cases never convert to Int.',
-                     'Vector function/formal/capture/join ABI is not enabled by these local vector fixtures.'])
+                     'This corpus tests local operations; guest vector transport has separate evidence. Public host vector values, heap captures and fields remain unsupported.'])
     (OUT / 'provenance.json').write_text(json.dumps(provenance, indent=2)+'\n')
     print(f'DoubleX2 stages={stages}, native rows={native_rows}, model rows={len(wanted)}, positive strict audits={positives}')
     check(positives, 'DoubleX2 strict audit rejected a positive entry; see stage audit reports (no support claim)')

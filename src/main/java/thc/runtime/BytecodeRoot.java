@@ -981,7 +981,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             TupleResultsKt.requireVoidCarrier(state);
             long result;
             if (operation == OriginalStdioOp.LOCK) result = CoreOriginalStdio.locks(node).lock(fd, writing, milliseconds, socket);
-            else if (operation.getReadiness()) result = CoreOriginalStdio.current(node).ready(fd, writing, milliseconds, socket);
+            else if (operation.getReadiness()) result = CoreOriginalStdio.current(node).ready(fd, writing, milliseconds, socket, node);
             else throw new RuntimeFault("Invalid original four-scalar operation");
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
@@ -1220,6 +1220,24 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void apply(ManagedAddress output, ManagedAddress context, Object state) {
             ManagedByteArray.requireState(state);
             ManagedMd5.INSTANCE.finish(output, context);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = BytecodeVectorSlots.class, name = "slots")
+    public static final class WriteVectorSlots {
+        @Specialization public static void write(VirtualFrame frame, BytecodeVectorSlots slots,
+                Object value, @Bind("$node") Node node) {
+            slots.write(frame, (BytecodeRoot) node.getRootNode(), value);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = BytecodeVectorSlots.class, name = "slots")
+    public static final class ReadVectorSlots {
+        @Specialization public static Object read(VirtualFrame frame, BytecodeVectorSlots slots,
+                @Bind("$node") Node node) {
+            return slots.read(frame, (BytecodeRoot) node.getRootNode());
         }
     }
 
@@ -2291,6 +2309,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class AddCFinalizerToWeak {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress function, ManagedAddress address, long flag, ManagedAddress environment,
+                Object weak, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long added = ManagedWeaks.current(node).addCFinalizer(function, address, flag, weak,
+                    SulongCbits.current(node));
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, added);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = StablePointerOp.class, name = "operation")
     public static final class StablePointerTuple {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
@@ -3240,7 +3271,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class Multiply { @Specialization public static long apply(long x, long y) { return x * y; } }
     @Operation public static final class Negate { @Specialization public static long apply(long x) { return -x; } }
     @Operation public static final class Quotient { @Specialization public static long apply(long x, long y) { return x / y; } }
-    @Operation public static final class Remainder { @Specialization public static long apply(long x, long y) { return x % y; } }
+    @Operation public static final class Remainder {
+        @Specialization public static long apply(long x, long y) {
+            // Graal 25.3.4.1 can retain a dead Phi while virtualizing a remainder
+            // stored in a bytecode frame. The quotient form has the same wrapping
+            // long semantics, including MIN_VALUE / -1 and division by zero.
+            return x - (x / y) * y;
+        }
+    }
     /** No forcing or thunk-indirection traversal: compare the current operand references. */
     @Operation public static final class PointerEqual {
         @Specialization public static long apply(Object left, Object right) { return left == right ? 1L : 0L; }

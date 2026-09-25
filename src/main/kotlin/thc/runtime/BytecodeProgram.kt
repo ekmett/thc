@@ -90,7 +90,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     }
     private class JoinRegion
     private class JoinTarget(val region: JoinRegion, val index: Int, val parameters: List<Map<String, Any?>>,
-                             val locals: List<Local?>, val entryStrict: BooleanArray, val result: CoreRepresentation)
+                             val locals: List<List<Local>>, val entryStrict: BooleanArray, val result: CoreRepresentation)
     private class JoinEmission(val selector: BytecodeLocal?, val next: BytecodeLabel?, val labels: List<BytecodeLabel>) {
         var emittedIndex = -1
     }
@@ -104,6 +104,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     private fun interface Expression {
         fun emit(emission: Emission)
         fun emitTuple(emission: Emission, destination: List<BytecodeLocal>) { throw RuntimeFault("Tuple expression lacks a destination writer") }
+        val writesDestination: Boolean get() = false
         val proof: CoreRepresentation get() = CoreRepresentation.UNKNOWN
         val source: CoreSourceLocation? get() = null
         val loweredCase: Boolean get() = false
@@ -114,17 +115,34 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         override val proof get() = expression.proof
         override val source get() = expression.source
         override val loweredCase get() = true
+        override val writesDestination get() = expression.writesDestination
     }
     private class ProvenExpression(val expression: Expression, override val proof: CoreRepresentation) : Expression {
-        override fun emit(emission: Emission) = expression.emit(emission)
-        override fun emitTuple(emission: Emission, destination: List<BytecodeLocal>) = expression.emitTuple(emission, destination)
+        override fun emit(emission: Emission) {
+            if (!proof.isVector || !writesDestination) return expression.emit(emission)
+            val b = emission.builder
+            b.beginBlock()
+            val lanes = List(TupleShape.flatten(proof).size) { b.createLocal("vector result lane $it", null) }
+            expression.emitTuple(emission, lanes)
+            b.emitReadVectorSlots(BytecodeVectorSlots(proof, lanes.map(LocalAccessor::constantOf).toTypedArray()))
+            b.endBlock()
+        }
+        override fun emitTuple(emission: Emission, destination: List<BytecodeLocal>) {
+            if (!proof.isVector || writesDestination) return expression.emitTuple(emission, destination)
+            val slots = BytecodeVectorSlots(proof, destination.map(LocalAccessor::constantOf).toTypedArray())
+            emission.builder.beginWriteVectorSlots(slots)
+            expression.emit(emission)
+            emission.builder.endWriteVectorSlots()
+        }
         override val source get() = expression.source
         override val loweredCase get() = expression.loweredCase
+        override val writesDestination get() = expression.writesDestination
     }
     /** Source operations are builder metadata; they emit no guest instruction. */
     private class SourcedExpression(val expression: Expression, override val source: CoreSourceLocation) : Expression {
         override val proof get() = expression.proof
         override val loweredCase get() = expression.loweredCase
+        override val writesDestination get() = expression.writesDestination
         override fun emit(emission: Emission) = emitSource(emission) { expression.emit(emission) }
         override fun emitTuple(emission: Emission, destination: List<BytecodeLocal>) = emitSource(emission) { expression.emitTuple(emission, destination) }
         private fun emitSource(emission: Emission, action: () -> Unit) {
@@ -137,6 +155,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         }
     }
     private class ResultExpression(val action: (Emission, List<BytecodeLocal>?) -> Unit) : Expression {
+        override val writesDestination get() = true
         override fun emit(emission: Emission) = action(emission, null)
         override fun emitTuple(emission: Emission, destination: List<BytecodeLocal>) = action(emission, destination)
     }
@@ -269,7 +288,6 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     private fun function(label: String, args: List<Map<String, Any?>>, expression: List<Any?>, outer: Scope,
                          resultProof: CoreRepresentation = CoreRepresentations.expression(expression),
                          entryStrict: BooleanArray = BooleanArray(args.size)): FunctionSpec {
-        CoreRepresentations.requireNoVector(resultProof, "function result")
         if (entryStrict.size != args.size) throw RuntimeFault("Function entry contract arity mismatch")
         val context = FunctionContext(args.size, entryStrict.copyOf())
         val scope = Scope(context, source = outer.source)
@@ -294,8 +312,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val lifted = representation(arg)
             val proof = CoreRepresentations.binder(arg).copy(evaluated = !lifted || context.entryStrict[index])
             val offset = ArgumentLayout.offset(context.inputLayout, index)
-            if (proof.isTuple) {
-                if (lifted) throw RuntimeFault("Tuple formal cannot be lifted")
+            if (proof.isTypedTransport) {
+                if (lifted) throw RuntimeFault(if (proof.isVector) "Vector formal cannot be lifted" else "Tuple formal cannot be lifted")
                 val fields = if (arg["id"] in free) ArgumentLayout.leaves(proof).mapIndexed { leaf, field ->
                     Local(nextLocal++, "${arg["id"]} field $leaf", field.isLong, field).also {
                         physicalArguments += (offset + leaf) to it
@@ -315,8 +333,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         if ((compiled.proof.isSum || resultProof.isSum) && (!compiled.proof.isSum || !resultProof.isSum))
             throw RuntimeFault("Sum function requires exact body and declared result proofs")
         val body = ProvenExpression(compiled, compiled.proof.refine(resultProof).copy(evaluated = compiled.proof.evaluated))
-        CoreRepresentations.requireNoVector(body.proof, "function result")
-        context.tuple = if (body.proof.isAggregate) TupleShape(body.proof, language) else null
+        context.tuple = if (body.proof.isTypedTransport) TupleShape(body.proof, language) else null
         return FunctionSpec(build(label, context, body, forceResult = !body.proof.evaluated), context.captureLayout, captureSources)
     }
 
@@ -560,13 +577,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
      * Recheck the declared carrier only after the resumable force completes. */
     private fun emitEntryStrictDemands(e: Emission, context: FunctionContext) {
         context.arguments.forEachIndexed { index, local ->
-            if (!context.entryStrict[index] || local == null || local.primitive || local.proof.isAggregate) return@forEachIndexed
+            if (!context.entryStrict[index] || local == null || local.primitive || local.proof.isTypedTransport) return@forEachIndexed
             val raw = ProvenExpression(read(local), local.proof.copy(evaluated = false))
             restoreArgument(e, local) { force(raw).emit(e) }
         }
     }
     private fun force(value: Expression): Expression {
-        if (value.proof.isAggregate) return value
+        if (value.proof.isTypedTransport) return value
         if (value.proof.evaluated) return value
         return evaluated(ResultExpression { e, destination ->
             if (destination != null) value.emitTuple(e, destination) else {
@@ -675,15 +692,16 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk", allowEmpty: Boolean = false, declaredLifted: Boolean = lifted): Expression {
         fun check(value: CoreRepresentation) {
             if (allowEmpty) CoreRepresentations.requireInput(value) else CoreRepresentations.requireScalar(value, "argument")
-            if (value.isTuple && declaredLifted) throw RuntimeFault("Tuple argument cannot be lifted")
+            if (value.isTypedTransport && declaredLifted)
+                throw RuntimeFault(if (value.isVector) "Vector argument cannot be lifted" else "Tuple argument cannot be lifted")
         }
         val proof = CoreRepresentations.expression(expr)
         check(proof)
         val lexical = if (expr[0] == "var") scope.tuples[expr[1]]?.first ?: scope.locals[expr[1]]?.proof else null
         lexical?.let(::check)
         fun lowered(): Expression = compile(expr, scope, false).also { check(it.proof) }
-        if (proof.isTuple || lexical?.isTuple == true) return lowered().also {
-            if (!it.proof.isTuple) throw RuntimeFault("Missing exact tuple argument proof")
+        if (proof.isTypedTransport || lexical?.isTypedTransport == true) return lowered().also {
+            if (!it.proof.isTypedTransport) throw RuntimeFault("Missing exact typed argument proof")
         }
         // Lowering can expose a tuple behind omitted outer case metadata. It
         // must remain a destination writer and may never be forced or delayed.
@@ -696,7 +714,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         if (CoreApplicationCertificates.eagerApplication(expr, arityCertificate)) return lowered()
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> lowered(); else -> delay(expr, scope, label) }
     }
-    private fun literal(kind: String, value: String): Any = when (kind) {
+    private fun literal(kind: String, value: String, proof: CoreRepresentation? = null): Any = when (kind) {
         "int8" -> int8Literal(value)
         "int16" -> int16Literal(value)
         "int32" -> int32Literal(value)
@@ -709,6 +727,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
         "string-bytes" -> ManagedAddress.fromHex(value)
         "null-addr" -> if (value == "0") ManagedAddress.nullAddress() else throw UnsupportedCore("Malformed null Addr# literal")
+        "function-addr" -> CFinalizerLabels.fromCore(value, proof)
         "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
@@ -779,7 +798,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val values = List(layout.physicalArity) { b.createLocal("typed input $it", null) }
         arguments.forEachIndexed { index, argument ->
             val offset = layout.offset(index)
-            if (layout.isTuple(index)) argument.emitTuple(e, values.subList(offset, layout.offset(index + 1)))
+            if (layout.proof(index).isTypedTransport) argument.emitTuple(e, values.subList(offset, layout.offset(index + 1)))
             else {
                 b.beginStoreLocal(values[offset]); argument.emit(e); b.endStoreLocal()
             }
@@ -970,7 +989,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             List(layout.physicalArity) { b.createLocal("captured typed input $it", null) }.also { slots ->
                 arguments.forEachIndexed { index, argument ->
                     val offset = layout.offset(index)
-                    if (layout.isTuple(index)) argument.emitTuple(e, slots.subList(offset, layout.offset(index + 1)))
+                    if (layout.proof(index).isTypedTransport) argument.emitTuple(e, slots.subList(offset, layout.offset(index + 1)))
                     else {
                         b.beginStoreLocal(slots[offset]); argument.emit(e); b.endStoreLocal()
                     }
@@ -1141,17 +1160,20 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             b.beginBlock()
             // Saving all operands first is required for swaps and mutually recursive joins.
             val temporaries = arguments.mapIndexed { index, argument ->
-                if (target.locals[index] == null) {
-                    argument.emitTuple(e, emptyList())
-                    null
-                } else b.createLocal("join operand $index", null).also { temporary ->
-                    b.beginStoreLocal(temporary)
-                    argument.emit(e)
-                    b.endStoreLocal()
+                val fields = target.locals[index]
+                List(fields.size) { b.createLocal("join operand $index lane $it", null) }.also { slots ->
+                    if (CoreRepresentations.binder(target.parameters[index]).isTypedTransport) argument.emitTuple(e, slots)
+                    else {
+                        b.beginStoreLocal(slots.single())
+                        argument.emit(e)
+                        b.endStoreLocal()
+                    }
                 }
             }
-            target.locals.forEachIndexed { index, local ->
-                if (local != null) restoreArgument(e, local) { b.emitLoadLocal(temporaries[index]!!) }
+            target.locals.forEachIndexed { index, fields ->
+                fields.forEachIndexed { lane, local ->
+                    restoreArgument(e, local) { b.emitLoadLocal(temporaries[index][lane]) }
+                }
             }
             // A failed operand is not a transfer. Count only after all parallel moves succeed.
             b.emitJoinTransfer(metrics)
@@ -1179,7 +1201,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             definition.parameters.forEach {
                 val proof = CoreRepresentations.binder(it)
                 CoreRepresentations.requireJoinInput(proof)
-                if (proof.isEmptyTuple && representation(it)) throw RuntimeFault("Tuple join formal must be unlifted")
+                if (proof.isTypedTransport && representation(it))
+                    throw RuntimeFault(if (proof.isVector) "Vector join formal must be unlifted" else "Tuple join formal must be unlifted")
             }
             val formals = definition.parameters.map { it["id"] as String }.toSet()
             (freeVariables(definition.body) - formals - shadowed).forEach { id ->
@@ -1206,33 +1229,32 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val parameters = definition.parameters.mapIndexed { parameterIndex, parameter ->
                 // Join formal names have lexical scope only in their own body.
                 val proof = CoreRepresentations.binder(parameter).copy(evaluated = !representation(parameter) || entryStrict[parameterIndex])
-                if (proof.isEmptyTuple) null else Local(nextLocal++, parameter["id"] as String,
-                    if (proof.present) proof.isLong else !representation(parameter) && parameter["coercion"] != true, proof)
+                if (proof.isTypedTransport) ArgumentLayout.leaves(proof).mapIndexed { lane, field ->
+                    Local(nextLocal++, "${parameter["id"]} lane $lane", field.isLong, field)
+                } else listOf(Local(nextLocal++, parameter["id"] as String,
+                    if (proof.present) proof.isLong else !representation(parameter) && parameter["coercion"] != true, proof))
             }
             JoinTarget(region, index, definition.parameters, parameters, entryStrict, definition.result).also { local.bindJoin(definition.id, it) }
         }
         localJoinCount += targets.size
         val bodies = definitions.mapIndexed { index, definition ->
             val bodyScope = (if (recursive) local else scope).child()
-            targets[index].locals.forEachIndexed { parameterIndex, parameter ->
-                if (parameter != null) bodyScope.bindLocal(parameter.name, parameter)
-                else {
-                    val raw = definition.parameters[parameterIndex]
-                    bodyScope.bindTuple(raw["id"] as String, CoreRepresentations.binder(raw).copy(evaluated = true), emptyList())
-                }
+            targets[index].locals.forEachIndexed { parameterIndex, fields ->
+                val raw = definition.parameters[parameterIndex]
+                val formal = CoreRepresentations.binder(raw)
+                if (formal.isTypedTransport) bodyScope.bindTuple(raw["id"] as String, formal.copy(evaluated = true), fields)
+                else bodyScope.bindLocal(fields.single().name, fields.single())
             }
             val body = compile(definition.body, bodyScope.withSource(sources.binding(definition.binding, scope.source)), tail)
-            CoreRepresentations.requireNoVector(body.proof, "join result")
             CoreRepresentations.requireNoSum(body.proof, "join result")
             ProvenExpression(body, body.proof.refine(definition.result.copy(evaluated = false)))
         }
         val entry = compile(expression, local, tail)
-        CoreRepresentations.requireNoVector(entry.proof, "join result")
         CoreRepresentations.requireNoSum(entry.proof, "join result")
         val proof = entry.proof.refine(CoreRepresentations.expression(expression).copy(evaluated = false))
         bodies.forEach { TupleShape.requireCompatible(proof, it.proof) }
         return ProvenExpression(ResultExpression { e, destination ->
-            if (proof.isTuple != (destination != null)) throw RuntimeFault("Join result destination disagrees with its representation")
+            if (proof.isTypedTransport != (destination != null)) throw RuntimeFault("Join result destination disagrees with its representation")
             // A local join branches inside the current root. Every captured leaf
             // must still name an active typed local in that root's lexical scope.
             capturedTupleFields.values.forEach { if (it.id !in e.locals) throw RuntimeFault("Tuple join capture escaped its lexical slots") }
@@ -1241,7 +1263,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val result = if (destination == null) b.createLocal("join result", null) else null
             val selector = if (recursive) b.createLocal("join selector", "primitive") else null
             val exit = b.createLabel()
-            targets.flatMap { it.locals.filterNotNull() }.forEach { e.locals[it.id] = b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
+            targets.flatMap { it.locals.flatten() }.forEach { e.locals[it.id] = b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
             if (selector != null) {
                 b.beginStoreLocal(selector); b.emitLoadConstant(-1L); b.endStoreLocal()
                 b.beginWhile()
@@ -1280,14 +1302,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             if (result != null) b.emitLoadLocal(result)
             b.endBlock()
             e.joins.remove(region)
-            targets.flatMap { it.locals.filterNotNull() }.forEach { e.locals.remove(it.id) }
+            targets.flatMap { it.locals.flatten() }.forEach { e.locals.remove(it.id) }
         }, proof.copy(evaluated = entry.proof.evaluated && bodies.all { it.proof.evaluated }))
     }
 
     private fun compileSupported(expr: List<Any?>, scope: Scope, tail: Boolean): Expression = when (expr[0]) {
         "var" -> {
             val id = expr[1] as String
-            CoreVectors.requireVariableProof(scope.locals[id]?.proof ?: globalProofs[id], CoreRepresentations.expression(expr))
+            CoreVectors.requireVariableProof(scope.tuples[id]?.first ?: scope.locals[id]?.proof ?: globalProofs[id], CoreRepresentations.expression(expr))
             scope.tuples[id]?.let { (proof, fields) ->
                 TupleShape.requireCompatible(proof, CoreRepresentations.expression(expr))
                 tupleExpression(proof) { e, destination ->
@@ -1301,7 +1323,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     else Expression { it.builder.emitReadGlobal(binding) }, stored)
                 } ?: throw UnsupportedCore("Unresolved external binding $id")
         }
-        "lit" -> constant(literal(expr[1] as String, expr[2] as String)).let {
+        "lit" -> constant(literal(expr[1] as String, expr[2] as String, CoreRepresentations.expression(expr))).let {
             if (expr[1] in listOf("int8", "word8", "int16", "word16", "int32", "word32")) ProvenExpression(it, CoreRepresentations.narrowLiteralProof(expr))
             else if (expr[1] == "bignat") ProvenExpression(it, BigNatLiterals.proof(expr)) else it
         }
@@ -2075,12 +2097,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     when (operation) {
                         WeakOp.MAKE -> e.builder.beginMakeWeak(destination.single())
                         WeakOp.MAKE_PLAIN -> e.builder.beginMakeWeakPlain(destination.single())
+                        WeakOp.ADD_C_FINALIZER -> e.builder.beginAddCFinalizerToWeak(destination.single())
                         else -> e.builder.beginObserveWeak(destination[0], destination[1], operation == WeakOp.FINALIZE)
                     }
                     operands.forEach { it.emit(e) }
                     when (operation) {
                         WeakOp.MAKE -> e.builder.endMakeWeak()
                         WeakOp.MAKE_PLAIN -> e.builder.endMakeWeakPlain()
+                        WeakOp.ADD_C_FINALIZER -> e.builder.endAddCFinalizerToWeak()
                         else -> e.builder.endObserveWeak()
                     }
                 }
@@ -2519,7 +2543,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     (constructors[fn[1]]?.get("arity") as? Number)?.toInt() != args.size) throw RuntimeFault("Tuple constructor arity mismatch")
                 val operands = args.mapIndexed { index, arg ->
                     TupleShape.requireCompatible(shape.components[index], CoreRepresentations.expression(arg), component = true)
-                    if (shape.components[index].isTuple) compile(arg, scope, false)
+                    if (shape.components[index].isVector && flags[index] != false) throw RuntimeFault("Vector tuple field cannot be lifted")
+                    if (shape.components[index].isTypedTransport) compile(arg, scope, false)
                     else argument(arg, scope, flags[index] as? Boolean ?: throw UnsupportedCore("Unknown tuple field levity"))
                 }
                 tupleExpression(tupleProof) { e, destination ->
@@ -2527,7 +2552,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     operands.forEachIndexed { index, operand ->
                         val component = shape.components[index]
                         val offset = shape.offsets[index]
-                        if (component.isTuple) operand.emitTuple(e, destination.subList(offset, offset + TupleShape.flatten(component).size))
+                        if (component.isTypedTransport) operand.emitTuple(e, destination.subList(offset, offset + TupleShape.flatten(component).size))
                         else if (component.kind == CoreKind.VOID) {
                             e.builder.beginDiscardVoid(); operand.emit(e); e.builder.endDiscardVoid()
                         }
@@ -2542,7 +2567,6 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     e.builder.endBlock()
                 }
             } else {
-            CoreRepresentations.requireNoVector(tupleProof, "call result")
             val strict = if (fn[0] == "con" && (fn[2] as Number).toInt() == args.size) strictConstructorFields(fn[1] as String, args.size) else null
             val entryStrict = when (fn[0]) {
                 "lam" -> CoreEntries.lambda(fn)
@@ -2561,7 +2585,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 fn[0] == "prim" -> {
                     ScalarPrimitiveSignatures.validate(fn[1] as String, operands.map { it.proof }, tupleProof)
                     val value = primitive(fn[1] as String, operands)
-                    if (fn[1] == "raise#" && tupleProof.isAggregate) tupleExpression(tupleProof) { e, _ ->
+                    if (fn[1] == "raise#" && tupleProof.isTypedTransport) tupleExpression(tupleProof) { e, _ ->
                         val b = e.builder
                         b.beginBlock()
                         b.beginStoreLocal(b.createLocal("non-returning aggregate", null)); value.emit(e); b.endStoreLocal()
@@ -2569,7 +2593,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     } else value
                 }
                 strict != null -> construct(dataLayout(fn[1] as String), operands)
-                else -> if (tupleProof.isAggregate) tupleApplication(TupleShape(tupleProof, language), compile(fn, scope, false), operands, scope, tail)
+                else -> if (tupleProof.isTypedTransport) tupleApplication(TupleShape(tupleProof, language), compile(fn, scope, false), operands, scope, tail)
                     else application(compile(fn, scope, false), operands, scope, tail)
             }
             }
@@ -2579,44 +2603,69 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             if (group.any { CoreRepresentations.joinArity(it) != null }) {
                 joinRegion(group, expr[3] as List<Any?>, recursive, scope, tail)
             } else {
-                group.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "let binding") }
+                group.forEach {
+                    val proof = CoreRepresentations.binder(it)
+                    if (proof.isVector) {
+                        if (recursive || representation(it)) throw UnsupportedCore("Vector let binding must be nonrecursive and unlifted")
+                        CoreRepresentations.requireInput(proof)
+                    } else CoreRepresentations.requireScalar(proof, "let binding")
+                }
                 val local = scope.child()
-                val slots = group.map { bind(local, it["id"] as String, !representation(it),
-                    CoreRepresentations.binder(it).copy(evaluated = false), cell = recursive, entry = CoreEntries.binding(it),
-                    arityCertificate = CoreApplicationCertificates.binding(it)) }
+                val slots = group.map { binding ->
+                    val proof = CoreRepresentations.binder(binding)
+                    if (proof.isVector) TupleShape.flatten(proof).mapIndexed { lane, field ->
+                        Local(nextLocal++, "${binding["id"]} vector let lane $lane", field.isLong, field)
+                    }.also { local.bindTuple(binding["id"] as String, proof.copy(evaluated = true), it) }
+                    else listOf(bind(local, binding["id"] as String, !representation(binding),
+                        proof.copy(evaluated = false), cell = recursive, entry = CoreEntries.binding(binding),
+                        arityCertificate = CoreApplicationCertificates.binding(binding)))
+                }
                 val rhs = group.map {
                     val rhsExpr = it["expr"] as List<Any?>; val lifted = representation(it)
                     CoreRepresentations.requireNoSum(CoreRepresentations.expression(rhsExpr), "let binding")
                     if (recursive && !lifted) throw UnsupportedCore("Recursive unlifted binding unsupported")
                     val rhsScope = (if (recursive) local else scope).withSource(sources.binding(it, scope.source))
                     if (recursive && lifted && rhsExpr[0] !in listOf("lam", "lit", "con", "void")) delay(rhsExpr, rhsScope, it["name"].toString())
-                    else argument(rhsExpr, rhsScope, lifted, it["name"].toString())
+                    else argument(rhsExpr, rhsScope, lifted, it["name"].toString(),
+                        allowEmpty = CoreRepresentations.binder(it).isVector)
                 }
-                slots.forEachIndexed { index, slot ->
-                    val proof = slot.proof.refine(rhs[index].proof).copy(evaluated = rhs[index].proof.evaluated)
-                    // All RHS roots have already captured immutable Local records
-                    // with cell=true. Only body/new captures see published values.
-                    local.locals[slot.name] = slot.copy(proof = proof, cell = false,
-                        primitive = if (proof.present) proof.isLong else slot.primitive)
+                slots.forEachIndexed { index, fields ->
+                    if (CoreRepresentations.binder(group[index]).isVector) {
+                        if (!rhs[index].proof.isVector) throw RuntimeFault("Vector let binding requires an exact vector result proof")
+                        TupleShape.requireCompatible(CoreRepresentations.binder(group[index]), rhs[index].proof)
+                    } else {
+                        val slot = fields.single()
+                        val proof = slot.proof.refine(rhs[index].proof).copy(evaluated = rhs[index].proof.evaluated)
+                        // All RHS roots have already captured immutable Local records
+                        // with cell=true. Only body/new captures see published values.
+                        local.locals[slot.name] = slot.copy(proof = proof, cell = false,
+                            primitive = if (proof.present) proof.isLong else slot.primitive)
+                    }
                 }
                 val body = compile(expr[3] as List<Any?>, local, tail)
+                val physicalSlots = slots.flatten()
                 ProvenExpression(ResultExpression { e, destination ->
                     val b = e.builder
                     b.beginBlock()
-                    slots.forEach { e.locals[it.id] = b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
+                    physicalSlots.forEach { e.locals[it.id] = b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
                     if (recursive) {
-                        slots.forEach { b.beginStoreLocal(e.locals.getValue(it.id)); b.emitNewCell(); b.endStoreLocal() }
-                        slots.forEachIndexed { index, slot ->
+                        physicalSlots.forEach { b.beginStoreLocal(e.locals.getValue(it.id)); b.emitNewCell(); b.endStoreLocal() }
+                        slots.forEachIndexed { index, fields ->
+                            val slot = fields.single()
                             b.beginInitializeCell(); read(slot, false).emit(e); rhs[index].emit(e); b.endInitializeCell()
                         }
                         // Every RHS has captured the group before publication removes its indirections.
-                        slots.forEach { b.beginStoreLocal(e.locals.getValue(it.id)); read(it).emit(e); b.endStoreLocal() }
-                    } else slots.forEachIndexed { index, slot ->
-                        b.beginStoreLocal(e.locals.getValue(slot.id)); rhs[index].emit(e); b.endStoreLocal()
+                        physicalSlots.forEach { b.beginStoreLocal(e.locals.getValue(it.id)); read(it).emit(e); b.endStoreLocal() }
+                    } else slots.forEachIndexed { index, fields ->
+                        if (CoreRepresentations.binder(group[index]).isVector)
+                            rhs[index].emitTuple(e, fields.map { e.locals.getValue(it.id) })
+                        else {
+                            b.beginStoreLocal(e.locals.getValue(fields.single().id)); rhs[index].emit(e); b.endStoreLocal()
+                        }
                     }
                     emitResult(body, e, destination)
                     b.endBlock()
-                    slots.forEach { e.locals.remove(it.id) }
+                    physicalSlots.forEach { e.locals.remove(it.id) }
                 }, body.proof)
             }
         }
@@ -2880,7 +2929,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             List(inputLayout.physicalArity) { b.createLocal("captured typed tuple input $it", null) }.also { fields ->
                 arguments.forEachIndexed { index, argument ->
                     val offset = inputLayout.offset(index)
-                    if (inputLayout.isTuple(index)) argument.emitTuple(e, fields.subList(offset, inputLayout.offset(index + 1)))
+                    if (inputLayout.proof(index).isTypedTransport) argument.emitTuple(e, fields.subList(offset, inputLayout.offset(index + 1)))
                     else { b.beginStoreLocal(fields[offset]); argument.emit(e); b.endStoreLocal() }
                 }
             }
@@ -3221,7 +3270,6 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val result = arms.first().body.proof.refine(CoreRepresentations.expression(expr))
         arms.forEach { result.refine(it.body.proof) }
         CoreRepresentations.validateFloatingCaseResult(result, arms.map { it.body.proof })
-        CoreRepresentations.requireNoVector(result, "sum case result")
         return ProvenExpression(ResultExpression { e, destination ->
             val b = e.builder
             b.beginBlock()
@@ -3332,7 +3380,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 metadata.getOrNull(index)?.let { TupleShape.requireCompatible(component, CoreRepresentations.binder(it), component = true) }
                 val offset = shape.offsets[index]
                 val width = TupleShape.flatten(component).size
-                if (component.isTuple) scope.bindTuple(id, component, fields.subList(offset, offset + width))
+                if (component.isTypedTransport) scope.bindTuple(id, component, fields.subList(offset, offset + width))
                 else if (component.kind == CoreKind.VOID) scope.bindVoid(id, component)
                 else scope.bindLocal(id, fields[offset].copy(name = id))
             }

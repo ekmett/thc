@@ -154,6 +154,11 @@ def proof_error(rep):
     registers = rep.get('primReps')
     has_vector = isinstance(registers, list) and any(isinstance(r, str) and r.startswith('VecRep ') for r in registers)
     if not is_vector(rep):
+        if rep.get('aggregate') in ('unboxed-tuple', 'unboxed-sum') and 'vector' in rep:
+            # A sole physical VecRep can annotate a logical aggregate. Validate
+            # it independently; callers still validate every aggregate child.
+            physical = {key: rep[key] for key in ('primReps', 'evaluated', 'vector') if key in rep}
+            return proof_error(dict(physical, kind='vector'))
         return 'Vector representation lacks exact vector metadata' if 'vector' in rep or has_vector and 'aggregate' not in rep else None
     shape = rep.get('vector')
     if not isinstance(shape, dict) or type(shape.get('lanes')) is not int or not isinstance(shape.get('element'), str) or 'aggregate' in rep:
