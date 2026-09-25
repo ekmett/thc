@@ -1,0 +1,93 @@
+{
+  "rts_isThreaded": {
+    "argumentReps": [
+      {
+        "evaluated": false,
+        "kind": "void",
+        "primReps": []
+      }
+    ],
+    "arity": 1,
+    "convention": "ccall",
+    "resultRep": {
+      "aggregate": "unboxed-tuple",
+      "components": [
+        {
+          "evaluated": true,
+          "kind": "void",
+          "primReps": []
+        },
+        {
+          "evaluated": true,
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "evaluated": false,
+      "kind": "unknown",
+      "primReps": [
+        "IntRep"
+      ]
+    },
+    "safety": "unsafe",
+    "schema": 1,
+    "suppliedArity": 1,
+    "target": {
+      "isFunction": true,
+      "kind": "static",
+      "symbol": "rts_isThreaded",
+      "unit": "ghc-internal"
+    }
+  },
+  "strlen": {
+    "argumentReps": [
+      {
+        "evaluated": false,
+        "kind": "address",
+        "primReps": [
+          "AddrRep"
+        ]
+      },
+      {
+        "evaluated": false,
+        "kind": "void",
+        "primReps": []
+      }
+    ],
+    "arity": 2,
+    "convention": "ccall",
+    "resultRep": {
+      "aggregate": "unboxed-tuple",
+      "components": [
+        {
+          "evaluated": true,
+          "kind": "void",
+          "primReps": []
+        },
+        {
+          "evaluated": true,
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "evaluated": false,
+      "kind": "unknown",
+      "primReps": [
+        "IntRep"
+      ]
+    },
+    "safety": "unsafe",
+    "schema": 1,
+    "suppliedArity": 2,
+    "target": {
+      "isFunction": true,
+      "kind": "static",
+      "symbol": "strlen",
+      "unit": "ghc-internal"
+    }
+  }
+}
