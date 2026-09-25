@@ -60,6 +60,8 @@ extra-source-files:
   compiler/test-fixtures/OriginalFdReadyAuditNative.hs
   compiler/test-fixtures/OriginalIconvAudit.hs
   compiler/test-fixtures/OriginalIconvAuditNative.hs
+  compiler/test-fixtures/BoundThreadQueryAudit.hs
+  compiler/test-fixtures/BoundThreadQueryNative.hs
   compiler/test-fixtures/OriginalGmpAudit.hs
   compiler/test-fixtures/OriginalGmpNative.hs
   compiler/test-fixtures/OriginalPosixDupAudit.hs
@@ -324,6 +326,7 @@ executable thc-fixtures
     ThreadAsyncFixtures
     UncaughtSelfFixtures
     ArithmeticExceptionFixtures
+    BoundThreadQueryFixtures
     MaskFunctionFixtures
     InterfaceFixtures
     InterfaceForeignFacts

@@ -46,6 +46,7 @@ import OriginalTcgetattrFixtures (prepareOriginalTcgetattr)
 import OriginalSigprocmaskFixtures (prepareOriginalSigprocmask)
 import OriginalSigsetFixtures (prepareOriginalSigset)
 import OriginalIconvFixtures (prepareOriginalIconv)
+import BoundThreadQueryFixtures (prepareBoundThreadQuery)
 import MutVarFixtures (prepareMutVar)
 import StablePointerFixtures (prepareStablePointers)
 import WeakFixtures (prepareWeaks)
@@ -900,6 +901,7 @@ main = do
     ["original-rts-locks"] -> prepareOriginalRtsLocks root False
     ["original-rts-locks", "--require-supported"] -> prepareOriginalRtsLocks root True
     ["original-iconv"] -> prepareOriginalIconv root
+    ["bound-thread-query"] -> prepareBoundThreadQuery root
     ["mutvar"] -> prepareMutVar root
     ["stable-pointers"] -> prepareStablePointers root
     ["weak-explicit"] -> prepareWeaks root

@@ -303,6 +303,21 @@ tasks.register<Test>("originalIconvFullCoreTest") {
         }
     }
 }
+tasks.register<Test>("boundThreadQueryFullCoreTest") {
+    group = "verification"
+    description = "Tests the original negative bound-thread capability against both native RTS modes."
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    useJUnitPlatform()
+    filter { includeTestsMatching("thc.runtime.BoundThreadQueryNativeTest") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Original-import first-installed evidence requires a fresh test process") { true }
+    doFirst {
+        check(file("build/bound-thread-query/manifest.json").isFile) {
+            "Missing bound-thread-query fixture: run cabal run exe:thc-fixtures -- bound-thread-query with full-Core GHC9.14.1"
+        }
+    }
+}
 tasks.register<Test>("originalStackDecoderFullCoreTest") {
     group = "verification"
     description = "Tests the original stack decoder/formatter using the explicitly prepared full-Core GHC fixture."
