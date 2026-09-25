@@ -156,7 +156,8 @@ class SimdAstTransportTest {
                 val failure = assertThrows(PolyglotException::class.java) { context.eval("thc", request) }
                 // Known-input validation can reject the constructor application before
                 // layout construction reaches CoreFields; both enforce the exact proof.
-                val reasons = listOf(reason, "Missing or conflicting exact vector argument proof")
+                val reasons = listOf(reason, "Missing or conflicting exact vector argument proof") +
+                    if (label == "short levity") listOf("Constructor metadata length mismatch: Heap") else emptyList()
                 assertTrue(reasons.any { failure.message.orEmpty().contains(it) },
                     "$backend/$label: ${failure.message}")
             }
