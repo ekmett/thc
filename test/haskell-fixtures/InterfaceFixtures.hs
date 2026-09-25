@@ -3,8 +3,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module InterfaceFixtures (prepareInterfaceCore) where
 
-import Control.Monad (forM, forM_, unless)
-import Data.Aeson (Value(..), Result(..), fromJSON, object, (.=), decodeStrict')
+import Control.Monad (filterM, forM, forM_, unless)
+import Data.Aeson (Value(..), Result(..), fromJSON, toJSON, object, (.=), decodeStrict')
 import Data.Aeson.Key (Key)
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Char8 as BS
@@ -15,6 +15,7 @@ import FixtureSupport (CommandResult(..), hashes, runLogged, runLoggedExpect, wr
 import GHC hiding (exprType, entry)
 import GHC.Plugins
 import GHC.Core.TyCo.Compare (eqType)
+import qualified GHC.Data.ShortText as ShortText
 import GHC.Iface.Binary (readBinIface, CheckHiWay(..), TraceBinIFace(..))
 import GHC.Iface.Syntax (IfaceBindingX(..))
 import GHC.Types.TypeEnv (typeEnvIds)
@@ -66,6 +67,10 @@ prepareInterfaceCore root = do
   baseUnit <- case BS.words (commandStdout baseResult) of
     [name] -> pure (BS.unpack name)
     _ -> die "Expected exactly one selected base unit"
+  wiredResult <- run "wired-unit" ghcPkg ["field", "ghc-internal", "id", "--simple-output"]
+  wiredUnit <- case BS.words (commandStdout wiredResult) of
+    [name] -> pure (BS.unpack name)
+    _ -> die "Expected exactly one selected ghc-internal registration"
   libdir <- case lines (BS.unpack (commandStdout libdirResult)) of
     [path] -> pure path
     _ -> die "Expected exactly one selected GHC libdir"
@@ -168,6 +173,7 @@ prepareInterfaceCore root = do
                 (flattenBinds (interfaceBindings control))) "No actual hydrated GHC CBV marks"
     pure ()
   helperCommands <- checkHelper root directory libdir helper
+  wiredCommands <- checkWiredHelper root directory libdir helper wiredUnit baseUnit
   audits <- forM entries $ \entry -> run ("audit-" ++ entry) "python3"
     ["scripts/audit-core.py", "--entry", entry, "--output", directory </> entry ++ "-audit.json",
      directory </> (if entry == "coercionEntry" then "CBVCoercionAudit.json" else "InterfaceLibrary.json")]
@@ -180,13 +186,14 @@ prepareInterfaceCore root = do
         "scripts/audit-core.py", "scripts/core-capabilities.json"] ++
         ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
         ["scripts" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
-      commands = [helperBuild, helperLocation, pluginBuild, version, libdirResult, baseResult] ++
-        concat builds ++ [foreignBuild, nativeBuild, oracle] ++ helperCommands ++ audits
+      commands = [helperBuild, helperLocation, pluginBuild, version, libdirResult, baseResult, wiredResult] ++
+        concat builds ++ [foreignBuild, nativeBuild, oracle] ++ helperCommands ++ wiredCommands ++ audits
       artifacts = concatMap commandArtifacts commands ++
         [directory </> name | name <- ["InterfaceLibrary.json", "full/InterfaceLibrary.hi", "thin/InterfaceLibrary.hi",
           "full/InterfaceLibrary.dyn_hi", "full/InterfaceForeign.hi", "native/oracle", "source/InterfaceLibrary.saved"]] ++
         [directory </> name | name <- ["CBVCoercionAudit.json", "direct/CBVCoercionAudit.json",
-          "full/CBVCoercionAudit.hi", "thin/CBVCoercionAudit.hi", "source/CBVCoercionAudit.saved"]] ++
+          "full/CBVCoercionAudit.hi", "thin/CBVCoercionAudit.hi", "source/CBVCoercionAudit.saved",
+          "wired-unit.json"]] ++
         [directory </> entry ++ "-audit.json" | entry <- entries]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
@@ -195,7 +202,7 @@ prepareInterfaceCore root = do
      "unit" .= unitName, "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes,
      "controls" .= (["opaque-body", "private-worker", "recursive-groups", "thin-unavailable",
        "no-source-target", "wrong-module", "wrong-unit", "wrong-way", "foreign-rejected", "private-flags", "repeat-load",
-       "helper-protocol", "installed-cbv-worker"] :: [String]),
+       "helper-protocol", "installed-cbv-worker", "installed-wired-unit"] :: [String]),
      "commands" .= map commandRecord commands, "runtimeVerified" .= False]
   putStrLn "Prepared complete interface Core: 21 native rows; full/thin/no-source/identity/way/foreign controls passed"
 
@@ -257,6 +264,54 @@ checkHelper root directory libdir helper = do
         "Hydrated idCbvMarks changed"
     _ -> die "Missing/ambiguous installed CBV worker"
   pure (full ++ [thin,dynamic,badWay,badModule,foreignError,usageError])
+
+-- Inspect one actual selected boot-library interface without copying/hashing it.
+-- Stock GHC is thin; a compiler with full Core must instead load successfully.
+-- The reference identity comes from the raw header, not the helper's mapping.
+checkWiredHelper :: FilePath -> FilePath -> FilePath -> FilePath -> String -> String -> IO [CommandResult]
+checkWiredHelper root directory libdir helper registered otherRegistration = do
+  (path, canonical, complete) <- runGhc (Just libdir) $ do
+    initial <- getSessionDynFlags
+    initialEnv <- getSession
+    (flags,leftovers,_) <- parseDynamicFlags (hsc_logger initialEnv) initial
+      (map noLoc ["-clear-package-db", "-global-package-db", "-package-env", "-", "-package-id", registered])
+    liftIO $ check (null leftovers) "Unexpected wired-unit flag leftovers"
+    _ <- setSessionDynFlags flags
+    environment <- getSession
+    liftIO $ do
+      let units = hsc_units environment
+      info <- case filter ((== stringToUnit registered) . unwireUnit units . mkUnit) (listUnitInfo units) of
+        [selected] -> pure selected
+        _ -> die "Expected one exact selected wired registration"
+      existing <- filterM doesFileExist [ShortText.unpack dir </> "GHC/Internal/Char.hi" | dir <- unitImportDirs info]
+      path <- case existing of
+        [selected] -> pure selected
+        _ -> die "Expected one installed GHC.Internal.Char interface"
+      raw <- readBinIface (targetProfile flags) (hsc_NC environment) CheckHiWay QuietBinIFace path
+      let canonical = unitString (moduleUnit (mi_module raw))
+      check (canonical == "ghc-internal" && registered /= canonical) "Control does not exercise wired registration mapping"
+      check (moduleNameString (moduleName (mi_module raw)) == "GHC.Internal.Char") "Unexpected wired interface module"
+      pure (path, canonical, not (isNothing (mi_simplified_core raw)))
+  let expectedExit = if complete then 0 else 3
+      args requested = ["--libdir", libdir, "--unit", requested, "--module", "GHC.Internal.Char", "--interface", path]
+      run code label requested = runLoggedExpect code 180 root (directory </> "logs") label [] helper (args requested)
+  writeJson (root </> directory </> "wired-unit.json") $ object
+    ["registeredUnit" .= registered, "interfaceUnit" .= canonical, "module" .= ("GHC.Internal.Char" :: String),
+     "interface" .= path, "completeCore" .= complete, "expectedExit" .= expectedExit]
+  loaded <- run expectedExit "helper-wired-unit" registered
+  output <- maybe (die "Wired helper response is not JSON") pure (decodeStrict' (commandStdout loaded))
+  if complete then check (valueAt "status" output == String "loaded" &&
+      valueAt "unit" (valueAt "core" output) == String "ghc-internal") "Wired Core identity was rewritten"
+    else check (valueAt "status" output == String "unavailable" && valueAt "core" output == Null &&
+      valueAt "capability" output == String "complete-interface-core" &&
+      valueAt "unit" output == toJSON registered) "Thin wired input was not an exact-registration missing capability"
+  badUnit <- run 1 "helper-wired-wrong-unit" otherRegistration
+  canonicalAlias <- run 1 "helper-wired-canonical-alias" canonical
+  forM_ [badUnit,canonicalAlias] $ \result -> do
+    failure <- maybe (die "Wired helper failure is not JSON") pure (decodeStrict' (commandStdout result))
+    check (valueAt "status" failure == String "error" && valueAt "core" failure == Null)
+      "Wired-unit mapping accepted a different registration"
+  pure [loaded,badUnit,canonicalAlias]
 
 checkCore :: HscEnv -> FilePath -> InterfaceCore -> IO ()
 checkCore environment path core = do

@@ -4,13 +4,19 @@
 module Main (main) where
 
 import qualified Control.Exception as Exception
+import Control.DeepSeq (force)
 import Control.Monad (unless)
 import Data.Aeson (Value, object, (.=), encode)
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.List (isPrefixOf)
+import Data.Maybe (fromMaybe)
 import qualified Data.Map.Strict as Map
 import GHC (getSessionDynFlags, getSession, parseDynamicFlags, setSessionDynFlags, runGhc, noLoc)
-import GHC.Plugins (hsc_logger, mkModule, mkModuleName, stringToUnit, liftIO)
+import GHC.Plugins (hsc_logger, mkModule, mkModuleName, stringToUnit, stringToUnitId, liftIO)
+import GHC.Driver.Env (hsc_units)
+import GHC.Types.Unique.Map (lookupUniqMap)
+import GHC.Unit.Info (mkUnit)
+import GHC.Unit.State (wireMap, lookupUnitId, unwireUnit)
 import System.Environment (getArgs)
 import System.Exit (ExitCode(..), exitWith)
 import System.IO (hSetEncoding, stdout, utf8)
@@ -92,11 +98,22 @@ loadSelected options = runGhc (Just (libdir options)) $ do
   _ <- setSessionDynFlags selected
   environment <- getSession
   liftIO $ do
-    let expected = mkModule (stringToUnit (unit options)) (mkModuleName (moduleName options))
+    -- Package flags take the exact registration key, whereas interface owners
+    -- use GHC's wired identity. Resolve through this session, never by stripping
+    -- a version/hash or by treating any similarly named package as equivalent.
+    let units = hsc_units environment
+        registered = stringToUnitId (unit options)
+        selectedId = fromMaybe registered (lookupUniqMap (wireMap units) registered)
+    info <- maybe (ioError (userError "Requested registration is not in the selected GHC unit state"))
+      pure (lookupUnitId units selectedId)
+    let selectedUnit = mkUnit info
+    unless (unwireUnit units selectedUnit == stringToUnit (unit options))
+      (ioError (userError "Selected GHC unit does not map back to the exact requested registration"))
+    let expected = mkModule selectedUnit (mkModuleName (moduleName options))
     loaded <- loadInterfaceCore environment expected (interface options)
     case loaded of
       Nothing -> pure Nothing
       Just core -> do
         rendered <- interfaceCoreJSON (["unit-qualified"] ++ ["source-notes" | sourceNotes options]) core
-        _ <- Exception.evaluate (length rendered)
+        _ <- Exception.evaluate (force rendered)
         pure (Just rendered)

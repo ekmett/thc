@@ -92,6 +92,11 @@ global database plus those arguments: implicit user databases and package
 environments are disabled. The helper does not discover packages, rebuild them,
 or run guest code. The caller must select a helper built against the same GHC
 API/installation as that libdir; changing libdir is not GHC API compatibility.
+`--unit` is the exact registered package ID. The selected GHC `UnitState` maps it
+to an interface owner (for example, a versioned `ghc-internal` registration to
+the canonical `ghc-internal` owner) and must map back to that exact registration.
+Core retains its original canonical identity; no version/hash stripping or
+canonical-name alias is accepted in place of an exact registered ID.
 Ways are `vanilla` (default), `dynamic`, or `profiling`; the interface header must
 match the requested way. Only vanilla/dynamic synthetic packages are tested.
 
@@ -104,7 +109,8 @@ Except for `--help`, stdout is one UTF-8 JSON object with `schema: 1`:
 | 1 | `error` | `category: "interface"` and a diagnostic message; no Core |
 | 2 | `error` | `category: "usage"`, diagnostic and usage; no Core |
 
-The complete serialized Core is forced before any success bytes are emitted.
+The complete serialized Core, including each character, is deeply forced before
+any success bytes are emitted.
 Cancellation is not converted to a missing-capability result. An unavailable
 result never substitutes inline unfoldings. The driver may make an explicit
 source-fallback decision later; this change does not wire that policy/cache.
@@ -113,6 +119,10 @@ The fixture now feeds helper JSON through AST/bytecode execution and checks the
 installed `CBVCoercionAudit` worker's real `idCbvMarks_maybe`/`entryStrict` against
 the direct late-plugin export from its native compilation. No inferred marks
 are allowed in this comparison.
+It also probes the selected installation's actual `GHC.Internal.Char` interface:
+stock thin interfaces must report missing capability, not wrong-unit failure.
+If that installation carries full Core, the control requires successful loading
+with the original wired owner. The installed interface is not copied or hashed.
 
 ## Build a patched compiler
 

@@ -30,7 +30,7 @@ class InterfaceCoreNativeTest {
         assertEquals("thc-interface-fixture-0.1", manifest["unit"])
         assertEquals(listOf("opaque-body", "private-worker", "recursive-groups", "thin-unavailable",
             "no-source-target", "wrong-module", "wrong-unit", "wrong-way", "foreign-rejected",
-            "private-flags", "repeat-load", "helper-protocol", "installed-cbv-worker"), manifest["controls"])
+            "private-flags", "repeat-load", "helper-protocol", "installed-cbv-worker", "installed-wired-unit"), manifest["controls"])
         for (kind in listOf("inputHashes", "artifactHashes"))
             for ((path, expected) in manifest[kind] as Map<String, String>) {
                 val file = File(root, path)
@@ -71,6 +71,21 @@ class InterfaceCoreNativeTest {
         assertFalse(missing.containsKey("core"))
         val command = Json.parse(File(directory, "logs/helper-thin.command.json").readText()) as Map<String, Any?>
         assertEquals(3L, (command["exit"] as Number).toLong())
+        val wired = Json.parse(File(directory, "wired-unit.json").readText()) as Map<String, Any?>
+        val wiredResponse = Json.parse(File(directory, "logs/helper-wired-unit.stdout").readText()) as Map<String, Any?>
+        val wiredCommand = Json.parse(File(directory, "logs/helper-wired-unit.command.json").readText()) as Map<String, Any?>
+        assertEquals("ghc-internal", wired["interfaceUnit"])
+        assertNotEquals(wired["registeredUnit"], wired["interfaceUnit"])
+        assertEquals(wired["expectedExit"], wiredCommand["exit"])
+        if (wired["completeCore"] == true) {
+            assertEquals("loaded", wiredResponse["status"])
+            assertEquals(wired["interfaceUnit"], (wiredResponse["core"] as Map<*, *>)["unit"])
+        } else {
+            assertEquals("unavailable", wiredResponse["status"])
+            assertEquals("complete-interface-core", wiredResponse["capability"])
+            assertEquals(wired["registeredUnit"], wiredResponse["unit"])
+            assertFalse(wiredResponse.containsKey("core"))
+        }
     }
 
     @Test fun completeInterfacePreservesMetadataAndPassesStrictAdmission() {
