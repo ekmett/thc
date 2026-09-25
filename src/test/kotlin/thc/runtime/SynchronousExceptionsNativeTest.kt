@@ -15,7 +15,7 @@ import java.security.MessageDigest
 class SynchronousExceptionsNativeTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = File(root, "build/synchronous-exceptions")
-    private val supported = listOf("preciseCatch", "actionHeadCatch", "ignoredBottomPayload", "nestedRethrow",
+    private val supported = listOf("preciseCatch", "erasedNestedCatch", "actionHeadCatch", "ignoredBottomPayload", "nestedRethrow",
         "unusedHandler", "lazyResultBoundary", "restoreAndRethrow", "handlerMaskState",
         "maskNested", "maskRethrowRestore", "noDuplicateProbe")
 
@@ -71,12 +71,18 @@ class SynchronousExceptionsNativeTest {
                             "$label restored caller masking state")
                         if (name == "handlerMaskState") {
                             val node = program.entryTarget(name).rootNode
-                            SynchronousMasking.set(node, MaskingState.MASKED_UNINTERRUPTIBLE)
+                            // A top-level guest exit clears its Java-thread mask. Keep an
+                            // outer guest entry alive while checking nested restoration.
+                            val threads = Language.currentState(node).threads
+                            threads.enterCurrent()
                             try {
+                                SynchronousMasking.set(node, MaskingState.MASKED_UNINTERRUPTIBLE)
                                 assertEquals(34L, function.execute(0L).asLong(), "$label nested unmask")
                                 assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, SynchronousMasking.current(node),
                                     "$label restored masked caller")
-                            } finally { SynchronousMasking.set(node, MaskingState.UNMASKED) }
+                            } finally { threads.leaveCurrent() }
+                            assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(node),
+                                "$label completed outer guest entry")
                         }
                         assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong(), label)
                         assertEquals(0L, (program.diagnostics().getValue("blackholes") as Number).toLong(), label)

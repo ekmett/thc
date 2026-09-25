@@ -18,6 +18,17 @@ preciseCatch raw = runRW# (\s ->
               (\(Payload value) s1 -> (# s1, Payload (value +# 17#) #)) s of
     (# _, Payload result #) -> result)
 
+-- GHC retains noinline until CorePrep. Its export-only erasure preserves this
+-- exact result type and the nested typed raiseIO#/State#/tuple certificates.
+{-# OPAQUE erasedNestedCatch #-}
+erasedNestedCatch :: Int# -> Int#
+erasedNestedCatch raw =
+  case noinline (runRW# (\s ->
+    case catch# (\s0 -> raiseIO# (Payload raw) s0)
+                (\(Payload caught) s1 -> (# s1, Payload (caught +# 43#) #)) s of
+      (# _, payload #) -> payload)) of
+    Payload result -> result
+
 -- catch# installs its handler before evaluating the action closure. This is
 -- intentionally not the head-strict GHC.Internal.IO.catchException wrapper.
 {-# OPAQUE actionHeadCatch #-}

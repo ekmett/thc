@@ -510,7 +510,10 @@ constructor d con = O $
 expr :: Ctx -> CoreExpr -> J
 expr d original
   | Just lowered <- wiredCase original = withRep (exprRep d original) (withUnsafeEqualityCase (expr d lowered))
-  | Just lowered <- wiredApplication original = expr (d { canCertify = canCertify d && preservesWiredTypes original lowered }) lowered
+  | Just lowered <- wiredApplication original =
+      if canCertify d && preservesWiredTypes original lowered
+      then expr d lowered
+      else uncertifiedRoot (expr d lowered)
   | Var v <- original, isWiredVoid v = A [S "void",O (("rep",voidRep) : sourceFields d)]
   | Var v <- original, Just lowered <- wiredRhs v = expr (d { canCertify = canCertify d && preservesWiredTypes original lowered }) lowered
   | canCertify d, Just saturated <- saturateMask original = expr d saturated
@@ -542,6 +545,18 @@ withRep rep (A xs) = case reverse xs of
   O fields : rest -> A (reverse rest ++ [O (("rep",rep) : filter ((/= "rep") . fst) fields)])
   _ -> A (xs ++ [O [("rep",rep)]])
 withRep _ node = node
+
+-- A wired identity/unary-class rewrite can change the type of its *result*.
+-- Its retained child is still genuine, typed GHC Core: erasing its certificates
+-- recursively would also erase an inner State# token, tuple layout or primop
+-- application that the rewrite never changed. Only the rewritten root lacks a
+-- certificate at the original call site. Keep its old no-demand/HNF contract.
+uncertifiedRoot :: J -> J
+uncertifiedRoot serialized = case withRep unknownRep serialized of
+  A [S "app",function,arguments,lifted,_,_,O metadata] ->
+    A [S "app",function,arguments,lifted,B False,B False,
+       O (filter ((/= "callDemand") . fst) metadata)]
+  other -> other
 
 -- Record this export-only late rule without obscuring the original Core dump,
 -- result representation, or source notes on the surviving expression.
