@@ -93,7 +93,8 @@ class OriginalStringRtsTest {
             assertThrows(RuntimeFault::class.java) { length(ManagedAddress.fromByteArray(byteArrayOf(1, 2))) }
             assertThrows(RuntimeFault::class.java) { length(managed.plus(12)) }
             assertThrows(RuntimeFault::class.java) { length(ManagedAddress.nullAddress()) }
-            assertThrows(RuntimeFault::class.java) { length(ManagedAddress.fromHex("0000000000000000")) }
+            assertEquals(0L, length(ManagedAddress.fromHex("0000000000000000")))
+            assertThrows(RuntimeFault::class.java) { length(ManagedAddress.unownedNumeric(0x1234L)) }
             val pointers = ManagedAddress.fromAllocation(ManagedAllocation.mutable(16, 8))
             pointers.writeAddressElementIndex(0, managed)
             assertThrows(RuntimeFault::class.java) { length(pointers) }
