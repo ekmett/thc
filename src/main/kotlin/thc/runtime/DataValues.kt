@@ -46,6 +46,9 @@ class DataLayout(
     @CompilationFinal(dimensions = 1)
     private val fields: Array<Field>
     val arity: Int = fieldReps.size
+    private val exactFieldReps = fieldReps.copyOf()
+    internal fun hasFieldRepresentation(index: Int, rep: String): Boolean =
+        index in exactFieldReps.indices && exactFieldReps[index] == rep
     // Only this layout's private factory path can authorize a storage object.
     // The key is checked by the superclass constructor and never retained there.
     private val allocationKey = Any()
