@@ -105,6 +105,56 @@ class SimdCallNativeTest {
         }
         return walk(node, emptySet())
     }
+    /** GHC may pass a lifted thunk directly instead of naming it with a let. */
+    private fun retainedLazyVectorArgument(value: Any?, consumerId: String): Boolean =
+        nodes(value).filter { it.getOrNull(0) == "case" }.any { case ->
+            val vector = vectorBinder((case.getOrNull(4) as? Map<*, *>)?.get("binder"))
+                ?: return@any false
+            (case.getOrNull(3) as? List<*>)?.any { alternative ->
+                val body = (alternative as? List<*>)?.getOrNull(3)
+                nodes(body).any { call ->
+                    val head = call.getOrNull(1) as? List<*>
+                    val arguments = call.getOrNull(2) as? List<*>
+                    val metadata = call.getOrNull(6) as? Map<*, *>
+                    val demand = metadata?.get("callDemand") as? Map<*, *>
+                    val delayed = arguments?.getOrNull(1) as? List<*>
+                    val proof = ((delayed?.lastOrNull() as? Map<*, *>)?.get("rep") as? Map<*, *>)
+                    call.getOrNull(0) == "app" && head?.getOrNull(0) == "var" &&
+                        head?.getOrNull(1) == consumerId && arguments?.size == 2 &&
+                        call.getOrNull(3) == listOf(false, true) &&
+                        (demand?.get("arity") as? Number)?.toInt() == 2 &&
+                        demand?.get("strictArgs") == listOf(true, false) &&
+                        proof?.get("kind") == "data" &&
+                        proof?.get("primReps") == listOf("BoxedRep (Just Lifted)") &&
+                        proof?.get("evaluated") == false && freeVectorIds(delayed).contains(vector)
+                }
+            } == true
+        }
+
+    @Test fun exportedLazyVectorArgumentRequiresExactDemandAndOuterCapture() {
+        val vector = mapOf("kind" to "vector", "primReps" to listOf("VecRep 8 Int16ElemRep"),
+            "evaluated" to true)
+        val lazyBox = mapOf("kind" to "data", "primReps" to listOf("BoxedRep (Just Lifted)"),
+            "evaluated" to false)
+        fun exported(flags: List<Boolean> = listOf(false, true), strict: List<Boolean> = listOf(true, false),
+            box: Map<String, Any?> = lazyBox, captured: String = "vector"): List<Any?> {
+            val delayed = listOf("case", listOf("var", captured, mapOf("rep" to vector)), "inner",
+                listOf(listOf("default", null, emptyList<Any>(), listOf("con", "I#", 1),
+                    mapOf("binders" to emptyList<Any>()))), mapOf("rep" to box))
+            val call = listOf("app", listOf("var", "selectBox"),
+                listOf(listOf("var", "x"), delayed), flags, false, false,
+                mapOf("callDemand" to mapOf("arity" to 2, "strictArgs" to strict)))
+            return listOf("case", listOf("var", "source"), "vector",
+                listOf(listOf("default", null, emptyList<Any>(), call,
+                    mapOf("binders" to emptyList<Any>()))),
+                mapOf("binder" to mapOf("id" to "vector", "rep" to vector)))
+        }
+        assertTrue(retainedLazyVectorArgument(exported(), "selectBox"))
+        assertFalse(retainedLazyVectorArgument(exported(flags = listOf(false, false)), "selectBox"))
+        assertFalse(retainedLazyVectorArgument(exported(strict = listOf(true, true)), "selectBox"))
+        assertFalse(retainedLazyVectorArgument(exported(box = lazyBox + ("evaluated" to true)), "selectBox"))
+        assertFalse(retainedLazyVectorArgument(exported(captured = "unrelated"), "selectBox"))
+    }
     /** Inspect exported Core structure, not the Haskell source spelling. */
     private fun retainedHeapCore(source: Map<String, Any?>) {
         val constructors = source["constructors"] as List<Map<String, Any?>>
@@ -150,10 +200,12 @@ class SimdCallNativeTest {
             "Exported Core lacks the real vector constructor case")
         val closureRoot = bindings.single { it["name"] == "capturedCase" }
         val thunkRoot = bindings.single { it["name"] == "thunkCase" }
+        val thunkConsumer = bindings.single { it["name"] == "selectBox" }
         assertTrue(retainedVectorCaptures(closureRoot["expr"]).first,
             "Exported capturedCase lacks a free vector from an outer lexical binder")
-        assertTrue(retainedVectorCaptures(thunkRoot["expr"]).second,
-            "Exported thunkCase lacks a lifted RHS with an outer free vector")
+        assertTrue(retainedVectorCaptures(thunkRoot["expr"]).second ||
+            retainedLazyVectorArgument(thunkRoot["expr"], thunkConsumer["id"] as String),
+            "Exported thunkCase lacks a lazy lifted argument capturing an outer vector")
     }
 
     @Test fun nativeVectorCallsPapAndJoinsKeepCompiledAstAndBytecodeResults() {

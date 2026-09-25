@@ -127,7 +127,7 @@ class VectorHeapStorageTest {
                         // StaticShape escapes underscores in property IDs when
                         // naming generated fields and may place them in a base class.
                         val generatedPrefix = prefix.replace("_", "__")
-                        val properties = generateSequence(owner.javaClass) { it.superclass }
+                        val properties = generateSequence<Class<*>>(owner.javaClass) { it.superclass }
                             .flatMap { it.declaredFields.asSequence() }
                             .filter { it.name.startsWith(generatedPrefix) }.toList()
                         assertEquals(lanes, properties.size)
