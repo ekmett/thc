@@ -159,6 +159,9 @@ class Int32VectorMemoryProofTest {
         val p = BytecodeProgram(language, f.module)
         val host = p.hostEntryTarget(3)
         val original = p.entryTarget("root")
+        fun active() = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
+            .single { it.callTarget === original }.currentCallTarget as RootCallTarget
+        fun valid(target: RootCallTarget) = target.javaClass.getMethod("isValidLastTier").invoke(target) == true
         fun count() = (p.diagnostics().getValue("compiledEntries") as Number).toLong()
         fun call() {
             val bytes = ByteArray(40) { (it * 47 + 129).toByte() }
@@ -166,15 +169,19 @@ class Int32VectorMemoryProofTest {
             released(language)
         }
         repeat(12) { call() }
-        val active = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
-            .single { it.callTarget === original }.currentCallTarget as RootCallTarget
+        val target = active()
         assertEquals(0L, count())
-        active.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(active, true)
-        assertEquals(true, active.javaClass.getMethod("isValidLastTier").invoke(active))
+        assertFalse(valid(host), "host bridge remains interpreted")
+        target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+        assertTrue(valid(target), "first installed guest target")
         val before = count()
         call()
-        assertEquals(before + 1, count(), "one installed compiled guest entry")
-        assertEquals(true, active.javaClass.getMethod("isValidLastTier").invoke(active))
+        assertSame(target, active(), "same installed guest target after replay")
+        assertTrue(valid(target), "installed target stays valid after replay")
+        assertFalse(valid(host), "host bridge stays interpreted")
+        // The counter is program-wide: the inlined captured callback can add
+        // one entry beside the installed outer root during this single replay.
+        assertTrue(count() - before in 1L..2L, "compiled outer root and optional callback entry")
     }
 
     private fun reject(language: Language, backend: String, diagnostic: Boolean, fixture: Fixture, label: String) {
