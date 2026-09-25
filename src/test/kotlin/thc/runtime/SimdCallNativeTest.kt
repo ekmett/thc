@@ -115,9 +115,36 @@ class SimdCallNativeTest {
         val bindings = source["bindings"] as List<Map<String, Any?>>
         val heapPapRoot = bindings.single { it["name"] == "heapPapCase" }
         val expressions = nodes(heapPapRoot["expr"])
-        assertTrue(expressions.any { it.getOrNull(0) == "app" &&
-            (it.getOrNull(1) as? List<*>)?.let { head -> head.getOrNull(0) == "con" && head.getOrNull(1) == heapId } == true &&
-            (it.getOrNull(2) as? List<*>)?.size == 1 }, "Exported Core lacks a vector constructor PAP")
+        // GHC Core saturates data constructors: the source-level Heap vector
+        // PAP is a one-argument closure retaining that vector, then making Heap.
+        val partial = bindings.single { it["name"] == "applyHeapPartial" }
+        val partialId = partial["id"]
+        val papCalls = expressions.filter { it.getOrNull(0) == "app" &&
+            (it.getOrNull(1) as? List<*>)?.getOrNull(1) == partialId }.toList()
+        assertTrue(papCalls.any { call ->
+            val argument = (call.getOrNull(2) as? List<*>)?.singleOrNull()
+            val closures = nodes(argument).filter { it.getOrNull(0) == "lam" &&
+                (it.getOrNull(1) as? List<*>)?.size == 1 }
+            closures.any { closure ->
+                val formal = binderId((closure[1] as List<*>)[0])
+                val constructorsInBody = nodes(closure.getOrNull(2)).filter { it.getOrNull(0) == "app" &&
+                    (it.getOrNull(1) as? List<*>)?.let { head ->
+                        head.getOrNull(0) == "con" && head.getOrNull(1) == heapId } == true &&
+                    (it.getOrNull(2) as? List<*>)?.size == 2 }
+                formal != null && constructorsInBody.any { construction ->
+                    val fields = construction[2] as List<*>
+                    freeVectorIds(fields[0]).isNotEmpty() &&
+                        (fields[1] as? List<*>)?.let { it.getOrNull(0) == "var" && it.getOrNull(1) == formal } == true
+                }
+            }
+        } && retainedVectorCaptures(heapPapRoot["expr"]).first,
+            "Exported Core lacks the vector-retaining constructor partial application")
+        val partialFormal = binderId(((partial["expr"] as List<*>)[1] as List<*>).single())
+        assertTrue(nodes(partial["expr"]).any { it.getOrNull(0) == "app" &&
+            (it.getOrNull(1) as? List<*>)?.let { head ->
+                head.getOrNull(0) == "var" && head.getOrNull(1) == partialFormal } == true &&
+            (it.getOrNull(2) as? List<*>)?.size == 1 },
+            "Exported Core never applies the retained constructor closure")
         val consumer = bindings.single { it["name"] == "consumeHeap" }
         assertTrue(nodes(consumer["expr"]).any { it.getOrNull(0) == "data" && it.getOrNull(1) == heapId },
             "Exported Core lacks the real vector constructor case")

@@ -51,7 +51,8 @@ class SimdAstTransportTest {
         listOf("lam", args, body, mapOf("rep" to closure, "resultRep" to result,
             "entryStrict" to List(args.size) { false }))
     private fun binding(id: String, body: List<Any?>) = mapOf("id" to id, "name" to id,
-        "lifted" to true, "rep" to closure, "expr" to body)
+        "lifted" to true, "arity" to (body[1] as List<*>).size,
+        "rep" to closure, "expr" to body)
     private fun module(): Map<String, Any?> {
         val v = variable("v", vector)
         val first = unpack(v, prim("int16ToInt#", listOf(variable("lane0", int16)), int))
