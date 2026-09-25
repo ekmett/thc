@@ -40,21 +40,24 @@ The capability keeps
 only the registry, opaque weak handle and expected thread registry; it does not
 keep another key/value/action reference. Consumers must retain the capability,
 not a permanent key or ID snapshot. This is a liveness snapshot, not a dispatch
-permission: an eventual signal action must atomically recheck the exact identity
-when enqueuing its request. The existing numeric send path is not that guard.
-This accessor does not implement or admit the foreign RTS call or signals.
+permission: a consumer sending to this key must atomically recheck the exact
+identity when enqueuing its request. The numeric send path alone is not that guard.
+This accessor alone does not install a signal handler; the separate
+[launcher-only SIGINT bridge](primops.md#current-aggregate-and-address-limits)
+has its own bounded admission contract.
 
-`addCFinalizerToWeak#` remains unsupported. There is no ignored C callback,
-automatic GC finalizer thread, Java Cleaner/WeakReference approximation, heap
-walk or bounded-memory reclamation. Native callback support needs real typed
-pointer ownership and a once-only exit drain before it can be admitted.
+`addCFinalizerToWeak#` now admits only [source-certified one-argument C labels
+and owned `free` bases](c-finalizers.md). Explicit `finalizeWeak#` runs their
+callbacks outside the registry lock before returning the Haskell action. There
+is still no automatic GC finalizer thread, Java Cleaner/WeakReference
+approximation, heap walk or bounded-memory reclamation.
 
-This slice permits stdout's genuine key-capturing registration; it does not
-complete the Handle call graph or ordinary hello. Native normal process exit
-flushes stdout/stderr through `GHC.Internal.TopHandler.flushStdHandles`, not by
-eagerly running their weak finalizers. The actual standard-handle finalizer also
-closes codecs and replaces its MVar value with a finalized-handle error; it is
-not interchangeable with hFlush. Process-wrapper/shutdown support is separate.
+The original weak fixture below proved stdout's genuine key-capturing
+registration; by itself it did not complete the Handle call graph or executable
+startup. The [complete-Core executable path](driver.md#installed-complete-core-provider)
+now runs original normal-exit `flushStdHandles` with the main program's CAFs.
+Flushing is not equivalent to running the standard-handle finalizer, which also
+closes codecs and replaces its MVar value with a finalized-handle error.
 
 ## Native contract fixture
 
