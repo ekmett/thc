@@ -181,7 +181,11 @@ class PinnedPointerCellsTest {
         provenance()
         for (stage in listOf("pre", "post")) {
             val source = module(stage)
-            val calls = primitiveCalls(source)
+            // The copy root also uses mutable contents and touch. Keep these
+            // original ABI controls scoped to their two original entry roots.
+            val mutable = CoreModules.reachable(source, "mutableContentsRoundtrip")
+            val lazy = CoreModules.reachable(source, "touchLazyPayload")
+            val calls = primitiveCalls(mutable) + primitiveCalls(lazy)
             val contents = calls.single { (it[1] as List<*>)[1] == "mutableByteArrayContents#" }
             val touches = calls.filter { (it[1] as List<*>)[1] == "touch#" }
             assertEquals(2, touches.size)
@@ -199,15 +203,13 @@ class PinnedPointerCellsTest {
                 assertEquals(proof("void", emptyList(), false), rep(touch)) // Not (# State# #).
             }
             assertEquals(setOf(listOf(true, false), listOf(false, false)), touches.map { it[3] }.toSet())
-            val mutable = CoreModules.reachable(source, "mutableContentsRoundtrip")
             assertFalse(primitiveCalls(mutable).any { (it[1] as List<*>)[1] == "unsafeFreezeByteArray#" })
-            val lazy = CoreModules.reachable(source, "touchLazyPayload")
             assertEquals(1, primitiveCalls(lazy).count { (it[1] as List<*>)[1] == "raise#" })
             val audit = Json.parse(File(root, "build/pinned-pointer-cells/$stage/audit.json").readText()) as Map<String, Any?>
             assertEquals(true, audit["accepted"]); assertEquals(emptyList<Any>(), audit["missingGlobals"])
             val primitives = (audit["primitives"] as List<Map<String, Any?>>).associateBy { it["name"] }
-            for ((name, owners) in mapOf("mutableByteArrayContents#" to setOf("mutableContentsAt"),
-                "touch#" to setOf("mutableContentsRoundtrip", "touchLazyPayload"))) {
+            for ((name, owners) in mapOf("mutableByteArrayContents#" to setOf("mutableContentsAt", "nonOverlappingCopy"),
+                "touch#" to setOf("mutableContentsRoundtrip", "touchLazyPayload", "nonOverlappingCopy"))) {
                 val uses = primitives.getValue(name)["uses"] as List<Map<String, Any?>>
                 assertEquals(owners.map { "main:PinnedPointerCellsAudit.$it" }.toSet(), uses.map { it["owner"] }.toSet())
             }
@@ -499,20 +501,31 @@ class PinnedPointerCellsTest {
                     val program = program(language, source, backend)
                     val function = context.asValue(EntryValue(program, "nonOverlappingCopy", 1))
                     val host = program.hostEntryTarget(1)
+                    val original = program.entryTarget("nonOverlappingCopy")
+                    fun publicTargets(): List<RootCallTarget> {
+                        // EntryValue.compile installs the selected entry's active
+                        // direct target (possibly split) and the host bridge. It
+                        // does not promise installation of every nested helper.
+                        val entries = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
+                            .filter { it.callTarget === original }
+                            .map { it.currentCallTarget as RootCallTarget }.distinct()
+                            .ifEmpty { listOf(original) }
+                        return entries + host
+                    }
                     fun check(row: Row) = assertEquals(row.nonOverlappingCopy,
                         function.execute(row.input).asLong(), "$stage/$backend/${row.input}")
                     rows.forEach(::check)
                     assertTrue(function.invokeMember("compile").asBoolean(), "$stage/$backend compile")
-                    val targets = activeTargets(host)
-                    targets.forEach { valid(it, "$stage/$backend installed target") }
+                    val targets = publicTargets()
+                    targets.forEach { valid(it, "$stage/$backend/${it.rootNode.name} installed target") }
                     for (row in rows.asReversed()) {
                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                         check(row)
                         assertEquals(before + 1,
                             (program.diagnostics().getValue("compiledEntries") as Number).toLong(),
                             "$stage/$backend/${row.input} compiled entry")
-                        assertEquals(targets, activeTargets(host), "$stage/$backend active targets")
-                        targets.forEach { valid(it, "$stage/$backend retained target") }
+                        assertEquals(targets, publicTargets(), "$stage/$backend active targets")
+                        targets.forEach { valid(it, "$stage/$backend/${it.rootNode.name} retained target") }
                     }
                     assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong())
                     released(language)
