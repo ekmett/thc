@@ -81,8 +81,16 @@ internal class GuestThreads internal constructor(
     // Weak keys release dead Java carriers. Numbers are never recycled, so a
     // retained finished ThreadId still names its original logical capability.
     private val identities = WeakHashMap<Thread, GuestThreadId>()
+    // The RTS registration retains the Weak# capability, never its ThreadId#
+    // key or a numeric Java-thread snapshot. Signal delivery is not admitted yet.
+    private var mainThreadWeak: MainThreadWeakKey? = null
     private var allocatedCapabilities = 0L
     @Synchronized internal fun capabilityCount(): Long = allocatedCapabilities
+    @Synchronized fun registerMainThread(key: MainThreadWeakKey) {
+        check(!closed) { "Guest context has closed" }
+        mainThreadWeak = key
+    }
+    @Synchronized fun mainThreadRegistration(): MainThreadWeakKey? = mainThreadWeak
     private val currentSlot = ThreadLocal<GuestThread?>()
     private val delivery = ThreadLocal<DeliveryState?>()
     private var closed = false
@@ -171,6 +179,18 @@ internal class GuestThreads internal constructor(
             if (it == GuestThreadStatus.RUNTIME_FAILURE)
                 fault("ThreadId# terminated because of a runtime failure")
         }
+    }
+
+    /** Snapshot only: eventual dispatch must check the same identity atomically with enqueue. */
+    @TruffleBoundary @Synchronized internal fun liveJavaId(identity: GuestThreadId): Long? {
+        if (identity.owner !== this) fault("ThreadId# belongs to another guest context")
+        if (closed || identity.status.terminal) return null
+        val carrier = identity.carrier.get() ?: return null
+        if (!carrier.isAlive || carrier.threadId() != identity.javaId || identities[carrier] !== identity) return null
+        val active = threads[identity.javaId]
+        if (active != null && (active.identity !== identity || active.thread !== carrier)) return null
+        // A live host carrier can be FOREIGN between guest entries; no new lifetime is registered.
+        return identity.javaId
     }
 
     @TruffleBoundary fun send(identity: GuestThreadId, payload: Any?): AsyncRequest {
@@ -270,6 +290,7 @@ internal class GuestThreads internal constructor(
     @TruffleBoundary fun close() {
         val remaining = synchronized(this) {
             closed = true
+            mainThreadWeak = null
             identities.values.forEach { it.status = GuestThreadStatus.RUNTIME_FAILURE }
             threads.values.flatMap { slot ->
                 slot.identity.status = GuestThreadStatus.RUNTIME_FAILURE

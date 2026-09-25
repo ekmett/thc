@@ -52,10 +52,15 @@ have been built with it. Keep the matching compiler tools together; a
 Run the check for each library whose bodies THC will load.
 
 This is a capability check, not a declaration of GHC API compatibility.
-The exporter currently supports GHC 9.14.1. Wiring complete installed Core into
-the driver and removing the pinned-source fallback are migration work; the
-normal build reports a missing capability without disabling that fallback. The explicit
-`check-ghc-core` target fails when the required data is absent.
+The exporter currently supports GHC 9.14.1. The project driver already supports
+`--installed-core required`, which resolves exact selected registrations and
+acquires their complete interfaces through `thc-interface`. The default
+`--installed-core pinned` remains a separate source-provider choice, not a
+fallback after an interface error. The single-package `.cabal` path supports
+only the pinned mode. See the [driver guide](driver.md) for acquisition, checked
+ZIP caching and target-layout receipts. The normal build reports missing Core
+capability without disabling pinned mode; the explicit `check-ghc-core` target
+fails when the required data is absent.
 
 ## Library loading API
 
@@ -71,11 +76,14 @@ Resolve the expected `Module` (including its exact package unit) and interface
 path using the selected compiler session and package databases. `Nothing`
 means a valid interface lacks complete Core; wrong module/unit identities,
 way/version mismatches and malformed interfaces are errors. Nonempty foreign
-stubs and foreign files are retained in [archive-only Core schema 2](interface-foreign.md),
-including exact source and initializer/finalizer identities. This is not native
-linking or executable foreign-export registration: the runtime rejects those
-modules before execution. Ordinary foreign calls in Core still require the
-runtime's normal support audit.
+stubs and foreign files are retained in [Core schema 2](interface-foreign.md),
+including exact source and initializer/finalizer identities. Hydration does not
+link native products or register foreign exports. The checked loader rejects
+unlinked global lifecycle obligations even outside the entry's reachable
+closure, and rejects reachable bindings owned by an unlinked archive module.
+Verified native links have their own admission checks; unrelated archival
+bindings do not grant executable status. Ordinary foreign calls still require
+the runtime's normal support audit.
 
 The result exposes the original module, `ModDetails`, `CoreProgram` and foreign
 metadata. Hydration reads the raw interface before GHC's package cache strips
@@ -98,8 +106,9 @@ complete boot interfaces additionally check the original `$WTrType` and
 Serialization shares `THC.Plugin.serializePostTidyCore` with the late plugin,
 including exact recursive groups, representations, existing CBV proofs and
 optional `source-notes`/`unit-qualified` metadata. No source target is required;
-missing source text stays absent. This API does not wire the driver cache, link
-dependencies, or establish runtime support for an entire package.
+missing source text stays absent. The driver owns acquisition and cache
+integration separately; this API does not link dependencies or establish runtime
+support for an entire package.
 
 The `thc-fixtures interface-core` control separately registers full and thin
 synthetic packages, recovers an `OPAQUE` entry/private worker, checks identity,
@@ -147,8 +156,9 @@ Except for `--help`, stdout is one UTF-8 JSON object with `schema: 1`:
 The complete serialized Core, including each character, is deeply forced before
 any success bytes are emitted.
 Cancellation is not converted to a missing-capability result. An unavailable
-result never substitutes inline unfoldings. The driver may make an explicit
-source-fallback decision later; this change does not wire that policy/cache.
+result never substitutes inline unfoldings. In the driver's installed-Core
+required mode it is a capability failure; choosing the pinned source provider
+is an explicit option, not a retry policy.
 
 The fixture now feeds helper JSON through AST/bytecode execution and checks the
 installed `CBVCoercionAudit` worker's real `idCbvMarks_maybe`/`entryStrict` against

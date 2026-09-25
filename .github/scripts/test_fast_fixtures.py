@@ -19,6 +19,29 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_explicit_weak_fixture_registration_preserves_native_and_strict_inputs(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['weak-explicit']
+        self.assertEqual('weak-explicit', owners['thc.runtime.ManagedWeakTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
+                                   'weak-explicit']}], group['commands'])
+        self.assertEqual(['build/weak-explicit'], group['outputs'])
+        self.assertTrue(all((project / path).is_file() for path in group['sources']))
+        self.assertIn('"$fixture_bin" weak-explicit', (project / 'scripts/prepare-tests.sh').read_text())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/weak-explicit', fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertIn('build/weak-explicit/manifest.json', fast_fixtures.FULL_REQUIRED)
+        gradle = (project / 'build.gradle.kts').read_text()
+        for pattern in ('**/*.json', 'oracle.tsv', 'NativeWeak.hs'):
+            self.assertIn('"weak-explicit/' + pattern + '"', gradle)
+        for suffix in ('manifest.json', 'oracle.tsv', 'NativeWeak.hs',
+                       'pre/audit.json', 'post/audit.json',
+                       'pre/core/WeakAudit.json', 'post/core/WeakAudit.json',
+                       'pre/core/THC.InterfaceClosure.json', 'post/core/THC.InterfaceClosure.json'):
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/weak-explicit/' + suffix, {}))
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/weak-explicit/result.xml', {}))
+
     def test_libdw_unavailable_native_fixture_registration(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
@@ -26,16 +49,34 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual('libdw-unavailable', owners['thc.runtime.LibdwUnavailableTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
                                    'libdw-unavailable']}], group['commands'])
-        self.assertEqual(['build/libdw-unavailable/manifest.json', 'build/libdw-unavailable/oracle.json'], group['outputs'])
+        self.assertEqual(['build/libdw-unavailable/manifest.json', 'build/libdw-unavailable/oracle.json',
+                          'build/libdw-unavailable/foreign-labels.json'], group['outputs'])
         self.assertTrue(all((project / path).is_file() for path in group['sources']))
         self.assertIn('"$fixture_bin" libdw-unavailable', (project / 'scripts/prepare-tests.sh').read_text())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/libdw-unavailable/manifest.json', fast_fixtures.FULL_REQUIRED)
-        for suffix in ('manifest.json', 'oracle.json'):
+        for suffix in ('manifest.json', 'oracle.json', 'foreign-labels.json'):
             self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/libdw-unavailable/' + suffix, {}))
             self.assertIn('"libdw-unavailable/' + suffix + '"', (project / 'build.gradle.kts').read_text())
         self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/libdw-unavailable/native/oracle', {}))
         self.assertIn('build/libdw-unavailable/logs/', (project / '.github/workflows/build.yml').read_text())
+
+    def test_native_addresses_fixture_registration(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['native-addresses']
+        self.assertEqual('native-addresses', owners['thc.runtime.NativeAddressTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
+                                   'native-addresses']}], group['commands'])
+        self.assertEqual(['build/native-addresses/manifest.json', 'build/native-addresses/oracle.json'], group['outputs'])
+        self.assertTrue(all((project / path).is_file() for path in group['sources']))
+        self.assertIn('"$fixture_bin" native-addresses', (project / 'scripts/prepare-tests.sh').read_text())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/native-addresses/manifest.json', fast_fixtures.FULL_REQUIRED)
+        for suffix in ('manifest.json', 'oracle.json'):
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/native-addresses/' + suffix, {}))
+            self.assertIn('"native-addresses/' + suffix + '"', (project / 'build.gradle.kts').read_text())
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/native-addresses/native/oracle', {}))
 
     def test_original_gmp_registration_platform_and_exact_cache(self):
         project = Path(__file__).resolve().parents[2]

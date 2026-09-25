@@ -4,13 +4,42 @@
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import java.security.MessageDigest
+import java.net.URI
 
 plugins {
     application
     kotlin("jvm") version "2.4.20"
     kotlin("kapt") version "2.4.20"
+    id("org.jetbrains.dokka") version "2.2.0"
 }
 repositories { mavenCentral() }
+
+// Documentation reads handwritten sources; it does not compile the runtime,
+// generate Truffle DSL classes, or prepare native/Core fixtures.
+val docsRevision = providers.gradleProperty("thc.docsRevision").orElse(
+    providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.map { it.trim() })
+dokka {
+    moduleName.set("THC")
+    moduleVersion.set(docsRevision.map { it.take(12) })
+    dokkaPublications.html {
+        outputDirectory.set(layout.buildDirectory.dir("docs/jvm"))
+        includes.from("docs/site/jvm.md")
+        failOnWarning.set(false)
+        suppressInheritedMembers.set(true)
+    }
+    dokkaSourceSets.named("main") {
+        sourceRoots.setFrom("src/main/kotlin", "src/main/java")
+        classpath.setFrom(configurations.compileClasspath)
+        jdkVersion.set(25)
+        reportUndocumented.set(false)
+        suppressGeneratedFiles.set(true)
+        sourceLink {
+            localDirectory.set(file("src/main"))
+            remoteUrl.set(docsRevision.map { URI("https://github.com/ekmett/thc/blob/$it/src/main") })
+            remoteLineSuffix.set("#L")
+        }
+    }
+}
 // The checked family table generates concrete primitive carriers and typed nodes.
 // BytecodeRoot's DSL requires nested declarations; its marked regions are checked,
 // never rewritten by a build. Refresh them explicitly with the generator --write.
@@ -91,6 +120,7 @@ tasks.withType<Test>().configureEach {
             "integer-primops/core/**/*.json", "integer-primops/manifest.json", "integer-primops/oracle.tsv",
             "mutvar/**/*.json", "mutvar/oracle.tsv", "mutvar/NativeMutVar.hs",
             "stable-pointers/**/*.json", "stable-pointers/oracle.tsv", "stable-pointers/NativeStablePointer.hs",
+            "weak-explicit/**/*.json", "weak-explicit/oracle.tsv", "weak-explicit/NativeWeak.hs",
             "shrink-bytearrays/**/*.json", "shrink-bytearrays/oracle.tsv", "shrink-bytearrays/NativeShrinkByteArrays.hs",
             "fetch-add-int-array/**/*.json", "fetch-add-int-array/oracle.tsv", "fetch-add-int-array/NativeFetchAddIntArray.hs",
             "managed-mvars/**/*.json", "managed-mvars/*.tsv", "managed-mvars/native/**",
@@ -113,7 +143,8 @@ tasks.withType<Test>().configureEach {
             "original-handle-readiness/logs/*.stdout", "original-handle-readiness/logs/*.stderr",
             "original-posix-stat/**/*.json", "original-posix-stat/native/oracle",
             "original-posix-stat/logs/*.stdout", "original-posix-stat/logs/*.stderr",
-            "libdw-unavailable/manifest.json", "libdw-unavailable/oracle.json",
+            "libdw-unavailable/manifest.json", "libdw-unavailable/oracle.json", "libdw-unavailable/foreign-labels.json",
+            "native-addresses/manifest.json", "native-addresses/oracle.json",
             "original-gmp/**/*.json", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
             "original-gmp/logs/*.stdout", "original-gmp/logs/*.stderr",
             "original-stdio-close/**/*.json", "original-stdio-close/results/*.txt", "original-stdio-close/results/*.private",
@@ -317,11 +348,12 @@ tasks.withType<JavaCompile>().configureEach { options.compilerArgs.addAll(listOf
 // remains an optional execution path; no native pointer is exposed to Core.
 val compileCbits by tasks.registering(Exec::class) {
     inputs.files("scripts/build-cbits.py", "src/main/c/md5-api.c", "src/main/c/iconv-api.c",
-        "src/main/c/strerror-locale.c",
+        "src/main/c/strerror-locale.c", "src/main/c/libdw-unavailable.c",
         "compiler/pinned-ghc-internal/cbits/strerror.c",
         "src/main/c/gmp-api.c",
         "bench/experiments/pinned-addresses/reference/md5.c",
         "bench/experiments/pinned-addresses/reference/md5.h")
+    inputs.files(fileTree("compiler/pinned-ghc-rts") { include("*.c", "*.h") })
     outputs.dir(layout.buildDirectory.dir("generated/cbits"))
     outputs.upToDateWhen { false }
     commandLine("python3", "scripts/build-cbits.py", "--output", layout.buildDirectory.dir("generated/cbits").get().asFile)

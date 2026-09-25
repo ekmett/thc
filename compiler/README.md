@@ -100,7 +100,7 @@ Exactly saturated `tagToEnum#` applications retain an `enumFamily` object in the
 
 Data-constructor **workers** become constructor expressions. Constructor wrappers remain ordinary variable references and require actual compiled definitions.
 
-Type arguments and type lambdas erase. A type-only application becomes its function. Coercion arguments and coercion lambda binders retain a zero-width `void` slot so Core's value arity conventions remain explicit. Casts and ticks erase from the executable subset and remain visible in `sourceCore`. The source-note metadata below retains source attribution without executable tick wrappers or instrumentation events. Primitive literals retain kind, with integral/character codepoint values in decimal, byte strings in hexadecimal, floating values in decimal. Unsupported literal kinds stay explicit.
+Type arguments and type lambdas erase. A type-only application becomes its function. Coercion arguments and coercion lambda binders retain a zero-width `void` slot so Core's value arity conventions remain explicit. Casts and ticks erase from the executable subset and remain visible in `sourceCore`. The source-note metadata below retains source attribution without executable tick wrappers or instrumentation events. Primitive literals retain kind, with integral/character codepoint values in decimal, byte strings in hexadecimal, floating values in decimal. `LitLabel` preserves its exact symbol as `function-addr` or `data-addr`, according to GHC's `FunctionOrData`; it does not certify a function ABI or identify a providing library. Unsupported literal kinds stay explicit, and exporting a label does not admit it for execution.
 
 ## Optional source attribution
 

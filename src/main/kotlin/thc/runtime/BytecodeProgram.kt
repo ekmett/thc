@@ -173,6 +173,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         CoreStackInfoForeign.validateHeads(bindings)
         CoreOriginalStdio.validateHeads(bindings)
         CoreStablePointers.validateHeads(bindings)
+        CoreMainThreadForeign.validateHeads(bindings)
         CoreManagedFiles.validateHeads(bindings)
         CoreMd5Foreign.validateHeads(bindings)
         CoreGmpForeign.validateHeads(bindings)
@@ -1329,6 +1330,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val sharedCAF = CoreSharedCAFStores.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val mainThreadForeign = CoreMainThreadForeign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val managedFile = CoreManagedFiles.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val javascript = if (!stackClone && stackInfo == null && originalStdio == null && managedFile == null) CoreJavaScript.validate(expr, defined) else null
@@ -1339,7 +1342,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val libdw = CoreLibdwForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && capi == null &&
-                !stableFree && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null)
+                !stableFree && !mainThreadForeign && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null)
                 CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -1510,6 +1513,20 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     e.builder.beginRtsSharedCAFStore(destination.single(), sharedCAF)
                     operands.forEach { it.emit(e) }
                     e.builder.endRtsSharedCAFStore()
+                }
+            } else if (mainThreadForeign) {
+                CoreMainThreadForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreMainThreadForeign.validateOperand(index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    if (destination.isNotEmpty()) throw RuntimeFault("Main-thread registration has no result field")
+                    e.builder.beginRegisterMainThread()
+                    operands.forEach { it.emit(e) }
+                    e.builder.endRegisterMainThread()
                 }
             } else if (managedFile != null) {
                 CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -2030,6 +2047,29 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 } else ProvenExpression(Expression { e ->
                     e.builder.beginWriteMutVar(); operands.forEach { it.emit(e) }; e.builder.endWriteMutVar()
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && WeakOp.named(fn[1] as String) != null) {
+                val operation = WeakOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                operation.validateBindings(args.map(CoreRepresentations::expression), args.map {
+                    if (it[0] == "var") scope.locals[it[1]]?.proof ?: globalProofs[it[1]] else null
+                })
+                if (operation == WeakOp.MAKE)
+                    operation.validateAction(CoreRepresentations.knownFunctionSignature(args[2], bindings))
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                operation.validate(operands.map { it.proof }, flags, tupleProof)
+                tupleExpression(tupleProof) { e, destination ->
+                    when (operation) {
+                        WeakOp.MAKE -> e.builder.beginMakeWeak(destination.single())
+                        WeakOp.MAKE_PLAIN -> e.builder.beginMakeWeakPlain(destination.single())
+                        else -> e.builder.beginObserveWeak(destination[0], destination[1], operation == WeakOp.FINALIZE)
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (operation) {
+                        WeakOp.MAKE -> e.builder.endMakeWeak()
+                        WeakOp.MAKE_PLAIN -> e.builder.endMakeWeakPlain()
+                        else -> e.builder.endObserveWeak()
+                    }
+                }
             } else if (fn[0] == "prim" && StablePointerOp.named(fn[1] as String) != null) {
                 val operation = StablePointerOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -3630,6 +3670,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "narrow8Word#", "narrow16Word#", "narrow32Word#" -> "NarrowWord"
             "int2Word#", "word2Int#", "ord#", "chr#", "intToInt64#", "int64ToInt#" -> "Identity"
             "raise#" -> "Raise"
+            "addr2Int#" -> "AddressToInt"
+            "int2Addr#" -> "IntToAddress"
             "plusAddr#" -> "AddressPlus"
             "eqAddr#" -> "AddressEqual"
             "neAddr#" -> "AddressNotEqual"
@@ -3639,7 +3681,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
         val unary = operation in setOf("PopulationCountWidth", "CountLeadingZerosWidth", "CountTrailingZerosWidth", "ByteSwapWidth", "BitReverseWidth", "NegateNarrowInt", "BitNotNarrowWord", "Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount",
-            "Narrow8", "Narrow16", "Narrow32", "NarrowWord", "Identity", "Raise")
+            "Narrow8", "Narrow16", "Narrow32", "NarrowWord", "Identity", "Raise", "AddressToInt", "IntToAddress")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         if (operation == "Identity") return evaluated(Expression { e -> e.builder.beginToLong(); args[0].emit(e); e.builder.endToLong() })
         return evaluated(Expression { e ->
@@ -3698,6 +3740,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "ShiftLeft" -> b.beginShiftLeft(); "ShiftRight" -> b.beginShiftRight(); "ShiftRightUnsigned" -> b.beginShiftRightUnsigned()
                 "Narrow8" -> b.beginNarrow8(); "Narrow16" -> b.beginNarrow16(); "Narrow32" -> b.beginNarrow32()
                 "NarrowWord" -> b.beginNarrowWord(wordMask)
+                "AddressToInt" -> b.beginAddressToInt(); "IntToAddress" -> b.beginIntToAddress()
                 "Raise" -> b.beginRaise(); "AddressPlus" -> b.beginAddressPlus()
                 "AddressIndexByte" -> b.beginAddressIndexByte(name == "indexInt8OffAddr#")
                 "AddressIndexManagedScalar" -> b.beginAddressIndexManagedScalar(
@@ -3765,6 +3808,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "ShiftLeft" -> b.endShiftLeft(); "ShiftRight" -> b.endShiftRight(); "ShiftRightUnsigned" -> b.endShiftRightUnsigned()
                 "Narrow8" -> b.endNarrow8(); "Narrow16" -> b.endNarrow16(); "Narrow32" -> b.endNarrow32()
                 "NarrowWord" -> b.endNarrowWord()
+                "AddressToInt" -> b.endAddressToInt(); "IntToAddress" -> b.endIntToAddress()
                 "Raise" -> b.endRaise(); "AddressPlus" -> b.endAddressPlus(); "AddressIndexByte" -> b.endAddressIndexByte()
                 "AddressIndexManagedScalar" -> b.endAddressIndexManagedScalar()
                 "AddressEqual" -> b.endAddressEqual(); "AddressNotEqual" -> b.endAddressNotEqual()

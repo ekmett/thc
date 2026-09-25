@@ -30,9 +30,18 @@ name. A package manifest records the Cabal dependency graph, strict post-Tidy
 boundary, artifact paths and SHA-256 hashes. Two instances of the same package
 remain distinct when Cabal gives them different unit IDs.
 
-Dependencies need to be built with the exporter too. Installed interfaces do not
-contain every executable body. The boot libraries need matching Core artifacts;
-our current source export work is the beginning of that package set.
+Dependencies need matching complete Core artifacts too. Ordinary installed
+interfaces do not necessarily contain every executable body. The default
+`--installed-core pinned` mode supplies a limited set of exact GHC library
+sources. Project-directory runs may instead select `--installed-core required`
+to hydrate complete installed interfaces through the selected GHC 9.14.1 helper,
+including hidden owned modules. Thin interfaces are explicit capability failures;
+there is no silent switch to the pinned provider. See [GHC library Core](ghc-core.md)
+and the [driver's acquisition/cache contract](driver.md).
+
+Acquiring a module is distinct from admitting its foreign products for execution.
+The [foreign-artifact guide](interface-foreign.md) describes the schema-2 archive,
+verified native links, reachable binding checks and global lifecycle obligations.
 
 The project driver caches exports by Cabal's resolved build information, source
 contents, native component products and the exporter library. It keeps THC Core
