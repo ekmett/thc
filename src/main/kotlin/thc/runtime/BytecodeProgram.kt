@@ -1366,14 +1366,25 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     val result = destination.single()
                     val status = originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
                         originalStdio == OriginalStdioOp.CLOSE
-                    if (status) b.beginOriginalStdioStatus(result, originalStdio)
+                    if (originalStdio == OriginalStdioOp.SEEK) b.beginFileSeek(result)
+                    else if (status) b.beginOriginalStdioStatus(result, originalStdio)
                     else b.beginOriginalStdioTransfer(result,
                         originalStdio == OriginalStdioOp.READ_SAFE || originalStdio == OriginalStdioOp.READ_UNSAFE)
                     // errno's original ABI has only State#. This internal zero
                     // fills the shared instruction's unused typed descriptor lane.
                     if (originalStdio == OriginalStdioOp.ERRNO) b.emitLoadConstant(0L)
-                    operands.forEach { it.emit(e) }
-                    if (status) b.endOriginalStdioStatus() else b.endOriginalStdioTransfer()
+                    if (originalStdio == OriginalStdioOp.SEEK) {
+                        operands.take(3).forEach { it.emit(e) }
+                        // FileSeek already has four typed lanes. Keep the State#
+                        // check before the effect, then use its final internal
+                        // lane as a constant original-ABI selector.
+                        b.beginBlock()
+                        b.beginRequireIOState(); operands[3].emit(e); b.endRequireIOState()
+                        b.emitLoadConstant(OriginalStdioOp.SEEK)
+                        b.endBlock()
+                    } else operands.forEach { it.emit(e) }
+                    if (originalStdio == OriginalStdioOp.SEEK) b.endFileSeek()
+                    else if (status) b.endOriginalStdioStatus() else b.endOriginalStdioTransfer()
                 }
             } else if (managedFile != null) {
                 CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)

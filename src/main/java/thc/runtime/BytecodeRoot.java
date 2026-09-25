@@ -989,8 +989,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class FileSeek {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 long fd, long offset, long mode, Object state, @Bind("$node") Node node) {
-            TupleResultsKt.requireVoidCarrier(state);
-            long result = CoreManagedFiles.current(node).seek(fd, offset, mode);
+            long result;
+            if (state == OriginalStdioOp.SEEK) result = CoreOriginalStdio.current(node).seek(fd, offset, mode);
+            else {
+                TupleResultsKt.requireVoidCarrier(state);
+                result = CoreManagedFiles.current(node).seek(fd, offset, mode);
+            }
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }

@@ -21,6 +21,12 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
             requireVoidCarrier(operands[1].execute(frame))
             val stdio = CoreOriginalStdio.current(this)
             if (operation == OriginalStdioOp.CLOSE) stdio.close(fd) else stdio.isTerminal(fd)
+        } else if (operation == OriginalStdioOp.SEEK) {
+            val fd = operands[0].executeRequiredLong(frame)
+            val displacement = operands[1].executeRequiredLong(frame)
+            val whence = operands[2].executeRequiredLong(frame)
+            requireVoidCarrier(operands[3].execute(frame))
+            CoreOriginalStdio.current(this).seek(fd, displacement, whence)
         } else {
             val fd = operands[0].executeRequiredLong(frame)
             val address = operands[1].executeRequiredAddress(frame)

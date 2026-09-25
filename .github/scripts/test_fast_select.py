@@ -759,7 +759,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_file_and_stdio_owners_keep_native_and_lifecycle_controls(self):
         owners = self.policy["owners"]
         native = {"thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest",
-                  "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest"}
+                  "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest",
+                  "thc.runtime.OriginalStdioSeekNativeTest"}
         for name in ("ManagedFiles", "ManagedStdio", "StdioHostAbi", "CoreOriginalStdio",
                      "OriginalStdioExpression"):
             path = "src/main/kotlin/thc/runtime/" + name + ".kt"
