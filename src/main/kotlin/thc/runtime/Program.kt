@@ -1570,7 +1570,12 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             buildFrame(frame.arguments, frame)
         }
         return try { executeBody(frame) }
-        catch (cut: AstCapture) { cut.freeze(this, frame.materialize()) }
+        catch (cut: AstCapture) {
+            // Continuations own a real frame only on the interrupted slow path.
+            // Keep its escape out of ordinary compiled calls and foreign-call edges.
+            CompilerDirectives.transferToInterpreter()
+            cut.freeze(this, frame.materialize())
+        }
     }
 
     private fun executeBody(frame: VirtualFrame): Any? {
