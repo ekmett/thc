@@ -5,7 +5,8 @@
 -- An acquisition-only view of genuine recompiled interfaces. Native compilation
 -- always retains the caller's compiler, package database and installed libraries.
 module THC.Driver.InstalledForeign
-  ( ForeignCompiler(..), prepareForeignInterfaces, missingForeignProof, createView, viewContext ) where
+  ( ForeignCompiler(..), prepareForeignInterfaces, missingForeignProof, createView, viewContext
+  , observeProbeInterfaces ) where
 
 import Control.Exception (bracket, bracketOnError)
 import Control.Monad (filterM, forM, forM_, unless)
@@ -143,10 +144,12 @@ prepareForeignInterfaces producer cache source context registrations = do
       -- Includes each complete retained payload in the selected registered
       -- dependency closure, not ABI/mtime summaries or a GHC binary hash.
       probe <- probeInstalled context unit
+      dependencyInterfaces <- observeProbeInterfaces probe
       global <- command (installedPackageTool context)
         ["--global", "--no-user-package-db", "--expand-pkgroot", "dump"] Nothing
       pure $ object ["schema" .= (1 :: Int), "recipe" .= recipeIdentity config,
-        "files" .= observed, "installed" .= probe, "globalRegistrations" .= global,
+        "files" .= observed, "installed" .= probe, "dependencyInterfaces" .= dependencyInterfaces,
+        "globalRegistrations" .= global,
         "driver" .= foreignDriverHash producer]
 
 -- This first recipe deliberately supports a configured native Linux stage1
@@ -354,6 +357,30 @@ sha = concatMap (\byte -> let s = showHex byte "" in replicate (2 - length s) '0
 
 fileInventory :: [FilePath] -> IO [(FilePath, String)]
 fileInventory = mapM (\path -> (,) path <$> hashFile path)
+
+-- probeInstalled discovers the complete registered dependency closure. Its
+-- native helper probes dynamic payloads, while -dynamic-too also consumes
+-- vanilla dependencies. Resolve each way through the original registration:
+-- a canonical .dyn_hi symlink target need not have its .hi sibling beside it.
+observeProbeInterfaces :: Value -> IO [(FilePath, String)]
+observeProbeInterfaces probe = do
+  registrations <- field probe "registrations" :: IO [Value]
+  paths <- fmap concat $ forM registrations $ \record -> do
+    info <- parseRegistration =<< field record "registration"
+    modules <- field record "interfaces" :: IO [Value]
+    fmap concat $ forM modules $ \entry -> do
+      name <- field entry "module"
+      expected <- field entry "path"
+      forM ["hi", "dyn_hi"] $ \suffix -> do
+        matches <- filterM doesFileExist
+          [directory </> modulePath name <.> suffix | directory <- Package.importDirs info]
+        path <- case matches of
+          [found] -> canonicalizePath found
+          _ -> fail ("expected exactly one dependency " ++ suffix ++ " interface for " ++ name)
+        check (suffix /= "dyn_hi" || path == expected)
+          "dependency dynamic interface changed after inventory probe"
+        pure path
+  fileInventory (sort (nub paths))
 
 -- Source trees are supplied explicitly; enumerate the complete relevant header
 -- and interface inventories, so additions/removals invalidate the recipe too.

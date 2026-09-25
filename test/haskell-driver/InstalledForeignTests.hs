@@ -7,15 +7,17 @@ import Control.Exception (bracket)
 import Data.Aeson (Value(..), object, (.=))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-import Distribution.InstalledPackageInfo (parseInstalledPackageInfo)
+import qualified Data.ByteString as BS
+import Distribution.InstalledPackageInfo (parseInstalledPackageInfo, showInstalledPackageInfo)
 import qualified Distribution.Types.InstalledPackageInfo as Package
-import System.Directory (canonicalizePath, createDirectory, removeFile, removePathForcibly)
+import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMissing,
+  copyFile, removeFile, removePathForcibly)
 import System.Environment (lookupEnv)
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeDirectory, replaceExtension)
 import System.IO (openTempFile, hClose)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import THC.Driver.Installed
-import THC.Driver.InstalledForeign (missingForeignProof, createView, viewContext)
+import THC.Driver.InstalledForeign (missingForeignProof, createView, viewContext, observeProbeInterfaces)
 import TestSupport (Env, scratch, runExe, assertSuccess, out)
 
 -- These controls test orchestration decisions only. A verified marker here is
@@ -82,6 +84,29 @@ viewTests env = TestLabel "acquisition view preserves native registration" $ Tes
     assertEqual "view uses its own interface directory" [expectedDirectory] (Package.importDirs after)
     unchanged <- discoverInstalled context identifier
     assertEqual "original installed registration is untouched" original unchanged
+    -- Actual copied interface artifacts model one registered dependency. The
+    -- cache observer must catch a vanilla-only edit; a dynamic-only probe and
+    -- unchanged ABI/registration would miss it. Neither copy is loaded as Core.
+    originalDynamic <- maybe (fail "missing Bound interface") pure
+      (lookup "GHC.Internal.Conc.Bound" (installedInterfaces original))
+    let dependency = directory </> "dependency"
+        dynamic = dependency </> "GHC/Internal/Conc/Bound.dyn_hi"
+        vanilla = replaceExtension dynamic "hi"
+    createDirectoryIfMissing True (takeDirectory dynamic)
+    copyFile originalDynamic dynamic
+    copyFile (replaceExtension originalDynamic "hi") vanilla
+    let probe = object ["registrations" .= [object
+          ["registration" .= showInstalledPackageInfo before { Package.importDirs = [dependency] },
+           "interfaces" .= [object ["module" .= ("GHC.Internal.Conc.Bound" :: String), "path" .= dynamic]]]]]
+    observed <- observeProbeInterfaces probe
+    assertEqual "both compiler-read ways observed" 2 (length observed)
+    dynamicBytes <- BS.readFile dynamic
+    BS.appendFile vanilla "changed-vanilla-interface"
+    changed <- observeProbeInterfaces probe
+    assertBool "vanilla dependency mutation invalidates cache inputs" (observed /= changed)
+    assertEqual "dynamic observation alone is unchanged"
+      (lookup dynamic observed) (lookup dynamic changed)
+    assertEqual "dynamic payload remains unchanged" dynamicBytes =<< BS.readFile dynamic
   where
     temporary = do
       (path, handle) <- openTempFile (scratch env) "foreign-view-"
