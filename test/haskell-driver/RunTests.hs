@@ -5,12 +5,16 @@ module RunTests (tests) where
 
 import Control.Monad (forM_)
 import System.Directory (canonicalizePath)
+import System.Environment (lookupEnv)
 import System.FilePath ((</>), takeDirectory)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
 
 tests :: Env -> Test
-tests env = TestLabel "single-package native versus THC run" $ TestCase $
+tests env = TestList [runTests env, nativeExitTests env]
+
+runTests :: Env -> Test
+runTests env = TestLabel "single-package native versus THC run" $ TestCase $
   withFixture env "test/fixtures/run-pure" $ \package -> do
     let base = takeDirectory package
         source = package </> "app/Main.hs"
@@ -90,6 +94,26 @@ tests env = TestLabel "single-package native versus THC run" $ TestCase $
     assertBool "IO Int rejected" (not $ bool $ field wrongAudit "accepted")
     assertBool "correct boundary code" $ any
       ((== "io-main-boundary") . string . (`field` "code")) (objects wrongAudit "issues")
+
+nativeExitTests :: Env -> Test
+nativeExitTests env = TestLabel "original GHC buffered executable exit" $ TestCase $
+  withFixture env "test/fixtures/run-pure" $ \package -> do
+    compiler <- maybe "ghc" id <$> lookupEnv "GHC"
+    let source = package </> "app/Main.hs"
+        binary = package </> "native-exit"
+        build = runExe env package Nothing 30 compiler ["--make", "-O2", "-fforce-recomp",
+          "-o", binary, source]
+    writeText source "module Main where\nmain :: IO ()\nmain = putStr \"buffered-without-newline\"\n"
+    build >>= assertSuccess
+    normal <- runExe env package Nothing 30 binary []
+    assertSuccess normal
+    assertEqual "native normal shutdown flushes without newline" "buffered-without-newline" (out normal)
+    writeText source "module Main where\nmain :: IO ()\nmain = putStr \"before-failure\" >> error \"native-top-handler\"\n"
+    build >>= assertSuccess
+    failed <- runExe env package Nothing 30 binary []
+    assertFailure failed
+    assertEqual "native exception flushes the buffered prefix" "before-failure" (out failed)
+    assertContains "native-top-handler" (err failed)
 
 anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 anyM predicate values = or <$> mapM predicate values
