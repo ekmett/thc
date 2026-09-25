@@ -5,6 +5,7 @@ module StoreProjectTests (tests) where
 
 import Control.Exception (bracket)
 import Control.Monad (unless)
+import Data.Char (isHexDigit)
 import Data.List (isPrefixOf)
 import System.Directory (getModificationTime, getPermissions, removeFile,
                          removePathForcibly, setPermissions)
@@ -80,10 +81,16 @@ storeProjectTest env = TestLabel "source-built Cabal store Core" $ TestCase $
     assertEqual "native and THC output" (out native) (out first)
     firstManifest <- readJson (output </> "packages.json")
     let firstPath = string (field (bundle firstManifest firstId) "path")
-    firstInputs <- readCore firstPath "inplace-manifest.json"
-    assertEqual "store exporter cache includes foreign import proof" 1
-      (length $ filter (== "foreign-import-provenance")
-        (strings $ field (field firstInputs "exporter") "options"))
+    firstInner <- readCore firstPath "manifest.json"
+    let exportKey = string (field firstInner "exportKey")
+        buildKey = string (field firstInner "buildKey")
+        digest key = length key == 64 && all isHexDigit key
+    assertEqual "store manifest identifies its Cabal unit" firstId
+      (string $ field firstInner "unit")
+    assertBool "store build key is a SHA-256 digest" (digest buildKey)
+    assertBool "store export key is a SHA-256 digest" (digest exportKey)
+    assertEqual "store export key selects its cache directory" exportKey
+      (takeFileName $ takeDirectory firstPath)
     assertBool "store ZIP uses shared application cache"
       ((base </> "cache/core-bundles/v1") `isPrefixOf` firstPath)
     assertEqual "Cabal store ID is ZIP basename" (firstId ++ ".zip") (takeFileName firstPath)
