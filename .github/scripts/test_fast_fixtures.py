@@ -189,6 +189,55 @@ class FixturePreparationTest(unittest.TestCase):
                      'negative/extra.json', 'native/OriginalFdReadyAudit.hi', 'test-results/pass.xml'):
             self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/original-fd-ready/' + name, {}))
 
+    def test_original_rts_locks_exact_fixture_registration(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['original-rts-locks']
+        self.assertEqual('original-rts-locks', owners['thc.runtime.OriginalRtsLocksTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
+                                  'original-rts-locks', '--require-supported']}], group['commands'])
+        self.assertEqual(['build/original-rts-locks'], group['outputs'])
+        self.assertTrue(all((project / name).is_file() for name in group['sources']))
+        self.assertIn('"$fixture_bin" original-rts-locks --require-supported',
+                      (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/original-rts-locks', fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertTrue(fast_fixtures.fast_inputs.ORIGINAL_RTS_LOCK_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
+        self.assertIn('"original-rts-locks/**/*.json"', (project / 'build.gradle.kts').read_text())
+
+    def test_rts_lock_selected_receipt_requires_complete_strict_unchanged_artifacts(self):
+        project = Path(__file__).resolve().parents[2]
+        group = fast_fixtures._manifest(project)[0]['groups']['original-rts-locks']
+        manifest_name = 'build/original-rts-locks/manifest.json'
+        artifacts = {}
+        for name in fast_fixtures.fast_inputs.ORIGINAL_RTS_LOCK_OUTPUTS - {manifest_name}:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('{}\n')
+            artifacts[name] = fast_fixtures._digest(path)
+        manifest = dict(schema=1, strictAccepted=True, originalIdsChecked=True,
+                        typeEqualityChecked=True, installedArtifactsHashed=False, artifactHashes=artifacts)
+        path = self.root / manifest_name
+        path.write_text(json.dumps(manifest))
+        self.assertEqual(fast_fixtures.fast_inputs.ORIGINAL_RTS_LOCK_OUTPUTS,
+                         fast_fixtures._output_hashes(self.root, group).keys())
+        for key in ('strictAccepted', 'originalIdsChecked', 'typeEqualityChecked'):
+            path.write_text(json.dumps(dict(manifest, **{key: False})))
+            with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+        for change in ('unknown', 'missing', 'changed', 'symlink'):
+            path.write_text(json.dumps(manifest))
+            artifact = self.root / 'build/original-rts-locks/pre.json'
+            if artifact.is_symlink(): artifact.unlink()
+            artifact.write_text('{}\n')
+            if change == 'unknown':
+                path.write_text(json.dumps(dict(manifest, artifactHashes=dict(artifacts, **{'build/original-rts-locks/extra.json': '0'*64}))))
+            elif change == 'missing': artifact.unlink()
+            elif change == 'changed': artifact.write_text('changed')
+            else:
+                artifact.unlink(); artifact.symlink_to(path)
+            with self.assertRaises((RuntimeError, FileNotFoundError)):
+                fast_fixtures._output_hashes(self.root, group)
+
     def test_interface_core_fixture_registration(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

@@ -28,6 +28,8 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
         listOf("Int32Rep", "Int64Rep", "Int32Rep", null), "Int64Rep"),
     TRUNCATE("__hscore_ftruncate", "ccall", "unsafe", listOf("Int32Rep", "Int64Rep", null), "Int32Rep"),
     FSTAT("__hscore_fstat", "ccall", "unsafe", listOf("Int32Rep", "AddrRep", null), "Int32Rep"),
+    LOCK("lockFile", "ccall", "unsafe", listOf("Word64Rep", "Word64Rep", "Word64Rep", "Int32Rep", null), "Int32Rep"),
+    UNLOCK("unlockFile", "ccall", "unsafe", listOf("Word64Rep", null), "Int32Rep"),
     SIZEOF_STAT("__hscore_sizeof_stat", "ccall", "unsafe", listOf(null), "IntRep"),
     ST_DEV("__hscore_st_dev", "ccall", "unsafe", listOf("AddrRep", null), "Word64Rep"),
     ST_INO("__hscore_st_ino", "ccall", "unsafe", listOf("AddrRep", null), "Word64Rep"),
@@ -50,6 +52,7 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
 
     val readiness: Boolean get() = this == READY_SAFE || this == READY_UNSAFE
     val duplication: Boolean get() = this == DUP || this == DUP2
+    val locking: Boolean get() = this == LOCK || this == UNLOCK
     val seekConstant: Boolean get() = this == SEEK_SET || this == SEEK_CUR || this == SEEK_END
     val stat: Boolean get() = this == SIZEOF_STAT || statField ||
         this == IS_REG || this == IS_CHR || this == IS_BLK || this == IS_DIR || this == IS_FIFO || this == IS_SOCK
@@ -60,6 +63,7 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
 
 internal object CoreOriginalStdio {
     @JvmStatic fun current(node: Node): ManagedStdio = Language.currentState(node).stdio
+    @JvmStatic fun locks(node: Node): RtsFileLocks = Language.currentState(node).rtsFileLocks
     @JvmStatic fun iconv(node: Node): ManagedIconv = Language.currentState(node).iconv
     @JvmStatic fun strerror(node: Node): ManagedStrerror = Language.currentState(node).strerror
 
@@ -76,7 +80,7 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation.readiness || operation.seekConstant || operation.stat || operation == OriginalStdioOp.FSTAT || operation.iconv || operation.strerror || operation.duplication,
+        requireProof(operation.readiness || operation.seekConstant || operation.stat || operation == OriginalStdioOp.FSTAT || operation.iconv || operation.strerror || operation.duplication || operation.locking,
             "strict operand operation")
         val primitive = operation.arguments[index]
         val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }

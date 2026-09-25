@@ -39,7 +39,7 @@ MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers shrink-bytearrays fetch-add-int-array
-narrow-literal-proofs original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+narrow-literal-proofs original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops simd-capability-smoke synchronous-exceptions tuple-arithmetic word-floating""".split()
 SIMD_SMOKE_SOURCES = frozenset("build/generated/simd/fixtures/" + name for name in (
     "GeneratedSimdSmoke.hs", "GeneratedSimdSmokeScalar.hs",
@@ -161,6 +161,15 @@ ORIGINAL_GMP_OUTPUTS = frozenset("build/original-gmp/" + name for name in (
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
         "core/OriginalGmpAudit.json", "core/THC.InterfaceClosure.json",
         *(f"{entry}.audit.json" for entry in ORIGINAL_GMP_ENTRIES))),
+))
+
+ORIGINAL_RTS_LOCK_ENTRIES = ("originalLock", "originalUnlock")
+ORIGINAL_RTS_LOCK_OUTPUTS = frozenset("build/original-rts-locks/" + name for name in (
+    "manifest.json", "oracle.json", "declarations.json", "template-pre.json", "pre.json", "post.json",
+    *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_RTS_LOCK_ENTRIES),
+    *(f"logs/{label}.{suffix}" for label in ("version", "info", "libdir", "imports",
+        *(f"{stage}-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_RTS_LOCK_ENTRIES))
+      for suffix in ("stdout", "stderr", "command.json")),
 ))
 
 ORIGINAL_POSIX_STAT_ENTRIES = ("originalStatSize", "originalStatDev", "originalStatIno",
@@ -430,6 +439,20 @@ def formatter_artifact_hashes(root, manifest):
     return artifacts
 
 
+def rts_lock_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1 and
+            manifest.get("strictAccepted") is True and manifest.get("originalIdsChecked") is True and
+            manifest.get("typeEqualityChecked") is True and manifest.get("installedArtifactsHashed") is False,
+            "Invalid original RTS lock proof manifest")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) ==
+            ORIGINAL_RTS_LOCK_OUTPUTS - {"build/original-rts-locks/manifest.json"},
+            "Incomplete/unreviewed RTS lock artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid RTS lock artifact hash")
+    return artifacts
+
+
 def gmp_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and manifest.get("strictAccepted") is True,
             "Missing accepted GMP fixture receipt")
@@ -573,6 +596,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_HANDLE_READINESS_OUTPUTS
     if parts[1] == "original-posix-stat":
         return name in ORIGINAL_POSIX_STAT_OUTPUTS
+    if parts[1] == "original-rts-locks":
+        return name in ORIGINAL_RTS_LOCK_OUTPUTS
     if parts[1] == "original-gmp":
         return name in ORIGINAL_GMP_OUTPUTS
     if parts[1] == "original-stack":
@@ -671,6 +696,8 @@ def inventory(root, current, read, core_files, verified=None):
             formatter_artifact_hashes(root, doc)
         if name == "build/original-gmp/manifest.json":
             gmp_artifact_hashes(doc)
+        if name == "build/original-rts-locks/manifest.json":
+            rts_lock_artifact_hashes(doc)
         # Core is data, not a provenance map: representation payloads must not be
         # interpreted as filesystem paths. All other preparation JSON is scanned.
         if isinstance(doc, dict) and "bindings" in doc and "module" in doc:

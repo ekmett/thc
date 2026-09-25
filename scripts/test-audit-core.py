@@ -1965,9 +1965,12 @@ class OriginalGmpAuditTest(unittest.TestCase):
 
 
 class OriginalDupAuditTest(unittest.TestCase):
-    """Descriptor-call controls; genuine dup/fstat declarations live in Haskell fixtures."""
+    """Descriptor/RTS controls; genuine declarations live in Haskell fixtures."""
+    symbols = ('dup', 'dup2', '__hscore_fstat', 'lockFile', 'unlockFile')
     def fixture(self, symbol):
-        arguments = (('Int32Rep', 'AddrRep', None) if symbol == '__hscore_fstat' else
+        arguments = (('Word64Rep', 'Word64Rep', 'Word64Rep', 'Int32Rep', None) if symbol == 'lockFile' else
+                     ('Word64Rep', None) if symbol == 'unlockFile' else
+                     ('Int32Rep', 'AddrRep', None) if symbol == '__hscore_fstat' else
                      ('Int32Rep', None) if symbol == 'dup' else ('Int32Rep', 'Int32Rep', None))
         scalar = lambda rep, evaluated: dict(kind='void' if rep is None else 'address' if rep == 'AddrRep' else 'long',
             primReps=[] if rep is None else [rep], evaluated=evaluated)
@@ -1991,19 +1994,19 @@ class OriginalDupAuditTest(unittest.TestCase):
         return audit_core.Audit([('dup-control.json', module)], cap).run(['root'])
 
     def test_exact_original_duplication_requires_production_capability(self):
-        for symbol in ('dup', 'dup2', '__hscore_fstat'):
+        for symbol in self.symbols:
             self.assertEqual(1, CAP['managedForeignCalls'].count(symbol))
             report = self.audit(self.fixture(symbol)); self.assertTrue(report['accepted'], report)
             self.assertEqual([symbol], [c['symbol'] for c in report['foreignCalls']])
             self.assertFalse(self.audit(self.fixture(symbol), dict(CAP, managedForeignCalls=[]))['accepted'])
-        for alias in ('dup3', '_dup', 'prefixdup', '__hscore_dup', 'unlockFile', 'prefix__hscore_fstat', 'fstat'):
+        for alias in ('dup3', '_dup', 'prefixdup', '__hscore_dup', 'prefixunlockFile', 'prefixlockFile', 'prefix__hscore_fstat', 'fstat'):
             self.assertNotIn(alias, core_original_foreign.OPERATIONS)
             module = self.fixture('__hscore_fstat')
             self.call(module)[6]['foreignCall']['target']['symbol'] = alias
             self.assertFalse(self.audit(module)['accepted'])
 
     def test_descriptor_flags_head_and_raw_representation_forgery_reject(self):
-        for symbol in ('dup', 'dup2', '__hscore_fstat'):
+        for symbol in self.symbols:
             mutations = [(key, value) for key in ('schema', 'arity', 'suppliedArity')
                 for value in (None, True, 2.0, '2', 0, 1 << 32)] + [('convention', 'capi'), ('safety', 'safe'), ('extra', None)]
             for key, value in mutations:
@@ -2015,12 +2018,12 @@ class OriginalDupAuditTest(unittest.TestCase):
             for head in ([], ['var', None], ['prim', symbol], ['var', 'a0', dict(rep=CLOSURE)], ['var', 'root', dict(rep=CLOSURE)]):
                 module = self.fixture(symbol); self.call(module)[1] = head
                 self.assertFalse(self.audit(module)['accepted'])
-            for i in range(2 if symbol == 'dup' else 3):
+            for i in range(len(self.call(self.fixture(symbol))[2])):
                 for flag in (True, 0, None):
                     module = self.fixture(symbol); self.call(module)[3][i] = flag
                     self.assertFalse(self.audit(module)['accepted'])
                 for stored in (False, True):
-                    for rep in ('IntRep', 'Word32Rep', 'AddrRep'):
+                    for rep in ('IntRep', 'WordRep', 'Word32Rep', 'AddrRep'):
                         module = self.fixture(symbol)
                         proof = module['bindings'][0]['expr'][1][i]['rep'] if stored else self.call(module)[2][i][2]['rep']
                         if proof['primReps'] == [rep]: continue

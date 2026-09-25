@@ -224,8 +224,10 @@ class Language : TruffleLanguage<Language.State>() {
         internal val maskingState = ThreadLocal.withInitial { thc.runtime.MaskingState.UNMASKED }
         internal val threads = thc.runtime.GuestThreads(env, maskingState)
         internal val files = thc.runtime.ManagedFiles(env, threads)
+        internal val rtsFileLocks = thc.runtime.RtsFileLocks()
         // Installed only by the explicit fixed-filesystem NativeIO factory.
-        // Ordinary Context builders and the CLI retain the embedding file service.
+        // Ordinary/custom Context builders retain the embedding file service;
+        // the CLI and explicit NativeIO factory install the fixed native provider.
         internal var nativeFiles: thc.runtime.NativeFileProvider? = null
         internal val stdio = thc.runtime.ManagedStdio(files)
         internal val iconv = thc.runtime.ManagedIconv({ cbits() }, stdio, threads)
@@ -303,7 +305,9 @@ class Language : TruffleLanguage<Language.State>() {
             try { context.threads.close() } finally {
                 try { context.capturedAsyncRequests.close() } finally {
                     try { context.files.dispose() } finally {
-                        try { context.stdio.dispose() } finally { context.stackSnapshots.dispose() }
+                        try { context.stdio.dispose() } finally {
+                            try { context.rtsFileLocks.dispose() } finally { context.stackSnapshots.dispose() }
+                        }
                     }
                 }
             }

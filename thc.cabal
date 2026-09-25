@@ -34,6 +34,7 @@ extra-source-files:
   compiler/test-fixtures/OriginalStackFormatter.hs
   compiler/test-fixtures/OriginalStackFormatterNative.hs
   compiler/test-fixtures/OriginalFdReadyAudit.hs
+  compiler/test-fixtures/OriginalRtsLocksAudit.hs
   compiler/test-fixtures/OriginalFdReadyAuditNative.hs
   compiler/test-fixtures/OriginalIconvAudit.hs
   compiler/test-fixtures/OriginalIconvAuditNative.hs
@@ -285,6 +286,7 @@ executable thc-fixtures
     OriginalPosixStatFixtures
     OriginalGmpFixtures
     OriginalFdReadyFixtures
+    OriginalRtsLocksFixtures
     OriginalIconvFixtures
     MutVarFixtures
     StablePointerFixtures

@@ -52,6 +52,8 @@
     "close",
     "dup",
     "dup2",
+    "lockFile",
+    "unlockFile",
     "ghczuwrapperZC19ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZClseek",
     "__hscore_ftruncate",
     "isatty",
