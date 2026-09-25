@@ -261,10 +261,12 @@
     },
     "managed-address-reads": {
       "junit": ["thc.runtime.ManagedAddressReadTest"],
-      "commands": [{"argv": ["python3", "scripts/prepare-managed-address-reads.py"]}],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "managed-address-reads"]}],
       "outputs": ["build/managed-address-reads"],
       "sources": [
-        "scripts/prepare-managed-address-reads.py",
+        "test/haskell-fixtures/Main.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/ManagedAddressReadFixtures.hs",
         "compiler/test-fixtures/ManagedAddressReadAudit.hs",
         "compiler/test-fixtures/ManagedAddressReadNative.hs"
       ]
