@@ -900,12 +900,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
     public static final class OriginalStdioStatus {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
-                OriginalStdioOp operation, long fd, Object state, @Bind("$node") Node node) {
+                OriginalStdioOp operation, long fd, ManagedAddress address, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             // One typed instruction avoids another generated-interpreter partition;
             // the exact operation is compile-time metadata, not a guest operand.
             long result;
-            if (operation == OriginalStdioOp.ERRNO) result = CoreOriginalStdio.current(node).errno();
+            if (operation.getStat()) result = PosixStat.execute(operation, address, fd);
+            else if (operation == OriginalStdioOp.ERRNO) result = CoreOriginalStdio.current(node).errno();
             else if (operation == OriginalStdioOp.ISATTY) result = CoreOriginalStdio.current(node).isTerminal(fd);
             else if (operation == OriginalStdioOp.CLOSE) result = CoreOriginalStdio.current(node).close(fd);
             else throw new RuntimeFault("Invalid original stdio status operation");

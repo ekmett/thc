@@ -15,6 +15,23 @@ STACK_INFO = frozenset(('getStackInfoTableAddrzh', 'getInfoTableAddrszh', 'looku
     'getStackFieldszh', 'advanceStackFrameLocationzh'))
 
 OPERATIONS = {
+    '__hscore_sizeof_stat': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
+    '__hscore_st_dev': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Word64Rep')),
+    '__hscore_st_ino': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Word64Rep')),
+    '__hscore_st_mode': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Word32Rep')),
+    '__hscore_st_size': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Int64Rep')),
+    'ghczuwrapperZC8ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSzuISREG':
+        ('capi', 'unsafe', ('Word32Rep', None), (None, 'Int32Rep')),
+    'ghczuwrapperZC7ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSzuISCHR':
+        ('capi', 'unsafe', ('Word32Rep', None), (None, 'Int32Rep')),
+    'ghczuwrapperZC6ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSzuISBLK':
+        ('capi', 'unsafe', ('Word32Rep', None), (None, 'Int32Rep')),
+    'ghczuwrapperZC5ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSzuISDIR':
+        ('capi', 'unsafe', ('Word32Rep', None), (None, 'Int32Rep')),
+    'ghczuwrapperZC4ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSzuISFIFO':
+        ('capi', 'unsafe', ('Word32Rep', None), (None, 'Int32Rep')),
+    'ghczuwrapperZC3ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSzuISSOCK':
+        ('capi', 'unsafe', ('Word32Rep', None), (None, 'Int32Rep')),
     'ghczuwrapperZC22ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread':
         ('capi', 'safe', ('Int32Rep', 'AddrRep', 'Word64Rep', None), (None, 'Int64Rep')),
     'ghczuwrapperZC23ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread':
@@ -48,6 +65,8 @@ OPERATIONS = {
     'advanceStackFrameLocationzh': ('prim', 'safe', ('BoxedRep (Just Unlifted)', 'WordRep'),
                                    ('BoxedRep (Just Unlifted)', 'WordRep', 'IntRep')),
 }
+STAT_IMAGE = frozenset(symbol for symbol in OPERATIONS
+    if symbol.startswith('__hscore_st_') or symbol == '__hscore_sizeof_stat' or 'ZCSzuIS' in symbol)
 SCALAR_KEYS = {'kind', 'primReps', 'evaluated'}
 TUPLE_KEYS = SCALAR_KEYS | {'aggregate', 'components'}
 DESCRIPTOR_KEYS = {'schema', 'target', 'convention', 'safety', 'arity', 'suppliedArity', 'argumentReps', 'resultRep'}

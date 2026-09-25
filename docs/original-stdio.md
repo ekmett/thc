@@ -75,5 +75,21 @@ original write path queries readiness before choosing a safe or unsafe call.
 An arbitrary embedding OutputStream has no readiness protocol: never return
 unconditional readiness or poll process fd1 for it. Original error-string
 construction and standard-handle shutdown flushing are also separate work.
+
+The separate Linux GNU LP64 stat-image slice admits the exact original
+`__hscore_sizeof_stat`, `__hscore_st_dev`, `__hscore_st_ino`,
+`__hscore_st_mode`, `__hscore_st_size` and six pinned `S_IS*` CAPI wrappers.
+A fresh native C probe supplies the actual `struct stat` size, field offsets,
+widths and type masks. Accessors read checked managed bytes, retain mutable
+reads and reject pointer-cell reinterpretation; these are not native pointers.
+Haskell preparation captures real native stat images and type observations,
+while Kotlin verifies original pre/post Core and both first-installed backends.
+Darwin is explicitly excluded pending authentic matching declaration proofs.
+
+`fstat` remains unsupported. Public Truffle channels expose size but no
+authoritative descriptor metadata snapshot: path queries break after rename,
+unlink or replacement, and cached mode bits miss subsequent host `chmod`.
+No host metadata is fabricated for opaque embedding streams or context fds.
+
 Regular-file open/stat/locking, descriptors from other processes, arbitrary native
 pointer buffers, and generic Sulong symbol interposition are not established here.

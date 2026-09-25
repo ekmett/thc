@@ -27,6 +27,7 @@ import OriginalStdioCloseFixtures (prepareOriginalStdioClose)
 import OriginalStdioSeekFixtures (prepareOriginalStdioSeek)
 import OriginalStdioTruncateFixtures (prepareOriginalStdioTruncate)
 import OriginalHandleReadinessFixtures (prepareOriginalHandleReadiness)
+import OriginalPosixStatFixtures (prepareOriginalPosixStat)
 import OriginalFdReadyFixtures (prepareOriginalFdReady)
 import MutVarFixtures (prepareMutVar)
 import StablePointerFixtures (prepareStablePointers)
@@ -861,6 +862,7 @@ main = do
     ["original-stdio-truncate"] -> prepareOriginalStdioTruncate root
     "original-stdio-read":[] -> prepareOriginalStdioRead root
     ["original-handle-readiness"] -> prepareOriginalHandleReadiness root
+    ["original-posix-stat"] -> prepareOriginalPosixStat root
     ["original-fd-ready"] -> prepareOriginalFdReady root
     ["mutvar"] -> prepareMutVar root
     ["stable-pointers"] -> prepareStablePointers root

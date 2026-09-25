@@ -70,6 +70,7 @@ python3 scripts/prepare-managed-md5.py
 "$fixture_bin" original-stdio --require-supported
 "$fixture_bin" original-stdio-read
 "$fixture_bin" original-handle-readiness
+"$fixture_bin" original-posix-stat
 "$fixture_bin" original-stdio-close
 "$fixture_bin" original-stdio-seek
 "$fixture_bin" original-stdio-truncate

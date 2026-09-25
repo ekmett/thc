@@ -38,7 +38,7 @@ MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers shrink-bytearrays fetch-add-int-array
-narrow-literal-proofs original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-stdio-seek original-stdio-truncate original-fd-ready original-handle-readiness resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+narrow-literal-proofs original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-stdio-seek original-stdio-truncate original-fd-ready original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops synchronous-exceptions tuple-arithmetic word-floating""".split()
 PROVENANCE_DIRS = """aggregate-layout empty-join-input empty-tuple-input
 floating-tuple state-tuple sum-layout sum-result tag-to-enum tuple-input
@@ -86,6 +86,7 @@ NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate",
     "build/original-stdio-truncate/native/oracle",
     "build/original-fd-ready/native/oracle",
     "build/original-handle-readiness/native/oracle",
+    "build/original-posix-stat/native/oracle",
     *(f"build/{name}/native/{name}" for name in
       ("state-tuple", "tuple-input", "tuple-return", "empty-tuple-input"))})
 # The original stdio manifest fingerprints its commands, raw streams and numeric
@@ -132,6 +133,19 @@ ORIGINAL_HANDLE_READINESS_OUTPUTS = frozenset("build/original-handle-readiness/"
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
         "core/OriginalHandleReadinessAudit.json", "core/THC.InterfaceClosure.json",
         "originalIsTerminal.audit.json", "originalIsTerminalErrno.audit.json")),
+))
+
+ORIGINAL_POSIX_STAT_ENTRIES = ("originalStatSize", "originalStatDev", "originalStatIno",
+                             "originalStatMode", "originalStatLength", "originalStatTypes")
+ORIGINAL_POSIX_STAT_OUTPUTS = frozenset("build/original-posix-stat/" + name for name in (
+    "manifest.json", "oracle.json", "native/oracle", "native/sample.bin",
+    *(f"logs/{label}.{suffix}" for label in (
+        "ghc-version", "ghc-info", "native-build", "native-run", "pre-export", "post-export",
+        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_POSIX_STAT_ENTRIES))
+      for suffix in ("stdout", "stderr", "command.json")),
+    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
+        "core/OriginalPosixStatAudit.json", "core/THC.InterfaceClosure.json",
+        *(f"{entry}.audit.json" for entry in ORIGINAL_POSIX_STAT_ENTRIES))),
 ))
 
 ORIGINAL_STDIO_CLOSE_LOGS = (
@@ -490,6 +504,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_FD_READY_OUTPUTS
     if parts[1] == "original-handle-readiness":
         return name in ORIGINAL_HANDLE_READINESS_OUTPUTS
+    if parts[1] == "original-posix-stat":
+        return name in ORIGINAL_POSIX_STAT_OUTPUTS
     if parts[1] == "original-stack":
         return name == "build/original-stack/manifest.json" or original_stack_artifact(name)
     if parts[1] == "original-stack-formatter":
