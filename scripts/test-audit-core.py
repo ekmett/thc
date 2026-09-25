@@ -2167,6 +2167,62 @@ class OriginalDupAuditTest(unittest.TestCase):
             self.assertFalse(self.audit(module)['accepted'])
 
 
+class OriginalBoundThreadSupportTest(unittest.TestCase):
+    """Negative bound capability; never current-thread state or forkOS support."""
+
+    @staticmethod
+    def fixture():
+        state = dict(kind='void', primReps=[], evaluated=True)
+        result = tuple_rep(state, LONG); result['evaluated'] = False
+        descriptor = dict(schema=1, target=dict(kind='static', symbol='rtsSupportsBoundThreads',
+            unit='ghc-internal', isFunction=True), convention='ccall', safety='unsafe',
+            arity=1, suppliedArity=1, argumentReps=[dict(state, evaluated=False)], resultRep=copy.deepcopy(result))
+        call = ['app', ['var', 'structural-fcall', dict(rep=CLOSURE)],
+                [['var', 'state', dict(rep=state)]], [False], False, False, dict(rep=result, foreignCall=descriptor)]
+        case = ['case', call, 'done', [['tuple', None, [dict(id='s', lifted=False, rep=state),
+                dict(id='answer', lifted=False, rep=LONG)], ['var', 'answer', dict(rep=LONG)]]],
+                dict(rep=LONG, binder=dict(id='done', lifted=False, rep=dict(result, evaluated=True)))]
+        binding = dict(bind('root', ['lam', [dict(id='state', lifted=False, rep=state)], case,
+                        dict(rep=CLOSURE, resultRep=LONG)]), rep=CLOSURE, arity=1)
+        return dict(schema=1, ghc='9.14.1', bindings=[binding], constructors=[])
+
+    @staticmethod
+    def audit(module, capabilities=CAP):
+        return audit_core.Audit([('bound-thread-query.json', module)], capabilities).run(['root'])
+
+    def test_exact_negative_capability_query_and_malformed_proofs(self):
+        self.assertEqual(1, CAP['managedForeignCalls'].count('rtsSupportsBoundThreads'))
+        report = self.audit(self.fixture())
+        self.assertTrue(report['accepted'], report)
+        self.assertEqual(['rtsSupportsBoundThreads'], [call['symbol'] for call in report['foreignCalls']])
+        self.assertFalse(self.audit(self.fixture(), dict(CAP, managedForeignCalls=[]))['accepted'])
+        for mutation in ('schema', 'unit', 'dynamic', 'data', 'convention', 'safety', 'arity', 'saturation',
+                         'state', 'stored-state', 'flags', 'result-width', 'missing-state', 'defined-head', 'intrinsic-state'):
+            module = self.fixture()
+            call = module['bindings'][0]['expr'][2][1]
+            descriptor = call[6]['foreignCall']
+            if mutation == 'schema': descriptor['schema'] = True
+            if mutation == 'unit': descriptor['target']['unit'] = 'base'
+            if mutation == 'dynamic': descriptor['target']['kind'] = 'dynamic'
+            if mutation == 'data': descriptor['target']['isFunction'] = False
+            if mutation == 'convention': descriptor['convention'] = 'capi'
+            if mutation == 'safety': descriptor['safety'] = 'safe'
+            if mutation == 'arity': descriptor['arity'] = 0
+            if mutation == 'saturation': descriptor['suppliedArity'] = 0
+            if mutation == 'state': call[2][0][2]['rep'] = LONG
+            if mutation == 'stored-state': module['bindings'][0]['expr'][1][0]['rep'] = LONG
+            if mutation == 'flags': call[3] = [True]
+            if mutation == 'result-width': descriptor['resultRep']['components'][1]['primReps'] = ['Int32Rep']
+            if mutation == 'missing-state': descriptor['resultRep']['components'].pop(0)
+            if mutation == 'defined-head': module['bindings'].append(dict(bind('structural-fcall', lit(7)), rep=LONG))
+            if mutation == 'intrinsic-state': call[2][0] = [*lit(7), dict(rep=dict(kind='void', primReps=[], evaluated=True))]
+            self.assertFalse(self.audit(module)['accepted'], mutation)
+        for symbol in ('forkOS', 'isCurrentThreadBound', 'prefix_rtsSupportsBoundThreads'):
+            module = self.fixture()
+            module['bindings'][0]['expr'][2][1][6]['foreignCall']['target']['symbol'] = symbol
+            self.assertFalse(self.audit(module)['accepted'], symbol)
+
+
 class OriginalMainThreadRegistrationTest(unittest.TestCase):
     """The catalog admits only TopHandler's Weak# key call, not signal setup."""
 

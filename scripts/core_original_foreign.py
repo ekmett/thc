@@ -51,6 +51,7 @@ STACK_INFO = frozenset(('getStackInfoTableAddrzh', 'getInfoTableAddrszh', 'looku
     'getStackFieldszh', 'advanceStackFrameLocationzh'))
 
 OPERATIONS = {
+    'rtsSupportsBoundThreads': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
     **{symbol: ('ccall', 'unsafe', arguments, output)
        for symbol, (arguments, output) in LIBDW_UNAVAILABLE.items()},
     **{symbol: ('ccall', 'unsafe', arguments, output)
