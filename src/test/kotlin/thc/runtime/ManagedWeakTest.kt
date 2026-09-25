@@ -23,6 +23,7 @@ import java.util.IdentityHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 class ManagedWeakTest {
     private fun context() = Context.newBuilder("thc").allowExperimentalOptions(true)
@@ -117,35 +118,99 @@ class ManagedWeakTest {
     @Test fun mainThreadCapabilityProjectsOnlyLiveContextOwnedThreadKeys() {
         val first = context()
         first.initialize("thc"); first.enter()
-        val state = Language.currentState()
-        val owner = state.weaks
-        val threads = state.threads
-        val key = GuestThreadId(123L, threads)
-        val otherValue = GuestThreadId(456L, threads)
-        val weak = owner.make(key, otherValue, null)
-        val capability = owner.mainThreadKey(weak, threads)
-        assertEquals(123L, capability.liveJavaId(), "Native main-thread projection reads KEY, not value")
-        val closing = owner.mainThreadKey(owner.make(key, Any(), null), threads)
-        val wrongKey = owner.make(Any(), key, null)
-        assertThrows(RuntimeFault::class.java) { owner.mainThreadKey(wrongKey, threads) }
-        first.leave()
+        lateinit var capability: MainThreadWeakKey
+        lateinit var closing: MainThreadWeakKey
         try {
+            val state = Language.currentState()
+            val owner = state.weaks
+            val threads = state.threads
+            threads.enterCurrent()
+            val key = threads.currentIdentity()
+            val weak = owner.make(key, Any(), null)
+            try {
+                capability = owner.mainThreadKey(weak, threads)
+                assertEquals(Thread.currentThread().threadId(), capability.liveJavaId(), "Native main-thread projection reads KEY, not value")
+                val impostor = GuestThreadId(key.javaId, threads, key.capability, Thread.currentThread(), false)
+                assertEquals(key, impostor, "Numeric equality alone must not establish canonical identity")
+                assertNull(threads.liveJavaId(impostor))
+                assertNull(owner.mainThreadKey(owner.make(impostor, Any(), null), threads).liveJavaId())
+                closing = owner.mainThreadKey(owner.make(key, Any(), null), threads)
+                val wrongKey = owner.make(Any(), key, null)
+                assertThrows(RuntimeFault::class.java) { owner.mainThreadKey(wrongKey, threads) }
+            } finally { threads.leaveCurrent() }
+            assertEquals(key.javaId, capability.liveJavaId(), "A live FOREIGN host carrier is not terminated")
             context().use { second ->
                 second.initialize("thc"); second.enter()
                 try {
                     val foreign = Language.currentState()
-                    assertThrows(RuntimeFault::class.java) { foreign.weaks.mainThreadKey(weak, foreign.threads) }
-                    assertThrows(RuntimeFault::class.java) { owner.mainThreadKey(weak, foreign.threads) }
-                    val foreignKey = owner.make(GuestThreadId(789L, foreign.threads), Any(), null)
-                    assertThrows(RuntimeFault::class.java) { owner.mainThreadKey(foreignKey, threads) }
+                    foreign.threads.enterCurrent()
+                    try {
+                        assertThrows(RuntimeFault::class.java) { foreign.weaks.mainThreadKey(weak, foreign.threads) }
+                        assertThrows(RuntimeFault::class.java) { owner.mainThreadKey(weak, foreign.threads) }
+                        assertThrows(RuntimeFault::class.java) { foreign.threads.liveJavaId(key) }
+                        val foreignKey = owner.make(foreign.threads.currentIdentity(), Any(), null)
+                        assertThrows(RuntimeFault::class.java) { owner.mainThreadKey(foreignKey, threads) }
+                    } finally { foreign.threads.leaveCurrent() }
                 } finally { second.leave() }
             }
             assertEquals(0L, owner.finalize(weak).flag)
             assertNull(capability.liveJavaId())
             assertThrows(RuntimeFault::class.java) { owner.mainThreadKey(weak, threads) }
-        } finally { first.close() }
+            assertEquals(key.javaId, closing.liveJavaId())
+            threads.close()
+            assertNull(closing.liveJavaId(), "Thread service close invalidates even a still-live weak registration")
+        } finally { first.leave(); first.close() }
         assertNull(closing.liveJavaId())
         assertNull(capability.liveJavaId())
+    }
+
+    @Test fun mainThreadCapabilityDoesNotResurrectTerminalIdentitiesOrDeadOriginalCarriers() {
+        for ((forked, outcome) in listOf(true to GuestThreadStatus.FINISHED, true to GuestThreadStatus.DIED,
+                true to GuestThreadStatus.RUNTIME_FAILURE, false to GuestThreadStatus.FINISHED)) {
+            val threads = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }) { }
+            val owner = ManagedWeaks()
+            val capability = AtomicReference<MainThreadWeakKey>()
+            val weak = AtomicReference<Any>()
+            val failure = AtomicReference<Throwable>()
+            val ready = CountDownLatch(1); val leave = CountDownLatch(1)
+            val left = CountDownLatch(1); val stop = CountDownLatch(1)
+            val worker = Thread {
+                var entered = false
+                try {
+                    threads.enterCurrent(forked = forked); entered = true
+                    weak.set(owner.make(threads.currentIdentity(), Any(), null))
+                    capability.set(owner.mainThreadKey(weak.get(), threads))
+                    ready.countDown()
+                    check(leave.await(3, TimeUnit.SECONDS))
+                    threads.leaveCurrent(outcome); entered = false
+                    left.countDown()
+                    check(stop.await(3, TimeUnit.SECONDS))
+                } catch (error: Throwable) { failure.set(error); ready.countDown(); left.countDown() }
+                finally { if (entered) threads.leaveCurrent(outcome) }
+            }.apply { isDaemon = true }
+            worker.start()
+            try {
+                assertTrue(ready.await(3, TimeUnit.SECONDS))
+                failure.get()?.let { throw AssertionError("thread registration failed", it) }
+                assertEquals(worker.threadId(), capability.get().liveJavaId())
+                leave.countDown()
+                assertTrue(left.await(3, TimeUnit.SECONDS))
+                failure.get()?.let { throw AssertionError("thread completion failed", it) }
+                assertTrue(worker.isAlive, "Separate terminal guest status from actual Java carrier death")
+                if (forked) assertNull(capability.get().liveJavaId())
+                else assertEquals(worker.threadId(), capability.get().liveJavaId())
+                stop.countDown(); worker.join(3000)
+                assertFalse(worker.isAlive)
+                failure.get()?.let { throw AssertionError("worker failed", it) }
+                assertNull(capability.get().liveJavaId())
+                assertEquals(1L, owner.dereference(weak.get()).flag, "Liveness query must not finalize the weak")
+                threads.close()
+                assertNull(capability.get().liveJavaId())
+            } finally {
+                leave.countDown(); stop.countDown(); worker.join(3000)
+                threads.close(); owner.close()
+            }
+        }
     }
 
     private val state = CoreRepresentation(CoreKind.VOID, present = true, primReps = emptyList())

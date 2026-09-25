@@ -55,13 +55,13 @@ internal class ManagedWeaks {
         return key
     }
 
-    // Capability backing operation: no key or callback escapes. A returned number
-    // is a snapshot; execution liveness belongs to the consuming thread service.
+    // Capability backing operation: no key or callback escapes. The thread service
+    // checks the original canonical carrier; the returned number is still only a snapshot.
     @Synchronized @TruffleBoundary
     internal fun mainThreadJavaId(value: Any, threads: GuestThreads): Long? {
         if (closed) return null
         val payload = live[handle(value)] ?: return null
-        return threadKey(payload, threads).javaId
+        return threads.liveJavaId(threadKey(payload, threads))
     }
 
     @Synchronized fun retainedCount(): Int = live.size
