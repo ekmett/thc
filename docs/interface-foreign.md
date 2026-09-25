@@ -71,7 +71,8 @@ See the [managed export contract](site/embedding.md).
 
 For an ordinary full-Core installation lacking these annotations, project runs
 can explicitly supply `--installed-core required --ghc-source DIR`. This bounded
-producer accepts a matching configured GHC 9.14.1 native Linux stage1 tree. It
+producer accepts a matching configured GHC 9.14.1 native Linux stage1 tree with
+the original GMP, Haskell2010 and NoImplicitPrelude library configuration. It
 recompiles only `GHC.Internal.Conc.Bound` and
 `GHC.Internal.System.Posix.Internals`, and only when their required annotation
 is absent. Cabal's saved configuration supplies CPP flags, language settings and
@@ -81,14 +82,23 @@ and is not used here.
 
 The tree's dynamic interfaces must match the selected installation byte for
 byte, and each target source must match its retained GHC self-recompilation
-source fingerprint. Regenerated interfaces must retain the same complete raw
+source fingerprint. Every retained `UsageFile` input, including generated CPP
+headers and system headers, must still match its original fingerprint, resolved
+from the configured tree's root. A changed header is rejected before compilation
+or cache reuse; observing its new hash does not establish a matching build.
+Regenerated input inventories must preserve these dependencies, allowing only
+the selected RTS version-header copy with the same fingerprint and additional
+libraries from the actual registered plugin dependency closure. Regenerated
+interfaces must retain the same complete raw
 foreign products. A private acquisition view changes only ghc-internal's
 interface search directory; native libraries, ABI fields and dependency IDs
 remain unchanged. The project's native compiler and helper build continue to use
 the original selected compiler. No installed files, JSON modules or ZIP members
 are patched.
 
-THC caches genuine outputs using source/configuration/header/interface contents,
+THC caches genuine outputs using source/configuration/header/interface contents
+(including Hadrian's generated `hadrian/cfg/system.config` and both vanilla and
+dynamic interfaces throughout the selected registered dependency closure),
 the plugin and helper hashes, selected compiler information, and registrations.
 Input observations are repeated before returning a view. Output hashes and
 symlink inventories are checked on cache hits; publication is locked and atomic.

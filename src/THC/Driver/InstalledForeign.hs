@@ -6,7 +6,7 @@
 -- always retains the caller's compiler, package database and installed libraries.
 module THC.Driver.InstalledForeign
   ( ForeignCompiler(..), prepareForeignInterfaces, missingForeignProof, createView, viewContext
-  , observeProbeInterfaces ) where
+  , observeProbeInterfaces, retainedUsageFiles, verifyUsageFiles, matchUsageFiles ) where
 
 import Control.Exception (bracket, bracketOnError)
 import Control.Monad (filterM, forM, forM_, unless)
@@ -16,7 +16,9 @@ import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
+import Data.Char (isHexDigit, isSpace)
 import Data.List (isPrefixOf, nub, sort)
+import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Distribution.Compiler (CompilerFlavor(GHC))
@@ -132,6 +134,9 @@ prepareForeignInterfaces producer cache source context registrations = do
         check (after == before) "GHC source/configuration/interfaces changed during annotation acquisition"
         pure selected
     inputs config unit = do
+      forM_ (recipeUsageFiles config) $ \(_, original) -> do
+        _ <- verifyUsageFiles (recipeRoot config) original
+        pure ()
       -- Re-enumerate, not only re-hash the old list: an added include or boot
       -- interface can alter compiler resolution during a running compilation.
       files <- recipeFiles config
@@ -155,7 +160,10 @@ prepareForeignInterfaces producer cache source context registrations = do
 -- This first recipe deliberately supports a configured native Linux stage1
 -- tree, not an arbitrary source tarball or a guessed installed-GHC source path.
 data Recipe = Recipe { recipeRoot :: FilePath, recipeArguments :: [String]
-                     , recipeFiles :: IO [FilePath], recipeIdentity :: Value }
+                     , recipeFiles :: IO [FilePath], recipeIdentity :: Value
+                     , recipeUsageFiles :: [(String, [(FilePath, String)])]
+                     , recipeVersionHeaders :: (FilePath, FilePath)
+                     , recipeProducerLibraries :: [FilePath] }
 
 configuredRecipe :: ForeignCompiler -> InstalledContext -> InstalledUnit -> FilePath -> IO Recipe
 configuredRecipe producer context unit root = do
@@ -192,7 +200,10 @@ configuredRecipe producer context unit root = do
   -- Do not execute hidden arbitrary hooks/plugins from a setup-config. This is
   -- the known library option profile; conditional CPP comes from Cabal itself.
   check (hcOptions GHC info == ["-this-unit-id", "ghc-internal", "-Wcompat", "-Wnoncanonical-monad-instances"] &&
-         all ("-D" `isPrefixOf`) (cppOptions info)) "unsupported ghc-internal compiler option profile"
+         cppOptions info == ["-DBIGNUM_GMP"] &&
+         fmap prettyShow (defaultLanguage info) == Just "Haskell2010" &&
+         map prettyShow (defaultExtensions info) == ["NoImplicitPrelude"])
+    "unsupported ghc-internal compiler option profile (requires original native GMP configuration)"
   forM_ (installedInterfaces unit) $ \(name, installed) -> do
     let original = built </> modulePath name <.> "dyn_hi"
     left <- hashFile installed
@@ -202,7 +213,7 @@ configuredRecipe producer context unit root = do
                       built </> "include", packageRoot </> "include"]
       roots = [built, autogen, src]
       macros = autogen </> "cabal_macros.h"
-  forM_ [boundModule, posixModule] $ \name -> do
+  usageFiles <- forM [boundModule, posixModule] $ \name -> do
     let original = built </> modulePath name <.> "dyn_hi"
         sourceFile = src </> modulePath name <.> "hs"
     description <- command (foreignGhc producer) ["--show-iface", original] Nothing
@@ -210,8 +221,15 @@ configuredRecipe producer context unit root = do
     let fingerprints = [value | line <- lines description, ["src", "hash:", value] <- [words line]]
     check (fingerprints == [digest])
       ("--ghc-source original source does not match retained self-recomp metadata: " ++ name)
+    retained <- either fail pure (retainedUsageFiles description)
+    verified <- verifyUsageFiles root retained
+    required <- mapM canonicalizePath $ [root </> "rts/include/ghcversion.h", macros] ++
+      (if name == posixModule then [built </> "include/HsBaseConfig.h", stage </> "rts/build/include/ghcplatform.h"] else [])
+    check (all (`elem` map fst verified) required)
+      ("original interface lacks required CPP dependency evidence: " ++ name)
+    pure (name, verified)
   let baseFiles = [configured </> "setup-config", packageRoot </> "ghc-internal.cabal", macros,
-                   root </> "mk/config.mk", stage </> "lib/settings", installedLibdir context </> "settings",
+                   root </> "hadrian/cfg/system.config", stage </> "lib/settings", installedLibdir context </> "settings",
                    src </> modulePath boundModule <.> "hs", src </> modulePath posixModule <.> "hs",
                    foreignPluginLibrary producer, foreignRegisteredLibrary producer, installedHelper context] ++
                   [replaceExtension path suffix | (_, path) <- installedInterfaces unit, suffix <- ["hi", "dyn_hi"]]
@@ -238,16 +256,40 @@ configuredRecipe producer context unit root = do
     | directory <- Package.libraryDynDirs plugin, name <- Package.hsLibraries plugin]
   check (foreignRegisteredLibrary producer `elem` libraryMatches && length libraryMatches == 1)
     "THC plugin registration does not resolve to the recorded shared library"
+  -- GHC records dynamically loaded plugin dependencies as UsageFiles too. Only
+  -- those exact registered library paths may be additional producer inputs;
+  -- accepting every .so (or ignoring every non-.h) would hide a new CPP include.
+  descriptions <- command (installedPackageTool context)
+    ["--global", "--no-user-package-db", "--expand-pkgroot", "--package-db", foreignPluginDb producer, "dump"] Nothing
+  records <- mapM parseRegistration (splitRegistrations (lines descriptions))
+  dependencies <- registrationClosure records (foreignPluginUnit producer)
+  producerLibraries <- sort . nub <$> (mapM canonicalizePath =<< filterM doesFileExist
+    [directory </> "lib" ++ name ++ "-ghc9.14.1.so"
+    | dependency <- dependencies, directory <- Package.libraryDynDirs dependency,
+      name <- Package.hsLibraries dependency])
+  rts <- case [record | record <- records, prettyShow (Package.sourcePackageId record) == "rts-1.0.3"] of
+    [record] -> pure record
+    _ -> fail "expected exactly one selected RTS registration"
+  versionCandidates <- filterM doesFileExist [directory </> "ghcversion.h" | directory <- Package.includeDirs rts]
+  selectedVersion <- case versionCandidates of
+    [path] -> canonicalizePath path
+    _ -> fail "expected exactly one selected RTS ghcversion.h"
+  originalVersion <- canonicalizePath (root </> "rts/include/ghcversion.h")
+  originalVersionHash <- show <$> getFileHash originalVersion
+  _ <- verifyUsageFiles root [(selectedVersion, originalVersionHash)]
   infoOutput <- command (foreignGhc producer) ["--info"] Nothing
   let allFiles = do
         includes <- concat <$> mapM (treeFiles (\p -> takeExtension p `elem` [".h", ".hpp"])) includeRoots
         interfaces <- treeFiles (\p -> takeExtension p `elem` [".hi", ".dyn_hi", ".hi-boot", ".dyn_hi-boot"]) built
         pluginFiles <- treeFiles (\p -> takeExtension p == ".conf" || takeFileName p == "package.cache")
           (foreignPluginDb producer)
-        pure (sort (nub (baseFiles ++ includes ++ interfaces ++ pluginFiles)))
-  pure (Recipe root args allFiles $ object
-    ["root" .= root, "ghc" .= foreignGhc producer, "ghcInfo" .= infoOutput,
-     "arguments" .= args, "pluginUnit" .= foreignPluginUnit producer, "pluginRegistration" .= pluginDescription])
+        pure (sort (nub (selectedVersion : baseFiles ++ includes ++ interfaces ++ pluginFiles ++ concatMap (map fst . snd) usageFiles)))
+  let identity = object
+        ["root" .= root, "ghc" .= foreignGhc producer, "ghcInfo" .= infoOutput,
+         "arguments" .= args, "pluginUnit" .= foreignPluginUnit producer, "pluginRegistration" .= pluginDescription,
+         "originalUsageFiles" .= usageFiles, "versionHeaders" .= (originalVersion, selectedVersion),
+         "producerLibraries" .= producerLibraries]
+  pure (Recipe root args allFiles identity usageFiles (originalVersion, selectedVersion) producerLibraries)
 
 compileOriginal :: ForeignCompiler -> Recipe -> FilePath -> String -> IO ()
 compileOriginal producer recipe destination name = do
@@ -265,6 +307,12 @@ compileOriginal producer recipe destination name = do
          "-o", stem <.> "o", "-dyno", stem <.> "dyn_o",
          recipeRoot recipe </> "libraries/ghc-internal/src" </> modulePath name <.> "hs"]
   _ <- command (foreignGhc producer) arguments (Just (recipeRoot recipe))
+  description <- command (foreignGhc producer) ["--show-iface", stem <.> "dyn_hi"] Nothing
+  retained <- either fail pure (retainedUsageFiles description)
+  verified <- verifyUsageFiles (recipeRoot recipe) retained
+  expected <- maybe (fail "missing original CPP input inventory") pure (lookup name (recipeUsageFiles recipe))
+  check (matchUsageFiles (recipeVersionHeaders recipe) (recipeProducerLibraries recipe) expected verified)
+    ("regenerated interface changed the original CPP dependency inventory: " ++ name)
   pure ()
 
 createView :: InstalledContext -> InstalledUnit -> FilePath -> [String] -> IO FilePath
@@ -357,6 +405,66 @@ sha = concatMap (\byte -> let s = showHex byte "" in replicate (2 - length s) '0
 
 fileInventory :: [FilePath] -> IO [(FilePath, String)]
 fileInventory = mapM (\path -> (,) path <$> hashFile path)
+
+-- GHC 9.14.1's own pretty-printer emits UsageFile as addDependentFile followed
+-- by a quoted Haskell FilePath and its Fingerprint. Restrict parsing to the
+-- original Self-Recomp section, never source strings in the retained Core/C.
+-- An absent/stripped or differently formatted record is not sufficient evidence.
+retainedUsageFiles :: String -> Either String [(FilePath, String)]
+retainedUsageFiles description = do
+  section <- case dropWhile (/= "Self-Recomp") (lines description) of
+    [] -> Left "original interface lacks self-recompilation input evidence"
+    _:rest -> case break ("  orphan hash:" `isPrefixOf`) rest of
+      (_, []) -> Left "unsupported GHC self-recompilation record format"
+      (body, _) -> Right body
+  let rows = [dropWhile isSpace line | line <- section,
+              "addDependentFile" `isPrefixOf` dropWhile isSpace line]
+  unless (not (null rows)) (Left "original interface lacks retained CPP UsageFile evidence")
+  traverse parse rows
+  where
+    parse row = case reads (drop (length ("addDependentFile" :: String)) row) :: [(String, String)] of
+      [(path, rest)] ->
+        let (digest, ending) = span isHexDigit (dropWhile isSpace rest)
+        in if not (null path) && not (null digest) && length digest <= 32 &&
+              filter (not . isSpace) ending `elem` [",", "]"]
+           then Right (path, digest)
+           else Left "unsupported GHC UsageFile fingerprint record"
+      _ -> Left "unsupported GHC UsageFile path record"
+
+-- Relative UsageFile paths are relative to the original Hadrian invocation
+-- directory, which is the explicitly supplied tree root. Absolute system
+-- headers remain absolute; they too must match the original GHC fingerprint.
+verifyUsageFiles :: FilePath -> [(FilePath, String)] -> IO [(FilePath, String)]
+verifyUsageFiles root records = do
+  verified <- forM records $ \(path, expected) -> do
+    actualPath <- canonicalizePath (if isAbsolute path then path else root </> path)
+    actual <- show <$> getFileHash actualPath
+    check (actual == expected) ("original CPP input differs from retained UsageFile: " ++ actualPath)
+    pure (actualPath, expected)
+  pure (sort (nub verified))
+
+-- All paths have already been resolved and fingerprints checked. GHC injects
+-- its installed RTS version header rather than Hadrian's source-tree copy;
+-- permit this single exact substitution only with the original fingerprint.
+-- Everything else must be an original input or an actual registered plugin
+-- dependency library. Missing original inputs and newly shadowing includes fail.
+matchUsageFiles :: (FilePath, FilePath) -> [FilePath] -> [(FilePath, String)] -> [(FilePath, String)] -> Bool
+matchUsageFiles (originalVersion, selectedVersion) libraries original generated =
+  sort (nub expected) == sort (nub actual)
+  where
+    expected = [(if path == originalVersion then selectedVersion else path, digest) | (path, digest) <- original]
+    actual = [(path, digest) | (path, digest) <- generated,
+      path `notElem` libraries || path `elem` map fst expected]
+
+registrationClosure :: [Package.InstalledPackageInfo] -> String -> IO [Package.InstalledPackageInfo]
+registrationClosure records root = visit Map.empty [root]
+  where
+    visit found [] = pure (Map.elems found)
+    visit found (identifier:rest)
+      | Map.member identifier found = visit found rest
+      | otherwise = case [record | record <- records, prettyShow (Package.installedUnitId record) == identifier] of
+          [record] -> visit (Map.insert identifier record found) (map prettyShow (Package.depends record) ++ rest)
+          _ -> fail ("missing or ambiguous producer dependency registration: " ++ identifier)
 
 -- probeInstalled discovers the complete registered dependency closure. Its
 -- native helper probes dynamic payloads, while -dynamic-too also consumes
