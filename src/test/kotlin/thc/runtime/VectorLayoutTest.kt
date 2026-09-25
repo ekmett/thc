@@ -18,8 +18,8 @@ import java.io.File
 class VectorLayoutTest {
     private val integer = CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep"))
     private fun vectors(): List<CoreRepresentation> {
-        val cap = Json.parse(File(System.getProperty("thc.projectRoot"), "scripts/core-capabilities.json").readText()) as Map<*, *>
-        return (cap["vectorRepresentations"] as List<*>).map { raw ->
+        val catalog = Json.parse(File(System.getProperty("thc.projectRoot"), "scripts/simd-families.json").readText()) as Map<*, *>
+        return (catalog["families"] as List<*>).map { raw ->
             val shape = raw as Map<*, *>
             CoreRepresentations.parse(mapOf("kind" to "vector", "evaluated" to true,
                 "primReps" to listOf("VecRep ${shape["lanes"]} ${shape["element"]}"),
