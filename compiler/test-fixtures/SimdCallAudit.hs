@@ -35,15 +35,17 @@ capturedCase x = case vectorReturn x of
     0# -> 0#
     _ -> vectorWorker vector bias)
 
-{-# OPAQUE forceBox #-}
-forceBox :: Int -> Int#
-forceBox (I# value) = value
+{-# OPAQUE selectBox #-}
+selectBox :: Int# -> Int -> Int#
+selectBox gate boxed = case gate of
+  0# -> 13#
+  _ -> case boxed of I# value -> value
 
 {-# OPAQUE thunkCase #-}
 thunkCase :: Int# -> Int#
 thunkCase x = case vectorReturn x of
   vector -> let boxed = I# (vectorWorker vector 13#)
-            in forceBox boxed
+            in selectBox x boxed
 
 {-# OPAQUE vectorReturn #-}
 vectorReturn :: Int# -> Int16X8#
