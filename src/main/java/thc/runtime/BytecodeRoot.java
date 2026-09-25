@@ -765,10 +765,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             address.writeAddressElementIndex(offset, value);
             return kotlin.Unit.INSTANCE;
         }
-    }
-
-    @Operation
-    public static final class CopyAddrNonOverlapping {
+        // This distinct typed operand shape shares the address mutation
+        // operation rather than adding another Bytecode DSL partition member.
         @Specialization public static Object copy(ManagedAddress source, ManagedAddress destination,
                 long count, Object state) {
             ManagedByteArray.requireState(state);
