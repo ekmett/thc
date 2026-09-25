@@ -34,8 +34,12 @@ capturePair n d =
 {-# OPAQUE capturePairCase #-}
 capturePairCase :: Int# -> Int#
 capturePairCase x =
-  case capturePair x (case x <=# 0# of 1# -> -3#; _ -> 3#) of
+  case capturePair x (captureDenominator x) of
     (# Box q, _ #) -> q
+
+{-# OPAQUE captureDenominator #-}
+captureDenominator :: Int# -> Int#
+captureDenominator x = case x <=# 0# of 1# -> -3#; _ -> 3#
 {-# OPAQUE bottomBox #-}
 bottomBox :: Box
 bottomBox = bottomBox
