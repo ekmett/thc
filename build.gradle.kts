@@ -297,6 +297,21 @@ tasks.register<Test>("originalIconvFullCoreTest") {
         }
     }
 }
+tasks.register<Test>("fileWaitFullCoreTest") {
+    group = "verification"
+    description = "Tests original GHC descriptor waits using explicitly prepared Linux full Core."
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    useJUnitPlatform()
+    filter { includeTestsMatching("thc.runtime.FileWaitFullCoreTest") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Original descriptor-wait evidence requires a fresh test process") { true }
+    doFirst {
+        check(file("build/file-wait/manifest.json").isFile) {
+            "Missing file-wait fixture: use selected complete-Core GHC9.14.1 on Linux and run cabal run exe:thc-fixtures -- file-wait"
+        }
+    }
+}
 tasks.register<Test>("originalStackDecoderFullCoreTest") {
     group = "verification"
     description = "Tests the original stack decoder/formatter using the explicitly prepared full-Core GHC fixture."

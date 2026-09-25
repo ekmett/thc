@@ -498,14 +498,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val b = e.builder
         b.beginBlock()
         val values = operands.mapIndexed { index, operand ->
-            b.createLocal("MVar operand $index", null).also {
+            b.createLocal("Blocking operand $index", null).also {
                 b.beginStoreLocal(it); operand.emit(e); b.endStoreLocal()
             }
         }
-        val retry = b.createLocal("MVar request pending", "primitive")
-        val request = b.createLocal("MVar async request", "object")
-        val active = b.createLocal("MVar logical mask", "object")
-        val discard = b.createLocal("MVar resume value", "object")
+        val retry = b.createLocal("Blocking request pending", "primitive")
+        val request = b.createLocal("Blocking async request", "object")
+        val active = b.createLocal("Blocking logical mask", "object")
+        val discard = b.createLocal("Blocking resume value", "object")
         b.beginStoreLocal(retry); b.emitLoadConstant(true); b.endStoreLocal()
         b.beginWhile()
         b.emitLoadLocal(retry)

@@ -38,6 +38,8 @@ extra-source-files:
   compiler/test-fixtures/OriginalStackProof.json
   compiler/test-fixtures/OriginalStackFormatter.hs
   compiler/test-fixtures/OriginalStackFormatterNative.hs
+  compiler/test-fixtures/FileWaitAudit.hs
+  compiler/test-fixtures/FileWaitNative.hs
   compiler/test-fixtures/OriginalFdReadyAudit.hs
   compiler/test-fixtures/OriginalRtsLocksAudit.hs
   compiler/test-fixtures/OriginalOpenAudit.hs
@@ -333,6 +335,7 @@ executable thc-fixtures
     OriginalGmpFixtures
     LibdwUnavailableFixtures
     NativeAddressFixtures
+    FileWaitFixtures
     OriginalFdReadyFixtures
     OriginalRtsLocksFixtures
     OriginalOpenFixtures
