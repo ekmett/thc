@@ -626,11 +626,12 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
             require(arguments.isEmpty()) { "runIO takes no arguments" }
             if (lifecycleStarted != null && !lifecycleStarted.compareAndSet(false, true))
                 throw thc.runtime.RuntimeFault("Executable IO lifecycle already started")
-            val threads = Language.currentState(dispatch).threads
+            val owner = Language.currentState(dispatch)
+            val threads = owner.threads
             threads.enterCurrent()
             var outcome = thc.runtime.GuestThreadStatus.FINISHED
             try {
-                if (processSignals) Language.currentState(dispatch).signals.bind(program)
+                if (processSignals) owner.signals.bind(program)
                 try {
                     dispatch.execute(ioTarget, arrayOf(guestEntry))
                     // Run the original Handle action over this program's CAFs.
@@ -646,7 +647,7 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                 outcome = thc.runtime.GuestThreadStatus.uncaught(failure)
                 throw failure
             } finally {
-                try { if (processSignals) Language.currentState(dispatch).signals.close() }
+                try { if (processSignals) owner.signals.close() }
                 finally { threads.leaveCurrent(outcome) }
             }
             return true

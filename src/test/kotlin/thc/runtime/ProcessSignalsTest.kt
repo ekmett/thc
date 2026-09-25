@@ -62,6 +62,33 @@ class ProcessSignalsTest {
             finally { context.leave() }
         }
 
+    @Test fun hardContextExitSurvivesBothHostCleanupSteps() {
+        val death = ThreadDeath()
+        val restoration = RuntimeFault("native restoration failure")
+        val bookkeeping = RuntimeFault("thread bookkeeping failure")
+        val cleaned = mutableListOf<String>()
+        val observed = assertThrows(ThreadDeath::class.java) {
+            finishSignalConsumer(death, {
+                cleaned.add("native")
+                throw restoration
+            }, {
+                cleaned.add("thread")
+                throw bookkeeping
+            })
+        }
+        assertSame(death, observed)
+        assertEquals(listOf("native", "thread"), cleaned)
+        assertEquals(listOf(restoration, bookkeeping), death.suppressed.toList())
+        val laterDeath = ThreadDeath()
+        val failure = RuntimeFault("reader failure")
+        var unregistered = false
+        assertSame(laterDeath, assertThrows(ThreadDeath::class.java) {
+            finishSignalConsumer(failure, { throw laterDeath }, { unregistered = true })
+        })
+        assertTrue(unregistered)
+        assertEquals(listOf(failure), laterDeath.suppressed.toList())
+    }
+
     @Test fun genuineOriginalDeclarationRejectsWidthHeadStateAndDescriptorNearMisses() {
         // Original ghc-internal GHC.Internal.TopHandler core/246.json SHA256
         // 6dd8a0de3bfc8664c9ea1cd2cfee6d687438761adf15a192dfde3c8e21a6fbea.

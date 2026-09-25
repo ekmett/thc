@@ -104,30 +104,36 @@ internal class ManagedSignals(private val owner: Language.State, private val lan
             }
         } catch (caught: Throwable) {
             outcome = GuestThreadStatus.uncaught(caught)
-            if (!stopping) failure = caught
+            // closeExited/closeCancelled use ThreadDeath as hard control flow.
+            // A stop request never makes it an ignorable reader failure.
+            if (caught is ThreadDeath || !stopping) failure = caught
         } finally {
-            synchronized(this) {
-                closed = true; stopping = true
-                try { native.close() } catch (closing: Throwable) {
-                    if (failure == null) failure = closing else failure!!.addSuppressed(closing)
+            failure = finishSignalConsumer(failure, {
+                synchronized(this) {
+                    closed = true; stopping = true
+                    try { native.close() } finally { transport = null }
                 }
-                transport = null
-            }
-            if (registered) owner.threads.leaveCurrent(outcome)
+            }, { if (registered) owner.threads.leaveCurrent(outcome) })
         }
         if (failure != null) owner.env.context.closeCancelled(null, "Process signal dispatcher failed: ${failure!!.javaClass.simpleName}")
+    }
+
+    /** Exit notification only: no guest call, context lookup or safepoint join.
+     * The reader wakes (or receives hard-exit ThreadDeath), then restores the
+     * native disposition in its host-only cleanup after unregistering the
+     * blocked-state interrupter. Context closure waits for that owned thread. */
+    @Synchronized fun requestStop() {
+        stopping = true
+        transport?.wake()
+        if (worker == null) closed = true
     }
 
     /** Stop before leaving runIO; finalizeContext also covers cancellation. The
      * reader owns destruction after its safepoint interrupter is unregistered. */
     fun close() {
-        val child = synchronized(this) {
-            stopping = true
-            transport?.wake()
-            if (worker == null) closed = true
-            worker
-        }
-        if (child != null && child !== Thread.currentThread())
+        requestStop()
+        val child = synchronized(this) { worker }
+        if (child != null && child !== Thread.currentThread() && child.isAlive)
             TruffleSafepoint.setBlockedThreadInterruptibleFunction(null,
                 TruffleSafepoint.InterruptibleFunction<Thread, Unit> { it.join() }, child)
     }
@@ -136,6 +142,28 @@ internal class ManagedSignals(private val owner: Language.State, private val lan
         @JvmStatic fun install(node: Node, signal: Long, action: Long, mask: ManagedAddress): Long =
             Language.currentState(node).signals.install(signal, action, mask)
     }
+}
+
+/** Run both host cleanup steps, preserving hard Truffle control flow even if
+ * restoration or thread bookkeeping also fails. Never translate ThreadDeath
+ * into closeCancelled, and never let a cleanup exception replace it. */
+internal fun finishSignalConsumer(initial: Throwable?, restore: () -> Unit, unregister: () -> Unit): Throwable? {
+    var failure = initial
+    for (cleanup in listOf(restore, unregister)) try { cleanup() } catch (caught: Throwable) {
+        val previous = failure
+        when {
+            previous === caught -> Unit
+            previous == null -> failure = caught
+            caught is ThreadDeath && previous !is ThreadDeath -> {
+                caught.addSuppressed(previous)
+                failure = caught
+            }
+            else -> previous.addSuppressed(caught)
+        }
+    }
+    val result = failure
+    if (result is ThreadDeath) throw result
+    return result
 }
 
 /** CInt is erased to boxed Int32; Ptr's exact AddrRep field carries the owned
