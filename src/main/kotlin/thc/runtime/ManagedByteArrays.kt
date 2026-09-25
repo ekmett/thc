@@ -5,11 +5,11 @@ package thc.runtime
 
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
+import java.lang.foreign.ValueLayout
 
-/** The primitive JVM byte[] itself is the one unlifted guest reference. No
- * wrapper or per-byte boxing. Its mutable elements are never CompilationFinal.
- * The JVM initializes allocations; guests must still initialize before reading.
- */
+/** Host-supplied byte arrays retain their raw fast path. Guest allocations use
+ * one owner so shrink can change logical size without replacing the backing.
+ * The JVM initializes bytes; guests must still initialize before reading. */
 internal object ManagedByteArray {
     @JvmStatic fun size(bytes: ByteArray): Long = bytes.size.toLong()
     private fun index(bytes: ByteArray, offset: Long): Int {
@@ -75,6 +75,11 @@ internal object ManagedByteArray {
         is ManagedAllocation -> value.resized(size)
         is ByteArray -> resize(value, size)
         else -> fault("Expected a managed ByteArray#")
+    }
+    @JvmStatic fun shrinkGuest(value: Any?, size: Long) {
+        val allocation = value as? ManagedAllocation
+            ?: fault("shrinkMutableByteArray# requires an owned MutableByteArray#")
+        allocation.shrink(size)
     }
     @JvmStatic fun sizeGuest(value: Any?): Long = when (value) {
         is ManagedAllocation -> value.size
@@ -210,9 +215,32 @@ internal object ManagedByteArray {
         if (size < 0 || size > Int.MAX_VALUE.toLong()) fault("ByteArray# size outside the managed allocation domain")
         return ByteArray(size.toInt())
     }
+    @JvmStatic fun allocateGuest(size: Long): ManagedAllocation =
+        ManagedAllocation.mutable(size, ValueLayout.ADDRESS.byteSize().toInt())
+    private inline fun <T> vectorGuest(value: Any?, index: Long, scalarOffset: Boolean,
+        scalarWidth: Int, writable: Boolean, crossinline action: (ByteArray) -> T): T =
+        if (value is ManagedAllocation)
+            value.accessVector(index, scalarOffset, scalarWidth, writable) { action(it) }
+        else action(require(value))
+    @JvmStatic fun readInt32VectorGuest(value: Any?, index: Long, scalarOffset: Boolean): Int32X4 =
+        vectorGuest(value, index, scalarOffset, 4, false) { Int32X4.readArray(it, index, scalarOffset) }
+    @JvmStatic fun writeInt32VectorGuest(value: Any?, index: Long, vector: Int32X4, scalarOffset: Boolean) =
+        vectorGuest(value, index, scalarOffset, 4, true) { Int32X4.writeArray(it, index, vector, scalarOffset) }
+    @JvmStatic fun readWord32VectorGuest(value: Any?, index: Long, scalarOffset: Boolean): Word32X4 =
+        vectorGuest(value, index, scalarOffset, 4, false) { Word32X4.readArray(it, index, scalarOffset) }
+    @JvmStatic fun writeWord32VectorGuest(value: Any?, index: Long, vector: Word32X4, scalarOffset: Boolean) =
+        vectorGuest(value, index, scalarOffset, 4, true) { Word32X4.writeArray(it, index, vector, scalarOffset) }
+    @JvmStatic fun readFloatVectorGuest(value: Any?, index: Long, scalarOffset: Boolean): FloatX4 =
+        vectorGuest(value, index, scalarOffset, 4, false) { FloatX4.readArray(it, index, scalarOffset) }
+    @JvmStatic fun writeFloatVectorGuest(value: Any?, index: Long, vector: FloatX4, scalarOffset: Boolean) =
+        vectorGuest(value, index, scalarOffset, 4, true) { FloatX4.writeArray(it, index, vector, scalarOffset) }
+    @JvmStatic fun readDoubleVectorGuest(value: Any?, index: Long, scalarOffset: Boolean): DoubleX2 =
+        vectorGuest(value, index, scalarOffset, 8, false) { DoubleX2.readArray(it, index, scalarOffset) }
+    @JvmStatic fun writeDoubleVectorGuest(value: Any?, index: Long, vector: DoubleX2, scalarOffset: Boolean) =
+        vectorGuest(value, index, scalarOffset, 8, true) { DoubleX2.writeArray(it, index, vector, scalarOffset) }
     @JvmStatic fun require(value: Any?): ByteArray = when (value) {
         is ByteArray -> value
-        is ManagedAllocation -> value.rawBytesIfPointerFree()
+        is ManagedAllocation -> value.wholeBytesForPrimitive()
         else -> fault("Expected a managed ByteArray#")
     }
     @JvmStatic fun requireState(value: Any?) = requireVoidCarrier(value)
@@ -224,6 +252,7 @@ private const val BYTE_ARRAY_REP = "BoxedRep (Just Unlifted)"
 internal enum class ByteArrayOp(val primitive: String, private val arguments: List<List<String>>, val tuple: Boolean = false) {
     NEW("newByteArray#", listOf(listOf("IntRep"), emptyList()), true),
     RESIZE("resizeMutableByteArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
+    SHRINK("shrinkMutableByteArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList())),
     WRITE("writeWord8Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Word8Rep"), emptyList())),
     WRITE_CHAR("writeCharArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("WordRep"), emptyList())),
     COPY("copyByteArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf(BYTE_ARRAY_REP),
@@ -318,7 +347,8 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
         else scalar(result, when (this) {
             WRITE_INT8, WRITE_INT16, WRITE_WORD16, WRITE_WORD8_AS_INT16, WRITE_WORD8_AS_WORD16,
             WRITE, WRITE_CHAR, WRITE_INT, WRITE_DOUBLE, WRITE_INT32, WRITE_WORD32, WRITE_WORD8_AS_INT32, WRITE_WORD8_AS_WORD32, WRITE_FLOAT, WRITE_WORD,
-            WRITE_WORD8_AS_DOUBLE, WRITE_WORD8_AS_FLOAT, WRITE_INT64, WRITE_WORD64, COPY, SET, COPY_MUTABLE, COPY_MUTABLE_NON_OVERLAPPING -> emptyList()
+            WRITE_WORD8_AS_DOUBLE, WRITE_WORD8_AS_FLOAT, WRITE_INT64, WRITE_WORD64, COPY, SET, COPY_MUTABLE, COPY_MUTABLE_NON_OVERLAPPING,
+            SHRINK -> emptyList()
             SIZE, SIZE_MUTABLE, INDEX_INT, COMPARE -> listOf("IntRep")
             INDEX_INT8 -> listOf("Int8Rep")
             INDEX_INT16, INDEX_WORD8_AS_INT16 -> listOf("Int16Rep")
@@ -339,6 +369,7 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
     when (operation) {
         ByteArrayOp.NEW -> NewByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.RESIZE -> ResizeByteArrayExpression(operands[0], operands[1], operands[2])
+        ByteArrayOp.SHRINK -> ShrinkByteArrayExpression(operands[0], operands[1], operands[2])
         ByteArrayOp.FREEZE -> FreezeByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8, ByteArrayOp.WRITE_CHAR -> WriteByteArrayExpression(operands[0], operands[1], operands[2], operands[3])
         ByteArrayOp.COPY -> CopyByteArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4], operands[5])
@@ -401,7 +432,7 @@ private class NewByteArrayExpression(@field:Child private var size: Expr,
         val count = size.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
         // The logical State# component has no slot. Publish only after the effect.
-        FrameAccess.write(frame, slots[offset], ManagedByteArray.allocate(count))
+        FrameAccess.write(frame, slots[offset], ManagedByteArray.allocateGuest(count))
         return null
     }
 }
@@ -414,6 +445,17 @@ private class ResizeByteArrayExpression(@field:Child private var array: Expr,
         ManagedByteArray.requireState(state.execute(frame))
         FrameAccess.write(frame, slots[offset], ManagedByteArray.resizeGuest(bytes, count))
         return null
+    }
+}
+
+private class ShrinkByteArrayExpression(@field:Child private var array: Expr,
+    @field:Child private var size: Expr, @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any {
+        val bytes = array.execute(frame)
+        val count = size.executeRequiredLong(frame)
+        ManagedByteArray.requireState(state.execute(frame))
+        ManagedByteArray.shrinkGuest(bytes, count)
+        return Unit
     }
 }
 

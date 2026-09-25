@@ -19,10 +19,11 @@ internal class ManagedAllocation private constructor(
     // A raw array alias can outlive the call that obtained it. Never install
     // pointer cells after handing one out, even on another guest thread.
     private var exposedAsRawBytes = false
-    // Ordinary unpinned arrays never enter this owner. Pinned accesses use its
-    // monitor so pointer installation cannot race a scalar byte operation.
+    // Guest allocations also use this owner so shrink preserves identity.
+    // Its monitor keeps pointer installation and scalar access ordered.
     @Volatile private var pointerCapable = false
-    val size: Long get() = bytes.size.toLong()
+    @Volatile private var logicalSize = bytes.size
+    val size: Long get() = logicalSize.toLong()
     val addressWidth: Int get() = pointerBytes
     val isWritable: Boolean get() = writable
 
@@ -38,6 +39,15 @@ internal class ManagedAllocation private constructor(
     @Synchronized fun exposeToNative(): ByteArray {
         if (pointerCapable) fault("Pointer-bearing pinned array cannot be passed to native bitcode")
         exposedToNative = true
+        return bytes
+    }
+
+    /** Only synchronous, pointer-free primitive operations borrow this view.
+     * Their raw array bounds cannot represent a shrunk logical length. */
+    @Synchronized fun wholeBytesForPrimitive(): ByteArray {
+        if (pointerCapable || logicalSize != bytes.size)
+            fault("Raw byte-array primitive cannot access a pointer-bearing or shrunk allocation")
+        exposedAsRawBytes = true
         return bytes
     }
 
@@ -144,6 +154,21 @@ internal class ManagedAllocation private constructor(
         return action(bytes)
     }
 
+    /** Vector indices count either full 16-byte vectors or scalar lanes. */
+    @Synchronized fun <T> accessVector(index: Long, scalarOffset: Boolean, scalarWidth: Int,
+        writable: Boolean, action: (ByteArray) -> T): T {
+        val stride = if (scalarOffset) scalarWidth else 16
+        if (index < 0 || index > Long.MAX_VALUE / stride)
+            fault("Vector index outside managed allocation")
+        val start = range(index * stride, 16)
+        if (writable) {
+            mutable()
+            if (pointerCapable) invalidate(start, 16)
+        } else if (intersectsPointer(start, 16))
+            fault("Vector read overlaps a managed pointer cell")
+        return action(bytes)
+    }
+
     @Synchronized fun copyBytesOut(offset: Long, count: Long): ByteArray {
         val start = range(offset, count)
         if (intersectsPointer(start, count.toInt()))
@@ -213,6 +238,22 @@ internal class ManagedAllocation private constructor(
         // another byte-array branch is the one exercised by a compiled guest.
         if (!pointerCapable) return ManagedAllocation(bytes.copyOf(newSize.toInt()), true, pointerBytes)
         return resizeWithPointerCells(newSize)
+    }
+
+    /** Shrink the one guest allocation without changing any existing alias.
+     * Capacity remains available to raw/native views, but all managed ranges
+     * use [logicalSize] and truncated pointer roots are released first. */
+    @Synchronized @TruffleBoundary fun shrink(newSize: Long) {
+        mutable()
+        if (newSize < 0 || newSize > size) fault("MutableByteArray# shrink length outside current size")
+        if (newSize == size) return
+        pointers?.keys?.forEach { start ->
+            if (start < newSize && start.toLong() + pointerBytes > newSize)
+                fault("Cannot truncate a managed pointer cell")
+        }
+        pointers?.keys?.removeIf { it.toLong() >= newSize }
+        if (pointers?.isEmpty() == true) pointers = null
+        logicalSize = newSize.toInt()
     }
 
     @TruffleBoundary

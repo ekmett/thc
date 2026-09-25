@@ -2106,7 +2106,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
                     when (operation) {
                         ByteArrayOp.NEW -> e.builder.beginNewByteArray(destination[0])
-                        ByteArrayOp.RESIZE -> e.builder.beginResizeByteArray(destination[0])
+                        ByteArrayOp.RESIZE -> e.builder.beginResizeByteArray(false, destination[0])
                         ByteArrayOp.GET_SIZE_MUTABLE -> e.builder.beginGetSizeMutableByteArray(destination[0])
                         ByteArrayOp.FREEZE -> e.builder.beginFreezeByteArray(destination[0])
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD,
@@ -2151,6 +2151,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 } else ProvenExpression(Expression { e ->
                     when (operation) {
                         ByteArrayOp.COMPARE -> e.builder.beginCompareByteArrays()
+                        ByteArrayOp.SHRINK -> {
+                            e.builder.beginBlock()
+                            e.builder.beginResizeByteArray(true, e.builder.createLocal("shrink has no result", null))
+                        }
                         ByteArrayOp.COPY -> e.builder.beginCopyByteArray()
                         ByteArrayOp.SET -> e.builder.beginSetByteArray()
                         ByteArrayOp.COPY_MUTABLE, ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING ->
@@ -2194,6 +2198,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     operands.forEach { it.emit(e) }
                     when (operation) {
                         ByteArrayOp.COMPARE -> e.builder.endCompareByteArrays()
+                        ByteArrayOp.SHRINK -> {
+                            e.builder.endResizeByteArray()
+                            e.builder.emitLoadConstant(Unit)
+                            e.builder.endBlock()
+                        }
                         ByteArrayOp.COPY -> e.builder.endCopyByteArray()
                         ByteArrayOp.SET -> e.builder.endSetByteArray()
                         ByteArrayOp.COPY_MUTABLE, ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING -> e.builder.endCopyMutableByteArray()

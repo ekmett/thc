@@ -100,6 +100,18 @@
         "thc.cabal"
       ]
     },
+    "shrink-bytearrays": {
+      "junit": ["thc.runtime.ShrinkByteArrayTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "shrink-bytearrays"]}],
+      "outputs": ["build/shrink-bytearrays"],
+      "sources": [
+        "compiler/test-fixtures/ShrinkMutableByteArrayAudit.hs",
+        "test/haskell-fixtures/ShrinkByteArrayFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal"
+      ]
+    },
     "interface-core": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "interface-core"]}],

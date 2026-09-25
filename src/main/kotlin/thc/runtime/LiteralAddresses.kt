@@ -32,6 +32,8 @@ internal class ManagedAddress private constructor(
     internal fun cbitsBacking(): ByteArray { requireBytes(); return owner?.exposeToNative() ?: rawBacking() }
     internal fun cbitsWritable(): Boolean { requireBytes(); return owner?.isWritable ?: (mutableBytes != null) }
     internal fun cbitsOffset(): Long { size(); return offset }
+    internal fun cbitsOwner(): ManagedAllocation? = owner
+    internal fun cbitsSize(): Long = size()
 
     private fun size(): Long { requireBytes(); return owner?.size ?: (literalBytes ?: mutableBytes)?.size?.toLong()
         ?: fault("Null Addr# has no backing storage")
@@ -130,9 +132,11 @@ internal class ManagedAddress private constructor(
     fun utf8(): String {
         val bytes = rawBacking()
         val start = offset.toInt()
+        val limit = size().toInt()
+        if (start < 0 || start >= limit) fault("UTF-8 address outside its backing storage")
         var end = start
-        while (end < bytes.size && bytes[end] != 0.toByte()) end++
-        if (end == bytes.size) fault("Unterminated polyglot UTF-8 address")
+        while (end < limit && bytes[end] != 0.toByte()) end++
+        if (end == limit) fault("Unterminated polyglot UTF-8 address")
         return try {
             Charsets.UTF_8.newDecoder()
                 .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)

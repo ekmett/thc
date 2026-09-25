@@ -23,7 +23,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "2f872256509f9f9fbe6b6ed119addd71ee51cd66804b408e038c0acfb312a636"
+FULL_PREPARATION_PLAN = "f634d8e63328ab3a32d0decffd3b1e81abd4be5013a9b19f094175a4c93933a6"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -114,6 +114,11 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/int32-byte-offset/pre/core/Int32ByteOffsetAudit.json",
     "build/int32-byte-offset/post/core/Int32ByteOffsetAudit.json",
     "build/explicit64-arrays/manifest.json", "build/explicit64-arrays/oracle.tsv",
+    "build/shrink-bytearrays/manifest.json", "build/shrink-bytearrays/oracle.tsv",
+    "build/shrink-bytearrays/pre/core/ShrinkMutableByteArrayAudit.json",
+    "build/shrink-bytearrays/post/core/ShrinkMutableByteArrayAudit.json",
+    "build/shrink-bytearrays/pre/core/THC.InterfaceClosure.json",
+    "build/shrink-bytearrays/post/core/THC.InterfaceClosure.json",
     "build/explicit64-arrays/pre/audit.json", "build/explicit64-arrays/post/audit.json",
     "build/explicit64-arrays/pre/core/Explicit64ArrayAudit.json",
     "build/explicit64-arrays/post/core/Explicit64ArrayAudit.json",

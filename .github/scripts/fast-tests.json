@@ -901,6 +901,7 @@
         "thc.runtime.OriginalHandleReadinessNativeTest",
         "thc.runtime.MutVarTest",
         "thc.runtime.StablePointerTest",
+        "thc.runtime.ShrinkByteArrayTest",
         "thc.runtime.OriginalStackConsumerProofTest",
         "thc.runtime.BoxedArrayExtensionsTest",
         "thc.runtime.BitPrimopsTest",
@@ -940,8 +941,16 @@
       "junit": ["thc.runtime.StablePointerTest"],
       "python": []
     },
+    "test/haskell-fixtures/ShrinkByteArrayFixtures.hs": {
+      "junit": ["thc.runtime.ShrinkByteArrayTest"],
+      "python": []
+    },
     "compiler/test-fixtures/StablePointerAudit.hs": {
       "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/ShrinkMutableByteArrayAudit.hs": {
+      "junit": ["thc.runtime.ShrinkByteArrayTest"],
       "python": []
     },
     "compiler/test-fixtures/MutVarAudit.hs": {
