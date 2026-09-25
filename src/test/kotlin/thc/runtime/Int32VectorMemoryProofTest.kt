@@ -146,6 +146,37 @@ class Int32VectorMemoryProofTest {
         }
     }
 
+    @Test fun bytecodeReadVectorCanBeCapturedWithoutRetainingItsCarrier() = withLanguage { language ->
+        val operation = operations.single { it.isRead && !it.scalarOffset }
+        val f = fixture(operation)
+        val alternative = list(list(f.body[3])[0])
+        val callback = mutableListOf<Any?>("lam", listOf(binder("ignored", integer)),
+            consume(variable("vector", vector)),
+            mutableMapOf("rep" to copy(closure), "resultRep" to copy(integer),
+                "entryStrict" to listOf(false)))
+        alternative[3] = mutableListOf<Any?>("app", callback, mutableListOf(literal(0)),
+            mutableListOf(false), false, false, mutableMapOf("rep" to copy(integer)))
+        val p = BytecodeProgram(language, f.module)
+        val host = p.hostEntryTarget(3)
+        val original = p.entryTarget("root")
+        val active = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
+            .single { it.callTarget === original }.currentCallTarget as RootCallTarget
+        fun count() = (p.diagnostics().getValue("compiledEntries") as Number).toLong()
+        fun call() {
+            val bytes = ByteArray(40) { (it * 47 + 129).toByte() }
+            assertEquals(expected(bytes, 0), invoke(p, bytes, 0))
+            released(language)
+        }
+        repeat(12) { call() }
+        assertEquals(0L, count())
+        active.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(active, true)
+        assertEquals(true, active.javaClass.getMethod("isValidLastTier").invoke(active))
+        val before = count()
+        call()
+        assertEquals(before + 1, count(), "one installed compiled guest entry")
+        assertEquals(true, active.javaClass.getMethod("isValidLastTier").invoke(active))
+    }
+
     private fun reject(language: Language, backend: String, diagnostic: Boolean, fixture: Fixture, label: String) {
         val bytes = ByteArray(40) { (it * 13 + 97).toByte() }; val before = bytes.copyOf()
         assertThrows(RuntimeFault::class.java, { invoke(program(language, backend, fixture, diagnostic), bytes, 0) }, label)

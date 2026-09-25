@@ -3446,17 +3446,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val value = vectorByteArray(read.operation, operands)
         val local = scope.child()
         local.bindVoid(read.stateBinder, CoreVectorMemory.stateProof)
-        val vector = bind(local, read.vectorBinder, false, read.operation.vectorProof)
+        val vectorProof = read.operation.vectorProof
+        val lanes = TupleShape.flatten(vectorProof).mapIndexed { index, proof ->
+            Local(nextLocal++, "${read.vectorBinder} read lane $index", proof.isLong, proof)
+        }
+        local.bindTuple(read.vectorBinder, vectorProof, lanes)
         val body = compile(read.body, local, tail)
-        // No whole-tuple local or result handoff is ever created here.
+        // The immediate read result owns primitive locals, including when a
+        // nested closure later snapshots those lanes into its captured frame.
         return LoweredCaseExpression(ProvenExpression(ResultExpression { e, destination ->
             val b = e.builder
             b.beginBlock()
-            e.locals[vector.id] = b.createLocal(vector.name, "object")
-            b.beginStoreLocal(e.locals.getValue(vector.id)); value.emit(e); b.endStoreLocal()
+            lanes.forEach { e.locals[it.id] = b.createLocal(it.name, "primitive") }
+            value.emitTuple(e, lanes.map { e.locals.getValue(it.id) })
             emitResult(body, e, destination)
             b.endBlock()
-            e.locals.remove(vector.id)
+            lanes.forEach { e.locals.remove(it.id) }
         }, body.proof))
     }
     private fun tupleCase(expr: List<Any?>, scrutinee: Expression, proof: CoreRepresentation, scope: Scope, tail: Boolean): Expression {
