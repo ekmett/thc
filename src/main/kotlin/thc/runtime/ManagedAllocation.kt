@@ -141,6 +141,20 @@ internal class ManagedAllocation private constructor(
         return action(bytes)
     }
 
+    /** The allocation monitor makes the old-value read and wrapped write one
+     * atomic operation. Monitor entry/exit also supplies the full barrier. */
+    @Synchronized fun fetchAddInt(index: Long, delta: Long): Long {
+        mutable()
+        if (index < 0 || index > Long.MAX_VALUE / 8)
+            fault("Managed allocation element outside its backing storage")
+        val start = range(index * 8, 8)
+        if (intersectsPointer(start, 8))
+            fault("Atomic Int access overlaps a managed pointer cell")
+        val old = ManagedIntArray.read(bytes, index)
+        ManagedIntArray.write(bytes, index, old + delta)
+        return old
+    }
+
     /** Word8ArrayAs* offsets count bytes, including unaligned starts. Keep the
      * entire scalar access under the pointer-cell monitor. */
     @Synchronized fun <T> accessByteRange(offset: Long, width: Int, writable: Boolean,

@@ -165,8 +165,10 @@ class ByteArrayContracts(unittest.TestCase):
             app[6]['rep'] = proof
             self.assertIn('primitive-representation', {i['code'] for i in check(module)['issues']}, proof)
 
-    def test_shrink_mutable_bytearray_stays_unsupported(self):
-        self.assertNotIn('shrinkMutableByteArray#', CAP['primitives'])
+    def test_owned_array_operations_have_exact_contracts(self):
+        self.assertEqual(3, CAP['primitives']['shrinkMutableByteArray#'])
+        self.assertEqual(4, CAP['primitives']['fetchAddIntArray#'])
+        self.assertEqual(['IntRep'], CAP['managedByteArrayPrimitives']['fetchAddIntArray#']['result']['primReps'])
 
     def test_lexical_reference_cannot_be_relabelled_by_an_occurrence(self):
         for name in ('writeWord8Array#', 'unsafeFreezeByteArray#', 'sizeofByteArray#', 'indexWord8Array#',

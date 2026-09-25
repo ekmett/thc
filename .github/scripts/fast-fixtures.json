@@ -112,6 +112,18 @@
         "thc.cabal"
       ]
     },
+    "fetch-add-int-array": {
+      "junit": ["thc.runtime.FetchAddIntArrayTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "fetch-add-int-array"]}],
+      "outputs": ["build/fetch-add-int-array"],
+      "sources": [
+        "compiler/test-fixtures/FetchAddIntArrayAudit.hs",
+        "test/haskell-fixtures/FetchAddIntArrayFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal"
+      ]
+    },
     "interface-core": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "interface-core"]}],

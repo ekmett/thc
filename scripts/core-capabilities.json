@@ -640,6 +640,7 @@
     "writeWord64Array#": 4,
     "indexWord64Array#": 2,
     "readIntArray#": 3,
+    "fetchAddIntArray#": 4,
     "writeIntArray#": 4,
     "indexIntArray#": 2,
     "readDoubleArray#": 3,
@@ -774,6 +775,7 @@
   "limitations": [
     "Address operations support managed literal or byte-array backing with checked offsets; no raw pointers. Char# byte-memory operations read an unsigned byte and write the low eight bits of WordRep. Ordered Addr# comparisons are limited to offsets in the same backing allocation or null compared with itself; unrelated addresses have no synthetic order. Only the exact GHC MD5 C foreign calls admit managed addresses through Sulong.",
     "shrinkMutableByteArray# changes the logical size of a THC-owned allocation in place, preserving frozen and pinned aliases while retaining backing capacity. Managed byte, scalar, vector, address and C-bitcode buffer accesses observe the shorter bound; partial truncation of a managed pointer cell is rejected. Host-injected raw byte arrays cannot be shrunk in place.",
+    "fetchAddIntArray# atomically returns the previous signed machine Int and writes the wrapped sum under the allocation monitor, with a full memory barrier. It requires a THC-owned mutable byte array and a contained machine-word element; raw host arrays and pointer-cell overlaps are rejected.",
     "StablePtr# uses context-owned opaque AddrRep handles, with lazy referents and exact hs_free_stable_ptr. Live identity casts may be compared, but the handles have no byte storage, pointer arithmetic or ordering. Stable-pointer array and byte-memory index/read/write primops remain unsupported.",
     "Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Aggregate captures, heap fields, ordinary let bindings and join captures remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums, vectors and unresolved leaves cannot appear in tuple inputs; exact evaluated AddrRep leaves use managed address references.",
     "Binary unboxed sum results and immediate cases support exact machine Int/Word, Float, Double, known reference, void and tuple payloads. Nested sums, width-changing payload casts, vector/address or unknown leaves, sum inputs/captures/heap fields/local lets/joins/host results remain unsupported."
@@ -2290,6 +2292,21 @@
     "readIntArray#": {
       "arguments": [
         { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "primReps": ["IntRep"], "aggregate": "unboxed-tuple",
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "long", "primReps": ["IntRep"] }
+        ]
+      }
+    },
+    "fetchAddIntArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
         { "kind": "long", "primReps": ["IntRep"] },
         { "kind": "void", "primReps": [] }
       ],

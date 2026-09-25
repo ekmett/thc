@@ -23,7 +23,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "f634d8e63328ab3a32d0decffd3b1e81abd4be5013a9b19f094175a4c93933a6"
+FULL_PREPARATION_PLAN = "98fbb9a4218dac55685462e5ff1ee04ad8b94977d696045f6a74dcfaabd5a46c"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -120,6 +120,11 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/shrink-bytearrays/post/core/ShrinkMutableByteArrayAudit.json",
     "build/shrink-bytearrays/pre/core/THC.InterfaceClosure.json",
     "build/shrink-bytearrays/post/core/THC.InterfaceClosure.json",
+    "build/fetch-add-int-array/manifest.json", "build/fetch-add-int-array/oracle.tsv",
+    "build/fetch-add-int-array/pre/core/FetchAddIntArrayAudit.json",
+    "build/fetch-add-int-array/post/core/FetchAddIntArrayAudit.json",
+    "build/fetch-add-int-array/pre/core/THC.InterfaceClosure.json",
+    "build/fetch-add-int-array/post/core/THC.InterfaceClosure.json",
     "build/explicit64-arrays/pre/audit.json", "build/explicit64-arrays/post/audit.json",
     "build/explicit64-arrays/pre/core/Explicit64ArrayAudit.json",
     "build/explicit64-arrays/post/core/Explicit64ArrayAudit.json",

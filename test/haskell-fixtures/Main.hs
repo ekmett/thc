@@ -30,6 +30,7 @@ import OriginalHandleReadinessFixtures (prepareOriginalHandleReadiness)
 import MutVarFixtures (prepareMutVar)
 import StablePointerFixtures (prepareStablePointers)
 import ShrinkByteArrayFixtures (prepareShrinkByteArrays)
+import FetchAddIntArrayFixtures (prepareFetchAddIntArray)
 import StackFixtures (prepareOriginalStack, prepareOriginalStackFormatter, exportOriginalStackSource)
 import SmallArrayFixtures (prepareSmallArrays)
 import BoxedArrayExtensionsFixtures (prepareBoxedArrayExtensions)
@@ -862,6 +863,7 @@ main = do
     ["mutvar"] -> prepareMutVar root
     ["stable-pointers"] -> prepareStablePointers root
     ["shrink-bytearrays"] -> prepareShrinkByteArrays root
+    ["fetch-add-int-array"] -> prepareFetchAddIntArray root
     ["original-stack"] -> prepareOriginalStack root
     ["original-stack-formatter"] -> prepareOriginalStackFormatter root
     ["original-stack-source-export", directory] -> exportOriginalStackSource root directory

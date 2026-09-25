@@ -902,6 +902,7 @@
         "thc.runtime.MutVarTest",
         "thc.runtime.StablePointerTest",
         "thc.runtime.ShrinkByteArrayTest",
+        "thc.runtime.FetchAddIntArrayTest",
         "thc.runtime.OriginalStackConsumerProofTest",
         "thc.runtime.BoxedArrayExtensionsTest",
         "thc.runtime.BitPrimopsTest",
@@ -943,6 +944,14 @@
     },
     "test/haskell-fixtures/ShrinkByteArrayFixtures.hs": {
       "junit": ["thc.runtime.ShrinkByteArrayTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/FetchAddIntArrayFixtures.hs": {
+      "junit": ["thc.runtime.FetchAddIntArrayTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/FetchAddIntArrayAudit.hs": {
+      "junit": ["thc.runtime.FetchAddIntArrayTest"],
       "python": []
     },
     "compiler/test-fixtures/StablePointerAudit.hs": {
