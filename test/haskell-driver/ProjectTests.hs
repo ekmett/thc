@@ -190,33 +190,7 @@ cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ T
     assertFailure frontierResult
     assertNoStdout frontierResult
     frontierAudit <- readJson (frontierOutput </> "audit.json")
-    assertBool "fail remains outside the supported RTS stack frontier"
-      (not $ bool $ field frontierAudit "accepted")
-    let missing = map (string . (`field` "id")) (objects frontierAudit "missingGlobals")
-        missingName name = any (name `isInfixOf`) missing
-        issues = objects frontierAudit "issues"
-        clones = filter ((== "stg_cloneMyStackzh") . string . (`field` "symbol"))
-                        (objects frontierAudit "foreignCalls")
-    -- foreignCalls records only calls whose original descriptor, State/head
-    -- proofs and capability admission passed; it is not a symbol inventory.
-    assertEqual "original local clone has one validated foreign call" 1 (length clones)
-    let clone = one (const True) clones
-        sameSite issue = field issue "owner" == field clone "owner" &&
-                         field issue "path" == field clone "path"
-    assertEqual "clone belongs to genuine original backtrace collection"
-      "ghc-internal:GHC.Internal.Exception.Backtrace.$wcollectBacktraces'"
-      (string $ field clone "owner")
-    assertBool "validated clone retains its Core expression location"
-      ("/expr/" `isPrefixOf` string (field clone "path"))
-    assertBool "validated clone is neither missing nor rejected at its call site"
-      (not (missingName "stg_cloneMyStackzh") && not (any sameSite issues))
-    assertBool "original libdw collection remains an explicit unsupported frontier"
-      (missingName "libdwPoolTake" && any (\issue ->
-        string (field issue "code") == "foreign-call" &&
-        string (field issue "owner") == "ghc-internal:GHC.Internal.ExecutionStack.Internal.collectStackTrace1" &&
-        string (field issue "detail") == "Unsupported foreign target 'libdwPoolTake'") issues)
-    assertBool "genuine MonadFail/Typeable definitions are supplied"
-      (not $ any missingName ["$fMonadFailIO_$cfail", "sameTypeRep", "mkTrCon"])
+    assertFailFrontierAudit frontierAudit
     frontierPlan <- readJson (frontierOutput </> "native/cache/plan.json")
     let entry = one ((== "exe:fail-frontier") . string . (`field` "component-name"))
                     (objects frontierPlan "install-plan")
@@ -225,6 +199,37 @@ cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ T
     assertNoStdout native
     staging <- listDirectory (frontierOutput </> "native/cache/thc/staging")
     assertEqual "disposable export staging cleaned" [] staging
+
+assertFailFrontierAudit :: Value -> IO ()
+assertFailFrontierAudit audit = do
+  assertBool "the full MonadFail backtrace closure remains outside the supported frontier"
+    (not $ bool $ field audit "accepted")
+  let missing = map (string . (`field` "id")) (objects audit "missingGlobals")
+      missingName name = any (name `isInfixOf`) missing
+      issues = objects audit "issues"
+  -- foreignCalls records only calls whose original descriptor, State/head
+  -- proofs and capability admission passed; it is not a symbol inventory.
+  -- libdwPoolTake is admitted with the original RTS USE_LIBDW=0 behavior.
+  forM_ [("stg_cloneMyStackzh", "ghc-internal:GHC.Internal.Exception.Backtrace.$wcollectBacktraces'"),
+         ("libdwPoolTake", "ghc-internal:GHC.Internal.ExecutionStack.Internal.collectStackTrace1"),
+         ("libdwGetBacktrace", "ghc-internal:GHC.Internal.ExecutionStack.Internal.collectStackTrace1")] $
+    \(symbol, owner) -> do
+      let calls = filter (\call -> string (field call "symbol") == symbol &&
+                                  string (field call "owner") == owner) (objects audit "foreignCalls")
+      assertEqual (symbol ++ " has one validated original foreign call in " ++ owner) 1 (length calls)
+      let call = one (const True) calls
+          sameSite issue = field issue "owner" == field call "owner" &&
+                           field issue "path" == field call "path"
+      assertBool (symbol ++ " retains its Core expression location")
+        ("/expr/" `isPrefixOf` string (field call "path"))
+      assertBool (symbol ++ " is neither missing nor rejected at its call site")
+        (not (missingName symbol) && not (any sameSite issues))
+  assertBool "original stack decoding remains an explicit capability frontier" $ any (\issue ->
+    string (field issue "code") == "foreign-call" &&
+    "ghc-internal:GHC.Internal.Stack.Decode." `isPrefixOf` string (field issue "owner") &&
+    string (field issue "detail") == "Original foreign-call capability disabled") issues
+  assertBool "genuine MonadFail/Typeable definitions are supplied"
+    (not $ any missingName ["$fMonadFailIO_$cfail", "sameTypeRep", "mkTrCon"])
 
 withCache :: FilePath -> IO a -> IO a
 withCache path action = bracket acquire restore (const action)

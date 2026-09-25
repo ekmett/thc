@@ -4,6 +4,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
+import com.oracle.truffle.api.nodes.Node
 
 /** Original LP64 read/write/close/isatty/get_errno protocol over context descriptors, never host fds.
  * The current guest model runs each synchronous call on one host thread. This
@@ -59,14 +60,15 @@ internal class ManagedStdio(private val files: ManagedFiles) {
 
     @TruffleBoundary fun seekConstant(operation: OriginalStdioOp): Long = hostAbi.seekConstant(operation)
 
-    @TruffleBoundary fun ready(fd: Long, writing: Long, milliseconds: Long, socket: Long): Long {
+    @TruffleBoundary @JvmOverloads fun ready(fd: Long, writing: Long, milliseconds: Long, socket: Long,
+                                           node: Node? = null): Long {
         val abi = hostAbi
         if (fd != fd.toInt().toLong()) throw RuntimeFault("Original fdReady requires a canonical signed CInt descriptor")
         if (writing !in 0L..1L || socket !in 0L..1L)
             throw RuntimeFault("Original fdReady requires canonical CBool arguments")
-        // isSock is ignored by the original POSIX implementation. The regular
-        // file readiness domain has identical read/write polling semantics.
-        val ready = files.ready(fd, milliseconds)
+        // isSock is ignored by the original POSIX implementation. Pipe/socket
+        // readiness must retain the direction even though regular files don't.
+        val ready = files.ready(fd, milliseconds, writing != 0L, node)
         if (ready < 0) lastError.set(fileError(abi))
         return ready
     }
