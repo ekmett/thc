@@ -324,6 +324,28 @@ val compileCbits by tasks.registering(Exec::class) {
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/cbits")) }
 tasks.processResources { dependsOn(compileCbits) }
 
+// Optional Linux opened-resource provider; not original fstat admission.
+val compileNativeFiles by tasks.registering {
+    dependsOn("generateStdioAbi")
+    val source = layout.projectDirectory.file("src/main/c/native-file-api.c")
+    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    val output = layout.buildDirectory.dir("generated/native-files")
+    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output)
+    doLast {
+        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
+            val destination = output.get().asFile.resolve("thc/native/native-file-api.so")
+            destination.parentFile.mkdirs()
+            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-fembed-bitcode", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+        }
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-files")) }
+tasks.processResources { dependsOn(compileNativeFiles) }
+
 // Original stdio FCalls use target C widths/errno, not JVM or private-ABI values.
 val generateStdioAbi by tasks.registering {
     val source = layout.projectDirectory.file("src/main/c/stdio-abi-probe.c").asFile

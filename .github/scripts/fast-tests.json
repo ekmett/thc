@@ -264,6 +264,27 @@
     "test/haskell-fixtures/OriginalStdioCloseFixtures.hs": {
       "junit": ["thc.runtime.OriginalStdioCloseNativeTest"], "python": []
     },
+    "src/main/c/native-file-api.c": {
+      "junit": ["thc.runtime.NativeFileProviderTest"], "python": []
+    },
+    "src/main/java/thc/runtime/NativeFileLease.java": {
+      "junit": ["thc.runtime.NativeFileProviderTest"], "python": []
+    },
+    "src/main/kotlin/thc/NativeIO.kt": {
+      "junit": ["thc.runtime.NativeFileProviderTest"], "python": []
+    },
+    "src/main/kotlin/thc/NativeFileSystem.kt": {
+      "junit": ["thc.runtime.NativeFileProviderTest"], "python": []
+    },
+    "src/main/kotlin/thc/runtime/NativeFileException.kt": {
+      "junit": ["thc.runtime.NativeFileProviderTest"], "python": []
+    },
+    "src/main/kotlin/thc/runtime/NativeFileProvider.kt": {
+      "junit": ["thc.runtime.NativeFileProviderTest"], "python": []
+    },
+    "src/main/kotlin/thc/runtime/NativeOpenRequest.kt": {
+      "junit": ["thc.runtime.NativeFileProviderTest"], "python": []
+    },
     "src/main/kotlin/thc/runtime/ManagedFiles.kt": {
       "junit": ["thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedFilesTest", "thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest"],
       "python": []
