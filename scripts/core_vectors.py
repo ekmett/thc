@@ -139,7 +139,7 @@ for family in json.loads((Path(__file__).with_name('simd-families.json')).read_t
     if family['newCarrier']:
         GENERATED_SHAPES.append(shape)
     for operation in family['operations']:
-        arguments = [packed] if operation == 'pack' else [lane] if operation == 'broadcast' else [vector] * (2 if operation in ('plus', 'minus', 'times', 'divide') else 1)
+        arguments = [packed] if operation == 'pack' else [lane] if operation == 'broadcast' else [vector, lane, dict(kind='long', evaluated=True, primReps=['IntRep'])] if operation == 'insert' else [vector] * (2 if operation in ('plus', 'minus', 'times', 'divide') else 1)
         OPERATIONS[operation + family['name'] + '#'] = (arguments, packed if operation == 'unpack' else vector)
 
 def is_vector(rep): return isinstance(rep, dict) and rep.get('kind') == 'vector'

@@ -110,11 +110,12 @@ def result(family, operation, lane, a, b):
     left = signed(a + lane * 104729)
     right = signed(b - lane * 7919)
     if family['laneRep'] in ('FloatRep', 'DoubleRep'):
-        value = float_operation(operation, a if operation == 'broadcast' else left, right, width)
+        value = (float_operation('broadcast', b, 0, width) if operation == 'insert' else
+                 float_operation(operation, a if operation == 'broadcast' else left, right, width))
     else:
         left = signed(left, width)
         right = signed(right, width)
-        value = {'broadcast': lambda: a, 'negate': lambda: -left,
+        value = {'broadcast': lambda: a, 'insert': lambda: b, 'negate': lambda: -left,
                  'plus': lambda: left + right, 'minus': lambda: left - right,
                  'times': lambda: left * right}[operation]()
         value = value & ((1 << width) - 1) if family['laneRep'] == 'Word32Rep' else signed(value, width)
