@@ -6,7 +6,7 @@ module SimdFloatFmaFixtures (prepareSimdFloatFma) where
 import Control.Monad (forM_, unless, when)
 import Data.Aeson (object, (.=))
 import Data.Bits (xor)
-import FixtureSupport (hashes, run, runLogged, runLoggedExpect, writeJson)
+import FixtureSupport (hashes, run, runLogged, writeJson)
 import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
@@ -68,9 +68,7 @@ prepareSimdFloatFma root = do
     _ <- runLogged 120 root (directory </> "logs") (stage ++ "-audit") [] "python3"
       (["scripts/audit-core.py", directory </> stage ++ "-core/SimdFloatFma.json", "--output", audit] ++
        concatMap (\entry -> ["--entry",entry]) entries)
-    -- DoubleX2 candidate remains outside canonical admission until the genuine
-    -- native and compiled gates pass. Preserve that rejection as evidence.
-    _ <- runLoggedExpect 1 120 root (directory </> "logs") (stage ++ "-double-audit") [] "python3"
+    _ <- runLogged 120 root (directory </> "logs") (stage ++ "-double-audit") [] "python3"
       (["scripts/audit-core.py", directory </> stage ++ "-core/SimdFloatFma.json",
         "--output", directory </> stage ++ "-double-audit.json"] ++
        concatMap (\entry -> ["--entry",entry]) doubleEntries)
@@ -96,7 +94,7 @@ prepareSimdFloatFma root = do
     "doubleEntries" .= doubleEntries,"doubleInputs" .= map (map show) doubleInputs,
     "nativeRows" .= (if exportOnly then Nothing else Just (length rows)),
     "inputHashes" .= inputHashes,"artifactHashes" .= artifactHashes]
-  putStrLn ("simd-floatx4-fma: " ++ show (length rows) ++ " shared native rows; FloatX4 admitted, DoubleX2 candidate gated")
+  putStrLn ("simd-floatx4-fma: " ++ show (length rows) ++ " shared native rows; FloatX4 and DoubleX2 admitted")
   where
     valid row = case words row of
       [entry,_,_,_,_,result] -> maybe False (\n -> n >= 0 && n <=

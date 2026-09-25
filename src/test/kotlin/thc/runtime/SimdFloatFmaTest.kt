@@ -132,12 +132,10 @@ class SimdFloatFmaTest {
             assertEquals(true, audit["accepted"], "$stage canonical audit")
             assertEquals(emptyList<Any?>(), audit["issues"])
             assertEquals(emptyList<Any?>(), audit["missingGlobals"])
-            val candidate = Json.parse(File(directory, "$stage-double-audit.json").readText()) as Map<String, Any?>
-            assertEquals(false, candidate["accepted"], "DoubleX2 remains gated until native/compiled validation")
-            assertEquals(emptyList<Any?>(), candidate["missingGlobals"])
-            val issues = candidate["issues"] as List<Map<String, Any?>>
-            assertEquals(setOf("unsupported-primitive"), issues.map { it["code"] }.toSet())
-            assertEquals(CoreVectors.fusedDouble.toSet(), issues.map { it["detail"] }.toSet())
+            val doubleAudit = Json.parse(File(directory, "$stage-double-audit.json").readText()) as Map<String, Any?>
+            assertEquals(true, doubleAudit["accepted"], "$stage canonical DoubleX2 audit")
+            assertEquals(emptyList<Any?>(), doubleAudit["issues"])
+            assertEquals(emptyList<Any?>(), doubleAudit["missingGlobals"])
         }
         val inputs = if (double) (manifest["doubleInputs"] as List<List<String>>).map { row -> row.map(::parseBits) }
             else (manifest["inputs"] as List<List<Number>>).map { row -> row.map { it.toLong() } }
