@@ -2811,6 +2811,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "default" -> 0; "data" -> 1; else -> 2
             } }, alternatives.all { it.kind != "lit" || it.value is Long })
             val resultProof = CoreRepresentations.expression(expr)
+            CoreRepresentations.validateDeclaredCaseResult(resultProof, alternatives.map { it.body.proof })
             CoreRepresentations.validateAggregateCaseResult(resultProof, alternatives.map { it.body.proof })
             CoreRepresentations.validateFloatingCaseResult(resultProof, alternatives.map { it.body.proof })
             // A missing outer case record must not erase an exact aggregate
