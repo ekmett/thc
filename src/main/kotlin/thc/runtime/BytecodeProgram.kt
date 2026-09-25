@@ -243,6 +243,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     @Synchronized override fun hostEntryTarget(arity: Int): RootCallTarget =
         hostEntries.getOrPut(arity) { EntryRoot(language, arity, metrics).callTarget }
     override fun entryValue(name: String): Any? = globals.getValue(bindings[bindingIndex(name)]["id"] as String).read()
+    override fun constructorLayout(id: String): DataLayout = dataLayout(id)
     override fun entryTarget(name: String): RootCallTarget {
         var value = entryValue(name)
         while (value is Thunk && value.state == 2) value = value.value

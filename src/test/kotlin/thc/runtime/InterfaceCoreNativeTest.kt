@@ -42,7 +42,8 @@ class InterfaceCoreNativeTest {
         assertEquals(listOf("opaque-body", "private-worker", "recursive-groups", "thin-unavailable",
             "no-source-target", "wrong-module", "wrong-unit", "wrong-way", "foreign-archived",
             "private-flags", "repeat-load", "helper-protocol", "installed-cbv-worker", "installed-wired-unit",
-            "foreign-association-absence", "foreign-linked-clock"), manifest["controls"])
+            "foreign-association-absence", "foreign-linked-clock", "typed-foreign-export-associations",
+            "retained-export-registration", "managed-export-original"), manifest["controls"])
         for (kind in listOf("inputHashes", "artifactHashes"))
             for ((path, expected) in manifest[kind] as Map<String, String>) {
                 val file = File(root, path)

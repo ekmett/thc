@@ -67,6 +67,18 @@ fun loadEntry(context: Context, modules: List<String>, entry: String, instrument
         !ioMain && java.lang.Boolean.getBoolean("thc.diagnosticUnsupported"), backend,
         System.getProperty("thc.sourceNotesEnabled", "true").toBooleanStrict(), ioMain, shutdownEntry))
 
+/**
+ * Load one verified managed export bundle into [context]. The result has read-only
+ * unit → module → declared C-symbol members. Executing a symbol marshals its boxed
+ * scalar signature and runs its pure function or IO action in this context.
+ * This does not install native C entrypoints. Additional loads in the same context
+ * are rejected; aliases in this bundle share their program and CAFs.
+ */
+@JvmOverloads
+fun loadManagedExports(context: Context, modules: List<String>, backend: String = defaultBackend(),
+                       instrument: Boolean = true): Value =
+    context.eval("thc", CoreModules.managedExportRequest(modules, backend, instrument))
+
 /** JVM launcher implementation; ordinary package users should invoke the Haskell `thc run` driver. */
 fun main(args: Array<String>) {
     if (args.firstOrNull() == "--run-executable") {

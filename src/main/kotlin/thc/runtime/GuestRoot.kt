@@ -75,5 +75,7 @@ interface ExecutableProgram {
     fun hostEntryTarget(arity: Int = 0): RootCallTarget
     fun entryValue(name: String): Any?
     fun entryTarget(name: String): RootCallTarget
+    /** The same interned layout used by guest constructors and case dispatch. */
+    fun constructorLayout(id: String): DataLayout
     fun diagnostics(): Map<String, Any>
 }

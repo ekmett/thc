@@ -19,6 +19,9 @@ extra-source-files:
   compiler/test-fixtures/InterfaceNative.hs
   compiler/test-fixtures/InterfaceForeign.hs
   compiler/test-fixtures/InterfaceForeignAlias.hs
+  compiler/test-fixtures/ForeignExportSignatures.hs
+  compiler/test-fixtures/ForeignExportManaged.hs
+  compiler/test-fixtures/ManagedExportNative.hs
   scripts/check-ghc-core.hs
   test/check-ghc-core.sh
   compiler/test-fixtures/MaskFunctionAudit.hs
