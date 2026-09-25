@@ -47,7 +47,8 @@ class ProcessSignalsTest {
                     listOf(false, true), true, true, mapOf("rep" to ioResult)),
                 mapOf("rep" to closure, "resultRep" to ioResult)))
         fun constructor(id: String, name: String, fields: List<String>) = mapOf("id" to id, "name" to name,
-            "kind" to "boxed", "arity" to fields.size, "tag" to 1, "fieldReps" to fields.map(::listOf))
+            "kind" to "boxed", "arity" to fields.size, "tag" to 1, "fieldReps" to fields.map(::listOf),
+            "strictFields" to fields.map { false }, "fieldLifted" to fields.map { false })
         return mapOf("bindings" to listOf(binding, dispatcher), "instrument" to true, "constructors" to listOf(
             constructor("ghc-internal:GHC.Internal.Ptr.Ptr", "Ptr", listOf("AddrRep")),
             constructor("ghc-internal:GHC.Internal.Int.I32#", "I32#", listOf("Int32Rep")),
