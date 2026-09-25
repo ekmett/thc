@@ -210,6 +210,22 @@ private val text = "class FakeString { @Test }"
         self.assertEqual("narrow", result["mode"], result)
         self.assertEqual(["example.LeafTest", "example.SmokeTest"], result["junit"]["classes"])
 
+    def test_owned_runtime_file_keeps_polyglot_lane_and_shared_program_widens(self):
+        path = "src/main/kotlin/thc/runtime/ManagedFiles.kt"
+        self.policy["owners"][path] = dict(junit=["example.OtherTest"], python=[])
+        self.write(select.POLICY, json.dumps(self.policy))
+        self.write(path, "package thc.runtime\nclass ManagedFiles\n")
+        before = self.commit()
+        self.write(path, "package thc.runtime\nclass ManagedFiles { val changed = true }\n")
+        self.commit()
+        selected = self.plan(base=before)
+        self.assertEqual("narrow", selected["mode"], selected)
+        self.assertIn("example.OtherTest", selected["affected"]["junit"])
+        self.assertTrue(selected["polyglot"]["required"])
+        self.write("src/main/kotlin/thc/runtime/Program.kt", "package thc.runtime\nclass Program\n")
+        self.commit()
+        self.full("unmapped-source-or-configuration", base=before)
+
     def test_fixture_preparer_and_shared_test_context_select_their_owner(self):
         for path in self.policy["owners"]:
             with self.subTest(path=path):
@@ -739,6 +755,26 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                  "Program", "BytecodeProgram", "CoreRepresentations", "ArgumentLayout", "TupleResults", "Handoff")
         self.assertFalse({"src/main/kotlin/thc/runtime/" + name + ".kt" for name in names} & self.families.keys())
         self.assertFalse(any(path.startswith(("compiler/", "src/main/java/")) for path in self.families))
+
+    def test_file_and_stdio_owners_keep_native_and_lifecycle_controls(self):
+        owners = self.policy["owners"]
+        native = {"thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest",
+                  "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest"}
+        for name in ("ManagedFiles", "ManagedStdio", "StdioHostAbi", "CoreOriginalStdio",
+                     "OriginalStdioExpression"):
+            path = "src/main/kotlin/thc/runtime/" + name + ".kt"
+            with self.subTest(path=path):
+                self.assertLessEqual(native, set(owners[path]["junit"]))
+                self.assertNotIn(path, self.families)  # Preserve the foreign callback lane.
+        self.assertLessEqual({"thc.runtime.ManagedFilesTest", "thc.runtime.GuestThreadsTest",
+                              "thc.GuestExceptionsTest"}, set(owners["src/main/kotlin/thc/runtime/ManagedFiles.kt"]["junit"]))
+        self.assertLessEqual({"thc.runtime.CoreManagedFilesTest", "thc.runtime.ManagedFileCallTest"},
+                             set(owners["src/main/kotlin/thc/runtime/CoreManagedFiles.kt"]["junit"]))
+        self.assertLessEqual({"thc.runtime.StdioHostAbiTest", *native},
+                             set(owners["src/main/c/stdio-abi-probe.c"]["junit"]))
+        for path in ("src/main/kotlin/thc/runtime/Program.kt", "src/main/kotlin/thc/runtime/BytecodeProgram.kt",
+                     "src/main/kotlin/thc/runtime/CoreRepresentations.kt", "src/main/java/thc/runtime/BytecodeRoot.java"):
+            self.assertNotIn(path, owners)
 
     def test_cabal_plugin_build_inputs_are_not_driver_only(self):
         for name in ("thc.cabal", "cabal.project", "Setup.hs"):
