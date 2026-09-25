@@ -2294,6 +2294,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
         @Fallback public static void invalid(Object address, Object state) { throw fail("Expected opaque StablePtr#"); }
     }
+    @Operation public static final class RegisterMainThread {
+        @Specialization public static void register(Object weak, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            CoreMainThreadForeign.register(node, weak);
+        }
+    }
     @Operation public static final class EqualStablePointers {
         @Specialization public static long equal(ManagedAddress left, ManagedAddress right, @Bind("$node") Node node) {
             return StablePointers.current(node).equal(left, right) ? 1L : 0L;

@@ -10,6 +10,7 @@
     "thc.GuestExceptionsTest",
     "thc.runtime.ManagedDescriptorDupTest",
     "thc.runtime.CoreGmpForeignTest",
+    "thc.runtime.CoreMainThreadForeignTest",
     "thc.runtime.SulongLimbProviderTest",
     "thc.runtime.AstContinuationTest",
     "thc.runtime.GuestThreadsTest",

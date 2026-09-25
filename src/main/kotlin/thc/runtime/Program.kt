@@ -1698,6 +1698,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         CoreStackInfoForeign.validateHeads(bindings)
         CoreOriginalStdio.validateHeads(bindings)
         CoreStablePointers.validateHeads(bindings)
+        CoreMainThreadForeign.validateHeads(bindings)
         CoreManagedFiles.validateHeads(bindings)
         CoreMd5Foreign.validateHeads(bindings)
         CoreGmpForeign.validateHeads(bindings)
@@ -1953,6 +1954,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 CoreRepresentations.metadata(expr)?.get("rep"), foreignLinks)
             val stableFree = CoreStablePointers.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val mainThreadForeign = CoreMainThreadForeign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val managedFile = CoreManagedFiles.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val javascript = if (!stackClone && stackInfo == null && originalStdio == null && managedFile == null) CoreJavaScript.validate(expr, defined) else null
@@ -1961,7 +1964,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val gmp = CoreGmpForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && capi == null &&
-                !stableFree && managedFile == null && javascript == null && md5 == null && gmp == null)
+                !stableFree && !mainThreadForeign && managedFile == null && javascript == null && md5 == null && gmp == null)
                 CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -2000,6 +2003,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 CoreStablePointers.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 FreeStablePointer(compile(args[0], scope, false), compile(args[1], scope, false))
                     .proven(tupleProof.copy(evaluated = true))
+            } else if (mainThreadForeign) {
+                CoreMainThreadForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreMainThreadForeign.validateOperand(index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                RegisterMainThread(operands[0], operands[1]).proven(tupleProof.copy(evaluated = true))
             } else if (managedFile != null) {
                 CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 ManagedFileExpression(managedFile, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
