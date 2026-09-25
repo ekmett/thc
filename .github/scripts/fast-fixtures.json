@@ -6,6 +6,7 @@
     "thc.runtime.SavedTermiosTest",
     "thc.runtime.TermiosAbiTest",
     "thc.runtime.NativeFileProviderTest",
+    "thc.runtime.NativeFileBuffersTest",
     "thc.runtime.NativeFdWaitTest",
     "thc.runtime.FileWaitPrimitiveTest",
     "thc.runtime.ManagedFileCallTest",

@@ -13,7 +13,7 @@
   },
   "leafSources": {
     "src/main/kotlin/thc/runtime/ManagedNativeAllocations.kt": {
-      "junit": ["thc.runtime.NativeMallocTest"],
+      "junit": ["thc.runtime.NativeFileBuffersTest", "thc.runtime.NativeMallocTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/CoreDataLabels.kt": {
@@ -424,17 +424,17 @@
       "junit": ["thc.runtime.OriginalOpenTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest"], "python": []
     },
     "src/main/kotlin/thc/runtime/NativeFileProvider.kt": {
-      "junit": ["thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest"], "python": []
+      "junit": ["thc.runtime.NativeFileBuffersTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest"], "python": []
     },
     "src/main/kotlin/thc/runtime/NativeOpenRequest.kt": {
       "junit": ["thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest"], "python": []
     },
     "src/main/kotlin/thc/runtime/ManagedFiles.kt": {
-      "junit": ["thc.runtime.OriginalFcntlTest", "thc.runtime.FileWaitPrimitiveTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedFilesTest", "thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest"],
+      "junit": ["thc.runtime.NativeFileBuffersTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.FileWaitPrimitiveTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedFilesTest", "thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/ManagedStdio.kt": {
-      "junit": ["thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedStdioTest", "thc.runtime.ManagedFilesTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest"],
+      "junit": ["thc.runtime.NativeFileBuffersTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedStdioTest", "thc.runtime.ManagedFilesTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/StdioHostAbi.kt": {
@@ -1190,7 +1190,7 @@
     "test/haskell-fixtures/NativeAddressFixtures.hs": {"junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"], "python": []},
     "compiler/test-fixtures/NativeAddressNative.hs": {"junit": ["thc.runtime.NativeAddressTest"], "python": []},
     "compiler/test-fixtures/NativeMallocNative.hs": {"junit": ["thc.runtime.NativeMallocTest"], "python": []},
-    "src/main/java/thc/runtime/NativeMallocAllocation.java": {"junit": ["thc.runtime.NativeMallocTest"], "python": []},
+    "src/main/java/thc/runtime/NativeMallocAllocation.java": {"junit": ["thc.runtime.NativeFileBuffersTest", "thc.runtime.NativeMallocTest"], "python": []},
     "src/test/resources/core/original-malloc-descriptors.json": {"junit": ["thc.runtime.NativeMallocTest"], "python": []},
     "src/main/kotlin/thc/runtime/NativeAddresses.kt": {"junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"], "python": []},
     "test/haskell-fixtures/OriginalGmpFixtures.hs": {
