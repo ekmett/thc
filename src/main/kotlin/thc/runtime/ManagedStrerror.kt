@@ -17,6 +17,7 @@ internal class ManagedStrerror(private val cbits: () -> SulongCbits, private val
         // The original wrapper ellipsizes ERANGE using buflen-4. Its installed
         // Haskell caller supplies 512; reject unsafe or unbounded other sizes.
         if (length !in 4L..65536L) fault("strerror output length outside supported range")
+        output.requireByteRegion(length, writable = true)
         val library = cbits().strerrorLibrary()
         val invoke = {
             output.requireByteRegion(length, writable = true)
