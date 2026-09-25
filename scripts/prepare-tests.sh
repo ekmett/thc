@@ -77,6 +77,7 @@ case "$(uname -s)-$(uname -m)" in
 esac
 "$fixture_bin" original-stdio-close
 "$fixture_bin" original-posix-dup
+"$fixture_bin" original-rts-locks --require-supported
 "$fixture_bin" original-stdio-seek
 "$fixture_bin" original-strerror
 "$fixture_bin" original-stdio-truncate

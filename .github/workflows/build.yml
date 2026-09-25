@@ -358,6 +358,7 @@ jobs:
             build/original-stack-formatter/
             build/original-posix-stat/
             build/original-posix-dup/
+            build/original-rts-locks/
             build/original-gmp/
             build/address-fields/
             build/data-to-tag/

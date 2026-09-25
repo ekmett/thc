@@ -23,7 +23,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "3e8d207506652a79b8b4434c9e032ecdf4310e22b70d11254a92562c95982ce4"
+FULL_PREPARATION_PLAN = "1651fa18356d9acc433cbd6f955c346fb7b58f91d36aa7cbe85b679c598e7d1e"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -137,6 +137,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/original-stdio-seek/manifest.json", "build/original-stdio-seek/oracle.json",
     "build/original-stdio-truncate/manifest.json", "build/original-stdio-truncate/oracle.json",
     *fast_inputs.ORIGINAL_FD_READY_OUTPUTS,
+    *fast_inputs.ORIGINAL_RTS_LOCK_OUTPUTS,
     "build/original-handle-readiness/manifest.json",
     "build/small-arrays/manifest.json",
     "build/simd-capability-smoke/manifest.json",
@@ -259,6 +260,10 @@ def _output_hashes(root, group):
         return _formatter_output_hashes(root)
     if group["outputs"] == ["build/original-gmp"]:
         return _gmp_output_hashes(root)
+    if group["outputs"] == ["build/original-rts-locks"]:
+        name = "build/original-rts-locks/manifest.json"
+        expected = fast_inputs.rts_lock_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
     files = set()
     for output in group["outputs"]:
         path = root / _relative(output)
@@ -305,11 +310,16 @@ def _gmp_output_hashes(root):
     name = "build/original-gmp/manifest.json"
     path = fast_inputs.file_path(root, name)
     expected = fast_inputs.gmp_artifact_hashes(json.loads(path.read_text()))
+    return _manifest_output_hashes(root, name, expected)
+
+
+def _manifest_output_hashes(root, name, expected):
+    path = fast_inputs.file_path(root, name)
     result = {name: _digest(path)}
     for artifact, recorded in sorted(expected.items()):
         actual = _digest(fast_inputs.file_path(root, artifact))
         if actual != recorded:
-            raise RuntimeError("Stale GMP artifact: " + artifact)
+            raise RuntimeError("Stale original artifact: " + artifact)
         result[artifact] = actual
     return result
 
@@ -378,6 +388,9 @@ def _full_output_hashes(root):
         if name == "build/original-gmp":
             if fast_inputs.GMP_NATIVE_HOST:
                 files.update(_gmp_output_hashes(root))
+            continue
+        if name == "build/original-rts-locks":
+            files.update(_output_hashes(root, {"outputs": [name]}))
             continue
         for member in path.rglob("*"):
             # GHC's output directories can contain links to installed package

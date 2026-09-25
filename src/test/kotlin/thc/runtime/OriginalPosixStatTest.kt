@@ -145,29 +145,8 @@ class OriginalPosixStatTest {
             call[3] as List<*>, metadata["rep"])
     }
 
-    internal fun rawModule(original: List<Any?>, storedMutation: Int? = null): Map<String, Any?> {
-        val call = copy(original) as MutableList<Any?>
-        val descriptor = (call[6] as Map<*, *>)["foreignCall"] as Map<*, *>
-        val declared = descriptor["argumentReps"] as List<Map<String, Any?>>
-        val reps = declared.map { it + ("evaluated" to true) }
-        val output = descriptor["resultRep"] as Map<String, Any?>
-        val result = (output["components"] as List<Map<String, Any?>>)[1]
-        call[1] = listOf("var", "foreign", mapOf("rep" to OriginalStdioFixtures.closure()))
-        call[2] = reps.mapIndexed { index, rep -> listOf("var", "p$index", mapOf("rep" to rep)) }
-        val formals = reps.mapIndexed { index, rep -> mapOf("id" to "p$index", "name" to "p$index", "lifted" to false,
-            "rep" to if (storedMutation == index) OriginalStdioFixtures.scalar("IntRep") else rep) }
-        val body = listOf("case", call, "pair", listOf(listOf("data", "T2", listOf("s", "value"),
-            listOf("var", "value", mapOf("rep" to result)), mapOf("binders" to listOf(
-                mapOf("id" to "s", "lifted" to false, "rep" to OriginalStdioFixtures.scalar(null)),
-                mapOf("id" to "value", "lifted" to false, "rep" to result))))),
-            mapOf("rep" to result, "binder" to mapOf("id" to "pair", "lifted" to false, "rep" to output)))
-        val originalModule = module("pre")
-        return mapOf("sourceFiles" to originalModule["sourceFiles"], "sourceSpans" to originalModule["sourceSpans"],
-            "instrument" to true, "constructors" to listOf(mapOf("id" to "T2", "kind" to "unboxed-tuple", "arity" to 2, "tag" to 1)),
-            "bindings" to listOf(mapOf("id" to "entry", "name" to "entry", "arity" to reps.size,
-                "lifted" to true, "rep" to OriginalStdioFixtures.closure(),
-                "expr" to listOf("lam", formals, body, mapOf("rep" to OriginalStdioFixtures.closure(), "resultRep" to result)))))
-    }
+    internal fun rawModule(original: List<Any?>, storedMutation: Int? = null): Map<String, Any?> =
+        OriginalStdioChecks.rawModule(original, module("pre"), storedMutation)
 
     @Test fun bothLoadersCheckStoredOperandsAndStateBeforeNativeLayoutAccess() {
         for (backend in listOf("ast", "bytecode")) context().use { context ->
