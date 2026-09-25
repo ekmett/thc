@@ -12,9 +12,10 @@ import GHC.Prim (Weak#)
 foreign import ccall unsafe "rts_setMainThread"
   setMainThread :: Weak# ThreadId -> IO ()
 
-registerCurrent :: IO ()
+registerCurrent :: IO (Weak ThreadId)
 registerCurrent = do
   thread <- myThreadId
   weak <- mkWeakThreadId thread
   case weak of
     Weak carrier -> setMainThread carrier
+  pure weak
