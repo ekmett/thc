@@ -55,6 +55,12 @@ public final class NativeLimbScope implements AutoCloseable {
             MemorySegment.copy(segment, 0, MemorySegment.ofArray(destination), offset, count);
         }
 
+        public void copyFrom(byte[] source, int offset, int count) {
+            Objects.checkFromIndexSize(offset, count, source.length);
+            Objects.checkFromIndexSize(0L, count, capacity);
+            MemorySegment.copy(MemorySegment.ofArray(source), offset, segment, 0, count);
+        }
+
         public long readWord(long index) {
             Objects.checkIndex(index, capacity / Long.BYTES);
             return segment.get(ValueLayout.JAVA_LONG, index * Long.BYTES);

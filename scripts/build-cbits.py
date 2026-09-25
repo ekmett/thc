@@ -15,6 +15,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parent.parent
 PINNED = {"md5.c": "4fa83bda7aacc8a1656d7e2d78251bbe70a04b56",
           "md5.h": "a87296687a2f3dc6748264ff2a8a0c919518db55"}
+STRERROR_SHA256 = "bf3a2129e508a108611b734864b63b234fae319c544c1cc500a53a2b7a91953b"
 
 
 def compiler_target(clang, system, arch):
@@ -65,16 +66,24 @@ def main():
     headers = list(libdir.rglob("HsFFI.h"))
     if len(headers) != 1:
         raise SystemExit(f"Expected one pinned HsFFI.h, got {headers}")
+    config = list(libdir.rglob("HsBaseConfig.h"))
+    if len(config) != 1:
+        raise SystemExit(f"Expected one pinned ghc-internal HsBaseConfig.h, got {config}")
+    strerror = ROOT / "compiler/pinned-ghc-internal/cbits/strerror.c"
+    if hashlib.sha256(strerror.read_bytes()).hexdigest() != STRERROR_SHA256:
+        raise SystemExit("Original GHC 9.14.1 strerror.c changed")
     output = args.output.resolve() / "thc/cbits"
     output.mkdir(parents=True, exist_ok=True)
     commands = []
-    sources = {"md5": ROOT / "src/main/c/md5-api.c"}
+    sources = {"md5": ROOT / "src/main/c/md5-api.c", "strerror": strerror,
+               "strerror-locale": ROOT / "src/main/c/strerror-locale.c"}
     if system == "Linux":
         sources["iconv"] = ROOT / "src/main/c/iconv-api.c"
     for name, source in sources.items():
         command = [*compiler, "-O1", "-g", "-fno-strict-aliasing", "-emit-llvm", "-c",
                    f"-ffile-prefix-map={ROOT}=.", f"-fdebug-prefix-map={ROOT}=.",
-                   "-I", str(reference), "-I", str(headers[0].parent), str(source.relative_to(ROOT)),
+                   "-I", str(reference), "-I", str(headers[0].parent), "-I", str(config[0].parent),
+                   str(source.relative_to(ROOT)),
                    "-o", str(output / (name + ".bc"))]
         subprocess.run(command, cwd=ROOT, check=True)
         commands.append(command)

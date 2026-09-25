@@ -156,7 +156,7 @@ All references below use the pinned official source, not reconstructed stubs.
 
 | Boundary | Examples and qualification |
 | --- | --- |
-| Portable C candidates | Original `cbits/md5.c`, `cbits/iconv.c`, `cbits/strerror.c`, libc allocation and POSIX read/write wrappers can be candidates for Sulong with a correct host ABI, native buffers and lifetimes. |
+| Portable C candidates | Original `cbits/md5.c` and `cbits/strerror.c` now have bounded Sulong paths. Other libc allocation and POSIX read/write wrappers still require a correct host ABI, native buffers and lifetimes. |
 | Mixed C/RTS helpers | `fdReady` in [inputReady.c](https://github.com/ghc/ghc/blob/902339d332fb4ce2b3c87dcac1ee6495d41ad886/libraries/ghc-internal/cbits/inputReady.c#L154) uses polling plus RTS elapsed-time/error paths. `PrelIOUtils.c` contains portable locale code and RTS logging. Do not classify a whole translation unit as RTS-free from its happy path. |
 | THC-owned runtime semantics | Stable pointers, weak finalizers, MVars, masking, asynchronous exceptions, capability counts, event-manager CAF stores and logical-thread errno cannot be supplied by an unrelated native GHC runtime's state. |
 | Native memory-layout boundary | GMP wrappers need ByteArray payloads and pinned/marshalled lifetimes. [StackCloningDecoding.cmm](https://github.com/ghc/ghc/blob/902339d332fb4ce2b3c87dcac1ee6495d41ad886/libraries/ghc-internal/cbits/StackCloningDecoding.cmm#L3) and `Stack.cmm` use native TSO, stack, capability and closure layouts; `foreign import prim` is not an ordinary C/Sulong call. |

@@ -92,9 +92,15 @@ class CompilerTargetTest(unittest.TestCase):
             source = root / "src/main/c/md5-api.c"
             source.parent.mkdir(parents=True)
             source.write_bytes(b"/* synthetic ABI wrapper */\n")
+            for name in ("iconv-api.c", "gmp-api.c", "strerror-locale.c"):
+                (source.parent / name).write_bytes(b"/* synthetic ABI wrapper */\n")
+            original = root / "compiler/pinned-ghc-internal/cbits/strerror.c"
+            original.parent.mkdir(parents=True)
+            original.write_bytes((build.ROOT / "compiler/pinned-ghc-internal/cbits/strerror.c").read_bytes())
             libdir = root / "ghc-lib"
             libdir.mkdir()
             (libdir / "HsFFI.h").write_bytes(b"/* synthetic GHC header */\n")
+            (libdir / "HsBaseConfig.h").write_bytes(b"#define HAVE_STRERROR_R 1\n")
             output = root / "generated"
             default, target = "x86_64-pc-linux-gnu", "x86_64-unknown-linux-gnu"
 
@@ -126,9 +132,9 @@ class CompilerTargetTest(unittest.TestCase):
             self.assertEqual(target, manifest["target"])
             self.assertEqual("Linux", manifest["system"])
             self.assertEqual("x86_64", manifest["architecture"])
-            self.assertEqual([compile_call.call_args.args[0]], manifest["commands"])
-            self.assertEqual(3, len(manifest["sources"]))
-            self.assertEqual(1, len(manifest["artifacts"]))
+            self.assertEqual(5, len(manifest["commands"]))
+            self.assertEqual(7, len(manifest["sources"]))
+            self.assertEqual(5, len(manifest["artifacts"]))
             for entry in manifest["sources"] + manifest["artifacts"]:
                 self.assertEqual(hashlib.sha256(Path(entry["path"]).read_bytes()).hexdigest(), entry["sha256"])
 

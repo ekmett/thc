@@ -226,6 +226,7 @@ class Language : TruffleLanguage<Language.State>() {
         internal val files = thc.runtime.ManagedFiles(env, threads)
         internal val stdio = thc.runtime.ManagedStdio(files)
         internal val iconv = thc.runtime.ManagedIconv({ cbits() }, stdio, threads)
+        internal val strerror = thc.runtime.ManagedStrerror({ cbits() }, threads)
         internal val stackSnapshots = thc.runtime.ManagedStackRegistry()
         internal val capturedAsyncRequests = thc.runtime.CapturedAsyncRequests()
         internal val stablePointers = thc.runtime.StablePointers()
