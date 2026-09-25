@@ -33,6 +33,27 @@ on every compiled invocation. Tests retain the original imported declaration
 and typed operation evidence separately from first-installed guest target and
 counter checks; no settling calls or recompilation are permitted.
 
-Implementation checkpoint status: source only, unvalidated. The dedicated
-native fixture and complete validation receipt will be recorded before any
-support claim or integration.
+## Explicit full-Core fixture
+
+Select GHC 9.14.1 with installed library Core, then prepare the single named
+fixture and select its named Gradle group (under the host's shared resource
+gates where required):
+
+```sh
+cabal run exe:thc-fixtures --offline -- bound-thread-query
+./gradlew --offline --no-daemon --max-workers=2 test --tests thc.runtime.CoreBoundThreadForeignTest
+./gradlew --offline --no-daemon --max-workers=2 boundThreadQueryFullCoreTest
+JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --offline --no-daemon --max-workers=2 boundThreadQueryFullCoreTest
+```
+
+The genuine suite is separate from stock/thin default fixture groups, like the
+original iconv suite. Explicit selection with absent/stale fixtures fails; it
+does not skip or replace library definitions. The producer uses ordinary public
+imports and the existing pre/post compiler exporter, requires actual original
+foreign applications and a complete strict closure, and records both native
+command streams plus local transitive exporter/auditor hashes. The installed
+GHC executable, interfaces and libraries are not hashed. No pinned source
+inventory or fake FFI declaration is added.
+
+Implementation checkpoint status: source only, unvalidated. Native, default
+and dense results remain to be established before integration.

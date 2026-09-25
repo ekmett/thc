@@ -121,6 +121,8 @@ tasks.withType<Test>().configureEach {
             "mutvar/**/*.json", "mutvar/oracle.tsv", "mutvar/NativeMutVar.hs",
             "stable-pointers/**/*.json", "stable-pointers/oracle.tsv", "stable-pointers/NativeStablePointer.hs",
             "weak-explicit/**/*.json", "weak-explicit/oracle.tsv", "weak-explicit/NativeWeak.hs",
+            "bound-thread-query/**/*.json", "bound-thread-query/*/oracle.tsv",
+            "bound-thread-query/logs/*.stdout", "bound-thread-query/logs/*.stderr",
             "shrink-bytearrays/**/*.json", "shrink-bytearrays/oracle.tsv", "shrink-bytearrays/NativeShrinkByteArrays.hs",
             "fetch-add-int-array/**/*.json", "fetch-add-int-array/oracle.tsv", "fetch-add-int-array/NativeFetchAddIntArray.hs",
             "managed-mvars/**/*.json", "managed-mvars/*.tsv", "managed-mvars/native/**",
@@ -292,6 +294,21 @@ tasks.register<Test>("originalIconvFullCoreTest") {
     doFirst {
         check(file("build/original-iconv/manifest.json").isFile) {
             "Missing original-iconv fixture: select a full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- original-iconv (docs/original-iconv.md)"
+        }
+    }
+}
+tasks.register<Test>("boundThreadQueryFullCoreTest") {
+    group = "verification"
+    description = "Tests the original negative bound-thread capability against both native RTS modes."
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    useJUnitPlatform()
+    filter { includeTestsMatching("thc.runtime.BoundThreadQueryNativeTest") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Original-import first-installed evidence requires a fresh test process") { true }
+    doFirst {
+        check(file("build/bound-thread-query/manifest.json").isFile) {
+            "Missing bound-thread-query fixture: run cabal run exe:thc-fixtures -- bound-thread-query with full-Core GHC9.14.1 (docs/bound-thread-query.md)"
         }
     }
 }

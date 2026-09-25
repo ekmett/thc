@@ -42,6 +42,7 @@ import OriginalIconvFixtures (prepareOriginalIconv)
 import MutVarFixtures (prepareMutVar)
 import StablePointerFixtures (prepareStablePointers)
 import WeakFixtures (prepareWeaks)
+import BoundThreadQueryFixtures (prepareBoundThreadQuery)
 import ShrinkByteArrayFixtures (prepareShrinkByteArrays)
 import FetchAddIntArrayFixtures (prepareFetchAddIntArray)
 import StackFixtures (prepareOriginalStack, prepareOriginalStackFormatter, exportOriginalStackSource)
@@ -889,6 +890,7 @@ main = do
     ["mutvar"] -> prepareMutVar root
     ["stable-pointers"] -> prepareStablePointers root
     ["weak-explicit"] -> prepareWeaks root
+    ["bound-thread-query"] -> prepareBoundThreadQuery root
     ["shrink-bytearrays"] -> prepareShrinkByteArrays root
     ["fetch-add-int-array"] -> prepareFetchAddIntArray root
     ["original-stack"] -> prepareOriginalStack root

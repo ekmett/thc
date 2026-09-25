@@ -2179,8 +2179,7 @@ class OriginalBoundThreadSupportTest(unittest.TestCase):
             arity=1, suppliedArity=1, argumentReps=[dict(state, evaluated=False)], resultRep=copy.deepcopy(result))
         call = ['app', ['var', 'structural-fcall', dict(rep=CLOSURE)],
                 [['var', 'state', dict(rep=state)]], [False], False, False, dict(rep=result, foreignCall=descriptor)]
-        case = ['case', call, 'done', [['tuple', None, [dict(id='s', lifted=False, rep=state),
-                dict(id='answer', lifted=False, rep=LONG)], ['var', 'answer', dict(rep=LONG)]]],
+        case = ['case', call, 'done', [['default', None, [], [*lit(0), dict(rep=LONG)]]],
                 dict(rep=LONG, binder=dict(id='done', lifted=False, rep=dict(result, evaluated=True)))]
         binding = dict(bind('root', ['lam', [dict(id='state', lifted=False, rep=state)], case,
                         dict(rep=CLOSURE, resultRep=LONG)]), rep=CLOSURE, arity=1)
