@@ -4,13 +4,22 @@
 package thc.runtime
 
 import com.oracle.truffle.api.frame.VirtualFrame
+import java.lang.invoke.MethodHandles
+import java.lang.invoke.VarHandle
 
 /** One mutable guest reference. Reads return the stored value without entering a thunk.
  * Volatile access publishes stored values between threads without serializing
  * independent cells. The field remains mutable and is never CompilationFinal.
  */
 internal class ManagedMutVar(@Volatile var value: Any?) {
+    /** One JVM atomic exchange on the same volatile field used by read/write. */
+    fun exchange(replacement: Any?): Any? = VALUE_HANDLE.getAndSet(this, replacement)
+
     companion object {
+        private val VALUE_HANDLE: VarHandle = MethodHandles.privateLookupIn(
+            ManagedMutVar::class.java, MethodHandles.lookup()
+        ).findVarHandle(ManagedMutVar::class.java, "value", Any::class.java)
+
         @JvmStatic fun require(value: Any?): ManagedMutVar = value as? ManagedMutVar
             ?: fault("Expected a managed MutVar#")
     }
@@ -23,6 +32,7 @@ private const val LIFTED_REP = "BoxedRep (Just Lifted)"
 internal enum class MutVarOp(val primitive: String, private val arguments: List<String>, val tuple: Boolean) {
     NEW("newMutVar#", listOf("boxed", "state"), true),
     READ("readMutVar#", listOf("mutvar", "state"), true),
+    SWAP("atomicSwapMutVar#", listOf("mutvar", "boxed", "state"), true),
     WRITE("writeMutVar#", listOf("mutvar", "boxed", "state"), false);
 
     fun validate(actual: List<CoreRepresentation>, flags: List<*>, result: CoreRepresentation) {
@@ -52,6 +62,7 @@ internal fun mutVarExpression(operation: MutVarOp, proof: CoreRepresentation, op
     when (operation) {
         MutVarOp.NEW -> NewMutVarExpression(operands[0], operands[1])
         MutVarOp.READ -> ReadMutVarExpression(operands[0], operands[1])
+        MutVarOp.SWAP -> SwapMutVarExpression(operands[0], operands[1], operands[2])
         MutVarOp.WRITE -> WriteMutVarExpression(operands[0], operands[1], operands[2])
     }.proven(proof.copy(evaluated = true))
 
@@ -83,5 +94,17 @@ private class WriteMutVarExpression(@field:Child private var cell: Expr,
         requireVoidCarrier(state.execute(frame))
         reference.value = stored
         return Unit
+    }
+}
+
+private class SwapMutVarExpression(@field:Child private var cell: Expr,
+    @field:Child private var value: Expr, @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val reference = ManagedMutVar.require(cell.execute(frame))
+        val replacement = value.execute(frame)
+        requireVoidCarrier(state.execute(frame))
+        FrameAccess.write(frame, slots[offset], reference.exchange(replacement))
+        return null
     }
 }

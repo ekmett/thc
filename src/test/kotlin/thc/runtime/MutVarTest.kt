@@ -18,6 +18,8 @@ import thc.*
 import java.io.File
 import java.math.BigInteger
 import java.security.MessageDigest
+import java.util.IdentityHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -27,6 +29,7 @@ class MutVarTest {
     private val names = listOf("stRef", "lazyRef", "closureRef", "orderedRef", "unliftedRef", "stLoop")
     private val equalityNames = listOf("stRefEquality", "lazyRefEquality")
     private val lazyIONames = listOf("lazyIORef")
+    private val swapNames = listOf("swapRef", "lazySwapRef")
     private fun manifest() = Json.parse(File(root, "build/mutvar/manifest.json").readText()) as Map<String, Any?>
     private fun merged(paths: List<String>) = CoreModules.merge(paths.map { Json.parse(File(root, it).readText()) as Map<String, Any?> })
     private fun program(language: Language, module: Map<String, Any?>, backend: String): ExecutableProgram =
@@ -46,6 +49,9 @@ class MutVarTest {
             "lazyRef" -> x + BigInteger.valueOf(5)
             "lazyIORef" -> x + BigInteger.valueOf(17)
             "closureRef" -> x * BigInteger.valueOf(4) + BigInteger.valueOf(11)
+            "swapRef" -> x + (x + BigInteger.valueOf(17)) * BigInteger.valueOf(257) +
+                (x * BigInteger.valueOf(3)) * BigInteger.valueOf(65537)
+            "lazySwapRef" -> x * BigInteger.valueOf(258) + BigInteger.valueOf(7)
             "unliftedRef" -> x * BigInteger.valueOf(258) + BigInteger.ONE
             "stLoop" -> {
                 var value = x
@@ -75,6 +81,8 @@ class MutVarTest {
     @Test fun publicSTRefEqualityAcrossResidualCalls() = native(false, entryNames = equalityNames)
     @Test fun publicLazyIORefWithInlining() = native(true, entryNames = lazyIONames)
     @Test fun publicLazyIORefAcrossResidualCalls() = native(false, entryNames = lazyIONames)
+    @Test fun nativeAtomicSwapWithInlining() = native(true, entryNames = swapNames)
+    @Test fun nativeAtomicSwapAcrossResidualCalls() = native(false, entryNames = swapNames)
 
     @Test fun genuineLazyReturnedActionsKeepExactMutVarProofs() {
         fun nodes(value: Any?): List<List<Any?>> = when (value) {
@@ -116,7 +124,7 @@ class MutVarTest {
             assertEquals(expected, actual, "Stale MutVar fixture: $path; rerun prepare-mutvar.py")
         }
         val rows = File(root, "build/mutvar/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
-        assertEquals((names + equalityNames + lazyIONames).toSet(), rows.keys)
+        assertEquals((names + equalityNames + lazyIONames + swapNames).toSet(), rows.keys)
         assertEquals((manifest["nativeRows"] as Number).toInt(), rows.values.sumOf { it.size })
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) {
             val module = merged(paths)
@@ -258,6 +266,34 @@ class MutVarTest {
         }
     }
 
+    @Test fun concurrentAtomicExchangesNeitherLoseNorDuplicateReferences() {
+        val initial = Any()
+        val replacements = Array(8_000) { Any() }
+        val reference = ManagedMutVar(initial)
+        val displaced = ConcurrentLinkedQueue<Any>()
+        val start = CountDownLatch(1)
+        val workers = Executors.newFixedThreadPool(4)
+        try {
+            val tasks = (0..3).map { worker -> workers.submit {
+                start.await()
+                for (index in worker until replacements.size step 4)
+                    displaced.add(reference.exchange(replacements[index])!!)
+            } }
+            start.countDown()
+            tasks.forEach { it.get(10, TimeUnit.SECONDS) }
+            assertEquals(replacements.size, displaced.size)
+            val counts = IdentityHashMap<Any, Int>()
+            for (value in displaced) counts[value] = (counts[value] ?: 0) + 1
+            val last = reference.value!!
+            counts[last] = (counts[last] ?: 0) + 1
+            assertEquals(replacements.size + 1, counts.size)
+            for (value in listOf(initial) + replacements.toList()) assertEquals(1, counts[value])
+        } finally {
+            workers.shutdownNow()
+            assertTrue(workers.awaitTermination(10, TimeUnit.SECONDS), "MutVar exchange workers did not terminate")
+        }
+    }
+
     @Test fun stateFailurePrecedesMutationAndTuplePublication() {
         val builder = FrameDescriptor.newBuilder()
         val slot = builder.addSlot(FrameSlotKind.Object, "destination", null)
@@ -277,6 +313,17 @@ class MutVarTest {
             operand("cell") { cell }, operand("value") { replacement }, operand("state") { 1L }))
         assertThrows(RuntimeFault::class.java) { failingWrite.execute(frame) }
         assertSame(original, cell.value)
+        frame.setObject(slot, replacement)
+        val failingSwap = mutVarExpression(MutVarOp.SWAP, CoreRepresentation.UNKNOWN, arrayOf(
+            operand("cell") { cell }, operand("value") { replacement }, operand("state") { 1L }))
+        assertThrows(RuntimeFault::class.java) { failingSwap.executeTuple(frame, intArrayOf(slot), 0) }
+        assertSame(original, cell.value)
+        assertSame(replacement, frame.getObject(slot))
+        val swap = mutVarExpression(MutVarOp.SWAP, CoreRepresentation.UNKNOWN, arrayOf(
+            operand("cell") { cell }, operand("value") { replacement }, operand("state") { Unit }))
+        assertNull(swap.executeTuple(frame, intArrayOf(slot), 0))
+        assertSame(original, frame.getObject(slot))
+        assertSame(replacement, cell.value)
         for (operation in listOf(MutVarOp.NEW, MutVarOp.READ)) {
             frame.setObject(slot, replacement)
             val failing = mutVarExpression(operation, CoreRepresentation.UNKNOWN, arrayOf(
@@ -335,7 +382,8 @@ class MutVarTest {
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 for (operation in MutVarOp.entries) for (mutation in 0..6) for (diagnostic in listOf(false, true)) {
-                    val module = CoreModules.reachable(merged(paths), "orderedRef")
+                    val module = CoreModules.reachable(merged(paths),
+                        if (operation == MutVarOp.SWAP) "swapRef" else "orderedRef")
                     val app = applications(module).first { (it[1] as List<*>).take(2) == listOf("prim", operation.primitive) }
                     val args = app[2] as MutableList<Any?>
                     val flags = app[3] as MutableList<Any?>
@@ -365,7 +413,8 @@ class MutVarTest {
                     }, "$backend/${operation.primitive}/mutation$mutation/$diagnostic")
                 }
                 for (operation in MutVarOp.entries) {
-                    val module = CoreModules.reachable(merged(paths), "orderedRef")
+                    val module = CoreModules.reachable(merged(paths),
+                        if (operation == MutVarOp.SWAP) "swapRef" else "orderedRef")
                     val app = applications(module).first { (it[1] as List<*>).take(2) == listOf("prim", operation.primitive) }
                     val primitive = (app[1] as List<*>).toList(); app.clear(); app.addAll(primitive)
                     assertThrows(UnsupportedCore::class.java) { program(language, module, backend) }

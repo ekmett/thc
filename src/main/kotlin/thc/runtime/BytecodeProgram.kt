@@ -1794,10 +1794,19 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
                 if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
-                    if (operation == MutVarOp.NEW) e.builder.beginNewMutVar(destination[0])
-                    else e.builder.beginReadMutVar(destination[0])
+                    when (operation) {
+                        MutVarOp.NEW -> e.builder.beginNewMutVar(destination[0])
+                        MutVarOp.READ -> e.builder.beginReadMutVar(destination[0])
+                        MutVarOp.SWAP -> e.builder.beginSwapMutVar(destination[0])
+                        else -> error("Not a tuple MutVar operation")
+                    }
                     operands.forEach { it.emit(e) }
-                    if (operation == MutVarOp.NEW) e.builder.endNewMutVar() else e.builder.endReadMutVar()
+                    when (operation) {
+                        MutVarOp.NEW -> e.builder.endNewMutVar()
+                        MutVarOp.READ -> e.builder.endReadMutVar()
+                        MutVarOp.SWAP -> e.builder.endSwapMutVar()
+                        else -> error("Not a tuple MutVar operation")
+                    }
                 } else ProvenExpression(Expression { e ->
                     e.builder.beginWriteMutVar(); operands.forEach { it.emit(e) }; e.builder.endWriteMutVar()
                 }, tupleProof.copy(evaluated = true))

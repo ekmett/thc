@@ -91,6 +91,31 @@ orderedRef raw = runRW# (\s0 ->
     o +# f *# 257# +# l *# 65537# +# t *# 16777259#
   } } } } } } } } } } } })
 
+-- The returned fields are the values displaced by each indivisible exchange.
+{-# OPAQUE swapRef #-}
+swapRef :: Int# -> Int#
+swapRef raw = runRW# (\s0 ->
+  case newMutVar# (I# raw) s0 of { (# s1, cell #) ->
+  case atomicSwapMutVar# cell (I# (raw +# 17#)) s1 of { (# s2, old #) ->
+  case atomicSwapMutVar# cell (I# (raw *# 3#)) s2 of { (# s3, middle #) ->
+  case readMutVar# cell s3 of { (# _, current #) ->
+  case old of { I# a -> case middle of { I# b -> case current of { I# c ->
+    a +# b *# 257# +# c *# 65537#
+  } } } } } } })
+
+-- The overwritten bottom must not be forced; the second return is still the
+-- first replacement payload.
+{-# OPAQUE lazySwapRef #-}
+lazySwapRef :: Int# -> Int#
+lazySwapRef raw = runRW# (\s0 ->
+  case newMutVar# bottom s0 of { (# s1, cell #) ->
+  case atomicSwapMutVar# cell (Box (I# raw)) s1 of { (# s2, _ #) ->
+  case atomicSwapMutVar# cell (Box (I# (raw +# 7#))) s2 of { (# s3, previous #) ->
+  case readMutVar# cell s3 of { (# _, current #) ->
+  case previous of { Box (I# a) -> case current of { Box (I# b) ->
+    a *# 257# +# b
+  } } } } } })
+
 -- An unlifted boxed payload still contains a lazy lifted field.
 type Product :: UnliftedType
 data Product = Product Int# Box
