@@ -9,6 +9,8 @@ import thc.Language
 /** Exact pinned GHC declarations, not aliases for arbitrary POSIX imports. */
 internal enum class OriginalStdioOp(val symbol: String, val convention: String, val safety: String,
     val arguments: List<String?>, val result: String?) {
+    GET_SAVED_TERMIOS("__hscore_get_saved_termios", "ccall", "unsafe", listOf("Int32Rep", null), "AddrRep"),
+    SET_SAVED_TERMIOS("__hscore_set_saved_termios", "ccall", "unsafe", listOf("Int32Rep", "AddrRep", null), null),
     LFLAG("__hscore_lflag", "ccall", "unsafe", listOf("AddrRep", null), "Word32Rep"),
     POKE_LFLAG("__hscore_poke_lflag", "ccall", "unsafe", listOf("AddrRep", "Word32Rep", null), null),
     PTR_C_CC("__hscore_ptr_c_cc", "ccall", "unsafe", listOf("AddrRep", null), "AddrRep"),
@@ -77,6 +79,7 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
         this == SIZEOF_TERMIOS || this == ECHO || this == ICANON || this == VMIN || this == VTIME || this == TCSANOW ||
         this == SIZEOF_SIGSET || this == SIGTTOU || this == SIG_BLOCK || this == SIG_SETMASK
     val termiosAddress: Boolean get() = this == LFLAG || this == POKE_LFLAG || this == PTR_C_CC
+    val savedTermios: Boolean get() = this == GET_SAVED_TERMIOS || this == SET_SAVED_TERMIOS
 }
 
 internal object CoreOriginalStdio {
@@ -98,7 +101,7 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation == OriginalStdioOp.FSTAT || operation == OriginalStdioOp.OPEN || operation.iconv || operation.strerror || operation.duplication || operation.locking,
+        requireProof(operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.savedTermios || operation == OriginalStdioOp.FSTAT || operation == OriginalStdioOp.OPEN || operation.iconv || operation.strerror || operation.duplication || operation.locking,
             "strict operand operation")
         val primitive = operation.arguments[index]
         val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }

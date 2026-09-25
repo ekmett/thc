@@ -294,6 +294,7 @@ class Language : TruffleLanguage<Language.State>() {
         // the CLI and explicit NativeIO factory install the fixed native provider.
         internal var nativeFiles: thc.runtime.NativeFileProvider? = null
         internal val stdio = thc.runtime.ManagedStdio(files)
+        internal val savedTermios = thc.runtime.SavedTermios(this)
         internal val iconv = thc.runtime.ManagedIconv({ cbits() }, stdio, threads)
         internal val strerror = thc.runtime.ManagedStrerror({ cbits() }, threads)
         internal val stackSnapshots = thc.runtime.ManagedStackRegistry()
@@ -370,6 +371,7 @@ class Language : TruffleLanguage<Language.State>() {
     override fun disposeContext(context: State) {
         context.managedExports.close()
         context.foreignRoots.close()
+        context.savedTermios.close()
         try {
             try { context.threads.close() } finally {
                 try { context.capturedAsyncRequests.close() } finally {

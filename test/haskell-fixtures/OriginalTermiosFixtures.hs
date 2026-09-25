@@ -35,6 +35,7 @@ fixtureSources root = do
   plugin <- listDirectory (root </> "compiler/THC")
   scripts <- listDirectory (root </> "scripts")
   pure $ sort $ ["compiler/test-fixtures/OriginalTermiosAudit.hs", "compiler/test-fixtures/OriginalTermiosNative.hs",
+    "compiler/test-fixtures/OriginalSavedTermiosAudit.hs", "compiler/test-fixtures/OriginalSavedTermiosNative.hs",
     "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
     "test/haskell-fixtures/OriginalTermiosFixtures.hs", "scripts/audit-core.py", "scripts/core-capabilities.json",
     "src/main/resources/thc/scalar-primop-signatures.json", "compiler/export.sh", "compiler/build.sh",
@@ -85,8 +86,10 @@ prepareLinux root = do
         (["scripts/audit-core.py", "--entry", entry, "--output", path] ++ modules)
       pure (path,command)
     pure (modules,exported,audits)
-  let commands = [version,info,compiled,observed] ++ concat [exported : map snd audits | (_,exported,audits) <- exports]
-      artifacts = [binary,oracle] ++ concat [modules ++ map fst audits | (modules,_,audits) <- exports] ++ concatMap commandArtifacts commands
+  (savedCommands, savedArtifacts) <- prepareSavedTermios root ghc
+  let commands = [version,info,compiled,observed] ++ concat [exported : map snd audits | (_,exported,audits) <- exports] ++ savedCommands
+      artifacts = [binary,oracle] ++ concat [modules ++ map fst audits | (modules,_,audits) <- exports] ++
+        savedArtifacts ++ concatMap commandArtifacts commands
   inputHashes <- fixtureSources root >>= hashes root
   artifactHashes <- hashes root artifacts
   writeJson (root </> directory </> "manifest.json") $ object
@@ -94,4 +97,38 @@ prepareLinux root = do
      "oracle" .= oracle, "entries" .= entries, "strictAccepted" .= True,
      "runtimeVerified" .= False, "installedArtifactsHashed" .= False, "nativeRows" .= length rows, "inputHashes" .= inputHashes,
      "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
-  putStrLn "original-termios: six native images and thirteen strict pre/post original helpers prepared"
+  putStrLn "original-termios: six native images, 28 saved-pointer rows, and fifteen strict pre/post original helpers prepared"
+
+-- Keep this oracle separate from the termios image layout: it only observes
+-- pointer retention, and its native bracket restores the preexisting RTS roots.
+prepareSavedTermios :: FilePath -> FilePath -> IO ([CommandResult], [FilePath])
+prepareSavedTermios root ghc = do
+  let saved = directory </> "saved"
+      entries = ["originalGetSavedTermios", "originalSetSavedTermios"]
+      execute = runLogged 180 root (directory </> "logs")
+      binary = saved </> "native/oracle"
+      oracle = saved </> "oracle.json"
+  createDirectoryIfMissing True (root </> saved </> "native")
+  compiled <- execute "saved-native-build" [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint",
+    "-package", "ghc-internal", "-odir", root </> saved </> "native", "-hidir", root </> saved </> "native",
+    "compiler/test-fixtures/OriginalSavedTermiosNative.hs", "-o", root </> binary]
+  observed <- execute "saved-native-run" [] (root </> binary) []
+  rows <- maybe (die "Malformed original saved-termios observations") pure
+    (readMaybe (BSC.unpack (commandStdout observed)) :: Maybe [[Integer]])
+  unless (length rows == 28 && all ((== 6) . length) rows) (die "Incomplete original saved-termios oracle")
+  writeJson (root </> oracle) $ object ["rows" .= rows]
+  exports <- forM ["pre", "post"] $ \stage -> do
+    let core = saved </> stage </> "core"
+        modules = [core </> "OriginalSavedTermiosAudit.json", core </> "THC.InterfaceClosure.json"]
+        options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+          ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
+    exported <- execute ("saved-" ++ stage ++ "-export")
+      [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> saved </> stage </> "ghc")]
+      "compiler/export.sh" (["-package", "ghc-internal"] ++ options ++ ["compiler/test-fixtures/OriginalSavedTermiosAudit.hs"])
+    audits <- forM entries $ \entry -> do
+      let path = saved </> stage </> entry ++ ".audit.json"
+      audited <- execute ("saved-" ++ stage ++ "-audit-" ++ entry) [] "python3"
+        (["scripts/audit-core.py", "--entry", entry, "--output", path] ++ modules)
+      pure (path, audited)
+    pure (exported : map snd audits, modules ++ map fst audits)
+  pure ([compiled, observed] ++ concatMap fst exports, [binary, oracle] ++ concatMap snd exports)

@@ -12,6 +12,15 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
     override fun execute(frame: VirtualFrame): Nothing = fault("Original stdio call requires a State/result tuple destination")
 
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        if (operation.savedTermios) {
+            val fd = operands[0].executeRequiredLong(frame)
+            val address = if (operation == OriginalStdioOp.SET_SAVED_TERMIOS) operands[1].executeRequiredAddress(frame)
+                else ManagedAddress.nullAddress()
+            requireVoidCarrier(operands.last().execute(frame))
+            val result = SavedTermios.execute(this, operation, fd, address)
+            if (operation == OriginalStdioOp.GET_SAVED_TERMIOS) FrameAccess.writeObject(frame, slots[offset], result)
+            return null
+        }
         if (operation.termios) {
             val address = if (operation.termiosAddress) operands[0].executeRequiredAddress(frame) else ManagedAddress.nullAddress()
             val value = if (operation == OriginalStdioOp.POKE_LFLAG) operands[1].executeRequiredLong(frame) else 0L
