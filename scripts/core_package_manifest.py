@@ -330,6 +330,107 @@ def managed_import_stubs(module):
     return True
 
 
+def package_scalar_link(module):
+    """Verify typed local-component scalar imports; this is not general C linking."""
+    if 'packageScalarLink' not in module:
+        return None
+    def require(value, detail):
+        if not value:
+            raise ValueError('Invalid package scalar link: ' + detail)
+    def record(value, keys):
+        require(isinstance(value, dict) and set(value) == set(keys.split()), 'record fields')
+        return value
+    def text(value):
+        require(isinstance(value, str) and value and '\0' not in value, 'missing text')
+        return value
+    def identity(value):
+        record(value, 'unit module occurrence namespace')
+        for item in value.values(): text(item)
+        require(value['namespace'] in ('value', 'type', 'data'), 'name namespace')
+        return value
+    def typ(value):
+        require(isinstance(value, dict), 'type record')
+        if value.get('kind') == 'tycon':
+            record(value, 'kind name arguments'); identity(value['name'])
+            require(isinstance(value['arguments'], list), 'type arguments')
+            for item in value['arguments']: typ(item)
+        elif value.get('kind') in ('application', 'function'):
+            fields = 'function argument' if value['kind'] == 'application' else 'multiplicity argument result'
+            record(value, 'kind ' + fields)
+            for key in fields.split(): typ(value[key])
+        else: require(False, 'unknown type')
+    def exact(value, expected):
+        if type(value) is not type(expected): return False
+        if isinstance(value, dict):
+            return value.keys() == expected.keys() and all(exact(value[k], v) for k, v in expected.items())
+        if isinstance(value, list):
+            return len(value) == len(expected) and all(exact(a, b) for a, b in zip(value, expected))
+        return value == expected
+    def calls(value):
+        if isinstance(value, dict):
+            return ([value['foreignCall']] if 'foreignCall' in value else []) + sum((calls(v) for v in value.values()), [])
+        if isinstance(value, list): return sum((calls(v) for v in value), [])
+        return []
+    require(type(module.get('schema')) is int and module['schema'] == 1 and module.get('ghc') == '9.14.1', 'GHC/schema')
+    require(not any(key in module for key in ('foreign', 'foreignLink', 'staticForeignImportStubs',
+        'staticForeignExports', 'staticForeignExportRegistration')), 'mixed foreign obligations')
+    link = record(module['packageScalarLink'], 'schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi')
+    require(type(link['schema']) is int and link['schema'] == 1 and link['format'] == 'llvm-bitcode' and
+            link['profile'] == 'thc-local-scalar-ccall-v1', 'link profile')
+    unit = text(link['unit'])
+    require(unit == module.get('unit'), 'component owner')
+    target = text(link['target'])
+    cpu = {'amd64': 'x86_64', 'arm64': 'aarch64'}.get(platform.machine().lower(), platform.machine().lower())
+    target_cpu = {'arm64': 'aarch64'}.get(target.split('-')[0], target.split('-')[0])
+    require(target_cpu == cpu and ((platform.system() == 'Linux' and target.endswith('-linux-gnu')) or
+            (platform.system() == 'Darwin' and '-darwin' in target)), 'target differs from audit host')
+    require(SHA256.fullmatch(text(link['componentSha256'])) and SHA256.fullmatch(text(link['bitcodeSha256'])), 'digest')
+    encoded = text(link['bitcodeHex'])
+    try: data = bytes.fromhex(encoded)
+    except ValueError as error: raise ValueError('Invalid package scalar bitcode encoding') from error
+    require(data and data.hex() == encoded and hashlib.sha256(data).hexdigest() == link['bitcodeSha256'], 'bitcode digest')
+    require(isinstance(link['abi'], list) and link['abi'], 'empty ABI')
+    reps = ('Int32Rep', 'Int64Rep', 'FloatRep', 'DoubleRep')
+    abi = {}
+    for index, entry in enumerate(link['abi']):
+        record(entry, 'symbol entry arguments result')
+        name = text(entry['symbol'])
+        require(re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', name), 'C symbol')
+        require(entry['entry'] == 'thc_scalar_' + link['componentSha256'] + '_' + str(index), 'component entry namespace')
+        require(isinstance(entry['arguments'], list) and all(arg in reps for arg in entry['arguments']) and entry['result'] in reps, 'scalar ABI')
+        require(name not in abi, 'duplicate ABI symbol')
+        abi[name] = entry
+    require(list(abi) == sorted(abi), 'sorted unique ABI')
+    proof = record(module.get('staticForeignImports'),
+        'schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls')
+    require(type(proof['schema']) is int and proof['schema'] == 1 and proof['scope'] == 'retained-static-import-products' and
+        proof['execution'] == 'not-linked' and proof['profile'] == 'ghc-9.14.1-thc-only-static-c-imports-v1' and
+        proof['unit'] == unit and proof['module'] == module.get('module') and proof['status'] == 'verified' and
+        type(proof['wordBits']) is int and proof['wordBits'] == 64, 'typed import profile/owner')
+    product = record(proof['expectedForeign'], 'schema execution stubs files')
+    require(type(product['schema']) is int and product['schema'] == 1 and product['execution'] == 'not-linked' and product['files'] == [], 'foreign product')
+    if product['stubs'] is not None:
+        require(exact(product['stubs'], dict(header='', source='', initializers=[], finalizers=[])), 'nonempty foreign products')
+    require(isinstance(proof['imports'], list) and proof['imports'], 'empty import inventory')
+    binders, proved = [], set()
+    for item in proof['imports']:
+        record(item, 'binder header symbol unit isFunction convention safety declaredType normalizedType normalizationRole emitted')
+        binder = identity(item['binder'])
+        require(binder['unit'] == unit and binder['module'] == module.get('module') and binder['namespace'] == 'value' and binder not in binders, 'import binder')
+        binders.append(binder)
+        require(item['header'] is None and item['unit'] in (None, unit) and item['isFunction'] is True and
+            item['convention'] == 'ccall' and item['safety'] == 'unsafe' and item['normalizationRole'] == 'representational', 'static unsafe ccall')
+        typ(item['declaredType']); typ(item['normalizedType'])
+        name = text(item['symbol'])
+        require(name in abi, 'unlinked typed import')
+        entry = abi[name]
+        require(exact(item['emitted'], dict(symbol=name, unit=unit, convention='ccall', safety='unsafe',
+            arguments=entry['arguments'] + ['void'], result=['void', entry['result']])), 'emitted ABI differs from compiled C')
+        proved.add(name)
+    require(exact(proof['expectedCalls'], calls(module.get('bindings'))), 'retained Core foreign inventory differs')
+    return link, proved
+
+
 def foreign_execution_issue(module):
     """Explain a valid archive-only foreign marker without admitting it as Core."""
     if 'foreignLink' in module and linked_foreign(module):
@@ -343,6 +444,35 @@ def foreign_execution_issue(module):
                 'Core schema 2 is archive-only (execution=not-linked); typed foreign registration, '
                 'native stubs, initializers/finalizers, and callback support are required')
     return None
+
+
+def validate_package_scalar_call(call, abi, unit, arguments, flags, output):
+    """The declared and actual unlifted shapes must agree before a foreign effect."""
+    def fail(): raise ValueError('Package C call lacks its exact scalar/State ABI')
+    def scalar(value, rep, declared=False):
+        return (isinstance(value, dict) and set(value) == {'kind', 'primReps', 'evaluated'} and
+            value['kind'] == ('void' if rep is None else 'float' if rep == 'FloatRep' else 'double' if rep == 'DoubleRep' else 'long') and
+            value['primReps'] == ([] if rep is None else [rep]) and type(value['evaluated']) is bool and
+            (not declared or value['evaluated'] is False))
+    def result(value, declared=False):
+        if not isinstance(value, dict) or set(value) != {'kind', 'primReps', 'evaluated', 'aggregate', 'components'}: return False
+        parts = value['components']
+        return (value['kind'] == 'unknown' and value['aggregate'] == 'unboxed-tuple' and value['primReps'] == [abi['result']] and
+            type(value['evaluated']) is bool and (not declared or value['evaluated'] is False) and
+            isinstance(parts, list) and len(parts) == 2 and scalar(parts[0], None) and scalar(parts[1], abi['result']) and
+            parts[0]['evaluated'] is True and parts[1]['evaluated'] is True)
+    wanted = abi['arguments'] + [None]
+    if (not isinstance(call, dict) or set(call) != {'schema', 'target', 'convention', 'safety', 'arity', 'suppliedArity', 'argumentReps', 'resultRep'} or
+        type(call['schema']) is not int or call['schema'] != 1 or
+        call['target'] != dict(kind='static', symbol=abi['symbol'], unit=unit, isFunction=True) or
+        call['target'].get('isFunction') is not True or call['convention'] != 'ccall' or call['safety'] != 'unsafe' or
+        type(call['arity']) is not int or call['arity'] != len(wanted) or
+        type(call['suppliedArity']) is not int or call['suppliedArity'] != len(wanted) or
+        not isinstance(call['argumentReps'], list) or len(call['argumentReps']) != len(wanted) or
+        len(arguments) != len(wanted) or not isinstance(flags, list) or len(flags) != len(wanted) or any(v is not False for v in flags) or
+        not all(scalar(declared, rep, True) and scalar(actual, rep) for declared, actual, rep in zip(call['argumentReps'], arguments, wanted)) or
+        not result(call['resultRep'], True) or not result(output)):
+        fail()
 
 
 def validate_archive_only_foreign(module):
@@ -544,6 +674,8 @@ def _load(path, audit_archives):
                 executable = linked_foreign(module)
             if 'staticForeignImportStubs' in module:
                 executable = managed_import_stubs(module) or executable
+            if 'packageScalarLink' in module:
+                package_scalar_link(module)
             if not executable:
                 detail = foreign_execution_issue(module)
                 if audit_archives and detail:
