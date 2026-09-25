@@ -92,9 +92,20 @@ jobs:
         run: python3 scripts/primop-coverage.py --check
       - name: Resolve Cabal driver dependencies
         run: cabal build exe:thc
-      - name: Install Linux native GMP build dependencies
+      - name: Install Linux native and LLVM build dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install --yes clang libgmp-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang-18 llvm-18 libgmp-dev
+          echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
+      - name: Check Linux LLVM backend tools
+        if: runner.os == 'Linux'
+        run: |
+          for tool in clang llc opt; do
+            command -v "$tool"
+            major=$("$tool" --version | sed -nE 's/.*version ([0-9]+).*/\1/p' | sed -n '1p')
+            test "$major" = 18
+          done
       - name: Build and test from source
         run: scripts/try.sh --fail-fast
       - name: Check Haskell calls into JavaScript
