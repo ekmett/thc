@@ -160,7 +160,7 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
     } finally {
         // Sulong may discard a managed pointer wrapper after extracting its bits.
         // Retain every owner until the complete native call has returned.
-        arguments.forEach(Reference::reachabilityFence)
+        arguments.forEach { Reference.reachabilityFence(it) }
     }
     private fun transport(address: ManagedAddress): Any =
         NativeAddresses.current(null).transport(address) ?: buffer(address)

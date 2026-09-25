@@ -3356,7 +3356,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class DoubleToFloat { @Specialization public static float apply(double x) { return (float) x; } }
     @Operation public static final class ToFloat { @Specialization public static float apply(float x) { return x; } }
     @Operation public static final class ToDouble { @Specialization public static double apply(double x) { return x; } }
-    @Operation public static final class ToLong { @Specialization public static long apply(long x) { return x; } }
+    @Operation public static final class ToLong {
+        @Specialization public static long apply(long x) { return x; }
+        @Fallback public static long invalid(Object x) { throw fail("Expected primitive Long"); }
+    }
 
     private static RuntimeFault fail(String message) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
