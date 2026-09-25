@@ -252,6 +252,18 @@ internal class GuestThreads internal constructor(
         return claim(slot, node, interruptible)
     }
 
+    /** Inspect, never claim, a request while an original interruptible open
+     * owns an opaque foreign extent. GHC's wrapper chooses the delivery cut
+     * only after a failed open; success must first publish its descriptor.
+     * RaiseAsync.c preserves MaskedUninterruptible even for interruptible FFI.
+     */
+    @TruffleBoundary @Synchronized internal fun interruptibleForeignPending(): Boolean {
+        val slot = currentSlot.get() ?: return false
+        if (closed || threads[Thread.currentThread().threadId()] !== slot ||
+            slot.claimed != null || slot.queue.isEmpty()) return false
+        return slot.queue.first().forceSelf || maskingState.get() != MaskingState.MASKED_UNINTERRUPTIBLE
+    }
+
     @TruffleBoundary @Synchronized private fun claim(
         target: GuestThread,
         @Suppress("UNUSED_PARAMETER") node: Node,

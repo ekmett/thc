@@ -379,7 +379,9 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     /** Original unsafe open has no private admission claim or RTS lock. Reserve
      * the lowest descriptor before creation/truncation, but hold no registry
      * monitor over native acquisition. A completed result is never polled here. */
-    @TruffleBoundary internal fun openOriginal(path: ManagedAddress, flags: Long, mode: Long): Long {
+    @TruffleBoundary internal fun openOriginal(path: ManagedAddress, flags: Long, mode: Long,
+        operation: OriginalStdioOp = OriginalStdioOp.OPEN, node: Node? = null): Long {
+        check(operation.opening)
         nativeAbi.requireOpenAbi()
         if (flags != flags.toInt().toLong() || mode !in 0L..0xffffffffL)
             fault("Original open requires canonical CInt flags and Word32 mode")
@@ -392,7 +394,9 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
             return ByteArray(length.toInt()) { path.readWord8(it.toLong()).toByte() }
         }
         val allocation = path.cbitsOwner()
-        val bytes = if (allocation == null) snapshot() else synchronized(allocation) { snapshot() }
+        val bytes = path.withNativeBorrow {
+            if (allocation == null) snapshot() else synchronized(allocation) { snapshot() }
+        }
         return result {
             val (provider, claim) = synchronized(this) {
                 if (disposed) fail(4, "THC file context is closed")
@@ -403,7 +407,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
             }
             var resource: OpenedNativeFile? = null
             try {
-                val acquired = provider.openRaw(bytes, flags.toInt(), mode)
+                val acquired = provider.openRaw(bytes, flags.toInt(), mode, operation, node)
                 resource = acquired
                 val owner = OpenDescription(channel = acquired, native = acquired,
                     readable = nativeAbi.openReadable(flags), writable = nativeAbi.openWritable(flags),

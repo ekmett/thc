@@ -4,6 +4,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.interop.InteropLibrary
 import com.oracle.truffle.api.source.Source
 import org.graalvm.polyglot.io.ByteSequence
@@ -138,18 +139,24 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
 
     /** The public path is only the fixed provider's dispatch/CWD anchor. Guest
      * pathname bytes never pass through String or a charset decoder. */
-    fun openRaw(path: ByteArray, flags: Int, mode: Long): OpenedNativeFile {
+    fun openRaw(path: ByteArray, flags: Int, mode: Long, operation: OriginalStdioOp = OriginalStdioOp.OPEN,
+                node: Node? = null): OpenedNativeFile {
+        check(operation.opening)
         val abi = StdioHostAbi.load()
         val readable = abi.openReadable(flags.toLong())
         val writable = abi.openWritable(flags.toLong())
         val options: Set<OpenOption> = emptySet()
         return opened(".", NativeOpenRequest(null, options) { anchor ->
             val bytes = absoluteRawPath(anchor!!, path)
-            acquire(readable, writable) { lease -> NativeLimbScope().use { scope ->
-                val name = scope.allocate((bytes.size.toLong() + 7) and -8L)
-                name.copyFrom(bytes, 0, bytes.size)
-                result("open_raw", lease, name, flags, mode.toInt())
-            } }
+            acquire(readable, writable) { lease ->
+                if (operation == OriginalStdioOp.OPEN) NativeLimbScope().use { scope ->
+                    val name = scope.allocate((bytes.size.toLong() + 7) and -8L)
+                    name.copyFrom(bytes, 0, bytes.size)
+                    result("open_raw", lease, name, flags, mode.toInt())
+                } else NativeOpenOperation(bytes, flags, mode.toInt()).use { request ->
+                    request.await(node, threads, operation == OriginalStdioOp.OPEN_INTERRUPTIBLE, lease)
+                }
+            }
         }, options)
     }
 

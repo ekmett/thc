@@ -81,9 +81,10 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return closed
     }
 
-    @TruffleBoundary fun open(path: ManagedAddress, flags: Long, mode: Long): Long {
+    @TruffleBoundary fun open(path: ManagedAddress, flags: Long, mode: Long,
+        operation: OriginalStdioOp = OriginalStdioOp.OPEN, node: Node? = null): Long {
         val abi = hostAbi
-        val result = files.openOriginal(path, flags, mode)
+        val result = files.openOriginal(path, flags, mode, operation, node)
         if (result < 0) lastError.set(fileError(abi))
         return result
     }

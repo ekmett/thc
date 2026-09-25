@@ -20,7 +20,8 @@ import java.nio.channels.ClosedChannelException;
 
 /** Private native-provider ownership. No fd or native pointer becomes guest data.
  * Cleanup is a host downcall, not a second guest LLVM invocation, and works after
- * ordinary LLVM disposal. Acquisition cancellation is not yet proven safe.
+ * ordinary LLVM disposal. Safe/interruptible acquisition publishes only after
+ * its owned native worker has joined; unsafe LLVM acquisition is not cancelled.
  * Linux consumes close even on EINTR. */
 @ExportLibrary(InteropLibrary.class)
 public final class NativeFileLease implements AutoCloseable, TruffleObject {
@@ -39,6 +40,13 @@ public final class NativeFileLease implements AutoCloseable, TruffleObject {
     private boolean closed;
 
     NativeFileLease() { slot.set(ValueLayout.JAVA_INT, 0, -1); }
+
+    /** Called by the authenticated acquisition while holding this lease lock. */
+    synchronized MemorySegment openSlot() throws ClosedChannelException {
+        if (closed) throw new ClosedChannelException();
+        if (slot.get(ValueLayout.JAVA_INT, 0) != -1) throw new IllegalStateException("Open lease already populated");
+        return slot;
+    }
 
     synchronized void requireOpen() throws ClosedChannelException {
         if (closed || slot.get(ValueLayout.JAVA_INT, 0) < 0) throw new ClosedChannelException();
