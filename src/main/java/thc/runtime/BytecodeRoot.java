@@ -882,6 +882,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = TargetLayout.class, name = "layout")
+    public static final class OriginalStackWord {
+        @Specialization public static long apply(TargetLayout layout, Object snapshot, long offset) {
+            return ManagedStackRuntime.word(snapshot, offset, layout);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = TargetLayout.class, name = "layout")
     @ConstantOperand(type = OriginalStackInfoOp.class, name = "operation")
     public static final class OriginalStackIncompatibleTupleGetter {
         @Specialization public static void apply(TargetLayout layout, OriginalStackInfoOp operation,

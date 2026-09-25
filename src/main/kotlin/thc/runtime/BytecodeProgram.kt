@@ -1403,6 +1403,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         operands.single().emit(e)
                         e.builder.endOriginalStackFields()
                     }, tupleProof.copy(evaluated = true))
+                else if (stackInfo == OriginalStackInfoOp.WORD) ProvenExpression(Expression { e ->
+                    e.builder.beginOriginalStackWord(layout)
+                    operands.forEach { it.emit(e) }
+                    e.builder.endOriginalStackWord()
+                }, tupleProof.copy(evaluated = true))
                 else if (!stackInfo.tupleResult) ProvenExpression(Expression { e ->
                     e.builder.beginOriginalStackIncompatibleGetter(layout, stackInfo)
                     operands.forEach { it.emit(e) }

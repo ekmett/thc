@@ -30,6 +30,8 @@ extra-source-files:
   compiler/target-layout.c
   compiler/test-fixtures/OriginalStackAudit.hs
   compiler/test-fixtures/OriginalStackAuditNative.hs
+  compiler/test-fixtures/OriginalStackDecoder.hs
+  compiler/test-fixtures/OriginalStackDecoderNative.hs
   compiler/test-fixtures/OriginalStackProof.json
   compiler/test-fixtures/OriginalStackFormatter.hs
   compiler/test-fixtures/OriginalStackFormatterNative.hs
@@ -340,6 +342,8 @@ executable thc-fixtures
     FetchAddIntArrayFixtures
     SmallArrayFixtures
     StackFixtures
+    StackDecoderFixtures
+    InstalledCoreFixtures
     THC.Driver.Wired
     THC.Driver.Cabal
     THC.Driver.Cache
