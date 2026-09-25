@@ -2580,6 +2580,30 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
     @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class OriginalCStringLength {
+        @Specialization public static void length(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress address, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    address.cStringLength());
+        }
+        @Fallback public static void invalid(VirtualFrame frame, LocalAccessor destination,
+                Object address, Object state) {
+            throw fail("Expected owned Addr#/State# for original strlen");
+        }
+    }
+    /** The admitted FD scheduler follows the non-threaded GHC RTS branch. */
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class OriginalRtsIsThreaded {
+        @Specialization public static void query(VirtualFrame frame, LocalAccessor destination,
+                Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, 0L);
+        }
+    }
+    @Operation
     @ConstantOperand(type = RtsDiagnosticOp.class, name = "operation")
     public static final class RtsDiagnostic {
         @Specialization public static void report(RtsDiagnosticOp operation, Object first,

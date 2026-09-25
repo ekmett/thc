@@ -254,6 +254,33 @@ internal class ManagedAddress private constructor(
         return (if (literal != null) literal[index] else mutableBytes!![index]).toLong() and 0xffL
     }
 
+    /** Original libc strlen over a live, bounded byte address. The native
+     * allocation cannot be freed and an owner cannot shrink while scanning. */
+    @TruffleBoundary
+    fun cStringLength(): Long {
+        native?.let { allocation -> return allocation.access { segment ->
+            requireRange(0, 0)
+            val limit = segment.byteSize() - offset
+            var length = 0L
+            while (length < limit) {
+                if (segment.get(ValueLayout.JAVA_BYTE, offset + length) == 0.toByte()) return@access length
+                length++
+            }
+            fault("Unterminated original C string inside managed Addr#")
+        } }
+        val scan = scan@{
+            val limit = availableBytes()
+            var length = 0L
+            while (length < limit) {
+                if (readWord8(length) == 0L) return@scan length
+                length++
+            }
+            fault("Unterminated original C string inside managed Addr#")
+        }
+        val allocation = owner
+        return if (allocation == null) scan() else synchronized(allocation) { scan() }
+    }
+
     /** The caller evaluates State# before reaching storage. Invalid writes have
      * no effect; the value contributes only its low eight bits, like writeWord8Array#. */
     fun writeWord8(displacement: Long, value: Long) {

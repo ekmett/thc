@@ -1655,6 +1655,32 @@ class OriginalMemmoveDeclarationTest(unittest.TestCase):
             self.assertFalse(fixture.audit(wrong)['accepted'])
 
 
+class OriginalStringRtsDeclarationTest(unittest.TestCase):
+    def test_retained_posix_descriptors_and_capability(self):
+        resource = ROOT.parent / 'src/test/resources/core/original-string-rts-descriptors.json'
+        declarations = json.loads(resource.read_text())
+        self.assertEqual({'strlen', 'rts_isThreaded'}, set(declarations))
+        fixture = LibdwUnavailableAuditTest()
+        for symbol, declaration in declarations.items():
+            self.assertEqual(symbol, declaration['target']['symbol'])
+            module = fixture.fixture(declaration)
+            result = fixture.audit(module)
+            self.assertTrue(result['accepted'], result)
+            self.assertEqual([symbol], [call['symbol'] for call in result['foreignCalls']])
+            disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != symbol])
+            self.assertFalse(fixture.audit(module, disabled)['accepted'])
+            for key, value in (('safety', 'safe'), ('arity', 7), ('schema', 1.0),
+                               ('argumentReps', []), ('resultRep', LONG)):
+                wrong = copy.deepcopy(declaration); wrong[key] = value
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+            wrong = copy.deepcopy(declaration); wrong['target']['unit'] = 'base'
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+            for index in range(len(declaration['argumentReps'])):
+                wrong = fixture.fixture(declaration)
+                wrong['bindings'][0]['expr'][1][index]['rep'] = LONG
+                self.assertFalse(fixture.audit(wrong)['accepted'])
+
+
 class OriginalStackInfoAuditTest(unittest.TestCase):
     """Genuine unchanged FCall applications in explicitly synthetic scalar consumers.
 
