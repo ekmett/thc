@@ -84,10 +84,12 @@ def inventory():
                 # make this negative control weaker.
                 calls={'__gmpn_add':2,'__gmpn_add_1':1}
                 if entry=='integerAddFrontier': calls.update(__gmpn_cmp=1,__gmpn_sub=1)
-                wanted_issues=Counter({('unsupported-primitive','shrinkMutableByteArray#'):
-                                       7 if entry=='integerAddFrontier' else 5})
-                wanted_issues.update({('foreign-call',"Unsupported foreign target '"+symbol+"'"):count
-                                      for symbol,count in calls.items()})
+                check(sum(len(primitive['uses']) for primitive in report['primitives']
+                          if primitive['name']=='shrinkMutableByteArray#') ==
+                      (7 if entry=='integerAddFrontier' else 5),
+                      'Original supported shrinkMutableByteArray# calls disappeared')
+                wanted_issues=Counter({('foreign-call',"Unsupported foreign target '"+symbol+"'"):count
+                                       for symbol,count in calls.items()})
                 check(Counter((issue['code'],issue['detail']) for issue in report['issues'])==wanted_issues,
                       'Changed exact arithmetic primitive/foreign-call frontier: '+str(report['summary']))
                 check(len(report['missingGlobals'])==(6 if entry=='integerAddFrontier' else 3),
