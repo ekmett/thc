@@ -645,6 +645,43 @@ class AuditTest(unittest.TestCase):
         report = run_tuple(module)
         self.assertIn('unboxed-tuple join capture', [i['detail'] for i in report['issues']])
 
+    def test_inner_join_calls_outer_tuple_result_join_without_capturing_tuple(self):
+        module, outer = tuple_join_fixture(True)
+        producer = module['bindings'][1]['expr']
+        region = producer[2]
+        proof = copy.deepcopy(outer['joinResultRep'])
+        inner = dict(id='inner', name='inner', lifted=False, rep=proof,
+                     joinValueArity=0, joinResultRep=copy.deepcopy(proof),
+                     info=dict(joinArity=0), expr=[*var('finish'), dict(rep=copy.deepcopy(proof))])
+        region[3] = ['let', False, [inner], [*var('inner'), dict(rep=copy.deepcopy(proof))],
+                     dict(rep=copy.deepcopy(proof))]
+        report = run_tuple(module)
+        self.assertTrue(report['accepted'], report['issues'])
+        # A real tuple binder in the same lexical position remains unsupported.
+        inner['expr'] = [*var('held'), dict(rep=copy.deepcopy(proof))]
+        original = outer['expr']
+        producer[2] = ['case', original, 'held',
+                       [['default', None, [], region, dict(binders=[])]],
+                       dict(rep=proof, binder=dict(id='held', lifted=False, rep=proof))]
+        self.assertIn('unboxed-tuple join capture', [i['detail'] for i in run_tuple(module)['issues']])
+
+    def test_join_lambda_calls_outer_tuple_result_join_without_heap_capture(self):
+        module, outer = tuple_join_fixture(True)
+        producer = module['bindings'][1]['expr']
+        region = producer[2]
+        proof = copy.deepcopy(outer['joinResultRep'])
+        parameter = dict(id='join-arg', lifted=False, rep=LONG)
+        inner = dict(id='inner', name='inner', lifted=True, rep=CLOSURE,
+                     joinValueArity=1, joinResultRep=copy.deepcopy(proof),
+                     info=dict(joinArity=1),
+                     expr=['lam', [parameter], [*var('finish'), dict(rep=copy.deepcopy(proof))],
+                           dict(rep=CLOSURE, resultRep=copy.deepcopy(proof))])
+        call = ['app', [*var('inner'), dict(rep=CLOSURE)], [[*var('x'), dict(rep=LONG)]],
+                [False], False, False, dict(rep=copy.deepcopy(proof))]
+        region[3] = ['let', False, [inner], call, dict(rep=copy.deepcopy(proof))]
+        report = run_tuple(module)
+        self.assertTrue(report['accepted'], report['issues'])
+
     def test_recursive_join_identity_shadows_outer_tuple_for_capture_checks(self):
         module, join = tuple_join_fixture()
         producer = module['bindings'][1]['expr']
