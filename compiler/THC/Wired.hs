@@ -12,9 +12,13 @@ import GHC.Builtin.Names
   ( hasKey, lazyIdKey, noinlineIdKey, noinlineConstraintIdKey, nospecIdKey
   , runRWKey, realWorldPrimIdKey )
 import GHC.Core.Class (classAllSelIds)
+import GHC.Core.FVs (exprFreeVars)
 import GHC.Core.TyCo.Compare (eqType)
 import GHC.Core.Utils (isUnaryClassId, isUnsafeEqualityCase)
+import GHC.Types.Basic (OccInfo(IAmDead))
+import GHC.Types.Id (setIdOccInfo)
 import GHC.Types.Id.Make (mkDictSelRhs, realWorldPrimId)
+import GHC.Types.Var.Set (elemVarSet)
 import Data.List (findIndex)
 
 -- | GHC's runtime identity operations. In particular this includes BOTH a unary
@@ -41,13 +45,17 @@ wiredApplication expression = case collectArgs expression of
     isTypeArg Type{} = True
     isTypeArg _ = False
 
--- | The exact late CoreToStg case rule, before erasing type/coercion arguments
--- and occurrence information. GHC checks its wired Id/DataCon keys, one
--- UnsafeRefl alternative, and a dead case binder. In particular this supplies
--- neither a first-class proof value nor a rewrite for an arbitrary bottom.
+-- | The exact late CoreToStg case rule, before erasing type/coercion arguments.
+-- Installed interfaces need not retain the case binder's occurrence mark.
+-- Recover only its deadness from the actual alternative RHSs, then still ask
+-- GHC to check the wired Id/DataCon keys and the precise proof application.
+-- In particular this supplies neither a first-class proof value nor a rewrite
+-- for an arbitrary bottom or a case whose binder is used.
 -- The returned Core is used only by export, never by the simplifier.
 wiredCase :: CoreExpr -> Maybe CoreExpr
-wiredCase (Case scrut bndr _ alts) = isUnsafeEqualityCase scrut bndr alts
+wiredCase (Case scrut bndr _ alts) = case isUnsafeEqualityCase scrut (setIdOccInfo bndr IAmDead) alts of
+  Just rhs | not (bndr `elemVarSet` exprFreeVars rhs) -> Just rhs
+  _ -> Nothing
 wiredCase _ = Nothing
 
 -- runRW# f becomes f realWorld#, while lazy/noinline return their retained

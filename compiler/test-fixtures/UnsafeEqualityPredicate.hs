@@ -32,6 +32,7 @@ main = do
         wrong = setIdUnique proof (getUnique (mkTemplateLocal 103 (idType proof)))
         checks =
           [ ("actual wired case", True, test scrut dead [alt])
+          , ("unused case binder without occurrence mark", True, test scrut binder [alt])
           , ("live case binder", False, Case scrut binder (exprType scrut) [Alt (DataAlt refl) [] (Var binder)])
           , ("same spelling, different wired key", False, test (mkApps (Var wrong) [Type liftedTypeKind, Type intTy, Type intTy]) dead [alt])
           , ("wrong alternative", False, test scrut dead [Alt (DataAlt trueDataCon) [] rhs])
