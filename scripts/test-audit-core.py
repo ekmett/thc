@@ -2233,10 +2233,17 @@ class OriginalDupAuditTest(unittest.TestCase):
             self.call(module)[6]['foreignCall']['target']['symbol'] = alias
             self.assertFalse(self.audit(module)['accepted'])
 
+    def test_original_open_three_exact_safety_contracts(self):
+        for safety in ('unsafe', 'safe', 'interruptible'):
+            module = self.fixture('__hscore_open')
+            self.call(module)[6]['foreignCall']['safety'] = safety
+            self.assertTrue(self.audit(module)['accepted'])
+            self.assertFalse(self.audit(module, dict(CAP, managedForeignCalls=[]))['accepted'])
+
     def test_descriptor_flags_head_and_raw_representation_forgery_reject(self):
         for symbol in self.symbols:
             mutations = [(key, value) for key in ('schema', 'arity', 'suppliedArity')
-                for value in (None, True, 2.0, '2', 0, 1 << 32)] + [('convention', 'ccall' if symbol in self.sigset or symbol in (core_original_foreign.TCGETATTR_SYMBOL, core_original_foreign.TCSETATTR_SYMBOL) else 'capi'), ('safety', 'safe'), ('safety', 'interruptible'), ('extra', None)]
+                for value in (None, True, 2.0, '2', 0, 1 << 32)] + [('convention', 'ccall' if symbol in self.sigset or symbol in (core_original_foreign.TCGETATTR_SYMBOL, core_original_foreign.TCSETATTR_SYMBOL) else 'capi'), ('safety', 'unknown'), ('extra', None)] + ([] if symbol == '__hscore_open' else [('safety', 'safe'), ('safety', 'interruptible')])
             for key, value in mutations:
                 module = self.fixture(symbol); self.call(module)[6]['foreignCall'][key] = value
                 self.assertFalse(self.audit(module)['accepted'], (symbol, key, value))

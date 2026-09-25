@@ -12,7 +12,7 @@ import GHC.Internal.Foreign.C.Types (CInt(..))
 import GHC.Internal.System.Posix.Types (CMode(..))
 import qualified GHC.Internal.System.Posix.Internals as P
 
--- Unchanged installed declarations, including rejected safety controls. No FFI
+-- Unchanged installed declarations, including all three exact safety contracts. No FFI
 -- import is introduced here, and neither wrapper changes flags or pathname bytes.
 originalOpen :: Addr# -> Int# -> Word# -> Int#
 originalOpen path flags mode = runRW# (\state ->

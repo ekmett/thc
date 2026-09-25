@@ -309,6 +309,15 @@
     "compiler/test-fixtures/OriginalOpenAudit.hs": {
       "junit": ["thc.runtime.OriginalOpenTest"], "python": []
     },
+    "compiler/test-fixtures/OriginalOpenRequestNative.hs": {
+      "junit": ["thc.runtime.OriginalOpenTest"], "python": []
+    },
+    "src/main/c/native-open-request.c": {
+      "junit": ["thc.runtime.OriginalOpenTest"], "python": []
+    },
+    "src/main/kotlin/thc/runtime/NativeOpenOperation.kt": {
+      "junit": ["thc.runtime.OriginalOpenTest"], "python": []
+    },
     "compiler/test-fixtures/OriginalOpenNative.hs": {
       "junit": ["thc.runtime.OriginalOpenTest"], "python": []
     },

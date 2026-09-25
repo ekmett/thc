@@ -7,6 +7,7 @@
 #include <poll.h>
 #include <pthread.h>
 #include <signal.h>
+#include <sched.h>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -24,6 +25,7 @@ _Static_assert(sizeof(int) == 4 && sizeof(mode_t) == 4 && sizeof(void *) == 8,
 _Static_assert(SYS_openat == 257 && AT_FDCWD == -100 && EINTR == 4,
                "guard assembly must agree with the selected Linux ABI");
 _Static_assert(ATOMIC_INT_LOCK_FREE == 2, "signal cancellation flag must be lock free");
+_Static_assert(sizeof(_Atomic int) == 4, "guard cmpl requires a four-byte cancellation flag");
 
 // Only the owned native worker enters this function. The signal handler can
 // cancel the check-to-syscall interval, including the check/entry race. The end
@@ -51,6 +53,7 @@ __asm__(".text\n"
 
 static pthread_mutex_t signal_lock = PTHREAD_MUTEX_INITIALIZER;
 static int claimed_signal;
+static struct sigaction claimed_action;
 
 static void interrupt_open(int signal, siginfo_t *info, void *raw_context) {
   (void)signal;
@@ -73,15 +76,17 @@ static int own_signal(void) {
   struct sigaction action;
   if (sigaction(signal, NULL, &action) < 0) error = errno;
   else if (claimed_signal) {
-    if (!(action.sa_flags & SA_SIGINFO) || action.sa_sigaction != interrupt_open ||
-        (action.sa_flags & SA_RESTART)) error = EBUSY;
+    if (action.sa_sigaction != claimed_action.sa_sigaction || action.sa_flags != claimed_action.sa_flags ||
+        action.sa_restorer != claimed_action.sa_restorer) error = EBUSY;
+    for (int member = 1; member < NSIG && !error; ++member)
+      if (sigismember(&action.sa_mask, member) != sigismember(&claimed_action.sa_mask, member)) error = EBUSY;
   } else if (action.sa_handler != SIG_DFL) error = EBUSY;
   else {
     memset(&action, 0, sizeof(action));
     action.sa_sigaction = interrupt_open;
     action.sa_flags = SA_SIGINFO;
     sigemptyset(&action.sa_mask);
-    if (sigaction(signal, &action, NULL) < 0) error = errno;
+    if (sigaction(signal, &action, NULL) < 0 || sigaction(signal, NULL, &claimed_action) < 0) error = errno;
     else claimed_signal = signal;
   }
   pthread_mutex_unlock(&signal_lock);
@@ -100,6 +105,31 @@ struct open_request {
   uint32_t mode;
 };
 
+#ifdef THC_OPEN_REQUEST_TEST
+// Compiled only into the isolated native oracle, never the runtime library.
+// Pause at the two ownership boundaries without changing syscall/handler code.
+static _Atomic int test_pause;
+static _Atomic int test_stage;
+void thc_open_test_pause(int stage) {
+  atomic_store(&test_stage, 0);
+  atomic_store(&test_pause, stage);
+}
+int thc_open_test_stage(void) { return atomic_load(&test_stage); }
+static void test_boundary(int stage) {
+  if (atomic_load(&test_pause) == stage) {
+    atomic_store(&test_stage, stage);
+    while (atomic_load(&test_pause) == stage) sched_yield();
+  }
+}
+void thc_open_test_disposition(int ignore) {
+  struct sigaction action;
+  memset(&action, 0, sizeof(action));
+  action.sa_handler = ignore ? SIG_IGN : SIG_DFL;
+  sigemptyset(&action.sa_mask);
+  sigaction(SIGRTMIN, &action, NULL);
+}
+#endif
+
 static void wake_request(struct open_request *request) {
   uint64_t one = 1;
   ssize_t written;
@@ -114,7 +144,13 @@ static void *open_worker(void *argument) {
   sigfillset(&mask);
   sigdelset(&mask, claimed_signal);
   int error = pthread_sigmask(SIG_SETMASK, &mask, NULL);
+#ifdef THC_OPEN_REQUEST_TEST
+  test_boundary(1);
+#endif
   long result = error ? -error : thc_open_guard(&request->cancelled, request->path, request->flags, request->mode);
+#ifdef THC_OPEN_REQUEST_TEST
+  test_boundary(2);
+#endif
   request->fd = result >= 0 ? (int)result : -1;
   request->error = result < 0 ? (int)-result : 0;
   atomic_store_explicit(&request->done, 1, memory_order_release);
@@ -129,6 +165,8 @@ void *thc_open_start(const char *path, int flags, uint32_t mode, int *error) {
   if (!request) { *error = ENOMEM; return NULL; }
   request->event = -1;
   request->fd = -1;
+  atomic_init(&request->cancelled, 0);
+  atomic_init(&request->done, 0);
   request->path = strdup(path);
   if (!request->path) { *error = ENOMEM; goto failed; }
   request->event = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);

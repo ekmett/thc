@@ -376,7 +376,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         }
     }
 
-    /** Original unsafe open has no private admission claim or RTS lock. Reserve
+    /** Original open has no private admission claim or RTS lock. Reserve
      * the lowest descriptor before creation/truncation, but hold no registry
      * monitor over native acquisition. A completed result is never polled here. */
     @TruffleBoundary internal fun openOriginal(path: ManagedAddress, flags: Long, mode: Long,
