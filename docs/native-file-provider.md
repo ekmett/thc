@@ -32,8 +32,9 @@ context provider are still live. Completion followed by failure, duplicate or
 late completion, and reentrant provider disposal reject and close the resource.
 
 The private C transport opens regular files without truncation. Nonblocking and
-no-controlling-terminal flags prevent FIFO/TTY acquisition side effects before
-the opened type check. Other types receive explicit unsupported-policy rejection,
+no-controlling-terminal flags prevent FIFO waiting and controlling-terminal
+acquisition before the opened type check, not all possible device-open effects.
+Other types receive explicit unsupported-policy rejection,
 not fabricated native errno. Native failures retain actual captured errno.
 Read, write, seek, truncate and full `struct stat` snapshots share one descriptor.
 Metadata therefore follows host chmod, size changes, rename, replacement and
