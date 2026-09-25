@@ -48,6 +48,5 @@ stability workflow is advisory and separately records compiled-code behavior.
 Neither the smoke selection nor a warm local run is a claim about hosted PR
 latency; use the workflow's phase timings and elapsed time to assess that.
 
-For automatic merging, the repository owner applies `auto-merge`. The bot
-checks and merges one PR at a time against current main. A completed failing
-main `Build` pauses automatic merges; a pending main `Build` does not.
+The merge workflow is disabled. Reviewed PRs are integrated into main manually,
+one at a time.

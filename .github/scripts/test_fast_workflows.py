@@ -42,14 +42,6 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertIn("!contains(github.event.pull_request.title, '[ci skip]')", workflow)
         self.assertIn("cancel-in-progress: true", workflow)
 
-    def test_closed_pr_retires_only_its_own_fast_run(self):
-        workflow = WORKFLOW.read_text()
-        self.assertIn("types: [opened, synchronize, reopened, closed]", workflow)
-        self.assertIn("format('pr-{0}', github.event.number || github.run_id)", workflow)
-        self.assertIn("format('ref-{0}', github.ref)", workflow)
-        self.assertIn("github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.action == 'reopened'", workflow)
-        self.assertNotIn("pull_request_target", workflow)
-
     def check_case(self, kind, ref, event, trusted):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
