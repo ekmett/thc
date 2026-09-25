@@ -392,11 +392,15 @@ class DoubleArrayNativeTest {
 
     @Test fun invalidElementOffsetsAreGuardedOnBothBackendsWithoutNativeUndefinedAccesses() {
         val paths = paths()
+        // Guest allocations retain their owner across unsafe freeze. Its element
+        // and logical-range guards run before the raw Double backing-array guard.
+        val invalid = listOf(Long.MIN_VALUE to "element", -1L to "element", 1L to "range",
+            (1L shl 32) to "range", (1L shl 61) to "element", Long.MAX_VALUE to "element")
         for (backend in listOf("ast", "bytecode")) context(true).use { context ->
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                for (operation in operations) for (index in listOf(Long.MIN_VALUE, -1L, 1L, 1L shl 32, 1L shl 61, Long.MAX_VALUE)) {
+                for (operation in operations) for ((index, guard) in invalid) {
                     val name = owner(operation)
                     val module = CoreModules.reachable(merged(paths), name)
                     val app = applications(module).first { (it[1] as List<*>).take(2) == listOf("prim", operation.primitive) }
@@ -405,9 +409,15 @@ class DoubleArrayNativeTest {
                     val program = program(language, module, backend)
                     val function = context.asValue(EntryValue(program, name, 1))
                     val failure = assertThrows(PolyglotException::class.java) { function.execute(5L) }
-                    assertTrue(failure.message.orEmpty().contains("ByteArray# Double index"), "$backend/$operation/$index: $failure")
+                    assertEquals("${RuntimeFault::class.java.name}: Managed allocation $guard outside its backing storage",
+                        failure.message, "$backend/$operation/$index")
                     released(language)
                     assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong())
+                }
+                for (name in listOf("moveDoubleBits", "indexDoubleBits")) {
+                    val good = program(language, CoreModules.reachable(merged(paths), name), backend)
+                    assertEquals(5L, context.asValue(EntryValue(good, name, 1)).execute(5L).asLong())
+                    released(language)
                 }
             } finally { context.leave() }
         }

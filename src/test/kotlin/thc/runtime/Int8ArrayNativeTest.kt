@@ -363,7 +363,8 @@ class Int8ArrayNativeTest {
                     val program = program(language, module, backend)
                     val function = context.asValue(EntryValue(program, name, 1))
                     val failure = assertThrows(PolyglotException::class.java) { function.execute(5L) }
-                    assertTrue(failure.message.orEmpty().contains("ByteArray# index"), "$backend/$operation/$index: $failure")
+                    assertEquals("${RuntimeFault::class.java.name}: Managed allocation range outside its backing storage",
+                        failure.message, "$backend/$operation/$index")
                     released(language)
                     assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong())
                 }

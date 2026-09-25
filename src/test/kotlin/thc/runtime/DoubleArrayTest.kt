@@ -48,6 +48,35 @@ class DoubleArrayTest {
         }
     }
 
+    @Test fun ownedDoubleBoundsPreserveBytesAndRespectShrunkLogicalSize() {
+        for (size in listOf(0L, 7L, 8L, 15L, 16L)) {
+            val array = ManagedByteArray.allocateGuest(size + 8)
+            ManagedByteArray.fillGuest(array, 0, size + 8, 37)
+            // The backing still contains a complete extra Double. Both mutable
+            // reads and the frozen alias must honor the owner's logical length.
+            val frozen = ManagedByteArray.freezeGuest(array)
+            ManagedByteArray.shrinkGuest(array, size)
+            assertSame(array, frozen)
+            val expected = (0 until size).map { 37L }
+            val invalid = listOf(Long.MIN_VALUE to "element", -1L to "element", (size / 8) to "range",
+                (1L shl 32) to "range", (1L shl 61) to "element", Long.MAX_VALUE to "element")
+            for ((index, guard) in invalid) {
+                val read = assertThrows(RuntimeFault::class.java) { ManagedByteArray.readDoubleGuest(array, index) }
+                val indexRead = assertThrows(RuntimeFault::class.java) { ManagedByteArray.readDoubleGuest(frozen, index) }
+                val write = assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeDoubleGuest(array, index, -0.0) }
+                for (failure in listOf(read, indexRead, write))
+                    assertEquals("Managed allocation $guard outside its backing storage", failure.message,
+                        "size=$size/index=$index")
+                assertEquals(size, ManagedByteArray.sizeGuest(array))
+                assertEquals(expected, (0 until size).map { ManagedByteArray.readGuest(array, it, true) })
+            }
+            if (size >= 8) {
+                ManagedByteArray.writeDoubleGuest(array, 0, -0.0)
+                assertEquals(Long.MIN_VALUE, ManagedByteArray.readDoubleGuest(frozen, 0).toRawBits())
+            }
+        }
+    }
+
     @Test fun statePrecedesMemoryAccessAndOnlySuccessfulReadsPublishPrimitiveDouble() {
         val descriptor = FrameDescriptor.newBuilder()
         val slot = descriptor.addSlot(FrameSlotKind.Double, "result", null)
