@@ -51,7 +51,8 @@ class SimdAstTransportTest {
         listOf("lam", args, body, mapOf("rep" to closure, "resultRep" to result,
             "entryStrict" to List(args.size) { false }))
     private fun binding(id: String, body: List<Any?>) = mapOf("id" to id, "name" to id,
-        "lifted" to true, "rep" to closure, "expr" to body)
+        "lifted" to true, "arity" to (body[1] as List<*>).size,
+        "rep" to closure, "expr" to body)
     private fun module(): Map<String, Any?> {
         val v = variable("v", vector)
         val first = unpack(v, prim("int16ToInt#", listOf(variable("lane0", int16)), int))
@@ -74,6 +75,94 @@ class SimdAstTransportTest {
                     call("score", listOf(broadcast(variable("x"))), closure), listOf(literal(13)), int))),
                 binding("nested", lam(listOf(formal("x")), nestedCase))))
     }
+    private fun heapModule(): Map<String, Any?> {
+        val boxed = mapOf("kind" to "data", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)
+        val heap = mapOf("id" to "Heap", "name" to "Heap", "kind" to "boxed", "arity" to 2,
+            "fieldReps" to listOf(listOf("VecRep 8 Int16ElemRep"), listOf("IntRep")),
+            "fieldTypes" to listOf(vector, int), "fieldLifted" to listOf(false, false),
+            "strictFields" to listOf(false, false))
+        val boxedInt = mapOf("id" to "BoxedInt", "name" to "BoxedInt", "kind" to "boxed", "arity" to 1,
+            "fieldReps" to listOf(listOf("IntRep")), "fieldTypes" to listOf(int),
+            "fieldLifted" to listOf(false), "strictFields" to listOf(false))
+        fun saved() = variable("saved", vector)
+        fun scoreSaved() = call("score", listOf(saved(), literal(13)))
+        fun vectorLet(body: List<Any?>): List<Any?> = listOf("let", false,
+            listOf(mapOf("id" to "saved", "name" to "saved", "lifted" to false,
+                "rep" to vector, "expr" to broadcast(variable("x")))), body, mapOf("rep" to int))
+        fun selectHeap(value: List<Any?>): List<Any?> = listOf("case", value, "whole",
+            listOf(listOf("data", "Heap", listOf("v", "bias"),
+                call("score", listOf(variable("v", vector), variable("bias"))),
+                mapOf("binders" to listOf(formal("v", vector), formal("bias"))))),
+            mapOf("rep" to int, "binder" to formal("whole", boxed)))
+        val heapDirect = app(listOf("con", "Heap", 2), listOf(broadcast(variable("x")), literal(13)), boxed)
+        val heapPap = app(app(listOf("con", "Heap", 2), listOf(broadcast(variable("x"))), closure),
+            listOf(literal(13)), boxed)
+        val captured = vectorLet(app(lam(listOf(formal("bias")),
+            call("score", listOf(saved(), variable("bias")))), listOf(literal(13)), int))
+        val thunk = vectorLet(listOf("let", false,
+            listOf(mapOf("id" to "suspended", "name" to "suspended", "lifted" to true,
+                "rep" to (boxed + ("evaluated" to false)),
+                "expr" to app(listOf("con", "BoxedInt", 1), listOf(scoreSaved()), boxed))),
+            listOf("case", variable("suspended", boxed + ("evaluated" to false)), "whole",
+                listOf(listOf("data", "BoxedInt", listOf("answer"), variable("answer"),
+                    mapOf("binders" to listOf(formal("answer"))))),
+                mapOf("rep" to int, "binder" to formal("whole", boxed))), mapOf("rep" to int)))
+        val base = module()
+        return base + mapOf("constructors" to (base["constructors"] as List<*>) + listOf(heap, boxedInt),
+            "bindings" to (base["bindings"] as List<*>) + listOf(
+                binding("heapDirect", lam(listOf(formal("x")), selectHeap(heapDirect))),
+                binding("heapPap", lam(listOf(formal("x")), selectHeap(heapPap))),
+                binding("captured", lam(listOf(formal("x")), captured)),
+                binding("thunk", lam(listOf(formal("x")), thunk))))
+    }
+    @Test fun publicLoadRejectsContradictoryVectorConstructorMetadata() {
+        val source = heapModule()
+        val constructors = source["constructors"] as List<Map<String, Any?>>
+        val heap = constructors.single { it["id"] == "Heap" }
+        val wrongKind = vector + ("kind" to "long")
+        val wrongRep = vector + mapOf("primReps" to listOf("VecRep 8 Word16ElemRep"),
+            "vector" to mapOf("lanes" to 8L, "element" to "Word16ElemRep"))
+        val malformed = listOf(
+            "missing types" to ((heap - "fieldTypes") to "Vector constructor field requires exact logical metadata"),
+            "short types" to ((heap + ("fieldTypes" to listOf(vector))) to "Constructor field type count mismatch"),
+            "missing levity" to ((heap - "fieldLifted") to "Missing constructor representation metadata"),
+            "short levity" to ((heap + ("fieldLifted" to listOf(false))) to "Constructor field type count mismatch"),
+            "lifted vector" to ((heap + ("fieldLifted" to listOf(true, false))) to "Constructor field levity disagrees"),
+            "missing strictness" to ((heap - "strictFields") to "Missing constructor strictness metadata"),
+            "invalid strictness" to ((heap + ("strictFields" to listOf("false", false))) to "Unknown constructor field strictness"),
+            "unevaluated vector" to ((heap + ("fieldTypes" to listOf(vector + ("evaluated" to false), int))) to
+                "Constructor field evaluatedness lacks a worker obligation"),
+            "wrong kind" to ((heap + ("fieldTypes" to listOf(wrongKind, int))) to
+                "Core Long proof lacks a supported primitive representation"),
+            "wrong representation" to ((heap + ("fieldTypes" to listOf(wrongRep, int))) to
+                "Constructor field type disagrees with its primitive representation"))
+        assertEquals(CoreRepresentations.parse(vector), CoreFields(heap).vectorProofs[0])
+        for ((label, mutation) in malformed) {
+            val (changed, reason) = mutation
+            val failure = assertThrows(RuntimeFault::class.java) { CoreFields(changed) }
+            assertTrue(failure.message.orEmpty().contains(reason), "CoreFields/$label: ${failure.message}")
+        }
+        for (backend in listOf("ast", "bytecode")) {
+            Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
+                val request = Json.stringify(mapOf("entry" to "heapDirect", "backend" to backend,
+                    "modules" to listOf(source)))
+                assertEquals(14L, context.eval("thc", request).execute(1L).asLong(), "$backend valid metadata")
+            }
+            for ((label, mutation) in malformed) Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
+                val (changed, reason) = mutation
+                val module = source + ("constructors" to constructors.map { if (it["id"] == "Heap") changed else it })
+                val request = Json.stringify(mapOf("entry" to "heapDirect", "backend" to backend,
+                    "modules" to listOf(module)))
+                val failure = assertThrows(PolyglotException::class.java) { context.eval("thc", request) }
+                // Known-input validation can reject the constructor application before
+                // layout construction reaches CoreFields; both enforce the exact proof.
+                val reasons = listOf(reason, "Missing or conflicting exact vector argument proof") +
+                    if (label == "short levity") listOf("Constructor metadata length mismatch: Heap") else emptyList()
+                assertTrue(reasons.any { failure.message.orEmpty().contains(it) },
+                    "$backend/$label: ${failure.message}")
+            }
+        }
+    }
     @Test fun publicHostStillRejectsVectorIngressAndResult() {
         for (backend in listOf("ast", "bytecode")) for ((entry, boundary) in
             listOf("identity" to "host argument", "returnVector" to "host result"))
@@ -95,6 +184,93 @@ class SimdAstTransportTest {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                     val program = Program(language, module())
                     for (entry in listOf("direct", "pap", "nested")) {
+                        val function = context.asValue(EntryValue(program, entry, 1))
+                        for (x in listOf(-32768L, -1L, 0L, 32767L))
+                            assertEquals(x.toShort().toLong() + 13L, function.execute(x).asLong(), "$entry/$x interpreted")
+                        assertTrue(function.invokeMember("compile").asBoolean(), "$entry first installed compilation")
+                        val target = program.entryTarget(entry)
+                        for (x in listOf(32767L, 0L, -1L, -32768L)) {
+                            val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                            assertEquals(x.toShort().toLong() + 13L, function.execute(x).asLong(), "$entry/$x compiled")
+                            assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() > before)
+                            assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                            assertEquals(0, language.handoffState.get().arguments.depth)
+                            assertEquals(0, language.handoffState.get().results.depth)
+                        }
+                    }
+                } finally { context.leave() }
+            }
+    }
+
+    @Test fun astHeapVectorsOwnLanesAcrossClosureThunkConstructorAndPap() {
+        Context.newBuilder("thc").allowExperimentalOptions(true)
+            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+            .option("engine.CompilationFailureAction", "Throw").build().use { context ->
+                context.initialize("thc"); context.enter()
+                try {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val program = Program(language, heapModule())
+                    for (entry in listOf("heapDirect", "heapPap", "captured", "thunk")) {
+                        val function = context.asValue(EntryValue(program, entry, 1))
+                        for (x in listOf(-32768L, -1L, 0L, 32767L))
+                            assertEquals(x.toShort().toLong() + 13L, function.execute(x).asLong(), "$entry/$x interpreted")
+                        assertTrue(function.invokeMember("compile").asBoolean(), "$entry first installed compilation")
+                        val target = program.entryTarget(entry)
+                        for (x in listOf(32767L, 0L, -1L, -32768L)) {
+                            val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                            assertEquals(x.toShort().toLong() + 13L, function.execute(x).asLong(), "$entry/$x compiled")
+                            assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() > before)
+                            assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                            assertEquals(0, language.handoffState.get().arguments.depth)
+                            assertEquals(0, language.handoffState.get().results.depth)
+                        }
+                    }
+                } finally { context.leave() }
+            }
+    }
+
+    @Test fun bytecodeHeapConstructorFieldsAndPapRetainPrimitiveLanes() {
+        val constructorModule = heapModule().let { source ->
+            source + ("bindings" to (source["bindings"] as List<Map<String, Any?>>)
+                .filterNot { it["id"] in setOf("captured", "thunk") })
+        }
+        for (inlining in listOf(true, false)) Context.newBuilder("thc").allowExperimentalOptions(true)
+            .option("compiler.Inlining", inlining.toString())
+            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+            .option("engine.CompilationFailureAction", "Throw").build().use { context ->
+                context.initialize("thc"); context.enter()
+                try {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val program = BytecodeProgram(language, constructorModule)
+                    for (entry in listOf("heapDirect", "heapPap")) {
+                        val function = context.asValue(EntryValue(program, entry, 1))
+                        for (x in listOf(-32768L, -1L, 0L, 32767L))
+                            assertEquals(x.toShort().toLong() + 13L, function.execute(x).asLong(), "$entry/$x interpreted")
+                        assertTrue(function.invokeMember("compile").asBoolean(), "$entry first installed compilation")
+                        val target = program.entryTarget(entry)
+                        for (x in listOf(32767L, 0L, -1L, -32768L)) {
+                            val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                            assertEquals(x.toShort().toLong() + 13L, function.execute(x).asLong(), "$entry/$x compiled")
+                            assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() > before)
+                            assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                            assertEquals(0, language.handoffState.get().arguments.depth)
+                            assertEquals(0, language.handoffState.get().results.depth)
+                        }
+                    }
+                } finally { context.leave() }
+            }
+    }
+
+    @Test fun bytecodeHeapClosureAndThunkCaptureRetainsOwnedLanes() {
+        for (inlining in listOf(true, false)) Context.newBuilder("thc").allowExperimentalOptions(true)
+            .option("compiler.Inlining", inlining.toString())
+            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+            .option("engine.CompilationFailureAction", "Throw").build().use { context ->
+                context.initialize("thc"); context.enter()
+                try {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val program = BytecodeProgram(language, heapModule())
+                    for (entry in listOf("captured", "thunk")) {
                         val function = context.asValue(EntryValue(program, entry, 1))
                         for (x in listOf(-32768L, -1L, 0L, 32767L))
                             assertEquals(x.toShort().toLong() + 13L, function.execute(x).asLong(), "$entry/$x interpreted")

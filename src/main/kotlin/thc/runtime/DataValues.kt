@@ -6,7 +6,10 @@ package thc.runtime
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.bytecode.BytecodeNode
+import com.oracle.truffle.api.bytecode.LocalAccessor
 import com.oracle.truffle.api.frame.Frame
+import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.ExplodeLoop
 import com.oracle.truffle.api.staticobject.DefaultStaticProperty
 import com.oracle.truffle.api.staticobject.StaticShape
@@ -35,14 +38,23 @@ private const val CHARLIKE_MAX = 255L
  * nodes use this description but are separate objects. The layout contains no
  * particular constructor value's payload.
  */
-class DataLayout(
+class DataLayout private constructor(
     language: TruffleLanguage<*>,
     val id: String,
     val name: String,
     fieldReps: Array<String>,
-    referenceTypes: Array<Class<*>?> = arrayOfNulls(fieldReps.size)
+    referenceTypes: Array<Class<*>?>,
+    vectorProofs: Array<CoreRepresentation?>
 ) {
-    init { require(referenceTypes.size == fieldReps.size) }
+    constructor(language: TruffleLanguage<*>, id: String, name: String, fieldReps: Array<String>,
+        referenceTypes: Array<Class<*>?> = arrayOfNulls(fieldReps.size)) :
+        this(language, id, name, fieldReps, referenceTypes, arrayOfNulls(fieldReps.size))
+
+    companion object {
+        internal fun fromFields(language: TruffleLanguage<*>, id: String, name: String, fields: CoreFields): DataLayout =
+            DataLayout(language, id, name, fields.storage, fields.referenceTypes, fields.vectorProofs)
+    }
+    init { require(referenceTypes.size == fieldReps.size && vectorProofs.size == fieldReps.size) }
     @CompilationFinal(dimensions = 1)
     private val fields: Array<Field>
     val arity: Int = fieldReps.size
@@ -74,7 +86,7 @@ class DataLayout(
 
     init {
         val requested = java.lang.Boolean.parseBoolean(System.getProperty(CLASS_OWNED_LAYOUTS_PROPERTY, "true"))
-        var chosenFields = Array(fieldReps.size) { Field(it, fieldReps[it], referenceTypes[it]) }
+        var chosenFields = Array(fieldReps.size) { Field(it, fieldReps[it], referenceTypes[it], vectorProofs[it]) }
         var chosenShape = buildShape(language, chosenFields, requested)
         var sample = chosenShape.factory.create(this, allocationKey)
         val reserved = requested && ClassOwnedLayouts.reserve(sample.javaClass, classOwnerToken)
@@ -83,7 +95,7 @@ class DataLayout(
             // pointer-free values remain valid; this layout takes a separate
             // superclass with an explicit owner field before publishing values.
             // StaticProperty instances are shape-specific and cannot be reused.
-            chosenFields = Array(fieldReps.size) { Field(it, fieldReps[it], referenceTypes[it]) }
+            chosenFields = Array(fieldReps.size) { Field(it, fieldReps[it], referenceTypes[it], vectorProofs[it]) }
             chosenShape = buildShape(language, chosenFields, false)
             sample = chosenShape.factory.create(this, allocationKey)
         }
@@ -140,6 +152,7 @@ class DataLayout(
     @ExplodeLoop
     fun create(values: Array<Any?>): DataValue {
         if (values.size != arity) fault("Constructor field count does not match layout")
+        if (fields.any { it.vector != null }) fault("Vector constructor fields require primitive lane sources")
         if (boxedValues != null)
             return createLong(values[0] as? Long ?: fault("Expected primitive Long constructor field"))
         val value = allocate()
@@ -159,12 +172,14 @@ class DataLayout(
     }
 
     /** Keep the value private until every final field has been initialized exactly once. */
+    @JvmName("allocate")
     internal fun allocate(): DataValue {
         val value = nullaryValue ?: shape.factory.create(this, allocationKey)
         checkAllocated(value)
         return value
     }
 
+    @JvmName("initialize")
     internal fun initialize(value: DataValue, index: Int, field: Any?) {
         if (!owns(value)) fault("Constructor value does not match layout")
         if (index < 0 || index >= arity) fault("Invalid constructor field index")
@@ -172,22 +187,50 @@ class DataLayout(
     }
 
     /** A primitive producer can initialize its property without an Object-array bridge. */
+    @JvmName("initializeLong")
     internal fun initializeLong(value: DataValue, index: Int, field: Long) {
         if (!owns(value)) fault("Constructor value does not match layout")
         if (index < 0 || index >= arity) fault("Invalid constructor field index")
         fields[index].initializeLong(value, field)
     }
 
+    @JvmName("initializeFloat")
     internal fun initializeFloat(value: DataValue, index: Int, field: Float) {
         if (!owns(value)) fault("Constructor value does not match layout")
         if (index < 0 || index >= arity) fault("Invalid constructor field index")
         fields[index].initializeFloat(value, field)
     }
 
+    @JvmName("initializeDouble")
     internal fun initializeDouble(value: DataValue, index: Int, field: Double) {
         if (!owns(value)) fault("Constructor value does not match layout")
         if (index < 0 || index >= arity) fault("Invalid constructor field index")
         fields[index].initializeDouble(value, field)
+    }
+
+    fun isVector(index: Int): Boolean = fields[index].vector != null
+    fun fieldWidth(index: Int): Int = fields[index].vector?.lanes ?: if (fields[index].isVoid()) 0 else 1
+    internal fun vectorProof(index: Int): CoreRepresentation? = fields[index].vector?.proof
+    private fun checkedVector(value: DataValue, index: Int): OwnedVectorFields {
+        if (!owns(value)) fault("Constructor value does not match layout")
+        if (index < 0 || index >= arity) fault("Invalid constructor field index")
+        return fields[index].vector ?: fault("Constructor field is not a vector")
+    }
+    @JvmName("initializeVector")
+    internal fun initializeVector(value: DataValue, index: Int, frame: Frame, slots: IntArray, offset: Int) {
+        checkedVector(value, index).initialize(value, frame, slots, offset)
+    }
+    @JvmName("initializeVector")
+    internal fun initializeVector(value: DataValue, index: Int, bytecode: BytecodeNode, frame: VirtualFrame,
+        slots: Array<LocalAccessor>, offset: Int) {
+        checkedVector(value, index).initialize(value, bytecode, frame, slots, offset)
+    }
+    fun restoreVector(value: DataValue, index: Int, frame: Frame, slots: IntArray, offset: Int) {
+        checkedVector(value, index).restore(value, frame, slots, offset)
+    }
+    fun restoreVector(value: DataValue, index: Int, bytecode: BytecodeNode, frame: VirtualFrame,
+        slots: Array<LocalAccessor>, offset: Int) {
+        checkedVector(value, index).restore(value, bytecode, frame, slots, offset)
     }
 
     fun read(value: DataValue, index: Int): Any? {
@@ -245,15 +288,17 @@ class DataLayout(
         if (!owns(value)) fault("Constructor value does not match layout")
         if (arity == 0) return name
         return fields.indices.joinToString(prefix = "$name[", postfix = "]") { index ->
-            val field = read(value, index)
+            val field = if (fields[index].vector != null) "<${fields[index].vector!!.proof.primReps!!.single()}>"
+                else read(value, index)
             // Debugging must not force lazy fields or recursively walk a long list.
             if (field is DataValue) "${field.layout.name}(...)" else field.toString()
         }
     }
 
-    private class Field(index: Int, representation: String, referenceType: Class<*>?) {
+    private class Field(index: Int, representation: String, referenceType: Class<*>?, vectorProof: CoreRepresentation?) {
+        val vector = vectorProof?.let { OwnedVectorFields(it, "field_$index") }
         val isLifted = representation == "LiftedRep"
-        private val kind = when (representation) {
+        private val kind = if (vector != null) VECTOR else when (representation) {
             "IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep",
             "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep" -> LONG
             "FloatRep" -> FLOAT
@@ -265,6 +310,7 @@ class DataLayout(
         private val address = representation == "AddrRep"
         private val referenceType = if (address) ManagedAddress::class.java else referenceType ?: Any::class.java
         init {
+            require(vector == null || vector.proof.primReps == listOf(representation)) { "Vector field representation mismatch" }
             require(referenceType == null || kind == OBJECT)
             require(!address || referenceType == null || referenceType == ManagedAddress::class.java)
         }
@@ -276,6 +322,7 @@ class DataLayout(
                 FLOAT -> builder.property(property, Float::class.javaPrimitiveType, true)
                 DOUBLE -> builder.property(property, Double::class.javaPrimitiveType, true)
                 OBJECT -> builder.property(property, referenceType, true)
+                VECTOR -> vector!!.register(builder)
                 // A zero-width Core slot exists logically, but takes no payload storage.
                 VOID -> Unit
             }
@@ -289,6 +336,7 @@ class DataLayout(
                 OBJECT -> property.setObject(value, if (address)
                     field as? ManagedAddress ?: fault("Expected a managed literal Addr# constructor field") else field)
                 VOID -> if (field !== Unit) fault("Expected zero-width constructor field")
+                VECTOR -> fault("Vector constructor field requires primitive lane sources")
             }
         }
 
@@ -311,12 +359,14 @@ class DataLayout(
             FLOAT -> property.getFloat(value)
             DOUBLE -> property.getDouble(value)
             OBJECT -> property.getObject(value)
+            VECTOR -> fault("Vector constructor field requires a typed destination")
             else -> Unit
         }
 
         fun isLong(): Boolean = kind == LONG
         fun isFloat(): Boolean = kind == FLOAT
         fun isDouble(): Boolean = kind == DOUBLE
+        fun isVoid(): Boolean = kind == VOID
 
         fun readLong(value: DataValue): Long {
             if (kind != LONG) fault("Constructor field is not primitive Long")
@@ -339,6 +389,7 @@ class DataLayout(
                 DOUBLE -> FrameAccess.writeDouble(frame, slot, property.getDouble(value))
                 OBJECT -> FrameAccess.write(frame, slot, property.getObject(value))
                 VOID -> FrameAccess.write(frame, slot, Unit)
+                VECTOR -> fault("Vector constructor field requires a typed destination")
             }
         }
 
@@ -348,6 +399,7 @@ class DataLayout(
             private const val VOID = 2
             private const val FLOAT = 3
             private const val DOUBLE = 4
+            private const val VECTOR = 5
         }
     }
 }

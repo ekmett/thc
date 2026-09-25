@@ -48,6 +48,7 @@ import WeakFixtures (prepareWeaks)
 import ShrinkByteArrayFixtures (prepareShrinkByteArrays)
 import FetchAddIntArrayFixtures (prepareFetchAddIntArray)
 import StackFixtures (prepareOriginalStack, prepareOriginalStackFormatter, exportOriginalStackSource)
+import StackDecoderFixtures (prepareOriginalStackDecoder)
 import SmallArrayFixtures (prepareSmallArrays)
 import BoxedArrayExtensionsFixtures (prepareBoxedArrayExtensions)
 import WideCharAddressFixtures (prepareWideCharAddress)
@@ -897,6 +898,7 @@ main = do
     ["shrink-bytearrays"] -> prepareShrinkByteArrays root
     ["fetch-add-int-array"] -> prepareFetchAddIntArray root
     ["original-stack"] -> prepareOriginalStack root
+    ["original-stack-decoder"] -> prepareOriginalStackDecoder root
     ["original-stack-formatter"] -> prepareOriginalStackFormatter root
     ["original-stack-source-export", directory] -> exportOriginalStackSource root directory
     ["boxed-array-extensions"] -> prepareBoxedArrayExtensions root

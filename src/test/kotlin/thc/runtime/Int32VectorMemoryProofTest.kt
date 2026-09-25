@@ -146,6 +146,44 @@ class Int32VectorMemoryProofTest {
         }
     }
 
+    @Test fun bytecodeReadVectorCanBeCapturedWithoutRetainingItsCarrier() = withLanguage { language ->
+        val operation = operations.single { it.isRead && !it.scalarOffset }
+        val f = fixture(operation)
+        val alternative = list(list(f.body[3])[0])
+        val callback = mutableListOf<Any?>("lam", listOf(binder("ignored", integer)),
+            consume(variable("vector", vector)),
+            mutableMapOf("rep" to copy(closure), "resultRep" to copy(integer),
+                "entryStrict" to listOf(false)))
+        alternative[3] = mutableListOf<Any?>("app", callback, mutableListOf(literal(0)),
+            mutableListOf(false), false, false, mutableMapOf("rep" to copy(integer)))
+        val p = BytecodeProgram(language, f.module)
+        val host = p.hostEntryTarget(3)
+        val original = p.entryTarget("root")
+        fun active() = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
+            .single { it.callTarget === original }.currentCallTarget as RootCallTarget
+        fun valid(target: RootCallTarget) = target.javaClass.getMethod("isValidLastTier").invoke(target) == true
+        fun count() = (p.diagnostics().getValue("compiledEntries") as Number).toLong()
+        fun call() {
+            val bytes = ByteArray(40) { (it * 47 + 129).toByte() }
+            assertEquals(expected(bytes, 0), invoke(p, bytes, 0))
+            released(language)
+        }
+        repeat(12) { call() }
+        val target = active()
+        assertEquals(0L, count())
+        assertFalse(valid(host), "host bridge remains interpreted")
+        target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+        assertTrue(valid(target), "first installed guest target")
+        val before = count()
+        call()
+        assertSame(target, active(), "same installed guest target after replay")
+        assertTrue(valid(target), "installed target stays valid after replay")
+        assertFalse(valid(host), "host bridge stays interpreted")
+        // The counter is program-wide: the inlined captured callback can add
+        // one entry beside the installed outer root during this single replay.
+        assertTrue(count() - before in 1L..2L, "compiled outer root and optional callback entry")
+    }
+
     private fun reject(language: Language, backend: String, diagnostic: Boolean, fixture: Fixture, label: String) {
         val bytes = ByteArray(40) { (it * 13 + 97).toByte() }; val before = bytes.copyOf()
         assertThrows(RuntimeFault::class.java, { invoke(program(language, backend, fixture, diagnostic), bytes, 0) }, label)

@@ -13,6 +13,10 @@ entry "papCase" = papCase
 entry "nestedTupleCase" = nestedTupleCase
 entry "joinCase" = joinCase
 entry "overCase" = overCase
+entry "heapCase" = heapCase
+entry "heapPapCase" = heapPapCase
+entry "capturedCase" = capturedCase
+entry "thunkCase" = thunkCase
 entry _ = error "Unknown SIMD call entry"
 
 emit :: String -> Int -> IO ()

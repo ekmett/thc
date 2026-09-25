@@ -887,8 +887,25 @@ class Audit:
             for index, registers in enumerate(reps):
                 if not isinstance(registers, list) or len(registers) > 1:
                     self.issue('constructor-field-representation', owner, path, f'{key}[{index}]: {registers!r}')
+                elif registers and isinstance(registers[0], str) and registers[0].startswith('VecRep '):
+                    types, lifted, strict = info.get('fieldTypes'), info.get('fieldLifted'), info.get('strictFields')
+                    proof = types[index] if isinstance(types, list) and len(types) == expected else None
+                    if not self.supported_vector(proof, 'heap-fields'):
+                        self.issue('vector-boundary', owner, path, f'{key}[{index}]: vector heap field')
+                    if (not isinstance(proof, dict) or proof.get('primReps') != registers or
+                            proof.get('evaluated') is not True or
+                            not isinstance(lifted, list) or len(lifted) != expected or lifted[index] is not False or
+                            not isinstance(strict, list) or len(strict) != expected or type(strict[index]) is not bool):
+                        self.issue('constructor-field-representation', owner, path,
+                                   f'{key}[{index}]: vector field requires exact unlifted/evaluated fieldTypes')
+                    if proof is not None:
+                        self.representation(proof, owner, path + f'/fieldTypes/{index}')
                 elif registers and registers[0] not in self.cap['fieldRepresentations']:
                     self.issue('constructor-field-representation', owner, path, f'{key}[{index}]: {registers[0]}')
+                if (isinstance(fields, list) and len(fields) == expected and is_vector(fields[index]) and
+                        (not isinstance(registers, list) or registers != fields[index].get('primReps'))):
+                    self.issue('constructor-field-representation', owner, path,
+                               f'{key}[{index}]: vector field proof disagrees with fieldReps')
         # AddrRep always denotes the managed LiteralAddress carrier, including
         # legacy constructor records without the optional precise fieldTypes.
         for index, registers in enumerate(reps if isinstance(reps, list) else []):
@@ -1021,8 +1038,9 @@ class Audit:
                 local_join_prefix = join_prefix > 0 and join_prefix == len(expr[1])
                 vector_captures = {key for key in (self.free_variables(expr[2]) - ids) & bound.keys()
                                    if self.is_vector_value(bound[key])}
-                if vector_captures and not (local_join_prefix and
-                        all(self.supported_vector(bound[key], 'join-captures') for key in vector_captures)):
+                if vector_captures and not (
+                        all(self.supported_vector(bound[key], 'join-captures' if local_join_prefix else 'captures')
+                            for key in vector_captures)):
                     self.issue('vector-boundary', owner, path, 'vector capture')
                 if captured and not (local_join_prefix and
                                      'unboxed-tuple' in self.cap.get('aggregateJoinCaptures', []) and
@@ -1534,8 +1552,11 @@ class Audit:
                     if not vector_operation and not vector_memory and (is_vector(self.expression_rep(argument)) or argument[0] == 'var' and is_vector(bound.get(argument[1]))):
                         actual = self.effective_rep(argument, bound)
                         join = isinstance(target, dict) and '_join_arity' in target
-                        boundary = 'tuple-fields' if tuple_constructor else 'join-arguments' if join else 'arguments'
-                        if not ((tuple_constructor or function[0] not in ('prim', 'con')) and self.supported_vector(actual, boundary)):
+                        boxed_constructor = function[0] == 'con' and self.constructors.get(function[1], {}).get('kind', 'boxed') == 'boxed'
+                        boundary = ('tuple-fields' if tuple_constructor else 'heap-fields' if boxed_constructor else
+                                    'join-arguments' if join else 'arguments')
+                        if not ((tuple_constructor or boxed_constructor or function[0] != 'prim' and function[0] != 'con')
+                                and self.supported_vector(actual, boundary)):
                             self.issue('vector-boundary', owner, f'{path}/arguments/{index}', 'vector argument')
                         if not isinstance(flags, list) or index >= len(flags) or flags[index] is not False:
                             self.issue('application-levity', owner, f'{path}/arguments/{index}', 'Vector argument must be unlifted')
@@ -1587,6 +1608,11 @@ class Audit:
                             self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-tuple join capture')
                         self.compare_shapes(self.expression_rep(expr), binding.get('joinResultRep'), owner,
                                             f'{path}/bindings/{index}/joinResultRep')
+                    elif binding.get('lifted') is True:
+                        captures = self.free_variables(binding['expr']) & bound.keys()
+                        if any(self.is_vector_value(bound[key]) and not self.supported_vector(bound[key], 'captures')
+                               for key in captures):
+                            self.issue('vector-boundary', owner, f'{path}/bindings/{index}', 'vector thunk capture')
                     if recursive and binding.get('lifted') is False:
                         self.issue('recursive-unlifted', owner, f'{path}/bindings/{index}', binding.get('id'))
                     self.walk(binding.get('expr'), local if recursive else bound,
@@ -1604,6 +1630,8 @@ class Audit:
                                     if sum_payload or is_sum(binder_proof) or self.is_tuple(binder_proof) else self.expression_rep(expr[1]), owner, path + '/binder/rep')
                 if is_sum(binder_proof) and metadata.get('binder', {}).get('lifted') is not False:
                     self.issue('case-binder-metadata', owner, path, 'Sum case binder must be unlifted')
+                if is_vector(binder_proof) and metadata.get('binder', {}).get('lifted') is not False:
+                    self.issue('application-levity', owner, path, 'Vector case binder must be unlifted')
                 if is_sum(binder_proof) and not expr[3]:
                     self.issue('aggregate-shape', owner, path, 'Empty sum case')
                 if self.is_tuple(binder_proof):
@@ -1653,6 +1681,24 @@ class Audit:
                             sum_tags.add('default')
                     if kind == 'data':
                         self.constructor(value, owner, altpath, False, len(ids), binder_proof)
+                        fields = self.constructors.get(value, {}).get('fieldTypes')
+                        if (self.constructors.get(value, {}).get('kind') != 'unboxed-tuple' and
+                                isinstance(fields, list) and any(is_vector(field) for field in fields) and
+                                (not isinstance(records, list) or len(records) != len(fields))):
+                            self.issue('alternative-binder-metadata', owner, altpath,
+                                       'Vector constructor pattern requires every exact field binder')
+                        # Polymorphic (#,#) fieldTypes are unknown. Its instantiated
+                        # case-binder components below carry the exact vector proof.
+                        if (self.constructors.get(value, {}).get('kind') != 'unboxed-tuple' and
+                                isinstance(fields, list) and isinstance(records, list) and len(fields) == len(records)):
+                            for field, (expected, record) in enumerate(zip(fields, records)):
+                                actual = record.get('rep') if isinstance(record, dict) else None
+                                if is_vector(expected) or is_vector(actual):
+                                    self.compare_shapes(expected, actual, owner,
+                                                        f'{altpath}/binders/{field}/rep', component=True)
+                                    if not isinstance(record, dict) or record.get('lifted') is not False:
+                                        self.issue('application-levity', owner, altpath,
+                                                   f'Vector constructor binder {field} must be unlifted')
                         if self.is_tuple(binder_proof):
                             if self.constructors.get(value, {}).get('kind') != 'unboxed-tuple':
                                 self.issue('aggregate-shape', owner, altpath, 'Tuple scrutinee requires a tuple alternative')

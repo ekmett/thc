@@ -238,6 +238,58 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** Capture source descriptors are replay-local metadata, never payload arrays. */
+    public static final class VectorCaptureSource {
+        public final ClosureTemplate template;
+        public final boolean thunk;
+        @CompilerDirectives.CompilationFinal(dimensions = 1)
+        public final LocalAccessor[] lanes;
+        public VectorCaptureSource(ClosureTemplate template, LocalAccessor[] lanes, boolean thunk) {
+            this.template = template;
+            this.lanes = lanes;
+            this.thunk = thunk;
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = VectorCaptureSource.class, name = "source")
+    public static final class MakeVectorCapture {
+        @Specialization public static Object create(VirtualFrame frame, VectorCaptureSource source,
+                @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            CapturedFrame environment = source.template.captureLayout.captureLocals(bytecode, frame, source.lanes);
+            if (source.thunk) return new Thunk(source.template.target, environment);
+            return new Closure(environment, ApplicationKt.getNO_PAP_ARGUMENTS(), source.template.arity,
+                    source.template.target);
+        }
+    }
+
+    /** One logical vector field restores directly to primitive bytecode locals. */
+    public static final class VectorCaptureSlots {
+        public final CaptureLayout layout;
+        public final int index;
+        @CompilerDirectives.CompilationFinal(dimensions = 1)
+        public final LocalAccessor[] lanes;
+        public VectorCaptureSlots(CaptureLayout layout, int index, LocalAccessor[] lanes) {
+            this.layout = layout;
+            this.index = index;
+            this.lanes = lanes;
+        }
+        public void restore(VirtualFrame frame, BytecodeNode bytecode, CapturedFrame environment) {
+            layout.restoreVector(environment, index, bytecode, frame, lanes, 0);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = VectorCaptureSlots.class, name = "slots")
+    public static final class CaptureReadVector {
+        @Specialization public static void read(VirtualFrame frame, VectorCaptureSlots slots,
+                CapturedFrame environment, @Bind("$node") Node node) {
+            slots.restore(frame, ((BytecodeRoot) node.getRootNode()).getBytecodeNode(), environment);
+        }
+    }
+
+
     @Operation
     @ConstantOperand(type = CaptureLayout.class, name = "layout")
     @ConstantOperand(type = int.class, name = "index")
@@ -268,6 +320,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return layout.readLong(environment, index);
         }
     }
+
 
     @Operation
     @ConstantOperand(type = Metrics.class, name = "metrics")
@@ -877,6 +930,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object apply(TargetLayout layout, OriginalStackInfoOp operation,
                 Object snapshot, long offset) {
             return ManagedStackRuntime.incompatibleGetter(operation, snapshot, offset, layout);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = TargetLayout.class, name = "layout")
+    public static final class OriginalStackWord {
+        @Specialization public static long apply(TargetLayout layout, Object snapshot, long offset) {
+            return ManagedStackRuntime.word(snapshot, offset, layout);
         }
     }
 
@@ -1707,6 +1768,62 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class Construct {
         @Specialization public static DataValue create(DataLayout layout, @Variadic Object[] fields) {
             return layout.create(fields);
+        }
+    }
+
+    /** Vector fields are initialized from owned primitive locals before publication. */
+    @Operation
+    @ConstantOperand(type = DataLayout.class, name = "layout")
+    public static final class AllocateData {
+        @Specialization public static DataValue allocate(DataLayout layout) { return layout.allocate(); }
+    }
+
+    @Operation
+    @ConstantOperand(type = DataLayout.class, name = "layout")
+    @ConstantOperand(type = int.class, name = "index")
+    public static final class InitializeDataScalar {
+        @Specialization(guards = "layout.isLong(index)")
+        public static void number(DataLayout layout, int index, DataValue value, long field) {
+            layout.initializeLong(value, index, field);
+        }
+        @Specialization(guards = "layout.isFloat(index)")
+        public static void floating(DataLayout layout, int index, DataValue value, float field) {
+            layout.initializeFloat(value, index, field);
+        }
+        @Specialization(guards = "layout.isDouble(index)")
+        public static void doubleValue(DataLayout layout, int index, DataValue value, double field) {
+            layout.initializeDouble(value, index, field);
+        }
+        @Specialization(replaces = {"number", "floating", "doubleValue"})
+        public static void object(DataLayout layout, int index, DataValue value, Object field) {
+            layout.initialize(value, index, field);
+        }
+    }
+
+    /** A constant descriptor lets partial evaluation see each bytecode local. */
+    public static final class DataVectorTransfer {
+        public final DataLayout layout;
+        public final int index;
+        public final boolean initialize;
+        @CompilerDirectives.CompilationFinal(dimensions = 1)
+        public final LocalAccessor[] lanes;
+        public DataVectorTransfer(DataLayout layout, int index, LocalAccessor[] lanes, boolean initialize) {
+            this.layout = layout;
+            this.index = index;
+            this.lanes = lanes;
+            this.initialize = initialize;
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = DataVectorTransfer.class, name = "descriptor")
+    public static final class TransferDataVector {
+        @Specialization public static void transfer(VirtualFrame frame, DataVectorTransfer descriptor,
+                DataValue value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            if (descriptor.initialize) descriptor.layout.initializeVector(value, descriptor.index, bytecode,
+                    frame, descriptor.lanes, 0);
+            else descriptor.layout.restoreVector(value, descriptor.index, bytecode, frame, descriptor.lanes, 0);
         }
     }
 

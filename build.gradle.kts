@@ -300,6 +300,24 @@ tasks.register<Test>("originalIconvFullCoreTest") {
         }
     }
 }
+tasks.register<Test>("originalStackDecoderFullCoreTest") {
+    group = "verification"
+    description = "Tests the original stack decoder/formatter using the explicitly prepared full-Core GHC fixture."
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    inputs.files(fileTree("build/original-stack-decoder") {
+        include("**/*.json", "installed/bundles/*.zip", "logs/*.stdout", "logs/*.stderr", "native/oracle")
+    })
+    useJUnitPlatform()
+    filter { includeTestsMatching("thc.runtime.OriginalStackDecoderTest") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Full-Core native/compiled evidence requires a fresh test process") { true }
+    doFirst {
+        check(file("build/original-stack-decoder/manifest.json").isFile) {
+            "Missing original-stack-decoder fixture: select a full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- original-stack-decoder"
+        }
+    }
+}
 tasks.register<Test>("simdFamiliesExperimentTest") {
     group = "verification"
     description = "Runs the prepared generated SIMD Core, native-oracle, and compiled-path experiment."

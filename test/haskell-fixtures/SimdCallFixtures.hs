@@ -16,7 +16,8 @@ import System.FilePath ((</>))
 import System.Info (arch)
 
 entries :: [String]
-entries = ["directCase", "papCase", "nestedTupleCase", "joinCase", "overCase"]
+entries = ["directCase", "papCase", "nestedTupleCase", "joinCase", "overCase",
+  "heapCase", "heapPapCase", "capturedCase", "thunkCase"]
 
 inputs :: [Int]
 inputs = [-65536, -32769, -32768, -1, 0, 1, 32767, 32768, 65535]
