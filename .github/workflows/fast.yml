@@ -194,6 +194,15 @@ jobs:
         run: |
           case "$(cabal --numeric-version)" in 3.16.*) ;; *) exit 1 ;; esac
           cabal build exe:thc
+      - name: Install Linux native GMP build dependencies
+        # Persistent hosts provision these packages outside the workflow.
+        if: runner.os == 'Linux' && needs.automation.outputs.persistent != 'true'
+        run: sudo apt-get update && sudo apt-get install --yes clang libgmp-dev
+      - name: Check Linux native GMP build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          command -v clang
+          dpkg-query --show --showformat='${Status}\n' libgmp-dev | grep -Fx 'install ok installed'
       - name: Identify toolchain and fixture dependencies
         run: python3 .github/scripts/fast_ci.py identify
       - name: Run fresh smoke plus affected tests

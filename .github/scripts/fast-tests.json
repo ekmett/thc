@@ -879,6 +879,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.OriginalGmpTest",
         "thc.runtime.OriginalFdReadyNativeTest",
         "thc.runtime.ManagedAddressReadTest",
         "thc.runtime.ThreadAsyncNativeTest",
@@ -925,6 +926,24 @@
         "thc.runtime.FloatWordArrayNativeTest"
       ],
       "python": []
+    },
+    "test/haskell-fixtures/OriginalGmpFixtures.hs": {
+      "junit": ["thc.runtime.OriginalGmpTest"], "python": []
+    },
+    "compiler/test-fixtures/OriginalGmpAudit.hs": {
+      "junit": ["thc.runtime.OriginalGmpTest"], "python": []
+    },
+    "compiler/test-fixtures/OriginalGmpNative.hs": {
+      "junit": ["thc.runtime.OriginalGmpTest"], "python": []
+    },
+    "src/main/kotlin/thc/runtime/CoreGmpForeign.kt": {
+      "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/kotlin/thc/runtime/ManagedGmp.kt": {
+      "junit": ["thc.runtime.SulongLimbProviderTest", "thc.runtime.OriginalGmpTest"], "python": []
+    },
+    "src/main/kotlin/thc/runtime/GmpForeignExpression.kt": {
+      "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": []
     },
     "test/haskell-fixtures/ContinuationFixtures.hs": {
       "junit": ["thc.runtime.CoreContinuationNativeTest"],

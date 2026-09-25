@@ -112,6 +112,8 @@ tasks.withType<Test>().configureEach {
             "original-handle-readiness/logs/*.stdout", "original-handle-readiness/logs/*.stderr",
             "original-posix-stat/**/*.json", "original-posix-stat/native/oracle",
             "original-posix-stat/logs/*.stdout", "original-posix-stat/logs/*.stderr",
+            "original-gmp/**/*.json", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
+            "original-gmp/logs/*.stdout", "original-gmp/logs/*.stderr",
             "original-stdio-close/**/*.json", "original-stdio-close/results/*.txt", "original-stdio-close/results/*.private",
             "original-stdio-close/native/**", "original-stdio-close/logs/*.stdout", "original-stdio-close/logs/*.stderr",
             "original-stdio-seek/**/*.json", "original-stdio-seek/results/*.txt", "original-stdio-seek/results/*.private",
