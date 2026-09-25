@@ -126,7 +126,7 @@ internal class ManagedExportPlan(val linked: Map<String, Any?>, val exports: Lis
     companion object {
         fun read(input: Map<String, Any?>): ManagedExportPlan {
             require(input.keys.all { it in setOf("mode", "modules", "backend", "instrument", "sourceNotesEnabled", "strictLink", "targetLayout",
-                "packageManifest", "packageManifestSha256") } &&
+                "packageManifest", "packageManifestSha256", "packageCapability") } &&
                 input["mode"] == "managed-exports" && input["strictLink"] == true) { "Managed export loading requires its explicit strict request" }
             val merger = CoreModules.Merger()
             val admissions = arrayListOf<ManagedExportAdmission>()

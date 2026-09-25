@@ -317,9 +317,18 @@ class CoreZipBundleTest {
         assertFalse(input.containsKey("modules"))
         assertEquals(path.toRealPath().toString(), input["packageManifest"])
         assertEquals(64, (input["packageManifestSha256"] as String).length)
-        val merger = CoreModules.Merger()
         @Suppress("UNCHECKED_CAST")
         val decoded = input as Map<String, Any?>
+        Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
+            assertTrue(assertThrows(RuntimeException::class.java) {
+                context.eval("thc", Json.stringify(decoded - "packageCapability"))
+            }.message!!.contains("capability"))
+            assertTrue(assertThrows(RuntimeException::class.java) {
+                context.eval("thc", Json.stringify(decoded + ("packageManifest" to
+                    temporary.resolve("unreadable.json").toString())))
+            }.message!!.contains("capability"))
+        }
+        val merger = CoreModules.Merger()
         val layout = CoreModules.visitRequestModules(decoded) { merger.add(it) }
         assertEquals(8, layout?.wordBytes)
         val linked = CoreModules.reachable(merger.finish(), "pkg-a:Shared.entry", true)

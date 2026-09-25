@@ -34,9 +34,14 @@ import thc.runtime.CoreRepresentation
 import thc.runtime.IoMainRoot
 import thc.runtime.TargetLayout
 import java.io.File
+import java.security.MessageDigest
+import java.security.SecureRandom
+import java.util.Base64
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.FutureTask
 import java.util.concurrent.atomic.AtomicReference
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 
 /**
  * Internal Core assembly and request serialization shared by the launcher and tests.
@@ -45,6 +50,16 @@ import java.util.concurrent.atomic.AtomicReference
  * embedding callers should normally use [loadEntry].
  */
 object CoreModules {
+    // Only the host-side request builder can authorize a deferred file read.
+    // Arbitrary guest Source JSON must never acquire a new host-filesystem API.
+    private val packageKey = ByteArray(32).also { SecureRandom().nextBytes(it) }
+    private fun packageCapability(path: String, sha256: String): String {
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(packageKey, "HmacSHA256"))
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(
+            mac.doFinal((path.length.toString() + ":" + path + sha256).toByteArray(Charsets.UTF_8)))
+    }
+
     private fun admission(module: Map<String, Any?>): ManagedExportAdmission? =
         if ((module["schema"] == 2L || module["schema"] == 2) &&
             module.containsKey("staticForeignExportRegistration") &&
@@ -263,9 +278,17 @@ object CoreModules {
             }
             val expected = input["packageManifestSha256"] as? String
                 ?: error("Missing package manifest identity")
+            val supplied = input["packageCapability"] as? String
+                ?: error("Missing package request capability")
+            require(MessageDigest.isEqual(supplied.toByteArray(Charsets.US_ASCII),
+                packageCapability(manifest, expected).toByteArray(Charsets.US_ASCII))) {
+                "Invalid package request capability"
+            }
             return CorePackageManifest.visitModules(manifest, expected) { module, _ -> accept(module) }.targetLayout
         }
-        require(input["packageManifestSha256"] == null) { "Orphan package manifest identity" }
+        require(input["packageManifestSha256"] == null && input["packageCapability"] == null) {
+            "Orphan package manifest identity"
+        }
         val modules = input["modules"] as? List<Map<String, Any?>> ?: error("Expected modules array")
         modules.forEach(accept)
         return input["targetLayout"]?.let(TargetLayout::fromDocument)
@@ -294,7 +317,8 @@ object CoreModules {
             }
             if (inline == null) return Json.stringify(settings + mapOf(
                 "packageManifest" to result.manifestPath,
-                "packageManifestSha256" to result.manifestSha256))
+                "packageManifestSha256" to result.manifestSha256,
+                "packageCapability" to packageCapability(result.manifestPath, result.manifestSha256)))
             return buildString {
                 append(options, 0, options.length - 1)
                 append(",\"modules\":[").append(inline).append(']')
