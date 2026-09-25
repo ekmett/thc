@@ -3,6 +3,7 @@
 
 package thc.runtime
 
+import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.TruffleSafepoint
 import com.oracle.truffle.api.TruffleLanguage
@@ -80,6 +81,61 @@ internal class ThreadStatus(@field:Child private var identity: Expr, @field:Chil
         FrameAccess.writeLong(frame, slots[offset + 1], snapshot.capability)
         FrameAccess.writeLong(frame, slots[offset + 2], snapshot.locked)
         return null
+    }
+}
+
+/** A sender owns one request across an interruptible ACK wait. Only an AST
+ * caller with a saved continuation may begin an external send. */
+internal class KillThread(@field:Child private var identity: Expr, @field:Child private var payload: Expr,
+    @field:Child private var state: Expr, private val captureWait: Boolean,
+    proof: CoreRepresentation) : Expr() {
+    init { representation = proof.copy(evaluated = true) }
+
+    private class ResumeWait(private val node: KillThread, private val sent: AsyncRequest) : AstResumeStep {
+        override fun resume(frame: VirtualFrame, input: Any?): Any {
+            if (input !== Unit) fault("Invalid killThread# continuation")
+            return node.finish(sent)
+        }
+    }
+
+    private class ResumeCompleted : AstResumeStep {
+        override fun resume(frame: VirtualFrame, input: Any?): Any {
+            if (input !== Unit) fault("Invalid completed killThread# continuation")
+            return Unit
+        }
+    }
+
+    internal fun finish(sent: AsyncRequest): Any {
+        val enteredCompiled = CompilerDirectives.inCompiledCode()
+        try { GuestThreadOps.finishKill(this, sent) }
+        catch (blocked: AsyncBlocked) {
+            if (!captureWait) fault("Nonresumable AST sender blocked after a self-directed killThread#")
+            blocked.request.compiledCapture = enteredCompiled
+            throw AstCapture(blocked.request, SynchronousMasking.current(this))
+                .append(ResumeWait(this, sent))
+        }
+        GuestThreads.pollCurrent(this, false)?.let { incoming ->
+            if (sent.forceSelf) {
+                if (incoming !== sent) fault("Self-directed killThread# claimed a different request")
+                incoming.compiledCapture = CompilerDirectives.inCompiledCode()
+                throw AsyncDelivery(incoming, this)
+            }
+            if (incoming === sent) fault("killThread# claimed its completed outbound request")
+            if (!captureWait) fault("Nonresumable AST sender claimed an external request")
+            incoming.compiledCapture = CompilerDirectives.inCompiledCode()
+            throw AstCapture(incoming, SynchronousMasking.current(this)).append(ResumeCompleted())
+        }
+        if (sent.forceSelf) fault("Self-directed killThread# was not delivered at its guest poll")
+        return Unit
+    }
+
+    override fun execute(frame: VirtualFrame): Any {
+        val target = identity.execute(frame)
+        val exception = payload.execute(frame) // The lifted payload remains lazy.
+        requireVoidCarrier(state.execute(frame))
+        if (!captureWait && target !== GuestThreadOps.myThreadId(this))
+            throw UnsupportedCore("AST external killThread# requires a captured sender continuation")
+        return finish(GuestThreadOps.beginKill(this, target, exception))
     }
 }
 

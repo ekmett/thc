@@ -592,6 +592,8 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                 thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
             } catch (suspended: thc.runtime.CallSegmentSuspended) {
                 thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
+            } catch (delivered: thc.runtime.AsyncDelivery) {
+                thc.runtime.AsyncContinuations.uncaught(delivered.request, dispatch)
             }
         } catch (failure: Throwable) {
             outcome = thc.runtime.GuestThreadStatus.uncaught(failure)
@@ -634,6 +636,8 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                     thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
                 } catch (suspended: thc.runtime.CallSegmentSuspended) {
                     thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
+                } catch (delivered: thc.runtime.AsyncDelivery) {
+                    thc.runtime.AsyncContinuations.uncaught(delivered.request, dispatch)
                 }
             } catch (failure: Throwable) {
                 outcome = thc.runtime.GuestThreadStatus.uncaught(failure)
