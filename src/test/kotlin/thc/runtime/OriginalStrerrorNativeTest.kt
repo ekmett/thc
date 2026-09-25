@@ -8,10 +8,15 @@ import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import thc.Json
 import thc.Language
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 /** Original ghc-internal errno messages against an exact typed FCall consumer. */
 class OriginalStrerrorNativeTest {
@@ -20,6 +25,66 @@ class OriginalStrerrorNativeTest {
     private fun json(path: File) = Json.parse(path.readText()) as Map<String, Any?>
     private fun valid(target: RootCallTarget) = assertEquals(true,
         target.javaClass.getMethod("isValidLastTier").invoke(target))
+
+    @Test fun ownedNativeOutputRemainsBorrowedUntilCopybackCompletes() {
+        assumeTrue(System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in setOf("amd64", "x86_64"))
+        val manifest = json(File(fixture, "manifest.json"))
+        OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf("compiler/test-fixtures/OriginalStrerrorNative.hs"))
+        OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf("build/original-strerror/oracle.json"),
+            "build/original-strerror/")
+        val rows = (json(File(fixture, "oracle.json"))["raw"] as List<Map<String, Any?>>)
+            .filter { it["length"] == 512L }
+        assertEquals(listOf(22L, 999999L), rows.map { it["errno"] })
+        Context.newBuilder("thc").allowNativeAccess(true).build().use { context ->
+            val executor = Executors.newSingleThreadExecutor()
+            context.initialize("thc"); context.enter()
+            try {
+                val owner = Language.currentState()
+                val registry = owner.nativeAllocations
+                for (row in rows) {
+                    val base = registry.malloc(528)
+                    val output = base.plus(8)
+                    for (i in 0L until 528L) base.writeWord8(i, 0x55)
+                    val error = (row["errno"] as Number).toLong()
+                    val expected = (row["status"] as Number).toLong()
+                    assertEquals(expected, owner.strerror.call(error, output, 512))
+                    val bytes = (row["bytes"] as List<Number>).map { it.toLong() }
+                    assertEquals(List(8) { 0x55L } + bytes + List(8) { 0x55L },
+                        (0L until 528L).map(base::readWord8), "native output and canaries")
+                    for (i in 0L until 528L) base.writeWord8(i, 0x55)
+                    val startFree = CountDownLatch(1)
+                    val freeingStarted = CountDownLatch(1)
+                    val freeing = executor.submit {
+                        context.enter()
+                        try {
+                            assertTrue(startFree.await(5, TimeUnit.SECONDS))
+                            freeingStarted.countDown()
+                            registry.free(base)
+                        } finally { context.leave() }
+                    }
+                    val service = ManagedStrerror({
+                        // This is the real adapter's existing provider callback.
+                        // Same-thread free proves the borrow without scheduling;
+                        // the queued other-thread free must wait through copyback.
+                        val denied = assertThrows(RuntimeFault::class.java) { registry.free(base) }
+                        assertTrue(denied.message!!.contains("borrowed by this thread"))
+                        startFree.countDown()
+                        assertTrue(freeingStarted.await(5, TimeUnit.SECONDS))
+                        assertThrows(TimeoutException::class.java) { freeing.get(100, TimeUnit.MILLISECONDS) }
+                        owner.cbits()
+                    }, owner.threads)
+                    try {
+                        assertEquals(expected, service.call(error, output, 512))
+                        // Every copyback access checks liveness; an early free
+                        // would fault before the adapter returned its C status.
+                        freeing.get(5, TimeUnit.SECONDS)
+                        assertThrows(RuntimeFault::class.java) { base.readWord8(0) }
+                        assertEquals(0, registry.liveCount())
+                    } finally { startFree.countDown() }
+                }
+            } finally { context.leave(); executor.shutdownNow() }
+        }
+    }
 
     @Test fun originalMessagesSurviveNativeCopyAndCompiledCalls() {
         val manifest = json(File(fixture, "manifest.json"))

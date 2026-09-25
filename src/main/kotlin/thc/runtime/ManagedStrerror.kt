@@ -17,6 +17,12 @@ internal class ManagedStrerror(private val cbits: () -> SulongCbits, private val
         // The original wrapper ellipsizes ERANGE using buflen-4. Its installed
         // Haskell caller supplies 512; reject unsafe or unbounded other sizes.
         if (length !in 4L..65536L) fault("strerror output length outside supported range")
+        // Scalar accesses alone release their native borrow between bytes. Keep
+        // an owned malloc output live through provider loading, C and copyback.
+        return output.withNativeBorrow { copyMessage(error, output, length) }
+    }
+
+    private fun copyMessage(error: Long, output: ManagedAddress, length: Long): Long {
         output.requireByteRegion(length, writable = true)
         val nativeCode = cbits()
         val library = nativeCode.strerrorLibrary()
