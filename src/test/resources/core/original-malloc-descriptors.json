@@ -1,0 +1,91 @@
+[
+  {
+    "argumentReps": [
+      {
+        "evaluated": false,
+        "kind": "long",
+        "primReps": [
+          "Word64Rep"
+        ]
+      },
+      {
+        "evaluated": false,
+        "kind": "void",
+        "primReps": []
+      }
+    ],
+    "arity": 2,
+    "convention": "ccall",
+    "resultRep": {
+      "aggregate": "unboxed-tuple",
+      "components": [
+        {
+          "evaluated": true,
+          "kind": "void",
+          "primReps": []
+        },
+        {
+          "evaluated": true,
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        }
+      ],
+      "evaluated": false,
+      "kind": "unknown",
+      "primReps": [
+        "AddrRep"
+      ]
+    },
+    "safety": "unsafe",
+    "schema": 1,
+    "suppliedArity": 2,
+    "target": {
+      "isFunction": true,
+      "kind": "static",
+      "symbol": "malloc",
+      "unit": "ghc-internal"
+    }
+  },
+  {
+    "argumentReps": [
+      {
+        "evaluated": false,
+        "kind": "address",
+        "primReps": [
+          "AddrRep"
+        ]
+      },
+      {
+        "evaluated": false,
+        "kind": "void",
+        "primReps": []
+      }
+    ],
+    "arity": 2,
+    "convention": "ccall",
+    "resultRep": {
+      "aggregate": "unboxed-tuple",
+      "components": [
+        {
+          "evaluated": true,
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "evaluated": false,
+      "kind": "unknown",
+      "primReps": []
+    },
+    "safety": "unsafe",
+    "schema": 1,
+    "suppliedArity": 2,
+    "target": {
+      "isFunction": true,
+      "kind": "static",
+      "symbol": "free",
+      "unit": "ghc-internal"
+    }
+  }
+]

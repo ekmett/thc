@@ -205,17 +205,29 @@ class FixturePreparationTest(unittest.TestCase):
         manifest, owners = fast_fixtures._manifest(project)
         group = manifest['groups']['native-addresses']
         self.assertEqual('native-addresses', owners['thc.runtime.NativeAddressTest'])
+        self.assertEqual('native-addresses', owners['thc.runtime.NativeMallocTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
                                    'native-addresses']}], group['commands'])
-        self.assertEqual(['build/native-addresses/manifest.json', 'build/native-addresses/oracle.json'], group['outputs'])
+        self.assertEqual(['build/native-addresses/manifest.json', 'build/native-addresses/oracle.json',
+                          'build/native-malloc/manifest.json', 'build/native-malloc/oracle.txt'], group['outputs'])
+        self.assertIn('compiler/test-fixtures/NativeMallocNative.hs', group['sources'])
+        self.assertIn('src/test/resources/core/original-malloc-descriptors.json', group['sources'])
         self.assertTrue(all((project / path).is_file() for path in group['sources']))
         self.assertIn('"$fixture_bin" native-addresses', (project / 'scripts/prepare-tests.sh').read_text())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/native-addresses/manifest.json', fast_fixtures.FULL_REQUIRED)
+        self.assertIn('build/native-malloc/manifest.json', fast_fixtures.FULL_REQUIRED)
+        self.assertIn('build/native-malloc/oracle.txt', fast_fixtures.FULL_REQUIRED)
         for suffix in ('manifest.json', 'oracle.json'):
             self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/native-addresses/' + suffix, {}))
             self.assertIn('"native-addresses/' + suffix + '"', (project / 'build.gradle.kts').read_text())
         self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/native-addresses/native/oracle', {}))
+        for suffix in ('manifest.json', 'oracle.txt'):
+            path = 'build/native-malloc/' + suffix
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path, {}))
+            self.assertIn('"native-malloc/' + suffix + '"', (project / 'build.gradle.kts').read_text())
+            self.assertIn(path, (project / '.github/workflows/build.yml').read_text())
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/native-malloc/native/oracle', {}))
 
     def test_original_gmp_registration_platform_and_exact_cache(self):
         project = Path(__file__).resolve().parents[2]

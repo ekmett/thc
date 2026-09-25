@@ -92,10 +92,12 @@
         "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "native-addresses": {
-      "junit": ["thc.runtime.NativeAddressTest"],
+      "junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "native-addresses"]}],
-      "outputs": ["build/native-addresses/manifest.json", "build/native-addresses/oracle.json"],
-      "sources": ["compiler/test-fixtures/NativeAddressNative.hs", "test/haskell-fixtures/NativeAddressFixtures.hs",
+      "outputs": ["build/native-addresses/manifest.json", "build/native-addresses/oracle.json",
+        "build/native-malloc/manifest.json", "build/native-malloc/oracle.txt"],
+      "sources": ["compiler/test-fixtures/NativeAddressNative.hs", "compiler/test-fixtures/NativeMallocNative.hs",
+        "src/test/resources/core/original-malloc-descriptors.json", "test/haskell-fixtures/NativeAddressFixtures.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-open": {

@@ -34,6 +34,7 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
     "build/original-fd-ready", "build/simd-calls",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    "build/native-malloc/oracle.txt",
     "build/simd-calls/manifest.json", "build/simd-calls/pre-core/SimdCallAudit.json",
     "build/simd-calls/pre-audit.json",
     "build/simd-floatx4-fma/manifest.json", "build/simd-floatx4-fma/pre-core/SimdFloatFma.json",

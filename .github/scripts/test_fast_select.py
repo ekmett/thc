@@ -732,7 +732,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         return self.families["src/main/kotlin/thc/runtime/" + name + ".kt"]
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
-        self.assertEqual({"AddressIdentity", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArrays", "ManagedMutVars", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
+        self.assertEqual({"AddressIdentity", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArrays", "ManagedMutVars", "ManagedNativeAllocations", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
                           "IntegerVectorPrimitives", "FloatingVectorPrimitives"},
                          {Path(path).stem for path in self.families})
         for path, group in self.families.items():
@@ -751,6 +751,21 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertEqual({"junit": ["thc.runtime.CoreBoundThreadForeignTest"],
                           "python": ["scripts/test-audit-core.py"]},
                          self.family("CoreBoundThreadForeign"))
+
+    def test_native_malloc_source_and_composite_owners_select_both_consumers(self):
+        malloc = "thc.runtime.NativeMallocTest"
+        addresses = "thc.runtime.NativeAddressTest"
+        self.assertEqual([malloc], self.family("ManagedNativeAllocations")["junit"])
+        owners = self.policy["owners"]
+        self.assertEqual([malloc], owners["src/main/java/thc/runtime/NativeMallocAllocation.java"]["junit"])
+        self.assertEqual({malloc, addresses},
+                         set(owners["test/haskell-fixtures/NativeAddressFixtures.hs"]["junit"]))
+        self.assertEqual({malloc, addresses},
+                         set(owners["src/main/kotlin/thc/runtime/NativeAddresses.kt"]["junit"]))
+        for path in ("compiler/test-fixtures/NativeMallocNative.hs",
+                     "src/test/resources/core/original-malloc-descriptors.json"):
+            self.assertEqual([malloc], owners[path]["junit"])
+        self.assertIn(malloc, owners["test/haskell-fixtures/Main.hs"]["junit"])
 
     def test_saved_termios_owners_select_pointer_and_original_fixture_controls(self):
         owners = self.policy["owners"]

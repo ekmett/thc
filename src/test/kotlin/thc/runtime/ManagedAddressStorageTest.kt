@@ -177,8 +177,12 @@ class ManagedAddressStorageTest {
         val type = ManagedAddress::class.java
         assertTrue(Modifier.isFinal(type.modifiers))
         val fields = type.declaredFields.filterNot { Modifier.isStatic(it.modifiers) }
-        assertEquals(setOf("literalBytes", "mutableBytes", "offset", "owner"), fields.map { it.name }.toSet())
         assertTrue(fields.all { Modifier.isPrivate(it.modifiers) && Modifier.isFinal(it.modifiers) })
+        // New address capabilities may add final ownership fields. Only literal
+        // contents may be treated as compilation constants.
+        assertEquals(setOf("literalBytes"), fields.filter {
+            it.isAnnotationPresent(CompilationFinal::class.java)
+        }.map { it.name }.toSet())
         val literalField = fields.single { it.name == "literalBytes" }.also { it.isAccessible = true }
         val mutableField = fields.single { it.name == "mutableBytes" }.also { it.isAccessible = true }
         val ownerField = fields.single { it.name == "owner" }.also { it.isAccessible = true }

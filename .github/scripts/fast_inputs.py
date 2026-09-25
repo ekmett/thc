@@ -39,7 +39,7 @@ MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 thread-status boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array
-narrow-literal-proofs native-addresses libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
 SIMD_FLOAT_FMA_OUTPUTS = frozenset("build/simd-floatx4-fma/" + name for name in (
     "manifest.json", "oracle.txt", "pre-core/SimdFloatFma.json", "post-core/SimdFloatFma.json",
@@ -788,6 +788,8 @@ def allowed_payload(name, pins):
         return name in ("build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json", "build/libdw-unavailable/foreign-labels.json")
     if parts[1] == "native-addresses":
         return name in ("build/native-addresses/manifest.json", "build/native-addresses/oracle.json")
+    if parts[1] == "native-malloc":
+        return name in ("build/native-malloc/manifest.json", "build/native-malloc/oracle.txt")
     if parts[1] == "original-strerror":
         return name in ORIGINAL_STRERROR_OUTPUTS
     if parts[1] == "original-fd-ready":

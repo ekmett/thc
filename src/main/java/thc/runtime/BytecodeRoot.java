@@ -998,6 +998,25 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class NativeMalloc {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                long size, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedAddress result = ManagedNativeAllocations.current(node).malloc(size);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    public static final class NativeFree {
+        @Specialization public static void apply(ManagedAddress address, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedNativeAllocations.current(node).free(address);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = CapiCall.class, name = "call")
     public static final class LinkedCapiWordAddress {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,

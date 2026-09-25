@@ -70,6 +70,9 @@ OPERATIONS = {
         ('capi', 'unsafe', ('Int32Rep', 'AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
     TCGETATTR_SYMBOL:
         ('capi', 'unsafe', ('Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),
+
+    'malloc': ('ccall', 'unsafe', ('Word64Rep', None), (None, 'AddrRep')),
+    'free': ('ccall', 'unsafe', ('AddrRep', None), (None,)),
     **{symbol: ('capi', 'unsafe', arguments, output)
        for symbol, (arguments, output) in SIGSET_OPERATIONS.items()},
     'rtsSupportsBoundThreads': ('ccall', 'unsafe', (None,), (None, 'IntRep')),

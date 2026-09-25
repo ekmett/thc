@@ -126,6 +126,31 @@ class FastInputTests(unittest.TestCase):
                 if member.name != 'files/' + binary])
             self.rejected_without_writes(changed)
 
+    def test_native_malloc_cache_preserves_exact_oracle_and_rejects_extra_members(self):
+        manifest_path = 'build/native-malloc/manifest.json'
+        oracle_path = 'build/native-malloc/oracle.txt'
+        self.assertIn(manifest_path, DECLARED_REQUIRED)
+        self.put(oracle_path, '0 0 0 0\n1 1 257 1\n')
+        original = json.dumps({'schema': 1, 'inputHashes': self.manifest['inputHashes'],
+            'artifactHashes': {oracle_path: cache.digest(self.root / oracle_path)}})
+        self.put(manifest_path, original)
+        for path in (manifest_path, oracle_path):
+            self.assertTrue(cache.allowed_payload(path, {}))
+            with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
+        for suffix in ('native/oracle', 'native/oracle.o', 'logs/extra.stdout', 'other.txt'):
+            self.assertFalse(cache.allowed_payload('build/native-malloc/' + suffix, {}), suffix)
+        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, manifest_path)):
+            packed = self.pack()
+            self.assertLessEqual({manifest_path, oracle_path}, packed['payload'].keys())
+            self.remove_payload(packed)
+            cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(original, (self.root / manifest_path).read_text())
+            self.assertEqual(packed['payload'][oracle_path], cache.digest(self.root / oracle_path))
+            self.remove_payload(packed)
+            missing_oracle = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                if member.name != 'files/' + oracle_path])
+            self.rejected_without_writes(missing_oracle)
+
     def test_sigset_exact_native_image_fixture_inventory(self):
         self.assertEqual(41, len(cache.ORIGINAL_SIGSET_OUTPUTS))
         self.assertIn('build/original-sigset/manifest.json', DECLARED_REQUIRED)
