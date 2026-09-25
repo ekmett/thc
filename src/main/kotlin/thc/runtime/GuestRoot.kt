@@ -29,7 +29,8 @@ abstract class GuestRoot(language: TruffleLanguage<*>?, descriptor: FrameDescrip
         private set
     internal fun configureTypedInput(layout: TypedInputLayout?) { typedInput = layout }
     private fun configureStrictPositions() {
-        strictArgumentPositions = entryStrict.indices.filter { entryStrict[it] && inputLayout?.isTuple(it) != true }
+        strictArgumentPositions = entryStrict.indices.filter { entryStrict[it] &&
+            inputLayout?.isTuple(it) != true && inputLayout?.isVector(it) != true }
             .map { ArgumentLayout.offset(inputLayout, it) + entryArgumentOffset }.toIntArray()
     }
 
