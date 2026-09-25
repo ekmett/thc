@@ -2285,7 +2285,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class AwaitFileWait {
         @Specialization public static void await(GlobalBinding payload, boolean async, Object token,
                 @Bind("$node") Node node) {
-            FileWaitPrimitivesKt.awaitFileWait(token, payload, async, node);
+            // The native wait crosses a boundary; sample before leaving this
+            // resumable bytecode operation, then tag only a claimed request.
+            boolean compiledAtCut = CompilerDirectives.inCompiledCode();
+            FileWaitPrimitivesKt.awaitFileWait(token, payload, async, compiledAtCut, node);
         }
     }
 

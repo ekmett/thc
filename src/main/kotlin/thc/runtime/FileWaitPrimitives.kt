@@ -3,6 +3,7 @@
 
 package thc.runtime
 
+import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.Node
@@ -44,7 +45,7 @@ internal class WaitFileDescriptor(@field:Child private var fd: Expr,
     }
 
     private fun await(token: ManagedFiles.WaitToken) {
-        try { token.await(this, async) }
+        try { token.await(this, async, CompilerDirectives.inCompiledCode()) }
         catch (blocked: AsyncBlocked) {
             throw AstCapture(blocked.request, SynchronousMasking.current(this)).append(Resume(this, token))
         }
@@ -65,9 +66,10 @@ internal fun prepareFileWait(fd: Long, state: Any?, writing: Boolean, node: Node
     return Language.currentState(node).files.waitToken(fd, writing)
 }
 
-internal fun awaitFileWait(token: Any?, payload: GlobalBinding, async: Boolean, node: Node): Any {
+internal fun awaitFileWait(token: Any?, payload: GlobalBinding, async: Boolean,
+                           compiledAtCut: Boolean, node: Node): Any {
     val saved = token as? ManagedFiles.WaitToken ?: fault("Invalid descriptor-wait token")
-    try { saved.await(node, async) }
+    try { saved.await(node, async, compiledAtCut) }
     catch (_: ClosedChannelException) { badFileDescriptor(payload, node) }
     return Unit
 }
