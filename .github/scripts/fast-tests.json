@@ -293,6 +293,12 @@
     "compiler/test-fixtures/InterfaceForeign.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
     },
+    "compiler/test-fixtures/InterfaceForeignAlias.hs": {
+      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
+    },
+    "test/haskell-fixtures/InterfaceForeignFacts.hs": {
+      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
+    },
     "compiler/test-fixtures/LiveAsyncAudit.hs": {
       "junit": ["thc.runtime.LiveAsyncNativeTest", "thc.runtime.AsyncStrictEntryNativeTest"],
       "python": []
