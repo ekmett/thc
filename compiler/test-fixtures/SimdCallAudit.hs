@@ -6,6 +6,45 @@ module SimdCallAudit where
 
 import GHC.Exts
 
+data Heap = Heap Int16X8# Int#
+
+{-# OPAQUE consumeHeap #-}
+consumeHeap :: Heap -> Int#
+consumeHeap (Heap vector bias) = vectorWorker vector bias
+
+{-# OPAQUE heapMaker #-}
+heapMaker :: Int16X8# -> Int# -> Heap
+heapMaker vector = Heap vector
+
+{-# OPAQUE heapCase #-}
+heapCase :: Int# -> Int#
+heapCase x = consumeHeap (Heap (vectorReturn x) 13#)
+
+{-# OPAQUE heapPapCase #-}
+heapPapCase :: Int# -> Int#
+heapPapCase x = consumeHeap (heapMaker (vectorReturn x) 13#)
+
+{-# OPAQUE applyCaptured #-}
+applyCaptured :: (Int# -> Int#) -> Int#
+applyCaptured f = f 13#
+
+{-# OPAQUE capturedCase #-}
+capturedCase :: Int# -> Int#
+capturedCase x = case vectorReturn x of
+  vector -> applyCaptured (\bias -> case bias of
+    0# -> 0#
+    _ -> vectorWorker vector bias)
+
+{-# OPAQUE forceBox #-}
+forceBox :: Int -> Int#
+forceBox (I# value) = value
+
+{-# OPAQUE thunkCase #-}
+thunkCase :: Int# -> Int#
+thunkCase x = case vectorReturn x of
+  vector -> let boxed = I# (vectorWorker vector 13#)
+            in forceBox boxed
+
 {-# OPAQUE vectorReturn #-}
 vectorReturn :: Int# -> Int16X8#
 vectorReturn x = broadcastInt16X8# (intToInt16# x)
