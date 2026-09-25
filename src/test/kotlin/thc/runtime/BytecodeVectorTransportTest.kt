@@ -277,7 +277,7 @@ class BytecodeVectorTransportTest {
         }
     }
 
-    @Test fun vectorLetsRejectRecursiveLiftedMismatchedAndHeapCapturedValues() = withLanguage { language ->
+    @Test fun vectorLetsRejectRecursiveLiftedAndMismatchedValues() = withLanguage { language ->
         val family = families().single { it.name == "Int32X4" }
         val payload = lanes(family, variable("x"))
         fun reject(body: VectorCore, result: VectorRep = family.vector) {
@@ -292,8 +292,8 @@ class BytecodeVectorTransportTest {
         val other = families().single { it.name == "Word32X4" }
         reject(vectorLet("v", family.vector, lanes(other, variable("x")), variable("v", family.vector)))
         reject(vectorLet("v", family.vector, number(0), variable("v", family.vector)))
-        reject(vectorLet("v", family.vector, payload,
-            lambda(listOf(parameter("unused")), variable("v", family.vector), family.vector)), closure)
+        // Ordinary closures retaining a lexical vector now have owned lane
+        // storage; the genuine capturedCase Core path is proved by SimdCallNativeTest.
         val fields = tuple(List(family.lanes) { family.lane })
         reject(vectorLet("v", fields,
             application(listOf("con", "T${family.lanes}", family.lanes),
