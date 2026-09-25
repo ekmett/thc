@@ -36,12 +36,11 @@ internal object CoreMemmoveForeign {
     }
 
     fun validateHead(function: List<Any?>, defined: Boolean) {
+        val proof = CoreRepresentations.metadata(function)?.get("rep") as? Map<*, *>
         requireProof(function.size == 3 && function[0] == "var" && function[1] is String &&
-            (function[1] as String).isNotEmpty() && !defined &&
-            (CoreRepresentations.metadata(function)?.get("rep") as? Map<*, *>)?.let {
-                it.keys == scalarKeys && it["kind"] == "closure" &&
-                    it["primReps"] == listOf("BoxedRep (Just Lifted)") && it["evaluated"] == true
-            } == true, "unresolved original foreign variable required")
+            (function[1] as String).isNotEmpty() && !defined && proof?.keys == scalarKeys &&
+            proof["kind"] == "closure" && proof["primReps"] == listOf("BoxedRep (Just Lifted)") &&
+            proof["evaluated"] == true, "unresolved original foreign variable required")
     }
 
     fun validateHeads(value: Any?) {
