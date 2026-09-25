@@ -162,12 +162,14 @@ class DataLayout private constructor(
     }
 
     /** Keep the value private until every final field has been initialized exactly once. */
+    @JvmName("allocate")
     internal fun allocate(): DataValue {
         val value = nullaryValue ?: shape.factory.create(this, allocationKey)
         checkAllocated(value)
         return value
     }
 
+    @JvmName("initialize")
     internal fun initialize(value: DataValue, index: Int, field: Any?) {
         if (!owns(value)) fault("Constructor value does not match layout")
         if (index < 0 || index >= arity) fault("Invalid constructor field index")
@@ -175,18 +177,21 @@ class DataLayout private constructor(
     }
 
     /** A primitive producer can initialize its property without an Object-array bridge. */
+    @JvmName("initializeLong")
     internal fun initializeLong(value: DataValue, index: Int, field: Long) {
         if (!owns(value)) fault("Constructor value does not match layout")
         if (index < 0 || index >= arity) fault("Invalid constructor field index")
         fields[index].initializeLong(value, field)
     }
 
+    @JvmName("initializeFloat")
     internal fun initializeFloat(value: DataValue, index: Int, field: Float) {
         if (!owns(value)) fault("Constructor value does not match layout")
         if (index < 0 || index >= arity) fault("Invalid constructor field index")
         fields[index].initializeFloat(value, field)
     }
 
+    @JvmName("initializeDouble")
     internal fun initializeDouble(value: DataValue, index: Int, field: Double) {
         if (!owns(value)) fault("Constructor value does not match layout")
         if (index < 0 || index >= arity) fault("Invalid constructor field index")
