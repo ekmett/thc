@@ -28,6 +28,12 @@ int64_t thc_file_tcgetattr(const int *lease, struct termios *image, int64_t *err
   return result;
 }
 
+int64_t thc_file_tcsetattr(const int *lease, int action, const struct termios *image, int64_t *error) {
+  int result = tcsetattr(*lease, action, image);
+  *error = result < 0 ? errno : 0;
+  return result;
+}
+
 // Original unsafe open transport: no added flags, path decoding, type filter,
 // retry, truncation deferral or RTS locking. The caller reserved its guest fd.
 int64_t thc_file_open_raw(int *lease, const char *path, int flags, uint32_t mode, int64_t *error) {

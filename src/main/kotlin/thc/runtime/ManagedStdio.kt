@@ -131,6 +131,15 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return result
     }
 
+    @TruffleBoundary fun tcsetattr(fd: Long, action: Long, source: ManagedAddress): Long {
+        val abi = hostAbi
+        if (fd != fd.toInt().toLong() || action != action.toInt().toLong())
+            fault("Original tcsetattr requires canonical signed CInt descriptor and action")
+        val result = files.tcsetattr(fd, action.toInt(), source)
+        if (result < 0) lastError.set(fileError(abi))
+        return result
+    }
+
     @TruffleBoundary fun tcgetattr(fd: Long, destination: ManagedAddress): Long {
         val abi = hostAbi
         if (fd != fd.toInt().toLong()) fault("Original tcgetattr requires a canonical signed CInt descriptor")
