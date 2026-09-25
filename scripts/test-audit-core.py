@@ -41,6 +41,34 @@ CLOSURE = dict(REFERENCE, kind='closure', evaluated=True)
 TUPLE_CAP = dict(CAP, aggregateResults=['unboxed-tuple'])
 
 
+class ArchiveReachabilityTest(unittest.TestCase):
+    def report(self, expression, initializers=(), finalizers=(), files=()):
+        root = dict(schema=1, ghc='9.14.1', bindings=[bind('root', expression)], constructors=[])
+        label = lambda name, init: dict(isInitializer=init, unit='pkg', module='M', name=name)
+        archive = dict(schema=2, ghc='9.14.1', unit='pkg', module='M',
+                       foreign=dict(schema=1, execution='not-linked',
+                                    stubs=dict(header='', source='int stub(void) { return 1; }',
+                                               initializers=[label(name, True) for name in initializers],
+                                               finalizers=[label(name, False) for name in finalizers]), files=list(files)),
+                       bindings=[bind('pkg:M.cold', lit(9))], constructors=[])
+        return audit_core.Audit([('root.json', root), ('archive.json', archive)], CAP).run(['root'])
+
+    def test_unused_archive_is_validated_but_not_executed(self):
+        report = self.report(lit(7))
+        self.assertTrue(report['accepted'], report['issues'])
+        self.assertEqual(['root'], [item['id'] for item in report['reachableBindings']])
+
+    def test_reachable_archive_and_global_registration_still_reject(self):
+        for report in (self.report(var('pkg:M.cold')),
+                       self.report(lit(7), initializers=('start',)),
+                       self.report(lit(7), finalizers=('stop',)),
+                       self.report(lit(7), files=(dict(language='RawObject', source='opaque', extension='.o'),)),
+                       self.report(lit(7), files=(dict(language='C', source='void init(void) __attribute__((constructor));', extension='.c'),))):
+            self.assertFalse(report['accepted'])
+            self.assertIn('module-format', {issue['code'] for issue in report['issues']})
+            self.assertIn('archive-only', str(report['issues']))
+
+
 def tuple_rep(*components):
     return dict(aggregate='unboxed-tuple', kind='unknown', evaluated=True,
                 components=list(components), primReps=[r for c in components for r in c['primReps']])

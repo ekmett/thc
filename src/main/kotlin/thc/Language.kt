@@ -47,10 +47,15 @@ object CoreModules {
         val sourceSpans = linkedMapOf<String, Map<String, Any?>>()
         val bindingOrigins = linkedMapOf<String, Map<String, String>>()
         val foreignLinks = linkedMapOf<Pair<String, String>, ForeignBitcode>()
+        val archiveBindings = linkedMapOf<String, String>()
         val moduleKeys = hashSetOf<Pair<String, String>>()
         for (module in modules) {
-            CoreForeignArtifacts.requireExecutable(module)
-            CoreForeignArtifacts.linked(module)?.let { link ->
+            CoreForeignArtifacts.validateArchive(module)
+            val link = CoreForeignArtifacts.linked(module)
+            val archiveOnly = module["schema"] == 2L || module["schema"] == 2
+            if (archiveOnly && link == null && CoreForeignArtifacts.hasRegistrationObligations(module))
+                CoreForeignArtifacts.requireExecutable(module)
+            link?.let {
                 require(foreignLinks.putIfAbsent(link.unit to link.module, link) == null) {
                     "Duplicate linked foreign module: ${link.unit}:${link.module}"
                 }
@@ -77,6 +82,8 @@ object CoreModules {
             for (b in module["bindings"] as List<Map<String, Any?>>) {
                 val id = b["id"] as String
                 require(bindings.putIfAbsent(id, b) == null) { "Duplicate binding: $id" }
+                if (archiveOnly && link == null)
+                    archiveBindings[id] = "${module["unit"]}:${module["module"]}"
                 // The merged bundle has no single unit/module. Preserve the exact
                 // exporting module for globally named bindings; synthetic entries
                 // and interface fragments must not acquire a guessed owner.
@@ -96,20 +103,24 @@ object CoreModules {
         return mapOf("schema" to 1L, "ghc" to "9.14.1", "module" to "THC.Bundle",
             "bindings" to bindings.values.toList(), "constructors" to constructors.values.toList(),
             "bindingOrigins" to bindingOrigins,
+            "archiveBindings" to archiveBindings,
             "foreignLinks" to foreignLinks.values.toList(),
             "sourceFiles" to sourceFiles.values.toList(), "sourceSpans" to sourceSpans.values.toList())
     }
 
     @Suppress("UNCHECKED_CAST")
-    fun reachable(module: Map<String, Any?>, entry: String, strictLink: Boolean = false): Map<String, Any?> {
-        CoreForeignArtifacts.requireExecutableInput(module)
+    fun reachable(module: Map<String, Any?>, entry: String, strictLink: Boolean = false): Map<String, Any?> =
+        reachable(module, listOf(entry), strictLink)
+
+    @Suppress("UNCHECKED_CAST")
+    fun reachable(module: Map<String, Any?>, entries: List<String>, strictLink: Boolean = false): Map<String, Any?> {
+        if (module.containsKey("archiveBindings")) CoreForeignArtifacts.validateArchive(module)
+        else CoreForeignArtifacts.requireExecutableInput(module)
         val bindings = module["bindings"] as List<Map<String, Any?>>
         val byId = bindings.associateBy { it["id"] as String }
         val constructorIds = (module["constructors"] as? List<Map<String, Any?>>)
             ?.mapTo(hashSetOf()) { it["id"] as String } ?: emptySet()
-        val exact = byId[entry]
-        val roots = if (exact != null) listOf(exact) else bindings.filter { it["name"] == entry }
-        require(roots.size == 1) { "Missing or ambiguous entry: $entry" }
+        require(entries.isNotEmpty() && entries.distinct().size == entries.size) { "Missing or duplicate Core entries" }
         val reachable = linkedSetOf<String>()
         val pending = ArrayDeque<String>()
         val missing = linkedMapOf<String, MutableSet<String>>()
@@ -162,9 +173,13 @@ object CoreModules {
                 "con" -> constructor(expr[1] as String)
             }
         }
-        val root = roots.single()["id"] as String
-        reachable.add(root)
-        pending.addLast(root)
+        for (entry in entries) {
+            val exact = byId[entry]
+            val roots = if (exact != null) listOf(exact) else bindings.filter { it["name"] == entry }
+            require(roots.size == 1) { "Missing or ambiguous entry: $entry" }
+            val root = roots.single()["id"] as String
+            if (reachable.add(root)) pending.addLast(root)
+        }
         while (pending.isNotEmpty()) {
             owner = pending.removeFirst()
             visit(byId.getValue(owner)["expr"] as List<Any?>, emptySet())
@@ -175,11 +190,20 @@ object CoreModules {
         require(missingConstructors.isEmpty()) {
             "Unlinked Core constructors: " + missingConstructors.entries.joinToString { (id, uses) -> "$id referenced by ${uses.joinToString()}" }
         }
-        return module + ("bindings" to bindings.filter { it["id"] in reachable })
+        val archived = module["archiveBindings"] as? Map<String, String> ?: emptyMap()
+        for (id in reachable) archived[id]?.let { owner ->
+            throw IllegalArgumentException("Unsupported foreign code/registration for $owner: " +
+                "Core schema 2 is archive-only; native stubs, initializers, finalizers and callbacks are not linked")
+        }
+        return (module - "archiveBindings") + ("bindings" to bindings.filter { it["id"] in reachable })
     }
 
     fun request(paths: List<String>, entry: String, instrument: Boolean = true, diagnosticUnsupported: Boolean = false,
-                backend: String = defaultBackend(), sourceNotesEnabled: Boolean = true, ioMain: Boolean = false): String {
+                backend: String = defaultBackend(), sourceNotesEnabled: Boolean = true, ioMain: Boolean = false,
+                shutdownEntry: String? = null): String {
+        require(shutdownEntry == null || (ioMain && shutdownEntry.isNotBlank() && shutdownEntry != entry)) {
+            "Executable shutdown requires a distinct IO entry"
+        }
         val manifest = paths.singleOrNull()?.takeIf { it.startsWith("@") }?.drop(1)
         val settings = linkedMapOf<String, Any>(
             "entry" to entry, "instrument" to instrument,
@@ -187,6 +211,7 @@ object CoreModules {
             "sourceNotesEnabled" to sourceNotesEnabled)
         if (manifest != null) settings["strictLink"] = true
         if (ioMain) settings["ioMain"] = true
+        if (shutdownEntry != null) settings["shutdownEntry"] = shutdownEntry
         val options = StringBuilder().also { Json.appendObjectDocument(it,
             Json.stringify(settings)) }
         return buildString {
@@ -324,11 +349,18 @@ class Language : TruffleLanguage<Language.State>() {
         val input = Json.parse(request.source.characters.toString()) as Map<String, Any?>
         val modules = input["modules"] as? List<Map<String, Any?>> ?: error("Expected modules array")
         val entry = input["entry"] as? String ?: error("Expected entry name")
+        val shutdownEntry = input["shutdownEntry"] as? String
+        require(input["shutdownEntry"] == null ||
+            (input["ioMain"] == true && !shutdownEntry.isNullOrBlank() && shutdownEntry != entry)) {
+            "Executable shutdown requires a distinct IO entry"
+        }
         require(input["ioMain"] != true || input["diagnosticUnsupported"] != true) {
             "IO main requires strict unsupported-Core rejection"
         }
         val layout = input["targetLayout"]?.let(TargetLayout::fromDocument)
-        val linked = CoreModules.reachable(CoreModules.merge(modules), entry, input["strictLink"] == true) + mapOf("instrument" to (input["instrument"] != false),
+        val linked = CoreModules.reachable(CoreModules.merge(modules),
+            if (shutdownEntry == null) listOf(entry) else listOf(entry, shutdownEntry),
+            input["strictLink"] == true) + mapOf("instrument" to (input["instrument"] != false),
             "diagnosticUnsupported" to (input["diagnosticUnsupported"] == true),
             "sourceNotesEnabled" to (input["sourceNotesEnabled"] != false)) +
             (if (layout == null) emptyMap() else mapOf("targetLayout" to layout))
@@ -337,6 +369,11 @@ class Language : TruffleLanguage<Language.State>() {
         val selected = bindings.singleOrNull { it["id"] == entry } ?: bindings.single { it["name"] == entry }
         val selectedExpression = selected["expr"] as List<Any?>
         val ioResult = if (input["ioMain"] == true) CoreRepresentations.ioUnitMainResult(selected, bindings) else null
+        val shutdownResult = shutdownEntry?.let { name ->
+            val shutdown = bindings.singleOrNull { it["id"] == name }
+                ?: throw IllegalArgumentException("Missing exact executable shutdown entry: $name")
+            CoreRepresentations.ioUnitMainResult(shutdown, bindings)
+        }
         val hostResultFault = if (ioResult != null) null else try {
             thc.runtime.CoreRepresentations.knownFunctionSignature(selectedExpression, bindings)?.let { (inputs, result) ->
                 inputs.forEach { thc.runtime.CoreRepresentations.requireScalar(it, "host argument") }
@@ -358,7 +395,8 @@ class Language : TruffleLanguage<Language.State>() {
             "bytecode" -> BytecodeProgram(this, linked, true)
             else -> throw IllegalArgumentException("Unknown THC backend: $backend")
         }
-        val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), hostResultFault, ioResult, this)
+        val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), hostResultFault, ioResult, this,
+            shutdownEntry, shutdownResult)
         return object : RootNode(this) {
             override fun execute(frame: VirtualFrame): Any = value
             override fun getName(): String = "THC load $entry"
@@ -369,10 +407,15 @@ class Language : TruffleLanguage<Language.State>() {
 @ExportLibrary(InteropLibrary::class)
 internal class EntryValue(private val program: ExecutableProgram, private val entry: String, private val argumentCount: Int,
                  private val hostResultFault: String? = null, ioResult: CoreRepresentation? = null,
-                 language: Language? = null) : TruffleObject {
+                 language: Language? = null, shutdownEntry: String? = null,
+                 shutdownResult: CoreRepresentation? = null) : TruffleObject {
     private val guestTarget = program.hostEntryTarget(argumentCount)
     private val guestEntry = program.entryValue(entry)
     private val ioTarget = ioResult?.let { IoMainRoot(language ?: error("Missing IO language"), it).callTarget }
+    private val shutdownValue = shutdownEntry?.let(program::entryValue)
+    private val shutdownTarget = shutdownResult?.let { IoMainRoot(language ?: error("Missing IO language"), it).callTarget }
+    private val lifecycleStarted = if (shutdownTarget == null) null else java.util.concurrent.atomic.AtomicBoolean()
+    init { require((shutdownValue == null) == (shutdownTarget == null)) }
     @ExportMessage fun isExecutable() = ioTarget == null
     @ExportMessage fun execute(arguments: Array<Any?>,
                                @Cached(value = "create()", uncached = "create()", neverDefault = true) dispatch: HostDispatch): Any? {
@@ -431,11 +474,18 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                      @Cached(value = "create()", uncached = "create()", neverDefault = true) dispatch: HostDispatch): Any {
         if (member == "runIO" && ioTarget != null) {
             require(arguments.isEmpty()) { "runIO takes no arguments" }
+            if (lifecycleStarted != null && !lifecycleStarted.compareAndSet(false, true))
+                throw thc.runtime.RuntimeFault("Executable IO lifecycle already started")
             val threads = Language.currentState(dispatch).threads
             threads.enterCurrent()
             var outcome = thc.runtime.GuestThreadStatus.FINISHED
             try {
-                try { dispatch.execute(ioTarget, arrayOf(guestEntry)) }
+                try {
+                    dispatch.execute(ioTarget, arrayOf(guestEntry))
+                    // Run the original Handle action over this program's CAFs.
+                    // TopHandler itself flushes on its exceptional path.
+                    if (shutdownTarget != null) dispatch.execute(shutdownTarget, arrayOf(shutdownValue))
+                }
                 catch (suspended: thc.runtime.ThunkSuspended) {
                     thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
                 } catch (suspended: thc.runtime.CallSegmentSuspended) {

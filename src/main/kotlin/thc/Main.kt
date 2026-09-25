@@ -36,12 +36,23 @@ fun executionContext(fileIO: Boolean = false): Context {
 
 @JvmOverloads
 fun loadEntry(context: Context, modules: List<String>, entry: String, instrument: Boolean = true,
-              backend: String = defaultBackend(), ioMain: Boolean = false): Value =
+              backend: String = defaultBackend(), ioMain: Boolean = false, shutdownEntry: String? = null): Value =
     context.eval("thc", CoreModules.request(modules, entry, instrument,
         !ioMain && java.lang.Boolean.getBoolean("thc.diagnosticUnsupported"), backend,
-        System.getProperty("thc.sourceNotesEnabled", "true").toBooleanStrict(), ioMain))
+        System.getProperty("thc.sourceNotesEnabled", "true").toBooleanStrict(), ioMain, shutdownEntry))
 
 fun main(args: Array<String>) {
+    if (args.firstOrNull() == "--run-executable") {
+        require(args.size == 4) {
+            "Usage: thc --run-executable MODULE.json[,MODULE.json...] ENTRY SHUTDOWN_ENTRY"
+        }
+        executionContext(fileIO = true).use { context ->
+            val action = loadEntry(context, args[1].split(','), args[2], ioMain = true, shutdownEntry = args[3])
+            check(action.invokeMember("runIO").asBoolean()) { "Executable IO did not complete" }
+            System.err.println(action.getMember("diagnostics").asString())
+        }
+        return
+    }
     if (args.firstOrNull() == "--run-io") {
         require(args.size == 3) { "Usage: thc --run-io MODULE.json[,MODULE.json...] ENTRY" }
         val modules = args[1].split(',')
