@@ -648,7 +648,7 @@ def allowed_payload(name, pins):
     if parts[1] == "original-stdio-truncate":
         return name in ORIGINAL_STDIO_TRUNCATE_OUTPUTS
     if parts[1] == "libdw-unavailable":
-        return name in ("build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json")
+        return name in ("build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json", "build/libdw-unavailable/foreign-labels.json")
     if parts[1] == "native-addresses":
         return name in ("build/native-addresses/manifest.json", "build/native-addresses/oracle.json")
     if parts[1] == "original-strerror":

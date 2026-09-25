@@ -114,7 +114,7 @@ tasks.withType<Test>().configureEach {
             "original-handle-readiness/logs/*.stdout", "original-handle-readiness/logs/*.stderr",
             "original-posix-stat/**/*.json", "original-posix-stat/native/oracle",
             "original-posix-stat/logs/*.stdout", "original-posix-stat/logs/*.stderr",
-            "libdw-unavailable/manifest.json", "libdw-unavailable/oracle.json",
+            "libdw-unavailable/manifest.json", "libdw-unavailable/oracle.json", "libdw-unavailable/foreign-labels.json",
             "native-addresses/manifest.json", "native-addresses/oracle.json",
             "original-gmp/**/*.json", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
             "original-gmp/logs/*.stdout", "original-gmp/logs/*.stderr",
@@ -319,11 +319,12 @@ tasks.withType<JavaCompile>().configureEach { options.compilerArgs.addAll(listOf
 // remains an optional execution path; no native pointer is exposed to Core.
 val compileCbits by tasks.registering(Exec::class) {
     inputs.files("scripts/build-cbits.py", "src/main/c/md5-api.c", "src/main/c/iconv-api.c",
-        "src/main/c/strerror-locale.c",
+        "src/main/c/strerror-locale.c", "src/main/c/libdw-unavailable.c",
         "compiler/pinned-ghc-internal/cbits/strerror.c",
         "src/main/c/gmp-api.c",
         "bench/experiments/pinned-addresses/reference/md5.c",
         "bench/experiments/pinned-addresses/reference/md5.h")
+    inputs.files(fileTree("compiler/pinned-ghc-rts") { include("*.c", "*.h") })
     outputs.dir(layout.buildDirectory.dir("generated/cbits"))
     outputs.upToDateWhen { false }
     commandLine("python3", "scripts/build-cbits.py", "--output", layout.buildDirectory.dir("generated/cbits").get().asFile)

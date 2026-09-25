@@ -49,12 +49,13 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual('libdw-unavailable', owners['thc.runtime.LibdwUnavailableTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
                                    'libdw-unavailable']}], group['commands'])
-        self.assertEqual(['build/libdw-unavailable/manifest.json', 'build/libdw-unavailable/oracle.json'], group['outputs'])
+        self.assertEqual(['build/libdw-unavailable/manifest.json', 'build/libdw-unavailable/oracle.json',
+                          'build/libdw-unavailable/foreign-labels.json'], group['outputs'])
         self.assertTrue(all((project / path).is_file() for path in group['sources']))
         self.assertIn('"$fixture_bin" libdw-unavailable', (project / 'scripts/prepare-tests.sh').read_text())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/libdw-unavailable/manifest.json', fast_fixtures.FULL_REQUIRED)
-        for suffix in ('manifest.json', 'oracle.json'):
+        for suffix in ('manifest.json', 'oracle.json', 'foreign-labels.json'):
             self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/libdw-unavailable/' + suffix, {}))
             self.assertIn('"libdw-unavailable/' + suffix + '"', (project / 'build.gradle.kts').read_text())
         self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/libdw-unavailable/native/oracle', {}))
