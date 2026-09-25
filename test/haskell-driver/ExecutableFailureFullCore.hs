@@ -4,7 +4,7 @@
 module Main (main) where
 
 import qualified Data.ByteString.Char8 as BS
-import Data.List (find, isPrefixOf, tails)
+import Data.List (find, isPrefixOf, isSuffixOf, stripPrefix, tails)
 import System.Directory (doesFileExist, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode (..), exitFailure)
@@ -16,7 +16,7 @@ import TestSupport
 main :: IO ()
 main = do
   environment <- setup
-  counts <- runTestTT (fixture environment)
+  counts <- runTestTT (TestList [reportTests, fixture environment])
   if errors counts + failures counts == 0 then pure () else exitFailure
 
 fixture :: Env -> Test
@@ -62,19 +62,83 @@ fixture environment = TestLabel "original executable uncaught IO exception" $ Te
     assertEqual "driver exit status" (code native) (code result)
     assertEqual "native and THC stdout" (out native) (out result)
     assertEqual "native and THC flushed file" (BS.pack "file before failure") =<< BS.readFile path
-    nativeReport <- originalReport (err native)
-    guestReport <- originalReport (err result)
+    let requireReport = either (\message -> HUnit.assertFailure message >> pure "") pure
+    nativeReport <- requireReport (originalReport project Nothing (err native))
+    guestReport <- requireReport (originalReport project (Just (runtime environment)) (err result))
     assertContains "user error (THC expected uncaught failure)" (err native)
-    assertBool "original TopHandler report matches native GHC after executable-name prefix"
-      (nativeReport `isPrefixOf` guestReport)
-    assertContains ("command failed: " ++ runtime environment ++
-                    " (" ++ show (code native) ++ ")") (err result)
+    assertEqual "original TopHandler report matches native GHC" nativeReport guestReport
     removeFile path
 
--- The driver can append its own nonzero-command report, and the native binary
--- and JVM launcher have different process names. Keep the original exception
--- report byte-for-byte equal after that one process-name prefix.
-originalReport :: String -> IO String
-originalReport output = case find (isPrefixOf ": Uncaught exception ") (tails output) of
-  Just report -> pure report
-  Nothing -> HUnit.assertFailure "missing original TopHandler exception report" >> pure ""
+-- Compilation and JVM startup diagnostics precede the unique, line-anchored
+-- TopHandler header. From that header onward, retain every byte except the
+-- exact native process prefix, fixture source prefix, and driver suffix.
+originalReport :: FilePath -> Maybe FilePath -> String -> Either String String
+originalReport project launcher output = do
+  report <- case take 2 [body | (previous, rest) <- zip ('\n' : output) (tails output),
+                        previous == '\n',
+                        let body = maybe rest id (stripPrefix "failure: " rest),
+                        reportHeader `isPrefixOf` body] of
+    [body] -> Right body
+    [] -> Left "missing original TopHandler exception report"
+    _ -> Left "multiple original TopHandler exception reports"
+  body <- case launcher of
+    Nothing -> Right report
+    Just command -> case find (`isSuffixOf` report) (driverSuffixes command) of
+      Just suffix -> Right (take (length report - length suffix) report)
+      Nothing -> Left "missing exact driver nonzero-command suffix"
+  pure (relativeLocation body)
+  where
+    absolute = "\n  ioError, called at " ++ (project </> "app/Main.hs") ++ ":"
+    relative = "\n  ioError, called at app/Main.hs:"
+    relativeLocation input
+      | Just rest <- stripPrefix absolute input = relative ++ rest
+    relativeLocation [] = []
+    relativeLocation (char : rest) = char : relativeLocation rest
+
+reportHeader :: String
+reportHeader = "Uncaught exception ghc-internal:GHC.Internal.IO.Exception.IOException:\n"
+
+-- Cabal can wrap either side of the runtime command onto a new line. Match
+-- only those layouts of this exact command and exit status, at the very end.
+driverSuffixes :: FilePath -> [String]
+driverSuffixes command =
+  ["Error: thc: command failed:" ++ before ++ command ++ after ++ "(ExitFailure 1)\n" |
+    before <- [" ", "\n"], after <- [" ", "\n"]]
+
+reportTests :: Test
+reportTests = TestLabel "exact executable exception report comparison" $ TestList $
+  [ TestCase $ assertEqual "native process prefix" (Right expected)
+      (originalReport project Nothing ("failure: " ++ expected))
+  ] ++
+  [ TestCase $ assertEqual "guest report and wrapped driver suffix" (Right expected)
+      (guest ("compiler and JVM startup diagnostics\n" ++ absoluteReport ++ wrappedSuffix)) |
+    wrappedSuffix <- driverSuffixes command
+  ] ++
+  [ TestLabel label $ TestCase $ assertBool label (guest output /= Right expected) |
+    (label, output) <-
+      [ ("missing report header", "user error (THC expected uncaught failure)\n" ++ suffix)
+      , ("header must start a line", "junk: " ++ absoluteReport ++ suffix)
+      , ("unknown process prefix", "other: " ++ absoluteReport ++ suffix)
+      , ("multiple reports", absoluteReport ++ absoluteReport ++ suffix)
+      , ("missing payload", reportHeader ++ "\n" ++ location ++ "\n\n" ++ suffix)
+      , ("extra runtime fault in report", reportHeader ++ "\nruntime fault\n" ++ payload ++ "\n\n" ++ location ++ "\n\n" ++ suffix)
+      , ("extra runtime fault after report", absoluteReport ++ "runtime fault\n" ++ suffix)
+      , ("extra trailing junk", absoluteReport ++ suffix ++ "junk\n")
+      , ("wrong runtime command", absoluteReport ++ "Error: thc: command failed:\n" ++ command ++ "-other\n(ExitFailure 1)\n")
+      , ("wrong exit status", absoluteReport ++ "Error: thc: command failed:\n" ++ command ++ "\n(ExitFailure 2)\n")
+      , ("missing driver suffix", absoluteReport)
+      , ("wrong fixture source path", reportHeader ++ "\n" ++ payload ++ "\n\nHasCallStack backtrace:\n" ++
+          "  ioError, called at /other/app/Main.hs:12:3 in run-executable-failure-0.1.0.0-inplace-failure:Main\n\n" ++ suffix)
+      ]
+  ]
+  where
+    project = "/tmp/thc-driver-tests-123/executable failure"
+    command = "/tmp/thc/build/install/thc/bin/thc"
+    payload = "user error (THC expected uncaught failure)"
+    location = "  ioError, called at " ++ (project </> "app/Main.hs") ++
+      ":12:3 in run-executable-failure-0.1.0.0-inplace-failure:Main"
+    expected = reportHeader ++ "\n" ++ payload ++ "\n\nHasCallStack backtrace:\n" ++
+      "  ioError, called at app/Main.hs:12:3 in run-executable-failure-0.1.0.0-inplace-failure:Main\n\n"
+    absoluteReport = reportHeader ++ "\n" ++ payload ++ "\n\nHasCallStack backtrace:\n" ++ location ++ "\n\n"
+    suffix = "Error: thc: command failed:\n" ++ command ++ "\n(ExitFailure 1)\n"
+    guest = originalReport project (Just command)
