@@ -2,7 +2,8 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 module THC.Driver.Wired
-  ( WiredArtifacts(..), bootSources, moduleSources, sourceHashes, exportPinnedCore ) where
+  ( WiredArtifacts(..), bootSources, moduleSources, sourceHashes
+  , exportPinnedCore, probeTargetLayout ) where
 
 import Control.Monad (forM, forM_, when)
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -204,14 +205,7 @@ exportPinnedCore sourceRoot ghc ghcPkg pluginLibrary pluginUnit layoutRecipe sta
     status <- waitForProcess process
     when (status /= ExitSuccess) (fail ("GHC source preprocessing failed: " ++ path))
     pure (path, output)
-  compiler <- findExecutable "cc" >>= maybe (fail "C compiler is unavailable") pure
-  let layoutBinary = staging </> "target-layout"
-      layoutJson = staging </> "target-layout.json"
-  layoutStatus <- rawSystem compiler
-    (["-Wall", "-Werror"] ++ map ("-I" ++) includeDirs ++
-     [layoutRecipe, "-o", layoutBinary])
-  when (layoutStatus /= ExitSuccess) (fail "GHC target layout receipt compilation failed")
-  writeFile layoutJson =<< readProcess layoutBinary [] ""
+  layoutJson <- probeTargetLayout includeDirs layoutRecipe staging
   let common = ["-c", "-dynamic", "-fforce-recomp", "-XNoPolyKinds",
                 "-this-unit-id", "ghc-internal", "-package", "ghc-internal",
                 "-odir", overlay, "-hidir", overlay, "-I" ++ (sourceRoot </> "include")]
@@ -231,6 +225,18 @@ exportPinnedCore sourceRoot ghc ghcPkg pluginLibrary pluginUnit layoutRecipe sta
   forM_ bootSources (compile True)
   forM_ moduleSources (compile False . fst)
   pure (WiredArtifacts generated layoutJson)
+
+probeTargetLayout :: [FilePath] -> FilePath -> FilePath -> IO FilePath
+probeTargetLayout includeDirs recipe staging = do
+  compiler <- findExecutable "cc" >>= maybe (fail "C compiler is unavailable") pure
+  createDirectoryIfMissing True staging
+  let binary = staging </> "target-layout"
+      receipt = staging </> "target-layout.json"
+  status <- rawSystem compiler
+    (["-Wall", "-Werror"] ++ map ("-I" ++) includeDirs ++ [recipe, "-o", binary])
+  when (status /= ExitSuccess) (fail "GHC target layout receipt compilation failed")
+  writeFile receipt =<< readProcess binary [] ""
+  pure receipt
 
 linkInterfaces :: FilePath -> FilePath -> FilePath -> IO ()
 linkInterfaces installed overlay directory = do

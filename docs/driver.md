@@ -161,10 +161,12 @@ driver rehydrates interfaces before looking up a content-addressed ZIP: unchange
 output reuses it, but this is not a command-free cache or an ABI-only freshness
 claim. Failed refreshes leave prior complete bundles intact.
 
-This provider does not yet attach target-layout receipts: it cannot truthfully
-claim the pinned provider's seven HSC preprocessing products. Stack/IPE paths
-requiring that layout still fail explicitly. Complete interfaces also do not
-establish foreign-export/RTS support or make ordinary Handle programs runnable.
+This provider derives its target-layout receipt from the selected GHC and RTS
+headers. The checked ZIP stores that receipt in both its index and hashed
+build inputs, with the selected RTS registration and layout recipe in its cache
+identity. It does not claim the pinned provider's seven HSC preprocessing
+products. Complete interfaces still do not establish foreign-export/RTS
+support or make ordinary Handle programs runnable.
 The existing source-deleted opaque/private/CBV fixture exercises discovery,
 process acquisition, cache reuse and strict ZIP admission, followed by native
 comparisons in first-installed AST and bytecode targets.
