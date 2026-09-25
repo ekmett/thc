@@ -4258,13 +4258,37 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedWord8X16Insert(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X16Insert()
         }, GeneratedVectors.proofWord8X16)
+        "minWord8X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord8X16Min(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X16Min()
+        }, GeneratedVectors.proofWord8X16)
+        "maxWord8X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord8X16Max(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X16Max()
+        }, GeneratedVectors.proofWord8X16)
         "insertWord16X8#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedWord16X8Insert(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X8Insert()
         }, GeneratedVectors.proofWord16X8)
+        "minWord16X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X8Min(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X8Min()
+        }, GeneratedVectors.proofWord16X8)
+        "maxWord16X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X8Max(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X8Max()
+        }, GeneratedVectors.proofWord16X8)
         "insertWord32X4#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedWord32X4Insert(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X4Insert()
+        }, GeneratedVectors.proofWord32X4)
+        "minWord32X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X4Min(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X4Min()
+        }, GeneratedVectors.proofWord32X4)
+        "maxWord32X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X4Max(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X4Max()
         }, GeneratedVectors.proofWord32X4)
         "packInt16X16#" -> ProvenExpression(Expression { e ->
             val b = e.builder

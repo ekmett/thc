@@ -113,8 +113,12 @@ def result(family, operation, lane, a, b):
         value = (float_operation('broadcast', b, 0, width) if operation == 'insert' else
                  float_operation(operation, a if operation == 'broadcast' else left, right, width))
     else:
-        left = signed(left, width)
-        right = signed(right, width)
+        if family['laneRep'].startswith('Word'):
+            left &= (1 << width) - 1
+            right &= (1 << width) - 1
+        else:
+            left = signed(left, width)
+            right = signed(right, width)
         value = {'broadcast': lambda: a, 'insert': lambda: b, 'negate': lambda: -left,
                  'plus': lambda: left + right, 'minus': lambda: left - right,
                  'times': lambda: left * right, 'min': lambda: min(left, right),

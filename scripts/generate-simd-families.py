@@ -436,7 +436,7 @@ def smoke_sources(fs):
         if op == 'insert':
             scalar.append(f'  {index}# -> case ({lane}) ==# ({inserted}) of {{ 1# -> {observe(rep, convert[rep]("b"), True)}; _ -> {observe(rep, left, True)} }}')
         elif op in ('min', 'max'):
-            # GHC has vector min/max but no scalar minIntN#/maxIntN# primops.
+            # GHC has vector extrema but no corresponding scalar min/max primops.
             first, second = (left, right) if op == 'min' else (right, left)
             scalar.append(f'  {index}# -> case lt{stem}# ({left}) ({right}) of {{ 1# -> {observe(rep, first)}; _ -> {observe(rep, second)} }}')
         else:

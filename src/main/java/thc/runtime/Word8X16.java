@@ -4,6 +4,7 @@
 package thc.runtime;
 
 import jdk.incubator.vector.ByteVector;
+import jdk.incubator.vector.VectorOperators;
 
 /** Sixteen unsigned lanes stored as raw bytes; unpack zero-extends to Long. */
 public final class Word8X16 {
@@ -53,4 +54,6 @@ public final class Word8X16 {
     public static Word8X16 subtract(Word8X16 a, Word8X16 b) { return lanes(a.vector().sub(b.vector())); }
     /** Low-eight-bit products; hardware lowering is verified separately for the pinned target. */
     public static Word8X16 multiply(Word8X16 a, Word8X16 b) { return lanes(a.vector().mul(b.vector())); }
+    public static Word8X16 min(Word8X16 a, Word8X16 b) { return lanes(a.vector().lanewise(VectorOperators.UMIN, b.vector())); }
+    public static Word8X16 max(Word8X16 a, Word8X16 b) { return lanes(a.vector().lanewise(VectorOperators.UMAX, b.vector())); }
 }

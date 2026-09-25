@@ -98,7 +98,7 @@ class VectorAuditTest(unittest.TestCase):
         self.assertEqual(OPERATIONS['packWord32X4#'],([TUPLE_WORD32_REP],VECTOR_WORD32_REP))
         self.assertEqual(OPERATIONS['unpackWord32X4#'],([VECTOR_WORD32_REP],TUPLE_WORD32_REP))
         names={name for name in OPERATIONS if 'Word32X4' in name}
-        self.assertEqual(len(names),7)
+        self.assertEqual(len(names),9)
         self.assertNotIn('negateWord32X4#',CAP['primitives'])
         for name in names: self.assertEqual(CAP['primitives'][name],len(OPERATIONS[name][0]))
 
@@ -134,7 +134,7 @@ class VectorAuditTest(unittest.TestCase):
         self.assertEqual(OPERATIONS['packWord16X8#'],([TUPLE_WORD16_REP],VECTOR_WORD16_REP))
         self.assertEqual(OPERATIONS['unpackWord16X8#'],([VECTOR_WORD16_REP],TUPLE_WORD16_REP))
         names={name for name in OPERATIONS if 'Word16X8' in name}
-        self.assertEqual(len(names),7)
+        self.assertEqual(len(names),9)
         self.assertNotIn('negateWord16X8#',CAP['primitives'])
         for name in names: self.assertEqual(CAP['primitives'][name],len(OPERATIONS[name][0]))
 
@@ -170,7 +170,7 @@ class VectorAuditTest(unittest.TestCase):
         self.assertEqual(OPERATIONS['packWord8X16#'],([TUPLE_WORD8_REP],VECTOR_WORD8_REP))
         self.assertEqual(OPERATIONS['unpackWord8X16#'],([VECTOR_WORD8_REP],TUPLE_WORD8_REP))
         names={name for name in OPERATIONS if 'Word8X16' in name}
-        self.assertEqual(len(names),7)
+        self.assertEqual(len(names),9)
         self.assertNotIn('negateWord8X16#',CAP['primitives'])
         for name in names: self.assertEqual(CAP['primitives'][name],len(OPERATIONS[name][0]))
 
