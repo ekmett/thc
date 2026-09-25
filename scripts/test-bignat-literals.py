@@ -4,6 +4,7 @@
 
 """Fail-closed BigNat literal contracts and independent byte/limb observations."""
 import copy
+from collections import Counter
 import importlib.util
 import json
 from pathlib import Path
@@ -61,5 +62,13 @@ class BigNatContracts(unittest.TestCase):
         m=json.loads(manifest.read_text());self.assertEqual(len(verify((manifest.parent/'oracle.tsv').read_text())),m['nativeRows'])
         for stage in ('pre','post'):
             for name in ENTRIES:self.assertTrue(json.loads((manifest.parent/f'{stage}-{name}.audit.json').read_text())['accepted'])
-            for name in ('integerAddFrontier','naturalAddFrontier'):self.assertFalse(json.loads((manifest.parent/f'{stage}-{name}.audit.json').read_text())['accepted'])
+            for name in ('integerAddFrontier','naturalAddFrontier'):
+                result=json.loads((manifest.parent/f'{stage}-{name}.audit.json').read_text())
+                self.assertEqual(name=='naturalAddFrontier',result['accepted'])
+                self.assertEqual([],result['issues'])
+                calls={'__gmpn_add':2,'__gmpn_add_1':1}
+                if name=='integerAddFrontier':calls.update(__gmpn_cmp=1,__gmpn_sub=1)
+                self.assertEqual(Counter(calls),Counter(call['symbol'] for call in result['foreignCalls']))
+                wanted=['ghc-internal:GHC.Internal.Prim.Exception.raiseUnderflow'] if name=='integerAddFrontier' else []
+                self.assertEqual(wanted,[missing['id'] for missing in result['missingGlobals']])
 if __name__=='__main__':unittest.main()
