@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <signal.h>
 #include <termios.h>
 
 _Static_assert(CHAR_BIT == 8 && sizeof(void *) == 8 && sizeof(long) == 8 && sizeof(int) == 4,
@@ -14,10 +15,28 @@ _Static_assert(sizeof(tcflag_t) == 4 && (tcflag_t)-1 > 0 && sizeof(cc_t) == 1,
                "termios requires the original Linux Word32/Word8 ABI");
 #endif
 int main(void) {
+  /* GHC 9.14.1 HsBase.h returns zero when these header macros are absent. */
+#if defined(SIGTTOU)
+  const int sigttou = SIGTTOU;
+#else
+  const int sigttou = 0;
+#endif
+#if defined(SIG_BLOCK)
+  const int sig_block = SIG_BLOCK;
+#else
+  const int sig_block = 0;
+#endif
+#if defined(SIG_SETMASK)
+  const int sig_setmask = SIG_SETMASK;
+#else
+  const int sig_setmask = 0;
+#endif
   printf("{\"size\":%zu,\"alignment\":%zu,\"lflagOffset\":%zu,\"lflagBytes\":%zu,"
          "\"ccOffset\":%zu,\"ccBytes\":%zu,\"ccCount\":%zu,"
-         "\"echo\":%d,\"icanon\":%d,\"vmin\":%d,\"vtime\":%d,\"tcsanow\":%d}\n",
+         "\"echo\":%d,\"icanon\":%d,\"vmin\":%d,\"vtime\":%d,\"tcsanow\":%d,"
+         "\"sigsetSize\":%zu,\"sigttou\":%d,\"sigBlock\":%d,\"sigSetmask\":%d}\n",
          sizeof(struct termios), _Alignof(struct termios), offsetof(struct termios, c_lflag), sizeof(tcflag_t),
          offsetof(struct termios, c_cc), sizeof(cc_t), sizeof(((struct termios *)0)->c_cc),
-         (int)ECHO, (int)ICANON, (int)VMIN, (int)VTIME, (int)TCSANOW);
+         (int)ECHO, (int)ICANON, (int)VMIN, (int)VTIME, (int)TCSANOW,
+         sizeof(sigset_t), sigttou, sig_block, sig_setmask);
 }

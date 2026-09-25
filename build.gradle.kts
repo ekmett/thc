@@ -330,6 +330,24 @@ tasks.register<Test>("originalStackDecoderFullCoreTest") {
         }
     }
 }
+tasks.register<Test>("arithmeticExceptionsFullCoreTest") {
+    group = "verification"
+    description = "Tests original arithmetic exception payloads using the explicitly prepared full-Core GHC fixture."
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    inputs.files(fileTree("build/arithmetic-exceptions") {
+        include("**/*.json", "installed/bundles/*.zip", "logs/*.stdout", "logs/*.stderr", "native/oracle")
+    })
+    useJUnitPlatform()
+    filter { includeTestsMatching("thc.runtime.ArithmeticExceptionsNativeTest") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Full-Core native/compiled evidence requires a fresh test process") { true }
+    doFirst {
+        check(file("build/arithmetic-exceptions/manifest.json").isFile) {
+            "Missing arithmetic-exceptions fixture: select a full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- arithmetic-exceptions"
+        }
+    }
+}
 tasks.register<Test>("simdFamiliesExperimentTest") {
     group = "verification"
     description = "Runs the prepared generated SIMD Core, native-oracle, and compiled-path experiment."

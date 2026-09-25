@@ -45,7 +45,8 @@ fixtureSources root = do
 prepareLinux :: FilePath -> IO ()
 prepareLinux root = do
   let entries = ["originalTermiosSize", "originalEcho", "originalIcanon", "originalVmin", "originalVtime",
-        "originalTcsanow", "originalLflag", "originalPokeLflag", "originalCC"]
+        "originalTcsanow", "originalSigsetSize", "originalSigttou", "originalSigBlock", "originalSigSetmask",
+        "originalLflag", "originalPokeLflag", "originalCC"]
       execute = runLogged 180 root (directory </> "logs")
   createDirectoryIfMissing True (root </> directory </> "native")
   let manifest = root </> directory </> "manifest.json"
@@ -93,4 +94,4 @@ prepareLinux root = do
      "oracle" .= oracle, "entries" .= entries, "strictAccepted" .= True,
      "runtimeVerified" .= False, "installedArtifactsHashed" .= False, "nativeRows" .= length rows, "inputHashes" .= inputHashes,
      "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
-  putStrLn "original-termios: six native images and nine strict pre/post original helpers prepared"
+  putStrLn "original-termios: six native images and thirteen strict pre/post original helpers prepared"

@@ -74,7 +74,7 @@ class SimdFamiliesTest {
     }
 
     @Test fun exactLaneSignWidthLogicalTupleAndCallingProofsRemainRequired() {
-        assertEquals(160, GeneratedVectors.operations.size)
+        assertEquals(162, GeneratedVectors.operations.size)
         for ((name, tuple, vector) in listOf(
             Triple("Word64X2", GeneratedVectors.unpackedWord64X2, GeneratedVectors.proofWord64X2),
             Triple("Word32X8", GeneratedVectors.unpackedWord32X8, GeneratedVectors.proofWord32X8),
@@ -147,6 +147,19 @@ class SimdFamiliesTest {
         for (index in listOf(-1L, 16L, Long.MAX_VALUE, 0x1_0000_0000L)) {
             assertThrows(RuntimeFault::class.java) { GeneratedVectorInsert.insert(Word8X16.broadcast(1), 2, index) }
         }
+    }
+
+    @Test fun word32X16ExtremaUseUnsignedLaneOrderAcrossTheFullCarrier() {
+        val left = Word32X16.insert(Word32X16.broadcast(Int.MIN_VALUE), -1, 15L)
+        val right = Word32X16.insert(Word32X16.broadcast(Int.MAX_VALUE), 0, 15L)
+        val minimum = Word32X16.min(left, right)
+        val maximum = Word32X16.max(left, right)
+        assertEquals(Int.MAX_VALUE, minimum.lane0)
+        assertEquals(Int.MAX_VALUE, minimum.lane7)
+        assertEquals(0, minimum.lane15)
+        assertEquals(Int.MIN_VALUE, maximum.lane0)
+        assertEquals(Int.MIN_VALUE, maximum.lane7)
+        assertEquals(-1, maximum.lane15)
     }
 
     // These early gates use actual pre-Tidy Core and the independent model.

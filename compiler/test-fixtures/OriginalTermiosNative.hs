@@ -17,7 +17,8 @@ main :: IO ()
 main = do
   let size = I# (originalTermiosSize 0#)
       constants = [size, I# (originalEcho 0#), I# (originalIcanon 0#), I# (originalVmin 0#),
-        I# (originalVtime 0#), I# (originalTcsanow 0#)]
+        I# (originalVtime 0#), I# (originalTcsanow 0#), I# (originalSigsetSize 0#),
+        I# (originalSigttou 0#), I# (originalSigBlock 0#), I# (originalSigSetmask 0#)]
       patterns = [0,1,255,2147483648,4294967295,3735928559 :: Word]
   rows <- allocaBytes (size + 16) $ \storage -> forM patterns $ \pattern -> do
     fillBytes storage 90 (size + 16)

@@ -49,8 +49,17 @@ class FastInputTests(unittest.TestCase):
                        'other.txt', 'pre-core/Other.json', 'test-results/pass.json'):
             self.assertFalse(cache.allowed_payload('build/simd-floatx4-fma/' + suffix, {}), suffix)
 
+    def test_arithmetic_installed_bundle_hashes_do_not_escape_into_zip_member_paths(self):
+        path = 'build/arithmetic-exceptions/installed/bundles/ghc-internal.zip'
+        package = dict(format='thc-core-packages', units=[dict(bundle=dict(path=path, sha256='a'*64),
+            modules=[dict(path='core/0.json', sha256='b'*64)])])
+        self.assertEqual([(path, 'a'*64)], list(cache.hashes_in(package, {})))
+        self.assertFalse(cache.allowed_payload(path, {}))
+        self.assertFalse(cache.allowed_payload('build/arithmetic-exceptions/native/other.zip', {}))
+        with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
+
     def test_termios_exact_image_fixture_inventory(self):
-        self.assertEqual(97, len(cache.ORIGINAL_TERMIOS_OUTPUTS))
+        self.assertEqual(129, len(cache.ORIGINAL_TERMIOS_OUTPUTS))
         self.assertIn('build/original-termios/manifest.json', DECLARED_REQUIRED)
         for name in cache.ORIGINAL_TERMIOS_OUTPUTS:
             self.assertTrue(cache.allowed_payload(name, {}), name)

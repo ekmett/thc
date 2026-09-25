@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 462 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 720 | No declared lowering. |
+| Partial | 467 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 715 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -40,6 +40,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 ## Current aggregate and address limits
 
 - waitRead#/waitWrite# admit exact Int# and State# contracts for live context-owned native descriptors. A logical wait token retains its original descriptor identity across async suspension and rejects close or number reuse. Bad descriptors raise the original lazy ghc-internal blockedOnBadFD payload; arbitrary host streams and nonnative readiness providers have no general readiness guarantee.
+- Arithmetic exception primops require an exact empty unboxed tuple and retain the original ghc-internal SomeException CAF as an implicit dependency. Scalar and concrete tuple bottom results reuse guest raise semantics; vector and sum results remain rejected.
 - Original Stack.Decode getters consume only context-owned immutable managed snapshots: a nonempty, zero-slack sequence of one-word, zero-payload RET_SMALL frames with authentic detached guest provenance. getWordzh reads the real owned native bits of each header's info-table key and requires native access. Payload, RET_BIG, BCO, RET_FUN and UNDERFLOW getters reject incompatible frame kinds, bad offsets and foreign/expired snapshots; none of those frame kinds can be produced by this snapshot constructor. Descriptor admission permits the unchanged decoder over this closed managed domain, not native RTS stack memory or resumable continuations.
 - addr2Int#/int2Addr# preserve real machine address bits. Null and arbitrary integer bit patterns roundtrip; unowned numeric addresses cannot be dereferenced or passed to native code. Immutable literals and pointer-free immutable images acquire one owned native allocation per backing in the current native-enabled context; live registered ranges recover their original managed aliases. Integer values do not root allocations. Mutable managed storage and opaque StablePtr numeric projection remain unsupported; no JVM identity hashes or borrowed scratch pointers are exposed.
 - threadStatus# returns the exact State#/Int#/Int#/Int# tuple for context-owned Java thread identities. Logical capabilities are monotonically allocated per Java carrier, not physical CPU numbers; forkOn/count/affinity APIs remain unsupported. Registered MVar, black-hole, throwTo and foreign boundaries report their actual managed states. Forked threads retain normal/uncaught-guest completion; a live host carrier outside guest entry remains foreign and keeps its identity on re-entry. Existing throwTo mailboxes are scoped to active guest invocations and do not queue across separate host calls.
@@ -529,6 +530,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `maxInt64X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `maxInt8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `maxWord16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `maxWord32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `maxWord32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `maxWord32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `maxWord64X2#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -543,6 +545,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `minInt64X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minInt8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minWord16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `minWord32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minWord32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minWord32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minWord64X2#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -655,7 +658,10 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `quotRemInt#` — arity 2 — Exact tuple arithmetic
 - [ ] `quotRemWord#` — arity 2 — Exact tuple arithmetic
 - [ ] `raise#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `raiseDivZero#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `raiseIO#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `raiseOverflow#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `raiseUnderflow#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `readAddrArray#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readAddrOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readArray#` — arity 3 — Managed lifted arrays
@@ -1093,7 +1099,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `maxInt8X64#` — arity 2
 - [ ] `maxWord16X16#` — arity 2
 - [ ] `maxWord16X32#` — arity 2
-- [ ] `maxWord32X16#` — arity 2
 - [ ] `maxWord8X32#` — arity 2
 - [ ] `maxWord8X64#` — arity 2
 - [ ] `minDouble#` — arity 2
@@ -1111,7 +1116,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `minInt8X64#` — arity 2
 - [ ] `minWord16X16#` — arity 2
 - [ ] `minWord16X32#` — arity 2
-- [ ] `minWord32X16#` — arity 2
 - [ ] `minWord8X32#` — arity 2
 - [ ] `minWord8X64#` — arity 2
 - [ ] `minusAddr#` — arity 2
@@ -1191,9 +1195,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `quotWord8X16#` — arity 2
 - [ ] `quotWord8X32#` — arity 2
 - [ ] `quotWord8X64#` — arity 2
-- [ ] `raiseDivZero#` — arity 1
-- [ ] `raiseOverflow#` — arity 1
-- [ ] `raiseUnderflow#` — arity 1
 - [ ] `readDoubleArrayAsDoubleX4#` — arity 3
 - [ ] `readDoubleArrayAsDoubleX8#` — arity 3
 - [ ] `readDoubleOffAddrAsDoubleX2#` — arity 3

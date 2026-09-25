@@ -18,6 +18,10 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     VMIN("__hscore_vmin", "ccall", "unsafe", listOf(null), "Int32Rep"),
     VTIME("__hscore_vtime", "ccall", "unsafe", listOf(null), "Int32Rep"),
     TCSANOW("__hscore_tcsanow", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    SIZEOF_SIGSET("__hscore_sizeof_sigset_t", "ccall", "unsafe", listOf(null), "IntRep"),
+    SIGTTOU("__hscore_sigttou", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    SIG_BLOCK("__hscore_sig_block", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    SIG_SETMASK("__hscore_sig_setmask", "ccall", "unsafe", listOf(null), "Int32Rep"),
     READ_SAFE("ghczuwrapperZC22ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread", "capi", "safe",
         listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep"),
     READ_UNSAFE("ghczuwrapperZC23ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread", "capi", "unsafe",
@@ -70,7 +74,8 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     val iconv: Boolean get() = this == LOCALE || this == ICONV_OPEN || this == ICONV_CLOSE || this == ICONV
     val strerror: Boolean get() = this == STRERROR
     val termios: Boolean get() = this == LFLAG || this == POKE_LFLAG || this == PTR_C_CC ||
-        this == SIZEOF_TERMIOS || this == ECHO || this == ICANON || this == VMIN || this == VTIME || this == TCSANOW
+        this == SIZEOF_TERMIOS || this == ECHO || this == ICANON || this == VMIN || this == VTIME || this == TCSANOW ||
+        this == SIZEOF_SIGSET || this == SIGTTOU || this == SIG_BLOCK || this == SIG_SETMASK
     val termiosAddress: Boolean get() = this == LFLAG || this == POKE_LFLAG || this == PTR_C_CC
 }
 

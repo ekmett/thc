@@ -1790,6 +1790,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreVectors.validate(name, args.map(CoreVectors::argumentProof), tupleProof)
                 CoreVectors.validateFlags(flags)
                 vectorPrimitive(name, args.map { compile(it, scope, false) })
+            } else if (fn[0] == "prim" && CoreArithmeticExceptions.payload(fn[1] as String) != null) {
+                val name = fn[1] as String
+                CoreArithmeticExceptions.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operand = argument(args.single(), scope, false, allowEmpty = true)
+                CoreArithmeticExceptions.validate(name, listOf(operand.proof), flags, tupleProof)
+                val id = CoreArithmeticExceptions.payload(name)!!
+                val payload = globals[id] ?: throw UnsupportedCore("Unresolved implicit exception binding $id")
+                ProvenExpression(ResultExpression { e, destination ->
+                    val b = e.builder
+                    b.beginBlock()
+                    operand.emitTuple(e, emptyList())
+                    if (destination != null) b.beginStoreLocal(b.createLocal("non-returning arithmetic exception", null))
+                    b.beginRaise(); b.emitReadGlobal(payload); b.endRaise()
+                    if (destination != null) b.endStoreLocal()
+                    b.endBlock()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && fn[1] in setOf("raiseIO#", "catch#", "getMaskingState#",
                     "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#")) {
                 val name = fn[1] as String
@@ -4576,6 +4592,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         "insertWord32X16#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedWord32X16Insert(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X16Insert()
+        }, GeneratedVectors.proofWord32X16)
+        "minWord32X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X16Min(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X16Min()
+        }, GeneratedVectors.proofWord32X16)
+        "maxWord32X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X16Max(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X16Max()
         }, GeneratedVectors.proofWord32X16)
         "packFloatX16#" -> ProvenExpression(Expression { e ->
             val b = e.builder

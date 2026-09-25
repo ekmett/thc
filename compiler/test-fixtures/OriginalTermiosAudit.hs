@@ -22,6 +22,14 @@ originalVtime :: Int# -> Int#
 originalVtime extra = case fromIntegral P.const_vtime :: Int of I# value -> value +# extra
 originalTcsanow :: Int# -> Int#
 originalTcsanow extra = case fromIntegral P.const_tcsanow :: Int of I# value -> value +# extra
+originalSigsetSize :: Int# -> Int#
+originalSigsetSize extra = case P.sizeof_sigset_t of I# value -> value +# extra
+originalSigttou :: Int# -> Int#
+originalSigttou extra = case fromIntegral P.const_sigttou :: Int of I# value -> value +# extra
+originalSigBlock :: Int# -> Int#
+originalSigBlock extra = case fromIntegral P.const_sig_block :: Int of I# value -> value +# extra
+originalSigSetmask :: Int# -> Int#
+originalSigSetmask extra = case fromIntegral P.const_sig_setmask :: Int of I# value -> value +# extra
 
 originalLflag :: Addr# -> Word#
 originalLflag address = runRW# (\state -> case P.c_lflag (Ptr address) of { IO action ->
