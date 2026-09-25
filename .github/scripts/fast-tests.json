@@ -775,6 +775,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.ManagedAddressReadTest",
         "thc.runtime.ThreadAsyncNativeTest",
         "thc.runtime.UncaughtSelfNativeTest",
         "thc.runtime.Int32ByteOffsetTest",
@@ -842,6 +843,10 @@
     },
     "test/haskell-fixtures/WideCharAddressFixtures.hs": {
       "junit": ["thc.runtime.WideCharAddressTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/ManagedAddressReadFixtures.hs": {
+      "junit": ["thc.runtime.ManagedAddressReadTest"],
       "python": []
     },
     "test/haskell-fixtures/SmallArrayFixtures.hs": {
