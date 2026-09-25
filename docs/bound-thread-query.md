@@ -60,5 +60,24 @@ local transitive exporter/driver/auditor inputs are hashed. The installed GHC
 executable, interfaces and libraries are not hashed. No copied source inventory
 or fake FFI declaration is added.
 
-Implementation checkpoint status: source only, unvalidated. Native, default
-and dense results remain to be established before integration.
+## Validation boundary
+
+The identical-source native controls passed in both RTS modes, including eight
+signed 64-bit projection rows per mode. Support/current-bound/forkIO-bound/
+runInBoundThread-success/action-ran were respectively
+`(False,False,False,False,False)` without `-threaded` and
+`(True,True,False,True,True)` with it. Independent structural tests passed both
+default and dense handoff modes: AST and bytecode each retained the actual guest
+target on its first installed call with exactly one compiled entry, zero traps
+and clean handoffs.
+
+The genuine installed pre/post audits each supplied 66,217 bindings, reached one
+consumer binding, recognized the original query, and found no missing globals.
+Both nevertheless rejected the same independent global registration obligation:
+`GHC.Internal.Conc.Bound` has Core schema 2 with `execution=not-linked`. Its native
+foreign registration is not implemented by this query adapter. Complete original
+bundles and that rejection are preserved; no successful fixture manifest is
+written, and the genuine full-Core JVM suite has not been run. The producer keeps
+the successful native receipt separately and attempts both strict audits before
+reporting failure. This is partial validation, not complete original-module,
+hello-world, or bound-thread support.
