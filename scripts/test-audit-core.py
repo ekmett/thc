@@ -1570,22 +1570,29 @@ class LibdwUnavailableAuditTest(unittest.TestCase):
 
 
 class NativeMallocDeclarationTest(unittest.TestCase):
-    """Genuine descriptors; admission remains private until the native/JVM gate."""
-    def test_two_exact_declarations_and_private_admission(self):
+    """Original descriptors for the bounded, owned native allocation protocol."""
+    def test_two_exact_declarations_and_capability_gate(self):
         resource = ROOT.parent / 'src/test/resources/core/original-malloc-descriptors.json'
         declarations = json.loads(resource.read_text())
         self.assertEqual(['malloc', 'free'], [d['target']['symbol'] for d in declarations])
         fixture = LibdwUnavailableAuditTest()
-        private = dict(CAP, managedForeignCalls=[*CAP['managedForeignCalls'], 'malloc', 'free'])
+        disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s not in ('malloc', 'free')])
         for declaration in declarations:
             module = fixture.fixture(declaration)
-            self.assertFalse(fixture.audit(module)['accepted'])
-            self.assertTrue(fixture.audit(module, private)['accepted'])
+            self.assertTrue(fixture.audit(module)['accepted'])
+            self.assertFalse(fixture.audit(module, disabled)['accepted'])
             for key, value in [('safety', 'safe'), ('arity', 3), ('convention', 'capi'), ('schema', 1.0)]:
                 wrong = copy.deepcopy(declaration); wrong[key] = value
-                self.assertFalse(fixture.audit(fixture.fixture(wrong), private)['accepted'])
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
             wrong = copy.deepcopy(declaration); wrong['target']['unit'] = 'other'
-            self.assertFalse(fixture.audit(fixture.fixture(wrong), private)['accepted'])
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+            # Occurrence annotations cannot hide a differently represented argument.
+            for index in range(len(declaration['argumentReps'])):
+                wrong = fixture.fixture(declaration)
+                wrong['bindings'][0]['expr'][1][index]['rep'] = CLOSURE
+                result = fixture.audit(wrong)
+                self.assertFalse(result['accepted'], result)
+                self.assertEqual([], result['foreignCalls'])
         for symbol in ('calloc', 'realloc', 'prefixmalloc', 'free2'):
             self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
 

@@ -376,6 +376,9 @@ jobs:
             build/native-addresses/manifest.json
             build/native-addresses/oracle.json
             build/native-addresses/logs/
+            build/native-malloc/manifest.json
+            build/native-malloc/oracle.txt
+            build/native-malloc/logs/
             build/original-gmp/
             build/address-fields/
             build/data-to-tag/

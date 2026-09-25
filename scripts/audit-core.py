@@ -644,7 +644,7 @@ class Audit:
                         or symbol in core_original_foreign.SIGSET_OPERATIONS
                         or symbol in ('getOrSetSystemEventThreadEventManagerStore',
                                       'getOrSetGHCConcSignalSignalHandlerStore')
-                        or symbol in ('rts_setMainThread', 'rtsSupportsBoundThreads', 'lockFile', 'unlockFile', '__hscore_fstat', '__hscore_open', 'dup', 'dup2', 'fdReady', 'localeEncoding', 'hs_iconv_open', 'hs_iconv_close', 'hs_iconv',
+                        or symbol in ('malloc', 'free', 'rts_setMainThread', 'rtsSupportsBoundThreads', 'lockFile', 'unlockFile', '__hscore_fstat', '__hscore_open', 'dup', 'dup2', 'fdReady', 'localeEncoding', 'hs_iconv_open', 'hs_iconv_close', 'hs_iconv',
                                       'base_strerror_r')):
                     for index, (argument, primitive) in enumerate(zip(arguments, core_original_foreign.OPERATIONS[symbol][2])):
                         self.original_stack_operand(argument, primitive, bound, index)
