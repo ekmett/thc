@@ -53,7 +53,7 @@ python3 scripts/prepare-boxed-arrays.py
 python3 scripts/prepare-array-slices.py
 python3 scripts/prepare-address-fields.py
 python3 scripts/prepare-data-to-tag.py
-python3 scripts/prepare-mutvar.py
+"$fixture_bin" mutvar
 python3 scripts/prepare-managed-mvars.py --refresh
 rm -rf -- build/synchronous-exceptions
 python3 scripts/prepare-synchronous-exceptions.py

@@ -205,7 +205,6 @@ jobs:
           python3 scripts/test-core-arrays.py
           python3 scripts/test-address-fields.py
           python3 scripts/test-core-data-tags.py
-          python3 scripts/test-core-mutvars.py
           python3 scripts/test-show-int-model.py
           python3 scripts/test-show-word-list-model.py
           python3 scripts/test-bignat-literals.py

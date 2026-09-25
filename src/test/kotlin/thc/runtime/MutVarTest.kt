@@ -109,6 +109,24 @@ class MutVarTest {
                     (call[2] as List<List<Any?>>).map(CoreRepresentations::expression),
                     call[3] as List<*>, CoreRepresentations.expression(call))
             }
+            val equalityCalls = nodes(original).filter { node ->
+                node.firstOrNull() == "app" && (node[1] as? List<*>)?.take(2) ==
+                    listOf("prim", "reallyUnsafePtrEquality#")
+            }
+            assertTrue(equalityCalls.isNotEmpty(), "$stage retains genuine STRef identity comparison")
+            for (call in equalityCalls) {
+                assertEquals(listOf(false, false), call[3])
+                val arguments = call[2] as List<List<Any?>>
+                assertEquals(2, arguments.size)
+                for (argument in arguments) {
+                    val rep = CoreRepresentations.expression(argument)
+                    assertEquals(CoreKind.OBJECT, rep.kind)
+                    assertEquals(listOf("BoxedRep (Just Unlifted)"), rep.primReps)
+                }
+                val result = CoreRepresentations.expression(call)
+                assertEquals(CoreKind.LONG, result.kind)
+                assertEquals(listOf("IntRep"), result.primReps)
+            }
             val audit = Json.parse(File(root, "build/mutvar/$stage/lazyIORef.audit.json").readText()) as Map<String, Any?>
             assertEquals(true, audit["accepted"])
             assertEquals(emptyList<Any>(), audit["missingGlobals"])
@@ -121,7 +139,7 @@ class MutVarTest {
         for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
             val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
                 .joinToString("") { "%02x".format(it.toInt() and 255) }
-            assertEquals(expected, actual, "Stale MutVar fixture: $path; rerun prepare-mutvar.py")
+            assertEquals(expected, actual, "Stale MutVar fixture: $path; rerun thc-fixtures mutvar")
         }
         val rows = File(root, "build/mutvar/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
         assertEquals((names + equalityNames + lazyIONames + swapNames).toSet(), rows.keys)
@@ -129,6 +147,22 @@ class MutVarTest {
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) {
             val module = merged(paths)
             for (name in entryNames) {
+                val audit = Json.parse(File(root, "build/mutvar/$stage/$name.audit.json").readText()) as Map<String, Any?>
+                assertEquals(true, audit["accepted"], "$stage/$name strict Core audit")
+                assertEquals(emptyList<Any>(), audit["issues"], "$stage/$name audit issues")
+                assertEquals(emptyList<Any>(), audit["missingGlobals"], "$stage/$name missing globals")
+                val primitives = (audit["primitives"] as List<Map<String, Any?>>).map { it["name"] }.toSet()
+                val required = when (name) {
+                    "swapRef", "lazySwapRef" -> setOf("newMutVar#", "readMutVar#", "atomicSwapMutVar#")
+                    "lazyRefEquality" -> setOf("newMutVar#", "writeMutVar#", "reallyUnsafePtrEquality#")
+                    "stRefEquality" -> setOf("newMutVar#", "readMutVar#", "writeMutVar#", "reallyUnsafePtrEquality#")
+                    else -> setOf("newMutVar#", "readMutVar#", "writeMutVar#")
+                }
+                assertTrue(primitives.containsAll(required), "$stage/$name lost primitive evidence: $required")
+                val reachable = (audit["reachableBindings"] as List<Map<String, Any?>>).map { it["id"] as String }
+                if (name == "stRef") assertTrue(reachable.any { it.startsWith("main:MutVarAudit.bump") })
+                if (name in equalityNames) for (helper in listOf("sameRef", "writeAndScore"))
+                    assertTrue(reachable.any { it.startsWith("main:MutVarAudit.$helper") }, "$stage/$name/$helper")
                 val cases = rows.getValue(name).map { it[1].toLong() to it[2].toLong() }
                 cases.forEach { (input, native) -> assertEquals(mathematical(name, input), native, "Native $name($input)") }
                 for (backend in listOf("ast", "bytecode")) context(inlining).use { context ->
@@ -208,6 +242,38 @@ class MutVarTest {
         assertFalse(java.lang.reflect.Modifier.isFinal(field.modifiers))
         assertTrue(java.lang.reflect.Modifier.isVolatile(field.modifiers), "MutVar writes must publish to other threads")
         assertNull(field.getAnnotation(com.oracle.truffle.api.CompilerDirectives.CompilationFinal::class.java))
+    }
+
+    @Test fun exactContractsAcceptLiftedAndUnliftedBoxedPayloadCarriers() {
+        val state = CoreRepresentation(CoreKind.VOID, present = true, primReps = emptyList())
+        val reference = CoreRepresentation(CoreKind.OBJECT, present = true,
+            primReps = listOf("BoxedRep (Just Unlifted)"))
+        for (kind in listOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT))
+            for (levity in listOf("Lifted", "Unlifted")) {
+                val payload = CoreRepresentation(kind, present = true,
+                    primReps = listOf("BoxedRep (Just $levity)"))
+                for (operation in MutVarOp.entries) {
+                    val arguments = when (operation) {
+                        MutVarOp.NEW -> listOf(payload, state)
+                        MutVarOp.READ -> listOf(reference, state)
+                        MutVarOp.SWAP, MutVarOp.WRITE -> listOf(reference, payload, state)
+                    }
+                    val returned = if (operation == MutVarOp.NEW) reference else payload
+                    val result = if (operation.tuple) CoreRepresentation(CoreKind.UNKNOWN, present = true,
+                        primReps = returned.primReps, components = listOf(state, returned)) else state
+                    val flags = arguments.map { it.primReps == listOf("BoxedRep (Just Lifted)") }
+                    operation.validate(arguments, flags, result)
+                    val scalar = CoreRepresentation(CoreKind.LONG, present = true, primReps = listOf("IntRep"))
+                    if (operation == MutVarOp.READ) {
+                        val wrongResult = result.copy(primReps = scalar.primReps, components = listOf(state, scalar))
+                        assertThrows(RuntimeFault::class.java) { operation.validate(arguments, flags, wrongResult) }
+                    } else {
+                        val payloadIndex = if (operation == MutVarOp.NEW) 0 else 1
+                        val wrongArguments = arguments.toMutableList().apply { this[payloadIndex] = scalar }
+                        assertThrows(RuntimeFault::class.java) { operation.validate(wrongArguments, flags, result) }
+                    }
+                }
+            }
     }
 
     private class PublishedValue {

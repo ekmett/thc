@@ -23,6 +23,18 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "mutvar": {
+      "junit": ["thc.runtime.MutVarTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "mutvar"]}],
+      "outputs": ["build/mutvar"],
+      "sources": [
+        "compiler/test-fixtures/MutVarAudit.hs",
+        "test/haskell-fixtures/MutVarFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal"
+      ]
+    },
     "interface-core": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "interface-core"]}],
