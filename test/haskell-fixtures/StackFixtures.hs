@@ -136,7 +136,10 @@ prepareOriginalStackFormatter root = do
   unless (BS.words (commandStdout version) == ["9.14.1"]) (die "Original formatter requires GHC 9.14.1")
   plugin <- command "plugin-build" [] "compiler/build.sh" []
   executable <- getExecutablePath
-  sourceExport <- command "original-source-export" [] executable ["original-stack-source-export", directory </> "originals"]
+  -- The cold, serial export of all 54 pinned modules can exceed five minutes
+  -- on CI; keep the other formatter commands on their shorter limit.
+  sourceExport <- runLogged 600 root logs "original-source-export" [] executable
+    ["original-stack-source-export", directory </> "originals"]
   let coreRoot = directory </> "originals/core"
   originals <- map (coreRoot </>) . sort <$> listDirectory (root </> coreRoot)
   let source = "compiler/test-fixtures/OriginalStackFormatter.hs"
