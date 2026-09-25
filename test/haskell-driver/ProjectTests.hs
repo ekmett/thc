@@ -228,10 +228,14 @@ forBackends env invoke output project entryOf unit bundleRef modulePath = go Not
           dep = one ((== "dep-data") . string . (`field` "pkg-name")) install
           helper = one ((== "th-helper") . string . (`field` "pkg-name")) install
           bridge = one ((== "lib:bridge") . string . (`field` "component-name")) install
+          optional = one ((== "bench:optional-bench") . string . (`field` "component-name")) install
           depId = string (field dep "id")
           helperId = string (field helper "id")
           bridgeId = string (field bridge "id")
           entryId = string (field entry "id")
+          optionalId = string (field optional "id")
+      optionalBuilt <- doesFileExist (string $ field optional "build-info")
+      assertBool "disabled benchmark has no build-info" (not optionalBuilt)
       native <- runExe env project Nothing 60 (string $ field entry "bin-file") []
       assertSuccess native
       assertEqual "native output" (out result) (out native)
@@ -247,6 +251,8 @@ forBackends env invoke output project entryOf unit bundleRef modulePath = go Not
       assertBool "native TH helper in compiler args" (helperId `elem` bridgeArgs)
 
       manifest <- readJson (output </> "packages.json")
+      assertBool "unbuilt optional benchmark is outside the executable Core closure" $
+        all ((/= optionalId) . string . (`field` "id")) (objects manifest "units")
       assertEqual "manifest format" "thc-core-packages" (string $ field manifest "format")
       assertEqual "manifest schema" 1 (number $ field manifest "schema")
       assertEqual "helper Core" ["THHelper"] (moduleNames $ unit manifest helperId)
