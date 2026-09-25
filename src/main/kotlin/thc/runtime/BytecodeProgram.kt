@@ -1364,7 +1364,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
                     val result = destination.single()
-                    val status = originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY
+                    val status = originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
+                        originalStdio == OriginalStdioOp.CLOSE
                     if (status) b.beginOriginalStdioStatus(result, originalStdio)
                     else b.beginOriginalStdioTransfer(result,
                         originalStdio == OriginalStdioOp.READ_SAFE || originalStdio == OriginalStdioOp.READ_UNSAFE)

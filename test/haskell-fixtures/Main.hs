@@ -23,6 +23,7 @@ import UncaughtSelfFixtures (prepareUncaughtSelf)
 import MaskFunctionFixtures (prepareMaskFunctions)
 import InterfaceFixtures (prepareInterfaceCore)
 import OriginalStdioFixtures (prepareOriginalStdio, prepareOriginalStdioRead)
+import OriginalStdioCloseFixtures (prepareOriginalStdioClose)
 import OriginalHandleReadinessFixtures (prepareOriginalHandleReadiness)
 import MutVarFixtures (prepareMutVar)
 import StackFixtures (prepareOriginalStack, prepareOriginalStackFormatter, exportOriginalStackSource)
@@ -847,6 +848,7 @@ main = do
     ["fused-floating"] -> prepareFusedFloating root
     ["sqrt"] -> prepareSqrt root
     "original-stdio":options -> prepareOriginalStdio root options
+    ["original-stdio-close"] -> prepareOriginalStdioClose root
     "original-stdio-read":[] -> prepareOriginalStdioRead root
     ["original-handle-readiness"] -> prepareOriginalHandleReadiness root
     ["mutvar"] -> prepareMutVar root
@@ -869,4 +871,4 @@ main = do
     ["interface-core"] -> prepareInterfaceCore root
     ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (interface-core|core-continuation|mask-functions|live-async|thread-async|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|mutvar|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|sqrt|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|managed-address-reads|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (interface-core|core-continuation|mask-functions|live-async|thread-async|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|original-stdio-read|original-handle-readiness|original-stdio-close|mutvar|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|sqrt|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|managed-address-reads|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

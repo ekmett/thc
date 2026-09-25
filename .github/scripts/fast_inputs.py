@@ -38,7 +38,7 @@ MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar
-narrow-literal-proofs original-stack original-stack-formatter original-stdio original-stdio-read original-handle-readiness resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+narrow-literal-proofs original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-handle-readiness resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops synchronous-exceptions tuple-arithmetic word-floating""".split()
 PROVENANCE_DIRS = """aggregate-layout empty-join-input empty-tuple-input
 floating-tuple state-tuple sum-layout sum-result tag-to-enum tuple-input
@@ -81,6 +81,7 @@ MAX_JSON_BYTES = 384 * 1024 * 1024
 NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate",
     "build/original-stdio/native/original-stdio-oracle",
     "build/original-stdio-read/native/original-stdio-read-oracle",
+    "build/original-stdio-close/native/oracle",
     "build/original-handle-readiness/native/oracle",
     *(f"build/{name}/native/{name}" for name in
       ("state-tuple", "tuple-input", "tuple-return", "empty-tuple-input"))})
@@ -128,6 +129,22 @@ ORIGINAL_HANDLE_READINESS_OUTPUTS = frozenset("build/original-handle-readiness/"
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
         "core/OriginalHandleReadinessAudit.json", "core/THC.InterfaceClosure.json",
         "originalIsTerminal.audit.json", "originalIsTerminalErrno.audit.json")),
+))
+
+ORIGINAL_STDIO_CLOSE_LOGS = (
+    "ghc-version", "ghc-info", "native-build", "pre-export", "post-export",
+) + tuple(f"native-{index}" for index in range(4)) + tuple(
+    f"{stage}-audit-{entry}" for stage in ("pre", "post")
+    for entry in ("originalClose", "originalCloseErrno"))
+ORIGINAL_STDIO_CLOSE_OUTPUTS = frozenset("build/original-stdio-close/" + name for name in (
+    "manifest.json", "oracle.json", "native/oracle",
+    *(f"results/{index}.txt" for index in range(4)),
+    "results/0.private", "results/2.private",
+    *(f"logs/{label}.{suffix}" for label in ORIGINAL_STDIO_CLOSE_LOGS
+      for suffix in ("stdout", "stderr", "command.json")),
+    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
+        "core/OriginalStdioCloseAudit.json", "core/THC.InterfaceClosure.json",
+        "originalClose.audit.json", "originalCloseErrno.audit.json")),
 ))
 
 # Each attempt retains its logs without admitting arbitrary files from a build
@@ -409,6 +426,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_STDIO_OUTPUTS
     if parts[1] == "original-stdio-read":
         return name in ORIGINAL_STDIO_READ_OUTPUTS
+    if parts[1] == "original-stdio-close":
+        return name in ORIGINAL_STDIO_CLOSE_OUTPUTS
     if parts[1] == "original-handle-readiness":
         return name in ORIGINAL_HANDLE_READINESS_OUTPUTS
     if parts[1] == "original-stack":

@@ -199,6 +199,15 @@
     }
   },
   "owners": {
+    "compiler/test-fixtures/OriginalStdioCloseAudit.hs": {
+      "junit": ["thc.runtime.OriginalStdioCloseNativeTest"], "python": []
+    },
+    "compiler/test-fixtures/OriginalStdioCloseAuditNative.hs": {
+      "junit": ["thc.runtime.OriginalStdioCloseNativeTest"], "python": []
+    },
+    "test/haskell-fixtures/OriginalStdioCloseFixtures.hs": {
+      "junit": ["thc.runtime.OriginalStdioCloseNativeTest"], "python": []
+    },
     "compiler/test-fixtures/OriginalStdioReadAudit.hs": {
       "junit": ["thc.runtime.OriginalStdioReadTest"],
       "python": []
@@ -816,6 +825,7 @@
         "thc.runtime.WideCharAddressTest",
         "thc.runtime.OriginalStdioNativeTest",
         "thc.runtime.OriginalStdioReadTest",
+        "thc.runtime.OriginalStdioCloseNativeTest",
         "thc.runtime.OriginalHandleReadinessNativeTest",
         "thc.runtime.MutVarTest",
         "thc.runtime.OriginalStackConsumerProofTest",
