@@ -834,9 +834,7 @@
       ]
     },
     "scripts/prepare-simd-families.py": {
-      "junit": [
-        "thc.runtime.SimdCapabilitySmokeTest"
-      ],
+      "junit": [],
       "python": [
         "scripts/test-simd-families.py"
       ]
@@ -856,9 +854,7 @@
       ]
     },
     "scripts/simd_family_model.py": {
-      "junit": [
-        "thc.runtime.SimdCapabilitySmokeTest"
-      ],
+      "junit": [],
       "python": [
         "scripts/test-simd-families.py"
       ]

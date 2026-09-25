@@ -139,10 +139,8 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/original-handle-readiness/manifest.json",
     "build/small-arrays/manifest.json",
     "build/simd-capability-smoke/manifest.json",
-    # The SIMD smoke exporter consumes this generated Haskell fixture. Check
-    # both Haskell outputs without hashing unrelated JVM code generation.
-    "build/generated/simd/fixtures/GeneratedSimdFamilies.hs",
-    "build/generated/simd/fixtures/GeneratedSimdFamiliesNative.hs",
+    # Smoke manifests hash generated Haskell inputs, independently of JVM codegen.
+    *fast_inputs.SIMD_SMOKE_SOURCES,
 })
 # Compiler interfaces/objects and Gradle products are not consumed by JUnit;
 # full receipt reuse checks the final Core/native fixture data instead.

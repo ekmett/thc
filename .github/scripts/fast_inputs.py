@@ -39,7 +39,12 @@ boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag do
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers shrink-bytearrays fetch-add-int-array
 narrow-literal-proofs original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-stdio-seek original-stdio-truncate original-fd-ready original-handle-readiness resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
-show-int show-word-list signed-narrow-primops synchronous-exceptions tuple-arithmetic word-floating""".split()
+show-int show-word-list signed-narrow-primops simd-capability-smoke synchronous-exceptions tuple-arithmetic word-floating""".split()
+SIMD_SMOKE_SOURCES = frozenset("build/generated/simd/fixtures/" + name for name in (
+    "GeneratedSimdSmoke.hs", "GeneratedSimdSmokeScalar.hs",
+    "GeneratedSimdSmokeScalarNative.hs", "GeneratedSimdSmokeVectorNative.hs"))
+SIMD_SMOKE_OUTPUTS = SIMD_SMOKE_SOURCES | frozenset("build/simd-capability-smoke/" + name for name in (
+    "manifest.json", "pre-core/GeneratedSimdSmoke.json", "audits.json", "cases.tsv", "native/simd-smoke-oracle"))
 PROVENANCE_DIRS = """aggregate-layout empty-join-input empty-tuple-input
 floating-tuple state-tuple sum-layout sum-result tag-to-enum tuple-input
 tuple-join tuple-return unsafe-equality simd simd-int32x4 simd-floatx4
@@ -79,6 +84,7 @@ MAX_TOTAL_BYTES = 3 * 1024 * 1024 * 1024
 MAX_MANIFEST_BYTES = 16 * 1024 * 1024
 MAX_JSON_BYTES = 384 * 1024 * 1024
 NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate",
+    "build/simd-capability-smoke/native/simd-smoke-oracle",
     "build/original-stdio/native/original-stdio-oracle",
     "build/original-stdio-read/native/original-stdio-read-oracle",
     "build/original-stdio-close/native/oracle",
@@ -471,6 +477,8 @@ def allowed_payload(name, pins):
         return True
     if native_executable(name):
         return True
+    if name in SIMD_SMOKE_SOURCES:
+        return True
     if len(parts) < 3 or parts[0] != "build":
         return False
     if parts[1] == "compiler":
@@ -478,6 +486,8 @@ def allowed_payload(name, pins):
             bool(re.fullmatch(r"libHSthc-[\w.-]+\.(so|dylib)", parts[2])))
     if parts[1] == "original-stdio":
         return name in ORIGINAL_STDIO_OUTPUTS
+    if parts[1] == "simd-capability-smoke":
+        return name in SIMD_SMOKE_OUTPUTS
     if parts[1] == "original-stdio-read":
         return name in ORIGINAL_STDIO_READ_OUTPUTS
     if parts[1] == "original-stdio-close":

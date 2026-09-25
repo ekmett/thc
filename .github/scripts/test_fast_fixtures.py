@@ -19,6 +19,17 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_simd_smoke_recipe_tracks_generated_haskell_inputs(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['simd-capability-smoke']
+        self.assertEqual('simd-capability-smoke', owners['thc.runtime.SimdCapabilitySmokeTest'])
+        sources = fast_fixtures.fast_inputs.SIMD_SMOKE_SOURCES
+        self.assertEqual({'build/simd-capability-smoke'} | sources, set(group['outputs']))
+        self.assertLessEqual(sources, fast_fixtures.FULL_REQUIRED)
+        self.assertNotIn('scripts/prepare-simd-families.py', group['sources'])
+        self.assertNotIn('scripts/simd_family_model.py', group['sources'])
+
     def test_original_fd_ready_fixture_registration(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
@@ -759,8 +770,8 @@ class FullFixtureReceiptTest(unittest.TestCase):
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text("new preparer output\n")
         if self.generated_fixture:
-            for name in ("GeneratedSimdFamilies.hs", "GeneratedSimdFamiliesNative.hs"):
-                output = self.root / "build/generated/simd/fixtures" / name
+            for name in fast_fixtures.fast_inputs.SIMD_SMOKE_SOURCES:
+                output = self.root / name
                 output.parent.mkdir(parents=True, exist_ok=True)
                 output.write_text(f"generated {self.prepared}\n")
 
@@ -804,12 +815,11 @@ class FullFixtureReceiptTest(unittest.TestCase):
 
     def test_generated_haskell_fixture_is_verified_without_jvm_codegen(self):
         self.generated_fixture = True
-        names = {"build/generated/simd/fixtures/GeneratedSimdFamilies.hs",
-                 "build/generated/simd/fixtures/GeneratedSimdFamiliesNative.hs"}
+        names = fast_fixtures.fast_inputs.SIMD_SMOKE_SOURCES
         with mock.patch.object(fast_fixtures, "FULL_REQUIRED", fast_fixtures.FULL_REQUIRED | names):
             self.prepare("thc.UnknownTest")
             self.assertEqual(self.prepare("thc.UnknownTest")["reused"], ["full"])
-            generated = self.root / "build/generated/simd/fixtures/GeneratedSimdFamilies.hs"
+            generated = self.root / "build/generated/simd/fixtures/GeneratedSimdSmoke.hs"
             generated.write_text("changed generated fixture\n")
             self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
             self.assertEqual(self.prepared, 2)
