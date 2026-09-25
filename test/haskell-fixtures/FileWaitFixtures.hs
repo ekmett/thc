@@ -36,8 +36,10 @@ prepareFileWait root = do
   installed <- prepareInstalledCore root directory
   let ghc = fixtureGhc installed
       packagePath = fixturePackages installed
+  -- GHC 9.14's raw wait primops use the non-threaded select I/O manager.
+  -- Linking the threaded RTS instead aborts before testing either primop.
   nativeBuild <- run "native-build" [] ghc
-    ["--make", "-O2", "-dynamic", "-threaded", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
+    ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
      "-package", "ghc-internal", "-package", "unix", "-i./compiler/test-fixtures",
      "-odir", directory </> "native", "-hidir", directory </> "native", driver, "-o", binary]
   nativeRun <- run "native-oracle" [] (root </> binary) []
