@@ -126,6 +126,28 @@ class ByteArrayTest {
         assertThrows(RuntimeFault::class.java) { ManagedByteArray.requireState(0L) }
     }
 
+    @Test fun ownedGuestStorageRejectsFullWidthInvalidSizesAndIndicesBeforeWriting() {
+        // Guest arrays use an owner so shrink preserves aliases. Exercise that
+        // path separately from the raw host ByteArray controls above.
+        for (size in listOf(Long.MIN_VALUE, -1L, Int.MAX_VALUE.toLong() + 1, 1L shl 32, Long.MAX_VALUE)) {
+            val failure = assertThrows(RuntimeFault::class.java) { ManagedByteArray.allocateGuest(size) }
+            assertEquals("Managed allocation size outside JVM domain", failure.message, "size=$size")
+        }
+        for (size in listOf(0L, 1L, 3L)) {
+            val array = ManagedByteArray.allocateGuest(size)
+            for (index in 0 until size) ManagedByteArray.writeGuest(array, index, 129 + index)
+            val expected = (0 until size).map { 129 + it }
+            for (index in listOf(Long.MIN_VALUE, -1L, size, 1L shl 32, Long.MAX_VALUE)) {
+                val read = assertThrows(RuntimeFault::class.java) { ManagedByteArray.readGuest(array, index, true) }
+                val write = assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeGuest(array, index, 7) }
+                for (failure in listOf(read, write))
+                    assertEquals("Managed allocation range outside its backing storage", failure.message, "size=$size/index=$index")
+                assertEquals(size, ManagedByteArray.sizeGuest(array))
+                assertEquals(expected, (0 until size).map { ManagedByteArray.readGuest(array, it, true) })
+            }
+        }
+    }
+
     @Test fun effectsEvaluateTheStateOperandBeforeWritingAndFailWithoutPublishing() {
         val builder = FrameDescriptor.newBuilder()
         val slot = builder.addSlot(FrameSlotKind.Object, "destination", null)
@@ -275,7 +297,9 @@ class ByteArrayTest {
                         val program = program(language, module, backend)
                         val function = context.asValue(EntryValue(program, "orderedBytes", 1))
                         val failure = assertThrows(PolyglotException::class.java) { function.execute(5L) }
-                        assertTrue(failure.message.orEmpty().contains("ByteArray#"), "$backend/$primitive/$value: $failure")
+                        val guard = if (primitive == "newByteArray#") "Managed allocation size outside JVM domain"
+                            else "Managed allocation range outside its backing storage"
+                        assertEquals("${RuntimeFault::class.java.name}: $guard", failure.message, "$backend/$primitive/$value")
                         assertEquals(0, language.handoffState.get().results.depth)
                         assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong())
                     }
