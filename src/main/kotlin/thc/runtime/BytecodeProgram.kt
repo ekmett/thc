@@ -3200,6 +3200,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     b.endBlock()
                 }
                 "broadcastFloatX4#" -> { b.beginVectorFloatBroadcast(); operands[0].emit(e); b.endVectorFloatBroadcast() }
+                in CoreVectors.fusedFloat -> {
+                    b.beginVectorFloatFused(CoreVectors.fusedFloat.indexOf(name))
+                    operands.forEach { it.emit(e) }; b.endVectorFloatFused()
+                }
                 else -> {
                     val operation = when (name) { "plusFloatX4#" -> 0; "minusFloatX4#" -> 1; "timesFloatX4#" -> 2; else -> error("Invalid FloatX4 operation") }
                     b.beginVectorFloatBinary(operation)

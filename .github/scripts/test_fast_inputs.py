@@ -21,6 +21,34 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def test_floatx4_fma_payload_is_closed_and_preserves_original_provenance(self):
+        manifest_path = 'build/simd-floatx4-fma/manifest.json'
+        self.assertIn(manifest_path, DECLARED_REQUIRED)
+        self.assertEqual(6, len(cache.SIMD_FLOAT_FMA_OUTPUTS))
+        artifacts = cache.SIMD_FLOAT_FMA_OUTPUTS - {manifest_path}
+        for path in artifacts:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.put(path, b'{}\n' if path.endswith('.json') else b'original native rows\n')
+            with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
+        original = json.dumps({'schema': 1, 'inputHashes': self.manifest['inputHashes'],
+            'artifactHashes': {name: cache.digest(self.root / name) for name in artifacts}})
+        self.put(manifest_path, original)
+        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, manifest_path)):
+            manifest = self.pack()
+            self.assertLessEqual(cache.SIMD_FLOAT_FMA_OUTPUTS, manifest['payload'].keys())
+            self.remove_payload(manifest)
+            cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(original, (self.root / manifest_path).read_text())
+            for name in artifacts:
+                self.assertEqual(manifest['payload'][name], cache.digest(self.root / name))
+            self.remove_payload(manifest)
+            changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                if member.name != 'files/build/simd-floatx4-fma/oracle.txt'])
+            self.rejected_without_writes(changed)
+        for suffix in ('native/oracle', 'native/SimdFloatFma.o', 'logs/extra.command.json',
+                       'other.txt', 'pre-core/Other.json', 'test-results/pass.json'):
+            self.assertFalse(cache.allowed_payload('build/simd-floatx4-fma/' + suffix, {}), suffix)
+
     def test_termios_exact_image_fixture_inventory(self):
         self.assertEqual(97, len(cache.ORIGINAL_TERMIOS_OUTPUTS))
         self.assertIn('build/original-termios/manifest.json', DECLARED_REQUIRED)

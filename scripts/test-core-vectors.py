@@ -150,6 +150,40 @@ class VectorAuditTest(unittest.TestCase):
                 proof['vector']['lanes'] = count
                 self.assertIsNotNone(proof_error(proof), (original, count))
 
+    def test_floatx4_fused_requires_three_exact_vectors_and_canonical_admission(self):
+        for name in ('fmaddFloatX4#', 'fmsubFloatX4#', 'fnmaddFloatX4#', 'fnmsubFloatX4#'):
+            self.assertEqual(3, CAP['primitives'][name])
+            module = fixture()
+            body = module['bindings'][0]['expr'][2]
+            operand = ['app', ['prim', 'broadcastFloatX4#', dict(rep=CLOSURE)],
+                       [['lit', 'float', '1.0', dict(rep=LANE_FLOAT_REP)]], [False], False, True,
+                       dict(rep=copy.deepcopy(VECTOR_FLOAT_REP))]
+            body[1] = ['app', ['prim', name, dict(rep=CLOSURE)], [copy.deepcopy(operand) for _ in range(3)],
+                       [False] * 3, False, True, dict(rep=copy.deepcopy(VECTOR_FLOAT_REP))]
+            body[4]['binder']['rep'] = copy.deepcopy(VECTOR_FLOAT_REP)
+            self.assertTrue(run(module)['accepted'], run(module)['issues'])
+            without = copy.deepcopy(CAP)
+            del without['primitives'][name]
+            self.assertIn('unsupported-primitive', {issue['code'] for issue in run(module, capability=without)['issues']})
+            for index in range(3):
+                malformed = copy.deepcopy(module)
+                malformed['bindings'][0]['expr'][2][1][2][index][-1]['rep'] = copy.deepcopy(VECTOR_DOUBLE_REP)
+                self.assertFalse(run(malformed)['accepted'])
+            for count in (2, 4):
+                malformed = copy.deepcopy(module)
+                app = malformed['bindings'][0]['expr'][2][1]
+                app[2] = [copy.deepcopy(operand) for _ in range(count)]
+                app[3] = [False] * count
+                self.assertFalse(run(malformed)['accepted'])
+            malformed = copy.deepcopy(module)
+            malformed['bindings'][0]['expr'][2][1][-1]['rep'] = copy.deepcopy(VECTOR_DOUBLE_REP)
+            self.assertFalse(run(malformed)['accepted'])
+            malformed = copy.deepcopy(module)
+            malformed['bindings'][0]['expr'][2][1][3][1] = True
+            self.assertFalse(run(malformed)['accepted'])
+        for name in ('fmaddFloatX8#', 'fmsubFloatX16#', 'fnmaddDoubleX2#', 'fnmsubDoubleX8#'):
+            self.assertNotIn(name, CAP['primitives'])
+
     def test_int32_multiply_requires_two_exact_signed_vectors(self):
         m=fixture(); body=m['bindings'][0]['expr'][2]
         def broadcast(value):

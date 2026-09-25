@@ -314,6 +314,7 @@ executable thc-fixtures
     Explicit64ArrayFixtures
     FusedFloatingFixtures
     SimdCallFixtures
+    SimdFloatFmaFixtures
     SqrtFixtures
     OriginalStdioFixtures
     OriginalStdioCloseFixtures
