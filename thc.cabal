@@ -303,6 +303,7 @@ executable thc-fixtures
     Int32ByteOffsetFixtures
     Explicit64ArrayFixtures
     FusedFloatingFixtures
+    SimdCallFixtures
     SqrtFixtures
     OriginalStdioFixtures
     OriginalStdioCloseFixtures

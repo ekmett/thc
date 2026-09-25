@@ -9,6 +9,16 @@ import com.oracle.truffle.api.bytecode.LocalAccessor
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.ExplodeLoop
 
+/** Exact vector metadata and replay-local lanes; no activation or vector payload is retained. */
+internal class BytecodeVectorSlots(proof: CoreRepresentation,
+    @field:CompilationFinal(dimensions = 1) private val slots: Array<LocalAccessor>) {
+    private val layout = VectorLayout(proof)
+    init { require(slots.size == TupleShape.flatten(proof).size) }
+    fun write(frame: VirtualFrame, root: BytecodeRoot, value: Any) =
+        layout.write(root.bytecodeNode, frame, slots, 0, value)
+    fun read(frame: VirtualFrame, root: BytecodeRoot): Any = layout.read(root.bytecodeNode, frame, slots, 0)
+}
+
 /** Replay-local destinations for a typed input loan; never retains an activation. */
 internal class BytecodeTypedInputSlots(
     private val entry: TypedInputLayout,

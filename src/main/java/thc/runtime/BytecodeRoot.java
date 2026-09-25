@@ -1224,6 +1224,24 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = BytecodeVectorSlots.class, name = "slots")
+    public static final class WriteVectorSlots {
+        @Specialization public static void write(VirtualFrame frame, BytecodeVectorSlots slots,
+                Object value, @Bind("$node") Node node) {
+            slots.write(frame, (BytecodeRoot) node.getRootNode(), value);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = BytecodeVectorSlots.class, name = "slots")
+    public static final class ReadVectorSlots {
+        @Specialization public static Object read(VirtualFrame frame, BytecodeVectorSlots slots,
+                @Bind("$node") Node node) {
+            return slots.read(frame, (BytecodeRoot) node.getRootNode());
+        }
+    }
+
+    @Operation
     @ConstantOperand(type = BytecodeTypedInputSlots.class, name = "slots")
     public static final class RestoreTypedInput {
         @Specialization public static void restore(VirtualFrame frame, BytecodeTypedInputSlots slots,

@@ -137,7 +137,7 @@ class SimdDoubleVectorTest {
             { it + ("primReps" to List(2) { "DoubleRep" }) },
             { it + mapOf("primReps" to listOf("VecRep 2 Int64ElemRep"), "vector" to mapOf("lanes" to 2L, "element" to "Int64ElemRep")) })
         for (backend in listOf("ast", "bytecode")) {
-            assertThrows(UnsupportedCore::class.java) { program(language, backend, input, "vectorArgument") }
+            assertNotNull(program(language, backend, input, "vectorArgument"))
             val unsupported = rewrite(input) { it + mapOf("primReps" to listOf("VecRep 8 DoubleElemRep"),
                 "vector" to mapOf("lanes" to 8L, "element" to "DoubleElemRep")) } as Map<String, Any?>
             assertThrows(UnsupportedCore::class.java) { program(language, backend, unsupported, "plusCase") }

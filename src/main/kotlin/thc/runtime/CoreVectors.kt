@@ -17,6 +17,14 @@ internal data class CoreVector(val lanes: Int, val element: String) {
         val DOUBLEX2 = CoreVector(2, "DoubleElemRep")
         fun parse(raw: Any?, kind: CoreKind, reps: List<String>?, aggregate: Boolean): CoreVector? {
             if (kind != CoreKind.VECTOR) {
+                // The exporter records a sole physical VecRep on a logical
+                // tuple as well (for example (# State#, FloatX4# #)). Check that
+                // redundant physical annotation without turning the tuple into
+                // a scalar vector; its recursive fields are validated separately.
+                if (aggregate && raw != null) {
+                    parse(raw, CoreKind.VECTOR, reps, false)
+                    return null
+                }
                 if (raw != null || !aggregate && reps?.any { it.startsWith("VecRep ") } == true)
                     throw RuntimeFault("Vector representation lacks exact vector metadata")
                 return null

@@ -16,23 +16,34 @@ internal class ArgumentLayout private constructor(
 ) {
     val logicalArity: Int get() = proofs.size
     val physicalArity: Int get() = offsets.last()
-    val requiresTyped: Boolean = proofs.any { it.isTuple && !it.isEmptyTuple }
+    val requiresTyped: Boolean = proofs.any { it.isVector || it.isTuple && !it.isEmptyTuple }
+    val physicalStorageReps: List<String> = proofs.flatMap { proof ->
+        if (proof.isTuple || proof.isVector) VectorLayout.storageReps(proof)
+        else listOf(when {
+            proof.isLong -> "IntRep"
+            proof.isFloat -> "FloatRep"
+            proof.isDouble -> "DoubleRep"
+            proof.kind == CoreKind.ADDRESS -> "AddrRep"
+            else -> "BoxedRep (Just Lifted)"
+        })
+    }
     // Build recursive metadata once during lowering. PAP/overapplication indices
     // can be dynamic even at an otherwise scalar/empty call site; rebuilding a
     // recursive signature there makes partial evaluation expand unknown shapes.
     @field:CompilationFinal(dimensions = 1)
     private val tupleKeys: Array<String?> = Array(proofs.size) { index ->
-        proofs[index].takeIf { it.isTuple }?.let(TupleShape::compatibilityKey)
+        proofs[index].takeIf { it.isTuple || it.isVector }?.let(TupleShape::compatibilityKey)
     }
     fun isEmpty(index: Int): Boolean = proofs[index].isEmptyTuple
     fun isTuple(index: Int): Boolean = proofs[index].isTuple
+    fun isVector(index: Int): Boolean = proofs[index].isVector
     fun proof(index: Int): CoreRepresentation = proofs[index]
     fun offset(index: Int): Int = offsets[index]
     fun suffix(index: Int): ArgumentLayout? = fromProofs(proofs.drop(index))
 
     companion object {
         fun fromProofs(proofs: List<CoreRepresentation>): ArgumentLayout? {
-            if (proofs.none { it.isTuple }) return null
+            if (proofs.none { it.isTuple || it.isVector }) return null
             proofs.forEach(CoreRepresentations::requireInput)
             val offsets = IntArray(proofs.size + 1)
             val physical = ArrayList<CoreRepresentation>()
@@ -46,7 +57,7 @@ internal class ArgumentLayout private constructor(
         // retains its existing Unit argument. Zero physical width never identifies
         // a logical argument: (# #), (# State# s #), and nested empty tuples differ.
         fun leaves(proof: CoreRepresentation): List<CoreRepresentation> =
-            if (proof.isTuple) TupleShape.flatten(proof) else listOf(proof)
+            if (proof.isTuple || proof.isVector) TupleShape.flatten(proof) else listOf(proof)
         fun offset(layout: ArgumentLayout?, index: Int): Int = layout?.offset(index) ?: index
         fun width(layout: ArgumentLayout?, count: Int): Int = offset(layout, count)
 
