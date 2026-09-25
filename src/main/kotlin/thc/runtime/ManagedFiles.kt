@@ -513,6 +513,15 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         } }
     }
 
+    /** Status flags belong to the shared open description. Keep the same owner
+     * monitor and authenticated lease as byte IO, dup aliases and retirement. */
+    @TruffleBoundary internal fun fcntl(fd: Long, argument: Long, write: Boolean): Long = result {
+        withDescriptor(fd) { entry ->
+            val resource = entry.native ?: fail(7, "THC descriptor has no native fcntl capability: $fd")
+            if (write) resource.setStatusFlags(argument) else resource.statusFlags()
+        }
+    }
+
     /** Stable logical identity for a future resumable wait primop. The token
      * holds no native fd between attempts: async unwinding unregisters and closes
      * the current native request. Retrying this token never resolves fd again.
@@ -712,7 +721,8 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         if (!entry.writable) fail(if (original) 5 else 4, "THC file descriptor is not writable: $fd")
         if (length < 0) fail(5, "Negative THC file size")
         val oldSize = channel.size()
-        if (length > oldSize && (entry.append || !entry.canExtend))
+        val append = entry.native?.let { nativeAbi.openAppend(it.statusFlags()) } ?: entry.append
+        if (length > oldSize && (append || !entry.canExtend))
             fail(7, "Extending an append-mode file or native standard endpoint is not supported")
         val position = channel.position()
         try {

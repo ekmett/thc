@@ -18,9 +18,11 @@ int main(void) {
            "\"EACCES\":%d,\"EEXIST\":%d,\"EBADF\":%d,\"EINVAL\":%d,"
            "\"EIO\":%d,\"ENOTSUP\":%d,\"EBUSY\":%d,\"EISDIR\":%d,\"ENOTTY\":%d,\"ESPIPE\":%d,\"EMFILE\":%d},"
            "\"seek\":{\"SEEK_SET\":%d,\"SEEK_CUR\":%d,\"SEEK_END\":%d},"
-           "\"open\":{\"modeBytes\":%zu,\"O_ACCMODE\":%d,\"O_RDONLY\":%d,\"O_WRONLY\":%d,\"O_RDWR\":%d,\"O_APPEND\":%d}}\n",
+           "\"open\":{\"modeBytes\":%zu,\"O_ACCMODE\":%d,\"O_RDONLY\":%d,\"O_WRONLY\":%d,\"O_RDWR\":%d,\"O_APPEND\":%d,"
+           "\"O_CREAT\":%d,\"O_NOCTTY\":%d,\"O_NONBLOCK\":%d,\"F_GETFL\":%d,\"F_SETFL\":%d}}\n",
            CHAR_BIT, sizeof(void *), sizeof(int), sizeof(bool), sizeof(size_t), sizeof(ssize_t),
            ENOENT, EACCES, EEXIST, EBADF, EINVAL, EIO, ENOTSUP, EBUSY, EISDIR, ENOTTY, ESPIPE, EMFILE,
-           SEEK_SET, SEEK_CUR, SEEK_END, sizeof(mode_t), O_ACCMODE, O_RDONLY, O_WRONLY, O_RDWR, O_APPEND);
+           SEEK_SET, SEEK_CUR, SEEK_END, sizeof(mode_t), O_ACCMODE, O_RDONLY, O_WRONLY, O_RDWR, O_APPEND,
+           O_CREAT, O_NOCTTY, O_NONBLOCK, F_GETFL, F_SETFL);
     return 0;
 }

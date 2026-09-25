@@ -43,6 +43,19 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     WRITE_UNSAFE("ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite", "capi", "unsafe",
         listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep"),
     ERRNO("__hscore_get_errno", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    O_APPEND("__hscore_o_append", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    O_CREAT("__hscore_o_creat", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    O_NOCTTY("__hscore_o_noctty", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    O_NONBLOCK("__hscore_o_nonblock", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    O_RDONLY("__hscore_o_rdonly", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    O_RDWR("__hscore_o_rdwr", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    O_WRONLY("__hscore_o_wronly", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    F_GETFL("__hscore_f_getfl", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    F_SETFL("__hscore_f_setfl", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    FCNTL_READ("ghczuwrapperZC17ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCfcntl", "capi", "unsafe",
+        listOf("Int32Rep", "Int32Rep", null), "Int32Rep"),
+    FCNTL_WRITE("ghczuwrapperZC16ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCfcntl", "capi", "unsafe",
+        listOf("Int32Rep", "Int32Rep", "Int64Rep", null), "Int32Rep"),
     SEEK_SET("ghczuwrapperZC1ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuSET", "capi", "unsafe", listOf(null), "Int32Rep"),
     SEEK_CUR("ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR", "capi", "unsafe", listOf(null), "Int32Rep"),
     SEEK_END("ghczuwrapperZC0ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuEND", "capi", "unsafe", listOf(null), "Int32Rep"),
@@ -79,6 +92,11 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     val readiness: Boolean get() = this == READY_SAFE || this == READY_UNSAFE
     val duplication: Boolean get() = this == DUP || this == DUP2
     val locking: Boolean get() = this == LOCK || this == UNLOCK
+    val flagConstant: Boolean get() = when (this) {
+        O_APPEND, O_CREAT, O_NOCTTY, O_NONBLOCK, O_RDONLY, O_RDWR, O_WRONLY, F_GETFL, F_SETFL -> true
+        else -> false
+    }
+    val fcntl: Boolean get() = this == FCNTL_READ || this == FCNTL_WRITE
     val seekConstant: Boolean get() = this == SEEK_SET || this == SEEK_CUR || this == SEEK_END
     val stat: Boolean get() = this == SIZEOF_STAT || statField ||
         this == IS_REG || this == IS_CHR || this == IS_BLK || this == IS_DIR || this == IS_FIFO || this == IS_SOCK
@@ -113,7 +131,7 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation == OriginalStdioOp.TCSETATTR || operation == OriginalStdioOp.OPEN || operation.iconv || operation.strerror || operation.duplication || operation.locking,
+        requireProof(operation.flagConstant || operation.fcntl || operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation == OriginalStdioOp.TCSETATTR || operation == OriginalStdioOp.OPEN || operation.iconv || operation.strerror || operation.duplication || operation.locking,
             "strict operand operation")
         val primitive = operation.arguments[index]
         val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }

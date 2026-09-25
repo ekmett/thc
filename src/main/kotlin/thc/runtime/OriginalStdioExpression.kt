@@ -114,6 +114,15 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
         } else if (operation == OriginalStdioOp.ERRNO) {
             requireVoidCarrier(operands[0].execute(frame))
             CoreOriginalStdio.current(this).errno()
+        } else if (operation.flagConstant) {
+            requireVoidCarrier(operands[0].execute(frame))
+            CoreOriginalStdio.current(this).flagConstant(operation)
+        } else if (operation.fcntl) {
+            val fd = operands[0].executeRequiredLong(frame)
+            val command = operands[1].executeRequiredLong(frame)
+            val argument = if (operation == OriginalStdioOp.FCNTL_WRITE) operands[2].executeRequiredLong(frame) else 0L
+            requireVoidCarrier(operands.last().execute(frame))
+            CoreOriginalStdio.current(this).fcntl(fd, command, argument, operation == OriginalStdioOp.FCNTL_WRITE)
         } else if (operation.seekConstant) {
             requireVoidCarrier(operands[0].execute(frame))
             CoreOriginalStdio.current(this).seekConstant(operation)

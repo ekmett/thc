@@ -1091,6 +1091,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             else if (operation == OriginalStdioOp.FSTAT) result = CoreOriginalStdio.current(node).fstat(fd, address);
             else if (operation == OriginalStdioOp.UNLOCK) result = CoreOriginalStdio.locks(node).unlock(fd);
             else if (operation == OriginalStdioOp.ERRNO) result = CoreOriginalStdio.current(node).errno();
+            else if (operation.getFlagConstant()) result = CoreOriginalStdio.current(node).flagConstant(operation);
             else if (operation.getSeekConstant()) result = CoreOriginalStdio.current(node).seekConstant(operation);
             else if (operation == OriginalStdioOp.ISATTY) result = CoreOriginalStdio.current(node).isTerminal(fd);
             else if (operation == OriginalStdioOp.CLOSE) result = CoreOriginalStdio.current(node).close(fd);
@@ -1109,6 +1110,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             TupleResultsKt.requireVoidCarrier(state);
             long result;
             if (operation == OriginalStdioOp.LOCK) result = CoreOriginalStdio.locks(node).lock(fd, writing, milliseconds, socket);
+            else if (operation.getFcntl()) result = CoreOriginalStdio.current(node).fcntl(fd, writing, milliseconds,
+                operation == OriginalStdioOp.FCNTL_WRITE);
             else if (operation.getReadiness()) result = CoreOriginalStdio.current(node).ready(fd, writing, milliseconds, socket, node);
             else throw new RuntimeFault("Invalid original four-scalar operation");
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);

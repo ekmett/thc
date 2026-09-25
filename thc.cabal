@@ -50,6 +50,8 @@ extra-source-files:
   compiler/test-fixtures/OriginalFdReadyAudit.hs
   compiler/test-fixtures/OriginalRtsLocksAudit.hs
   compiler/test-fixtures/RtsDiagnosticsNative.hs
+  compiler/test-fixtures/OriginalFcntlAudit.hs
+  compiler/test-fixtures/OriginalFcntlNative.hs
   compiler/test-fixtures/OriginalOpenAudit.hs
   compiler/test-fixtures/OriginalOpenNative.hs
   compiler/test-fixtures/OriginalTermiosAudit.hs

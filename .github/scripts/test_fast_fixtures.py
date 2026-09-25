@@ -356,6 +356,46 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual({'mode': 'selected', 'rebuilt': [], 'reused': []}, result)
         self.assertEqual([], self.calls)
 
+    def test_original_fcntl_registered_cache_checks_all_artifacts(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['original-fcntl']
+        cache = fast_fixtures.fast_inputs
+        self.assertEqual('original-fcntl', owners['thc.runtime.OriginalFcntlTest'])
+        self.assertIn('"$fixture_bin" original-fcntl', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('build/original-fcntl', fast_fixtures.FULL_OUTPUT_ROOTS)
+        name = 'build/original-fcntl/manifest.json'
+        self.assertEqual(113, len(cache.ORIGINAL_FCNTL_OUTPUTS))
+        for item in cache.ORIGINAL_FCNTL_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(item, {}), item)
+        for item in ('native/private-file', 'native/Main.o', 'pre/core/Other.json', 'logs/unknown.stdout'):
+            self.assertFalse(cache.allowed_payload('build/original-fcntl/' + item, {}), item)
+        with mock.patch.object(cache, 'GMP_NATIVE_HOST', True):
+            artifacts = {}
+            for item in cache.ORIGINAL_FCNTL_OUTPUTS - {name}:
+                path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
+            receipt = dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
+                           installedArtifactsHashed=False, nativeRows=4,
+                           entries=list(cache.ORIGINAL_FCNTL_ENTRIES), artifactHashes=artifacts)
+            path = self.root / name; path.write_text(json.dumps(receipt))
+            self.assertEqual(cache.ORIGINAL_FCNTL_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+            for missing in ('native/oracle', 'pre/core/OriginalFcntlAudit.json',
+                            'post/originalSetFlags.audit.json', 'logs/native-run.stdout'):
+                item = 'build/original-fcntl/' + missing
+                incomplete = dict(artifacts); del incomplete[item]
+                with self.assertRaises(cache.CacheMiss):
+                    cache.fcntl_artifact_hashes(dict(receipt, artifactHashes=incomplete))
+                artifact = self.root / item; artifact.write_text('changed')
+                with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+                artifact.unlink(); artifact.symlink_to(self.root / 'build/original-fcntl/oracle.json')
+                with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
+                artifact.unlink(); artifact.write_text('fixture\n')
+        with mock.patch.object(cache, 'GMP_NATIVE_HOST', False):
+            receipt = dict(schema=1, supported=False, artifactHashes={})
+            path.write_text(json.dumps(receipt))
+            self.assertEqual({name}, set(fast_fixtures._output_hashes(self.root, group)))
+
     def test_original_termios_registration_receipt_and_stale_artifact(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
