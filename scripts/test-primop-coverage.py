@@ -78,7 +78,7 @@ class PrimopChecklistTest(unittest.TestCase):
         scalars = dict(schema=1, ghc='9.14.1', targetWordSize=64, primitives={})
         row = coverage.classify(data, cap, scalars)['primitives'][0]
         self.assertEqual('partial', row['status'])
-        self.assertEqual('Managed blocking cells; no guest scheduler or async exceptions', row['scope'])
+        self.assertEqual('Managed blocking cells; backend and continuation limits apply', row['scope'])
 
     def test_explicit_weaks_do_not_claim_automatic_gc_or_ephemerons(self):
         cap = dict(primitives={'mkWeak#': 4}, managedWeakPrimitives={
@@ -87,7 +87,7 @@ class PrimopChecklistTest(unittest.TestCase):
         scalars = dict(schema=1, ghc='9.14.1', targetWordSize=64, primitives={})
         row = coverage.classify(data, cap, scalars)['primitives'][0]
         self.assertEqual('partial', row['status'])
-        self.assertIn('no GC, ephemerons or C finalizers', row['scope'])
+        self.assertIn('restricted C labels, no GC or ephemerons', row['scope'])
 
     def test_unadvertised_is_missing_and_new_advertisements_default_to_partial(self):
         cap = copy.deepcopy(self.capability)

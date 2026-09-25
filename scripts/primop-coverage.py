@@ -83,8 +83,8 @@ def classify(data, capability, scalars):
                                ('managedArrayPrimitives', 'Managed lifted arrays'),
                                ('managedMutVarPrimitives', 'Managed lazy reference cells'),
                                ('managedStablePtrPrimitives', 'Context-owned opaque stable handles; no pointer memory access'),
-                               ('managedWeakPrimitives', 'PARTIAL: retained registrations and explicit Haskell finalization; no GC, ephemerons or C finalizers'),
-                               ('managedMVarPrimitives', 'Managed blocking cells; no guest scheduler or async exceptions')):
+                               ('managedWeakPrimitives', 'Retained registrations and explicit Haskell/C finalization; restricted C labels, no GC or ephemerons'),
+                               ('managedMVarPrimitives', 'Managed blocking cells; backend and continuation limits apply')):
                 if name in capability.get(key, {}):
                     scope = label
                     break

@@ -22,7 +22,10 @@ optional environment, in that order around the flag. A zero flag calls
 `function(object)`; any nonzero flag calls `function(environment, object)`.
 Registration on a live weak returns 1 and prepends the callback; registration
 on a dead weak returns 0. The two libdw function signatures have no environment
-argument, so their ABI is only suitable for a zero flag.
+argument, so their ABI is only suitable for a zero flag. The original `free`
+label uses the same ABI and releases a live, context-owned malloc base (or null).
+Dead weak registration returns zero before inspecting an already-freed base;
+function ownership, weak ownership and the ABI flag are still checked.
 
 Explicit `finalizeWeak#` atomically makes the weak dead and detaches its payload,
 then runs C callbacks synchronously in reverse registration order outside the
@@ -34,14 +37,17 @@ The native Haskell fixture checks real non-null function addresses, registration
 dead-registration failure, repeat finalization, and preservation of the separate
 Haskell finalizer action. The source fixture exports actual GHC Core and verifies
 the function/data distinction, `AddrRep` certificates, and the typed finalizer
-primop. THC resolves only the two original one-argument libdw labels into
-context-owned, nonnumeric Sulong callables. Explicit weak finalization invokes
+primop. THC resolves the two original one-argument libdw labels into
+context-owned, nonnumeric Sulong callables, and `free` into the owned allocation
+registry. Explicit weak finalization invokes
 registered callbacks outside the registry lock. The two selected original
 callback bodies are empty: unchanged bytes in the native oracle cannot prove
 invocation or callback order. Separate registry instrumentation checks order and
 the fact that invocation is outside the lock; the JVM integration check executes
-the actual Sulong members. Automatic guest GC finalization, other C function
-labels, and data labels such as `enabled_capabilities` remain unsupported.
+the actual Sulong members. The owned `free` test verifies release, expired aliases
+and dead registration on both compiled backends. Automatic guest GC finalization
+and arbitrary C function labels remain unsupported. The separate
+`enabled_capabilities` data label exposes a read-only live Word32 cell.
 
 Primary implementations at the pinned GHC revision:
 
