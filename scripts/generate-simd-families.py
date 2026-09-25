@@ -360,12 +360,11 @@ def smoke_sources(fs):
             main += ['import GeneratedSimdSmoke']
         main += ['emit :: [String] -> IO ()', 'emit [selector, left, right] =',
                  '  case (read selector, read left, read right) of',
-                 '    (I# k, I# a, I# b) -> case I# (scalarSmoke k a b) of answer ->']
-        prefix = ''
+                 '    (I# k, I# a, I# b) ->',
+                 '      let answer = I# (scalarSmoke k a b)', '      in']
         if compare_vector:
-            main += ['      if answer /= I# (simdSmoke k a b) then error "Native SIMD/scalar mismatch" else']
-            prefix = '  '
-        main += [prefix + '      putStrLn ("simdSmoke\\t" ++ selector ++ "\\t" ++ left ++ "\\t" ++ right ++ "\\t" ++ show answer)',
+            main += ['        if answer /= I# (simdSmoke k a b) then error "Native SIMD/scalar mismatch" else']
+        main += ['          putStrLn ("simdSmoke\\t" ++ selector ++ "\\t" ++ left ++ "\\t" ++ right ++ "\\t" ++ show answer)',
                  'emit _ = error "Invalid SIMD smoke input"', 'main :: IO ()',
                  'main = if finiteBitSize (0 :: Int) /= 64 then error "Requires 64-bit Int"',
                  '       else getContents >>= mapM_ (emit . words) . lines']
