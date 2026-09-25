@@ -23,6 +23,19 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "original-stdio-close": {
+      "junit": ["thc.runtime.OriginalStdioCloseNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stdio-close"]}],
+      "outputs": ["build/original-stdio-close"],
+      "sources": [
+        "compiler/test-fixtures/OriginalStdioCloseAudit.hs",
+        "compiler/test-fixtures/OriginalStdioCloseAuditNative.hs",
+        "test/haskell-fixtures/OriginalStdioCloseFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal"
+      ]
+    },
     "original-stdio-read": {
       "junit": ["thc.runtime.OriginalStdioReadTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stdio-read"]}],

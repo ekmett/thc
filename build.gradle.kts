@@ -108,6 +108,8 @@ tasks.withType<Test>().configureEach {
             "original-stdio-read/input.bin",
             "original-handle-readiness/**/*.json", "original-handle-readiness/native/**",
             "original-handle-readiness/logs/*.stdout", "original-handle-readiness/logs/*.stderr",
+            "original-stdio-close/**/*.json", "original-stdio-close/results/*.txt", "original-stdio-close/results/*.private",
+            "original-stdio-close/native/**", "original-stdio-close/logs/*.stdout", "original-stdio-close/logs/*.stderr",
             "managed-md5-native/**",
             "original-stack/manifest.json", "original-stack/run-*/**",
             "original-stack-formatter/manifest.json", "original-stack-formatter/run-*/logs/*",
