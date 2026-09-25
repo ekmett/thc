@@ -19,6 +19,27 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_original_fd_ready_fixture_registration(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['original-fd-ready']
+        self.assertEqual('original-fd-ready', owners['thc.runtime.OriginalFdReadyNativeTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
+                                   'original-fd-ready']}], group['commands'])
+        self.assertEqual(['build/original-fd-ready'], group['outputs'])
+        self.assertTrue(all((project / name).is_file() for name in group['sources']))
+        self.assertIn('"$fixture_bin" original-fd-ready',
+                      (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/original-fd-ready', fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertTrue(fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
+        self.assertIn('"original-fd-ready/**/*.json"', (project / 'build.gradle.kts').read_text())
+        for path in fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS:
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path, {}), path)
+        for name in ('OriginalFD.json', 'native/unreviewed', 'logs/extra.stdout',
+                     'negative/extra.json', 'native/OriginalFdReadyAudit.hi', 'test-results/pass.xml'):
+            self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/original-fd-ready/' + name, {}))
+
     def test_interface_core_fixture_registration(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

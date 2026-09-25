@@ -40,6 +40,18 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return lastError.get()
     }
 
+    @TruffleBoundary fun ready(fd: Long, writing: Long, milliseconds: Long, socket: Long): Long {
+        val abi = hostAbi
+        if (fd != fd.toInt().toLong()) throw RuntimeFault("Original fdReady requires a canonical signed CInt descriptor")
+        if (writing !in 0L..1L || socket !in 0L..1L)
+            throw RuntimeFault("Original fdReady requires canonical CBool arguments")
+        // isSock is ignored by the original POSIX implementation. The regular
+        // file readiness domain has identical read/write polling semantics.
+        val ready = files.ready(fd, milliseconds)
+        if (ready < 0) lastError.set(abi.error(files.errorKind()))
+        return ready
+    }
+
     @TruffleBoundary fun close(fd: Long): Long {
         val abi = hostAbi
         if (fd != fd.toInt().toLong()) throw RuntimeFault("Original close requires a canonical signed CInt descriptor")

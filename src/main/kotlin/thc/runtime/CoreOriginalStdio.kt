@@ -22,7 +22,11 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     SEEK("ghczuwrapperZC19ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZClseek", "capi", "unsafe",
         listOf("Int32Rep", "Int64Rep", "Int32Rep", null), "Int64Rep"),
     TRUNCATE("__hscore_ftruncate", "ccall", "unsafe", listOf("Int32Rep", "Int64Rep", null), "Int32Rep"),
-    ISATTY("isatty", "ccall", "unsafe", listOf("Int32Rep", null), "Int32Rep");
+    ISATTY("isatty", "ccall", "unsafe", listOf("Int32Rep", null), "Int32Rep"),
+    READY_SAFE("fdReady", "ccall", "safe", listOf("Int32Rep", "Word8Rep", "Int64Rep", "Word8Rep", null), "Int32Rep"),
+    READY_UNSAFE("fdReady", "ccall", "unsafe", listOf("Int32Rep", "Word8Rep", "Int64Rep", "Word8Rep", null), "Int32Rep");
+
+    val readiness: Boolean get() = this == READY_SAFE || this == READY_UNSAFE
 }
 
 internal object CoreOriginalStdio {
@@ -37,6 +41,20 @@ internal object CoreOriginalStdio {
     }
     private fun exactInteger(value: Any?, expected: Int): Boolean =
         (value is Int || value is Long) && (value as Number).toLong() == expected.toLong()
+
+    /** An occurrence certificate cannot relabel a stored readiness operand. */
+    fun validateReadyOperand(operation: OriginalStdioOp, index: Int,
+        lowered: CoreRepresentation, stored: CoreRepresentation?) {
+        requireProof(operation.readiness, "readiness operand operation")
+        val primitive = operation.arguments[index]
+        val kind = if (primitive == null) CoreKind.VOID else CoreKind.LONG
+        val reps = listOfNotNull(primitive)
+        requireProof(lowered.present && !lowered.isAggregate && !lowered.isVector &&
+            lowered.kind == kind && lowered.primReps == reps, "lowered readiness operand $index")
+        if (stored != null && stored.present)
+            requireProof(!stored.isAggregate && !stored.isVector && stored.kind in setOf(kind, CoreKind.UNKNOWN) &&
+                (stored.primReps == null || stored.primReps == reps), "stored readiness operand $index")
+    }
 
     fun validateHead(function: List<Any?>, defined: Boolean) {
         val proof = CoreRepresentations.metadata(function)?.get("rep") as? Map<*, *>
@@ -89,7 +107,10 @@ internal object CoreOriginalStdio {
         val descriptor = meta["foreignCall"] as? Map<*, *> ?: return null
         val target = descriptor["target"] as? Map<*, *> ?: return null
         val symbol = target["symbol"] as? String ?: return null
-        val operation = OriginalStdioOp.entries.firstOrNull { it.symbol == symbol } ?: return null
+        val candidates = OriginalStdioOp.entries.filter { it.symbol == symbol }
+        if (candidates.isEmpty()) return null
+        val operation = candidates.firstOrNull { it.convention == descriptor["convention"] && it.safety == descriptor["safety"] }
+            ?: throw RuntimeFault("Invalid original stdio call: calling convention/safety")
         requireProof(descriptor.keys == descriptorKeys && exactInteger(descriptor["schema"], 1), "descriptor schema")
         requireProof(target.keys == setOf("kind", "symbol", "unit", "isFunction") &&
             target["kind"] == "static" && target["unit"] == "ghc-internal" && target["isFunction"] == true,

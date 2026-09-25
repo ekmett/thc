@@ -580,7 +580,7 @@ class Audit:
                 head_id = function[1] if isinstance(function, list) and len(function) > 1 else None
                 defined = isinstance(head_id, str) and (head_id in bound or head_id in self.bindings)
                 core_original_foreign.validate_head(function, defined)
-                if symbol in core_original_foreign.STACK_INFO:
+                if symbol in core_original_foreign.STACK_INFO or symbol == 'fdReady':
                     for index, (argument, primitive) in enumerate(zip(arguments, core_original_foreign.OPERATIONS[symbol][2])):
                         self.original_stack_operand(argument, primitive, bound, index)
                 if symbol == core_original_foreign.STACK_CLONE:

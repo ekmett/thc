@@ -31,6 +31,8 @@ extra-source-files:
   compiler/test-fixtures/OriginalStackProof.json
   compiler/test-fixtures/OriginalStackFormatter.hs
   compiler/test-fixtures/OriginalStackFormatterNative.hs
+  compiler/test-fixtures/OriginalFdReadyAudit.hs
+  compiler/test-fixtures/OriginalFdReadyAuditNative.hs
   README.md
   docs/driver.md
   docs/ghc-core.md
@@ -268,6 +270,7 @@ executable thc-fixtures
     OriginalStdioSeekFixtures
     OriginalStdioTruncateFixtures
     OriginalHandleReadinessFixtures
+    OriginalFdReadyFixtures
     MutVarFixtures
     StablePointerFixtures
     ShrinkByteArrayFixtures

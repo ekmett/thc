@@ -117,6 +117,8 @@ tasks.withType<Test>().configureEach {
             "original-stdio-seek/native/**", "original-stdio-seek/logs/*.stdout", "original-stdio-seek/logs/*.stderr",
             "original-stdio-truncate/**/*.json", "original-stdio-truncate/results/*.txt", "original-stdio-truncate/results/*.private",
             "original-stdio-truncate/native/**", "original-stdio-truncate/logs/*.stdout", "original-stdio-truncate/logs/*.stderr",
+            "original-fd-ready/**/*.json", "original-fd-ready/native/oracle", "original-fd-ready/native/private-file",
+            "original-fd-ready/logs/*.stdout", "original-fd-ready/logs/*.stderr",
             "managed-md5-native/**",
             "original-stack/manifest.json", "original-stack/run-*/**",
             "original-stack-formatter/manifest.json", "original-stack-formatter/run-*/logs/*",

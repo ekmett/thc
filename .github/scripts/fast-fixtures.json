@@ -24,6 +24,19 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "original-fd-ready": {
+      "junit": ["thc.runtime.OriginalFdReadyNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-fd-ready"]}],
+      "outputs": ["build/original-fd-ready"],
+      "sources": [
+        "compiler/test-fixtures/OriginalFdReadyAudit.hs",
+        "compiler/test-fixtures/OriginalFdReadyAuditNative.hs",
+        "test/haskell-fixtures/OriginalFdReadyFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal"
+      ]
+    },
     "original-stdio-truncate": {
       "junit": ["thc.runtime.OriginalStdioTruncateNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stdio-truncate"]}],

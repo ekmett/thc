@@ -23,13 +23,14 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "98fbb9a4218dac55685462e5ff1ee04ad8b94977d696045f6a74dcfaabd5a46c"
+FULL_PREPARATION_PLAN = "7c60914af31983393d2bbd5dff103ab1d3477eed540ce0761976bc5ef15ae155"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
     "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/uncaught-self", "build/small-arrays", "build/floating-address",
     "build/floating-byte-offset", "build/narrow-byte-offset", "build/int32-byte-offset",
     "build/explicit64-arrays", "build/mask-functions", "build/interface-core",
+    "build/original-fd-ready",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/interface-core/manifest.json", "build/interface-core/InterfaceLibrary.json",
@@ -134,6 +135,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/original-stdio-close/manifest.json", "build/original-stdio-close/oracle.json",
     "build/original-stdio-seek/manifest.json", "build/original-stdio-seek/oracle.json",
     "build/original-stdio-truncate/manifest.json", "build/original-stdio-truncate/oracle.json",
+    *fast_inputs.ORIGINAL_FD_READY_OUTPUTS,
     "build/original-handle-readiness/manifest.json",
     "build/small-arrays/manifest.json",
     "build/simd-capability-smoke/manifest.json",

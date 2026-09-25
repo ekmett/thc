@@ -22,8 +22,9 @@ import java.util.concurrent.CountDownLatch
 /** Explicit thc_io_v1 service, not a POSIX ABI. Descriptors and reader/writer
  * claims belong to one THC context. Only regular files and the embedding's
  * three streams are supported. Calls are synchronous: this is not a scheduler,
- * readiness service, or an implementation of interruptible foreign calls. */
+ * general readiness service, or an implementation of interruptible foreign calls. */
 internal class ManagedFiles(private val env: TruffleLanguage.Env, private val threads: GuestThreads) {
+    private enum class Readiness { REGULAR_FILE, UNAVAILABLE }
     private data class FileIdentity(val device: Long, val inode: Long)
     private class OpenClaim(var identity: FileIdentity?, val writable: Boolean) {
         val owner: Thread = Thread.currentThread()
@@ -36,7 +37,8 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         val identity: FileIdentity? = null,
         val readable: Boolean = false,
         val writable: Boolean = false,
-        val append: Boolean = false
+        val append: Boolean = false,
+        val readiness: Readiness = Readiness.UNAVAILABLE
     ) {
         // Accessed under this descriptor's monitor. Registry lookups never wait
         // for that monitor while holding the context-wide registry monitor.
@@ -176,7 +178,8 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
                     requireUnclaimed(after, writable, name, claim)
                     val allocated = nextDescriptor++
                     descriptors[allocated] = Descriptor(channel = acquired, identity = after,
-                        readable = mode == 0L || mode == 3L, writable = writable, append = mode == 2L)
+                        readable = mode == 0L || mode == 3L, writable = writable, append = mode == 2L,
+                        readiness = Readiness.REGULAR_FILE)
                     opening.remove(claim)
                     allocated
                 }
@@ -204,6 +207,27 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
                 if (n < 0) 0L else if (n == 0) fail(6, "THC input made no progress") else n.toLong()
             }
         } }
+    }
+
+    /** The pinned POSIX fdReady reports any poll event, including POLLNVAL,
+     * as ready. Regular files are ready in either direction, even at EOF or
+     * with an incompatible open mode: the following transfer reports errors.
+     * Do not acquire a descriptor's IO monitor to make this nonblocking probe.
+     * Opaque embedding streams have no readiness contract and are not process
+     * fd0/fd1/fd2. Negative descriptors are ignored by poll; only their zero
+     * timeout probe is supported until a real cancellable wait service exists. */
+    @TruffleBoundary fun ready(fd: Long, milliseconds: Long): Long {
+        if (fd < 0L) {
+            if (milliseconds != 0L) fault("Original fdReady cannot wait on an ignored negative descriptor")
+            return 0L
+        }
+        return result {
+            val readiness = synchronized(this) { descriptors[fd]?.readiness }
+            when (readiness) {
+                null, Readiness.REGULAR_FILE -> 1L
+                Readiness.UNAVAILABLE -> fail(7, "THC stream has no readiness contract: $fd")
+            }
+        }
     }
 
     @TruffleBoundary fun write(fd: Long, address: ManagedAddress, count: Long): Long {

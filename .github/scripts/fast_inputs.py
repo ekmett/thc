@@ -38,7 +38,7 @@ MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers shrink-bytearrays fetch-add-int-array
-narrow-literal-proofs original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-stdio-seek original-stdio-truncate original-handle-readiness resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+narrow-literal-proofs original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-stdio-seek original-stdio-truncate original-fd-ready original-handle-readiness resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops synchronous-exceptions tuple-arithmetic word-floating""".split()
 PROVENANCE_DIRS = """aggregate-layout empty-join-input empty-tuple-input
 floating-tuple state-tuple sum-layout sum-result tag-to-enum tuple-input
@@ -84,6 +84,7 @@ NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate",
     "build/original-stdio-close/native/oracle",
     "build/original-stdio-seek/native/oracle",
     "build/original-stdio-truncate/native/oracle",
+    "build/original-fd-ready/native/oracle",
     "build/original-handle-readiness/native/oracle",
     *(f"build/{name}/native/{name}" for name in
       ("state-tuple", "tuple-input", "tuple-return", "empty-tuple-input"))})
@@ -179,6 +180,25 @@ ORIGINAL_STDIO_TRUNCATE_OUTPUTS = frozenset("build/original-stdio-truncate/" + n
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
         "core/OriginalStdioTruncateAudit.json", "core/THC.InterfaceClosure.json",
         "originalTruncate.audit.json", "originalTruncateErrno.audit.json")),
+))
+
+ORIGINAL_FD_READY_ENTRIES = ("originalReadySafe", "originalReadyUnsafe")
+ORIGINAL_FD_READY_NEGATIVES = (
+    "wrong-unit", "dynamic-target", "non-function", "wrong-convention", "interruptible",
+    "wrong-arity", "wrong-supplied-arity", "boolean-schema", "signed-cbool",
+    "machine-timeout", "scalar-state", "machine-result",
+)
+ORIGINAL_FD_READY_LOGS = (
+    "ghc-version", "ghc-info", "ghc-libdir", "ghc-internal-imports", "native-build", "native-observations",
+) + tuple(f"audit-{entry}" for entry in ORIGINAL_FD_READY_ENTRIES) + tuple(
+    f"negative-{label}-{entry}" for label in ORIGINAL_FD_READY_NEGATIVES for entry in ORIGINAL_FD_READY_ENTRIES)
+ORIGINAL_FD_READY_OUTPUTS = frozenset("build/original-fd-ready/" + name for name in (
+    "manifest.json", "oracle.json", "OriginalFDDeclarations.json", "Template.json",
+    "OriginalFdReadyAudit.json", "facts.json", "native/oracle", "native/private-file",
+    *(f"{entry}.audit.json" for entry in ORIGINAL_FD_READY_ENTRIES),
+    *(f"negative/{label}.json" for label in ORIGINAL_FD_READY_NEGATIVES),
+    *(f"negative/{label}-{entry}.audit.json" for label in ORIGINAL_FD_READY_NEGATIVES for entry in ORIGINAL_FD_READY_ENTRIES),
+    *(f"logs/{label}.{suffix}" for label in ORIGINAL_FD_READY_LOGS for suffix in ("stdout", "stderr", "command.json")),
 ))
 
 # Each attempt retains its logs without admitting arbitrary files from a build
@@ -466,6 +486,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_STDIO_SEEK_OUTPUTS
     if parts[1] == "original-stdio-truncate":
         return name in ORIGINAL_STDIO_TRUNCATE_OUTPUTS
+    if parts[1] == "original-fd-ready":
+        return name in ORIGINAL_FD_READY_OUTPUTS
     if parts[1] == "original-handle-readiness":
         return name in ORIGINAL_HANDLE_READINESS_OUTPUTS
     if parts[1] == "original-stack":

@@ -11,6 +11,7 @@ The initial contracts are the exact `ghc-internal` static function targets:
 | `ghczuwrapperZC20ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite` | capi / safe | Int32Rep, AddrRep, Word64Rep | Int64Rep |
 | `ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite` | capi / unsafe | Int32Rep, AddrRep, Word64Rep | Int64Rep |
 | `__hscore_get_errno` | ccall / unsafe | none | Int32Rep |
+| `fdReady` | ccall / safe or unsafe | Int32Rep, Word8Rep, Int64Rep, Word8Rep | Int32Rep |
 
 Matching is independent of the consuming binding's name. These are exact pinned
 symbols, not a rule accepting arbitrary generated wrapper names. CInt, size_t,
@@ -27,16 +28,46 @@ Haskell write loop cannot spin indefinitely on an unsupported transport behavior
 
 `generateStdioAbi` compiles and executes a small C probe using the selected host
 clang and C headers. It records actual errno values and checks byte, pointer,
-CInt, size_t and ssize_t widths. The runtime checks the generated resource's
+CInt, CBool, size_t and ssize_t widths. The runtime checks the generated resource's
 platform and LP64 widths before foreign effects. This probe does not read or hash
 installed GHC files, mutate the process locale, or require native access when
 executing the managed writes. Supported build targets are the existing Linux GNU
 and Darwin x86_64/aarch64 host targets; cross-target resources are rejected.
 
-The current errno slot belongs to a context and host thread, which matches the
-current synchronous guest execution model. It must move into logical guest-thread
-state before migratable/resumable scheduling. Supporting safe/unsafe descriptors
-does not implement Haskell asynchronous interruption or `throwTo` resumability.
+The errno slot belongs to a context and Java thread, preserving the existing guest
+thread identity. Supporting safe/unsafe descriptors does not make these foreign
+operations asynchronously interruptible or establish migratable IO scheduling.
+
+## Bounded original file readiness
+
+The exact original `fdReady` signature uses signed CInt, unsigned one-byte CBool,
+signed Int64 milliseconds, CBool, and State. Lowered and stored operands must
+retain those proofs; scalar carrier sharing cannot relabel an address or State.
+Both boolean values must be canonical zero or one before any foreign effect.
+
+Context-owned regular files return one for read and write readiness, including
+EOF and an incompatible open mode. Closed or unknown nonnegative descriptors
+also return one: GHC's POSIX implementation treats any positive `poll` result as
+ready, including `POLLNVAL`; the subsequent IO operation reports the bad descriptor.
+Negative descriptors return zero only for a zero timeout. Other negative-descriptor
+waits fail explicitly until an interruptible waiting service exists. Readiness
+does not change the file position or clear sticky errno. POSIX ignores `isSock`.
+
+Embedding streams have no readiness contract and return minus one with host
+`ENOTSUP`. THC neither polls a process descriptor nor infers readiness from an
+InputStream's available-byte count. This bounded behavior is not general Handle,
+socket, pipe, scheduler, or asynchronous IO support.
+
+`cabal run exe:thc-fixtures -- original-fd-ready` prepares 168 native observations
+and an explicitly synthetic, GHC-typed scalar consumer of actual installed FD
+FCallIds. Replacement of a template foreign head requires GHC type equality and
+retains the original unit, symbol, convention, safety, and representation metadata.
+The fixture retains original declaration call records, template, and adapted
+exports; it does not claim unchanged original FD/Handle execution. GHC's ordinary
+typed declaration unfoldings supply the original foreign Ids even in stock thin
+interfaces. This is a fixture-only, non-executable declaration projection, not a
+production fallback for missing complete Core. Native comparison uses the actual
+linked GHC C symbol.
 
 This slice alone is not ordinary `putStrLn`/Handle support. Unchanged stdout
 initialization additionally needs terminal/locale capability calls, and the
