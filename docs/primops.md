@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 320 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 862 | No declared lowering. |
+| Partial | 322 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 860 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -397,6 +397,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `eqAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `fork#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `freezeArray#` — arity 4 — Managed lifted arrays
+- [ ] `freezeSmallArray#` — arity 4 — Managed lifted arrays
 - [ ] `geAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `getCurrentCCS#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `getMaskingState#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -589,6 +590,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `tagToEnum#` — arity 1 — concrete-nullary-family
 - [ ] `takeMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `thawArray#` — arity 4 — Managed lifted arrays
+- [ ] `thawSmallArray#` — arity 4 — Managed lifted arrays
 - [ ] `timesDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -801,7 +803,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `fnmsubFloatX4#` — arity 3
 - [ ] `fnmsubFloatX8#` — arity 3
 - [ ] `forkOn#` — arity 3
-- [ ] `freezeSmallArray#` — arity 4
 - [ ] `getApStackVal#` — arity 2
 - [ ] `getCCSOf#` — arity 2
 - [ ] `getSpark#` — arity 1
@@ -1362,7 +1363,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `shuffleWord8X64#` — arity 3
 - [ ] `spark#` — arity 2
 - [ ] `stableNameToInt#` — arity 1
-- [ ] `thawSmallArray#` — arity 4
 - [ ] `threadLabel#` — arity 2
 - [ ] `threadStatus#` — arity 2
 - [ ] `timesDoubleX8#` — arity 2

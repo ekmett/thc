@@ -33,8 +33,9 @@ prepareSmallArrays root = do
   oracle <- runWithTimeout (Just 30000000) root [] (root </> binary) []
     (unlines (map show inputs))
   let rows = map (splitTab . takeWhile (/= '\r')) (lines oracle)
-      parsed = [(x,y) | [a,b] <- rows, Just x <- [readInteger a], Just y <- [readInteger b]]
-  unless (length parsed == length inputs && map fst parsed == inputs)
+      parsed = [(x,y,z) | [a,b,c] <- rows, Just x <- [readInteger a],
+        Just y <- [readInteger b], Just z <- [readInteger c]]
+  unless (length parsed == length inputs && [x | (x,_,_) <- parsed] == inputs)
     (die "SmallArray native oracle returned malformed or missing rows")
   writeFile (root </> directory </> "oracle.tsv") oracle
   stages <- forM ["pre", "post"] $ \stage -> do
@@ -48,7 +49,7 @@ prepareSmallArrays root = do
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
       "compiler/export.sh" (options ++ [source]) ""
     _ <- run root [] "python3" ["scripts/audit-core.py", modulePath, "--entry",
-      "smallComposite", "--output", report] ""
+      "smallComposite", "--entry", "safeSliceComposite", "--output", report] ""
     accepted <- BS.readFile (root </> report)
     unless (case decodeStrict' accepted of
       Just (Object fields) -> KeyMap.lookup "accepted" fields == Just (Bool True)
@@ -69,6 +70,7 @@ prepareSmallArrays root = do
   artifactHashes <- hashes root artifacts
   writeJson (root </> directory </> "manifest.json") $ object
     ["schema" .= (1 :: Int), "ghc" .= version, "entry" .= ("smallComposite" :: String),
+     "safeEntry" .= ("safeSliceComposite" :: String),
      "nativeRows" .= length parsed,
      "stages" .= Map.fromList [(stage, path) | (stage,path,_) <- stages],
      "audits" .= Map.fromList [(stage, report) | (stage,_,report) <- stages],

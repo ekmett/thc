@@ -59,9 +59,12 @@ internal enum class SmallArrayOp(val primitive: String, private val arguments: L
     CLONE_MUTABLE("cloneSmallMutableArray#", listOf("array", "int", "int", "state"), listOf("state", "array")),
     COPY("copySmallArray#", listOf("array", "int", "array", "int", "int", "state"), listOf("state")),
     COPY_MUTABLE("copySmallMutableArray#", listOf("array", "int", "array", "int", "int", "state"), listOf("state")),
+    SAFE_FREEZE("freezeSmallArray#", listOf("array", "int", "int", "state"), listOf("state", "array")),
+    THAW("thawSmallArray#", listOf("array", "int", "int", "state"), listOf("state", "array")),
     UNSAFE_THAW("unsafeThawSmallArray#", listOf("array", "state"), listOf("state", "array"));
 
-    val tuple: Boolean get() = this in setOf(NEW, READ, INDEX, FREEZE, GET_SIZE_MUTABLE, CLONE_MUTABLE, UNSAFE_THAW)
+    val tuple: Boolean get() = this in setOf(NEW, READ, INDEX, FREEZE, GET_SIZE_MUTABLE,
+        CLONE_MUTABLE, SAFE_FREEZE, THAW, UNSAFE_THAW)
     fun validate(actual: List<CoreRepresentation>, flags: List<*>, proof: CoreRepresentation) {
         fun matches(rep: CoreRepresentation, role: String): Boolean = !rep.isAggregate && !rep.isVector && when (role) {
             "state" -> rep.kind == CoreKind.VOID && rep.primReps == emptyList<String>()
@@ -93,7 +96,8 @@ internal fun smallArrayExpression(operation: SmallArrayOp, proof: CoreRepresenta
     SmallArrayOp.SIZE, SmallArrayOp.SIZE_MUTABLE -> SizeSmallArrayExpression(operands[0])
     SmallArrayOp.GET_SIZE_MUTABLE -> GetSizeSmallArrayExpression(operands[0], operands[1])
     SmallArrayOp.CLONE -> CloneSmallArrayExpression(operands[0], operands[1], operands[2])
-    SmallArrayOp.CLONE_MUTABLE -> CopySmallArrayExpression(operands[0], operands[1], operands[2], operands[3])
+    SmallArrayOp.CLONE_MUTABLE, SmallArrayOp.SAFE_FREEZE, SmallArrayOp.THAW ->
+        CopySmallArrayExpression(operands[0], operands[1], operands[2], operands[3])
     SmallArrayOp.COPY, SmallArrayOp.COPY_MUTABLE -> TransferSmallArrayExpression(operation == SmallArrayOp.COPY_MUTABLE,
         operands[0], operands[1], operands[2], operands[3], operands[4], operands[5])
 }.proven(proof.copy(evaluated = true))

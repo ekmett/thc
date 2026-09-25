@@ -1849,7 +1849,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         SmallArrayOp.INDEX -> e.builder.beginIndexSmallArray(destination[0])
                         SmallArrayOp.FREEZE, SmallArrayOp.UNSAFE_THAW -> e.builder.beginFreezeSmallArray(destination[0])
                         SmallArrayOp.GET_SIZE_MUTABLE -> e.builder.beginGetSizeSmallMutableArray(destination[0])
-                        SmallArrayOp.CLONE_MUTABLE -> e.builder.beginCopySmallArraySlice(destination[0])
+                        SmallArrayOp.CLONE_MUTABLE, SmallArrayOp.SAFE_FREEZE, SmallArrayOp.THAW ->
+                            e.builder.beginCopySmallArraySlice(destination[0])
                         else -> error("Not a tuple SmallArray operation")
                     }
                     operands.forEach { it.emit(e) }
@@ -1859,7 +1860,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         SmallArrayOp.INDEX -> e.builder.endIndexSmallArray()
                         SmallArrayOp.FREEZE, SmallArrayOp.UNSAFE_THAW -> e.builder.endFreezeSmallArray()
                         SmallArrayOp.GET_SIZE_MUTABLE -> e.builder.endGetSizeSmallMutableArray()
-                        SmallArrayOp.CLONE_MUTABLE -> e.builder.endCopySmallArraySlice()
+                        SmallArrayOp.CLONE_MUTABLE, SmallArrayOp.SAFE_FREEZE, SmallArrayOp.THAW ->
+                            e.builder.endCopySmallArraySlice()
                         else -> error("Not a tuple SmallArray operation")
                     }
                 } else ProvenExpression(Expression { e ->
