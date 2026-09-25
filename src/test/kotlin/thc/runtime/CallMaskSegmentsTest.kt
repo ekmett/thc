@@ -198,12 +198,12 @@ class CallMaskSegmentsTest {
                 val a = maskedCaller(language, b, MaskingState.MASKED_INTERRUPTIBLE)
                 Chain(Thunk(a, null), a, b, c)
             }
-            assertEquals(BytecodeTier.CACHED, (cTarget.rootNode as BytecodeRoot).bytecodeNode.tier,
-                "The first yielded instruction must use the cached interpreter")
             entered(context) {
                 assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
                 assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(driver))
             }
+            assertEquals(BytecodeTier.CACHED, (cTarget.rootNode as BytecodeRoot).bytecodeNode.tier,
+                "The first yield must execute in the cached interpreter")
             val aContinuation = parent.value as ContinuationResult
             assertSame(aTarget.rootNode, aContinuation.continuationRootNode.sourceRootNode)
             val bSegment = (aContinuation.result as CallSegmentSuspended).segment

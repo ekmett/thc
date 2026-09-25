@@ -25,7 +25,7 @@ import com.oracle.truffle.api.nodes.Node;
 import thc.Language;
 
 /** Concrete Core instructions sharing the AST backend's heap and application ABI. */
-// Start in the cached interpreter. The former uncached threshold of zero
+// Generate only the cached interpreter. The former uncached threshold of zero
 // transitioned before executing even the first guest instruction.
 @GenerateBytecode(languageClass = Language.class, enableYield = true,
         boxingEliminationTypes = {long.class, float.class, double.class, boolean.class})
