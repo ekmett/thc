@@ -65,6 +65,9 @@ class Audit:
                 scalar_link = core_package_manifest.package_scalar_link(module)
                 if scalar_link:
                     link, proved = scalar_link
+                    if any(other['unit'] != link['unit'] and other['componentSha256'] == link['componentSha256']
+                           for other in self.package_scalar_links.values()):
+                        raise ValueError('Package C entry namespace belongs to another unit: ' + link['componentSha256'])
                     previous = self.package_scalar_links.setdefault(link['unit'], link)
                     if previous != link:
                         raise ValueError('Conflicting package C component identity: ' + link['unit'])

@@ -39,8 +39,8 @@ does not change the ordinary source-plugin foreign-output contract.
 
 ## Local package scalar C calls
 
-The `thc-local-scalar-ccall-v1` link profile covers a local Cabal library or
-executable component with one C translation unit and static, unsafe `ccall`
+The `thc-local-scalar-ccall-v1` link profile covers a registered local Cabal
+library component with one C translation unit and static, unsafe `ccall`
 imports. Arguments and the single result must use `Int32Rep`, `Int64Rep`,
 `FloatRep` or `DoubleRep`, with the original IO State argument/result retained.
 It does not admit pointers, callbacks, safe/interruptible imports, native RTS
@@ -51,8 +51,8 @@ Hackage cbits support.
 The selected GHC remains Cabal's native compiler. Its saved component C recipe
 must explicitly select Clang (for example with `ghc-options: -pgmc
 /absolute/path/to/clang`); acquisition does not replace a configured GCC.
-Matching `llvm-link` and `opt` must be available, or selected with
-`THC_LLVM_LINK` and `THC_LLVM_OPT`. The producer rejects unsupported C options
+Matching `llvm-link`, `opt` and `llvm-nm` must be available, or selected with
+`THC_LLVM_LINK`, `THC_LLVM_OPT` and `THC_LLVM_NM`. The producer rejects unsupported C options
 and LLVM constructs, requires the LLVM roundtrip to reproduce Cabal's actual
 native object, and records source/header observations in the component cache
 key. A target-specific native build and full-Core GHC 9.14.1 remain required.

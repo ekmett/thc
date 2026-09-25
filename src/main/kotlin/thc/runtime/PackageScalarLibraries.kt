@@ -31,6 +31,8 @@ internal class PackageScalarLibraries(private val env: TruffleLanguage.Env) {
         current()
         val selected = synchronized(this) {
             if (closed) fault("Package C library registry is closed")
+            if (libraries.values.any { it.link.unit != link.unit && it.link.componentSha256 == link.componentSha256 })
+                fault("Package C entry namespace belongs to another unit: ${link.componentSha256}")
             libraries[link.unit]?.also {
                 if (!it.link.same(link)) fault("Conflicting package C component identity: ${link.unit}")
             } ?: Loaded(link, FutureTask {

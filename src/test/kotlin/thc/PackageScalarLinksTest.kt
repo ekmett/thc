@@ -10,8 +10,8 @@ import java.util.HexFormat
 
 /** Structural controls only: these bytes are never parsed as LLVM or called. */
 class PackageScalarLinksTest {
-    private fun module(unit: String = "scalar-fixture", name: String = "Scalar"): Map<String, Any?> {
-        val digest = "a".repeat(64)
+    private fun module(unit: String = "scalar-fixture", name: String = "Scalar",
+        digest: String = (if (unit == "scalar-fixture") "a" else "b").repeat(64)): Map<String, Any?> {
         val bytes = byteArrayOf(0x42, 0x43)
         val symbol = "scalar_value"
         val scalarType = mapOf("kind" to "tycon", "arguments" to emptyList<Any>(), "name" to
@@ -80,5 +80,8 @@ class PackageScalarLinksTest {
             CoreModules.merge(listOf(first, second + ("packageScalarLink" to otherLink)))
         }
         assertEquals(2, (CoreModules.merge(listOf(first, module("separate-unit")))["packageScalarLinks"] as List<*>).size)
+        assertThrows(IllegalArgumentException::class.java) {
+            CoreModules.merge(listOf(first, module("separate-unit", digest = "a".repeat(64))))
+        }
     }
 }

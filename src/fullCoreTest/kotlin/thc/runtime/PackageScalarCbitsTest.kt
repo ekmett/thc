@@ -171,6 +171,10 @@ class PackageScalarCbitsTest {
                 fixture.links.forEach(registry::link)
                 fixture.links.forEach(registry::link) // Same component imported by several modules is reusable.
                 val link = fixture.links.first()
+                assertThrows(RuntimeFault::class.java) {
+                    registry.link(PackageScalarLink(link.unit + ":alias", link.target, link.componentSha256,
+                        link.bitcodeSha256, link.bytes, link.abi))
+                }
                 for (signature in link.abi) {
                     val values: Array<Any?> = signature.arguments.map { when (it) {
                         "Int32Rep", "Int64Rep" -> 0L; "FloatRep" -> 0.0f; "DoubleRep" -> 0.0

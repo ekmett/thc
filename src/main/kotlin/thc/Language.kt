@@ -93,6 +93,9 @@ object CoreModules {
             CoreForeignArtifacts.validateArchive(module)
             PackageScalarLinks.read(module)?.let { admission ->
                 val link = admission.link
+                require(packageScalarLinks.values.none { it.unit != link.unit && it.componentSha256 == link.componentSha256 }) {
+                    "Package C entry namespace belongs to another unit: ${link.componentSha256}"
+                }
                 val previous = packageScalarLinks.putIfAbsent(link.unit, link)
                 require(previous == null || previous.same(link)) { "Conflicting package C component: ${link.unit}" }
                 packageScalarProofs.getOrPut(link.unit) { linkedSetOf() }.addAll(admission.proved)
