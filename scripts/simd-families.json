@@ -6,7 +6,7 @@
     {"name": "Word64X2", "element": "Word64ElemRep", "laneRep": "Word64Rep", "lanes": 2, "bits": 128, "newCarrier": true, "operations": ["pack", "unpack", "broadcast", "plus", "minus", "times", "insert", "min", "max"]},
     {"name": "Word32X8", "element": "Word32ElemRep", "laneRep": "Word32Rep", "lanes": 8, "bits": 256, "newCarrier": true, "operations": ["pack", "unpack", "broadcast", "plus", "minus", "times", "insert", "min", "max"]},
     {"name": "Int32X8", "element": "Int32ElemRep", "laneRep": "Int32Rep", "lanes": 8, "bits": 256, "newCarrier": true, "operations": ["pack", "unpack", "broadcast", "plus", "minus", "times", "negate", "insert", "min", "max"]},
-    {"name": "Int32X16", "element": "Int32ElemRep", "laneRep": "Int32Rep", "lanes": 16, "bits": 512, "newCarrier": true, "operations": ["pack", "unpack", "broadcast", "plus", "minus", "times", "negate", "insert"]},
+    {"name": "Int32X16", "element": "Int32ElemRep", "laneRep": "Int32Rep", "lanes": 16, "bits": 512, "newCarrier": true, "operations": ["pack", "unpack", "broadcast", "plus", "minus", "times", "negate", "insert", "min", "max"]},
     {"name": "Int64X2", "element": "Int64ElemRep", "laneRep": "Int64Rep", "lanes": 2, "bits": 128, "newCarrier": false, "operations": ["times", "insert", "min", "max"]},
     {"name": "FloatX4", "element": "FloatElemRep", "laneRep": "FloatRep", "lanes": 4, "bits": 128, "newCarrier": false, "operations": ["negate", "divide", "insert"]},
     {"name": "DoubleX2", "element": "DoubleElemRep", "laneRep": "DoubleRep", "lanes": 2, "bits": 128, "newCarrier": false, "operations": ["negate", "divide", "insert"]},

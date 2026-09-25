@@ -407,7 +407,7 @@ def smoke_entries(fs):
 
 
 def smoke_groups(fs):
-    """Bound compiled size by lane work, retaining whole arithmetic families."""
+    """Bound compiled size by lane work, splitting only oversized families."""
     groups = [[]]
     legacy = []
     cost = index = 0
@@ -418,12 +418,15 @@ def smoke_groups(fs):
                 continue
             (legacy if operation == 'insert' and not family['newCarrier'] else indices).append(index)
             index += 1
-        lanes = family['lanes'] * len(indices)
-        if groups[-1] and cost + lanes > 112:
-            groups.append([])
-            cost = 0
-        groups[-1].extend(indices)
-        cost += lanes
+        limit = 112 // family['lanes']
+        for start in range(0, len(indices), limit):
+            chunk = indices[start:start + limit]
+            lanes = family['lanes'] * len(chunk)
+            if groups[-1] and cost + lanes > 112:
+                groups.append([])
+                cost = 0
+            groups[-1].extend(chunk)
+            cost += lanes
     if legacy:
         groups.append(legacy)
     return {f'simdSmoke{i}': indices for i, indices in enumerate(groups)}

@@ -21,6 +21,8 @@ extra-source-files:
   compiler/test-fixtures/InterfaceForeignAlias.hs
   compiler/test-fixtures/ForeignExportSignatures.hs
   compiler/test-fixtures/ForeignExportManaged.hs
+  compiler/test-fixtures/ForeignExportRegistration.hs
+  compiler/test-fixtures/RegistrationNative.hs
   compiler/test-fixtures/ManagedExportNative.hs
   scripts/check-ghc-core.hs
   test/check-ghc-core.sh
@@ -45,7 +47,13 @@ extra-source-files:
   compiler/test-fixtures/OriginalOpenAudit.hs
   compiler/test-fixtures/OriginalOpenNative.hs
   compiler/test-fixtures/OriginalTermiosAudit.hs
+  compiler/test-fixtures/OriginalSavedTermiosAudit.hs
+  compiler/test-fixtures/OriginalSavedTermiosNative.hs
   compiler/test-fixtures/OriginalTermiosNative.hs
+  compiler/test-fixtures/OriginalTcgetattrAudit.hs
+  compiler/test-fixtures/OriginalTcgetattrNative.hs
+  compiler/test-fixtures/OriginalSigsetAudit.hs
+  compiler/test-fixtures/OriginalSigsetNative.hs
   compiler/test-fixtures/OriginalFdReadyAuditNative.hs
   compiler/test-fixtures/OriginalIconvAudit.hs
   compiler/test-fixtures/OriginalIconvAuditNative.hs
@@ -75,6 +83,7 @@ extra-source-files:
   docs/interface-foreign.md
   docs/original-posix-dup.md
   docs/original-termios.md
+  docs/original-sigset.md
   compiler/ghc-core.settings
   compiler/patches/ghc-libraries-simplified-core.patch
   compiler/pinned-ghc-internal/GHC/Internal/Arr.hs
@@ -341,6 +350,8 @@ executable thc-fixtures
     OriginalRtsLocksFixtures
     OriginalOpenFixtures
     OriginalTermiosFixtures
+    OriginalTcgetattrFixtures
+    OriginalSigsetFixtures
     OriginalIconvFixtures
     MutVarFixtures
     StablePointerFixtures

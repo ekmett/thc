@@ -216,6 +216,8 @@ prepareInterfaceCore root = do
         "compiler/test-fixtures/InterfaceForeignAlias.hs", "test/haskell-fixtures/InterfaceForeignFacts.hs",
         "compiler/test-fixtures/ForeignExportSignatures.hs",
         "compiler/test-fixtures/ForeignExportManaged.hs", "compiler/test-fixtures/ManagedExportNative.hs",
+        "compiler/test-fixtures/ForeignExportRegistration.hs",
+        "compiler/test-fixtures/RegistrationNative.hs",
         "compiler/test-fixtures/CBVCoercionAudit.hs", "compiler/interface/Main.hs",
         "src/THC/Driver/Installed.hs", "src/THC/Driver/Project.hs", "src/THC/Driver/Wired.hs",
         "src/THC/Driver/ForeignBitcode.hs", "compiler/target-layout.c",
@@ -240,9 +242,11 @@ prepareInterfaceCore root = do
          directory </> "foreign-alias/b.json", directory </> "source/InterfaceForeignAlias.hs.saved"] ++
         [directory </> "typed-foreign-exports.json"] ++
         [directory </> "typed-foreign-exports" </> variant ++ ".json" |
-          variant <- ["a", "b", "signatures", "static-signatures", "foreign-file", "instrumented", "managed"]] ++
+          variant <- ["a", "b", "signatures", "static-signatures", "foreign-file", "instrumented", "managed", "registration"]] ++
         [directory </> "typed-foreign-exports/managed/ForeignExportManaged.hi",
-         directory </> "typed-export-source/ForeignExportManaged.hs.saved"] ++
+         directory </> "typed-export-source/ForeignExportManaged.hs.saved",
+         directory </> "typed-foreign-exports/registration/ForeignExportRegistration.hi",
+         directory </> "typed-export-source/ForeignExportRegistration.hs.saved"] ++
         [directory </> entry ++ "-audit.json" | entry <- entries]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts

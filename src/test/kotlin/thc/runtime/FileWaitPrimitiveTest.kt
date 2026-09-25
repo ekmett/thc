@@ -13,8 +13,8 @@ import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import org.junit.jupiter.api.io.TempDir
 import thc.CoreModules
+import thc.ContextProfile
 import thc.Language
-import thc.NativeIO
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.Executors
@@ -76,7 +76,7 @@ class FileWaitPrimitiveTest {
     }
 
     @Test fun firstInstalledWaitsKeepExactDescriptorAndLazyBadFdPayload() {
-        NativeIO.createContext().use { context ->
+        NativeFileProvider.createContext(emptySet(), ContextProfile.SYNCHRONOUS_TEST).use { context ->
             context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
@@ -115,7 +115,7 @@ class FileWaitPrimitiveTest {
         val pipe = directory.resolve("readiness")
         val created = ProcessBuilder("mkfifo", pipe.toString()).start()
         assertTrue(created.waitFor(5, TimeUnit.SECONDS)); assertEquals(0, created.exitValue())
-        val context = NativeIO.createContext(emptySet())
+        val context = NativeFileProvider.createContext(emptySet(), ContextProfile.SYNCHRONOUS_TEST)
         val worker = Executors.newSingleThreadExecutor()
         try {
             context.initialize("thc"); context.enter()

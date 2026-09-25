@@ -43,11 +43,10 @@ class FileWaitFullCoreTest {
             "build/file-wait/post/core/FileWaitAudit.json"))
         assertEquals("read-ready\nwrite-ready\noriginal-bad-fd\n",
             File(root, manifest["oracle"] as String).readText())
-        val text = StringBuilder()
-        val targetLayout = CorePackageManifest.appendModules(text,
-            File(root, manifest["packageManifest"] as String).path)
+        val originals = ArrayList<Map<String, Any?>>()
+        val targetLayout = CorePackageManifest.visitModules(
+            File(root, manifest["packageManifest"] as String).path) { module, _ -> originals.add(module) }.targetLayout
         assertNotNull(targetLayout)
-        val originals = Json.parse("[$text]") as List<Map<String, Any?>>
         val stages = manifest["stages"] as Map<String, String>
         assertEquals(setOf("pre", "post"), stages.keys)
         for ((stage, path) in stages) {
@@ -63,7 +62,7 @@ class FileWaitFullCoreTest {
                 assertEquals(true, audit["accepted"]); assertEquals(emptyList<Any>(), audit["missingGlobals"])
                 assertTrue((audit["primitives"] as List<Map<String, Any?>>).any {
                     it["name"] == if (writing) "waitWrite#" else "waitRead#" })
-                for (backend in listOf("ast", "bytecode")) NativeIO.createContext().use { context ->
+                for (backend in listOf("ast", "bytecode")) NativeFileProvider.createContext(emptySet(), ContextProfile.SYNCHRONOUS_TEST).use { context ->
                     context.enter()
                     try {
                         val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)

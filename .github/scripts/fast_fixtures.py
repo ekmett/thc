@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "4c4e6b7926a62540b51c3da2aae8e5d7aaad2bc67dd7b4886fefcab9ec62a774"
+FULL_PREPARATION_PLAN = "f950c636da3d2a5e935653a17f956ee2b64bb816d2054184e12b145622a9cca1"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -154,6 +154,8 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     *fast_inputs.ORIGINAL_RTS_LOCK_OUTPUTS,
     *(fast_inputs.ORIGINAL_OPEN_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-open/manifest.json"}),
     *(fast_inputs.ORIGINAL_TERMIOS_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-termios/manifest.json"}),
+    *(fast_inputs.ORIGINAL_TCGETATTR_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-tcgetattr/manifest.json"}),
+    *(fast_inputs.ORIGINAL_SIGSET_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-sigset/manifest.json"}),
     "build/original-handle-readiness/manifest.json",
     "build/small-arrays/manifest.json",
     "build/simd-capability-smoke/manifest.json",
@@ -288,6 +290,14 @@ def _output_hashes(root, group):
         name = "build/original-termios/manifest.json"
         expected = fast_inputs.termios_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
         return _manifest_output_hashes(root, name, expected)
+    if group["outputs"] == ["build/original-tcgetattr"]:
+        name = "build/original-tcgetattr/manifest.json"
+        expected = fast_inputs.tcgetattr_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
+    if group["outputs"] == ["build/original-sigset"]:
+        name = "build/original-sigset/manifest.json"
+        expected = fast_inputs.sigset_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
     files = set()
     for output in group["outputs"]:
         path = root / _relative(output)
@@ -413,7 +423,7 @@ def _full_output_hashes(root):
             if fast_inputs.GMP_NATIVE_HOST:
                 files.update(_gmp_output_hashes(root))
             continue
-        if name in ("build/original-rts-locks", "build/original-open", "build/original-termios"):
+        if name in ("build/original-rts-locks", "build/original-open", "build/original-termios", "build/original-tcgetattr", "build/original-sigset"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
         for member in path.rglob("*"):

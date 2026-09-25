@@ -1016,6 +1016,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             TupleResultsKt.requireVoidCarrier(state);
             // One typed instruction avoids another generated-interpreter partition;
             // the exact operation is compile-time metadata, not a guest operand.
+            if (operation.getSavedTermios()) {
+                ManagedAddress result = SavedTermios.execute(node, operation, fd, address);
+                if (operation == OriginalStdioOp.GET_SAVED_TERMIOS)
+                    destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+                return;
+            }
             if (operation.getTermios()) {
                 if (operation == OriginalStdioOp.PTR_C_CC) {
                     destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, TermiosImage.pointer(address));
@@ -1027,7 +1033,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 return;
             }
             long result;
-            if (operation.getStat()) result = PosixStat.execute(operation, address, fd);
+            if (operation.getSigset()) result = SigsetImage.execute(operation, address, fd, CoreOriginalStdio.current(node));
+            else if (operation.getStat()) result = PosixStat.execute(operation, address, fd);
+            else if (operation == OriginalStdioOp.TCGETATTR) result = CoreOriginalStdio.current(node).tcgetattr(fd, address);
             else if (operation == OriginalStdioOp.FSTAT) result = CoreOriginalStdio.current(node).fstat(fd, address);
             else if (operation == OriginalStdioOp.UNLOCK) result = CoreOriginalStdio.locks(node).unlock(fd);
             else if (operation == OriginalStdioOp.ERRNO) result = CoreOriginalStdio.current(node).errno();
@@ -3825,6 +3833,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class GeneratedInt32X16Insert {
         @Specialization public static Int32X16 apply(Int32X16 vector, long value, long index) { return Int32X16.insert(vector, (int) value, index); }
+    }
+    @Operation public static final class GeneratedInt32X16Min {
+        @Specialization public static Int32X16 apply(Int32X16 left, Int32X16 right) { return Int32X16.min(left, right); }
+    }
+    @Operation public static final class GeneratedInt32X16Max {
+        @Specialization public static Int32X16 apply(Int32X16 left, Int32X16 right) { return Int32X16.max(left, right); }
     }
     @Operation public static final class GeneratedInt64X2Times {
         @Specialization public static Int64X2 apply(Int64X2 left, Int64X2 right) { return Int64X2.multiply(left, right); }

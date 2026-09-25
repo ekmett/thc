@@ -201,6 +201,15 @@ class ByteArrayTest {
         for (count in listOf(0L, 1L)) assertThrows(RuntimeFault::class.java) {
             ManagedByteArray.copy(source, 0, ManagedByteArray.freeze(source), 2, count)
         }
+        val owned = ManagedByteArray.allocateGuest(4)
+        for (index in 0L..3L) ManagedByteArray.writeGuest(owned, index, 17L + index)
+        for (count in listOf(0L, 1L)) {
+            val failure = assertThrows(RuntimeFault::class.java) {
+                ManagedByteArray.copyGuest(owned, 0, ManagedByteArray.freezeGuest(owned), 2, count, false)
+            }
+            assertEquals("copyByteArray# requires distinct source and destination arrays", failure.message)
+            assertEquals(listOf(17L, 18L, 19L, 20L), (0L..3L).map { ManagedByteArray.readGuest(owned, it, true) })
+        }
     }
 
     @Test fun copyEvaluatesAllSixOperandsBeforeTheEffectAndStateFailureDoesNotWrite() {
@@ -247,12 +256,26 @@ class ByteArrayTest {
                     val failure = assertThrows(PolyglotException::class.java) { function.execute(0L) }
                     assertTrue(failure.message.orEmpty().contains("ByteArray# copy range"), "$backend/$argument/$value: $failure")
                 }
-                val aliasModule = fresh()
-                val aliasArgs = copy(aliasModule)[2] as MutableList<Any?>
-                aliasArgs[2] = aliasArgs[0]
-                val aliasFunction = context.asValue(EntryValue(program(language, aliasModule, backend), "copiedBytes", 1))
-                val aliasFailure = assertThrows(PolyglotException::class.java) { aliasFunction.execute(0L) }
-                assertTrue(aliasFailure.message.orEmpty().contains("requires distinct source and destination"), "$backend: $aliasFailure")
+                for (count in listOf(0L, 1L)) for (alias in listOf(false, true)) {
+                    val aliasModule = fresh()
+                    val aliasArgs = copy(aliasModule)[2] as MutableList<Any?>
+                    // Either copy in the fixture may be visited first. Keep both
+                    // ranges within the four-byte source when aliasing its destination.
+                    for ((argument, value) in listOf(1 to 0L, 3 to 2L, 4 to count)) {
+                        aliasArgs[argument] = listOf("lit", "int", value.toString(),
+                            CoreRepresentations.metadata(aliasArgs[argument] as List<Any?>))
+                    }
+                    if (alias) aliasArgs[2] = aliasArgs[0]
+                    val function = context.asValue(EntryValue(program(language, aliasModule, backend), "copiedBytes", 1))
+                    if (alias) {
+                        val failure = assertThrows(PolyglotException::class.java) { function.execute(0L) }
+                        assertTrue(failure.message.orEmpty().contains("requires distinct source and destination"), "$backend/$count: $failure")
+                    } else {
+                        val expected = BigInteger.valueOf(mathematical("copiedBytes", 0L)) -
+                            BigInteger.valueOf(33L * count) * BigInteger.valueOf(257).pow(6)
+                        assertEquals(expected.toLong(), function.execute(0L).asLong(), "$backend/$count distinct arrays")
+                    }
+                }
                 for (diagnostic in listOf(false, true)) {
                     val module = fresh()
                     val proof = CoreRepresentations.metadata(copy(module))!!["rep"] as MutableMap<String, Any?>

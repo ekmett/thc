@@ -711,7 +711,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val fn = function(label, emptyList(), expr, scope)
         (fn.target.rootNode as GuestRoot).tupleResult?.let { CoreRepresentations.requireScalar(it.proof, "thunk") }
         val template = BytecodeRoot.ClosureTemplate(fn.target, 0, fn.captureLayout)
-        return sourced(Expression { e ->
+        // Preserve the denoted value's proof without treating its thunk as WHNF.
+        return sourced(ProvenExpression(Expression { e ->
             if (fn.hasVectorCaptures) {
                 e.builder.emitMakeVectorCapture(BytecodeRoot.VectorCaptureSource(template,
                     fn.captures.map { LocalAccessor.constantOf(e.locals.getValue(it.id)) }.toTypedArray(), true))
@@ -720,7 +721,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 fn.captures.forEach { read(it, false).emit(e) }
                 e.builder.endMakeThunk()
             }
-        }, sources.expression(expr, scope.source))
+        }, CoreRepresentations.expression(expr).copy(evaluated = false)), sources.expression(expr, scope.source))
     }
     private fun closure(fn: FunctionSpec, arity: Int): Expression {
         val template = BytecodeRoot.ClosureTemplate(fn.target, arity, fn.captureLayout)
@@ -1487,7 +1488,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio == OriginalStdioOp.FSTAT || originalStdio == OriginalStdioOp.OPEN ||
+                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio == OriginalStdioOp.OPEN ||
                             originalStdio.iconv || originalStdio.strerror || originalStdio.duplication || originalStdio.locking)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
@@ -1505,12 +1506,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.createLocal("original open path", "object").also {
                             b.beginStoreLocal(it); operands[0].emit(e); b.endStoreLocal()
                         } else null
-                    val status = originalStdio.termios || originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
-                        originalStdio == OriginalStdioOp.CLOSE || originalStdio == OriginalStdioOp.DUP || originalStdio == OriginalStdioOp.FSTAT || originalStdio == OriginalStdioOp.UNLOCK || originalStdio.seekConstant || originalStdio.stat
-                    // Setter declares address before value. Store that operand
+                    val status = originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
+                        originalStdio == OriginalStdioOp.CLOSE || originalStdio == OriginalStdioOp.DUP || originalStdio.readImage || originalStdio == OriginalStdioOp.UNLOCK || originalStdio.seekConstant || originalStdio.stat
+                    // Image updates declare address before value. Store that operand
                     // once before filling the shared long/address/State lanes.
-                    val termiosAddress = if (originalStdio == OriginalStdioOp.POKE_LFLAG)
-                        b.createLocal("termios setter address", "object").also {
+                    val imageAddress = if (originalStdio == OriginalStdioOp.POKE_LFLAG || originalStdio == OriginalStdioOp.SIGADDSET)
+                        b.createLocal("original image address", "object").also {
                             b.beginStoreLocal(it); operands[0].emit(e); b.endStoreLocal()
                         } else null
                     if (originalStdio == OriginalStdioOp.LOCALE) b.beginOriginalLocale(result)
@@ -1528,10 +1529,16 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (originalStdio == OriginalStdioOp.OPEN) {
                         operands[1].emit(e); b.emitLoadLocal(openPath!!)
                         operands[2].emit(e); operands[3].emit(e)
-                    } else if (originalStdio.termios) {
-                        if (originalStdio == OriginalStdioOp.POKE_LFLAG) operands[1].emit(e) else b.emitLoadConstant(0L)
-                        if (termiosAddress != null) b.emitLoadLocal(termiosAddress)
-                        else if (originalStdio.termiosAddress) operands[0].emit(e)
+                    } else if (originalStdio.savedTermios) {
+                        operands[0].emit(e)
+                        if (originalStdio == OriginalStdioOp.SET_SAVED_TERMIOS) operands[1].emit(e)
+                        else b.emitLoadConstant(ManagedAddress.nullAddress())
+                        operands.last().emit(e)
+                    } else if (originalStdio.termios || originalStdio.sigset) {
+                        if (originalStdio == OriginalStdioOp.POKE_LFLAG || originalStdio == OriginalStdioOp.SIGADDSET)
+                            operands[1].emit(e) else b.emitLoadConstant(0L)
+                        if (imageAddress != null) b.emitLoadLocal(imageAddress)
+                        else if (originalStdio.termiosAddress || originalStdio.sigset) operands[0].emit(e)
                         else b.emitLoadConstant(ManagedAddress.nullAddress())
                         operands.last().emit(e)
                     } else if (status) {
@@ -1539,7 +1546,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                             originalStdio == OriginalStdioOp.SIZEOF_STAT || originalStdio.statField)
                             b.emitLoadConstant(0L) else operands[0].emit(e)
                         if (originalStdio.statField) operands[0].emit(e)
-                        else if (originalStdio == OriginalStdioOp.FSTAT) operands[1].emit(e)
+                        else if (originalStdio.readImage) operands[1].emit(e)
                         else b.emitLoadConstant(ManagedAddress.nullAddress())
                         operands.last().emit(e)
                     } else if (originalStdio == OriginalStdioOp.SEEK) {
@@ -2837,6 +2844,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "default" -> 0; "data" -> 1; else -> 2
             } }, alternatives.all { it.kind != "lit" || it.value is Long })
             val resultProof = CoreRepresentations.expression(expr)
+            CoreRepresentations.validateDeclaredCaseResult(resultProof, alternatives.map { it.body.proof })
             CoreRepresentations.validateAggregateCaseResult(resultProof, alternatives.map { it.body.proof })
             CoreRepresentations.validateFloatingCaseResult(resultProof, alternatives.map { it.body.proof })
             // A missing outer case record must not erase an exact aggregate
@@ -4265,6 +4273,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         "insertInt32X16#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedInt32X16Insert(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X16Insert()
+        }, GeneratedVectors.proofInt32X16)
+        "minInt32X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X16Min(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X16Min()
+        }, GeneratedVectors.proofInt32X16)
+        "maxInt32X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X16Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X16Max()
         }, GeneratedVectors.proofInt32X16)
         "timesInt64X2#" -> ProvenExpression(Expression { e ->
             val b = e.builder
