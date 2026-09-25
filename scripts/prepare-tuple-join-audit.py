@@ -16,7 +16,7 @@ OUT = ROOT / 'build/tuple-join'
 SOURCE = ROOT / 'compiler/test-fixtures/TupleJoinAudit.hs'
 NATIVE = ROOT / 'compiler/test-fixtures/TupleJoinAuditNative.hs'
 INPUTS = [-(1 << 63), -4097, -1, 0, 1, 4097, 3000000000, (1 << 63)-1]
-PRODUCERS = ['forward', 'recursive', 'mutual', 'nestedForward', 'empty', 'nested']
+PRODUCERS = ['forward', 'recursive', 'mutual', 'nestedForward', 'empty', 'nested', 'capturePair']
 
 
 def walk(value):
@@ -39,7 +39,8 @@ def verify():
                     recursiveCase=lambda x: x+3*(x & 31)+23,
                     mutualCase=lambda x: 5*mutual(x & 31, x),
                     nestedForwardCase=lambda x: x+(-17 if x <= 0 else -3),
-                    emptyCase=lambda x: x+37, nestedCase=lambda x: x+32)
+                    emptyCase=lambda x: x+37, nestedCase=lambda x: x+32,
+                    capturePairCase=lambda x: x-1 if x <= 0 else x)
     wrap = lambda n: (n+(1 << 63)) % (1 << 64)-(1 << 63)
     expected = {(name, x): wrap(f(x)) for name, f in formulas.items() for x in INPUTS}
     expected.update({('recursiveDepth', n): 5+3*n for n in (0, 1, 20000)})
@@ -67,6 +68,16 @@ def verify():
                 leaves = [v for v in walk(proof) if isinstance(v, dict) and v.get('kind') == 'data']
                 assert all(v['evaluated'] is False for v in leaves), 'Tuple result must not force lazy Box fields'
             joins[name] = [dict(id=d['id'], arity=d['joinValueArity'], result=d['joinResultRep']) for d in definitions]
+        capture = bindings['capturePair']['expr']
+        tuple_binders = [v[-1]['binder']['id'] for v in walk(capture)
+                         if isinstance(v, list) and v and v[0] == 'case' and
+                         isinstance(v[-1], dict) and isinstance(v[-1].get('binder'), dict) and
+                         v[-1]['binder'].get('rep', {}).get('aggregate') == 'unboxed-tuple']
+        assert any(any(isinstance(v, list) and v[:2] == ['var', binder]
+                       for v in walk(join['expr']))
+                   for binder in tuple_binders for join in
+                   [v for v in walk(capture) if isinstance(v, dict) and v.get('joinValueArity') == 1]), \
+            f'{stage}: capturePair must retain a real join referencing the evaluated tuple binder'
         report = auditor.Audit([(stage, module)], cap).run(sorted({name for name, _ in expected}))
         assert report['accepted'], report['issues']
         stages.append(dict(stage=stage, joins=joins, reachableBindings=report['summary']['reachableBindings']))

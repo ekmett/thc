@@ -1,12 +1,41 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-{-# LANGUAGE MagicHash, UnboxedTuples, NoImplicitPrelude #-}
+{-# LANGUAGE BangPatterns, MagicHash, UnboxedTuples, NoImplicitPrelude #-}
 {-# OPTIONS_GHC -fno-full-laziness -fno-worker-wrapper -fno-specialise -fno-spec-constr #-}
 module TupleJoinAudit where
 import GHC.Exts (Int#, (+#), (-#), (*#), (<=#), and#, int2Word#, word2Int#)
 
 data Box = Box Int#
+
+{-# OPAQUE boxedPair #-}
+boxedPair :: Int# -> Int# -> (# Box, Box #)
+boxedPair n d = (# Box n, Box d #)
+
+-- Match integerDivMod#'s strict tuple alias: a join may return the already
+-- evaluated tuple of lazy references without allocating a closure for it.
+{-# OPAQUE capturePair #-}
+capturePair :: Int# -> Int# -> (# Box, Box #)
+capturePair n d =
+  case r of
+    Box r# ->
+      let {-# NOINLINE finish #-}
+          finish delta = case delta <=# 0# of
+            1# -> let !q' = case q of Box q# -> Box (q# -# 1#)
+                      !r' = Box (r# +# 1#)
+                  in (# q', r' #)
+            _ -> qr
+      in case n <=# 0# of
+           1# -> finish r#
+           _ -> finish (r# -# 1#)
+  where
+    !qr@(# q, r #) = boxedPair n d
+
+{-# OPAQUE capturePairCase #-}
+capturePairCase :: Int# -> Int#
+capturePairCase x =
+  case capturePair x (case x <=# 0# of 1# -> -3#; _ -> 3#) of
+    (# Box q, _ #) -> q
 {-# OPAQUE bottomBox #-}
 bottomBox :: Box
 bottomBox = bottomBox
