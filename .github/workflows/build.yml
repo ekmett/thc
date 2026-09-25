@@ -37,7 +37,7 @@ jobs:
       - name: Lint CI and merge workflows
         shell: bash
         run: |
-          curl --fail --location --silent --show-error \
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --retry-max-time 30 \
             https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
             --output "$RUNNER_TEMP/actionlint.tar.gz"
           echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check
