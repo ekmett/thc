@@ -13,23 +13,19 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
 
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         // Direct enum comparison remains constant during partial evaluation.
-        val result = when (operation) {
-            OriginalStdioOp.ERRNO -> {
-                requireVoidCarrier(operands[0].execute(frame))
-                CoreOriginalStdio.current(this).errno()
-            }
-            OriginalStdioOp.ISATTY -> {
-                val fd = operands[0].executeRequiredLong(frame)
-                requireVoidCarrier(operands[1].execute(frame))
-                CoreOriginalStdio.current(this).isTerminal(fd)
-            }
-            else -> {
-                val fd = operands[0].executeRequiredLong(frame)
-                val address = operands[1].executeRequiredAddress(frame)
-                val count = operands[2].executeRequiredLong(frame)
-                requireVoidCarrier(operands[3].execute(frame))
-                CoreOriginalStdio.current(this).write(fd, address, count)
-            }
+        val result = if (operation == OriginalStdioOp.ERRNO) {
+            requireVoidCarrier(operands[0].execute(frame))
+            CoreOriginalStdio.current(this).errno()
+        } else if (operation == OriginalStdioOp.ISATTY) {
+            val fd = operands[0].executeRequiredLong(frame)
+            requireVoidCarrier(operands[1].execute(frame))
+            CoreOriginalStdio.current(this).isTerminal(fd)
+        } else {
+            val fd = operands[0].executeRequiredLong(frame)
+            val address = operands[1].executeRequiredAddress(frame)
+            val count = operands[2].executeRequiredLong(frame)
+            requireVoidCarrier(operands[3].execute(frame))
+            CoreOriginalStdio.current(this).write(fd, address, count)
         }
         FrameAccess.writeLong(frame, slots[offset], result)
         return null
