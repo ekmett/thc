@@ -58,8 +58,9 @@ region is validated before IO, then borrowed under the descriptor owner until
 the transfer and read copyback finish; concurrent free waits for that borrow.
 Channels receive a bounded native byte-buffer view. Embedding streams use at most
 1 MiB of staging storage and report the actual short transfer, preserving bytes
-outside a successful read. Freed, foreign-context and unowned numeric pointers
-remain rejected. This adds no descriptor or foreign-call authority.
+outside a successful read. A stream that writes a prefix before throwing retains
+those writes, as with a managed destination. Freed, foreign-context and unowned
+numeric pointers remain rejected. This adds no descriptor or foreign-call authority.
 
 Managed native opens register pending acquisition before provider calls, claim
 the actual opened identity before truncation, and publish one shared owner.

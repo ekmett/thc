@@ -147,29 +147,32 @@ class NativeFileBuffersTest {
         }
     }
 
-    @Test fun ioFailureAndHardUnwindReleaseNativeBorrows() {
-        for (read in listOf(false, true)) for (hard in listOf(false, true)) {
+    @Test fun partialStreamFailuresPreserveBytesAndReleaseNativeBorrows() {
+        for (native in listOf(false, true)) for (read in listOf(false, true)) for (hard in listOf(false, true)) {
             val death = ThreadDeath()
             fun failure(): Nothing = if (hard) throw death else throw IOException("expected transfer failure")
             val input = object : InputStream() {
                 override fun read(): Int = failure()
-                override fun read(target: ByteArray, offset: Int, length: Int): Int = failure()
+                override fun read(target: ByteArray, offset: Int, length: Int): Int {
+                    target[offset] = 41; target[offset + 1] = 42
+                    failure()
+                }
             }
             val output = object : OutputStream() {
                 override fun write(value: Int) = failure()
                 override fun write(source: ByteArray, offset: Int, length: Int) = failure()
             }
             Context.newBuilder("thc").allowNativeAccess(true).`in`(input).out(output).build().use { context -> entered(context) {
-                val state = Language.currentState(); val base = buffer(true, 8)
+                val state = Language.currentState(); val base = buffer(native, 8)
                 fun transfer() = if (read) state.stdio.read(0, base.plus(2), 3) else state.stdio.write(1, base.plus(2), 3)
                 if (hard) assertSame(death, assertThrows(ThreadDeath::class.java) { transfer() })
                 else {
                     assertEquals(-1L, transfer()); assertEquals(StdioHostAbi.load().error(6), state.stdio.errno())
-                    assertEquals(List(8) { 90 }, bytes(base, 8))
                 }
+                assertEquals(if (read) listOf(90, 90, 41, 42, 90, 90, 90, 90) else List(8) { 90 }, bytes(base, 8))
                 // Free rejects a borrow held by this thread instead of hanging,
                 // so this also proves every error path released its borrow.
-                state.nativeAllocations.free(base)
+                release(base)
                 assertEquals(0, state.nativeAllocations.liveCount())
             } }
         }

@@ -515,10 +515,18 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
                     val window = segment.asSlice(0, minOf(count, Int.MAX_VALUE.toLong())).asByteBuffer()
                     if (entry.input == null) entry.channel!!.read(window)
                     else {
-                        // Embedding streams require arrays. A bounded short
-                        // read is valid; never report/copy an unreceived suffix.
+                        // Preserve partial writes even when the stream throws,
+                        // as the managed-array path does. Seed untouched bytes.
                         val bytes = ByteArray(minOf(window.remaining(), 1024 * 1024))
-                        val received = entry.input.read(bytes, 0, bytes.size)
+                        window.duplicate().get(bytes)
+                        val received = try { entry.input.read(bytes, 0, bytes.size) }
+                        catch (failure: Throwable) {
+                            try { window.put(bytes) } catch (copyback: Throwable) {
+                                if (copyback !== failure) failure.addSuppressed(copyback)
+                            }
+                            throw failure
+                        }
+                        // A successful short read changes only its actual prefix.
                         if (received > 0) window.put(bytes, 0, received)
                         received
                     }
