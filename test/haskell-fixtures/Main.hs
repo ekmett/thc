@@ -15,6 +15,7 @@ import NarrowByteOffsetFixtures (prepareNarrowByteOffset)
 import Int32ByteOffsetFixtures (prepareInt32ByteOffset)
 import Explicit64ArrayFixtures (prepareExplicit64Array)
 import FusedFloatingFixtures (prepareFusedFloating)
+import SqrtFixtures (prepareSqrt)
 import ContinuationFixtures (prepareCoreContinuation)
 import LiveAsyncFixtures (prepareLiveAsync)
 import ThreadAsyncFixtures (prepareThreadAsync)
@@ -841,6 +842,7 @@ main = do
     ["int32-byte-offset"] -> prepareInt32ByteOffset root
     ["explicit64-arrays"] -> prepareExplicit64Array root
     ["fused-floating"] -> prepareFusedFloating root
+    ["sqrt"] -> prepareSqrt root
     "original-stdio":options -> prepareOriginalStdio root options
     ["original-stack"] -> prepareOriginalStack root
     ["original-stack-formatter"] -> prepareOriginalStackFormatter root
@@ -860,4 +862,4 @@ main = do
     ["interface-core"] -> prepareInterfaceCore root
     ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (interface-core|core-continuation|mask-functions|live-async|thread-async|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (interface-core|core-continuation|mask-functions|live-async|thread-async|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|sqrt|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

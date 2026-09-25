@@ -40,6 +40,15 @@ def validate_hashes(hashes):
         check(digest(Path(path)) == sha, 'Input changed since graph capture: ' + path)
 
 
+def check_fixture_manifest(path):
+    fixture = json.loads(path.read_text())
+    check(fixture['schema'] == 1 and fixture['ghc'] == '9.14.1', 'Unexpected sqrt fixture format')
+    for group in ('inputHashes', 'artifactHashes'):
+        for relative, sha in fixture[group].items():
+            check(digest(ROOT / relative) == sha, 'Stale sqrt fixture: ' + relative)
+    return fixture
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('output', type=Path)
@@ -54,7 +63,7 @@ def main():
     java = java_home / 'bin'
     module = ROOT / 'build/sqrt/pre-core/SqrtAudit.json'
     oracle = ROOT / 'build/sqrt/integer-oracle.tsv'
-    provenance = ROOT / 'build/sqrt/provenance.json'
+    fixture_manifest = ROOT / 'build/sqrt/manifest.json'
     tooling = [Path(__file__).resolve(), SHARED / 'TupleRuntimeGraphProbe.java', SHARED / 'inputs.py',
                SHARED / 'summarize.py', ROOT / 'tools/GraphInspect.java', ROOT / 'gradlew', ROOT / 'Makefile']
     manifest_path = output / 'launch-manifest.json'
@@ -75,15 +84,15 @@ def main():
         for path, sha in before_build.items():
             committed = subprocess.check_output(['git', 'show', revision + ':' + path], cwd=ROOT)
             check(hashlib.sha256(committed).hexdigest() == sha, 'Commit runtime source before graph capture: ' + path)
-        run(['python3', ROOT / 'scripts/prepare-sqrt-audit.py', '--check-only'])
+        fixture = check_fixture_manifest(fixture_manifest)
         run([ROOT / 'gradlew', '--no-daemon', 'installDist'], output / 'installDist.log')
         check(source_hashes() == before_build, 'Runtime source changed during installDist')
         launch = dict(schema=1, runtimeSourceCommit=revision, runtimeSourceSha256=before_build,
             javaVersion=subprocess.check_output([java / 'java', '-version'], stderr=subprocess.STDOUT, text=True).splitlines(),
             javaHome=str(java_home.resolve()), jdkReleaseSha256=digest(java_home / 'release'),
             toolingSha256={str(p.relative_to(ROOT)): digest(p) for p in tooling},
-            nativeProvenance=json.loads(provenance.read_text()),
-            inputsSha256={str(p): digest(p) for p in [module, oracle, provenance, *tooling, java_home / 'release',
+            nativeFixtureManifest=fixture,
+            inputsSha256={str(p): digest(p) for p in [module, oracle, fixture_manifest, *tooling, java_home / 'release',
                 *sorted((ROOT / 'build/install/thc/lib').glob('*.jar'))]})
         manifest_path.write_text(json.dumps(launch, indent=2) + '\n')
         run([java / 'javac', '-cp', cp, '-d', classes, SHARED / 'TupleRuntimeGraphProbe.java'])
@@ -136,7 +145,8 @@ def main():
         check(revisions == {launch['runtimeSourceCommit']}, 'Mixed runtime revisions')
         evidence = dict(scope='Actual production Core execution; fixed native oracle, no timing',
             **{key: launch[key] for key in ['runtimeSourceCommit', 'runtimeSourceSha256', 'javaVersion',
-                'jdkReleaseSha256', 'toolingSha256', 'nativeProvenance']},
+                'jdkReleaseSha256', 'toolingSha256']},
+            **{key: launch[key] for key in ('nativeFixtureManifest', 'nativeProvenance') if key in launch},
             launchManifest=launch, results=records,
             limitations=['Graph instrumentation is disabled: exact target validity, not per-row compiled-entry counters',
                          'Instrumented JVM tests separately require exact per-row compiled-entry increments',

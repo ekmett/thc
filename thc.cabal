@@ -240,6 +240,7 @@ executable thc-fixtures
     Int32ByteOffsetFixtures
     Explicit64ArrayFixtures
     FusedFloatingFixtures
+    SqrtFixtures
     OriginalStdioFixtures
     SmallArrayFixtures
     StackFixtures

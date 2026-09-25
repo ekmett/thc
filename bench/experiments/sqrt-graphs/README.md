@@ -8,14 +8,14 @@ There are no timing measurements or forced guest inlining decisions.
 
 ```sh
 export JAVA_HOME=/path/to/pinned/graalvm
-python3 scripts/prepare-sqrt-audit.py
+cabal run exe:thc-fixtures --offline -- sqrt
 python3 bench/experiments/sqrt-graphs/run.py /tmp/new-sqrt-graphs \
   --capture bench/experiments/sqrt-graphs/captured
 ```
 
 Commit runtime changes before running. The runner requires a fresh output
 directory, verifies committed runtime source hashes, rebuilds `installDist`, and
-records the runtime jars, native oracle/provenance, tooling and JDK release at
+records the runtime jars, native oracle/fixture manifest, tooling and JDK release at
 launch. It reuses the fixed-input tuple graph harness and strict allocation/call
 auditor, then requires exactly one `SqrtNode` and a final square-root instruction
 at the expected precision. Raw BGV/CFG files stay in the output directory. Only

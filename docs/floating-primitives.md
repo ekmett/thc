@@ -106,13 +106,14 @@ Malformed case results are checked against every known alternative independent
 of ordering; an unknown alternative does not inherit a floating proof from its
 peers.
 
-`scripts/prepare-sqrt-audit.py` separately exports public `Prelude.sqrt` and
+`cabal run exe:thc-fixtures --offline -- sqrt` exports public `Prelude.sqrt` and
 the scalar math wrappers for both precisions before and after Tidy. Its 418
-sqrt/control native rows include signed zeros,
-subnormals, infinities, negative values, signaling/quiet NaNs, boundaries around
+sqrt/control native rows include signed zeros, subnormals, infinities,
+negative values, signaling/quiet NaNs, boundaries around
 perfect squares, and deterministic random finite inputs. An independent exact
-rational model finds adjacent output values and compares their squared midpoint,
-checking nearest-even rounding without calling a floating square-root function.
+rational model in `SqrtPrimitiveTest` finds adjacent output values and compares
+their squared midpoint, checking nearest-even rounding without a floating
+square-root function.
 The suite checks 288 exact bit results, 104 NaN classifications and 26 scalar
 consumer results. Another 402 native rows exercise the 30 scalar math primops
 through typed `Float#`/`Double#` wrappers. Arithmetic NaN payloads and signs
