@@ -16,6 +16,7 @@ import thc.Language
 import thc.NativeFileSystem
 import thc.NativeIO
 import thc.NativeIO.StandardEndpoint
+import thc.executionContext
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.nio.ByteBuffer
@@ -29,6 +30,8 @@ import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.FileAttribute
 import java.nio.file.attribute.PosixFilePermissions
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /** Provider/ownership proof only, deliberately not original FCall admission. */
 @EnabledOnOs(OS.LINUX)
@@ -55,6 +58,26 @@ class NativeFileProviderTest {
             try { Files.readSymbolicLink(entry) == path.toAbsolutePath() }
             catch (_: java.nio.file.NoSuchFileException) { false }
         }.count()
+    }
+
+    @Test fun nativeAndCommandLineContextsPermitGuestThreads() {
+        for (factory in listOf<() -> Context>({ nativeContext() }, { executionContext(fileIO = true) })) factory().use {
+            entered(it) {
+                assertNotNull(Language.currentState().nativeFiles)
+                val ran = CountDownLatch(1)
+                val thread = Language.currentState().env.newTruffleThreadBuilder(Runnable { ran.countDown() }).build()
+                thread.start()
+                assertTrue(ran.await(5, TimeUnit.SECONDS), "Guest thread must run in the native context")
+                thread.join(5000)
+                assertFalse(thread.isAlive)
+            }
+        }
+        executionContext(fileIO = true).use { context -> entered(context) {
+            for (endpoint in StandardEndpoint.entries) provider().standard(endpoint).use {
+                assertTrue(it.isOpen, "The command line explicitly grants $endpoint")
+            }
+            for (fd in 0L..2L) assertTrue(Language.currentState().files.statImage(fd).isNotEmpty())
+        } }
     }
 
     @Test fun metadataAndBytesRetainOneOpenedResourceAcrossRenameUnlinkAndHostChanges() {

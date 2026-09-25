@@ -3,7 +3,12 @@
 This Linux x86_64 checkpoint proves a private provider's bytes and metadata come
 from the same opened resource. The explicit `NativeIO` context now attaches this
 capability to shared `ManagedFiles` owners and the original GHC `__hscore_fstat`
-adapter. It does **not** change the default CLI, implement RTS file locks, or
+adapter. On Linux x86_64, the ordinary
+`thc --run-io` launcher uses that fixed context and explicitly grants process
+stdin, stdout and stderr. The launcher keeps its compilation settings and permits
+guest threads. Other hosts retain the existing managed-file context. Custom
+embedding contexts and the scalar CLI path retain their existing IO choices.
+This does **not** implement RTS file locks or
 establish `putStrLn`/Handle support. Arbitrary acquisition cancellation, weak
 references and finalizers remain outside this proof.
 
@@ -13,7 +18,8 @@ references and finalizers remain outside this proof.
 It installs the exact final internal `NativeFileSystem`, constructs the context,
 attaches its private provider and descriptor owners, and returns a built
 `Context`, not a configurable builder. Standard INPUT, OUTPUT and ERROR resources
-require separate explicit grants. Each acquired endpoint is an owned native
+require separate explicit grants; the Linux CLI grants all three. Each acquired
+endpoint is an owned native
 duplicate; its byte operations and stat image use that duplicate, never metadata
 for an unrelated `Env` stream.
 All granted endpoints are acquired before their descriptors are installed;
@@ -97,6 +103,6 @@ declaration, both backends and every first-installed compiled invocation against
 native GHC. Observations cover size and chmod changes, a duplicate descriptor,
 rename/replacement/unlink identity, invalid/closed descriptors, sticky errno and
 destination canaries. Malformed State/ABI, short or immutable destinations and
-pointer-bearing storage reject before native observation. No CLI/Handle, RTS lock,
+pointer-bearing storage reject before native observation. No full Handle, RTS lock,
 arbitrary native pointer, or acquisition-cancellation guarantee follows from this
 bounded Linux x86_64 admission.

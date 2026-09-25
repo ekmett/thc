@@ -22,6 +22,9 @@ import java.nio.file.OpenOption
 import thc.Language
 import thc.NativeIO.StandardEndpoint
 import thc.NativeFileSystem
+import thc.NativeIO
+import thc.ContextProfile
+import thc.withContextProfile
 
 /** Linux provider proof only. Acquisition is reachable solely through the
  * explicitly configured NativeFileSystem request, never from a guest fd.
@@ -30,13 +33,11 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
     companion object {
         /** No arbitrary Builder, FileSystem, provider attachment, or global map.
          * The factory knows the exact final provider whose channel it authenticates. */
-        internal fun createContext(endpoints: Set<StandardEndpoint>, synchronousCompilation: Boolean = false): Context {
+        internal fun createContext(endpoints: Set<StandardEndpoint>,
+                                   profile: ContextProfile = ContextProfile.NATIVE): Context {
             val builder = Context.newBuilder("thc").allowNativeAccess(true)
                 .allowIO(IOAccess.newBuilder().fileSystem(NativeFileSystem(endpoints)).build())
-            if (synchronousCompilation) builder.allowExperimentalOptions(true)
-                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
-                .option("engine.CompilationFailureAction", "Throw")
-            val context = builder.build()
+            val context = builder.withContextProfile(profile).build()
             try {
                 context.initialize("thc"); context.enter()
                 try {
@@ -66,7 +67,7 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
     init {
         if (!env.isNativeAccessAllowed || !env.isFileIOAllowed)
             throw SecurityException("Native files require explicit file IO and native access")
-        if (System.getProperty("os.name") != "Linux" || System.getProperty("os.arch") !in setOf("amd64", "x86_64"))
+        if (!NativeIO.supportedHost())
             throw UnsupportedOperationException("Native files are currently verified only on Linux x86_64")
         val bytes = javaClass.getResourceAsStream("/thc/native/native-file-api.so")?.use { it.readBytes() }
             ?: fault("Missing native file provider bridge")
