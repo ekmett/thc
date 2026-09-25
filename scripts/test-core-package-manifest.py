@@ -290,6 +290,9 @@ class PackageManifestTest(unittest.TestCase):
             core_package_manifest.load_for_audit(archive(['lit', 'int', '42'], malformed))
 
         for bad in (
+                dict(schema=1, execution='not-linked',
+                     stubs=dict(header='valid header', source=17, initializers=[], finalizers=[]),
+                     files=[]),
                 dict(schema=True, execution='not-linked', stubs=None,
                      files=[dict(language='c', source='int f;', extension='c')]),
                 dict(schema=1, execution='not-linked', stubs=None,

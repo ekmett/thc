@@ -55,7 +55,9 @@ def validate_archive_only_foreign(module):
     nonempty = False
     if foreign['stubs'] is not None:
         stubs = record(foreign['stubs'], {'header', 'source', 'initializers', 'finalizers'})
-        nonempty = bool(text(stubs['header']) or text(stubs['source']))
+        header = text(stubs['header'])
+        source = text(stubs['source'])
+        nonempty = bool(header or source)
         nonempty = labels(stubs['initializers'], True) or nonempty
         nonempty = labels(stubs['finalizers'], False) or nonempty
     if not isinstance(foreign['files'], list):
