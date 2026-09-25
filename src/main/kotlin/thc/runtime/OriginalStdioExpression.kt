@@ -41,6 +41,12 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
             val outputCount = operands[4].executeRequiredAddress(frame)
             requireVoidCarrier(operands[5].execute(frame))
             CoreOriginalStdio.iconv(this).convert(handle, input, inputCount, output, outputCount)
+        } else if (operation == OriginalStdioOp.STRERROR) {
+            val error = operands[0].executeRequiredLong(frame)
+            val output = operands[1].executeRequiredAddress(frame)
+            val length = operands[2].executeRequiredLong(frame)
+            requireVoidCarrier(operands[3].execute(frame))
+            CoreOriginalStdio.strerror(this).call(error, output, length)
         } else if (operation == OriginalStdioOp.ERRNO) {
             requireVoidCarrier(operands[0].execute(frame))
             CoreOriginalStdio.current(this).errno()

@@ -23,8 +23,8 @@ class CoreOriginalStdioTest {
         assertTrue(error.message.orEmpty().startsWith("Invalid original stdio call: "), error.message)
     }
 
-    @Test fun allSixExactContracts() {
-        assertEquals(6, OriginalStdioFixtures.signatures.size)
+    @Test fun allSevenExactContracts() {
+        assertEquals(7, OriginalStdioFixtures.signatures.size)
         for (name in OriginalStdioFixtures.signatures.keys) {
             val input = Input(name)
             assertEquals(OriginalStdioFixtures.symbols.getValue(name), input.validate()!!.symbol)
@@ -53,8 +53,10 @@ class CoreOriginalStdioTest {
             for ((field, values) in mapOf("kind" to listOf(null, "dynamic", false),
                 "unit" to listOf(null, "", "main", "other-package", 7L, false), "isFunction" to listOf(null, false, 1L, "true")))
                 for (value in values) Input(name).also { it.target[field] = value; reject(it) }
-            for ((field, values) in mapOf("convention" to listOf(null, "prim", "javascript", if (name == "errno") "capi" else "ccall"),
-                "safety" to listOf(null, "interruptible", if (name == "safe_write") "unsafe" else "safe")))
+            for ((field, values) in mapOf("convention" to listOf(null, "prim", "javascript",
+                    if (OriginalStdioFixtures.convention(name) == "ccall") "capi" else "ccall"),
+                "safety" to listOf(null, "interruptible",
+                    if (OriginalStdioFixtures.safety(name) == "safe") "unsafe" else "safe")))
                 for (value in values) Input(name).also { it.descriptor[field] = value; reject(it) }
             Input(name).also { it.target.remove("unit"); reject(it) }
             Input(name).also { it.target["extra"] = false; reject(it) }

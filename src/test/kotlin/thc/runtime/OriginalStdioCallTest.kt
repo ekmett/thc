@@ -37,7 +37,7 @@ class OriginalStdioCallTest {
                         (call[1] as MutableList<Any?>)[1] = "unrelated-package:InlineCaller.arbitrary"
                     }
                     val program: ExecutableProgram = if (backend == "ast") Program(language, module) else BytecodeProgram(language, module)
-                    val targets = OriginalStdioFixtures.signatures.keys.associateWith(program::entryTarget)
+                    val targets = (OriginalStdioFixtures.signatures.keys - "strerror").associateWith(program::entryTarget)
                     val ebadf = StdioHostAbi.load().error(4L)
                     var compiled = false
                     fun call(name: String, vararg args: Any?): Any? {

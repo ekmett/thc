@@ -40,6 +40,15 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
     }
     private val library = load(env, "md5")
     private val iconvTask = FutureTask { load(env, "iconv") }
+    private val strerrorTask = FutureTask { load(env, "strerror") }
+    internal fun strerrorLibrary(): Any {
+        strerrorTask.run()
+        return try {
+            if (strerrorTask.isDone) strerrorTask.get()
+            else TruffleSafepoint.setBlockedThreadInterruptibleFunction(null,
+                TruffleSafepoint.InterruptibleFunction<FutureTask<Any>, Any> { it.get() }, strerrorTask)
+        } catch (failure: ExecutionException) { throw (failure.cause ?: failure) }
+    }
     internal fun iconvLibrary(): Any {
         if (System.getProperty("os.name") != "Linux")
             fault("Original native iconv currently requires the Linux GNU LP64 host ABI")

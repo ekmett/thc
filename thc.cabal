@@ -273,6 +273,7 @@ executable thc-fixtures
     OriginalStdioFixtures
     OriginalStdioCloseFixtures
     OriginalStdioSeekFixtures
+    OriginalStrerrorFixtures
     OriginalStdioTruncateFixtures
     OriginalHandleReadinessFixtures
     OriginalPosixStatFixtures

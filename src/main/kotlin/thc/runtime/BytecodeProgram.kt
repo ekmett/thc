@@ -1393,7 +1393,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.iconv)
+                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat ||
+                            originalStdio.iconv || originalStdio.strerror)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
                                 scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
@@ -1408,6 +1409,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     else if (originalStdio == OriginalStdioOp.ICONV_OPEN) b.beginOriginalIconvOpen(result)
                     else if (originalStdio == OriginalStdioOp.ICONV_CLOSE) b.beginOriginalIconvClose(result)
                     else if (originalStdio == OriginalStdioOp.ICONV) b.beginOriginalIconv(result)
+                    else if (originalStdio == OriginalStdioOp.STRERROR) b.beginOriginalStrerror(result)
                     else if (originalStdio.readiness) b.beginOriginalStdioReady(result)
                     else if (originalStdio == OriginalStdioOp.SEEK) b.beginFileSeek(result)
                     else if (originalStdio == OriginalStdioOp.TRUNCATE) b.beginFileSetSize(result)
@@ -1442,6 +1444,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     else if (originalStdio == OriginalStdioOp.ICONV_OPEN) b.endOriginalIconvOpen()
                     else if (originalStdio == OriginalStdioOp.ICONV_CLOSE) b.endOriginalIconvClose()
                     else if (originalStdio == OriginalStdioOp.ICONV) b.endOriginalIconv()
+                    else if (originalStdio == OriginalStdioOp.STRERROR) b.endOriginalStrerror()
                     else if (originalStdio.readiness) b.endOriginalStdioReady()
                     else if (originalStdio == OriginalStdioOp.SEEK) b.endFileSeek()
                     else if (originalStdio == OriginalStdioOp.TRUNCATE) b.endFileSetSize()

@@ -77,6 +77,7 @@ case "$(uname -s)-$(uname -m)" in
 esac
 "$fixture_bin" original-stdio-close
 "$fixture_bin" original-stdio-seek
+"$fixture_bin" original-strerror
 "$fixture_bin" original-stdio-truncate
 "$fixture_bin" original-fd-ready
 python3 scripts/prepare-pinned-addresses.py

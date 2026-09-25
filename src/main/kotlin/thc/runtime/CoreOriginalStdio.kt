@@ -42,7 +42,8 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     LOCALE("localeEncoding", "ccall", "unsafe", listOf(null), "AddrRep"),
     ICONV_OPEN("hs_iconv_open", "ccall", "unsafe", listOf("AddrRep", "AddrRep", null), "Int64Rep"),
     ICONV_CLOSE("hs_iconv_close", "ccall", "unsafe", listOf("Int64Rep", null), "Int32Rep"),
-    ICONV("hs_iconv", "ccall", "unsafe", listOf("Int64Rep", "AddrRep", "AddrRep", "AddrRep", "AddrRep", null), "Word64Rep");
+    ICONV("hs_iconv", "ccall", "unsafe", listOf("Int64Rep", "AddrRep", "AddrRep", "AddrRep", "AddrRep", null), "Word64Rep"),
+    STRERROR("base_strerror_r", "ccall", "safe", listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int32Rep");
 
     val readiness: Boolean get() = this == READY_SAFE || this == READY_UNSAFE
     val seekConstant: Boolean get() = this == SEEK_SET || this == SEEK_CUR || this == SEEK_END
@@ -50,11 +51,13 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
         this == IS_REG || this == IS_CHR || this == IS_BLK || this == IS_DIR || this == IS_FIFO || this == IS_SOCK
     val statField: Boolean get() = this == ST_DEV || this == ST_INO || this == ST_MODE || this == ST_SIZE
     val iconv: Boolean get() = this == LOCALE || this == ICONV_OPEN || this == ICONV_CLOSE || this == ICONV
+    val strerror: Boolean get() = this == STRERROR
 }
 
 internal object CoreOriginalStdio {
     @JvmStatic fun current(node: Node): ManagedStdio = Language.currentState(node).stdio
     @JvmStatic fun iconv(node: Node): ManagedIconv = Language.currentState(node).iconv
+    @JvmStatic fun strerror(node: Node): ManagedStrerror = Language.currentState(node).strerror
 
     private val scalarKeys = setOf("kind", "primReps", "evaluated")
     private val tupleKeys = scalarKeys + setOf("aggregate", "components")
@@ -69,7 +72,7 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation.readiness || operation.seekConstant || operation.stat || operation.iconv,
+        requireProof(operation.readiness || operation.seekConstant || operation.stat || operation.iconv || operation.strerror,
             "strict operand operation")
         val primitive = operation.arguments[index]
         val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }

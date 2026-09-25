@@ -39,7 +39,7 @@ MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers shrink-bytearrays fetch-add-int-array
-narrow-literal-proofs original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-stdio-seek original-stdio-truncate original-fd-ready original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+narrow-literal-proofs original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops simd-capability-smoke synchronous-exceptions tuple-arithmetic word-floating""".split()
 SIMD_SMOKE_SOURCES = frozenset("build/generated/simd/fixtures/" + name for name in (
     "GeneratedSimdSmoke.hs", "GeneratedSimdSmokeScalar.hs",
@@ -92,6 +92,7 @@ NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate",
     "build/original-stdio-close/native/oracle",
     "build/original-stdio-seek/native/oracle",
     "build/original-stdio-truncate/native/oracle",
+    "build/original-strerror/native/oracle",
     "build/original-fd-ready/native/oracle",
     "build/original-handle-readiness/native/oracle",
     "build/original-posix-stat/native/oracle",
@@ -220,6 +221,12 @@ ORIGINAL_STDIO_TRUNCATE_OUTPUTS = frozenset("build/original-stdio-truncate/" + n
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
         "core/OriginalStdioTruncateAudit.json", "core/THC.InterfaceClosure.json",
         "originalTruncate.audit.json", "originalTruncateErrno.audit.json")),
+))
+
+ORIGINAL_STRERROR_OUTPUTS = frozenset("build/original-strerror/" + name for name in (
+    "manifest.json", "oracle.json", "native/oracle",
+    *(f"logs/{label}.{suffix}" for label in ("ghc-version", "native-build", "native-oracle")
+      for suffix in ("stdout", "stderr", "command.json")),
 ))
 
 ORIGINAL_FD_READY_ENTRIES = ("originalReadySafe", "originalReadyUnsafe")
@@ -542,6 +549,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_STDIO_SEEK_OUTPUTS
     if parts[1] == "original-stdio-truncate":
         return name in ORIGINAL_STDIO_TRUNCATE_OUTPUTS
+    if parts[1] == "original-strerror":
+        return name in ORIGINAL_STRERROR_OUTPUTS
     if parts[1] == "original-fd-ready":
         return name in ORIGINAL_FD_READY_OUTPUTS
     if parts[1] == "original-handle-readiness":

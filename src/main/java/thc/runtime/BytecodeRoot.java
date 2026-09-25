@@ -1146,6 +1146,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class OriginalStrerror {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                long error, ManagedAddress output, long length, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = CoreOriginalStdio.strerror(node).call(error, output, length);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = GmpForeignOp.class, name = "operation")
     public static final class OriginalGmpCall {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,

@@ -12,18 +12,20 @@ internal object OriginalStdioFixtures {
         "errno" to "__hscore_get_errno",
         "seek_set" to "ghczuwrapperZC1ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuSET",
         "seek_cur" to "ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR",
-        "seek_end" to "ghczuwrapperZC0ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuEND")
+        "seek_end" to "ghczuwrapperZC0ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuEND",
+        "strerror" to "base_strerror_r")
     val signatures = linkedMapOf(
         "safe_write" to listOf("Int32Rep", "AddrRep", "Word64Rep", null),
         "unsafe_write" to listOf("Int32Rep", "AddrRep", "Word64Rep", null),
-        "errno" to listOf(null), "seek_set" to listOf(null), "seek_cur" to listOf(null), "seek_end" to listOf(null))
-    fun convention(name: String) = if (name == "errno") "ccall" else "capi"
-    fun safety(name: String) = if (name == "safe_write") "safe" else "unsafe"
+        "errno" to listOf(null), "seek_set" to listOf(null), "seek_cur" to listOf(null), "seek_end" to listOf(null),
+        "strerror" to listOf("Int32Rep", "AddrRep", "Word64Rep", null))
+    fun convention(name: String) = if (name == "errno" || name == "strerror") "ccall" else "capi"
+    fun safety(name: String) = if (name == "safe_write" || name == "strerror") "safe" else "unsafe"
 
     fun scalar(rep: String?, evaluated: Boolean = true): MutableMap<String, Any?> = mutableMapOf(
         "kind" to when (rep) { null -> "void"; "AddrRep" -> "address"; "BoxedRep (Just Lifted)" -> "closure"; else -> "long" },
         "primReps" to (rep?.let { listOf(it) } ?: emptyList<String>()), "evaluated" to evaluated)
-    fun output(name: String) = if (signatures.getValue(name).size == 1) "Int32Rep" else "Int64Rep"
+    fun output(name: String) = if (signatures.getValue(name).size == 1 || name == "strerror") "Int32Rep" else "Int64Rep"
     fun tuple(name: String, evaluated: Boolean = true): MutableMap<String, Any?> = mutableMapOf(
         "kind" to "unknown", "primReps" to listOf(output(name)), "aggregate" to "unboxed-tuple",
         "components" to mutableListOf(scalar(null), scalar(output(name))), "evaluated" to evaluated)
@@ -40,7 +42,7 @@ internal object OriginalStdioFixtures {
         MutableList<Any?>(signatures.getValue(name).size) { false }, false, false,
         mutableMapOf("rep" to tuple(name), "foreignCall" to descriptor(name)))
 
-    fun module(names: Iterable<String> = signatures.keys, mutate: (MutableList<Any?>) -> Unit = {}): Map<String, Any?> = mapOf(
+    fun module(names: Iterable<String> = signatures.keys - "strerror", mutate: (MutableList<Any?>) -> Unit = {}): Map<String, Any?> = mapOf(
         "instrument" to true,
         "constructors" to listOf(mapOf("id" to "T2", "kind" to "unboxed-tuple", "arity" to 2, "tag" to 1)),
         "bindings" to names.map { name ->

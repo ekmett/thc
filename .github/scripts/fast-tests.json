@@ -207,6 +207,15 @@
     }
   },
   "owners": {
+    "src/main/kotlin/thc/runtime/ManagedStrerror.kt": {
+      "junit": ["thc.runtime.OriginalStrerrorNativeTest"], "python": []
+    },
+    "compiler/test-fixtures/OriginalStrerrorNative.hs": {
+      "junit": ["thc.runtime.OriginalStrerrorNativeTest"], "python": []
+    },
+    "test/haskell-fixtures/OriginalStrerrorFixtures.hs": {
+      "junit": ["thc.runtime.OriginalStrerrorNativeTest"], "python": []
+    },
     "compiler/test-fixtures/OriginalFdReadyAudit.hs": {
       "junit": ["thc.runtime.OriginalFdReadyNativeTest"], "python": []
     },
@@ -268,11 +277,11 @@
       "python": []
     },
     "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt": {
-      "junit": ["thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest"],
+      "junit": ["thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalStrerrorNativeTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt": {
-      "junit": ["thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest"],
+      "junit": ["thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalStrerrorNativeTest", "thc.runtime.GuestThreadsTest"],
       "python": []
     },
     "compiler/test-fixtures/OriginalStdioReadAudit.hs": {
@@ -905,6 +914,7 @@
         "thc.runtime.OriginalStdioCloseNativeTest",
         "thc.runtime.OriginalStdioSeekNativeTest",
         "thc.runtime.OriginalStdioTruncateNativeTest",
+        "thc.runtime.OriginalStrerrorNativeTest",
         "thc.runtime.OriginalHandleReadinessNativeTest",
         "thc.runtime.OriginalPosixStatTest",
         "thc.runtime.PosixStatAbiTest",

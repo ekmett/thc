@@ -26,6 +26,17 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "original-strerror": {
+      "junit": ["thc.runtime.OriginalStrerrorNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-strerror"]}],
+      "outputs": ["build/original-strerror"],
+      "sources": [
+        "compiler/test-fixtures/OriginalStrerrorNative.hs",
+        "test/haskell-fixtures/OriginalStrerrorFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"
+      ]
+    },
     "original-gmp": {
       "junit": ["thc.runtime.OriginalGmpTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-gmp", "--require-supported"]}],
