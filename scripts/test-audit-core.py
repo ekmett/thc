@@ -2393,10 +2393,6 @@ class ExplicitWeakContractTest(unittest.TestCase):
             self.assertIn('scalar-representation', {issue['code'] for issue in report['issues']})
 
 
-if __name__ == '__main__':
-    unittest.main()
-
-
 class DescriptorWaitAuditTest(unittest.TestCase):
     """The RTS bad-FD CAF is an implicit original dependency of both waits."""
 
@@ -2422,7 +2418,8 @@ class DescriptorWaitAuditTest(unittest.TestCase):
                           [binding['id'] for binding in report['reachableBindings']])
             missing = audit_core.Audit([('wait.json', self.fixture(name, False))], CAP).run(['root'])
             self.assertFalse(missing['accepted'])
-            self.assertIn('ghc-internal:GHC.Internal.Event.Thread.blockedOnBadFD', missing['missingGlobals'])
+            self.assertIn('ghc-internal:GHC.Internal.Event.Thread.blockedOnBadFD',
+                          [binding['id'] for binding in missing['missingGlobals']])
             for mutation in ('descriptor', 'state', 'result', 'flags'):
                 module = self.fixture(name)
                 call = module['bindings'][0]['expr'][2]
@@ -2432,3 +2429,7 @@ class DescriptorWaitAuditTest(unittest.TestCase):
                 if mutation == 'flags': call[3] = [False, True]
                 bad = audit_core.Audit([('wait.json', module)], CAP).run(['root'])
                 self.assertFalse(bad['accepted'], (name, mutation, bad))
+
+
+if __name__ == '__main__':
+    unittest.main()
