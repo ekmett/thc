@@ -251,6 +251,8 @@ class Audit:
         if kind not in self.cap['literalKinds']:
             self.issue('unsupported-literal', owner, path, kind)
             return
+        if kind == 'function-addr' and value not in self.cap.get('functionLabels', []):
+            self.issue('unsupported-literal', owner, path, f'uncertified C function label {value}')
         if kind == 'bignat':
             if not isinstance(value, str) or not value or any(c not in '0123456789' for c in value) or len(value) > 1 and value[0] == '0':
                 self.issue('invalid-literal-value', owner, path, 'bignat requires canonical nonnegative decimal')
@@ -446,7 +448,7 @@ class Audit:
                 return dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
             if expr[1] in narrow:
                 return dict(kind='long', primReps=[narrow[expr[1]]], evaluated=True)
-            if expr[1] == 'null-addr':
+            if expr[1] in ('null-addr', 'function-addr'):
                 return dict(kind='address', primReps=['AddrRep'], evaluated=True)
             kind = {'float': 'float', 'double': 'double', 'string-bytes': 'address',
                     **dict.fromkeys(('int', 'word', 'char', 'int8', 'int16', 'int32', 'int64',
@@ -980,6 +982,12 @@ class Audit:
                     if (not isinstance(proof, dict) or proof.get('kind') != 'object' or
                             proof.get('primReps') != ['BoxedRep (Just Unlifted)'] or 'aggregate' in proof or is_vector(proof)):
                         self.issue('scalar-representation', owner, path + '/rep', 'BigNat literal requires exact unlifted ByteArray# identity')
+                if expr[1] == 'function-addr':
+                    raw = expr[3].get('rep') if len(expr) > 3 and isinstance(expr[3], dict) else None
+                    if (not isinstance(raw, dict) or raw.get('kind') != 'address' or
+                            raw.get('primReps') != ['AddrRep'] or 'aggregate' in raw or is_vector(raw)):
+                        self.issue('scalar-representation', owner, path + '/rep',
+                                   'Original C function label requires explicit exact AddrRep proof')
             elif tag == 'void':
                 self.compare_shapes(self.expression_rep(expr), self.literal_rep(expr), owner, path + '/rep')
             elif tag == 'lam':
@@ -1303,6 +1311,8 @@ class Audit:
                             return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
                         if role == 'flag':
                             return kind == 'long' and reps == ['IntRep']
+                        if role == 'address':
+                            return kind == 'address' and reps == ['AddrRep']
                         if role == 'action':
                             return kind in ('object', 'closure') and reps == ['BoxedRep (Just Lifted)']
                         return role == 'boxed' and kind in ('object', 'data', 'closure') and reps in (
@@ -1643,8 +1653,9 @@ class Audit:
                         self.literal(value[0], value[1], owner, altpath + '/literal')
                         if value[0] == 'bignat':
                             self.issue('alternative-kind', owner, altpath, 'BigNat literal alternatives are invalid GHC Core')
-                        if value[0] in ('float', 'double'):
-                            self.issue('alternative-kind', owner, altpath, 'Floating literal alternatives are invalid GHC Core')
+                        if value[0] in ('float', 'double', 'function-addr'):
+                            self.issue('alternative-kind', owner, altpath,
+                                       'Floating and C function literal alternatives are invalid GHC Core')
                     elif kind != 'default':
                         self.issue('alternative-kind', owner, altpath, kind)
                     if self.is_tuple(binder_proof) and (kind not in ('data', 'default') or kind == 'default' and ids):

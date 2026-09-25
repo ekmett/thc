@@ -1890,7 +1890,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             return compile(expr, scope, false).also { check(it.representation) }
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }.also { check(it.representation) }
     }
-    private fun literal(kind: String, value: String): Any = when (kind) {
+    private fun literal(kind: String, value: String, proof: CoreRepresentation? = null): Any = when (kind) {
         "int8" -> int8Literal(value)
         "int16" -> int16Literal(value)
         "int32" -> int32Literal(value)
@@ -1903,6 +1903,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
         "string-bytes" -> ManagedAddress.fromHex(value)
         "null-addr" -> if (value == "0") ManagedAddress.nullAddress() else throw UnsupportedCore("Malformed null Addr# literal")
+        "function-addr" -> CFinalizerLabels.fromCore(value, proof)
         "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
@@ -1944,7 +1945,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 ?: globals[id]?.let { GlobalRead(it).proven(globalProofs.getValue(id)) }
                 ?: throw UnsupportedCore("Unresolved external binding $id")
         }
-        "lit" -> Literal(literal(expr[1] as String, expr[2] as String)).let {
+        "lit" -> Literal(literal(expr[1] as String, expr[2] as String, CoreRepresentations.expression(expr))).let {
             if (expr[1] in listOf("int8", "word8", "int16", "word16", "int32", "word32")) it.proven(CoreRepresentations.narrowLiteralProof(expr))
             else if (expr[1] == "bignat") it.proven(BigNatLiterals.proof(expr)) else it
         }
