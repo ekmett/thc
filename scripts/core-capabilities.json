@@ -871,6 +871,8 @@
     "minusInt32X16#": 2,
     "timesInt32X16#": 2,
     "negateInt32X16#": 1,
+    "minInt32X16#": 2,
+    "maxInt32X16#": 2,
     "timesInt64X2#": 2,
     "minInt64X2#": 2,
     "maxInt64X2#": 2,

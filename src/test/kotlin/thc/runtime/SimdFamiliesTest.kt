@@ -74,7 +74,7 @@ class SimdFamiliesTest {
     }
 
     @Test fun exactLaneSignWidthLogicalTupleAndCallingProofsRemainRequired() {
-        assertEquals(162, GeneratedVectors.operations.size)
+        assertEquals(164, GeneratedVectors.operations.size)
         for ((name, tuple, vector) in listOf(
             Triple("Word64X2", GeneratedVectors.unpackedWord64X2, GeneratedVectors.proofWord64X2),
             Triple("Word32X8", GeneratedVectors.unpackedWord32X8, GeneratedVectors.proofWord32X8),
@@ -160,6 +160,32 @@ class SimdFamiliesTest {
         assertEquals(Int.MIN_VALUE, maximum.lane0)
         assertEquals(Int.MIN_VALUE, maximum.lane7)
         assertEquals(-1, maximum.lane15)
+    }
+
+    @Test fun int32X16ExtremaKeepSignedLanesAndExactShape() {
+        val left = Int32X16.insert(Int32X16.broadcast(Int.MIN_VALUE), -1, 15L)
+        val right = Int32X16.insert(Int32X16.broadcast(Int.MAX_VALUE), 0, 15L)
+        val minimum = Int32X16.min(left, right)
+        val maximum = Int32X16.max(left, right)
+        assertEquals(Int.MIN_VALUE, minimum.lane0)
+        assertEquals(Int.MIN_VALUE, minimum.lane7)
+        assertEquals(-1, minimum.lane15)
+        assertEquals(Int.MAX_VALUE, maximum.lane0)
+        assertEquals(Int.MAX_VALUE, maximum.lane7)
+        assertEquals(0, maximum.lane15)
+        val proof = GeneratedVectors.proofInt32X16
+        for (name in listOf("minInt32X16#", "maxInt32X16#")) {
+            CoreVectors.validate(name, listOf(proof, proof), proof)
+            for (wrong in listOf(GeneratedVectors.proofWord32X16, GeneratedVectors.proofInt32X8,
+                GeneratedVectors.unpackedInt32X16)) {
+                assertThrows(RuntimeFault::class.java) { CoreVectors.validate(name, listOf(wrong, proof), proof) }
+                assertThrows(RuntimeFault::class.java) { CoreVectors.validate(name, listOf(proof, wrong), proof) }
+                assertThrows(RuntimeFault::class.java) { CoreVectors.validate(name, listOf(proof, proof), wrong) }
+            }
+            for (arity in listOf(0, 1, 3)) assertThrows(RuntimeFault::class.java) {
+                CoreVectors.validate(name, List(arity) { proof }, proof)
+            }
+        }
     }
 
     // These early gates use actual pre-Tidy Core and the independent model.

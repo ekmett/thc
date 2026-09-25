@@ -122,7 +122,7 @@ class SimdFamiliesTest(unittest.TestCase):
 
     def test_exact_machine_contracts_and_recursive_lanes(self):
         families = GEN.families()
-        self.assertEqual(162, len(GEN.contracts(families)))
+        self.assertEqual(164, len(GEN.contracts(families)))
         for family in families:
             for operation in family['operations']:
                 name = operation + family['name'] + '#'
@@ -172,7 +172,7 @@ class SimdFamiliesTest(unittest.TestCase):
             self.assertIn(f'frame, value.lane{i});', bytecode)
 
     def test_signed_min_max_select_high_bit_lanes(self):
-        for name in ('Int8X16', 'Int16X8', 'Int32X4', 'Int32X8', 'Int64X2', 'Int64X4', 'Int64X8'):
+        for name in ('Int8X16', 'Int16X8', 'Int32X4', 'Int32X8', 'Int32X16', 'Int64X2', 'Int64X4', 'Int64X8'):
             family = next(f for f in GEN.families() if f['name'] == name)
             width = family['bits'] // family['lanes']
             low, high = -(1 << (width - 1)), (1 << (width - 1)) - 1
