@@ -1384,7 +1384,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio.readiness || originalStdio.seekConstant) CoreOriginalStdio.validateScalarOperand(originalStdio, index,
+                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat) CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
                                 scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
                     }
@@ -1393,7 +1393,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     val b = e.builder
                     val result = destination.single()
                     val status = originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
-                        originalStdio == OriginalStdioOp.CLOSE || originalStdio.seekConstant
+                        originalStdio == OriginalStdioOp.CLOSE || originalStdio.seekConstant || originalStdio.stat
                     if (originalStdio.readiness) b.beginOriginalStdioReady(result)
                     else if (originalStdio == OriginalStdioOp.SEEK) b.beginFileSeek(result)
                     else if (originalStdio == OriginalStdioOp.TRUNCATE) b.beginFileSetSize(result)
@@ -1402,8 +1402,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         originalStdio == OriginalStdioOp.READ_SAFE || originalStdio == OriginalStdioOp.READ_UNSAFE)
                     // errno and seek constants have only State#. This internal zero
                     // fills the shared instruction's unused typed descriptor lane.
-                    if (originalStdio == OriginalStdioOp.ERRNO || originalStdio.seekConstant) b.emitLoadConstant(0L)
-                    if (originalStdio == OriginalStdioOp.SEEK) {
+                    if (status) {
+                        if (originalStdio == OriginalStdioOp.ERRNO || originalStdio.seekConstant ||
+                            originalStdio == OriginalStdioOp.SIZEOF_STAT || originalStdio.statField)
+                            b.emitLoadConstant(0L) else operands[0].emit(e)
+                        if (originalStdio.statField) operands[0].emit(e) else b.emitLoadConstant(ManagedAddress.nullAddress())
+                        operands.last().emit(e)
+                    } else if (originalStdio == OriginalStdioOp.SEEK) {
                         operands.take(3).forEach { it.emit(e) }
                         // FileSeek already has four typed lanes. Keep the State#
                         // check before the effect, then use its final internal

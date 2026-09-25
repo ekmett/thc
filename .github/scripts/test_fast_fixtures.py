@@ -19,6 +19,32 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_original_posix_stat_fixture_registration_and_narrow_cache(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['original-posix-stat']
+        for name in ('OriginalPosixStatTest', 'PosixStatAbiTest'):
+            self.assertEqual('original-posix-stat', owners['thc.runtime.' + name])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-posix-stat']}], group['commands'])
+        self.assertIn('"$fixture_bin" original-posix-stat', (project / 'scripts/prepare-tests.sh').read_text())
+        self.assertIn('build/original-posix-stat/manifest.json', fast_fixtures.FULL_REQUIRED)
+        self.assertIn('build/original-posix-stat', fast_fixtures.FULL_OUTPUT_ROOTS)
+        cache = fast_fixtures.fast_inputs
+        self.assertEqual(74, len(cache.ORIGINAL_POSIX_STAT_OUTPUTS))
+        for path in cache.ORIGINAL_POSIX_STAT_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+        for suffix in ('native/unknown', 'logs/unknown.stdout', 'pre/core/Other.json', 'attempt-0/oracle.json'):
+            self.assertFalse(cache.allowed_payload('build/original-posix-stat/' + suffix, {}), suffix)
+        for suffix in ('../original-stdio/manifest.json', 'native/../../outside'):
+            with self.assertRaises(cache.CacheMiss):
+                cache.allowed_payload('build/original-posix-stat/' + suffix, {})
+        self.assertEqual(0o755, cache.safe_mode(0o755, 'build/original-posix-stat/native/oracle'))
+        with self.assertRaises(cache.CacheMiss):
+            cache.safe_mode(0o755, 'build/original-posix-stat/oracle.json')
+        producer = (project / 'test/haskell-fixtures/OriginalPosixStatFixtures.hs').read_text()
+        self.assertIn('os /= "linux"', producer)
+        self.assertIn('"supported" .= False', producer)
+
     def test_original_fd_ready_fixture_registration(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

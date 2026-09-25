@@ -111,6 +111,8 @@ tasks.withType<Test>().configureEach {
             "original-stdio-read/input.bin",
             "original-handle-readiness/**/*.json", "original-handle-readiness/native/**",
             "original-handle-readiness/logs/*.stdout", "original-handle-readiness/logs/*.stderr",
+            "original-posix-stat/**/*.json", "original-posix-stat/native/oracle",
+            "original-posix-stat/logs/*.stdout", "original-posix-stat/logs/*.stderr",
             "original-stdio-close/**/*.json", "original-stdio-close/results/*.txt", "original-stdio-close/results/*.private",
             "original-stdio-close/native/**", "original-stdio-close/logs/*.stdout", "original-stdio-close/logs/*.stderr",
             "original-stdio-seek/**/*.json", "original-stdio-seek/results/*.txt", "original-stdio-seek/results/*.private",
@@ -336,3 +338,34 @@ val generateStdioAbi by tasks.registering {
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/stdio-abi")) }
 tasks.processResources { dependsOn(generateStdioAbi) }
+
+val generatePosixStatAbi by tasks.registering {
+    dependsOn(generateStdioAbi)
+    val source = layout.projectDirectory.file("src/main/c/posix-stat-abi-probe.c").asFile
+    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    val output = layout.buildDirectory.dir("generated/posix-stat-abi")
+    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output); outputs.upToDateWhen { false }
+    doLast {
+        fun run(command: List<String>) = providers.exec { commandLine(command) }.standardOutput.asText.get()
+        // Share the already validated native compiler target, not another list
+        // of target triples or guessed ABI sizes.
+        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
+        val target = host["target"] as String
+        val command = listOf(clang.get()) + if (host["system"] == "Linux") listOf("--target=$target") else emptyList()
+        require(run(command + "-dumpmachine").trim() == target) { "Stat compiler target changed" }
+        val executable = temporaryDir.resolve("posix-stat-abi-probe")
+        run(command + listOf("-std=c11", source.path, "-o", executable.path))
+        val probe = JsonSlurper().parseText(run(listOf(executable.path))) as Map<*, *>
+        val manifest = linkedMapOf<String, Any?>("schema" to 1, "system" to host["system"],
+            "architecture" to host["architecture"], "target" to target,
+            "sourceSha256" to MessageDigest.getInstance("SHA-256").digest(source.readBytes()).joinToString("") { "%02x".format(it) },
+            "stat" to probe)
+        val destination = output.get().asFile.resolve("thc/native/posix-stat-abi.json")
+        destination.parentFile.mkdirs()
+        destination.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n")
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/posix-stat-abi")) }
+tasks.processResources { dependsOn(generatePosixStatAbi) }

@@ -25,12 +25,26 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     SEEK("ghczuwrapperZC19ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZClseek", "capi", "unsafe",
         listOf("Int32Rep", "Int64Rep", "Int32Rep", null), "Int64Rep"),
     TRUNCATE("__hscore_ftruncate", "ccall", "unsafe", listOf("Int32Rep", "Int64Rep", null), "Int32Rep"),
+    SIZEOF_STAT("__hscore_sizeof_stat", "ccall", "unsafe", listOf(null), "IntRep"),
+    ST_DEV("__hscore_st_dev", "ccall", "unsafe", listOf("AddrRep", null), "Word64Rep"),
+    ST_INO("__hscore_st_ino", "ccall", "unsafe", listOf("AddrRep", null), "Word64Rep"),
+    ST_MODE("__hscore_st_mode", "ccall", "unsafe", listOf("AddrRep", null), "Word32Rep"),
+    ST_SIZE("__hscore_st_size", "ccall", "unsafe", listOf("AddrRep", null), "Int64Rep"),
+    IS_REG("ghczuwrapperZC8ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSzuISREG", "capi", "unsafe", listOf("Word32Rep", null), "Int32Rep"),
+    IS_CHR("ghczuwrapperZC7ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSzuISCHR", "capi", "unsafe", listOf("Word32Rep", null), "Int32Rep"),
+    IS_BLK("ghczuwrapperZC6ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSzuISBLK", "capi", "unsafe", listOf("Word32Rep", null), "Int32Rep"),
+    IS_DIR("ghczuwrapperZC5ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSzuISDIR", "capi", "unsafe", listOf("Word32Rep", null), "Int32Rep"),
+    IS_FIFO("ghczuwrapperZC4ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSzuISFIFO", "capi", "unsafe", listOf("Word32Rep", null), "Int32Rep"),
+    IS_SOCK("ghczuwrapperZC3ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSzuISSOCK", "capi", "unsafe", listOf("Word32Rep", null), "Int32Rep"),
     ISATTY("isatty", "ccall", "unsafe", listOf("Int32Rep", null), "Int32Rep"),
     READY_SAFE("fdReady", "ccall", "safe", listOf("Int32Rep", "Word8Rep", "Int64Rep", "Word8Rep", null), "Int32Rep"),
     READY_UNSAFE("fdReady", "ccall", "unsafe", listOf("Int32Rep", "Word8Rep", "Int64Rep", "Word8Rep", null), "Int32Rep");
 
     val readiness: Boolean get() = this == READY_SAFE || this == READY_UNSAFE
     val seekConstant: Boolean get() = this == SEEK_SET || this == SEEK_CUR || this == SEEK_END
+    val stat: Boolean get() = this == SIZEOF_STAT || statField ||
+        this == IS_REG || this == IS_CHR || this == IS_BLK || this == IS_DIR || this == IS_FIFO || this == IS_SOCK
+    val statField: Boolean get() = this == ST_DEV || this == ST_INO || this == ST_MODE || this == ST_SIZE
 }
 
 internal object CoreOriginalStdio {
@@ -46,18 +60,18 @@ internal object CoreOriginalStdio {
     private fun exactInteger(value: Any?, expected: Int): Boolean =
         (value is Int || value is Long) && (value as Number).toLong() == expected.toLong()
 
-    /** An occurrence certificate cannot relabel a stored scalar/State operand. */
+    /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation.readiness || operation.seekConstant, "readiness/constant operand operation")
+        requireProof(operation.readiness || operation.seekConstant || operation.stat, "strict operand operation")
         val primitive = operation.arguments[index]
-        val kind = if (primitive == null) CoreKind.VOID else CoreKind.LONG
+        val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }
         val reps = listOfNotNull(primitive)
         requireProof(lowered.present && !lowered.isAggregate && !lowered.isVector &&
-            lowered.kind == kind && lowered.primReps == reps, "lowered scalar operand $index")
+            lowered.kind == kind && lowered.primReps == reps, "lowered foreign operand $index")
         if (stored != null && stored.present)
             requireProof(!stored.isAggregate && !stored.isVector && stored.kind in setOf(kind, CoreKind.UNKNOWN) &&
-                (stored.primReps == null || stored.primReps == reps), "stored scalar operand $index")
+                (stored.primReps == null || stored.primReps == reps), "stored foreign operand $index")
     }
 
     fun validateHead(function: List<Any?>, defined: Boolean) {

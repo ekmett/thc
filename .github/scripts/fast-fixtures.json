@@ -24,6 +24,16 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "original-posix-stat": {
+      "junit": ["thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-posix-stat"]}],
+      "outputs": ["build/original-posix-stat"],
+      "sources": [
+        "compiler/test-fixtures/OriginalPosixStatAudit.hs", "compiler/test-fixtures/OriginalPosixStatNative.hs",
+        "test/haskell-fixtures/OriginalPosixStatFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"
+      ]
+    },
     "original-fd-ready": {
       "junit": ["thc.runtime.OriginalFdReadyNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-fd-ready"]}],
