@@ -3,7 +3,8 @@
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
 module SimdFloatFma where
 import GHC.Exts
-import GHC.Prim (fmaddFloatX4#, fmsubFloatX4#, fnmaddFloatX4#, fnmsubFloatX4#,
+import GHC.Prim (fmaddFloatX8#, fmsubFloatX8#, fnmaddFloatX8#, fnmsubFloatX8#,
+                 fmaddFloatX4#, fmsubFloatX4#, fnmaddFloatX4#, fnmsubFloatX4#,
                  fmaddDoubleX2#, fmsubDoubleX2#, fnmaddDoubleX2#, fnmsubDoubleX2#)
 
 -- GHC 902339d332fb4ce2b3c87dcac1ee6495d41ad886 primops.txt.pp:4289-4308:
@@ -66,3 +67,33 @@ doubleAddCase = doubleLaneBits doubleAddWorker
 doubleSubCase = doubleLaneBits doubleSubWorker
 doubleNegAddCase = doubleLaneBits doubleNegAddWorker
 doubleNegSubCase = doubleLaneBits doubleNegSubWorker
+
+-- Reuse the same scalar driver/oracle, retaining an exact wider vector call.
+{-# NOINLINE wideAddWorker #-}
+{-# NOINLINE wideSubWorker #-}
+{-# NOINLINE wideNegAddWorker #-}
+{-# NOINLINE wideNegSubWorker #-}
+wideAddWorker, wideSubWorker, wideNegAddWorker, wideNegSubWorker :: FloatX8# -> FloatX8# -> FloatX8# -> FloatX8#
+wideAddWorker x y z = fmaddFloatX8# x y z
+wideSubWorker x y z = fmsubFloatX8# x y z
+wideNegAddWorker x y z = fnmaddFloatX8# x y z
+wideNegSubWorker x y z = fnmsubFloatX8# x y z
+
+{-# INLINE wideLaneBits #-}
+wideLaneBits :: (FloatX8# -> FloatX8# -> FloatX8# -> FloatX8#) -> Word# -> Word# -> Word# -> Int# -> Word#
+wideLaneBits operation xb yb zb lane =
+  case castWord32ToFloat# (wordToWord32# xb) of { x ->
+  case castWord32ToFloat# (wordToWord32# yb) of { y ->
+  case castWord32ToFloat# (wordToWord32# zb) of { z ->
+  case operation (packFloatX8# (# x, y, z, x, negateFloat# x, x, negateFloat# y, z #))
+                 (packFloatX8# (# y, z, x, y, y, negateFloat# y, z, negateFloat# x #))
+                 (packFloatX8# (# z, x, y, negateFloat# z, z, z, negateFloat# x, negateFloat# y #)) of { vector ->
+  case unpackFloatX8# vector of { (# a, b, c, d, e, f, g, h #) ->
+  word32ToWord# (castFloatToWord32# (case lane of
+    0# -> a; 1# -> b; 2# -> c; 3# -> d; 4# -> e; 5# -> f; 6# -> g; _ -> h)) } } } } }
+
+wideAddCase, wideSubCase, wideNegAddCase, wideNegSubCase :: Word# -> Word# -> Word# -> Int# -> Word#
+wideAddCase = wideLaneBits wideAddWorker
+wideSubCase = wideLaneBits wideSubWorker
+wideNegAddCase = wideLaneBits wideNegAddWorker
+wideNegSubCase = wideLaneBits wideNegSubWorker
