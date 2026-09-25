@@ -611,6 +611,7 @@
     "tanhDouble#": 1,
     "newMutVar#": 2,
     "readMutVar#": 2,
+    "atomicSwapMutVar#": 3,
     "writeMutVar#": 3,
     "newMVar#": 1,
     "takeMVar#": 2,
@@ -3177,6 +3178,17 @@
     "readMutVar#": {
       "arguments": [
         "mutvar",
+        "state"
+      ],
+      "result": [
+        "state",
+        "boxed"
+      ]
+    },
+    "atomicSwapMutVar#": {
+      "arguments": [
+        "mutvar",
+        "boxed",
         "state"
       ],
       "result": [

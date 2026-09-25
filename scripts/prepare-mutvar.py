@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / 'build/mutvar'
 SOURCE = 'compiler/test-fixtures/MutVarAudit.hs'
 ENTRIES = ['stRef', 'lazyRef', 'closureRef', 'orderedRef', 'unliftedRef', 'stLoop',
-           'stRefEquality', 'lazyRefEquality', 'lazyIORef']
+           'stRefEquality', 'lazyRefEquality', 'lazyIORef', 'swapRef', 'lazySwapRef']
 EQUALITY_ENTRIES = {'stRefEquality', 'lazyRefEquality'}
 PRIMITIVES = {'newMutVar#', 'readMutVar#', 'writeMutVar#'}
 
@@ -40,6 +40,10 @@ def mathematical(name, x):
         return signed(x + 17)
     if name == 'closureRef':
         return signed(4 * x + 11)
+    if name == 'swapRef':
+        return signed(x + (x + 17) * 257 + (x * 3) * 65537)
+    if name == 'lazySwapRef':
+        return signed(x * 258 + 7)
     if name == 'unliftedRef':
         return signed(x * 258 + 1)
     if name == 'stLoop':
@@ -91,7 +95,8 @@ def main():
             report_path.write_text(json.dumps(report, indent=2) + '\n')
             artifacts.append(str(report_path.relative_to(ROOT)))
             assert report['accepted'], (stage, name, report['issues'], report['missingGlobals'])
-            required = PRIMITIVES - ({'readMutVar#'} if name == 'lazyRefEquality' else set())
+            required = ({'newMutVar#', 'readMutVar#', 'atomicSwapMutVar#'} if name in {'swapRef', 'lazySwapRef'}
+                        else PRIMITIVES - ({'readMutVar#'} if name == 'lazyRefEquality' else set()))
             if name in EQUALITY_ENTRIES:
                 required |= {'reallyUnsafePtrEquality#'}
             assert required <= {p['name'] for p in report['primitives']}, (stage, name, report['primitives'])

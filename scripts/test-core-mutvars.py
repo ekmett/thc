@@ -85,7 +85,7 @@ class MutVarContracts(unittest.TestCase):
                 self.assertIn('primitive-representation', {i['code'] for i in check(module)['issues']}, (name, mutation))
 
     def test_payload_is_boxed_not_arbitrary_runtime_rep(self):
-        for name, index in [('newMutVar#', 0), ('writeMutVar#', 1)]:
+        for name, index in [('newMutVar#', 0), ('writeMutVar#', 1), ('atomicSwapMutVar#', 1)]:
             module, app = fixture(name)
             app[2][index][2]['rep'] = dict(kind='long', primReps=['IntRep'], evaluated=True)
             app[3][index] = False
@@ -96,7 +96,7 @@ class MutVarContracts(unittest.TestCase):
         self.assertIn('primitive-representation', {i['code'] for i in check(module)['issues']})
 
     def test_lexical_ref_cannot_be_relabelled_with_an_unlifted_occurrence(self):
-        for name in ('readMutVar#', 'writeMutVar#'):
+        for name in ('readMutVar#', 'writeMutVar#', 'atomicSwapMutVar#'):
             module, _ = fixture(name)
             module['bindings'][0]['expr'][1][0]['rep']['primReps'] = ['BoxedRep (Just Lifted)']
             self.assertIn('scalar-representation', {i['code'] for i in check(module)['issues']})
@@ -106,7 +106,7 @@ class MutVarContracts(unittest.TestCase):
             module, app = fixture(name)
             app[:] = ['prim', name]
             self.assertFalse(check(module)['accepted'])
-        for name in ('atomicSwapMutVar#', 'atomicModifyMutVar2#', 'casMutVar#'):
+        for name in ('atomicModifyMutVar2#', 'casMutVar#'):
             self.assertNotIn(name, CAP['primitives'])
 
 

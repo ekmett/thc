@@ -2023,6 +2023,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, cell.getValue());
         }
     }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class SwapMutVar {
+        @Specialization public static void swap(VirtualFrame frame, LocalAccessor destination,
+                Object reference, Object replacement, Object state, @Bind("$node") Node node) {
+            ManagedMutVar cell = ManagedMutVar.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    cell.exchange(replacement));
+        }
+    }
     @Operation public static final class WriteMutVar {
         @Specialization public static Object write(Object reference, Object value, Object state) {
             ManagedMutVar cell = ManagedMutVar.require(reference);

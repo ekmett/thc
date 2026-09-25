@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 322 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 860 | No declared lowering. |
+| Partial | 323 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 859 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -359,6 +359,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 
 - [ ] `addIntC#` — arity 2 — Exact tuple arithmetic
 - [ ] `addWordC#` — arity 2 — Exact tuple arithmetic
+- [ ] `atomicSwapMutVar#` — arity 3 — Managed lazy reference cells
 - [ ] `broadcastDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `broadcastDoubleX4#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `broadcastFloatX4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -708,7 +709,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `atomicModifyMutVar_#` — arity 3
 - [ ] `atomicReadIntArray#` — arity 3
 - [ ] `atomicReadWordAddr#` — arity 2
-- [ ] `atomicSwapMutVar#` — arity 3
 - [ ] `atomicWriteIntArray#` — arity 4
 - [ ] `atomicWriteWordAddr#` — arity 3
 - [ ] `atomically#` — arity 2
