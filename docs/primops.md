@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 436 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 746 | No declared lowering. |
+| Partial | 438 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 744 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -510,6 +510,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `maxInt8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `maxWord16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `maxWord32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `maxWord32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `maxWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minInt16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minInt32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -520,6 +521,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `minInt8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minWord16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minWord32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `minWord32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -1074,7 +1076,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `maxWord16X16#` — arity 2
 - [ ] `maxWord16X32#` — arity 2
 - [ ] `maxWord32X16#` — arity 2
-- [ ] `maxWord32X8#` — arity 2
 - [ ] `maxWord64X2#` — arity 2
 - [ ] `maxWord64X4#` — arity 2
 - [ ] `maxWord64X8#` — arity 2
@@ -1096,7 +1097,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `minWord16X16#` — arity 2
 - [ ] `minWord16X32#` — arity 2
 - [ ] `minWord32X16#` — arity 2
-- [ ] `minWord32X8#` — arity 2
 - [ ] `minWord64X2#` — arity 2
 - [ ] `minWord64X4#` — arity 2
 - [ ] `minWord64X8#` — arity 2

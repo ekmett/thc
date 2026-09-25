@@ -103,7 +103,9 @@ def carrier(f):
     primitive = scalar.capitalize()
     fields = ', '.join(f'@JvmField val lane{i}: {primitive}' for i in range(count))
     vec = f'{vector}.broadcast({vector}.SPECIES_{f["bits"]}, lane0)' + ''.join(f'.withLane({i}, lane{i})' for i in range(1, count))
+    unsigned_extrema = f['laneRep'].startswith('Word') and any(op in ('min', 'max') for op in f['operations'])
     lines = [HEADER, 'package thc.runtime', f'import jdk.incubator.vector.{vector}',
+             *(['import jdk.incubator.vector.VectorOperators'] if unsigned_extrema else []),
              '/** Exact durable primitive lanes; transient Vector API storage never escapes here. */',
              f'class {n}({fields}) {{', f'    private fun vector(): {vector} = {vec}',
              '    companion object {',
@@ -112,7 +114,10 @@ def carrier(f):
     for op in f['operations']:
         if op in BINARY:
             method = BINARY[op]
-            lines.append(f'        @JvmStatic fun {method}(a: {n}, b: {n}): {n} = lanes(a.vector().{VECTOR_METHOD[method]}(b.vector()))')
+            expression = (f'a.vector().lanewise(VectorOperators.U{op.upper()}, b.vector())'
+                          if unsigned_extrema and op in ('min', 'max') else
+                          f'a.vector().{VECTOR_METHOD[method]}(b.vector())')
+            lines.append(f'        @JvmStatic fun {method}(a: {n}, b: {n}): {n} = lanes({expression})')
         elif op == 'negate':
             lines.append(f'        @JvmStatic fun negate(a: {n}): {n} = lanes(a.vector().neg())')
         elif op == 'insert':
