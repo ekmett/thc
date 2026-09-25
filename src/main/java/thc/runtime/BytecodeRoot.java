@@ -89,7 +89,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object read(GlobalBinding binding) { return binding.read(); }
     }
 
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class PolyglotEval {
         @Specialization
@@ -102,7 +102,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         public static PolyglotAccess createAccess() { return new PolyglotAccess(); }
     }
 
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class PolyglotReadMember {
         @Specialization
@@ -115,7 +115,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         public static PolyglotAccess createAccess() { return new PolyglotAccess(); }
     }
 
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class PolyglotExecuteInt {
         @Specialization
@@ -128,7 +128,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         public static PolyglotAccess createAccess() { return new PolyglotAccess(); }
     }
 
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = BytecodeJavaScriptArguments.class, name = "arguments")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class JavaScriptInt {
@@ -143,7 +143,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = BytecodeJavaScriptArguments.class, name = "arguments")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class JavaScriptDouble {
@@ -158,7 +158,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = BytecodeJavaScriptArguments.class, name = "arguments")
     public static final class JavaScriptVoid {
         @Specialization public static void call(VirtualFrame frame, BytecodeJavaScriptArguments arguments,
@@ -262,7 +262,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = Metrics.class, name = "metrics")
     @ConstantOperand(type = boolean.class, name = "async")
     public static final class ForceValue {
@@ -295,7 +295,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     /** A successful force updates this activation's mutable binding, not its final capture property. */
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = Metrics.class, name = "metrics")
     @ConstantOperand(type = LocalAccessor.class, name = "local")
     @ConstantOperand(type = boolean.class, name = "cell")
@@ -917,7 +917,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class CloneMyStack {
         @Specialization public static void capture(VirtualFrame frame, LocalAccessor destination,
@@ -1090,7 +1090,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     /** Only the function is a stack operand; aggregate fields stay in typed locals. */
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = BytecodeInputSource.class, name = "source")
     @ConstantOperand(type = boolean.class, name = "tail")
     @ConstantOperand(type = Metrics.class, name = "metrics")
@@ -1114,7 +1114,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = BytecodeInputSource.class, name = "source")
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = boolean.class, name = "tail")
@@ -1161,7 +1161,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     /** Invoke exactly one logical State argument, with a fence after real return/throw. */
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = Metrics.class, name = "metrics")
     public static final class KeepAlive {
         @Specialization public static Object apply(VirtualFrame frame, Metrics metrics,
@@ -1176,7 +1176,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         public static Force createForce(Metrics metrics) { return new Force(metrics); }
     }
 
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = Metrics.class, name = "metrics")
     public static final class KeepAliveTuple {
@@ -1195,7 +1195,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     /** Tuple operands are scalar inputs; each dispatch arm consumes into typed locals. */
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = int.class, name = "arity")
     @ConstantOperand(type = Metrics.class, name = "metrics")
@@ -1211,7 +1211,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     /** Private non-tail tuple checkpoint. Ordinary calls still use ApplyTuple. */
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = int.class, name = "arity")
     @ConstantOperand(type = Metrics.class, name = "metrics")
@@ -1274,7 +1274,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         } finally { SynchronousMasking.set(node, callerMask); }
     }
 
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = int.class, name = "arity")
     @ConstantOperand(type = Metrics.class, name = "metrics")
@@ -1300,7 +1300,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = ArgumentLayout.class, name = "layout")
     @ConstantOperand(type = Metrics.class, name = "metrics")
@@ -1315,7 +1315,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = ArgumentLayout.class, name = "layout")
     @ConstantOperand(type = Metrics.class, name = "metrics")
@@ -1341,7 +1341,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = ArgumentLayout.class, name = "layout")
     @ConstantOperand(type = Metrics.class, name = "metrics")
@@ -1415,7 +1415,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = int.class, name = "arity")
     @ConstantOperand(type = boolean.class, name = "tail")
     @ConstantOperand(type = Metrics.class, name = "metrics")
@@ -1441,7 +1441,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = ArgumentLayout.class, name = "layout")
     @ConstantOperand(type = boolean.class, name = "tail")
     @ConstantOperand(type = Metrics.class, name = "metrics")
@@ -1482,7 +1482,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object read(int index, TailCall call) { return call.getArgs()[index]; }
     }
 
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = int.class, name = "arity")
     @ConstantOperand(type = int.class, name = "formalArity")
     public static final class IsSelf {
@@ -1613,7 +1613,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     /** Called inside a DSL TryCatch; its typed tuple destination is unchanged. */
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = Metrics.class, name = "metrics")
     public static final class InvokeIOAction {
@@ -1640,7 +1640,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     /** Private checkpoint variant: a yielded action is captured before tuple destination consumption. */
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = Metrics.class, name = "metrics")
     public static final class InvokeIOActionCheckpoint {
@@ -1681,7 +1681,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     /** The private mask-action edge shares exact action capture but owns host-fault cleanup. */
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = Metrics.class, name = "metrics")
     public static final class InvokeMaskedIOActionCheckpoint {
@@ -1770,7 +1770,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = Metrics.class, name = "metrics")
     public static final class InvokeIOHandler {
@@ -1793,7 +1793,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     /** Private checkpoint variant: retain the original handler's tuple and mask update. */
-    @Operation(forceCached = true)
+    @Operation
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = Metrics.class, name = "metrics")
     public static final class InvokeIOHandlerCheckpoint {
