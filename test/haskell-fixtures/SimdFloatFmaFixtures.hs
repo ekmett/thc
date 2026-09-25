@@ -50,7 +50,8 @@ prepareSimdFloatFma root = do
       manifest = output </> "manifest.json"
       exportOnly = arch == "aarch64"
       stages = if exportOnly then ["pre"] else ["pre","post"]
-      nativeFlags = ["-mavx","-mfma"]
+      -- GHC requires AVX2 when lowering the shared FloatX8 256-bit workers.
+      nativeFlags = ["-mavx2","-mfma"]
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
   when present (removeFile manifest)
@@ -60,7 +61,7 @@ prepareSimdFloatFma root = do
   unless exportOnly $ do
     unless (arch == "x86_64" && os == "linux") (die "Native FloatX4 FMA oracle requires Linux x86_64")
     cpu <- readFile "/proc/cpuinfo"
-    unless (all (`elem` words cpu) ["avx","fma"]) (die "Native FloatX4 FMA oracle requires AVX and FMA hardware")
+    unless (all (`elem` words cpu) ["avx","avx2","fma"]) (die "Native SIMD FMA oracle requires AVX2 and FMA hardware")
   forM_ stages $ \stage -> do
     _ <- run root [("THC_CORE_OUT", output </> stage ++ "-core"),
                   ("THC_GHC_OUT", output </> stage ++ "-ghc")]
