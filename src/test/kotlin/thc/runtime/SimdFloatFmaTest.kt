@@ -14,7 +14,7 @@ import thc.Language
 import java.io.File
 import java.security.MessageDigest
 
-/** FloatX4 and DoubleX2 share one native executable and pre/post Core export. */
+/** FloatX4, FloatX8 and DoubleX2 share one native executable and pre/post Core export. */
 class SimdFloatFmaTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = File(root, "build/simd-floatx4-fma")
@@ -50,11 +50,18 @@ class SimdFloatFmaTest {
         }
         assertEquals(0L, bits(FloatX4.fused(2, FloatX4.broadcast(0f),
             FloatX4.broadcast(0f), FloatX4.broadcast(0f)).lane(0)), "Negating the rounded answer would give -0")
+        val wide = FloatX8Fused.apply(0, FloatX8.broadcast(x), FloatX8.broadcast(y), FloatX8.broadcast(-1f))
+        val wideLanes = listOf(wide.lane0, wide.lane1, wide.lane2, wide.lane3, wide.lane4, wide.lane5, wide.lane6, wide.lane7)
+        wideLanes.forEach { assertEquals(bits(-Math.scalb(1.0f, -46)), bits(it)) }
+        val zero = FloatX8Fused.apply(2, FloatX8.broadcast(0f), FloatX8.broadcast(0f), FloatX8.broadcast(0f))
+        listOf(zero.lane0, zero.lane1, zero.lane2, zero.lane3, zero.lane4, zero.lane5, zero.lane6, zero.lane7)
+            .forEach { assertEquals(0L, bits(it), "Negating the rounded answer would give -0") }
     }
 
     @Test fun exactThreeVectorInputsAndResultAreRequired() {
         for ((names, proof, wrong) in listOf(
             Triple(CoreVectors.fusedFloat, CoreVectors.proofFloat, CoreVectors.proofDouble),
+            Triple(CoreVectors.fusedFloat8, GeneratedVectors.proofFloatX8, CoreVectors.proofFloat),
             Triple(CoreVectors.fusedDouble, CoreVectors.proofDouble, CoreVectors.proofFloat))) for (name in names) {
             val good = List(3) { proof }
             CoreVectors.validate(name, good, proof)
@@ -89,12 +96,17 @@ class SimdFloatFmaTest {
     }
 
     @Test fun genuineCoreAndNativeLaneBitsSurviveBothCompiledBackends() {
-        for (double in listOf(false, true)) checkGenuineCoreAndNativeLaneBits(double)
+        for (laneCount in listOf(4, 2, 8)) checkGenuineCoreAndNativeLaneBits(laneCount)
     }
 
-    private fun checkGenuineCoreAndNativeLaneBits(double: Boolean) {
-        val names = if (double) listOf("doubleAddCase", "doubleSubCase", "doubleNegAddCase", "doubleNegSubCase") else this.names
-        val laneCount = if (double) 2 else 4
+    private fun checkGenuineCoreAndNativeLaneBits(laneCount: Int) {
+        val double = laneCount == 2
+        val wide = laneCount == 8
+        val names = when {
+            double -> listOf("doubleAddCase", "doubleSubCase", "doubleNegAddCase", "doubleNegSubCase")
+            wide -> listOf("wideAddCase", "wideSubCase", "wideNegAddCase", "wideNegSubCase")
+            else -> this.names
+        }
         fun bits(value: Double) = if (double) value.toRawBits() else this.bits(value.toFloat())
         fun same(expected: Long, actual: Long, label: String) {
             if (!double) this.same(expected, actual, label)
@@ -102,7 +114,12 @@ class SimdFloatFmaTest {
             else assertEquals(expected, actual, label)
         }
         fun lanes(input: List<Long>): List<Triple<Double, Double, Double>> {
-            if (!double) return this.lanes(input).map { (x,y,z) -> Triple(x.toDouble(), y.toDouble(), z.toDouble()) }
+            if (!double) {
+                val base = this.lanes(input)
+                val (x,y,z) = base[0]
+                val all = if (wide) base + listOf(Triple(-x,y,z), Triple(x,-y,z), Triple(-y,z,-x), Triple(z,-x,-y)) else base
+                return all.map { (a,b,c) -> Triple(a.toDouble(), b.toDouble(), c.toDouble()) }
+            }
             val (x,y,z) = input.map(Double::fromBits)
             return listOf(Triple(x,y,z), Triple(y,z,-x))
         }
@@ -118,7 +135,7 @@ class SimdFloatFmaTest {
         assertEquals("9.14.1", manifest["ghc"])
         val exportOnly = System.getProperty("os.arch") in listOf("aarch64", "arm64")
         assertEquals(if (exportOnly) listOf("pre") else listOf("pre", "post"), manifest["stages"])
-        assertEquals(if (exportOnly) null else 528L, manifest["nativeRows"], "Native preparation cannot silently downgrade")
+        assertEquals(if (exportOnly) null else 1232L, manifest["nativeRows"], "Native preparation cannot silently downgrade")
         assertEquals(listOf("-mavx", "-mfma"), manifest["nativeFlags"])
         for ((path, want) in ((manifest["inputHashes"] as Map<String, String>) +
                 (manifest["artifactHashes"] as Map<String, String>))) {
@@ -126,7 +143,7 @@ class SimdFloatFmaTest {
                 .joinToString("") { "%02x".format(it) }
             assertEquals(want, hash, "Stale shared SIMD fused fixture $path")
         }
-        assertEquals(names, manifest[if (double) "doubleEntries" else "entries"])
+        assertEquals(names, manifest[if (double) "doubleEntries" else if (wide) "wideEntries" else "entries"])
         for (stage in manifest["stages"] as List<String>) {
             val audit = Json.parse(File(directory, "$stage-audit.json").readText()) as Map<String, Any?>
             assertEquals(true, audit["accepted"], "$stage canonical audit")
@@ -141,7 +158,7 @@ class SimdFloatFmaTest {
             else (manifest["inputs"] as List<List<Number>>).map { row -> row.map { it.toLong() } }
         assertEquals(22, inputs.size)
         val native = if (manifest["nativeRows"] != null) File(directory, "oracle.txt").readLines().map { it.split(' ') }.also {
-            assertEquals(528, it.size)
+            assertEquals(1232, it.size)
         }.filter { it[0] in names } else null
         val expectedRequests = names.flatMap { name -> inputs.flatMap { input -> (0 until laneCount).map { lane ->
             listOf(name) + input.map(::unsigned) + lane.toString()
@@ -190,7 +207,7 @@ class SimdFloatFmaTest {
                         val resultShape = requireNotNull(workerRoot.tupleResult)
                         assertEquals(3, inputLayout.logical.logicalArity)
                         assertEquals(3 * laneCount, inputLayout.logical.physicalArity)
-                        assertEquals(if (double) CoreVector.DOUBLEX2 else CoreVector.FLOATX4, resultShape.proof.vector)
+                        assertEquals(if (double) CoreVector.DOUBLEX2 else if (wide) GeneratedVectors.vectorFloatX8 else CoreVector.FLOATX4, resultShape.proof.vector)
                         fun workerCall(input: List<Long>) {
                             val laneInputs = lanes(input)
                             val loan = language.handoffState.get().arguments.acquire(inputLayout.packet)
