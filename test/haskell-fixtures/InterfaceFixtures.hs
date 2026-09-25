@@ -31,7 +31,7 @@ import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist,
                          listDirectory, renameFile, withCurrentDirectory)
 import System.Environment (lookupEnv)
 import System.Exit (die)
-import System.FilePath ((</>), makeRelative, splitDirectories, takeExtension)
+import System.FilePath ((</>), makeRelative, splitDirectories, takeExtension, takeDirectory)
 import THC.Interface
 import qualified THC.Driver.Installed as Installed
 import qualified THC.Driver.Project as Project
@@ -48,7 +48,7 @@ prepareInterfaceCore root = do
       generated = directory </> "source/InterfaceLibrary.hs"
       run label program args = runLogged 180 root (directory </> "logs") label [] program args
       expectedModule = mkModule (stringToUnit unitName) (mkModuleName "InterfaceLibrary")
-      entries = ["opaqueEntry", "inlineEntry", "recursiveEntry", "coercionEntry"] :: [String]
+      entries = ["opaqueEntry", "inlineEntry", "recursiveEntry", "coercionEntry", "wrapperEntry"] :: [String]
   mapM_ (createDirectoryIfMissing True . (root </>))
     [directory </> name | name <- ["source", "full", "thin", "foreign", "native", "no-source"]]
   copyFile (root </> "compiler/test-fixtures/InterfaceLibrary.hs") (root </> generated)
@@ -194,6 +194,12 @@ prepareInterfaceCore root = do
   helperCommands <- checkHelper root directory libdir helper
   associationCommands <- prepareForeignAssociation root directory ghc libdir unitName
   wiredCommands <- checkWiredHelper root directory libdir helper wiredUnit baseUnit
+  wrapperFacts <- decodeFile (root </> directory </> "installed-wrapper-facts.json")
+  let wrapperArtifacts = case wrapperFacts of
+        Array rows -> [makeRelative root path | row <- toList rows,
+          valueAt "completeCore" row == Bool True, key <- ["exported", "audit"],
+          String pathText <- [valueAt key row], let path = Text.unpack pathText]
+        _ -> []
   checkDriver root directory ghc ghcPkg helper baseUnit
   audits <- forM entries $ \entry -> run ("audit-" ++ entry) "python3"
     ["scripts/audit-core.py", "--entry", unitName ++ ":" ++
@@ -213,7 +219,7 @@ prepareInterfaceCore root = do
       commands = [helperBuild, helperLocation, pluginBuild, version, libdirResult, baseResult, wiredResult] ++
         concat builds ++ [foreignBuild] ++ foreignInit ++ [foreignRegistered, nativeBuild, oracle] ++
         helperCommands ++ associationCommands ++ wiredCommands ++ audits
-      artifacts = concatMap commandArtifacts commands ++
+      artifacts = concatMap commandArtifacts commands ++ wrapperArtifacts ++
         [directory </> name | name <- ["InterfaceLibrary.json", "full/InterfaceLibrary.hi", "thin/InterfaceLibrary.hi",
           "full/InterfaceLibrary.dyn_hi", "full/InterfaceForeign.hi", "native/oracle", "source/InterfaceLibrary.saved"]] ++
         [directory </> name | name <- ["CBVCoercionAudit.json", "direct/CBVCoercionAudit.json",
@@ -221,7 +227,7 @@ prepareInterfaceCore root = do
           "wired-unit.json"]] ++
         [directory </> "packages.json", directory </> "foreign-packages.json", directory </> "InterfaceForeign.json",
          directory </> "driver-controls.json", directory </> "foreign-association.json",
-         directory </> "installed-bound-facts.json", directory </> "foreign-alias/a.json",
+         directory </> "installed-bound-facts.json", directory </> "installed-wrapper-facts.json", directory </> "foreign-alias/a.json",
          directory </> "foreign-alias/b.json", directory </> "source/InterfaceForeignAlias.hs.saved"] ++
         [directory </> entry ++ "-audit.json" | entry <- entries]
   inputHashes <- hashes root inputs
@@ -403,7 +409,7 @@ checkForeignCore environment path core = do
 -- The reference identity comes from the raw header, not the helper's mapping.
 checkWiredHelper :: FilePath -> FilePath -> FilePath -> FilePath -> String -> String -> IO [CommandResult]
 checkWiredHelper root directory libdir helper registered otherRegistration = do
-  (path, canonical, complete) <- runGhc (Just libdir) $ do
+  (path, canonical, complete, wrapperCommands) <- runGhc (Just libdir) $ do
     initial <- getSessionDynFlags
     initialEnv <- getSession
     (flags,leftovers,_) <- parseDynamicFlags (hsc_logger initialEnv) initial
@@ -425,7 +431,8 @@ checkWiredHelper root directory libdir helper registered otherRegistration = do
       check (canonical == "ghc-internal" && registered /= canonical) "Control does not exercise wired registration mapping"
       check (moduleNameString (moduleName (mi_module raw)) == "GHC.Internal.Char") "Unexpected wired interface module"
       inspectInstalledBound environment path (root </> directory </> "installed-bound-facts.json")
-      pure (path, canonical, not (isNothing (mi_simplified_core raw)))
+      wrapperCommands <- checkInstalledWrappers environment path root directory
+      pure (path, canonical, not (isNothing (mi_simplified_core raw)), wrapperCommands)
   let expectedExit = if complete then 0 else 3
       args requested = ["--libdir", libdir, "--unit", requested, "--module", "GHC.Internal.Char", "--interface", path]
       run code label requested = runLoggedExpect code 180 root (directory </> "logs") label [] helper (args requested)
@@ -445,7 +452,7 @@ checkWiredHelper root directory libdir helper registered otherRegistration = do
     failure <- maybe (die "Wired helper failure is not JSON") pure (decodeStrict' (commandStdout result))
     check (valueAt "status" failure == String "error" && valueAt "core" failure == Null)
       "Wired-unit mapping accepted a different registration"
-  pure [loaded,badUnit,canonicalAlias]
+  pure ([loaded,badUnit,canonicalAlias] ++ wrapperCommands)
 
 checkCore :: HscEnv -> FilePath -> InterfaceCore -> IO ()
 checkCore environment path core = do
@@ -460,6 +467,7 @@ checkCore environment path core = do
   check (length inlineIds == 1 && all (not . isNothing . maybeUnfoldingTemplate . realIdUnfolding) inlineIds)
     "Private hydration discarded interface pragmas"
   check (all (\(v,rhs) -> eqType (idType v) (exprType rhs)) flat) "Recovered Core type mismatch"
+  checkWrapper environment core "$WToken"
   case (named "opaqueEntry", named "privateWorker") of
     ([(_,rhs)],[(worker,_)]) -> check (refers worker rhs) "Original private worker reference was not preserved"
     _ -> die "Full Core lost the opaque entry or private worker"
@@ -472,7 +480,12 @@ checkCore environment path core = do
           rawRec _ = False
           coreRec Rec{} = True
           coreRec _ = False
-      check (any rawRec groups && map rawRec groups == map coreRec (interfaceBindings core))
+      let added = length (interfaceBindings core) - length groups
+          (wrappers, ordinaryGroups) = splitAt added (interfaceBindings core)
+          wrapperGroup (NonRec v _) = isDataConWrapId v
+          wrapperGroup _ = False
+      check (added >= 1 && all wrapperGroup wrappers && any rawRec groups &&
+        map rawRec groups == map coreRec ordinaryGroups)
         "Original recursive groups were changed"
   where
     refers worker (Var v) = v == worker
@@ -483,3 +496,44 @@ checkCore environment path core = do
     refers worker (Cast x _) = refers worker x
     refers worker (Tick _ x) = refers worker x
     refers _ _ = False
+
+-- Compare an actual hydrated constructor Id and its GHC-produced wrapper body,
+-- including type/coercion arguments, rather than synthesizing from its name.
+checkWrapper :: HscEnv -> InterfaceCore -> String -> IO ()
+checkWrapper environment core occurrence = do
+  let declared = [v | v <- typeEnvIds (md_types (interfaceDetails core)), getOccString v == occurrence]
+      recovered = [(v, rhs) | (v, rhs) <- flattenBinds (interfaceBindings core), getOccString v == occurrence]
+      render = showSDoc (hsc_dflags environment) . ppr
+  case (declared, recovered) of
+    ([original], [(v, rhs)]) | Just expected <- dataConWrapUnfolding_maybe original -> do
+      check (v == original && nameModule_maybe (varName v) == Just (interfaceModule core))
+        "Constructor wrapper lost its exact GHC identity/owner"
+      check (eqType (idType v) (exprType rhs) && render rhs == render expected)
+        "Constructor wrapper body/type/coercions changed"
+    _ -> die ("Missing/duplicate genuine constructor wrapper " ++ occurrence)
+
+-- Installed boot interfaces may be thin, but when complete they must supply
+-- these original wrappers. The synthetic GADT/unpacked control above always
+-- exercises acquisition, including on an ordinary thin-boot GHC installation.
+checkInstalledWrappers :: HscEnv -> FilePath -> FilePath -> FilePath -> IO [CommandResult]
+checkInstalledWrappers environment charPath root directory = do
+  facts <- forM [("Data/Typeable/Internal.hi", "$WTrType"), ("Unsafe/Coerce.hi", "$WUnsafeRefl")] $ \(relative, occurrence) -> do
+    let path = takeDirectory charPath </> relative
+    raw <- readBinIface (targetProfile (hsc_dflags environment)) (hsc_NC environment) CheckHiWay QuietBinIFace path
+    loaded <- loadInterfaceCore environment (mi_module raw) path
+    case loaded of
+      Nothing -> pure (object ["wrapper" .= occurrence, "completeCore" .= False], [])
+      Just core -> do
+        checkWrapper environment core occurrence
+        rendered <- interfaceCoreJSON ["unit-qualified"] core
+        let exported = root </> directory </> occurrence ++ ".json"
+            audit = root </> directory </> occurrence ++ "-audit.json"
+            entry = unitString (moduleUnit (interfaceModule core)) ++ ":" ++
+              moduleNameString (moduleName (interfaceModule core)) ++ "." ++ occurrence
+        writeFile exported rendered
+        audited <- runLogged 180 root (directory </> "logs") ("audit-" ++ occurrence) [] "python3"
+          ["scripts/audit-core.py", exported, "--entry", entry, "--output", audit]
+        pure (object ["wrapper" .= occurrence, "completeCore" .= True,
+          "exported" .= exported, "audit" .= audit], [audited])
+  writeJson (root </> directory </> "installed-wrapper-facts.json") (toJSON (map fst facts))
+  pure (concatMap snd facts)

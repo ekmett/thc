@@ -36,6 +36,7 @@ class FixturePreparationTest(unittest.TestCase):
                      'full/InterfaceLibrary.hi', 'thin/InterfaceLibrary.hi',
                      'full/InterfaceLibrary.dyn_hi', 'full/InterfaceForeign.hi',
                      'source/InterfaceLibrary.saved', 'opaqueEntry-audit.json',
+                     'wrapperEntry-audit.json', 'installed-wrapper-facts.json',
                      'inlineEntry-audit.json', 'recursiveEntry-audit.json',
                      'CBVCoercionAudit.json', 'direct/CBVCoercionAudit.json',
                      'full/CBVCoercionAudit.hi', 'thin/CBVCoercionAudit.hi',

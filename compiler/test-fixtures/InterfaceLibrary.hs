@@ -1,10 +1,19 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
-{-# LANGUAGE MagicHash #-}
-module InterfaceLibrary (opaqueEntry, inlineEntry, recursiveEntry, Token(..)) where
+{-# LANGUAGE GADTs, MagicHash #-}
+module InterfaceLibrary (opaqueEntry, inlineEntry, recursiveEntry, wrapperEntry, Token(..)) where
 import GHC.Exts
 
-data Token = Token Int
+data Token a where
+  Token :: {-# UNPACK #-} !Int -> Token Int
+
+{-# OPAQUE makeToken #-}
+makeToken :: (Int -> Token Int) -> Int -> Token Int
+makeToken constructor value = constructor value
+
+{-# OPAQUE wrapperEntry #-}
+wrapperEntry :: Int# -> Int#
+wrapperEntry n = case makeToken Token (I# n) of Token (I# value) -> value
 
 {-# OPAQUE opaqueEntry #-}
 opaqueEntry :: Int# -> Int#

@@ -39,6 +39,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/interface-core/source/InterfaceLibrary.saved",
     "build/interface-core/opaqueEntry-audit.json", "build/interface-core/inlineEntry-audit.json",
     "build/interface-core/recursiveEntry-audit.json",
+    "build/interface-core/wrapperEntry-audit.json", "build/interface-core/installed-wrapper-facts.json",
     "build/interface-core/CBVCoercionAudit.json", "build/interface-core/direct/CBVCoercionAudit.json",
     "build/interface-core/full/CBVCoercionAudit.hi", "build/interface-core/thin/CBVCoercionAudit.hi",
     "build/interface-core/source/CBVCoercionAudit.saved", "build/interface-core/coercionEntry-audit.json",
