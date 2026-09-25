@@ -207,6 +207,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         CoreGmpForeign.validateHeads(bindings)
         CoreLibdwForeign.validateHeads(bindings)
         CoreNativeAllocationForeign.validateHeads(bindings)
+        CoreMemmoveForeign.validateHeads(bindings)
         CoreSignalForeign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(bindings, constructors)
@@ -1434,10 +1435,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val nativeAllocation = CoreNativeAllocationForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val memmove = CoreMemmoveForeign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && capi == null &&
-                !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && rtsDiagnostic == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && processSignal == null)
+                !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && rtsDiagnostic == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -1754,6 +1757,19 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     operands.forEach { it.emit(e) }
                     if (nativeAllocation == NativeAllocationOp.MALLOC) e.builder.endNativeMalloc()
                     else e.builder.endNativeFree()
+                }
+            } else if (memmove) {
+                CoreMemmoveForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreMemmoveForeign.validateOperand(index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginOriginalMemmove(destination.single())
+                    operands.forEach { it.emit(e) }
+                    e.builder.endOriginalMemmove()
                 }
             } else if (libdw != null) {
                 CoreLibdwForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)

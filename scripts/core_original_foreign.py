@@ -74,6 +74,7 @@ OPERATIONS = {
 
     'malloc': ('ccall', 'unsafe', ('Word64Rep', None), (None, 'AddrRep')),
     'free': ('ccall', 'unsafe', ('AddrRep', None), (None,)),
+    'memmove': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', 'Word64Rep', None), (None, 'AddrRep')),
     **{symbol: ('capi', 'unsafe', arguments, output)
        for symbol, (arguments, output) in SIGSET_OPERATIONS.items()},
     'rtsSupportsBoundThreads': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
