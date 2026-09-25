@@ -16,6 +16,7 @@ import Data.Maybe (isNothing)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import FixtureSupport (CommandResult(..), hashes, runLogged, runLoggedExpect, writeJson)
+import InterfaceForeignFacts (prepareForeignAssociation, inspectInstalledBound)
 import GHC hiding (exprType, entry)
 import GHC.Plugins
 import GHC.Core.TyCo.Compare (eqType)
@@ -191,6 +192,7 @@ prepareInterfaceCore root = do
                 (flattenBinds (interfaceBindings control))) "No actual hydrated GHC CBV marks"
     pure ()
   helperCommands <- checkHelper root directory libdir helper
+  associationCommands <- prepareForeignAssociation root directory ghc libdir unitName
   wiredCommands <- checkWiredHelper root directory libdir helper wiredUnit baseUnit
   checkDriver root directory ghc ghcPkg helper baseUnit
   audits <- forM entries $ \entry -> run ("audit-" ++ entry) "python3"
@@ -201,6 +203,7 @@ prepareInterfaceCore root = do
   scripts <- listDirectory (root </> "scripts")
   let inputs = sort $ ["compiler/test-fixtures/InterfaceLibrary.hs", "compiler/test-fixtures/InterfaceNative.hs",
         "compiler/test-fixtures/InterfaceForeign.hs", "test/haskell-fixtures/InterfaceFixtures.hs",
+        "compiler/test-fixtures/InterfaceForeignAlias.hs", "test/haskell-fixtures/InterfaceForeignFacts.hs",
         "compiler/test-fixtures/CBVCoercionAudit.hs", "compiler/interface/Main.hs",
         "src/THC/Driver/Installed.hs", "src/THC/Driver/Project.hs", "src/THC/Driver/Zip.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "cabal.project",
@@ -208,7 +211,8 @@ prepareInterfaceCore root = do
         ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
         ["scripts" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
       commands = [helperBuild, helperLocation, pluginBuild, version, libdirResult, baseResult, wiredResult] ++
-        concat builds ++ [foreignBuild] ++ foreignInit ++ [foreignRegistered, nativeBuild, oracle] ++ helperCommands ++ wiredCommands ++ audits
+        concat builds ++ [foreignBuild] ++ foreignInit ++ [foreignRegistered, nativeBuild, oracle] ++
+        helperCommands ++ associationCommands ++ wiredCommands ++ audits
       artifacts = concatMap commandArtifacts commands ++
         [directory </> name | name <- ["InterfaceLibrary.json", "full/InterfaceLibrary.hi", "thin/InterfaceLibrary.hi",
           "full/InterfaceLibrary.dyn_hi", "full/InterfaceForeign.hi", "native/oracle", "source/InterfaceLibrary.saved"]] ++
@@ -216,7 +220,9 @@ prepareInterfaceCore root = do
           "full/CBVCoercionAudit.hi", "thin/CBVCoercionAudit.hi", "source/CBVCoercionAudit.saved",
           "wired-unit.json"]] ++
         [directory </> "packages.json", directory </> "foreign-packages.json", directory </> "InterfaceForeign.json",
-         directory </> "driver-controls.json"] ++
+         directory </> "driver-controls.json", directory </> "foreign-association.json",
+         directory </> "installed-bound-facts.json", directory </> "foreign-alias/a.json",
+         directory </> "foreign-alias/b.json", directory </> "source/InterfaceForeignAlias.hs.saved"] ++
         [directory </> entry ++ "-audit.json" | entry <- entries]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
@@ -225,7 +231,7 @@ prepareInterfaceCore root = do
      "unit" .= unitName, "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes,
      "controls" .= (["opaque-body", "private-worker", "recursive-groups", "thin-unavailable",
        "no-source-target", "wrong-module", "wrong-unit", "wrong-way", "foreign-archived", "private-flags", "repeat-load",
-       "helper-protocol", "installed-cbv-worker", "installed-wired-unit"] :: [String]),
+       "helper-protocol", "installed-cbv-worker", "installed-wired-unit", "foreign-association-absence"] :: [String]),
      "commands" .= map commandRecord commands, "runtimeVerified" .= False]
   putStrLn "Prepared complete interface Core: 21 native rows; full/thin/no-source/identity/way/foreign controls passed"
 
@@ -418,6 +424,7 @@ checkWiredHelper root directory libdir helper registered otherRegistration = do
       let canonical = unitString (moduleUnit (mi_module raw))
       check (canonical == "ghc-internal" && registered /= canonical) "Control does not exercise wired registration mapping"
       check (moduleNameString (moduleName (mi_module raw)) == "GHC.Internal.Char") "Unexpected wired interface module"
+      inspectInstalledBound environment path (root </> directory </> "installed-bound-facts.json")
       pure (path, canonical, not (isNothing (mi_simplified_core raw)))
   let expectedExit = if complete then 0 else 3
       args requested = ["--libdir", libdir, "--unit", requested, "--module", "GHC.Internal.Char", "--interface", path]

@@ -39,7 +39,8 @@ class InterfaceCoreNativeTest {
             "wrongWayFailure", "foreignArtifactsArchived", "failedRefreshPreservedBundle")) assertEquals(true, controls[name], name)
         assertEquals(listOf("opaque-body", "private-worker", "recursive-groups", "thin-unavailable",
             "no-source-target", "wrong-module", "wrong-unit", "wrong-way", "foreign-archived",
-            "private-flags", "repeat-load", "helper-protocol", "installed-cbv-worker", "installed-wired-unit"), manifest["controls"])
+            "private-flags", "repeat-load", "helper-protocol", "installed-cbv-worker", "installed-wired-unit",
+            "foreign-association-absence"), manifest["controls"])
         for (kind in listOf("inputHashes", "artifactHashes"))
             for ((path, expected) in manifest[kind] as Map<String, String>) {
                 val file = File(root, path)

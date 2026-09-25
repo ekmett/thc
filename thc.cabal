@@ -16,6 +16,7 @@ extra-source-files:
   compiler/test-fixtures/InterfaceLibrary.hs
   compiler/test-fixtures/InterfaceNative.hs
   compiler/test-fixtures/InterfaceForeign.hs
+  compiler/test-fixtures/InterfaceForeignAlias.hs
   scripts/check-ghc-core.hs
   test/check-ghc-core.sh
   compiler/test-fixtures/MaskFunctionAudit.hs
@@ -252,6 +253,7 @@ executable thc-fixtures
     UncaughtSelfFixtures
     MaskFunctionFixtures
     InterfaceFixtures
+    InterfaceForeignFacts
     FixtureSupport
     WordFloatingFixtures
     FloatingAddressFixtures

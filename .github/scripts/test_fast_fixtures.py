@@ -43,7 +43,10 @@ class FixturePreparationTest(unittest.TestCase):
                      'logs/helper-thin.stdout', 'logs/helper-thin.command.json',
                      'wired-unit.json', 'logs/helper-wired-unit.stdout',
                      'logs/helper-wired-unit.command.json', 'packages.json', 'driver-controls.json',
-                     'InterfaceForeign.json', 'foreign-packages.json'):
+                     'InterfaceForeign.json', 'foreign-packages.json',
+                     'foreign-association.json', 'installed-bound-facts.json',
+                     'foreign-alias/a.json', 'foreign-alias/b.json',
+                     'source/InterfaceForeignAlias.hs.saved'):
             self.assertIn('build/interface-core/' + name, fast_fixtures.FULL_REQUIRED)
         self.assertIn('"interface-core/**/*.json"', (project / 'build.gradle.kts').read_text())
 
