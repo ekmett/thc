@@ -16,6 +16,8 @@
     "advanceStackFrameLocationzh",
     "getStackFieldszh",
     "lookupIPE",
+    "ghczuwrapperZC22ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread",
+    "ghczuwrapperZC23ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread",
     "ghczuwrapperZC20ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite",
     "ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite",
     "__hscore_get_errno",

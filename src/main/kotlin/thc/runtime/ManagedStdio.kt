@@ -12,6 +12,14 @@ internal class ManagedStdio(private val files: ManagedFiles) {
     private val hostAbi by lazy { StdioHostAbi.load() }
     private val lastError = ThreadLocal.withInitial { 0L }
 
+    @TruffleBoundary fun read(fd: Long, address: ManagedAddress, count: Long): Long {
+        val abi = hostAbi
+        if (fd != fd.toInt().toLong()) throw RuntimeFault("Original read requires a canonical signed CInt descriptor")
+        val received = files.read(fd, address, count)
+        if (received < 0) lastError.set(abi.error(files.errorKind()))
+        return received
+    }
+
     @TruffleBoundary fun write(fd: Long, address: ManagedAddress, count: Long): Long {
         val abi = hostAbi // Validate the host C ABI before any external effect.
         if (fd != fd.toInt().toLong()) throw RuntimeFault("Original write requires a canonical signed CInt descriptor")

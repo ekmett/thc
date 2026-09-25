@@ -22,7 +22,7 @@ import ThreadAsyncFixtures (prepareThreadAsync)
 import UncaughtSelfFixtures (prepareUncaughtSelf)
 import MaskFunctionFixtures (prepareMaskFunctions)
 import InterfaceFixtures (prepareInterfaceCore)
-import OriginalStdioFixtures (prepareOriginalStdio)
+import OriginalStdioFixtures (prepareOriginalStdio, prepareOriginalStdioRead)
 import MutVarFixtures (prepareMutVar)
 import StackFixtures (prepareOriginalStack, prepareOriginalStackFormatter, exportOriginalStackSource)
 import SmallArrayFixtures (prepareSmallArrays)
@@ -846,6 +846,7 @@ main = do
     ["fused-floating"] -> prepareFusedFloating root
     ["sqrt"] -> prepareSqrt root
     "original-stdio":options -> prepareOriginalStdio root options
+    "original-stdio-read":[] -> prepareOriginalStdioRead root
     ["mutvar"] -> prepareMutVar root
     ["original-stack"] -> prepareOriginalStack root
     ["original-stack-formatter"] -> prepareOriginalStackFormatter root

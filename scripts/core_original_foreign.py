@@ -15,6 +15,10 @@ STACK_INFO = frozenset(('getStackInfoTableAddrzh', 'getInfoTableAddrszh', 'looku
     'getStackFieldszh', 'advanceStackFrameLocationzh'))
 
 OPERATIONS = {
+    'ghczuwrapperZC22ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread':
+        ('capi', 'safe', ('Int32Rep', 'AddrRep', 'Word64Rep', None), (None, 'Int64Rep')),
+    'ghczuwrapperZC23ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread':
+        ('capi', 'unsafe', ('Int32Rep', 'AddrRep', 'Word64Rep', None), (None, 'Int64Rep')),
     'ghczuwrapperZC20ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite':
         ('capi', 'safe', ('Int32Rep', 'AddrRep', 'Word64Rep', None), (None, 'Int64Rep')),
     'ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite':

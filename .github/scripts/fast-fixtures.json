@@ -23,6 +23,19 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "original-stdio-read": {
+      "junit": ["thc.runtime.OriginalStdioReadTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stdio-read"]}],
+      "outputs": ["build/original-stdio-read"],
+      "sources": [
+        "compiler/test-fixtures/OriginalStdioReadAudit.hs",
+        "compiler/test-fixtures/OriginalStdioReadNative.hs",
+        "test/haskell-fixtures/Main.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/OriginalStdioFixtures.hs",
+        "thc.cabal"
+      ]
+    },
     "mutvar": {
       "junit": ["thc.runtime.MutVarTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "mutvar"]}],
