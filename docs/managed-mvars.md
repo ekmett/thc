@@ -43,7 +43,8 @@ The bytecode backend also uses these requests for
 an uncommitted request and saves a retry at the guest continuation cut. The
 original cell protocol tests use external host operations; the public threading
 fixtures exercise concurrent guest admission and `killThread#`.
-Weak finalizers, other Handle dependencies and native IO remain separate work.
+[Explicit weak registration/finalization](weak-explicit.md), other Handle
+dependencies and native IO are separate contracts; automatic weak GC is deferred.
 
 ## Evidence and reproduction
 

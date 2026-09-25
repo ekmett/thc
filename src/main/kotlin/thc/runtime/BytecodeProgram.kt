@@ -2030,6 +2030,29 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 } else ProvenExpression(Expression { e ->
                     e.builder.beginWriteMutVar(); operands.forEach { it.emit(e) }; e.builder.endWriteMutVar()
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && WeakOp.named(fn[1] as String) != null) {
+                val operation = WeakOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                operation.validateBindings(args.map(CoreRepresentations::expression), args.map {
+                    if (it[0] == "var") scope.locals[it[1]]?.proof ?: globalProofs[it[1]] else null
+                })
+                if (operation == WeakOp.MAKE)
+                    operation.validateAction(CoreRepresentations.knownFunctionSignature(args[2], bindings))
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                operation.validate(operands.map { it.proof }, flags, tupleProof)
+                tupleExpression(tupleProof) { e, destination ->
+                    when (operation) {
+                        WeakOp.MAKE -> e.builder.beginMakeWeak(destination.single())
+                        WeakOp.MAKE_PLAIN -> e.builder.beginMakeWeakPlain(destination.single())
+                        else -> e.builder.beginObserveWeak(destination[0], destination[1], operation == WeakOp.FINALIZE)
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (operation) {
+                        WeakOp.MAKE -> e.builder.endMakeWeak()
+                        WeakOp.MAKE_PLAIN -> e.builder.endMakeWeakPlain()
+                        else -> e.builder.endObserveWeak()
+                    }
+                }
             } else if (fn[0] == "prim" && StablePointerOp.named(fn[1] as String) != null) {
                 val operation = StablePointerOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

@@ -300,6 +300,7 @@ executable thc-fixtures
     OriginalIconvFixtures
     MutVarFixtures
     StablePointerFixtures
+    WeakFixtures
     ShrinkByteArrayFixtures
     FetchAddIntArrayFixtures
     SmallArrayFixtures

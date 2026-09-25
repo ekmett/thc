@@ -1271,6 +1271,59 @@ class Audit:
                                        function[1] + ': stored ByteArray operand contradicts its required representation')
                     if not exact(proof, bytearray_primitive['result']):
                         self.issue('primitive-representation', owner, path, function[1] + ': exact ByteArray result required')
+                weak = self.cap.get('managedWeakPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
+                if weak is not None:
+                    def weak_role(rep, role):
+                        if not isinstance(rep, dict) or 'aggregate' in rep or 'vector' in rep or is_vector(rep):
+                            return False
+                        kind, reps = rep.get('kind'), rep.get('primReps')
+                        if role == 'state':
+                            return kind == 'void' and reps == []
+                        if role == 'weak':
+                            return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
+                        if role == 'flag':
+                            return kind == 'long' and reps == ['IntRep']
+                        if role == 'action':
+                            return kind in ('object', 'closure') and reps == ['BoxedRep (Just Lifted)']
+                        return role == 'boxed' and kind in ('object', 'data', 'closure') and reps in (
+                            ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)'])
+                    actual = [self.expression_rep(argument) for argument in arguments]
+                    expected = weak['arguments']
+                    expected_flags = [isinstance(rep, dict) and rep.get('primReps') == ['BoxedRep (Just Lifted)'] for rep in actual]
+                    if (len(actual) != len(expected) or not isinstance(flags, list) or
+                            any(type(flag) is not bool for flag in flags) or flags != expected_flags or
+                            any(not weak_role(rep, role) for rep, role in zip(actual, expected))):
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact Weak arguments required')
+                    for argument, rep, role in zip(arguments, actual, expected):
+                        stored = (bound.get(argument[1]) if argument[1] in bound else
+                                  self.bindings.get(argument[1], {}).get('rep')) if argument[0] == 'var' else None
+                        registers = stored.get('primReps') if isinstance(stored, dict) else None
+                        if registers == ['BoxedRep Nothing'] and isinstance(rep, dict) and rep.get('primReps') in (
+                                ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)']):
+                            stored = dict(stored, primReps=rep['primReps'])
+                        if isinstance(registers, list) and (self.shape(stored) != self.shape(rep) or
+                                stored.get('kind') != 'unknown' and not weak_role(stored, role)):
+                            self.issue('primitive-representation', owner, path,
+                                       function[1] + ': Weak argument contradicts its binding proof')
+                    fields = proof.get('components') if isinstance(proof, dict) else None
+                    output = weak['result']
+                    if not (self.is_tuple(proof) and proof.get('kind') == 'unknown' and
+                            isinstance(fields, list) and len(fields) == len(output) and
+                            all(weak_role(rep, role) for rep, role in zip(fields, output)) and
+                            proof.get('primReps') == [r for field in fields for r in field['primReps']]):
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact Weak result required')
+                    signature = self.known_function_signature(arguments[2]) if function[1] == 'mkWeak#' and len(arguments) == 4 else None
+                    if signature is not None:
+                        inputs, result = signature
+                        fields = result.get('components') if isinstance(result, dict) else None
+                        if not (len(inputs) == 1 and weak_role(inputs[0], 'state') and
+                                self.is_tuple(result) and result.get('kind') == 'unknown' and
+                                isinstance(fields, list) and len(fields) == 2 and
+                                weak_role(fields[0], 'state') and weak_role(fields[1], 'boxed') and
+                                fields[1].get('primReps') == ['BoxedRep (Just Lifted)'] and
+                                result.get('primReps') == fields[1]['primReps']):
+                            self.issue('primitive-representation', owner, path,
+                                       'mkWeak#: finalizer requires State# -> (# State#, lifted value #)')
                 mutvar = self.cap.get('managedMutVarPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
                 stable_ptr = self.cap.get('managedStablePtrPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
                 if stable_ptr is not None:

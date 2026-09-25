@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 447 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 735 | No declared lowering. |
+| Partial | 451 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 731 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -46,6 +46,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - shrinkMutableByteArray# changes the logical size of a THC-owned allocation in place, preserving frozen and pinned aliases while retaining backing capacity. Managed byte, scalar, vector, address and C-bitcode buffer accesses observe the shorter bound; partial truncation of a managed pointer cell is rejected. Host-injected raw byte arrays cannot be shrunk in place.
 - fetchAddIntArray# atomically returns the previous signed machine Int and writes the wrapped sum under the allocation monitor, with a full memory barrier. It requires a THC-owned mutable byte array and a contained machine-word element; raw host arrays and pointer-cell overlaps are rejected.
 - StablePtr# uses context-owned opaque AddrRep handles, with lazy referents and exact hs_free_stable_ptr. The two original RTS shared-CAF getOrSet calls atomically retain their first live handle per context until disposal; null queries leave empty slots unchanged. Live identity casts may be compared, but the handles have no byte storage, pointer arithmetic or ordering. Stable-pointer array and byte-memory index/read/write primops remain unsupported.
+- Weak# support is PARTIAL: context-owned registrations retain lazy keys, values and Haskell actions until explicit finalizeWeak# or context close. Finalization atomically marks dead and returns the real action without invoking it; close never runs Haskell finalizers. There is no automatic GC/ephemeron reclamation, and addCFinalizerToWeak# remains rejected.
 - Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Local joins may read an enclosing tuple's existing typed frame slots; ordinary function captures, heap fields and ordinary let bindings remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums, vectors and unresolved leaves cannot appear in tuple inputs; exact evaluated AddrRep leaves use managed address references.
 - Binary unboxed sum results and immediate cases support exact machine Int/Word, Float, Double, known reference, void and tuple payloads. Nested sums, width-changing payload casts, vector/address or unknown leaves, sum inputs/captures/heap fields/local lets/joins/host results remain unsupported.
 
@@ -410,6 +411,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `dataToTagLarge#` — arity 1 — concrete-algebraic-family-64
 - [ ] `dataToTagSmall#` — arity 1 — concrete-algebraic-family-64
 - [ ] `deRefStablePtr#` — arity 2 — Context-owned opaque stable handles; no pointer memory access
+- [ ] `deRefWeak#` — arity 2 — PARTIAL: retained registrations and explicit Haskell finalization; no GC, ephemerons or C finalizers
 - [ ] `divideDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `divideDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `divideDoubleX8#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -419,6 +421,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `eqAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `eqStablePtr#` — arity 2 — Context-owned opaque stable handles; no pointer memory access
 - [ ] `fetchAddIntArray#` — arity 4 — Managed byte storage
+- [ ] `finalizeWeak#` — arity 2 — PARTIAL: retained registrations and explicit Haskell finalization; no GC, ephemerons or C finalizers
 - [ ] `fork#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `freezeArray#` — arity 4 — Managed lifted arrays
 - [ ] `freezeSmallArray#` — arity 4 — Managed lifted arrays
@@ -558,6 +561,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `minusWord64X4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusWord64X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `mkWeak#` — arity 4 — PARTIAL: retained registrations and explicit Haskell finalization; no GC, ephemerons or C finalizers
+- [ ] `mkWeakNoFinalizer#` — arity 3 — PARTIAL: retained registrations and explicit Haskell finalization; no GC, ephemerons or C finalizers
 - [ ] `mutableByteArrayContents#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `myThreadId#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `neAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
@@ -874,7 +879,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `copyAddrToByteArray#` — arity 5
 - [ ] `copyByteArrayToAddr#` — arity 5
 - [ ] `copyMutableByteArrayToAddr#` — arity 5
-- [ ] `deRefWeak#` — arity 2
 - [ ] `decodeDouble_2Int#` — arity 1
 - [ ] `decodeDouble_Int64#` — arity 1
 - [ ] `decodeFloat_Int#` — arity 1
@@ -890,7 +894,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `fetchSubWordAddr#` — arity 3
 - [ ] `fetchXorIntArray#` — arity 4
 - [ ] `fetchXorWordAddr#` — arity 3
-- [ ] `finalizeWeak#` — arity 2
 - [ ] `fmaddDoubleX2#` — arity 3
 - [ ] `fmaddDoubleX4#` — arity 3
 - [ ] `fmaddDoubleX8#` — arity 3
@@ -1114,8 +1117,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `minusWord8X32#` — arity 2
 - [ ] `minusWord8X64#` — arity 2
 - [ ] `mkApUpd0#` — arity 1
-- [ ] `mkWeak#` — arity 4
-- [ ] `mkWeakNoFinalizer#` — arity 3
 - [ ] `mulIntMayOflo#` — arity 2
 - [ ] `negateInt16X32#` — arity 1
 - [ ] `negateInt8X32#` — arity 1

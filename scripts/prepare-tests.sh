@@ -55,6 +55,7 @@ python3 scripts/prepare-address-fields.py
 python3 scripts/prepare-data-to-tag.py
 "$fixture_bin" mutvar
 "$fixture_bin" stable-pointers
+"$fixture_bin" weak-explicit
 "$fixture_bin" shrink-bytearrays
 "$fixture_bin" fetch-add-int-array
 python3 scripts/prepare-managed-mvars.py --refresh

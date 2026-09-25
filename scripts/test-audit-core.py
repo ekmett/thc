@@ -2167,5 +2167,57 @@ class OriginalDupAuditTest(unittest.TestCase):
             self.assertFalse(self.audit(module)['accepted'])
 
 
+class ExplicitWeakContractTest(unittest.TestCase):
+    """Structural rejection controls; native semantics come from WeakAudit.hs."""
+    def fixture(self, name):
+        state = dict(kind='void', primReps=[], evaluated=True)
+        weak = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
+        roles = dict(state=state, weak=weak, boxed=REFERENCE, action=CLOSURE, flag=LONG)
+        contract = CAP['managedWeakPrimitives'][name]
+        parameters = [dict(id=f'a{i}', lifted=roles[role]['primReps'] == ['BoxedRep (Just Lifted)'],
+                           rep=copy.deepcopy(roles[role])) for i, role in enumerate(contract['arguments'])]
+        result = tuple_rep(*(copy.deepcopy(roles[role]) for role in contract['result']))
+        call = ['app', ['prim', name], [[*var(p['id']), dict(rep=copy.deepcopy(p['rep']))] for p in parameters],
+                [p['lifted'] for p in parameters], False, False, dict(rep=result)]
+        body = ['case', call, 'result', [['default', None, [], [*lit(0), dict(rep=LONG)]]],
+                dict(rep=LONG, binder=dict(id='result', lifted=False, rep=copy.deepcopy(result)))]
+        root = dict(bind('root', ['lam', parameters, body, dict(rep=CLOSURE, resultRep=LONG)]),
+                    arity=len(parameters), rep=CLOSURE)
+        return dict(schema=1, ghc='9.14.1', bindings=[root], constructors=[])
+
+    def call(self, module):
+        return module['bindings'][0]['expr'][2][1]
+
+    def test_four_exact_contracts_are_partial_and_c_finalizers_stay_rejected(self):
+        self.assertEqual({'mkWeak#', 'mkWeakNoFinalizer#', 'deRefWeak#', 'finalizeWeak#'},
+                         set(CAP['managedWeakPrimitives']))
+        for name in CAP['managedWeakPrimitives']:
+            module = self.fixture(name)
+            report = run_tuple(module)
+            self.assertTrue(report['accepted'], report['issues'])
+            self.call(module)[1][1] = 'addCFinalizerToWeak#'
+            self.assertFalse(run_tuple(module)['accepted'])
+        self.assertNotIn('addCFinalizerToWeak#', CAP['primitives'])
+
+    def test_flags_arity_state_logical_tuple_and_lexical_proofs_cannot_be_forged(self):
+        for name in CAP['managedWeakPrimitives']:
+            for mutation in range(5):
+                module = self.fixture(name)
+                call = self.call(module)
+                if mutation == 0:
+                    call[3][0] = not call[3][0]
+                elif mutation == 1:
+                    call[2].pop(); call[3].pop()
+                elif mutation == 2:
+                    call[2][-1][2]['rep'] = copy.deepcopy(LONG)
+                elif mutation == 3:
+                    call[6]['rep']['components'].pop(0)  # Identical physical reps, missing logical State.
+                else:
+                    module['bindings'][0]['expr'][1][0]['rep'] = dict(kind='address', primReps=['AddrRep'])
+                report = run_tuple(module)
+                self.assertFalse(report['accepted'], (name, mutation))
+                self.assertIn('primitive-representation', {issue['code'] for issue in report['issues']})
+
+
 if __name__ == '__main__':
     unittest.main()
