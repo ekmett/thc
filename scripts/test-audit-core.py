@@ -41,6 +41,34 @@ CLOSURE = dict(REFERENCE, kind='closure', evaluated=True)
 TUPLE_CAP = dict(CAP, aggregateResults=['unboxed-tuple'])
 
 
+class ArchiveReachabilityTest(unittest.TestCase):
+    def report(self, expression, initializers=(), finalizers=(), files=()):
+        root = dict(schema=1, ghc='9.14.1', bindings=[bind('root', expression)], constructors=[])
+        label = lambda name, init: dict(isInitializer=init, unit='pkg', module='M', name=name)
+        archive = dict(schema=2, ghc='9.14.1', unit='pkg', module='M',
+                       foreign=dict(schema=1, execution='not-linked',
+                                    stubs=dict(header='', source='int stub(void) { return 1; }',
+                                               initializers=[label(name, True) for name in initializers],
+                                               finalizers=[label(name, False) for name in finalizers]), files=list(files)),
+                       bindings=[bind('pkg:M.cold', lit(9))], constructors=[])
+        return audit_core.Audit([('root.json', root), ('archive.json', archive)], CAP).run(['root'])
+
+    def test_unused_archive_is_validated_but_not_executed(self):
+        report = self.report(lit(7))
+        self.assertTrue(report['accepted'], report['issues'])
+        self.assertEqual(['root'], [item['id'] for item in report['reachableBindings']])
+
+    def test_reachable_archive_and_global_registration_still_reject(self):
+        for report in (self.report(var('pkg:M.cold')),
+                       self.report(lit(7), initializers=('start',)),
+                       self.report(lit(7), finalizers=('stop',)),
+                       self.report(lit(7), files=(dict(language='RawObject', source='opaque', extension='.o'),)),
+                       self.report(lit(7), files=(dict(language='C', source='void init(void) __attribute__((constructor));', extension='.c'),))):
+            self.assertFalse(report['accepted'])
+            self.assertIn('module-format', {issue['code'] for issue in report['issues']})
+            self.assertIn('archive-only', str(report['issues']))
+
+
 def tuple_rep(*components):
     return dict(aggregate='unboxed-tuple', kind='unknown', evaluated=True,
                 components=list(components), primReps=[r for c in components for r in c['primReps']])
@@ -892,7 +920,7 @@ class AuditTest(unittest.TestCase):
         thread = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
         action = dict(kind='closure', primReps=['BoxedRep (Just Lifted)'], evaluated=True)
         payload = dict(kind='data', primReps=['BoxedRep (Just Lifted)'], evaluated=False)
-        roles = {'state': state, 'threadId': thread, 'action': action, 'payload': payload}
+        roles = {'state': state, 'threadId': thread, 'action': action, 'payload': payload, 'int': LONG}
         contracts = CAP['managedThreadPrimitives']
         self.assertEqual({name: len(spec['arguments']) for name, spec in contracts.items()},
                          {name: CAP['primitives'][name] for name in contracts})
@@ -1446,6 +1474,59 @@ class OriginalStackCloneAuditTest(unittest.TestCase):
                 self.assertTrue(any('stored State' in str(issue['detail']) for issue in report['issues']))
         module = self.fixture(); state = self.call(module)[2][0][2]
         self.call(module)[2][0] = ['lit', 'int', '7', state]; self.reject(module)
+
+
+class LibdwUnavailableAuditTest(unittest.TestCase):
+    """Original declaration certificates; synthetic consumers, no closure claim."""
+    resource = ROOT.parent / 'src/test/resources/core/original-libdw-descriptors.json'
+
+    def fixture(self, declaration):
+        declaration = copy.deepcopy(declaration)
+        parameters = [dict(id=f'arg-{i}', lifted=False, rep=dict(rep, evaluated=True))
+                      for i, rep in enumerate(declaration['argumentReps'])]
+        call = ['app', ['var', 'synthetic-fcall-id', dict(rep=CLOSURE)],
+                [['var', p['id'], dict(rep=p['rep'])] for p in parameters],
+                [False] * len(parameters), False, False,
+                dict(rep=declaration['resultRep'], foreignCall=declaration)]
+        body = ['case', call, 'tuple-result', [['default', None, [], [*lit(0), dict(rep=LONG)]]],
+                dict(rep=LONG, binder=dict(id='tuple-result', lifted=False, rep=dict(declaration['resultRep'], evaluated=True)))]
+        wrapper = dict(bind('consumer', ['lam', parameters, body, dict(rep=CLOSURE, resultRep=LONG)]),
+                       rep=CLOSURE, arity=len(parameters))
+        return dict(schema=1, ghc='9.14.1', bindings=[wrapper], constructors=[])
+
+    def audit(self, module, cap=CAP):
+        return audit_core.Audit([('synthetic-libdw-consumer.json', module)], cap).run(['consumer'])
+
+    def test_original_declarations_admitted_only_with_explicit_unavailable_backend(self):
+        declarations = json.loads(self.resource.read_text())
+        self.assertEqual(set(core_original_foreign.LIBDW_UNAVAILABLE),
+                         {d['target']['symbol'] for d in declarations})
+        for declaration in declarations:
+            module = self.fixture(declaration)
+            result = self.audit(module)
+            self.assertTrue(result['accepted'], result)
+            self.assertEqual([], result['missingGlobals'])
+            self.assertEqual([declaration['target']['symbol']], [c['symbol'] for c in result['foreignCalls']])
+            result = self.audit(module, dict(CAP, managedForeignCalls=[]))
+            self.assertFalse(result['accepted'])
+            self.assertEqual([], result['foreignCalls'])
+
+    def test_descriptor_and_stored_operand_spoofs_rejected(self):
+        for declaration in json.loads(self.resource.read_text()):
+            target = declaration['target']
+            for incorrect in [dict(declaration, schema=1.0), dict(declaration, safety='safe'),
+                              dict(declaration, arity=0), dict(declaration, convention='capi'),
+                              dict(declaration, target=dict(target, unit='main')),
+                              dict(declaration, target=dict(target, isFunction=False)),
+                              dict(declaration, resultRep=LONG)]:
+                result = self.audit(self.fixture(incorrect))
+                self.assertFalse(result['accepted'], result)
+                self.assertEqual([], result['foreignCalls'])
+            module = self.fixture(declaration)
+            module['bindings'][0]['expr'][1][0]['rep'] = LONG
+            result = self.audit(module)
+            self.assertFalse(result['accepted'], result)
+            self.assertEqual([], result['foreignCalls'])
 
 
 class OriginalStackInfoAuditTest(unittest.TestCase):

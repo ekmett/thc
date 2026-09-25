@@ -176,6 +176,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         CoreManagedFiles.validateHeads(bindings)
         CoreMd5Foreign.validateHeads(bindings)
         CoreGmpForeign.validateHeads(bindings)
+        CoreLibdwForeign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(bindings, constructors)
             CoreInputCalls.validate(bindings, constructors)
@@ -1333,8 +1334,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
             val gmp = CoreGmpForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val libdw = CoreLibdwForeign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && capi == null &&
-                !stableFree && managedFile == null && javascript == null && md5 == null && gmp == null)
+                !stableFree && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null)
                 CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -1513,6 +1516,29 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ManagedFileOp.IS_TERMINAL -> b.endFileIsTerminal()
                         ManagedFileOp.DEVICE_TYPE -> b.endFileDeviceType()
                     }
+                }
+            } else if (libdw != null) {
+                CoreLibdwForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreLibdwForeign.validateOperand(libdw, index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    b.beginBlock()
+                    operands.dropLast(1).forEach { operand ->
+                        b.beginRequireAddress(); operand.emit(e); b.endRequireAddress()
+                    }
+                    b.beginRequireIOState(); operands.last().emit(e); b.endRequireIOState()
+                    if (libdw != LibdwForeignOp.CLEAR) {
+                        b.beginStoreLocal(destination.single())
+                        if (libdw == LibdwForeignOp.LOOKUP) b.emitLoadConstant(1L)
+                        else b.emitLoadConstant(ManagedAddress.nullAddress())
+                        b.endStoreLocal()
+                    }
+                    b.endBlock()
                 }
             } else if (gmp != null) {
                 CoreGmpForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -1824,6 +1850,15 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     e.builder.beginGetCurrentCCS(destination[0])
                     state.emit(e)
                     e.builder.endGetCurrentCCS()
+                }
+            } else if (fn[0] == "prim" && fn[1] == "threadStatus#") {
+                CoreGuestThreads.validate("threadStatus#", args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.map { argument(it, scope, false) }
+                CoreGuestThreads.validate("threadStatus#", operands.map { it.proof }, flags, tupleProof)
+                tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginThreadStatus(destination[0], destination[1], destination[2])
+                    operands.forEach { it.emit(e) }
+                    e.builder.endThreadStatus()
                 }
             } else if (fn[0] == "prim" && fn[1] in listOf("fork#", "myThreadId#", "killThread#")) {
                 val name = fn[1] as String

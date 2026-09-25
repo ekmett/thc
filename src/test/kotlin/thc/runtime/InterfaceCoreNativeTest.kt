@@ -23,7 +23,9 @@ class InterfaceCoreNativeTest {
     private val entries = listOf("opaqueEntry", "inlineEntry", "recursiveEntry", "coercionEntry", "wrapperEntry")
     private fun source(entry: String = "opaqueEntry"): Map<String, Any?> {
         val modules = StringBuilder("[")
-        assertNull(CorePackageManifest.appendModules(modules, File(directory, "packages.json").absolutePath))
+        val layout = CorePackageManifest.appendModules(modules, File(directory, "packages.json").absolutePath)
+        assertNotNull(layout, "selected installed Core carries the target-derived layout")
+        assertEquals("fixture", layout!!.compilerAbi)
         modules.append(']')
         val name = if (entry == "coercionEntry") "CBVCoercionAudit" else "InterfaceLibrary"
         return (Json.parse(modules.toString()) as List<Map<String, Any?>>).single { it["module"] == name }
@@ -62,7 +64,9 @@ class InterfaceCoreNativeTest {
         oracle()
         val direct = Json.parse(File(directory, "InterfaceForeign.json").readText()) as Map<String, Any?>
         val modules = StringBuilder("[")
-        assertNull(CorePackageManifest.appendModules(modules, File(directory, "foreign-packages.json").absolutePath))
+        val layout = CorePackageManifest.appendModules(modules, File(directory, "foreign-packages.json").absolutePath)
+        assertNotNull(layout, "archiving foreign code preserves the selected target layout")
+        assertEquals("fixture", layout!!.compilerAbi)
         modules.append(']')
         val archived = (Json.parse(modules.toString()) as List<Map<String, Any?>>).single()
         assertEquals(2L, archived["schema"])

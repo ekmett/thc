@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 444 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 738 | No declared lowering. |
+| Partial | 445 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 737 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -39,6 +39,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 
 ## Current aggregate and address limits
 
+- threadStatus# returns the exact State#/Int#/Int#/Int# tuple for context-owned Java thread identities. Logical capabilities are monotonically allocated per Java carrier, not physical CPU numbers; forkOn/count/affinity APIs remain unsupported. Registered MVar, black-hole, throwTo and foreign boundaries report their actual managed states. Forked threads retain normal/uncaught-guest completion; a live host carrier outside guest entry remains foreign and keeps its identity on re-entry. Existing throwTo mailboxes are scoped to active guest invocations and do not queue across separate host calls.
+- The native DWARF backend is unavailable, matching GHC 9.14.1 RTS USE_LIBDW=0: original libdwPoolTake/libdwGetBacktrace return null, libdwLookupLocation returns failure 1 without touching Location, and libdwPoolClear is a no-op. Managed IPE snapshots are separate. Native DWARF frames and libdw finalizer function addresses are not provided.
 - Address operations support managed literal or byte-array backing with checked offsets; no raw pointers. Char# byte-memory operations read an unsigned byte and write the low eight bits of WordRep. Ordered Addr# comparisons are limited to offsets in the same backing allocation or null compared with itself; unrelated addresses have no synthetic order. Exact GHC MD5 calls use checked Sulong buffer views. Original localeEncoding/hs_iconv_open/hs_iconv_close/hs_iconv use Linux GNU LP64 native iconv with context-owned opaque handles, explicit native-buffer copies, checked disjoint pointer/count/byte regions, cursor writeback and captured errno; Original base_strerror_r uses the pinned GHC wrapper, a checked writable guest buffer, and a short-lived native scratch copy with thread-local C message locale and complete buffer writeback. No general native-pointer FFI is admitted.
 - shrinkMutableByteArray# changes the logical size of a THC-owned allocation in place, preserving frozen and pinned aliases while retaining backing capacity. Managed byte, scalar, vector, address and C-bitcode buffer accesses observe the shorter bound; partial truncation of a managed pointer cell is rejected. Host-injected raw byte arrays cannot be shrunk in place.
 - fetchAddIntArray# atomically returns the previous signed machine Int and writes the wrapped sum under the allocation monitor, with a full memory barrier. It requires a THC-owned mutable byte array and a contained machine-word element; raw host arrays and pointer-cell overlaps are rejected.
@@ -697,6 +699,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `takeMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `thawArray#` — arity 4 — Managed lifted arrays
 - [ ] `thawSmallArray#` — arity 4 — Managed lifted arrays
+- [ ] `threadStatus#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesDoubleX8#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -1386,7 +1389,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `spark#` — arity 2
 - [ ] `stableNameToInt#` — arity 1
 - [ ] `threadLabel#` — arity 2
-- [ ] `threadStatus#` — arity 2
 - [ ] `timesInt16X32#` — arity 2
 - [ ] `timesInt8X32#` — arity 2
 - [ ] `timesInt8X64#` — arity 2

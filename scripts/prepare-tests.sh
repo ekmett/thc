@@ -64,6 +64,7 @@ python3 scripts/prepare-synchronous-exceptions.py
 "$fixture_bin" core-continuation
 "$fixture_bin" live-async
 "$fixture_bin" thread-async
+"$fixture_bin" thread-status
 "$fixture_bin" uncaught-self
 "$fixture_bin" mask-functions
 "$fixture_bin" interface-core
@@ -81,6 +82,7 @@ esac
 "$fixture_bin" original-open
 "$fixture_bin" original-rts-locks --require-supported
 "$fixture_bin" original-stdio-seek
+"$fixture_bin" libdw-unavailable
 "$fixture_bin" original-strerror
 "$fixture_bin" original-stdio-truncate
 "$fixture_bin" original-fd-ready

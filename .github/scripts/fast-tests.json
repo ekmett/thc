@@ -523,6 +523,18 @@
       "junit": ["thc.runtime.Int32ByteOffsetTest"],
       "python": []
     },
+    "compiler/test-fixtures/ThreadStatusAudit.hs": {
+      "junit": ["thc.runtime.ThreadStatusNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/ThreadStatusNative.hs": {
+      "junit": ["thc.runtime.ThreadStatusNativeTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/ThreadStatusFixtures.hs": {
+      "junit": ["thc.runtime.ThreadStatusNativeTest"],
+      "python": []
+    },
     "compiler/test-fixtures/ThreadAsyncAudit.hs": {
       "junit": ["thc.runtime.ThreadAsyncNativeTest"],
       "python": []
@@ -957,9 +969,11 @@
         "thc.runtime.OriginalRtsLocksTest",
         "thc.runtime.OriginalPosixDupNativeTest",
         "thc.runtime.OriginalGmpTest",
+        "thc.runtime.LibdwUnavailableTest",
         "thc.runtime.OriginalFdReadyNativeTest",
         "thc.runtime.ManagedAddressReadTest",
         "thc.runtime.ThreadAsyncNativeTest",
+        "thc.runtime.ThreadStatusNativeTest",
         "thc.runtime.UncaughtSelfNativeTest",
         "thc.runtime.Int32ByteOffsetTest",
         "thc.runtime.NarrowByteOffsetTest",
@@ -1007,6 +1021,11 @@
       ],
       "python": []
     },
+    "test/haskell-fixtures/LibdwUnavailableFixtures.hs": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
+    "compiler/test-fixtures/LibdwUnavailableNative.hs": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
+    "src/main/kotlin/thc/runtime/CoreLibdwForeign.kt": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/kotlin/thc/runtime/OriginalLibdwExpression.kt": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
+    "src/test/resources/core/original-libdw-descriptors.json": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
     "test/haskell-fixtures/OriginalGmpFixtures.hs": {
       "junit": ["thc.runtime.OriginalGmpTest"], "python": []
     },
@@ -1179,7 +1198,20 @@
       "haskell": ["driver-tests"]
     },
     "src/THC/Driver/Installed.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
+      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "src/main/kotlin/thc/runtime/TargetLayout.kt": {
+      "junit": ["thc.CoreZipBundleTest", "thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"],
+      "python": []
+    },
+    "src/THC/Driver/Wired.hs": {
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"], "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "compiler/target-layout.c": {
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"], "python": [],
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/run-pure/run-pure.cabal": {
       "junit": [],

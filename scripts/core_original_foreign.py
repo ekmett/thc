@@ -25,6 +25,13 @@ GMP_OPERATIONS = {
     'integer_gmp_mpn_tdiv_r': ((GMP_ARRAY, GMP_ARRAY, 'IntRep', GMP_ARRAY, 'IntRep', None), (None,)),
 }
 GMP_SYMBOLS = frozenset(GMP_OPERATIONS)
+# The managed runtime has no native DWARF backend, matching RTS USE_LIBDW=0.
+LIBDW_UNAVAILABLE = {
+    'libdwPoolTake': ((None,), (None, 'AddrRep')),
+    'libdwGetBacktrace': (('AddrRep', None), (None, 'AddrRep')),
+    'libdwLookupLocation': (('AddrRep', 'AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
+    'libdwPoolClear': ((None,), (None,)),
+}
 SEEK_CONSTANTS = frozenset((
     'ghczuwrapperZC1ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuSET',
     'ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR',
@@ -36,6 +43,8 @@ STACK_INFO = frozenset(('getStackInfoTableAddrzh', 'getInfoTableAddrszh', 'looku
     'getStackFieldszh', 'advanceStackFrameLocationzh'))
 
 OPERATIONS = {
+    **{symbol: ('ccall', 'unsafe', arguments, output)
+       for symbol, (arguments, output) in LIBDW_UNAVAILABLE.items()},
     **{symbol: ('ccall', 'unsafe', arguments, output)
        for symbol, (arguments, output) in GMP_OPERATIONS.items()},
     '__hscore_sizeof_stat': ('ccall', 'unsafe', (None,), (None, 'IntRep')),

@@ -50,9 +50,21 @@ class Audit:
         self.chains = {}
         self.queue = deque()
         self.linked_foreign = {}
+        self.archive_bindings = {}
         for source, module in modules:
             linked = (type(module.get('schema')) is int and module['schema'] == 2 and
                       'foreignLink' in module and core_package_manifest.linked_foreign(module))
+            archive = core_package_manifest.foreign_execution_issue(module) if not linked else None
+            foreign = module.get('foreign')
+            stubs = foreign.get('stubs') if isinstance(foreign, dict) else None
+            registration = ((isinstance(foreign, dict) and bool(foreign.get('files'))) or
+                            (isinstance(stubs, dict) and
+                             bool(stubs.get('initializers') or stubs.get('finalizers'))))
+            if archive:
+                try:
+                    core_package_manifest.validate_archive_only_foreign(module)
+                except ValueError as error:
+                    self.issue('module-format', None, source, str(error))
             if linked:
                 for symbol in module['foreignLink']['symbols']:
                     key = (module['foreignLink']['unit'], symbol)
@@ -60,10 +72,11 @@ class Audit:
                         self.issue('module-format', None, source, 'Duplicate linked CAPI symbol ' + symbol)
                     self.linked_foreign[key] = module['foreignLink']
             if (type(module.get('schema')) is not int or
-                    (module['schema'] != 1 and not linked) or
-                    module.get('ghc') != '9.14.1' or ('foreign' in module and not linked)):
+                    (module['schema'] != 1 and not linked and not archive) or
+                    module.get('ghc') != '9.14.1' or
+                    ('foreign' in module and not linked and not archive) or registration):
                 self.issue('module-format', None, source,
-                           core_package_manifest.foreign_execution_issue(module) or
+                           archive or
                            'Requires executable Core schema 1 / GHC 9.14.1 without foreign artifacts')
             for binding in module.get('bindings', []):
                 key = binding.get('id')
@@ -75,6 +88,8 @@ class Audit:
                 else:
                     self.bindings[key] = binding
                     self.sources[key] = source
+                    if archive and not registration:
+                        self.archive_bindings[key] = (source, archive)
             for constructor in module.get('constructors', []):
                 key = constructor.get('id')
                 if not isinstance(key, str):
@@ -594,6 +609,7 @@ class Audit:
                 if (symbol in core_original_foreign.STACK_INFO or symbol in core_original_foreign.SEEK_CONSTANTS
                         or symbol in core_original_foreign.STAT_IMAGE
                         or symbol in core_original_foreign.GMP_SYMBOLS
+                        or symbol in core_original_foreign.LIBDW_UNAVAILABLE
                         or symbol in ('lockFile', 'unlockFile', '__hscore_fstat', '__hscore_open', 'dup', 'dup2', 'fdReady', 'localeEncoding', 'hs_iconv_open', 'hs_iconv_close', 'hs_iconv',
                                       'base_strerror_r')):
                     for index, (argument, primitive) in enumerate(zip(arguments, core_original_foreign.OPERATIONS[symbol][2])):
@@ -1165,6 +1181,8 @@ class Audit:
                         kind, reps = rep.get('kind'), rep.get('primReps')
                         if role == 'state':
                             return kind == 'void' and reps == []
+                        if role == 'int':
+                            return kind == 'long' and reps == ['IntRep']
                         if role == 'threadId':
                             return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
                         if role == 'action':
@@ -1189,7 +1207,7 @@ class Audit:
                         valid = (self.is_tuple(proof) and proof.get('kind') == 'unknown' and
                                  isinstance(fields, list) and len(fields) == len(result) and
                                  all(thread_role(rep, role) for rep, role in zip(fields, result)) and
-                                 proof.get('primReps') == ['BoxedRep (Just Unlifted)'])
+                                 proof.get('primReps') == [rep for field in fields for rep in field['primReps']])
                     else:
                         valid = thread_role(proof, result)
                     if not valid:
@@ -1650,8 +1668,8 @@ class Audit:
             self.issue('io-main-boundary', key, '/entry', 'requires IO () with State# RealWorld -> (# State#, () #)')
 
     def run(self, entries, io_main=False):
-        if io_main and len(entries) != 1:
-            raise ValueError('IO main audit requires exactly one entry')
+        # Executable shutdown is another exact IO () root in the same package
+        # closure. Each root receives the same boundary check below.
         roots = []
         for entry in entries:
             candidates = [entry] if entry in self.bindings else [k for k, b in self.bindings.items() if b.get('name') == entry]
@@ -1678,9 +1696,15 @@ class Audit:
                 if key not in self.chains:
                     self.chains[key] = [key]
                     self.queue.append(key)
+        reported_archives = set()
         while self.queue:
             key = self.queue.popleft()
             self.reachable.append(key)
+            if key in self.archive_bindings:
+                source, detail = self.archive_bindings[key]
+                if source not in reported_archives:
+                    self.issue('module-format', key, source, detail)
+                    reported_archives.add(source)
             binding = self.bindings[key]
             self.binding_metadata(binding, key, '/binding')
             if is_sum(binding.get('rep')) or is_sum(self.expression_rep(binding.get('expr'))):
