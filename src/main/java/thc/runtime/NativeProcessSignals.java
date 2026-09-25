@@ -80,10 +80,12 @@ public final class NativeProcessSignals implements AutoCloseable {
     }
     public void wake() {
         try { Api.WAKE.invokeExact(session); }
+        catch (RuntimeException | Error failure) { throw failure; }
         catch (Throwable failure) { throw failed("Process signal wake failed", failure); }
     }
     public void resetWake() {
         try { Api.RESET.invokeExact(session); }
+        catch (RuntimeException | Error failure) { throw failure; }
         catch (Throwable failure) { throw failed("Process signal wake reset failed", failure); }
     }
     /** Caller has stopped and joined the reader and unregistered its interrupter. */
@@ -102,6 +104,7 @@ public final class NativeProcessSignals implements AutoCloseable {
     public static void exitBySignal(int signal) {
         if (signal <= 0 || signal >= 65) throw new IllegalArgumentException("Invalid process exit signal");
         try { Api.EXIT.invokeExact(signal); }
+        catch (RuntimeException | Error failure) { throw failure; }
         catch (Throwable failure) { throw failed("Process signal exit failed", failure); }
         throw new AssertionError("Signal exit returned");
     }
