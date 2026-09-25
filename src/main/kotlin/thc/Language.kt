@@ -139,12 +139,12 @@ object CoreModules {
         fun finish(): Map<String, Any?> {
             require(count != 0) { "No Core modules supplied" }
             return mapOf("schema" to 1L, "ghc" to "9.14.1", "module" to "THC.Bundle",
-            "bindings" to bindings.values.toList(), "constructors" to constructors.values.toList(),
-            "bindingOrigins" to bindingOrigins,
-            "archiveBindings" to archiveBindings,
-            "managedRegistrations" to admissions,
-            "foreignLinks" to foreignLinks.values.toList(),
-            "sourceFiles" to sourceFiles.values.toList(), "sourceSpans" to sourceSpans.values.toList())
+                "bindings" to bindings.values.toList(), "constructors" to constructors.values.toList(),
+                "bindingOrigins" to bindingOrigins,
+                "archiveBindings" to archiveBindings,
+                "managedRegistrations" to admissions.toList(),
+                "foreignLinks" to foreignLinks.values.toList(),
+                "sourceFiles" to sourceFiles.values.toList(), "sourceSpans" to sourceSpans.values.toList())
         }
     }
 

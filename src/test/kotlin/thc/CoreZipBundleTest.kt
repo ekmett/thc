@@ -319,7 +319,7 @@ class CoreZipBundleTest {
         assertEquals(64, (input["packageManifestSha256"] as String).length)
         @Suppress("UNCHECKED_CAST")
         val decoded = input as Map<String, Any?>
-        Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
+        Context.newBuilder("thc").allowExperimentalOptions(true).allowAllAccess(true).build().use { context ->
             assertTrue(assertThrows(RuntimeException::class.java) {
                 context.eval("thc", Json.stringify(decoded - "packageCapability"))
             }.message!!.contains("capability"))
@@ -341,12 +341,21 @@ class CoreZipBundleTest {
                 assertEquals(51L, context.eval("thc", selected).execute().asLong(), backend)
             }
         }
-        Files.writeString(path, "{}")
-        assertThrows(RuntimeException::class.java) {
+        val archive = temporary.resolve("pkg-a.zip")
+        val originalArchive = Files.readAllBytes(archive)
+        Files.write(archive, originalArchive + 0.toByte())
+        assertTrue(assertThrows(RuntimeException::class.java) {
             Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
                 context.eval("thc", request)
             }
-        }
+        }.message!!.contains("hash mismatch"))
+        Files.write(archive, originalArchive)
+        Files.writeString(path, "{}")
+        assertTrue(assertThrows(RuntimeException::class.java) {
+            Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
+                context.eval("thc", request)
+            }
+        }.message!!.contains("manifest changed after request"))
     }
 
     @Test fun archiveInventoryIdentityAndBothHashesAreRequired() {
