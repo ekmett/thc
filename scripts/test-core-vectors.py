@@ -29,6 +29,68 @@ def fixture():
     return dict(schema=1, ghc='9.14.1', bindings=[dict(id='root', name='root', lifted=True, arity=0,
         rep=CLOSURE, expr=['lam', [], body, dict(rep=CLOSURE,resultRep=LONG)])], constructors=[])
 class VectorAuditTest(unittest.TestCase):
+    def transport(self, module):
+        cap = dict(CAP, vectorTransport=['arguments', 'results', 'join-arguments', 'join-results', 'tuple-fields', 'let-bindings'])
+        return audit.Audit([('vector-transport', module)], cap).run(['root'])
+
+    def transport_fixture(self, pap=False):
+        module = fixture()
+        body = module['bindings'][0]['expr'][2]
+        original = body[1]
+        formal = dict(id='vector-formal', lifted=False, rep=copy.deepcopy(VECTOR_REP))
+        parameters = [formal] + ([dict(id='unused', lifted=False, rep=copy.deepcopy(LONG))] if pap else [])
+        worker = dict(id='worker', name='worker', lifted=True, arity=len(parameters), rep=CLOSURE,
+                      expr=['lam', parameters, ['var', 'vector-formal', dict(rep=copy.deepcopy(VECTOR_REP))],
+                            dict(rep=CLOSURE, resultRep=copy.deepcopy(VECTOR_REP))])
+        call = ['app', ['var', 'worker', dict(rep=CLOSURE)], [original], [False], False, False,
+                dict(rep=copy.deepcopy(CLOSURE if pap else VECTOR_REP))]
+        if pap:
+            call = ['app', call, [['lit', 'int', '7', dict(rep=LONG)]], [False], False, False,
+                    dict(rep=copy.deepcopy(VECTOR_REP))]
+        body[1] = call
+        module['bindings'].append(worker)
+        return module
+
+    def test_vector_transport_requires_explicit_capability_and_exact_shapes(self):
+        for pap in (False, True):
+            module = self.transport_fixture(pap)
+            self.assertTrue(self.transport(module)['accepted'], self.transport(module)['issues'])
+            self.assertFalse(run(module)['accepted'])
+            for wrong in (VECTOR32_REP, VECTOR_WORD32_REP, TUPLE_REP):
+                changed = copy.deepcopy(module)
+                changed['bindings'][1]['expr'][1][0]['rep'] = copy.deepcopy(wrong)
+                self.assertFalse(self.transport(changed)['accepted'])
+            changed = copy.deepcopy(module)
+            changed['bindings'][1]['expr'][1][0]['lifted'] = True
+            self.assertFalse(self.transport(changed)['accepted'])
+
+    def test_redundant_aggregate_vector_annotation_is_checked_without_relabelling(self):
+        state = dict(kind='void', evaluated=True, primReps=[])
+        proof = dict(copy.deepcopy(VECTOR_REP), kind='unknown', aggregate='unboxed-tuple',
+                     components=[state, copy.deepcopy(VECTOR_REP)])
+        self.assertIsNone(proof_error(proof))
+        self.assertNotEqual(audit.Audit.shape(proof), audit.Audit.shape(VECTOR_REP))
+        for wrong in (VECTOR32_REP['vector'], VECTOR_WORD32_REP['vector'], dict(lanes=2.0, element='Int64ElemRep')):
+            self.assertIsNotNone(proof_error(dict(proof, vector=wrong)))
+        cap = dict(CAP, vectorTransport=['tuple-fields'])
+        checker = audit.Audit([], cap)
+        checker.representation(proof, 'root', 'result')
+        self.assertEqual([], checker.issues)
+        bad = copy.deepcopy(proof)
+        bad['components'][1] = copy.deepcopy(VECTOR32_REP)
+        checker.representation(bad, 'root', 'result')
+        self.assertTrue(checker.issues)
+
+    def test_call_transport_does_not_admit_a_heap_capture(self):
+        module = fixture()
+        body = module['bindings'][0]['expr'][2]
+        body[3][0][3] = ['lam', [], ['var', 'v', dict(rep=copy.deepcopy(VECTOR_REP))],
+                         dict(rep=CLOSURE, resultRep=copy.deepcopy(VECTOR_REP))]
+        body[4]['rep'] = CLOSURE
+        module['bindings'][0]['expr'][3]['resultRep'] = CLOSURE
+        report = self.transport(module)
+        self.assertIn(('vector-boundary', 'vector capture'), {(i['code'], i['detail']) for i in report['issues']})
+
     def test_all_vector_families_require_integer_json_lane_counts(self):
         for original in (VECTOR_REP, VECTOR32_REP, VECTOR16_REP, VECTOR8_REP,
                          VECTOR_WORD8_REP, VECTOR_WORD16_REP, VECTOR_WORD32_REP,

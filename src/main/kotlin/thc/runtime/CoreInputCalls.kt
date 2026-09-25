@@ -46,6 +46,9 @@ internal object CoreInputCalls {
                             if (expected.isTuple || actual.isTuple) {
                                 if (!expected.isTuple || !actual.isTuple || !TupleShape.compatible(expected, actual))
                                     throw UnsupportedCore("Missing or conflicting exact tuple argument proof")
+                            } else if (expected.isVector || actual.isVector) {
+                                if (!expected.isVector || !actual.isVector || !TupleShape.compatible(expected, actual))
+                                    throw UnsupportedCore("Missing or conflicting exact vector argument proof")
                             } else if (expected.isAggregate || actual.isAggregate) TupleShape.requireCompatible(expected, actual, component = true)
                         }
                     }
