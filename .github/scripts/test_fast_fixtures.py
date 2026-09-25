@@ -135,14 +135,14 @@ class FixturePreparationTest(unittest.TestCase):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
         group = manifest['groups']['original-posix-stat']
-        for name in ('OriginalPosixStatTest', 'PosixStatAbiTest'):
+        for name in ('OriginalPosixStatTest', 'PosixStatAbiTest', 'OriginalFstatTest'):
             self.assertEqual('original-posix-stat', owners['thc.runtime.' + name])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-posix-stat']}], group['commands'])
         self.assertIn('"$fixture_bin" original-posix-stat', (project / 'scripts/prepare-tests.sh').read_text())
         self.assertIn('build/original-posix-stat/manifest.json', fast_fixtures.FULL_REQUIRED)
         self.assertIn('build/original-posix-stat', fast_fixtures.FULL_OUTPUT_ROOTS)
         cache = fast_fixtures.fast_inputs
-        self.assertEqual(74, len(cache.ORIGINAL_POSIX_STAT_OUTPUTS))
+        self.assertEqual(90, len(cache.ORIGINAL_POSIX_STAT_OUTPUTS))
         for path in cache.ORIGINAL_POSIX_STAT_OUTPUTS:
             self.assertTrue(cache.allowed_payload(path, {}), path)
         for suffix in ('native/unknown', 'logs/unknown.stdout', 'pre/core/Other.json', 'attempt-0/oracle.json'):

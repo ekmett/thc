@@ -145,7 +145,7 @@ class OriginalPosixStatTest {
             call[3] as List<*>, metadata["rep"])
     }
 
-    private fun rawModule(original: List<Any?>, storedMutation: Int? = null): Map<String, Any?> {
+    internal fun rawModule(original: List<Any?>, storedMutation: Int? = null): Map<String, Any?> {
         val call = copy(original) as MutableList<Any?>
         val descriptor = (call[6] as Map<*, *>)["foreignCall"] as Map<*, *>
         val declared = descriptor["argumentReps"] as List<Map<String, Any?>>
@@ -234,8 +234,8 @@ class OriginalPosixStatTest {
             target["symbol"] = "prefix" + target["symbol"]
             assertNull(validate(aliased))
             target["symbol"] = "__hscore_fstat"
-            assertNull(validate(aliased), "No descriptor-stat semantics may be inferred from memory accessors")
+            assertThrows(RuntimeFault::class.java) { validate(aliased) }
         }
-        assertFalse(File(root, "scripts/core-capabilities.json").readText().contains("\"__hscore_fstat\""))
+        assertTrue(File(root, "scripts/core-capabilities.json").readText().contains("\"__hscore_fstat\""))
     }
 }

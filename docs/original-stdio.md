@@ -118,10 +118,14 @@ Haskell preparation captures real native stat images and type observations,
 while Kotlin verifies original pre/post Core and both first-installed backends.
 Darwin is explicitly excluded pending authentic matching declaration proofs.
 
-`fstat` remains unsupported. Public Truffle channels expose size but no
-authoritative descriptor metadata snapshot: path queries break after rename,
-unlink or replacement, and cached mode bits miss subsequent host `chmod`.
-No host metadata is fabricated for opaque embedding streams or context fds.
+The exact original `__hscore_fstat` declaration is supported only through the
+explicit Linux x86_64 [native provider](native-file-provider.md). Its shared
+opened-resource owner supplies bytes and authoritative metadata, including after
+chmod, rename, replacement and unlink. The complete writable managed destination
+is validated before observation and protected through copyback; errors preserve
+the destination and success preserves errno. Ungranted embedding streams and
+ordinary public Truffle channels remain unsupported (ENOTSUP), rather than
+fabricating metadata from paths or treating context descriptors as host fds.
 
-Regular-file open/stat/locking, descriptors from other processes, arbitrary native
+General original Handle open/locking, descriptors from other processes, arbitrary native
 pointer buffers, and generic Sulong symbol interposition are not established here.

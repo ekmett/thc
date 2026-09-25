@@ -164,7 +164,7 @@ ORIGINAL_GMP_OUTPUTS = frozenset("build/original-gmp/" + name for name in (
 ))
 
 ORIGINAL_POSIX_STAT_ENTRIES = ("originalStatSize", "originalStatDev", "originalStatIno",
-                             "originalStatMode", "originalStatLength", "originalStatTypes")
+                             "originalStatMode", "originalStatLength", "originalStatTypes", "originalFstat", "originalFstatErrno")
 ORIGINAL_POSIX_STAT_OUTPUTS = frozenset("build/original-posix-stat/" + name for name in (
     "manifest.json", "oracle.json", "native/oracle", "native/sample.bin",
     *(f"logs/{label}.{suffix}" for label in (

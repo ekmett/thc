@@ -16,7 +16,7 @@ are different claims; each report identifies which it establishes.
 | Mutable references | [ST/STRef with lazy lifted storage](mutvars.md) |
 | MVars | [Managed cells, lazy payloads and blocking handoff](managed-mvars.md); a Handle IO foundation, not complete Handle support |
 | Locale and iconv | [Original native glibc/Sulong imports](original-iconv.md); explicit full-Core proof group, not complete Handle/IO |
-| Native file ownership | [Opt-in opened-resource provider proof](native-file-provider.md); no CLI wiring or original fstat admission yet |
+| Native file ownership | [Opt-in opened-resource provider and original fstat](native-file-provider.md); no CLI wiring or RTS locking |
 | Threads | [Asynchronous exceptions and resumable thunk evaluation](async-exceptions.md); Java thread identities, masking and interruptible MVar waits |
 | ShortByteString | [Pack, length, unpack, uncons, comparison, prefix and suffix](bytearrays.md); [public slicing](library-coverage.md) |
 | Boxed arrays | [Public fixed-bounds STArray and lazy elements](core-evidence.md#lifted-boxed-array-storage); [clone, freeze and thaw slices](array-slices.md) |

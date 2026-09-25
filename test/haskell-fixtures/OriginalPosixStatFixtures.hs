@@ -38,7 +38,8 @@ prepareLinux root = do
   let directory = "build/original-posix-stat"
       source = "compiler/test-fixtures/OriginalPosixStatAudit.hs"
       driver = "compiler/test-fixtures/OriginalPosixStatNative.hs"
-      entries = ["originalStatSize", "originalStatDev", "originalStatIno", "originalStatMode", "originalStatLength", "originalStatTypes"]
+      entries = ["originalStatSize", "originalStatDev", "originalStatIno", "originalStatMode", "originalStatLength", "originalStatTypes",
+        "originalFstat", "originalFstatErrno"]
       execute = runLogged 180 root (directory </> "logs")
   createDirectoryIfMissing True (root </> directory </> "native")
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
@@ -55,10 +56,10 @@ prepareLinux root = do
     "-package", "ghc-internal", "-icompiler/test-fixtures", "-odir", root </> directory </> "native",
     "-hidir", root </> directory </> "native", driver, "-o", root </> binary]
   observed <- execute "native-run" [] (root </> binary) [root </> directory </> "native"]
-  (size,images,modes) <- maybe (die "Malformed original stat observations") pure
-    (readMaybe (BSC.unpack (commandStdout observed)) :: Maybe (Integer, [([Int],[Integer])], [(Integer,Integer)]))
+  (size,images,modes,fstats) <- maybe (die "Malformed original stat observations") pure
+    (readMaybe (BSC.unpack (commandStdout observed)) :: Maybe (Integer, [([Int],[Integer])], [(Integer,Integer)], [(String,Integer,Integer,[Integer],Bool)]))
   let oracle = directory </> "oracle.json"
-  writeJson (root </> oracle) $ object ["size" .= size, "images" .= images, "modes" .= modes]
+  writeJson (root </> oracle) $ object ["size" .= size, "images" .= images, "modes" .= modes, "fstats" .= fstats]
   exports <- forM ["pre","post"] $ \stage -> do
     let core = directory </> stage </> "core"
         modules = [core </> "OriginalPosixStatAudit.json",core </> "THC.InterfaceClosure.json"]

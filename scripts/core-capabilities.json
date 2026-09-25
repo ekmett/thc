@@ -38,6 +38,7 @@
     "ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite",
     "__hscore_get_errno",
     "__hscore_sizeof_stat",
+    "__hscore_fstat",
     "__hscore_st_dev",
     "__hscore_st_ino",
     "__hscore_st_mode",
