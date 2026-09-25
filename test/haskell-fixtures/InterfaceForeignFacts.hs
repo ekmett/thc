@@ -1,10 +1,13 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
-module InterfaceForeignFacts (prepareForeignAssociation, inspectInstalledBound) where
+module InterfaceForeignFacts (prepareForeignAssociation, prepareTypedForeignAssociation, inspectInstalledBound) where
 
 import Control.Monad (forM, unless)
-import Data.Aeson (Value(..), object, (.=))
+import Data.Aeson (Value(..), object, (.=), eitherDecodeStrict')
+import qualified Data.Aeson.KeyMap as KeyMap
+import qualified Data.ByteString.Char8 as BSC
+import Data.Foldable (toList)
 import Data.List (isInfixOf, sortOn)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (isJust, mapMaybe)
@@ -17,7 +20,7 @@ import GHC.Iface.Ext.Fields (getExtensibleFields)
 import GHC.Tc.Utils.TcType (tcSplitPiTys, tcSplitIOType_maybe)
 import GHC.Types.RepType (typePrimRep)
 import qualified GHC.Unit.Module.WholeCoreBindings as ForeignCore
-import System.Directory (copyFile, createDirectoryIfMissing, renameFile)
+import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist, renameFile)
 import System.Exit (die)
 import System.FilePath ((</>), takeDirectory)
 import FixtureSupport (CommandResult, runLogged, writeJson)
@@ -103,6 +106,9 @@ prepareForeignAssociation root directory ghc libdir unitName = do
       check (all (not . isFCallId) referenced) "Export binder unexpectedly has foreign-call IdDetails"
       check (Map.null (getExtensibleFields (mi_ext_fields raw))) "Unexpected typed interface extension"
       rendered <- interfaceCoreJSON ["unit-qualified"] core
+      original <- either die pure (eitherDecodeStrict' (BSC.pack rendered))
+      check (case original of Object fields -> not (KeyMap.member "staticForeignExports" fields); _ -> False)
+        "Unannotated interface acquired a fabricated static-export inventory"
       writeFile (root </> directory </> "foreign-alias" </> variant ++ ".json") rendered
       pure (facts, declarations, exports, header, cSource, object
         ["variant" .= variant, "symbol" .= symbol, "facts" .= facts,
@@ -122,6 +128,102 @@ prepareForeignAssociation root directory ghc libdir unitName = do
          "sourceDeleted" .= True, "variants" .= [a, b]]
     _ -> die "Expected exactly two foreign association controls"
   pure commands
+
+-- The same original aliases with the opt-in producer annotation. Compile in
+-- separate processes, remove source targets, then recover through fresh GHC
+-- interface sessions: no plugin-side registry can supply these associations.
+prepareTypedForeignAssociation :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> String -> String -> FilePath -> String -> IO [CommandResult]
+prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUnit pluginDb pluginUnit = do
+  let variants = [("a", "InterfaceForeignAlias", "thc_interface_alias_a"),
+                  ("b", "InterfaceForeignAlias", "thc_interface_alias_b"),
+                  ("signatures", "ForeignExportSignatures", "unused")]
+      sourceFor name = directory </> "typed-export-source" </> name ++ ".hs"
+  createDirectoryIfMissing True (root </> directory </> "typed-export-source")
+  mapM_ (\name -> copyFile (root </> "compiler/test-fixtures" </> name ++ ".hs") (root </> sourceFor name))
+    ["InterfaceForeignAlias", "ForeignExportSignatures"]
+  commands <- forM variants $ \(variant, name, symbol) -> do
+    let output = directory </> "typed-foreign-exports" </> variant
+    createDirectoryIfMissing True (root </> output)
+    compiled <- runLogged 180 root (directory </> "logs") ("typed-foreign-export-" ++ variant) [] ghc
+      ["-c", "-O2", "-fforce-recomp", "-dcore-lint", "-this-unit-id", unitName,
+       "-fwrite-if-simplified-core", "-DTHC_FOREIGN_C_LABEL=\"" ++ symbol ++ "\"",
+       "-package-db", pluginDb, "-plugin-package-id", pluginUnit, "-fplugin=THC.Plugin",
+       "-fplugin-opt=THC.Plugin:" ++ output </> "direct", "-fplugin-opt=THC.Plugin:post-tidy",
+       "-fplugin-opt=THC.Plugin:foreign-export-associations",
+       "-odir", output, "-hidir", output, "-stubdir", output, sourceFor name]
+    let database = root </> output </> "package.conf.d"
+        conf = root </> output </> "package.conf"
+        run label = runLogged 180 root (directory </> "logs") ("typed-export-" ++ variant ++ "-" ++ label) [] ghcPkg
+    exists <- doesDirectoryExist database
+    initialized <- if exists then pure [] else (:[]) <$> run "init" ["init", database]
+    writeFile conf $ unlines
+      ["name: thc-interface-fixture", "version: 0.1", "id: " ++ unitName,
+       "key: " ++ unitName, "exposed: True", "exposed-modules: " ++ name,
+       "import-dirs: " ++ show (root </> output), "depends: " ++ baseUnit]
+    registered <- run "register" ["--package-db", database, "update", conf]
+    pure ([compiled] ++ initialized ++ [registered])
+  mapM_ (\name -> renameFile (root </> sourceFor name) (root </> sourceFor name ++ ".saved"))
+    ["InterfaceForeignAlias", "ForeignExportSignatures"]
+  records <- forM variants $ \(variant, name, _) -> runGhc (Just libdir) $ do
+    initial <- getSessionDynFlags
+    initialEnv <- getSession
+    (flags, leftovers, _) <- parseDynamicFlags (hsc_logger initialEnv) initial
+      (map noLoc ["-package-db", root </> directory </> "typed-foreign-exports" </> variant </> "package.conf.d",
+                  "-package-id", unitName])
+    liftIO $ check (null leftovers) "Unexpected typed association control flags"
+    _ <- setSessionDynFlags flags
+    environment <- getSession
+    liftIO $ do
+      let path = root </> directory </> "typed-foreign-exports" </> variant </> name ++ ".hi"
+          expected = mkModule (stringToUnit unitName) (mkModuleName name)
+      loaded <- loadInterfaceCore environment expected path
+      core <- maybe (die "Typed association control lost complete Core") pure loaded
+      rendered <- interfaceCoreJSON ["unit-qualified"] core
+      value <- either die pure (eitherDecodeStrict' (BSC.pack rendered))
+      let metadata = field "staticForeignExports" value
+      check (field "schema" metadata == Number 1 && field "execution" metadata == String "not-linked" &&
+        field "scope" metadata == String "static-export-associations") "Missing archival typed export schema"
+      check (field "schema" value == Number 2 && field "execution" (field "foreign" value) == String "not-linked")
+        "Typed association changed original foreign archive admission"
+      writeJson (root </> directory </> "typed-foreign-exports" </> variant ++ ".json") value
+      pure metadata
+  case records of
+    [first, second, signatures] -> do
+      let a = singleExport first
+          b = singleExport second
+          allSignatures = entries signatures
+          named symbol = case filter ((== String symbol) . field "symbol") allSignatures of
+            [entry] -> entry
+            _ -> Null
+          countExport = named "thc_export_count"
+      check (field "symbol" a == String "thc_interface_alias_a" && field "symbol" b == String "thc_interface_alias_b")
+        "Typed association lost the distinct external C names"
+      check (field "binder" a /= Null && field "binder" a == field "binder" b &&
+        field "declaredType" a == field "declaredType" b && field "normalizedType" a == field "normalizedType" b)
+        "C-name control unexpectedly changed the exact exported binder/signature"
+      check (field "effect" a == String "io" && field "convention" a == String "ccall")
+        "StablePtr export lost its IO calling convention"
+      check (length allSignatures == 4 && field "effect" (named "thc_export_pure") == String "pure" &&
+        field "effect" countExport == String "io" && field "declaredType" countExport /= field "normalizedType" countExport &&
+        field "binder" (named "thc_export_alias_one") /= Null &&
+        field "binder" (named "thc_export_alias_two") /= Null)
+        "Typed export signatures lost normalization, aliases, or static/dynamic distinction"
+      let pureArguments = case field "arguments" (named "thc_export_pure") of
+            Array values -> map (field "occurrence" . field "name") (toList values)
+            _ -> []
+      check (pureArguments == map String ["Int8", "Word16", "Float", "Double"] &&
+        field "occurrence" (field "name" (field "result" countExport)) == String "Int32")
+        "Typed export metadata conflated primitive widths/floats or lost newtype normalization"
+      writeJson (root </> directory </> "typed-foreign-exports.json") (object
+        ["schema" .= (1 :: Int), "execution" .= ("not-linked" :: String),
+         "sourceDeleted" .= True, "aliasControls" .= [first, second], "signatureControls" .= signatures])
+    _ -> die "Expected typed alias and signature controls"
+  pure (concat commands)
+  where
+    field key (Object fields) = maybe Null id (KeyMap.lookup key fields)
+    field _ _ = Null
+    entries value = case field "exports" value of Array values -> toList values; _ -> []
+    singleExport value = case entries value of [entry] -> entry; _ -> Null
 
 -- The selected installed compiler may legitimately have thin boot interfaces.
 -- Inspect Bound only when its real complete Core exists; never copy/hash it.

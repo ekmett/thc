@@ -191,6 +191,7 @@ library
   other-modules:
     THC.CBV
     THC.Demands
+    THC.ForeignExports
     THC.Sources
     THC.Wired
   build-depends:
