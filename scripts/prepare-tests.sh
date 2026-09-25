@@ -13,7 +13,6 @@ python3 scripts/prepare-floating-audit.py
 python3 scripts/prepare-floating-tuples.py
 python3 scripts/prepare-scalar-bitcasts.py
 python3 scripts/prepare-tag-to-enum-audit.py
-python3 scripts/prepare-unsafe-equality-audit.py
 python3 scripts/prepare-show-int.py
 python3 scripts/prepare-show-word-list.py
 python3 scripts/prepare-bignat-literals.py
@@ -30,6 +29,7 @@ python3 scripts/prepare-tuple-join-audit.py
 python3 scripts/prepare-empty-join-input.py
 cabal build exe:thc-fixtures --offline
 fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
+"$fixture_bin" unsafe-equality
 "$fixture_bin" integer
 "$fixture_bin" bit
 "$fixture_bin" word-floating
