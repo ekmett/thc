@@ -900,12 +900,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
     public static final class OriginalStdioStatus {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
-                OriginalStdioOp operation, long fd, Object state, @Bind("$node") Node node) {
+                OriginalStdioOp operation, long fd, ManagedAddress address, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             // One typed instruction avoids another generated-interpreter partition;
             // the exact operation is compile-time metadata, not a guest operand.
             long result;
-            if (operation == OriginalStdioOp.ERRNO) result = CoreOriginalStdio.current(node).errno();
+            if (operation.getStat()) result = PosixStat.execute(operation, address, fd);
+            else if (operation == OriginalStdioOp.ERRNO) result = CoreOriginalStdio.current(node).errno();
+            else if (operation.getSeekConstant()) result = CoreOriginalStdio.current(node).seekConstant(operation);
             else if (operation == OriginalStdioOp.ISATTY) result = CoreOriginalStdio.current(node).isTerminal(fd);
             else if (operation == OriginalStdioOp.CLOSE) result = CoreOriginalStdio.current(node).close(fd);
             else throw new RuntimeFault("Invalid original stdio status operation");
@@ -2077,6 +2079,28 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             TupleResultsKt.requireVoidCarrier(state);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
                     cell.exchange(replacement));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "oldDestination")
+    @ConstantOperand(type = LocalAccessor.class, name = "resultDestination")
+    @ConstantOperand(type = Language.class, name = "language")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    @ConstantOperand(type = boolean.class, name = "async")
+    public static final class ModifyMutVar2 {
+        protected static MutVarModifySite create(Language language, Metrics metrics, boolean async) {
+            return MutVarModifySite.create(language, metrics, async);
+        }
+        @Specialization public static void modify(VirtualFrame frame, LocalAccessor oldDestination,
+                LocalAccessor resultDestination, Language language, Metrics metrics, boolean async,
+                Object reference, Object function, Object state, @Bind("$node") Node node,
+                @Cached(value = "create(language, metrics, async)", neverDefault = true) MutVarModifySite site) {
+            ManagedMutVar cell = ManagedMutVar.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            ModifiedMutVar modified = cell.modify(function, site);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            oldDestination.setObject(bytecode, frame, modified.getOld());
+            resultDestination.setObject(bytecode, frame, modified.getResult());
         }
     }
     @Operation public static final class WriteMutVar {
@@ -3459,6 +3483,299 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class GeneratedDoubleX4Divide {
         @Specialization public static DoubleX4 apply(DoubleX4 left, DoubleX4 right) { return DoubleX4.divide(left, right); }
+    }
+    @Operation public static final class GeneratedInt64X4Pack {
+        @Specialization public static Int64X4 apply(long lane0, long lane1, long lane2, long lane3) { return new Int64X4(lane0, lane1, lane2, lane3); }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "lane0")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane1")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane2")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane3")
+    public static final class GeneratedInt64X4Unpack {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, Int64X4 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            lane0.setLong(bytecode, frame, value.lane0);
+            lane1.setLong(bytecode, frame, value.lane1);
+            lane2.setLong(bytecode, frame, value.lane2);
+            lane3.setLong(bytecode, frame, value.lane3);
+        }
+    }
+    @Operation public static final class GeneratedInt64X4Broadcast {
+        @Specialization public static Int64X4 apply(long value) { return Int64X4.broadcast(value); }
+    }
+    @Operation public static final class GeneratedInt64X4Plus {
+        @Specialization public static Int64X4 apply(Int64X4 left, Int64X4 right) { return Int64X4.add(left, right); }
+    }
+    @Operation public static final class GeneratedInt64X4Minus {
+        @Specialization public static Int64X4 apply(Int64X4 left, Int64X4 right) { return Int64X4.subtract(left, right); }
+    }
+    @Operation public static final class GeneratedInt64X4Times {
+        @Specialization public static Int64X4 apply(Int64X4 left, Int64X4 right) { return Int64X4.multiply(left, right); }
+    }
+    @Operation public static final class GeneratedInt64X4Negate {
+        @Specialization public static Int64X4 apply(Int64X4 value) { return Int64X4.negate(value); }
+    }
+    @Operation public static final class GeneratedInt64X8Pack {
+        @Specialization public static Int64X8 apply(long lane0, long lane1, long lane2, long lane3, long lane4, long lane5, long lane6, long lane7) { return new Int64X8(lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7); }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "lane0")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane1")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane2")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane3")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane4")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane5")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane6")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane7")
+    public static final class GeneratedInt64X8Unpack {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, Int64X8 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            lane0.setLong(bytecode, frame, value.lane0);
+            lane1.setLong(bytecode, frame, value.lane1);
+            lane2.setLong(bytecode, frame, value.lane2);
+            lane3.setLong(bytecode, frame, value.lane3);
+            lane4.setLong(bytecode, frame, value.lane4);
+            lane5.setLong(bytecode, frame, value.lane5);
+            lane6.setLong(bytecode, frame, value.lane6);
+            lane7.setLong(bytecode, frame, value.lane7);
+        }
+    }
+    @Operation public static final class GeneratedInt64X8Broadcast {
+        @Specialization public static Int64X8 apply(long value) { return Int64X8.broadcast(value); }
+    }
+    @Operation public static final class GeneratedInt64X8Plus {
+        @Specialization public static Int64X8 apply(Int64X8 left, Int64X8 right) { return Int64X8.add(left, right); }
+    }
+    @Operation public static final class GeneratedInt64X8Minus {
+        @Specialization public static Int64X8 apply(Int64X8 left, Int64X8 right) { return Int64X8.subtract(left, right); }
+    }
+    @Operation public static final class GeneratedInt64X8Times {
+        @Specialization public static Int64X8 apply(Int64X8 left, Int64X8 right) { return Int64X8.multiply(left, right); }
+    }
+    @Operation public static final class GeneratedInt64X8Negate {
+        @Specialization public static Int64X8 apply(Int64X8 value) { return Int64X8.negate(value); }
+    }
+    @Operation public static final class GeneratedWord64X4Pack {
+        @Specialization public static Word64X4 apply(long lane0, long lane1, long lane2, long lane3) { return new Word64X4(lane0, lane1, lane2, lane3); }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "lane0")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane1")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane2")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane3")
+    public static final class GeneratedWord64X4Unpack {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, Word64X4 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            lane0.setLong(bytecode, frame, value.lane0);
+            lane1.setLong(bytecode, frame, value.lane1);
+            lane2.setLong(bytecode, frame, value.lane2);
+            lane3.setLong(bytecode, frame, value.lane3);
+        }
+    }
+    @Operation public static final class GeneratedWord64X4Broadcast {
+        @Specialization public static Word64X4 apply(long value) { return Word64X4.broadcast(value); }
+    }
+    @Operation public static final class GeneratedWord64X4Plus {
+        @Specialization public static Word64X4 apply(Word64X4 left, Word64X4 right) { return Word64X4.add(left, right); }
+    }
+    @Operation public static final class GeneratedWord64X4Minus {
+        @Specialization public static Word64X4 apply(Word64X4 left, Word64X4 right) { return Word64X4.subtract(left, right); }
+    }
+    @Operation public static final class GeneratedWord64X4Times {
+        @Specialization public static Word64X4 apply(Word64X4 left, Word64X4 right) { return Word64X4.multiply(left, right); }
+    }
+    @Operation public static final class GeneratedWord64X8Pack {
+        @Specialization public static Word64X8 apply(long lane0, long lane1, long lane2, long lane3, long lane4, long lane5, long lane6, long lane7) { return new Word64X8(lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7); }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "lane0")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane1")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane2")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane3")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane4")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane5")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane6")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane7")
+    public static final class GeneratedWord64X8Unpack {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, Word64X8 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            lane0.setLong(bytecode, frame, value.lane0);
+            lane1.setLong(bytecode, frame, value.lane1);
+            lane2.setLong(bytecode, frame, value.lane2);
+            lane3.setLong(bytecode, frame, value.lane3);
+            lane4.setLong(bytecode, frame, value.lane4);
+            lane5.setLong(bytecode, frame, value.lane5);
+            lane6.setLong(bytecode, frame, value.lane6);
+            lane7.setLong(bytecode, frame, value.lane7);
+        }
+    }
+    @Operation public static final class GeneratedWord64X8Broadcast {
+        @Specialization public static Word64X8 apply(long value) { return Word64X8.broadcast(value); }
+    }
+    @Operation public static final class GeneratedWord64X8Plus {
+        @Specialization public static Word64X8 apply(Word64X8 left, Word64X8 right) { return Word64X8.add(left, right); }
+    }
+    @Operation public static final class GeneratedWord64X8Minus {
+        @Specialization public static Word64X8 apply(Word64X8 left, Word64X8 right) { return Word64X8.subtract(left, right); }
+    }
+    @Operation public static final class GeneratedWord64X8Times {
+        @Specialization public static Word64X8 apply(Word64X8 left, Word64X8 right) { return Word64X8.multiply(left, right); }
+    }
+    @Operation public static final class GeneratedWord32X16Pack {
+        @Specialization public static Word32X16 apply(long lane0, long lane1, long lane2, long lane3, long lane4, long lane5, long lane6, long lane7, long lane8, long lane9, long lane10, long lane11, long lane12, long lane13, long lane14, long lane15) { return new Word32X16((int) lane0, (int) lane1, (int) lane2, (int) lane3, (int) lane4, (int) lane5, (int) lane6, (int) lane7, (int) lane8, (int) lane9, (int) lane10, (int) lane11, (int) lane12, (int) lane13, (int) lane14, (int) lane15); }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "lane0")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane1")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane2")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane3")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane4")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane5")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane6")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane7")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane8")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane9")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane10")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane11")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane12")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane13")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane14")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane15")
+    public static final class GeneratedWord32X16Unpack {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, LocalAccessor lane8, LocalAccessor lane9, LocalAccessor lane10, LocalAccessor lane11, LocalAccessor lane12, LocalAccessor lane13, LocalAccessor lane14, LocalAccessor lane15, Word32X16 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            lane0.setLong(bytecode, frame, value.lane0 & 0xffff_ffffL);
+            lane1.setLong(bytecode, frame, value.lane1 & 0xffff_ffffL);
+            lane2.setLong(bytecode, frame, value.lane2 & 0xffff_ffffL);
+            lane3.setLong(bytecode, frame, value.lane3 & 0xffff_ffffL);
+            lane4.setLong(bytecode, frame, value.lane4 & 0xffff_ffffL);
+            lane5.setLong(bytecode, frame, value.lane5 & 0xffff_ffffL);
+            lane6.setLong(bytecode, frame, value.lane6 & 0xffff_ffffL);
+            lane7.setLong(bytecode, frame, value.lane7 & 0xffff_ffffL);
+            lane8.setLong(bytecode, frame, value.lane8 & 0xffff_ffffL);
+            lane9.setLong(bytecode, frame, value.lane9 & 0xffff_ffffL);
+            lane10.setLong(bytecode, frame, value.lane10 & 0xffff_ffffL);
+            lane11.setLong(bytecode, frame, value.lane11 & 0xffff_ffffL);
+            lane12.setLong(bytecode, frame, value.lane12 & 0xffff_ffffL);
+            lane13.setLong(bytecode, frame, value.lane13 & 0xffff_ffffL);
+            lane14.setLong(bytecode, frame, value.lane14 & 0xffff_ffffL);
+            lane15.setLong(bytecode, frame, value.lane15 & 0xffff_ffffL);
+        }
+    }
+    @Operation public static final class GeneratedWord32X16Broadcast {
+        @Specialization public static Word32X16 apply(long value) { return Word32X16.broadcast((int) value); }
+    }
+    @Operation public static final class GeneratedWord32X16Plus {
+        @Specialization public static Word32X16 apply(Word32X16 left, Word32X16 right) { return Word32X16.add(left, right); }
+    }
+    @Operation public static final class GeneratedWord32X16Minus {
+        @Specialization public static Word32X16 apply(Word32X16 left, Word32X16 right) { return Word32X16.subtract(left, right); }
+    }
+    @Operation public static final class GeneratedWord32X16Times {
+        @Specialization public static Word32X16 apply(Word32X16 left, Word32X16 right) { return Word32X16.multiply(left, right); }
+    }
+    @Operation public static final class GeneratedFloatX16Pack {
+        @Specialization public static FloatX16 apply(float lane0, float lane1, float lane2, float lane3, float lane4, float lane5, float lane6, float lane7, float lane8, float lane9, float lane10, float lane11, float lane12, float lane13, float lane14, float lane15) { return new FloatX16(lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7, lane8, lane9, lane10, lane11, lane12, lane13, lane14, lane15); }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "lane0")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane1")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane2")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane3")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane4")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane5")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane6")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane7")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane8")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane9")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane10")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane11")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane12")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane13")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane14")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane15")
+    public static final class GeneratedFloatX16Unpack {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, LocalAccessor lane8, LocalAccessor lane9, LocalAccessor lane10, LocalAccessor lane11, LocalAccessor lane12, LocalAccessor lane13, LocalAccessor lane14, LocalAccessor lane15, FloatX16 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            lane0.setFloat(bytecode, frame, value.lane0);
+            lane1.setFloat(bytecode, frame, value.lane1);
+            lane2.setFloat(bytecode, frame, value.lane2);
+            lane3.setFloat(bytecode, frame, value.lane3);
+            lane4.setFloat(bytecode, frame, value.lane4);
+            lane5.setFloat(bytecode, frame, value.lane5);
+            lane6.setFloat(bytecode, frame, value.lane6);
+            lane7.setFloat(bytecode, frame, value.lane7);
+            lane8.setFloat(bytecode, frame, value.lane8);
+            lane9.setFloat(bytecode, frame, value.lane9);
+            lane10.setFloat(bytecode, frame, value.lane10);
+            lane11.setFloat(bytecode, frame, value.lane11);
+            lane12.setFloat(bytecode, frame, value.lane12);
+            lane13.setFloat(bytecode, frame, value.lane13);
+            lane14.setFloat(bytecode, frame, value.lane14);
+            lane15.setFloat(bytecode, frame, value.lane15);
+        }
+    }
+    @Operation public static final class GeneratedFloatX16Broadcast {
+        @Specialization public static FloatX16 apply(float value) { return FloatX16.broadcast(value); }
+    }
+    @Operation public static final class GeneratedFloatX16Plus {
+        @Specialization public static FloatX16 apply(FloatX16 left, FloatX16 right) { return FloatX16.add(left, right); }
+    }
+    @Operation public static final class GeneratedFloatX16Minus {
+        @Specialization public static FloatX16 apply(FloatX16 left, FloatX16 right) { return FloatX16.subtract(left, right); }
+    }
+    @Operation public static final class GeneratedFloatX16Times {
+        @Specialization public static FloatX16 apply(FloatX16 left, FloatX16 right) { return FloatX16.multiply(left, right); }
+    }
+    @Operation public static final class GeneratedFloatX16Negate {
+        @Specialization public static FloatX16 apply(FloatX16 value) { return FloatX16.negate(value); }
+    }
+    @Operation public static final class GeneratedFloatX16Divide {
+        @Specialization public static FloatX16 apply(FloatX16 left, FloatX16 right) { return FloatX16.divide(left, right); }
+    }
+    @Operation public static final class GeneratedDoubleX8Pack {
+        @Specialization public static DoubleX8 apply(double lane0, double lane1, double lane2, double lane3, double lane4, double lane5, double lane6, double lane7) { return new DoubleX8(lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7); }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "lane0")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane1")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane2")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane3")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane4")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane5")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane6")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane7")
+    public static final class GeneratedDoubleX8Unpack {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, DoubleX8 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            lane0.setDouble(bytecode, frame, value.lane0);
+            lane1.setDouble(bytecode, frame, value.lane1);
+            lane2.setDouble(bytecode, frame, value.lane2);
+            lane3.setDouble(bytecode, frame, value.lane3);
+            lane4.setDouble(bytecode, frame, value.lane4);
+            lane5.setDouble(bytecode, frame, value.lane5);
+            lane6.setDouble(bytecode, frame, value.lane6);
+            lane7.setDouble(bytecode, frame, value.lane7);
+        }
+    }
+    @Operation public static final class GeneratedDoubleX8Broadcast {
+        @Specialization public static DoubleX8 apply(double value) { return DoubleX8.broadcast(value); }
+    }
+    @Operation public static final class GeneratedDoubleX8Plus {
+        @Specialization public static DoubleX8 apply(DoubleX8 left, DoubleX8 right) { return DoubleX8.add(left, right); }
+    }
+    @Operation public static final class GeneratedDoubleX8Minus {
+        @Specialization public static DoubleX8 apply(DoubleX8 left, DoubleX8 right) { return DoubleX8.subtract(left, right); }
+    }
+    @Operation public static final class GeneratedDoubleX8Times {
+        @Specialization public static DoubleX8 apply(DoubleX8 left, DoubleX8 right) { return DoubleX8.multiply(left, right); }
+    }
+    @Operation public static final class GeneratedDoubleX8Negate {
+        @Specialization public static DoubleX8 apply(DoubleX8 value) { return DoubleX8.negate(value); }
+    }
+    @Operation public static final class GeneratedDoubleX8Divide {
+        @Specialization public static DoubleX8 apply(DoubleX8 left, DoubleX8 right) { return DoubleX8.divide(left, right); }
     }
     // END GENERATED SIMD FAMILIES
 }

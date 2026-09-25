@@ -13,9 +13,18 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
 
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         // Direct enum comparison remains constant during partial evaluation.
-        val result = if (operation == OriginalStdioOp.ERRNO) {
+        val result = if (operation.stat) {
+            val address = if (operation.statField) operands[0].executeRequiredAddress(frame) else ManagedAddress.nullAddress()
+            val mode = if (operation == OriginalStdioOp.SIZEOF_STAT || operation.statField) 0L
+                else operands[0].executeRequiredLong(frame)
+            requireVoidCarrier(operands[operands.lastIndex].execute(frame))
+            PosixStat.execute(operation, address, mode)
+        } else if (operation == OriginalStdioOp.ERRNO) {
             requireVoidCarrier(operands[0].execute(frame))
             CoreOriginalStdio.current(this).errno()
+        } else if (operation.seekConstant) {
+            requireVoidCarrier(operands[0].execute(frame))
+            CoreOriginalStdio.current(this).seekConstant(operation)
         } else if (operation.readiness) {
             val fd = operands[0].executeRequiredLong(frame)
             val writing = operands[1].executeRequiredLong(frame)

@@ -28,6 +28,38 @@ class StdioHostAbiTest {
             assertEquals((raw[name] as Number).toLong(), abi.error(kind))
         assertEquals((raw["ENOTTY"] as Number).toLong(), abi.notTerminal())
         assertEquals(abi.error(6), abi.error(0)); assertEquals(abi.error(6), abi.error(Long.MAX_VALUE))
+        val seek = document["seek"] as Map<*, *>
+        for ((mode, operation) in listOf(OriginalStdioOp.SEEK_SET, OriginalStdioOp.SEEK_CUR, OriginalStdioOp.SEEK_END).withIndex()) {
+            val constant = (seek[operation.name] as Number).toLong()
+            assertEquals(constant, abi.seekConstant(operation))
+            assertEquals(mode.toLong(), abi.seekMode(constant))
+        }
+    }
+
+    @Test fun seekConstantsAreIndependentSignedCIntsNotPrivateModes() {
+        val values = mapOf("SEEK_SET" to Int.MIN_VALUE.toLong(), "SEEK_CUR" to 71L, "SEEK_END" to -9L)
+        val abi = parse(document() + ("seek" to values))
+        for ((mode, operation) in listOf(OriginalStdioOp.SEEK_SET, OriginalStdioOp.SEEK_CUR, OriginalStdioOp.SEEK_END).withIndex()) {
+            assertEquals(values.getValue(operation.name), abi.seekConstant(operation))
+            assertEquals(mode.toLong(), abi.seekMode(values.getValue(operation.name)))
+        }
+        for (unknown in listOf(0L, 1L, 2L, Long.MIN_VALUE, Long.MAX_VALUE)) assertNull(abi.seekMode(unknown))
+        assertThrows(RuntimeFault::class.java) { abi.seekConstant(OriginalStdioOp.ERRNO) }
+    }
+
+    @Test fun seekProbeRejectsMissingExtraDuplicateAndNonCIntFields() {
+        val original = document()
+        val seek = original["seek"] as Map<*, *>
+        for (field in seek.keys) {
+            for (wrong in listOf(null, true, false, 1.0, "0", Int.MIN_VALUE.toLong() - 1, Int.MAX_VALUE.toLong() + 1))
+                assertThrows(RuntimeFault::class.java) { parse(original + ("seek" to (seek + (field to wrong)))) }
+            assertThrows(RuntimeFault::class.java) { parse(original + ("seek" to (seek - field))) }
+            for (other in seek.keys - field)
+                assertThrows(RuntimeFault::class.java) { parse(original + ("seek" to (seek + (field to seek[other])))) }
+        }
+        for (wrong in listOf(null, emptyList<Any?>(), emptyMap<String, Any?>(), seek + ("extra" to 0)))
+            assertThrows(RuntimeFault::class.java) { parse(original + ("seek" to wrong)) }
+        assertThrows(RuntimeFault::class.java) { parse(original - "seek") }
     }
 
     @Test fun mismatchedPlatformWidthsAndMalformedErrnoReject() {

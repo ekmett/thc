@@ -258,8 +258,8 @@ class OriginalFdReadyNativeTest {
                     val operation = if (name.endsWith("Unsafe")) OriginalStdioOp.READY_UNSAFE else OriginalStdioOp.READY_SAFE
                     val valid = arguments.map(CoreRepresentations::expression)
                     valid.forEachIndexed { index, rep ->
-                        assertDoesNotThrow { CoreOriginalStdio.validateReadyOperand(operation, index, rep, rep) }
-                        assertThrows(RuntimeFault::class.java) { CoreOriginalStdio.validateReadyOperand(operation, index, rep,
+                        assertDoesNotThrow { CoreOriginalStdio.validateScalarOperand(operation, index, rep, rep) }
+                        assertThrows(RuntimeFault::class.java) { CoreOriginalStdio.validateScalarOperand(operation, index, rep,
                             rep.copy(kind = CoreKind.ADDRESS, primReps = listOf("AddrRep"))) }
                     }
                     released(language)

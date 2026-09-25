@@ -1384,7 +1384,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio.readiness) CoreOriginalStdio.validateReadyOperand(originalStdio, index,
+                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat) CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
                                 scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
                     }
@@ -1393,17 +1393,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     val b = e.builder
                     val result = destination.single()
                     val status = originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
-                        originalStdio == OriginalStdioOp.CLOSE
+                        originalStdio == OriginalStdioOp.CLOSE || originalStdio.seekConstant || originalStdio.stat
                     if (originalStdio.readiness) b.beginOriginalStdioReady(result)
                     else if (originalStdio == OriginalStdioOp.SEEK) b.beginFileSeek(result)
                     else if (originalStdio == OriginalStdioOp.TRUNCATE) b.beginFileSetSize(result)
                     else if (status) b.beginOriginalStdioStatus(result, originalStdio)
                     else b.beginOriginalStdioTransfer(result,
                         originalStdio == OriginalStdioOp.READ_SAFE || originalStdio == OriginalStdioOp.READ_UNSAFE)
-                    // errno's original ABI has only State#. This internal zero
+                    // errno and seek constants have only State#. This internal zero
                     // fills the shared instruction's unused typed descriptor lane.
-                    if (originalStdio == OriginalStdioOp.ERRNO) b.emitLoadConstant(0L)
-                    if (originalStdio == OriginalStdioOp.SEEK) {
+                    if (status) {
+                        if (originalStdio == OriginalStdioOp.ERRNO || originalStdio.seekConstant ||
+                            originalStdio == OriginalStdioOp.SIZEOF_STAT || originalStdio.statField)
+                            b.emitLoadConstant(0L) else operands[0].emit(e)
+                        if (originalStdio.statField) operands[0].emit(e) else b.emitLoadConstant(ManagedAddress.nullAddress())
+                        operands.last().emit(e)
+                    } else if (originalStdio == OriginalStdioOp.SEEK) {
                         operands.take(3).forEach { it.emit(e) }
                         // FileSeek already has four typed lanes. Keep the State#
                         // check before the effect, then use its final internal
@@ -1872,6 +1877,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         MutVarOp.NEW -> e.builder.beginNewMutVar(destination[0])
                         MutVarOp.READ -> e.builder.beginReadMutVar(destination[0])
                         MutVarOp.SWAP -> e.builder.beginSwapMutVar(destination[0])
+                        MutVarOp.MODIFY2 -> e.builder.beginModifyMutVar2(destination[0], destination[1],
+                            language, metrics, enableAsync)
                         else -> error("Not a tuple MutVar operation")
                     }
                     operands.forEach { it.emit(e) }
@@ -1879,6 +1886,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         MutVarOp.NEW -> e.builder.endNewMutVar()
                         MutVarOp.READ -> e.builder.endReadMutVar()
                         MutVarOp.SWAP -> e.builder.endSwapMutVar()
+                        MutVarOp.MODIFY2 -> e.builder.endModifyMutVar2()
                         else -> error("Not a tuple MutVar operation")
                     }
                 } else ProvenExpression(Expression { e ->
@@ -3847,6 +3855,233 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedDoubleX4Divide(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX4Divide()
         }, GeneratedVectors.proofDoubleX4)
+        "packInt64X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(4) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.beginGeneratedInt64X4Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedInt64X4Pack()
+            b.endBlock()
+        }, GeneratedVectors.proofInt64X4)
+        "unpackInt64X4#" -> tupleExpression(GeneratedVectors.unpackedInt64X4) { e, destination ->
+            e.builder.beginGeneratedInt64X4Unpack(destination[0], destination[1], destination[2], destination[3])
+            operands[0].emit(e)
+            e.builder.endGeneratedInt64X4Unpack()
+        }
+        "broadcastInt64X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X4Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X4Broadcast()
+        }, GeneratedVectors.proofInt64X4)
+        "plusInt64X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X4Plus(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X4Plus()
+        }, GeneratedVectors.proofInt64X4)
+        "minusInt64X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X4Minus(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X4Minus()
+        }, GeneratedVectors.proofInt64X4)
+        "timesInt64X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X4Times(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X4Times()
+        }, GeneratedVectors.proofInt64X4)
+        "negateInt64X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X4Negate(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X4Negate()
+        }, GeneratedVectors.proofInt64X4)
+        "packInt64X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(8) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.beginGeneratedInt64X8Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedInt64X8Pack()
+            b.endBlock()
+        }, GeneratedVectors.proofInt64X8)
+        "unpackInt64X8#" -> tupleExpression(GeneratedVectors.unpackedInt64X8) { e, destination ->
+            e.builder.beginGeneratedInt64X8Unpack(destination[0], destination[1], destination[2], destination[3], destination[4], destination[5], destination[6], destination[7])
+            operands[0].emit(e)
+            e.builder.endGeneratedInt64X8Unpack()
+        }
+        "broadcastInt64X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X8Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X8Broadcast()
+        }, GeneratedVectors.proofInt64X8)
+        "plusInt64X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X8Plus(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X8Plus()
+        }, GeneratedVectors.proofInt64X8)
+        "minusInt64X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X8Minus(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X8Minus()
+        }, GeneratedVectors.proofInt64X8)
+        "timesInt64X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X8Times(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X8Times()
+        }, GeneratedVectors.proofInt64X8)
+        "negateInt64X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X8Negate(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X8Negate()
+        }, GeneratedVectors.proofInt64X8)
+        "packWord64X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(4) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.beginGeneratedWord64X4Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedWord64X4Pack()
+            b.endBlock()
+        }, GeneratedVectors.proofWord64X4)
+        "unpackWord64X4#" -> tupleExpression(GeneratedVectors.unpackedWord64X4) { e, destination ->
+            e.builder.beginGeneratedWord64X4Unpack(destination[0], destination[1], destination[2], destination[3])
+            operands[0].emit(e)
+            e.builder.endGeneratedWord64X4Unpack()
+        }
+        "broadcastWord64X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord64X4Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X4Broadcast()
+        }, GeneratedVectors.proofWord64X4)
+        "plusWord64X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord64X4Plus(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X4Plus()
+        }, GeneratedVectors.proofWord64X4)
+        "minusWord64X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord64X4Minus(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X4Minus()
+        }, GeneratedVectors.proofWord64X4)
+        "timesWord64X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord64X4Times(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X4Times()
+        }, GeneratedVectors.proofWord64X4)
+        "packWord64X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(8) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.beginGeneratedWord64X8Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedWord64X8Pack()
+            b.endBlock()
+        }, GeneratedVectors.proofWord64X8)
+        "unpackWord64X8#" -> tupleExpression(GeneratedVectors.unpackedWord64X8) { e, destination ->
+            e.builder.beginGeneratedWord64X8Unpack(destination[0], destination[1], destination[2], destination[3], destination[4], destination[5], destination[6], destination[7])
+            operands[0].emit(e)
+            e.builder.endGeneratedWord64X8Unpack()
+        }
+        "broadcastWord64X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord64X8Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X8Broadcast()
+        }, GeneratedVectors.proofWord64X8)
+        "plusWord64X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord64X8Plus(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X8Plus()
+        }, GeneratedVectors.proofWord64X8)
+        "minusWord64X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord64X8Minus(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X8Minus()
+        }, GeneratedVectors.proofWord64X8)
+        "timesWord64X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord64X8Times(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X8Times()
+        }, GeneratedVectors.proofWord64X8)
+        "packWord32X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(16) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.beginGeneratedWord32X16Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedWord32X16Pack()
+            b.endBlock()
+        }, GeneratedVectors.proofWord32X16)
+        "unpackWord32X16#" -> tupleExpression(GeneratedVectors.unpackedWord32X16) { e, destination ->
+            e.builder.beginGeneratedWord32X16Unpack(destination[0], destination[1], destination[2], destination[3], destination[4], destination[5], destination[6], destination[7], destination[8], destination[9], destination[10], destination[11], destination[12], destination[13], destination[14], destination[15])
+            operands[0].emit(e)
+            e.builder.endGeneratedWord32X16Unpack()
+        }
+        "broadcastWord32X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X16Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X16Broadcast()
+        }, GeneratedVectors.proofWord32X16)
+        "plusWord32X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X16Plus(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X16Plus()
+        }, GeneratedVectors.proofWord32X16)
+        "minusWord32X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X16Minus(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X16Minus()
+        }, GeneratedVectors.proofWord32X16)
+        "timesWord32X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X16Times(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X16Times()
+        }, GeneratedVectors.proofWord32X16)
+        "packFloatX16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(16) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.beginGeneratedFloatX16Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedFloatX16Pack()
+            b.endBlock()
+        }, GeneratedVectors.proofFloatX16)
+        "unpackFloatX16#" -> tupleExpression(GeneratedVectors.unpackedFloatX16) { e, destination ->
+            e.builder.beginGeneratedFloatX16Unpack(destination[0], destination[1], destination[2], destination[3], destination[4], destination[5], destination[6], destination[7], destination[8], destination[9], destination[10], destination[11], destination[12], destination[13], destination[14], destination[15])
+            operands[0].emit(e)
+            e.builder.endGeneratedFloatX16Unpack()
+        }
+        "broadcastFloatX16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX16Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX16Broadcast()
+        }, GeneratedVectors.proofFloatX16)
+        "plusFloatX16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX16Plus(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX16Plus()
+        }, GeneratedVectors.proofFloatX16)
+        "minusFloatX16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX16Minus(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX16Minus()
+        }, GeneratedVectors.proofFloatX16)
+        "timesFloatX16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX16Times(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX16Times()
+        }, GeneratedVectors.proofFloatX16)
+        "negateFloatX16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX16Negate(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX16Negate()
+        }, GeneratedVectors.proofFloatX16)
+        "divideFloatX16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX16Divide(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX16Divide()
+        }, GeneratedVectors.proofFloatX16)
+        "packDoubleX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(8) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.beginGeneratedDoubleX8Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedDoubleX8Pack()
+            b.endBlock()
+        }, GeneratedVectors.proofDoubleX8)
+        "unpackDoubleX8#" -> tupleExpression(GeneratedVectors.unpackedDoubleX8) { e, destination ->
+            e.builder.beginGeneratedDoubleX8Unpack(destination[0], destination[1], destination[2], destination[3], destination[4], destination[5], destination[6], destination[7])
+            operands[0].emit(e)
+            e.builder.endGeneratedDoubleX8Unpack()
+        }
+        "broadcastDoubleX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX8Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX8Broadcast()
+        }, GeneratedVectors.proofDoubleX8)
+        "plusDoubleX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX8Plus(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX8Plus()
+        }, GeneratedVectors.proofDoubleX8)
+        "minusDoubleX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX8Minus(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX8Minus()
+        }, GeneratedVectors.proofDoubleX8)
+        "timesDoubleX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX8Times(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX8Times()
+        }, GeneratedVectors.proofDoubleX8)
+        "negateDoubleX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX8Negate(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX8Negate()
+        }, GeneratedVectors.proofDoubleX8)
+        "divideDoubleX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX8Divide(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX8Divide()
+        }, GeneratedVectors.proofDoubleX8)
         else -> throw UnsupportedCore("Unsupported generated vector primitive $name")
     }
     // END GENERATED SIMD FAMILIES

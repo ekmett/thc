@@ -40,6 +40,8 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return lastError.get()
     }
 
+    @TruffleBoundary fun seekConstant(operation: OriginalStdioOp): Long = hostAbi.seekConstant(operation)
+
     @TruffleBoundary fun ready(fd: Long, writing: Long, milliseconds: Long, socket: Long): Long {
         val abi = hostAbi
         if (fd != fd.toInt().toLong()) throw RuntimeFault("Original fdReady requires a canonical signed CInt descriptor")
@@ -64,7 +66,7 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         val abi = hostAbi
         if (fd != fd.toInt().toLong() || whence != whence.toInt().toLong())
             throw RuntimeFault("Original seek requires canonical signed CInt descriptor and whence")
-        val position = files.seek(fd, displacement, whence)
+        val position = files.seek(fd, displacement, abi.seekMode(whence) ?: -1L)
         if (position < 0) lastError.set(if (files.errorKind() == 7L) abi.notSeekable()
             else abi.error(files.errorKind()))
         return position

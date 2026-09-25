@@ -74,6 +74,9 @@ checks and separate graph evidence.
 | FloatX4 | [Foundation](floatx4.md) | [Raw-bit packed memory](floatx4-bytearray.md) |
 | DoubleX2 | [Foundation](doublex2.md) | [Raw-bit packed memory](doublex2-bytearray.md) |
 
+The [generated wide arithmetic families](simd-wide-arithmetic.md) share exact
+lane contracts and finite scalar-entry Haskell oracles/compiled JVM drivers.
+
 ## Performance and runtime design
 
 The recorded Map measurements are workload-specific. The controlled ARM64 run

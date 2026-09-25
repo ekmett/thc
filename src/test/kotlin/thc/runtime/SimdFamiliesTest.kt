@@ -60,8 +60,12 @@ class SimdFamiliesTest {
         for ((carrier, count, primitive) in listOf(Triple(Word64X2::class.java, 2, Long::class.javaPrimitiveType),
             Triple(Word32X8::class.java, 8, Int::class.javaPrimitiveType),
             Triple(Int32X8::class.java, 8, Int::class.javaPrimitiveType), Triple(Int32X16::class.java, 16, Int::class.javaPrimitiveType),
-            Triple(FloatX8::class.java, 8, Float::class.javaPrimitiveType), Triple(DoubleX4::class.java, 4, Double::class.javaPrimitiveType))) {
-            val fields = carrier.declaredFields
+            Triple(FloatX8::class.java, 8, Float::class.javaPrimitiveType), Triple(DoubleX4::class.java, 4, Double::class.javaPrimitiveType),
+            Triple(Int64X4::class.java, 4, Long::class.javaPrimitiveType), Triple(Int64X8::class.java, 8, Long::class.javaPrimitiveType),
+            Triple(Word64X4::class.java, 4, Long::class.javaPrimitiveType), Triple(Word64X8::class.java, 8, Long::class.javaPrimitiveType),
+            Triple(Word32X16::class.java, 16, Int::class.javaPrimitiveType),
+            Triple(FloatX16::class.java, 16, Float::class.javaPrimitiveType), Triple(DoubleX8::class.java, 8, Double::class.javaPrimitiveType))) {
+            val fields = carrier.declaredFields.filterNot { Modifier.isStatic(it.modifiers) }
             assertEquals(count, fields.size)
             assertTrue(fields.all { it.type == primitive && Modifier.isFinal(it.modifiers) && !Modifier.isStatic(it.modifiers) })
             assertEquals((0 until count).map { "lane$it" }.toSet(), fields.map { it.name }.toSet())
@@ -69,14 +73,21 @@ class SimdFamiliesTest {
     }
 
     @Test fun exactLaneSignWidthLogicalTupleAndCallingProofsRemainRequired() {
-        assertEquals(47, GeneratedVectors.operations.size)
+        assertEquals(95, GeneratedVectors.operations.size)
         for ((name, tuple, vector) in listOf(
             Triple("Word64X2", GeneratedVectors.unpackedWord64X2, GeneratedVectors.proofWord64X2),
             Triple("Word32X8", GeneratedVectors.unpackedWord32X8, GeneratedVectors.proofWord32X8),
             Triple("Int32X8", GeneratedVectors.unpackedInt32X8, GeneratedVectors.proofInt32X8),
             Triple("Int32X16", GeneratedVectors.unpackedInt32X16, GeneratedVectors.proofInt32X16),
             Triple("FloatX8", GeneratedVectors.unpackedFloatX8, GeneratedVectors.proofFloatX8),
-            Triple("DoubleX4", GeneratedVectors.unpackedDoubleX4, GeneratedVectors.proofDoubleX4))) {
+            Triple("DoubleX4", GeneratedVectors.unpackedDoubleX4, GeneratedVectors.proofDoubleX4),
+            Triple("Int64X4", GeneratedVectors.unpackedInt64X4, GeneratedVectors.proofInt64X4),
+            Triple("Int64X8", GeneratedVectors.unpackedInt64X8, GeneratedVectors.proofInt64X8),
+            Triple("Word64X4", GeneratedVectors.unpackedWord64X4, GeneratedVectors.proofWord64X4),
+            Triple("Word64X8", GeneratedVectors.unpackedWord64X8, GeneratedVectors.proofWord64X8),
+            Triple("Word32X16", GeneratedVectors.unpackedWord32X16, GeneratedVectors.proofWord32X16),
+            Triple("FloatX16", GeneratedVectors.unpackedFloatX16, GeneratedVectors.proofFloatX16),
+            Triple("DoubleX8", GeneratedVectors.unpackedDoubleX8, GeneratedVectors.proofDoubleX8))) {
             CoreVectors.validate("pack$name#", listOf(tuple), vector)
             CoreVectors.validate("times$name#", listOf(vector, vector), vector)
             CoreVectors.validate("unpack$name#", listOf(vector), tuple)

@@ -23,7 +23,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "7c60914af31983393d2bbd5dff103ab1d3477eed540ce0761976bc5ef15ae155"
+FULL_PREPARATION_PLAN = "2b55ef1b69f2648921fcde2b3ee73faf93b758aff6c86aacc0cd77713d9610c4"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -139,10 +139,8 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/original-handle-readiness/manifest.json",
     "build/small-arrays/manifest.json",
     "build/simd-capability-smoke/manifest.json",
-    # The SIMD smoke exporter consumes this generated Haskell fixture. Check
-    # both Haskell outputs without hashing unrelated JVM code generation.
-    "build/generated/simd/fixtures/GeneratedSimdFamilies.hs",
-    "build/generated/simd/fixtures/GeneratedSimdFamiliesNative.hs",
+    # Smoke manifests hash generated Haskell inputs, independently of JVM codegen.
+    *fast_inputs.SIMD_SMOKE_SOURCES,
 })
 # Compiler interfaces/objects and Gradle products are not consumed by JUnit;
 # full receipt reuse checks the final Core/native fixture data instead.

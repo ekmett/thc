@@ -20,7 +20,8 @@ import System.FilePath ((</>), takeExtension)
 
 entries :: [String]
 entries = ["stRef", "lazyRef", "closureRef", "orderedRef", "unliftedRef", "stLoop",
-           "stRefEquality", "lazyRefEquality", "lazyIORef", "swapRef", "lazySwapRef"]
+           "stRefEquality", "lazyRefEquality", "lazyIORef", "swapRef", "lazySwapRef",
+           "modifyRef", "lazyModifyRef", "lazyBottomModifierRef"]
 
 source, directory :: FilePath
 source = "compiler/test-fixtures/MutVarAudit.hs"

@@ -21,6 +21,35 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def test_simd_smoke_generated_sources_and_native_oracle_roundtrip(self):
+        name = 'build/simd-capability-smoke/manifest.json'
+        self.assertIn(name, DECLARED_REQUIRED)
+        artifacts = cache.SIMD_SMOKE_OUTPUTS - {name}
+        for path in artifacts:
+            self.put(path, b'{}\n' if path.endswith('.json') else b'fixture\n')
+        binary = self.root / 'build/simd-capability-smoke/native/simd-smoke-oracle'
+        binary.chmod(0o755)
+        self.put(name, json.dumps({'inputs': [dict(path=path, sha256=cache.digest(self.root / path))
+                                            for path in sorted(artifacts)]}))
+        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
+            manifest = self.pack()
+            self.assertLessEqual(cache.SIMD_SMOKE_OUTPUTS, manifest['payload'].keys())
+            self.remove_payload(manifest)
+            cache.restore(self.root, self.current, self.bundle)
+            for path in artifacts:
+                self.assertEqual(manifest['payload'][path], cache.digest(self.root / path))
+            self.assertEqual(0o755, binary.stat().st_mode & 0o7777)
+            self.remove_payload(manifest)
+            for missing in cache.SIMD_SMOKE_SOURCES:
+                with self.subTest(missing=missing):
+                    changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                        if member.name != 'files/' + missing])
+                    self.rejected_without_writes(changed)
+        for unexpected in ('build/generated/simd/kotlin/Generated.kt',
+                           'build/generated/simd/fixtures/Unexpected.hs',
+                           'build/simd-capability-smoke/native/unreviewed'):
+            self.assertFalse(cache.allowed_payload(unexpected, {}))
+
     def formatter_fixture(self):
         project = Path(__file__).resolve().parents[2]
         self.put(cache.WIRED_SOURCE, (project / cache.WIRED_SOURCE).read_bytes())

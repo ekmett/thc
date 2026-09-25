@@ -52,6 +52,12 @@ class OriginalStdioCallTest {
                         return result
                     }
                     fun exercise(pass: Int) {
+                        for ((name, operation) in listOf("seek_set" to OriginalStdioOp.SEEK_SET,
+                            "seek_cur" to OriginalStdioOp.SEEK_CUR, "seek_end" to OriginalStdioOp.SEEK_END)) {
+                            val errno = Language.currentState().stdio.errno()
+                            assertEquals(StdioHostAbi.load().seekConstant(operation), call(name))
+                            assertEquals(errno, Language.currentState().stdio.errno(), "constant preserves sticky errno")
+                        }
                         for (name in listOf("safe_write", "unsafe_write")) {
                             val bytes = byteArrayOf(0x55, pass.toByte(), 0, -1, 10, 0x66)
                             val address = ManagedAddress.fromByteArray(bytes).plus(1L)
@@ -91,7 +97,8 @@ class OriginalStdioCallTest {
                         assertEquals(ebadf, call("errno"))
                         released(language)
                     }
-                    assertThrows(RuntimeFault::class.java) { Calls.target(targets.getValue("errno"), arrayOf(0L, 9L)) }
+                    for (name in listOf("errno", "seek_set", "seek_cur", "seek_end"))
+                        assertThrows(RuntimeFault::class.java) { Calls.target(targets.getValue(name), arrayOf(0L, 9L)) }
                     released(language)
                 } finally { context.leave() }
             }

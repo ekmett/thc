@@ -1977,7 +1977,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio.readiness) CoreOriginalStdio.validateReadyOperand(originalStdio, index,
+                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat) CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.representation, if (argument[0] == "var")
                                 scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
                     }
@@ -2083,7 +2083,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val operation = MutVarOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 mutVarExpression(operation, tupleProof,
-                    args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }.toTypedArray())
+                    args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }.toTypedArray(),
+                    language, metrics, enableAsync)
             } else if (fn[0] == "prim" && StablePointerOp.named(fn[1] as String) != null) {
                 val operation = StablePointerOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

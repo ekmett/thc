@@ -38,8 +38,13 @@ MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers shrink-bytearrays fetch-add-int-array
-narrow-literal-proofs original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-stdio-seek original-stdio-truncate original-fd-ready original-handle-readiness resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
-show-int show-word-list signed-narrow-primops synchronous-exceptions tuple-arithmetic word-floating""".split()
+narrow-literal-proofs original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-stdio-seek original-stdio-truncate original-fd-ready original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+show-int show-word-list signed-narrow-primops simd-capability-smoke synchronous-exceptions tuple-arithmetic word-floating""".split()
+SIMD_SMOKE_SOURCES = frozenset("build/generated/simd/fixtures/" + name for name in (
+    "GeneratedSimdSmoke.hs", "GeneratedSimdSmokeScalar.hs",
+    "GeneratedSimdSmokeScalarNative.hs", "GeneratedSimdSmokeVectorNative.hs"))
+SIMD_SMOKE_OUTPUTS = SIMD_SMOKE_SOURCES | frozenset("build/simd-capability-smoke/" + name for name in (
+    "manifest.json", "pre-core/GeneratedSimdSmoke.json", "audits.json", "cases.tsv", "native/simd-smoke-oracle"))
 PROVENANCE_DIRS = """aggregate-layout empty-join-input empty-tuple-input
 floating-tuple state-tuple sum-layout sum-result tag-to-enum tuple-input
 tuple-join tuple-return unsafe-equality simd simd-int32x4 simd-floatx4
@@ -79,6 +84,7 @@ MAX_TOTAL_BYTES = 3 * 1024 * 1024 * 1024
 MAX_MANIFEST_BYTES = 16 * 1024 * 1024
 MAX_JSON_BYTES = 384 * 1024 * 1024
 NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate",
+    "build/simd-capability-smoke/native/simd-smoke-oracle",
     "build/original-stdio/native/original-stdio-oracle",
     "build/original-stdio-read/native/original-stdio-read-oracle",
     "build/original-stdio-close/native/oracle",
@@ -86,6 +92,7 @@ NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate",
     "build/original-stdio-truncate/native/oracle",
     "build/original-fd-ready/native/oracle",
     "build/original-handle-readiness/native/oracle",
+    "build/original-posix-stat/native/oracle",
     *(f"build/{name}/native/{name}" for name in
       ("state-tuple", "tuple-input", "tuple-return", "empty-tuple-input"))})
 # The original stdio manifest fingerprints its commands, raw streams and numeric
@@ -134,6 +141,19 @@ ORIGINAL_HANDLE_READINESS_OUTPUTS = frozenset("build/original-handle-readiness/"
         "originalIsTerminal.audit.json", "originalIsTerminalErrno.audit.json")),
 ))
 
+ORIGINAL_POSIX_STAT_ENTRIES = ("originalStatSize", "originalStatDev", "originalStatIno",
+                             "originalStatMode", "originalStatLength", "originalStatTypes")
+ORIGINAL_POSIX_STAT_OUTPUTS = frozenset("build/original-posix-stat/" + name for name in (
+    "manifest.json", "oracle.json", "native/oracle", "native/sample.bin",
+    *(f"logs/{label}.{suffix}" for label in (
+        "ghc-version", "ghc-info", "native-build", "native-run", "pre-export", "post-export",
+        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_POSIX_STAT_ENTRIES))
+      for suffix in ("stdout", "stderr", "command.json")),
+    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
+        "core/OriginalPosixStatAudit.json", "core/THC.InterfaceClosure.json",
+        *(f"{entry}.audit.json" for entry in ORIGINAL_POSIX_STAT_ENTRIES))),
+))
+
 ORIGINAL_STDIO_CLOSE_LOGS = (
     "ghc-version", "ghc-info", "native-build", "pre-export", "post-export",
 ) + tuple(f"native-{index}" for index in range(4)) + tuple(
@@ -151,14 +171,14 @@ ORIGINAL_STDIO_CLOSE_OUTPUTS = frozenset("build/original-stdio-close/" + name fo
 ))
 
 ORIGINAL_STDIO_SEEK_LOGS = (
-    "ghc-version", "ghc-info", "native-build", "pre-export", "post-export",
-) + tuple(f"native-{index}" for index in range(18)) + tuple(
+    "ghc-version", "ghc-info", "native-build", "native-constants", "pre-export", "post-export",
+) + tuple(f"native-{index}" for index in range(24)) + tuple(
     f"{stage}-audit-{entry}" for stage in ("pre", "post")
     for entry in ("originalSeek", "originalSeekErrno"))
 ORIGINAL_STDIO_SEEK_OUTPUTS = frozenset("build/original-stdio-seek/" + name for name in (
     "manifest.json", "oracle.json", "native/oracle",
-    *(f"results/{index}.txt" for index in range(18)),
-    *(f"results/{index}.private" for index in list(range(7)) + list(range(9, 16))),
+    *(f"results/{index}.txt" for index in range(24)),
+    *(f"results/{index}.private" for index in range(24) if index % 12 not in (7, 8)),
     *(f"logs/{label}.{suffix}" for label in ORIGINAL_STDIO_SEEK_LOGS
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
@@ -471,6 +491,8 @@ def allowed_payload(name, pins):
         return True
     if native_executable(name):
         return True
+    if name in SIMD_SMOKE_SOURCES:
+        return True
     if len(parts) < 3 or parts[0] != "build":
         return False
     if parts[1] == "compiler":
@@ -478,6 +500,8 @@ def allowed_payload(name, pins):
             bool(re.fullmatch(r"libHSthc-[\w.-]+\.(so|dylib)", parts[2])))
     if parts[1] == "original-stdio":
         return name in ORIGINAL_STDIO_OUTPUTS
+    if parts[1] == "simd-capability-smoke":
+        return name in SIMD_SMOKE_OUTPUTS
     if parts[1] == "original-stdio-read":
         return name in ORIGINAL_STDIO_READ_OUTPUTS
     if parts[1] == "original-stdio-close":
@@ -490,6 +514,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_FD_READY_OUTPUTS
     if parts[1] == "original-handle-readiness":
         return name in ORIGINAL_HANDLE_READINESS_OUTPUTS
+    if parts[1] == "original-posix-stat":
+        return name in ORIGINAL_POSIX_STAT_OUTPUTS
     if parts[1] == "original-stack":
         return name == "build/original-stack/manifest.json" or original_stack_artifact(name)
     if parts[1] == "original-stack-formatter":

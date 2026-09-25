@@ -7,11 +7,14 @@ package thc.runtime
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.frame.FrameDescriptor
 import com.oracle.truffle.api.frame.FrameSlotKind
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.NodeUtil
+import com.oracle.truffle.api.nodes.Node.Child
+import com.oracle.truffle.api.nodes.RootNode
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.*
@@ -19,6 +22,7 @@ import java.io.File
 import java.math.BigInteger
 import java.security.MessageDigest
 import java.util.IdentityHashMap
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -30,6 +34,7 @@ class MutVarTest {
     private val equalityNames = listOf("stRefEquality", "lazyRefEquality")
     private val lazyIONames = listOf("lazyIORef")
     private val swapNames = listOf("swapRef", "lazySwapRef")
+    private val modifyNames = listOf("modifyRef", "lazyModifyRef", "lazyBottomModifierRef")
     private fun manifest() = Json.parse(File(root, "build/mutvar/manifest.json").readText()) as Map<String, Any?>
     private fun merged(paths: List<String>) = CoreModules.merge(paths.map { Json.parse(File(root, it).readText()) as Map<String, Any?> })
     private fun program(language: Language, module: Map<String, Any?>, backend: String): ExecutableProgram =
@@ -51,6 +56,10 @@ class MutVarTest {
             "closureRef" -> x * BigInteger.valueOf(4) + BigInteger.valueOf(11)
             "swapRef" -> x + (x + BigInteger.valueOf(17)) * BigInteger.valueOf(257) +
                 (x * BigInteger.valueOf(3)) * BigInteger.valueOf(65537)
+            "modifyRef" -> x + (x + BigInteger.valueOf(17)) * BigInteger.valueOf(257) +
+                (x * BigInteger.valueOf(3)) * BigInteger.valueOf(65537) +
+                (x + BigInteger.valueOf(17)) * BigInteger.valueOf(16777259)
+            "lazyModifyRef", "lazyBottomModifierRef" -> x
             "lazySwapRef" -> x * BigInteger.valueOf(258) + BigInteger.valueOf(7)
             "unliftedRef" -> x * BigInteger.valueOf(258) + BigInteger.ONE
             "stLoop" -> {
@@ -83,6 +92,8 @@ class MutVarTest {
     @Test fun publicLazyIORefAcrossResidualCalls() = native(false, entryNames = lazyIONames)
     @Test fun nativeAtomicSwapWithInlining() = native(true, entryNames = swapNames)
     @Test fun nativeAtomicSwapAcrossResidualCalls() = native(false, entryNames = swapNames)
+    @Test fun nativeLazyAtomicModifyWithInlining() = native(true, entryNames = modifyNames)
+    @Test fun nativeLazyAtomicModifyAcrossResidualCalls() = native(false, entryNames = modifyNames)
 
     @Test fun genuineLazyReturnedActionsKeepExactMutVarProofs() {
         fun nodes(value: Any?): List<List<Any?>> = when (value) {
@@ -142,7 +153,7 @@ class MutVarTest {
             assertEquals(expected, actual, "Stale MutVar fixture: $path; rerun thc-fixtures mutvar")
         }
         val rows = File(root, "build/mutvar/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
-        assertEquals((names + equalityNames + lazyIONames + swapNames).toSet(), rows.keys)
+        assertEquals((names + equalityNames + lazyIONames + swapNames + modifyNames).toSet(), rows.keys)
         assertEquals((manifest["nativeRows"] as Number).toInt(), rows.values.sumOf { it.size })
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) {
             val module = merged(paths)
@@ -154,6 +165,8 @@ class MutVarTest {
                 val primitives = (audit["primitives"] as List<Map<String, Any?>>).map { it["name"] }.toSet()
                 val required = when (name) {
                     "swapRef", "lazySwapRef" -> setOf("newMutVar#", "readMutVar#", "atomicSwapMutVar#")
+                    "modifyRef" -> setOf("newMutVar#", "readMutVar#", "atomicModifyMutVar2#")
+                    "lazyModifyRef", "lazyBottomModifierRef" -> setOf("newMutVar#", "atomicModifyMutVar2#")
                     "lazyRefEquality" -> setOf("newMutVar#", "writeMutVar#", "reallyUnsafePtrEquality#")
                     "stRefEquality" -> setOf("newMutVar#", "readMutVar#", "writeMutVar#", "reallyUnsafePtrEquality#")
                     else -> setOf("newMutVar#", "readMutVar#", "writeMutVar#")
@@ -244,6 +257,255 @@ class MutVarTest {
         assertNull(field.getAnnotation(com.oracle.truffle.api.CompilerDirectives.CompilationFinal::class.java))
     }
 
+    @Test fun atomicModifyReturnsOneSharedLazyApplicationAndSelector() {
+        executionContext().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val layout = DataLayout(language, "main:ModifyPair", "ModifyPair", arrayOf("LiftedRep", "IntRep"))
+                val calls = java.util.concurrent.atomic.AtomicInteger()
+                val old = Any(); val replacement = Any()
+                val modifier = object : GuestRoot(language, FrameDescriptor.newBuilder().build()) {
+                    override fun bloom(frame: VirtualFrame): Long = frame.arguments[0] as Long
+                    override fun execute(frame: VirtualFrame): Any? {
+                        assertSame(old, frame.arguments[1]); calls.incrementAndGet()
+                        return layout.create(arrayOf(replacement, 7L))
+                    }
+                }
+                val metrics = Metrics(false)
+                val force = object : RootNode(language, FrameDescriptor.newBuilder().build()) {
+                    @Child private var evaluator = Force(metrics)
+                    override fun execute(frame: VirtualFrame): Any? = evaluator.execute(frame, frame.arguments[0])
+                }.callTarget
+                val cell = ManagedMutVar(old)
+                val function = Closure(null, arity = 1, target = modifier.callTarget)
+                fun constant(value: Any?) = object : Expr() {
+                    override fun execute(frame: VirtualFrame): Any? = value
+                }
+                val slots = FrameDescriptor.newBuilder().let { builder ->
+                    intArrayOf(builder.addSlot(FrameSlotKind.Object, "old", null),
+                        builder.addSlot(FrameSlotKind.Object, "result", null)) to builder.build()
+                }
+                val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), slots.second)
+                val invalidState = mutVarExpression(MutVarOp.MODIFY2, CoreRepresentation.UNKNOWN,
+                    arrayOf(constant(cell), constant(function), constant(1L)), language, metrics)
+                assertThrows(RuntimeFault::class.java) { invalidState.executeTuple(frame, slots.first, 0) }
+                assertSame(old, cell.value)
+                assertEquals(0, calls.get())
+                val site = MutVarModifySite(language, metrics, false)
+                val modified = cell.modify(function, site)
+                assertSame(old, modified.old)
+                assertEquals(0, calls.get())
+                val selected = cell.value
+                assertTrue(selected is Thunk)
+                val second = ManagedMutVar(old)
+                val secondModification = second.modify(function, site)
+                assertSame(modified.result.target, secondModification.result.target,
+                    "atomic updates at one primitive site share the application call target")
+                assertSame((selected as Thunk).target, (second.value as Thunk).target,
+                    "atomic updates at one primitive site share the selector call target")
+                assertSame(replacement, Calls.target(force, arrayOf(selected)))
+                assertEquals(1, calls.get())
+                assertSame(layout, (Calls.target(force, arrayOf(modified.result)) as DataValue).layout)
+                assertEquals(1, calls.get(), "selector and returned record share the modifier application")
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun atomicModifySharesTheModifierFailureWithoutReplayingIt() {
+        executionContext().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val calls = java.util.concurrent.atomic.AtomicInteger()
+                val payload = Any(); val old = Any()
+                val modifier = object : GuestRoot(language, FrameDescriptor.newBuilder().build()) {
+                    override fun bloom(frame: VirtualFrame): Long = frame.arguments[0] as Long
+                    override fun execute(frame: VirtualFrame): Nothing {
+                        calls.incrementAndGet(); throw GuestException(payload, this)
+                    }
+                }
+                val metrics = Metrics(false)
+                val force = object : RootNode(language, FrameDescriptor.newBuilder().build()) {
+                    @Child private var evaluator = Force(metrics)
+                    override fun execute(frame: VirtualFrame): Any? = evaluator.execute(frame, frame.arguments[0])
+                }.callTarget
+                val cell = ManagedMutVar(old)
+                val modified = cell.modify(Closure(null, arity = 1, target = modifier.callTarget),
+                    MutVarModifySite(language, metrics, false))
+                assertSame(old, modified.old)
+                assertEquals(0, calls.get())
+                for (value in listOf(modified.result, cell.value, modified.result, cell.value)) {
+                    val failure = assertThrows(GuestException::class.java) { Calls.target(force, arrayOf(value)) }
+                    assertSame(payload, failure.payload)
+                }
+                assertEquals(1, calls.get(), "a failed modifier is memoized by the shared application thunk")
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun atomicModifyDoesNotEnterABottomModifierBeforeReturningOld() {
+        executionContext().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val calls = java.util.concurrent.atomic.AtomicInteger()
+                val payload = Any(); val old = Any()
+                val bottom = object : GuestRoot(language, FrameDescriptor.newBuilder().build()) {
+                    override fun bloom(frame: VirtualFrame): Long = frame.arguments[0] as Long
+                    override fun execute(frame: VirtualFrame): Nothing {
+                        calls.incrementAndGet(); throw GuestException(payload, this)
+                    }
+                }
+                val metrics = Metrics(false)
+                val modifier = Thunk(bottom.callTarget, null)
+                val cell = ManagedMutVar(old)
+                val modified = cell.modify(modifier, MutVarModifySite(language, metrics, false))
+                assertSame(old, modified.old)
+                assertEquals(0, calls.get(), "atomicModifyMutVar2# must not force f before the swap")
+                val force = object : RootNode(language, FrameDescriptor.newBuilder().build()) {
+                    @Child private var evaluator = Force(metrics)
+                    override fun execute(frame: VirtualFrame): Any? = evaluator.execute(frame, frame.arguments[0])
+                }.callTarget
+                for (value in listOf(modified.result, cell.value)) {
+                    val failure = assertThrows(GuestException::class.java) { Calls.target(force, arrayOf(value)) }
+                    assertSame(payload, failure.payload)
+                }
+                assertEquals(1, calls.get())
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun atomicModifyResumesModifierCallAndSelectedFieldWithoutRepeatingTheSwap() {
+        executionContext().use { context ->
+            context.initialize("thc"); context.enter()
+            val cell: ManagedMutVar
+            val selected: Thunk
+            val modified: ModifiedMutVar
+            val force: RootCallTarget
+            val replacement = Any()
+            val counts = Array(3) { java.util.concurrent.atomic.AtomicInteger() }
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val metrics = Metrics(false)
+                val old = Any()
+                val layout = DataLayout(language, "main:PausedModifyPair", "PausedModifyPair",
+                    arrayOf("LiftedRep", "IntRep"))
+                fun leaf(value: Any?) = Thunk(object : GuestRoot(language, FrameDescriptor.newBuilder().build()) {
+                    override fun bloom(frame: VirtualFrame): Long = frame.arguments[0] as Long
+                    override fun execute(frame: VirtualFrame): Any? = value
+                }.callTarget, null)
+                fun pausing(child: Thunk, counter: java.util.concurrent.atomic.AtomicInteger,
+                            expected: Any? = null) = object : GuestRoot(language, FrameDescriptor.newBuilder().build()) {
+                    override fun bloom(frame: VirtualFrame): Long = frame.arguments[0] as Long
+                    override fun execute(frame: VirtualFrame): Any? {
+                        if (expected != null) assertSame(expected, frame.arguments[1])
+                        counter.incrementAndGet()
+                        CompilerDirectives.transferToInterpreter()
+                        return AstCapture(ThunkSuspended(child), SynchronousMasking.current(this))
+                            .append(object : AstResumeStep {
+                                override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                                    val answer = input as? ChildResume ?: fault("Missing child resume")
+                                    answer.failure?.let { throw it }
+                                    return answer.value
+                                }
+                            }).freeze(this, frame.materialize())
+                    }
+                }
+                val field = Thunk(pausing(leaf(replacement), counts[2]).callTarget, null)
+                val record = layout.create(arrayOf(field, 7L))
+                val body = pausing(leaf(record), counts[1], old)
+                val closure = Closure(null, arity = 1, target = body.callTarget)
+                val modifier = Thunk(pausing(leaf(closure), counts[0]).callTarget, null)
+                cell = ManagedMutVar(old)
+                modified = cell.modify(modifier, MutVarModifySite(language, metrics, true))
+                selected = cell.value as Thunk
+                assertSame(old, modified.old)
+                assertEquals(listOf(0, 0, 0), counts.map { it.get() })
+                force = object : RootNode(language, FrameDescriptor.newBuilder().build()) {
+                    @Child private var evaluator = Force(metrics, true)
+                    override fun execute(frame: VirtualFrame): Any? = evaluator.execute(frame, frame.arguments[0])
+                }.callTarget
+            } finally { context.leave() }
+
+            // Each cut changes the Java carrier thread. The selector remains the
+            // sole published MutVar value while all three continuations resume.
+            fun step(): Any? {
+                val answer = CompletableFuture<Any?>()
+                val thread = Thread {
+                    context.enter()
+                    try { answer.complete(Calls.target(force, arrayOf(selected))) }
+                    catch (suspension: ThunkSuspended) { answer.complete(suspension) }
+                    catch (failure: Throwable) { answer.completeExceptionally(failure) }
+                    finally { context.leave() }
+                }
+                thread.start()
+                try { return answer.get(10, TimeUnit.SECONDS) }
+                finally { thread.join(5000); assertFalse(thread.isAlive) }
+            }
+            for (round in 0..2) {
+                val suspension = step() as? ThunkSuspended
+                    ?: throw AssertionError("Expected owned selector cut $round")
+                assertSame(selected, suspension.thunk)
+                assertSame(selected, cell.value, "CAS must not replay while the selector is suspended")
+                assertEquals((0..2).map { if (it <= round) 1 else 0 }, counts.map { it.get() })
+            }
+            assertSame(replacement, step())
+            assertSame(selected, cell.value)
+            assertEquals(listOf(1, 1, 1), counts.map { it.get() })
+            context.enter()
+            try {
+                val record = Calls.target(force, arrayOf(modified.result)) as DataValue
+                assertSame(replacement, Calls.target(force,
+                    arrayOf(record.layout.readFirstLifted(record))))
+            }
+            finally { context.leave() }
+        }
+    }
+
+    @Test fun concurrentAtomicModifyBuildsOneLazyUpdateChain() {
+        executionContext().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val counter = DataLayout(language, "main:AtomicCounter", "AtomicCounter", arrayOf("IntRep"))
+                val pair = DataLayout(language, "main:AtomicPair", "AtomicPair", arrayOf("LiftedRep", "IntRep"))
+                val metrics = Metrics(false)
+                val modifier = object : GuestRoot(language, FrameDescriptor.newBuilder().build()) {
+                    @Child private var force = Force(metrics)
+                    override fun bloom(frame: VirtualFrame): Long = frame.arguments[0] as Long
+                    override fun execute(frame: VirtualFrame): DataValue {
+                        val previous = force.execute(frame, frame.arguments[1]) as DataValue
+                        val n = counter.readLong(previous, 0)
+                        return pair.create(arrayOf(counter.createLong(n + 1), n))
+                    }
+                }
+                val closure = Closure(null, arity = 1, target = modifier.callTarget)
+                val cell = ManagedMutVar(counter.createLong(0))
+                val site = MutVarModifySite(language, metrics, false)
+                val start = CountDownLatch(1)
+                val workers = Executors.newFixedThreadPool(4)
+                try {
+                    val futures = List(4) { workers.submit {
+                        start.await()
+                        repeat(8) { cell.modify(closure, site) }
+                    } }
+                    start.countDown()
+                    futures.forEach { it.get(10, TimeUnit.SECONDS) }
+                } finally {
+                    workers.shutdownNow()
+                    assertTrue(workers.awaitTermination(10, TimeUnit.SECONDS))
+                }
+                val force = object : RootNode(language, FrameDescriptor.newBuilder().build()) {
+                    @Child private var evaluator = Force(metrics)
+                    override fun execute(frame: VirtualFrame): Any? = evaluator.execute(frame, frame.arguments[0])
+                }.callTarget
+                val final = Calls.target(force, arrayOf(cell.value)) as DataValue
+                assertEquals(32L, counter.readLong(final, 0), "each CAS publishes one selector")
+            } finally { context.leave() }
+        }
+    }
+
     @Test fun exactContractsAcceptLiftedAndUnliftedBoxedPayloadCarriers() {
         val state = CoreRepresentation(CoreKind.VOID, present = true, primReps = emptyList())
         val reference = CoreRepresentation(CoreKind.OBJECT, present = true,
@@ -252,11 +514,12 @@ class MutVarTest {
             for (levity in listOf("Lifted", "Unlifted")) {
                 val payload = CoreRepresentation(kind, present = true,
                     primReps = listOf("BoxedRep (Just $levity)"))
-                for (operation in MutVarOp.entries) {
+                for (operation in MutVarOp.entries.filterNot { it == MutVarOp.MODIFY2 }) {
                     val arguments = when (operation) {
                         MutVarOp.NEW -> listOf(payload, state)
                         MutVarOp.READ -> listOf(reference, state)
                         MutVarOp.SWAP, MutVarOp.WRITE -> listOf(reference, payload, state)
+                        MutVarOp.MODIFY2 -> error("Separate lifted function contract")
                     }
                     val returned = if (operation == MutVarOp.NEW) reference else payload
                     val result = if (operation.tuple) CoreRepresentation(CoreKind.UNKNOWN, present = true,
@@ -329,6 +592,26 @@ class MutVarTest {
         } finally {
             workers.shutdownNow()
             assertTrue(workers.awaitTermination(10, TimeUnit.SECONDS), "MutVar workers did not terminate")
+        }
+    }
+
+    @Test fun atomicModifyRequiresLiftedFunctionAndTwoLiftedResults() {
+        val state = CoreRepresentation(CoreKind.VOID, present = true, primReps = emptyList())
+        val reference = CoreRepresentation(CoreKind.OBJECT, present = true,
+            primReps = listOf("BoxedRep (Just Unlifted)"))
+        val lifted = listOf("BoxedRep (Just Lifted)")
+        val function = CoreRepresentation(CoreKind.CLOSURE, present = true, primReps = lifted)
+        val old = CoreRepresentation(CoreKind.DATA, present = true, primReps = lifted)
+        val record = CoreRepresentation(CoreKind.DATA, present = true, primReps = lifted)
+        val tuple = CoreRepresentation(CoreKind.UNKNOWN, present = true,
+            primReps = lifted + lifted, components = listOf(state, old, record))
+        val args = listOf(reference, function, state)
+        MutVarOp.MODIFY2.validate(args, listOf(false, true, false), tuple)
+        assertThrows(RuntimeFault::class.java) {
+            MutVarOp.MODIFY2.validate(args, listOf(false, false, false), tuple)
+        }
+        assertThrows(RuntimeFault::class.java) {
+            MutVarOp.MODIFY2.validate(args, listOf(false, true, false), tuple.copy(components = listOf(state, old)))
         }
     }
 
@@ -448,8 +731,11 @@ class MutVarTest {
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 for (operation in MutVarOp.entries) for (mutation in 0..6) for (diagnostic in listOf(false, true)) {
-                    val module = CoreModules.reachable(merged(paths),
-                        if (operation == MutVarOp.SWAP) "swapRef" else "orderedRef")
+                    val module = CoreModules.reachable(merged(paths), when (operation) {
+                        MutVarOp.SWAP -> "swapRef"
+                        MutVarOp.MODIFY2 -> "modifyRef"
+                        else -> "orderedRef"
+                    })
                     val app = applications(module).first { (it[1] as List<*>).take(2) == listOf("prim", operation.primitive) }
                     val args = app[2] as MutableList<Any?>
                     val flags = app[3] as MutableList<Any?>
@@ -479,8 +765,11 @@ class MutVarTest {
                     }, "$backend/${operation.primitive}/mutation$mutation/$diagnostic")
                 }
                 for (operation in MutVarOp.entries) {
-                    val module = CoreModules.reachable(merged(paths),
-                        if (operation == MutVarOp.SWAP) "swapRef" else "orderedRef")
+                    val module = CoreModules.reachable(merged(paths), when (operation) {
+                        MutVarOp.SWAP -> "swapRef"
+                        MutVarOp.MODIFY2 -> "modifyRef"
+                        else -> "orderedRef"
+                    })
                     val app = applications(module).first { (it[1] as List<*>).take(2) == listOf("prim", operation.primitive) }
                     val primitive = (app[1] as List<*>).toList(); app.clear(); app.addAll(primitive)
                     assertThrows(UnsupportedCore::class.java) { program(language, module, backend) }

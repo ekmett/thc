@@ -9,18 +9,21 @@ internal object OriginalStdioFixtures {
     val symbols = mapOf(
         "safe_write" to "ghczuwrapperZC20ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite",
         "unsafe_write" to "ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite",
-        "errno" to "__hscore_get_errno")
+        "errno" to "__hscore_get_errno",
+        "seek_set" to "ghczuwrapperZC1ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuSET",
+        "seek_cur" to "ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR",
+        "seek_end" to "ghczuwrapperZC0ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuEND")
     val signatures = linkedMapOf(
         "safe_write" to listOf("Int32Rep", "AddrRep", "Word64Rep", null),
         "unsafe_write" to listOf("Int32Rep", "AddrRep", "Word64Rep", null),
-        "errno" to listOf(null))
+        "errno" to listOf(null), "seek_set" to listOf(null), "seek_cur" to listOf(null), "seek_end" to listOf(null))
     fun convention(name: String) = if (name == "errno") "ccall" else "capi"
     fun safety(name: String) = if (name == "safe_write") "safe" else "unsafe"
 
     fun scalar(rep: String?, evaluated: Boolean = true): MutableMap<String, Any?> = mutableMapOf(
         "kind" to when (rep) { null -> "void"; "AddrRep" -> "address"; "BoxedRep (Just Lifted)" -> "closure"; else -> "long" },
         "primReps" to (rep?.let { listOf(it) } ?: emptyList<String>()), "evaluated" to evaluated)
-    fun output(name: String) = if (name == "errno") "Int32Rep" else "Int64Rep"
+    fun output(name: String) = if (signatures.getValue(name).size == 1) "Int32Rep" else "Int64Rep"
     fun tuple(name: String, evaluated: Boolean = true): MutableMap<String, Any?> = mutableMapOf(
         "kind" to "unknown", "primReps" to listOf(output(name)), "aggregate" to "unboxed-tuple",
         "components" to mutableListOf(scalar(null), scalar(output(name))), "evaluated" to evaluated)
