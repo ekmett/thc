@@ -2279,6 +2279,18 @@ class ExplicitWeakContractTest(unittest.TestCase):
         self.call(module)[2][0] = ['lit', 'data-addr', 'enabled_capabilities',
             dict(rep=dict(kind='address', primReps=['AddrRep'], evaluated=True))]
         self.assertFalse(run_tuple(module)['accepted'])
+        for mutation in ('missing', 'kind', 'rep', 'aggregate'):
+            module = self.fixture('addCFinalizerToWeak#')
+            label = ['lit', 'function-addr', 'libdwPoolRelease',
+                dict(rep=dict(kind='address', primReps=['AddrRep'], evaluated=True))]
+            self.call(module)[2][0] = label
+            if mutation == 'missing': label.pop()
+            elif mutation == 'kind': label[3]['rep']['kind'] = 'long'
+            elif mutation == 'rep': label[3]['rep']['primReps'] = ['IntRep']
+            else: label[3]['rep']['aggregate'] = 'unboxed-tuple'
+            report = run_tuple(module)
+            self.assertFalse(report['accepted'], (mutation, report))
+            self.assertIn('scalar-representation', {issue['code'] for issue in report['issues']})
 
 
 if __name__ == '__main__':

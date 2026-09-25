@@ -73,7 +73,7 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
         function.requireOwner(this)
         val pointer = if (address === ManagedAddress.nullAddress()) 0L else {
             address.requireByteRegion(0)
-            transport(address)
+            pointerTransport(address)
         }
         val threads = Language.currentState(null).threads
         val previous = threads.enterForeign()
@@ -203,6 +203,17 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
     }
     private fun transport(address: ManagedAddress): Any =
         NativeAddresses.current(null).transport(address) ?: buffer(address)
+    /** A C callback receives Addr# itself, unlike Cbits calls with a separate offset. */
+    internal fun pointerTransport(address: ManagedAddress): CbitsBuffer {
+        address.requireByteRegion(0)
+        val nativeImage = if (address.nativeImageKey() == null) null else Supplier {
+            val registry = NativeAddresses.current(null)
+            registry.project(address)
+            registry.transport(address) ?: fault("Missing immutable callback pointer image")
+        }
+        return CbitsBuffer(address.cbitsBacking(), address.cbitsWritable(),
+            LongSupplier { address.cbitsSize() }, address.cbitsOffset(), nativeImage)
+    }
     fun init(context: ManagedAddress) {
         executeWithOwners(init, transport(context), context.cbitsOffset())
     }

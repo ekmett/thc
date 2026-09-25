@@ -5,6 +5,7 @@ package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.interop.InteropLibrary
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -149,14 +150,23 @@ class LibdwUnavailableTest {
                 assertThrows(RuntimeFault::class.java) { CFinalizerLabels.fromCore("enabled_capabilities", proof) }
                 assertThrows(RuntimeFault::class.java) { CFinalizerLabels.fromCore("libdwPoolRelease", proof.copy(primReps = listOf("WordRep"))) }
                 val bytes = ManagedAllocation.mutable(16, 8)
-                for (index in 0L until 16L) bytes.writeByte(index, 165)
+                for (index in 0L until 16L) bytes.writeByte(index, index + 17)
                 val pointer = ManagedAddress.fromAllocation(bytes)
+                val interop = InteropLibrary.getUncached()
+                val shifted = state.cbits().pointerTransport(pointer.plus(5))
+                assertEquals(22.toByte(), interop.readBufferByte(shifted, 0))
+                assertEquals(11L, interop.getBufferSize(shifted))
+                val immutable = ManagedAddress.fromHex("0112233445").plus(2)
+                val projected = state.cbits().pointerTransport(immutable)
+                assertEquals(0x23.toByte(), interop.readBufferByte(projected, 0))
+                interop.toNative(projected)
+                assertEquals(immutable.toNativeBits(), interop.asPointer(projected))
                 val weak = state.weaks.make(Any(), Any(), null)
-                assertEquals(1L, state.weaks.addCFinalizer(first, pointer, 0, weak, state.cbits()))
-                assertEquals(1L, state.weaks.addCFinalizer(second, pointer, 0, weak, state.cbits()))
+                assertEquals(1L, state.weaks.addCFinalizer(first, pointer.plus(5), 0, weak, state.cbits()))
+                assertEquals(1L, state.weaks.addCFinalizer(second, pointer.plus(5), 0, weak, state.cbits()))
                 assertThrows(RuntimeFault::class.java) { state.weaks.addCFinalizer(first, pointer, 1, weak, state.cbits()) }
                 assertEquals(0L, state.weaks.finalize(weak).flag)
-                assertEquals(List(16) { 165L }, (0L until 16L).map(bytes::readByte))
+                assertEquals(List(16) { it.toLong() + 17 }, (0L until 16L).map(bytes::readByte))
                 assertEquals(0L, state.weaks.addCFinalizer(first, pointer, 0, weak, state.cbits()))
                 assertEquals(0L, state.weaks.finalize(weak).flag)
             } finally { context.leave() }
