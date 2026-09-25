@@ -58,17 +58,19 @@ class FastInputTests(unittest.TestCase):
         self.assertFalse(cache.allowed_payload('build/arithmetic-exceptions/native/other.zip', {}))
         with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
 
-    def test_termios_exact_image_fixture_inventory(self):
-        self.assertEqual(129, len(cache.ORIGINAL_TERMIOS_OUTPUTS))
+    def test_termios_exact_image_and_saved_pointer_fixture_inventory(self):
+        self.assertEqual(163, len(cache.ORIGINAL_TERMIOS_OUTPUTS))
         self.assertIn('build/original-termios/manifest.json', DECLARED_REQUIRED)
         for name in cache.ORIGINAL_TERMIOS_OUTPUTS:
             self.assertTrue(cache.allowed_payload(name, {}), name)
-            if name == 'build/original-termios/native/oracle':
+            if name in ('build/original-termios/native/oracle', 'build/original-termios/saved/native/oracle'):
                 self.assertEqual(0o755, cache.safe_mode(0o755, name))
             else:
                 with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, name)
         for suffix in ('native/other', 'logs/extra.stdout', 'pre/unknown.audit.json',
-                       'attempt-0/oracle.json', 'pre/core/Other.json', 'native/OriginalTermiosAudit.o'):
+                       'attempt-0/oracle.json', 'pre/core/Other.json', 'native/OriginalTermiosAudit.o',
+                       'saved/native/other', 'saved/native/OriginalSavedTermiosNative.o',
+                       'saved/pre/core/Other.json', 'logs/saved-extra.stdout'):
             self.assertFalse(cache.allowed_payload('build/original-termios/' + suffix, {}), suffix)
         for suffix in ('../outside', 'logs/../../outside'):
             with self.assertRaises(cache.CacheMiss): cache.file_path(self.root, 'build/original-termios/' + suffix)
@@ -87,6 +89,36 @@ class FastInputTests(unittest.TestCase):
             self.assertFalse(cache.allowed_payload('build/original-open/' + suffix, {}), suffix)
         for suffix in ('../outside', 'logs/../../outside'):
             with self.assertRaises(cache.CacheMiss): cache.file_path(self.root, 'build/original-open/' + suffix)
+
+    def test_termios_cache_round_trip_keeps_saved_pointer_provenance_and_native_mode(self):
+        name = 'build/original-termios/manifest.json'
+        artifacts = cache.ORIGINAL_TERMIOS_OUTPUTS - {name}
+        binaries = ('build/original-termios/native/oracle', 'build/original-termios/saved/native/oracle')
+        for path in artifacts:
+            self.put(path, b'{}\n' if path.endswith('.json') else b'\x00\x80\xff\n')
+        for binary in binaries:
+            (self.root / binary).chmod(0o755)
+        original = json.dumps(dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
+            installedArtifactsHashed=False, nativeRows=6, entries=list(cache.ORIGINAL_TERMIOS_ENTRIES),
+            inputHashes=self.manifest['inputHashes'],
+            artifactHashes={path: cache.digest(self.root / path) for path in artifacts}))
+        self.put(name, original)
+        with patch.object(cache, 'GMP_NATIVE_HOST', True), patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
+            packed = self.pack()
+            self.assertLessEqual(cache.ORIGINAL_TERMIOS_OUTPUTS, packed['payload'].keys())
+            self.remove_payload(packed)
+            cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(original, (self.root / name).read_text())
+            for path in artifacts:
+                self.assertEqual(packed['payload'][path], cache.digest(self.root / path), path)
+            for binary in binaries:
+                self.assertEqual(0o755, (self.root / binary).stat().st_mode & 0o7777)
+            self.remove_payload(packed)
+            for missing in ('saved/native/oracle', 'saved/pre/core/OriginalSavedTermiosAudit.json',
+                            'logs/saved-native-run.stdout'):
+                altered = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                    if member.name != 'files/build/original-termios/' + missing])
+                self.rejected_without_writes(altered)
 
     def test_rts_locks_exact_nonexecutable_cache_inventory(self):
         self.assertEqual(34, len(cache.ORIGINAL_RTS_LOCK_OUTPUTS))
