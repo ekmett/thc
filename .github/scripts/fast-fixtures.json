@@ -16,6 +16,7 @@
     "thc.runtime.GuestThreadsTest",
     "thc.runtime.GuestThreadStatusTest",
     "thc.runtime.BytecodeTypedTupleInputTest",
+    "thc.runtime.SimdAstTransportTest",
     "thc.runtime.DoubleArrayTest",
     "thc.runtime.DoubleVectorMemoryProofTest",
     "thc.runtime.DoubleVectorStorageTest",
@@ -235,6 +236,12 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "fused-floating"]}],
       "outputs": ["build/fused-floating"],
       "sources": ["test/haskell-fixtures/FusedFloatingFixtures.hs", "test/haskell-fixtures/Main.hs", "compiler/test-fixtures/FloatingAudit.hs", "compiler/test-fixtures/FloatingAuditNative.hs"]
+    },
+    "simd-calls": {
+      "junit": ["thc.runtime.SimdCallNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd-calls"]}],
+      "outputs": ["build/simd-calls"],
+      "sources": ["test/haskell-fixtures/SimdCallFixtures.hs", "test/haskell-fixtures/Main.hs", "compiler/test-fixtures/SimdCallAudit.hs", "compiler/test-fixtures/SimdCallNative.hs"]
     },
     "word-floating": {
       "junit": ["thc.runtime.WordFloatingTest"],

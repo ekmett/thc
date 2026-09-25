@@ -39,6 +39,7 @@ fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
 "$fixture_bin" int32-byte-offset
 "$fixture_bin" explicit64-arrays
 "$fixture_bin" fused-floating
+"$fixture_bin" simd-calls
 "$fixture_bin" sqrt
 "$fixture_bin" original-stack
 "$fixture_bin" original-stack-formatter

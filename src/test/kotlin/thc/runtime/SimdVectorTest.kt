@@ -86,7 +86,7 @@ class SimdVectorTest {
             assertThrows(RuntimeFault::class.java) { program(language, backend, hidden, "vectorCase") }
         }
     }
-    @Test fun vectorJoinFormalRejectsWithoutAnEarlierVectorLet() = withLanguage { language ->
+    @Test fun vectorJoinFormalLoadsWithoutAnEarlierVectorLet() = withLanguage { language ->
         val m = module().toMutableMap()
         val binding = (m["bindings"] as List<Map<String, Any?>>).single { it["name"] == "branchCase" }
         val expression = (binding["expr"] as List<Any?>).toMutableList()
@@ -103,8 +103,7 @@ class SimdVectorTest {
         expression[2] = inline(outer[3])
         m["bindings"] = listOf(binding + ("expr" to expression))
         for (backend in listOf("ast", "bytecode")) {
-            val error = assertThrows(UnsupportedCore::class.java) { program(language, backend, m, "branchCase") }
-            assertEquals("Unsupported Core vector boundary: join argument", error.message, backend)
+            assertNotNull(program(language, backend, m, "branchCase"))
         }
     }
     @Test fun caseCannotHideAVectorBoundaryWhenMetadataIsMissing() = withLanguage { language ->

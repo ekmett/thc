@@ -127,15 +127,14 @@ class SimdFloatByteArrayTest {
             validateMode(exported + ("toolchain" to mapOf("architecture" to "aarch64")), "amd64")
         }
     }
-    @Test fun genuineExportedVectorBoundariesRemainRejected() {
+    @Test fun genuineVectorCallBindingsLoadBeforePublicHostAdmission() {
         val provenance = provenance()
         for (stage in provenance["stages"] as List<String>) for (backend in listOf("ast", "bytecode")) withLanguage(true) { language ->
             val module = Json.parse(File(directory, "$stage-core/SimdFloatX4ByteArray.json").readText()) as Map<String, Any?>
             for (name in listOf("vectorArgument", "readTupleEscape", "readVectorEscape")) {
                 val linked = CoreModules.reachable(module, name)
-                assertThrows(RuntimeFault::class.java, {
-                    if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
-                }, "$stage/$backend/$name")
+                assertNotNull(if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked),
+                    "$stage/$backend/$name")
             }
         }
     }
