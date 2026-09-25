@@ -75,7 +75,7 @@ checks and separate graph evidence.
 | DoubleX2 | [Foundation](doublex2.md) | [Raw-bit packed memory](doublex2-bytearray.md) |
 
 The [generated wide arithmetic families](simd-wide-arithmetic.md) share exact
-lane contracts and a finite scalar-entry Haskell oracle/compiled JVM driver.
+lane contracts and finite scalar-entry Haskell oracles/compiled JVM drivers.
 
 ## Performance and runtime design
 

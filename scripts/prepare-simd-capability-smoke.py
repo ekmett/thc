@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Prepare one finite SIMD driver against native Haskell scalar lane arithmetic.
+"""Prepare bounded SIMD composites against native Haskell scalar lane arithmetic.
 
 The default native oracle contains no vectors and needs no AVX512. Enable the
 additional native vector comparison only on a host supporting the selected ISA.
@@ -35,6 +35,8 @@ def record(path):
 def inputs(generator):
     def signed(value):
         return (value + (1 << 63)) % (1 << 64) - (1 << 63)
+    owners = {index: name for name, indices in generator.smoke_groups(generator.families()).items()
+              for index in indices}
     for index, (family, operation) in enumerate(generator.smoke_entries(generator.families())):
         rep = family['laneRep']
         if rep in ('FloatRep', 'DoubleRep'):
@@ -50,7 +52,7 @@ def inputs(generator):
             for left, right in pairs if lane in (0, family['lanes'] - 1) else pairs[:1]:
                 a = signed(left if operation == 'broadcast' else left - lane * 104729)
                 b = signed(right + lane * 7919)
-                yield index * 16 + lane, a, b
+                yield owners[index], index * 16 + lane, a, b
 
 
 def main():
@@ -76,12 +78,16 @@ def main():
     core = core_dir / 'GeneratedSimdSmoke.json'
     exported = json.loads(core.read_text())
     auditor = module(ROOT / 'scripts/audit-core.py', 'simd_auditor')
-    audit = auditor.Audit([(str(core), exported)], capabilities).run(['simdSmoke'])
-    used = {p['name'] for p in audit['primitives']}
-    if not audit['accepted'] or audit['missingGlobals'] or audit['issues'] or not set(contracts) <= used:
-        raise RuntimeError(f'Composite SIMD audit failed: {audit["issues"]}; missing {set(contracts) - used}')
+    groups = generator.smoke_groups(generator.families())
+    audits = {name: auditor.Audit([(str(core), exported)], capabilities).run([name]) for name in groups}
+    used = {p['name'] for audit in audits.values() for p in audit['primitives']}
+    for name, audit in audits.items():
+        if not audit['accepted'] or audit['missingGlobals'] or audit['issues']:
+            raise RuntimeError(f'{name}: Composite SIMD audit failed: {audit["issues"]}')
+    if not set(contracts) <= used:
+        raise RuntimeError(f'Composite SIMD operations disappeared: {set(contracts) - used}')
     audits_path = OUT / 'audits.json'
-    audits_path.write_text(json.dumps(audit, indent=2) + '\n')
+    audits_path.write_text(json.dumps(audits, indent=2) + '\n')
     requests = ''.join('\t'.join(map(str, row)) + '\n' for row in inputs(generator))
     native = OUT / 'native'
     native.mkdir(exist_ok=True)
@@ -104,7 +110,7 @@ def main():
     sources += sorted(GENERATED.glob('GeneratedSimdSmoke*.hs'))
     sources += [ROOT / 'src/main/resources/thc/scalar-primop-signatures.json']
     manifest = dict(schema=1, scope='local SIMD with exact lanes; no vector ABI or hardware-SIMD guarantee',
-                    ghcVersion='9.14.1', rows=len(actual.splitlines()), names=['simdSmoke'],
+                    ghcVersion='9.14.1', rows=len(actual.splitlines()), names=list(groups),
                     nativeOracle='scalar-and-vector' if args.native_vector else 'scalar',
                     ghcOptions=args.ghc_option, operations=sorted(contracts),
                     inputs=[record(path) for path in sources],

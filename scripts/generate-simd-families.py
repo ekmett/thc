@@ -308,8 +308,24 @@ def smoke_entries(fs):
     return [(f, op) for f in fs for op in f['operations'] if op not in ('pack', 'unpack')]
 
 
+def smoke_groups(fs):
+    """Bound compiled size by lane work, retaining whole arithmetic families."""
+    groups = [[]]
+    cost = index = 0
+    for family in fs:
+        count = len([op for op in family['operations'] if op not in ('pack', 'unpack')])
+        lanes = family['lanes'] * count
+        if groups[-1] and cost + lanes > 112:
+            groups.append([])
+            cost = 0
+        groups[-1].extend(range(index, index + count))
+        cost += lanes
+        index += count
+    return {f'simdSmoke{i}': indices for i, indices in enumerate(groups)}
+
+
 def smoke_sources(fs):
-    """One dynamic operation/lane driver; the native scalar oracle needs no SIMD ISA."""
+    """Bounded composite drivers; the native scalar oracle needs no SIMD ISA."""
     convert = {
         'Int32Rep': lambda x: f'intToInt32# ({x})',
         'Word32Rep': lambda x: f'wordToWord32# (int2Word# ({x}))',
@@ -326,13 +342,18 @@ def smoke_sources(fs):
         if rep == 'FloatRep':
             return f'case {value} of v -> case neFloat# v v of {{ 1# -> 2143289344#; _ -> word2Int# (word32ToWord# (castFloatToWord32# v)) }}'
         return f'case {value} of v -> case v /=## v of {{ 1# -> 9221120237041090560#; _ -> word2Int# (word64ToWord# (castDoubleToWord64# v)) }}'
-    def module(name, entry):
+    def header(name):
         return [*HASKELL_HEADER, '{-# LANGUAGE MagicHash, UnboxedTuples #-}', f'module {name} where',
-                'import GHC.Exts', '', f'{entry} :: Int# -> Int# -> Int# -> Int#',
+                'import GHC.Exts', '']
+    def signature(entry):
+        return [f'{entry} :: Int# -> Int# -> Int# -> Int#',
                 f'{entry} selector a b = case quotInt# selector 16# of']
-    vector = module('GeneratedSimdSmoke', 'simdSmoke')
-    scalar = module('GeneratedSimdSmokeScalar', 'scalarSmoke')
+    groups = smoke_groups(fs)
+    owners = {index: name for name, indices in groups.items() for index in indices}
+    drivers = {name: signature(name) for name in groups}
+    scalar = header('GeneratedSimdSmokeScalar') + signature('scalarSmoke')
     for index, (f, op) in enumerate(smoke_entries(fs)):
+        vector = drivers[owners[index]]
         n, count, rep = f['name'], f['lanes'], f['laneRep']
         lane = 'remInt# selector 16#'
         left = f'pack{n}# (# ' + ', '.join(convert[rep](f'a +# {i * 104729}#') for i in range(count)) + ' #)'
@@ -350,7 +371,10 @@ def smoke_sources(fs):
                      ('sub' if op == 'minus' and rep not in ('FloatRep', 'DoubleRep') else op) + stem + '#')
         value = left if op == 'broadcast' else f'{primitive} ({left})' + (f' ({right})' if op in BINARY else '')
         scalar.append(f'  {index}# -> {observe(rep, value)}')
-    vector += ['  _ -> 0#']; scalar += ['  _ -> 0#']
+    vector = header('GeneratedSimdSmoke')
+    for driver in drivers.values():
+        vector += driver + ['  _ -> 0#', '']
+    scalar += ['  _ -> 0#']
     outputs = {'fixtures/GeneratedSimdSmoke.hs': '\n'.join(vector) + '\n',
                'fixtures/GeneratedSimdSmokeScalar.hs': '\n'.join(scalar) + '\n'}
     for compare_vector in (False, True):
@@ -358,13 +382,18 @@ def smoke_sources(fs):
                 'import GHC.Exts', 'import Data.Bits (finiteBitSize)', 'import GeneratedSimdSmokeScalar']
         if compare_vector:
             main += ['import GeneratedSimdSmoke']
-        main += ['emit :: [String] -> IO ()', 'emit [selector, left, right] =',
+        main += ['emit :: [String] -> IO ()', 'emit [name, selector, left, right] =',
                  '  case (read selector, read left, read right) of',
                  '    (I# k, I# a, I# b) ->',
-                 '      let answer = I# (scalarSmoke k a b)', '      in']
+                 '      let answer = I# (scalarSmoke k a b)']
         if compare_vector:
-            main += ['        if answer /= I# (simdSmoke k a b) then error "Native SIMD/scalar mismatch" else']
-        main += ['          putStrLn ("simdSmoke\\t" ++ selector ++ "\\t" ++ left ++ "\\t" ++ right ++ "\\t" ++ show answer)',
+            main += ['          actual = case name of']
+            main += [f'            "{name}" -> I# ({name} k a b)' for name in groups]
+            main += ['            _ -> error "Unknown SIMD smoke entry"', '      in',
+                     '        if answer /= actual then error "Native SIMD/scalar mismatch" else']
+        else:
+            main += ['      in', f'        if name `notElem` {json.dumps(list(groups))} then error "Unknown SIMD smoke entry" else']
+        main += ['          putStrLn (name ++ "\\t" ++ selector ++ "\\t" ++ left ++ "\\t" ++ right ++ "\\t" ++ show answer)',
                  'emit _ = error "Invalid SIMD smoke input"', 'main :: IO ()',
                  'main = if finiteBitSize (0 :: Int) /= 64 then error "Requires 64-bit Int"',
                  '       else getContents >>= mapM_ (emit . words) . lines']

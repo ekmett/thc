@@ -64,7 +64,7 @@ class SimdCapabilitySmokeTest {
         val rows = File(directory, "cases.tsv").readLines().filter(String::isNotEmpty).map { line ->
             line.split('\t').also { assertEquals(5, it.size) }
         }.groupBy { it[0] }
-        assertEquals(listOf("simdSmoke"), manifest["names"])
+        assertEquals((0..6).map { "simdSmoke$it" }, manifest["names"])
         assertEquals(manifest["names"], rows.keys.toList())
         assertEquals((manifest["rows"] as Number).toInt(), rows.values.sumOf { it.size })
         for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").allowExperimentalOptions(true)

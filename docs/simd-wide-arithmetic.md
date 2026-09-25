@@ -14,8 +14,9 @@ Floating arithmetic follows Java semantics; NaN payload selection is not
 claimed. Vector calls, returns, captures, heap fields and joins remain outside
 this local arithmetic scope.
 
-The capability smoke uses one dynamic operation/lane driver containing all 95
-generated operations. It checks 1,002 finite cases interpreted and after
+The capability smoke uses seven operation/lane drivers containing all 95
+generated operations. Each driver contains whole arithmetic families, with at
+most 112 lane-operation pairs to bound compiled code size. It checks 1,002 finite cases interpreted and after
 explicit compilation on both backends, observes every lane, includes integer
 sign/overflow edges, and checks retained compiled targets and released handoff
 state. There are no spin warmup loops. Native expectations come from Haskell
