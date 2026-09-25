@@ -262,8 +262,9 @@ def bytecode_emitter(fs):
 
 def fixture_sources(fs):
     """Real scalar-entry Haskell; vectors never cross a function boundary."""
+    extrema = [op + f['name'] + '#' for f in fs for op in f['operations'] if op in ('min', 'max')]
     source = [*HASKELL_HEADER, '{-# LANGUAGE MagicHash, UnboxedTuples #-}', 'module GeneratedSimdFamilies where',
-              'import GHC.Exts', '',
+              'import GHC.Exts', *(['import GHC.Prim (' + ', '.join(extrema) + ')'] if extrema else []), '',
               '-- NaN payload selection is not part of arithmetic primop semantics.',
               '-- All non-NaNs are observed as exact bits, including signed zero.',
               '{-# INLINE bitsFloat #-}', 'bitsFloat :: Float# -> Int#',
@@ -402,8 +403,9 @@ def smoke_sources(fs):
             return f'case {value} of v -> case neFloat# v v of {{ 1# -> 2143289344#; _ -> word2Int# (word32ToWord# (castFloatToWord32# v)) }}'
         return f'case {value} of v -> case v /=## v of {{ 1# -> 9221120237041090560#; _ -> word2Int# (word64ToWord# (castDoubleToWord64# v)) }}'
     def header(name):
+        extrema = [op + f['name'] + '#' for f in fs for op in f['operations'] if op in ('min', 'max')]
         return [*HASKELL_HEADER, '{-# LANGUAGE MagicHash, UnboxedTuples #-}', f'module {name} where',
-                'import GHC.Exts', '']
+                'import GHC.Exts', *(['import GHC.Prim (' + ', '.join(extrema) + ')'] if name == 'GeneratedSimdSmoke' and extrema else []), '']
     def signature(entry):
         return [f'{entry} :: Int# -> Int# -> Int# -> Int#',
                 f'{entry} selector a b = case quotInt# selector 256# of']
