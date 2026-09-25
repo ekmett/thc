@@ -610,7 +610,7 @@ class Audit:
                         or symbol in core_original_foreign.STAT_IMAGE
                         or symbol in core_original_foreign.GMP_SYMBOLS
                         or symbol in core_original_foreign.LIBDW_UNAVAILABLE
-                        or symbol in ('lockFile', 'unlockFile', '__hscore_fstat', '__hscore_open', 'dup', 'dup2', 'fdReady', 'localeEncoding', 'hs_iconv_open', 'hs_iconv_close', 'hs_iconv',
+                        or symbol in ('rts_setMainThread', 'lockFile', 'unlockFile', '__hscore_fstat', '__hscore_open', 'dup', 'dup2', 'fdReady', 'localeEncoding', 'hs_iconv_open', 'hs_iconv_close', 'hs_iconv',
                                       'base_strerror_r')):
                     for index, (argument, primitive) in enumerate(zip(arguments, core_original_foreign.OPERATIONS[symbol][2])):
                         self.original_stack_operand(argument, primitive, bound, index)
