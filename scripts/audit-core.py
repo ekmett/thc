@@ -51,15 +51,24 @@ class Audit:
         self.queue = deque()
         self.linked_foreign = {}
         self.archive_bindings = {}
+        self.retained_exports = []
         for source, module in modules:
-            linked = (type(module.get('schema')) is int and module['schema'] == 2 and
-                      'foreignLink' in module and core_package_manifest.linked_foreign(module))
-            archive = core_package_manifest.foreign_execution_issue(module) if not linked else None
             foreign = module.get('foreign')
             stubs = foreign.get('stubs') if isinstance(foreign, dict) else None
             registration = ((isinstance(foreign, dict) and bool(foreign.get('files'))) or
                             (isinstance(stubs, dict) and
                              bool(stubs.get('initializers') or stubs.get('finalizers'))))
+            retained = None
+            if module.get('schema') == 2 and registration and 'staticForeignExportRegistration' in module:
+                try:
+                    retained = core_package_manifest.managed_registration(module)
+                except (ValueError, KeyError, TypeError) as error:
+                    self.issue('module-format', None, source, str(error))
+            if retained:
+                self.retained_exports.extend(retained)
+            linked = (type(module.get('schema')) is int and module['schema'] == 2 and
+                      'foreignLink' in module and core_package_manifest.linked_foreign(module))
+            archive = core_package_manifest.foreign_execution_issue(module) if not linked and not retained else None
             if archive:
                 try:
                     core_package_manifest.validate_archive_only_foreign(module)
@@ -72,9 +81,9 @@ class Audit:
                         self.issue('module-format', None, source, 'Duplicate linked CAPI symbol ' + symbol)
                     self.linked_foreign[key] = module['foreignLink']
             if (type(module.get('schema')) is not int or
-                    (module['schema'] != 1 and not linked and not archive) or
+                    (module['schema'] != 1 and not linked and not archive and not retained) or
                     module.get('ghc') != '9.14.1' or
-                    ('foreign' in module and not linked and not archive) or registration):
+                    ('foreign' in module and not linked and not archive and not retained) or (registration and not retained)):
                 self.issue('module-format', None, source,
                            archive or
                            'Requires executable Core schema 1 / GHC 9.14.1 without foreign artifacts')
@@ -1794,6 +1803,12 @@ class Audit:
                 if key not in self.chains:
                     self.chains[key] = [key]
                     self.queue.append(key)
+        # Retention does not call an export. The current backends must still
+        # lower its closure body, so unsupported retained bodies remain gaps.
+        for key in self.retained_exports:
+            if key not in self.chains:
+                self.chains[key] = [key]
+                self.queue.append(key)
         reported_archives = set()
         while self.queue:
             key = self.queue.popleft()
@@ -1815,7 +1830,7 @@ class Audit:
                 issue['reachableVia'] = self.chains[issue['owner']]
         missing = [dict(id=key, reachableVia=self.chains[uses[0]['owner']] + [key], references=uses)
                    for key, uses in sorted(self.missing.items())]
-        return dict(schema=1, audit='syntactic-reachable-core', roots=roots,
+        return dict(schema=1, audit='syntactic-reachable-core', roots=roots, retainedExports=self.retained_exports,
                     capabilityProfile=self.cap.get('name'), accepted=not self.issues and not missing,
                     summary=dict(suppliedBindings=len(self.bindings), reachableBindings=len(self.reachable),
                                  missingGlobals=len(missing), issues=len(self.issues)),

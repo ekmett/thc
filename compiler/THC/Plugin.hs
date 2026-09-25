@@ -910,15 +910,18 @@ exportProvenanceFields owner annotations program original = do
       let details = case verdict of
             ExportProvenance.UnknownProvenance reason -> [("status",S "unclassified"),("reason",S reason)]
             ExportProvenance.RejectedProvenance reason -> [("status",S "rejected"),("reason",S reason)]
-            ExportProvenance.VerifiedRetainedRegistration roots ->
+            ExportProvenance.VerifiedRetainedRegistration _ roots ->
               [("status",S "verified"),("roots",A (map identity roots)),
                ("wordBits",num (64::Int)),("expectedForeign",foreignArtifactRecord original),
                ("expectedExports",case lookup "staticForeignExports" inventory of
                   Just value -> value
                   Nothing -> error "THC verified registration lost its export inventory")]
+          profile = case verdict of
+            ExportProvenance.VerifiedRetainedRegistration 2 _ -> "ghc-9.14.1-thc-only-native-static-ccall-imports-v2"
+            _ -> "ghc-9.14.1-thc-only-native-static-ccall-v1"
       pure [("staticForeignExportRegistration",O
         ([("schema",num (2::Int)),("scope",S "retained-foreign-products"),("execution",S "not-linked"),
-          ("profile",S "ghc-9.14.1-thc-only-native-static-ccall-v1")] ++ details))]
+          ("profile",S profile)] ++ details))]
   where
     checked = either (ioError . userError . ("THC: " ++)) pure
     identity (Exports.ExportName unit modName occurrence namespace) = O

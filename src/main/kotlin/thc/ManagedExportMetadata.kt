@@ -34,7 +34,8 @@ internal class ManagedExportAdmission private constructor(val module: Map<String
                 "profile", "status", "roots", "wordBits", "expectedForeign", "expectedExports"))
             require(provenance["schema"] == 2L && provenance["scope"] == "retained-foreign-products" &&
                 provenance["execution"] == "not-linked" && provenance["status"] == "verified" &&
-                provenance["profile"] == "ghc-9.14.1-thc-only-native-static-ccall-v1" && provenance["wordBits"] == 64L) {
+                provenance["profile"] in setOf("ghc-9.14.1-thc-only-native-static-ccall-v1",
+                    "ghc-9.14.1-thc-only-native-static-ccall-imports-v2") && provenance["wordBits"] == 64L) {
                 "Managed exports require verified retained static-export registration"
             }
             require(provenance["expectedForeign"] == module["foreign"]) { "Managed export foreign product changed after verification" }
