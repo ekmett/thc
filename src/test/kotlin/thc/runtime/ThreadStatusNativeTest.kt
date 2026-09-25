@@ -74,7 +74,15 @@ class ThreadStatusNativeTest {
                             else function.execute(reader, token).asLong()
                         repeat(3) { assertEquals(expected, execute(0L), "$stage/$backend/$entry") }
                         val active = targets(program.entryTarget(entry))
-                        assertTrue(active.any { it.rootNode.name.contains("observe") }, "The actual guest graph includes the primitive body")
+                        val observe = program.entryTarget("${module.getValue("unit")}:ThreadStatusAudit.observe")
+                        val identity = (observe.rootNode as GuestRoot).coreIdentity
+                        assertNotNull(identity, "The exported observe binding has a Core identity")
+                        // AST lambda labels describe arguments, not their global
+                        // binding. Splitting also permits distinct targets for the
+                        // same binding, so follow the retained Core identity.
+                        val observations = active.filter { (it.rootNode as GuestRoot).coreIdentity == identity }
+                        assertTrue(observations.isNotEmpty(), "The actual guest graph includes $identity: " +
+                            active.map { (it.rootNode as GuestRoot).coreIdentity ?: it.rootNode.name })
                         for (target in active) {
                             target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
                             assertTrue(valid(target))
@@ -84,7 +92,7 @@ class ThreadStatusNativeTest {
                         assertEquals(expected + 1L, execute(1L), "$stage/$backend/$entry first installed observation")
                         assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() - before >= 2,
                             "Entry and retained threadStatus# body enter installed code")
-                        for (target in active.filter { it.rootNode.name.contains("observe") })
+                        for (target in observations)
                             assertTrue(valid(target), "First observation preserves its compiled primitive body")
                         assertEquals(0L, program.diagnostics()["unsupportedTraps"])
                     } finally { context.leave() }
