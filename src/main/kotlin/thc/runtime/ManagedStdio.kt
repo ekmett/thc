@@ -22,11 +22,18 @@ internal class ManagedStdio(private val files: ManagedFiles) {
     /** The same original get_errno declaration observes a linked CAPI failure. */
     internal fun captureForeignErrno(errno: Long) { lastError.set(errno) }
 
+    private fun fileError(abi: StdioHostAbi, seek: Boolean = false): Long {
+        val native = files.nativeErrno()
+        return if (native != 0L) native
+            else if (seek && files.errorKind() == 7L) abi.notSeekable()
+            else abi.error(files.errorKind())
+    }
+
     @TruffleBoundary fun read(fd: Long, address: ManagedAddress, count: Long): Long {
         val abi = hostAbi
         if (fd != fd.toInt().toLong()) throw RuntimeFault("Original read requires a canonical signed CInt descriptor")
         val received = files.read(fd, address, count)
-        if (received < 0) lastError.set(abi.error(files.errorKind()))
+        if (received < 0) lastError.set(fileError(abi))
         return received
     }
 
@@ -36,7 +43,7 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         // A negative Long represents an unsigned size_t >= 2^63, outside every
         // managed allocation. ManagedFiles validates the entire range before IO.
         val written = files.write(fd, address, count)
-        if (written < 0) lastError.set(abi.error(files.errorKind()))
+        if (written < 0) lastError.set(fileError(abi))
         else if (count != 0L && written == 0L) {
             // GHC's original write loop would otherwise spin without progress.
             lastError.set(abi.error(6))
@@ -60,7 +67,7 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         // isSock is ignored by the original POSIX implementation. The regular
         // file readiness domain has identical read/write polling semantics.
         val ready = files.ready(fd, milliseconds)
-        if (ready < 0) lastError.set(abi.error(files.errorKind()))
+        if (ready < 0) lastError.set(fileError(abi))
         return ready
     }
 
@@ -68,7 +75,7 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         val abi = hostAbi
         if (fd != fd.toInt().toLong()) throw RuntimeFault("Original close requires a canonical signed CInt descriptor")
         val closed = files.close(fd)
-        if (closed < 0) lastError.set(abi.error(files.errorKind()))
+        if (closed < 0) lastError.set(fileError(abi))
         return closed
     }
 
@@ -76,7 +83,7 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         val abi = hostAbi
         if (fd != fd.toInt().toLong()) fault("Original dup requires a canonical signed CInt descriptor")
         val result = files.duplicate(fd)
-        if (result < 0) lastError.set(abi.error(files.errorKind()))
+        if (result < 0) lastError.set(fileError(abi))
         return result
     }
 
@@ -85,7 +92,7 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         if (fd != fd.toInt().toLong() || target != target.toInt().toLong())
             fault("Original dup2 requires canonical signed CInt descriptors")
         val result = files.duplicateTo(fd, target)
-        if (result < 0) lastError.set(abi.error(files.errorKind()))
+        if (result < 0) lastError.set(fileError(abi))
         return result
     }
 
@@ -94,8 +101,7 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         if (fd != fd.toInt().toLong() || whence != whence.toInt().toLong())
             throw RuntimeFault("Original seek requires canonical signed CInt descriptor and whence")
         val position = files.seek(fd, displacement, abi.seekMode(whence) ?: -1L)
-        if (position < 0) lastError.set(if (files.errorKind() == 7L) abi.notSeekable()
-            else abi.error(files.errorKind()))
+        if (position < 0) lastError.set(fileError(abi, seek = true))
         return position
     }
 
@@ -104,7 +110,7 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         if (fd != fd.toInt().toLong())
             throw RuntimeFault("Original truncate requires a canonical signed CInt descriptor")
         val result = files.truncateOriginal(fd, length)
-        if (result < 0) lastError.set(abi.error(files.errorKind()))
+        if (result < 0) lastError.set(fileError(abi))
         return result
     }
 
@@ -113,7 +119,7 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         if (fd != fd.toInt().toLong()) throw RuntimeFault("Original isatty requires a canonical signed CInt descriptor")
         val terminal = files.isTerminal(fd)
         if (terminal < 0) {
-            lastError.set(abi.error(files.errorKind()))
+            lastError.set(fileError(abi))
             return 0L // POSIX isatty reports zero, not -1, for an invalid descriptor.
         }
         if (terminal == 0L) lastError.set(abi.notTerminal())

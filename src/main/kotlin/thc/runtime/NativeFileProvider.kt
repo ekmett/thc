@@ -38,7 +38,9 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
                 try {
                     val state = Language.currentState()
                     check(state.nativeFiles == null)
-                    state.nativeFiles = NativeFileProvider(state.env, state.threads)
+                    val provider = NativeFileProvider(state.env, state.threads)
+                    state.files.installNative(provider, endpoints)
+                    state.nativeFiles = provider
                 } finally { context.leave() }
                 return context
             } catch (failure: Throwable) {

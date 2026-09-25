@@ -45,6 +45,10 @@ class NativeFileProviderTest {
     private fun identity(file: OpenedNativeFile) = file.statImage().let {
         field(it, OriginalStdioOp.ST_DEV) to field(it, OriginalStdioOp.ST_INO)
     }
+    private fun path(path: Path) = ManagedAddress.fromByteArray(path.toString().toByteArray() + byteArrayOf(0))
+    private fun identity(files: ManagedFiles, fd: Long) = files.statImage(fd).let {
+        field(it, OriginalStdioOp.ST_DEV) to field(it, OriginalStdioOp.ST_INO)
+    }
     // Test-only kernel observation; no fd integer enters production or Core.
     private fun nativeDescriptors(path: Path): Long = Files.list(Path.of("/proc/self/fd")).use { entries ->
         entries.filter { entry ->
@@ -261,6 +265,156 @@ class NativeFileProviderTest {
                 opened.close()
                 assertThrows(ClosedChannelException::class.java) { opened.statImage() }
             }
+        } }
+    }
+
+    @Test fun managedAliasesKeepAuthoritativeIdentityAndClaimsAcrossHostMutation() {
+        val original = directory.resolve("managed")
+        val renamed = directory.resolve("managed-renamed")
+        Files.writeString(original, "abcdef")
+        nativeContext().use { context -> entered(context) {
+            val files = Language.currentState().files
+            val first = files.open(path(original), 3)
+            assertTrue(first >= 3)
+            val alias = files.duplicate(first)
+            val id = identity(files, first)
+            assertEquals(id, identity(files, alias))
+            assertEquals(1L, nativeDescriptors(original), "Managed dup shares one physical resource")
+            Files.move(original, renamed)
+            Files.writeString(original, "replacement")
+            Files.setPosixFilePermissions(renamed, PosixFilePermissions.fromString("r--------"))
+            assertEquals(0x100L, field(files.statImage(alias), OriginalStdioOp.ST_MODE) and 0x1ff)
+            Files.setPosixFilePermissions(renamed, PosixFilePermissions.fromString("rw-------"))
+            assertEquals(-1L, files.open(path(renamed), 1))
+            assertEquals(8L, files.errorKind())
+            assertEquals("abcdef", Files.readString(renamed), "Claim rejection must precede truncation")
+            assertEquals(1L, nativeDescriptors(renamed), "Rejected writer closes only its new acquisition")
+            val replacement = files.open(path(original), 3)
+            assertTrue(replacement >= 3)
+            assertNotEquals(id, identity(files, replacement))
+            assertEquals(0L, files.close(replacement))
+            val byte = ManagedAddress.fromByteArray(byteArrayOf(0))
+            assertEquals(1L, files.read(first, byte, 1)); assertEquals(97L, byte.readWord8(0))
+            assertEquals(1L, files.read(alias, byte, 1)); assertEquals(98L, byte.readWord8(0))
+            assertEquals(0L, files.close(first))
+            assertThrows(IOException::class.java) { files.statImage(first) }
+            assertEquals(1L, nativeDescriptors(renamed))
+            Files.delete(renamed)
+            assertEquals(id, identity(files, alias))
+            assertEquals(1L, files.write(alias, ManagedAddress.fromByteArray(byteArrayOf(90)), 1))
+            assertEquals(3L, files.seek(alias, 3, 0))
+            assertEquals(1L, files.read(alias, byte, 1)); assertEquals(100L, byte.readWord8(0))
+            assertEquals(0L, files.close(alias))
+            assertEquals("replacement", Files.readString(original))
+        } }
+    }
+
+    @Test fun managedReplacementMovesCapabilityAndLastOwnerClosesExactlyOnce() {
+        val a = directory.resolve("owner-a"); val b = directory.resolve("owner-b")
+        val context = nativeContext()
+        lateinit var files: ManagedFiles
+        entered(context) {
+            files = Language.currentState().files
+            val one = files.open(path(a), 3); val two = files.open(path(b), 3)
+            val alias = files.duplicate(one)
+            val oldIdentity = identity(files, one)
+            val newIdentity = identity(files, two)
+            assertNotEquals(oldIdentity, newIdentity)
+            assertEquals(one, files.duplicateTo(two, one))
+            assertEquals(newIdentity, identity(files, one))
+            assertEquals(oldIdentity, identity(files, alias))
+            assertEquals(1L, nativeDescriptors(a)); assertEquals(1L, nativeDescriptors(b))
+            assertEquals(0L, files.close(alias))
+            assertEquals(0L, nativeDescriptors(a))
+            assertEquals(one, files.duplicateTo(two, one), "Replacing same-owner alias must not close it")
+            assertEquals(0L, files.close(two))
+            assertEquals(1L, nativeDescriptors(b))
+            assertEquals(1L, files.write(one, ManagedAddress.fromByteArray(byteArrayOf(42)), 1))
+        }
+        context.close()
+        assertEquals(0L, nativeDescriptors(b), "Context disposal closes the final alias physically")
+        files.dispose()
+        assertEquals(0L, nativeDescriptors(b))
+        assertArrayEquals(byteArrayOf(42), Files.readAllBytes(b))
+    }
+
+    @Test fun explicitEndpointCapabilitiesPreserveUngrantAndNonregularBoundaries() {
+        nativeContext(setOf(StandardEndpoint.OUTPUT)).use { context -> entered(context) {
+            val state = Language.currentState(); val files = state.files; val stdio = state.stdio
+            for (fd in listOf(0L, 2L))
+                assertThrows(UnsupportedOperationException::class.java) { files.statImage(fd) }
+            val image = files.statImage(1)
+            val regular = PosixStat.execute(OriginalStdioOp.IS_REG, ManagedAddress.nullAddress(),
+                field(image, OriginalStdioOp.ST_MODE)) == 1L
+            assertEquals(if (regular) 0L else 1L, files.deviceType(1))
+            if (regular) {
+                assertEquals(1L, files.ready(1, 0)); assertEquals(0L, files.isTerminal(1))
+                assertEquals(-1L, files.setSize(1, field(image, OriginalStdioOp.ST_SIZE) + 1))
+                assertEquals(7L, files.errorKind(), "Inherited append status is not guessed for endpoint extension")
+            } else {
+                assertEquals(-1L, files.ready(1, 0)); assertEquals(7L, files.errorKind())
+                assertEquals(0L, stdio.isTerminal(1)); assertEquals(StdioHostAbi.load().error(7), stdio.errno())
+                assertEquals(-1L, files.size(1)); assertEquals(7L, files.errorKind())
+                assertEquals(-1L, files.setSize(1, 0)); assertEquals(7L, files.errorKind())
+                assertEquals(-1L, stdio.truncate(1, 0)); assertEquals(StdioHostAbi.load().error(5), stdio.errno())
+            }
+            val duplicate = files.duplicate(1)
+            val identity = identity(files, 1)
+            assertEquals(0L, files.close(1))
+            assertEquals(identity, identity(files, duplicate))
+            assertThrows(IOException::class.java) { files.statImage(1) }
+            assertEquals(0L, files.close(duplicate))
+        } }
+        nativeContext(StandardEndpoint.entries.toSet()).use { context -> entered(context) {
+            for (fd in 0L..2L) assertTrue(Language.currentState().files.statImage(fd).isNotEmpty())
+        } }
+    }
+
+    @Test fun partialStandardInstallationRollsBackBeforePublishingAuthority() {
+        nativeContext(setOf(StandardEndpoint.OUTPUT)).use { context -> entered(context) {
+            val state = Language.currentState()
+            val standalone = ManagedFiles(state.env, state.threads)
+            val target = Files.readSymbolicLink(Path.of("/proc/self/fd/1"))
+            fun matching() = Files.list(Path.of("/proc/self/fd")).use { entries -> entries.filter {
+                try { Files.readSymbolicLink(it) == target } catch (_: java.nio.file.NoSuchFileException) { false }
+            }.count() }
+            val before = matching()
+            try {
+                assertThrows(SecurityException::class.java) {
+                    standalone.installNative(provider(), linkedSetOf(StandardEndpoint.OUTPUT, StandardEndpoint.ERROR))
+                }
+                assertEquals(before, matching(), "Completed OUTPUT acquisition closes when later ERROR grant fails")
+                for (fd in 0L..2L)
+                    assertThrows(UnsupportedOperationException::class.java) { standalone.statImage(fd) }
+            } finally { standalone.dispose() }
+        } }
+    }
+
+    @Test fun nativeErrorsKeepPrivateCategoriesAndExactOriginalErrno() {
+        nativeContext(setOf(StandardEndpoint.OUTPUT)).use { context -> entered(context) {
+            val state = Language.currentState(); val files = state.files; val stdio = state.stdio
+            val abi = StdioHostAbi.load()
+            assertEquals(-1L, files.open(path(directory.resolve("missing")), 0))
+            assertEquals(1L, files.errorKind()); assertEquals(abi.error(1), files.nativeErrno())
+            assertEquals(-1L, stdio.close(-1))
+            assertEquals(abi.error(4), stdio.errno()); assertEquals(0L, files.nativeErrno())
+            // Compare against the actual same-endpoint native operation, without
+            // assuming this test process's stdout is a pipe, terminal or file.
+            provider().standard(StandardEndpoint.OUTPUT).use { endpoint ->
+                val expected = try { endpoint.position(); null } catch (error: NativeFileException) { error }
+                val observed = stdio.seek(1, 0, abi.seekConstant(OriginalStdioOp.SEEK_CUR))
+                if (expected != null) {
+                    assertEquals(-1L, observed)
+                    assertEquals(expected.errno.toLong(), stdio.errno())
+                    assertEquals(expected.errno.toLong(), files.nativeErrno())
+                } else assertTrue(observed >= 0)
+            }
+            val sticky = stdio.errno()
+            val alias = stdio.duplicate(1)
+            assertTrue(alias >= 0); assertEquals(sticky, stdio.errno())
+            assertEquals(0L, stdio.close(alias)); assertEquals(sticky, stdio.errno())
+            assertEquals(-1L, stdio.close(-1))
+            assertEquals(abi.error(4), stdio.errno(), "Later managed failure must not reuse stale native errno")
         } }
     }
 }

@@ -9,7 +9,8 @@ import thc.runtime.NativeFileProvider
 /** Explicit Linux host-filesystem authority for an opt-in context. This factory
  * owns the final filesystem configuration and returns a built Context, never a
  * mutable Builder. It cannot authenticate arbitrary filesystem wrappers.
- * Provider proof only: no CLI/ManagedFiles replacement or original fstat yet. */
+ * Connects the provider to this context's shared managed descriptor owners.
+ * No default CLI replacement or original fstat admission yet. */
 object NativeIO {
     enum class StandardEndpoint { INPUT, OUTPUT, ERROR }
 

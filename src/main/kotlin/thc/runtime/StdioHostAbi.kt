@@ -32,6 +32,11 @@ internal class StdioHostAbi private constructor(private val errors: Map<String, 
         10L -> "EMFILE"
         else -> "EIO"
     })
+    /** Retain the private service's categories while separately preserving the
+     * full captured errno for original calls (e.g. ESPIPE is not generic EIO). */
+    internal fun privateErrorKind(errno: Long): Long =
+        if (errno == notSeekable()) 7L
+        else (1L..10L).firstOrNull { it != 6L && error(it) == errno } ?: 6L
 
     companion object {
         private val widths = mapOf("charBits" to 8L, "pointer" to 8L, "int" to 4L, "bool" to 1L, "size" to 8L, "ssize" to 8L)
