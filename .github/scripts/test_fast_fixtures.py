@@ -634,6 +634,19 @@ class FixturePreparationTest(unittest.TestCase):
                 source = (project / "src/test/kotlin/thc/runtime" / (name + ".kt")).read_text()
                 self.assertNotIn('"build/', source)
 
+    def test_managed_file_and_stdio_controls_do_not_force_full_fixture_preparation(self):
+        project = Path(__file__).resolve().parents[2]
+        _, owners = fast_fixtures._manifest(project)
+        names = ("thc.GuestExceptionsTest", "thc.runtime.ManagedFileCallTest",
+                 "thc.runtime.ManagedFilesTest", "thc.runtime.ManagedStdioTest",
+                 "thc.runtime.OriginalStdioCallTest", "thc.runtime.StdioHostAbiTest")
+        for name in names:
+            with self.subTest(name=name):
+                self.assertIn(name, owners)
+                self.assertIsNone(owners[name])
+                source = (project / "src/test/kotlin" / (name.replace(".", "/") + ".kt")).read_text()
+                self.assertNotIn('"build/', source)
+
     def test_floating_simd_commands_preserve_full_preparation_platform_modes(self):
         project = Path(__file__).resolve().parents[2]
         manifest, _ = fast_fixtures._manifest(project)
