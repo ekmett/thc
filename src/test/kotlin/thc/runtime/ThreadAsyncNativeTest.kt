@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.CoreModules
 import thc.EntryValue
-import thc.ExecutableProgram
 import thc.Json
 import thc.Language
 import java.io.File
