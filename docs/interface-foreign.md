@@ -74,6 +74,10 @@ same-symbol component isolation, repeated imports and authority/carrier
 rejection. It is separate from the stock/thin-GHC default test inventory and
 fails when its real fixture has not been prepared.
 
+This first runtime slice checks semantics and ownership. Its interop call uses
+a Truffle boundary and boxed argument/result transport; compiled guest-entry
+validity does not establish Sulong inlining or allocation-free foreign calls.
+
 ## Why compiling the stubs through Sulong is insufficient
 
 The real GHC 9.14.1 `GHC.Internal.Conc.Bound` stub exports `forkOS_entry`. Its C

@@ -41,6 +41,52 @@ CLOSURE = dict(REFERENCE, kind='closure', evaluated=True)
 TUPLE_CAP = dict(CAP, aggregateResults=['unboxed-tuple'])
 
 
+class PackageScalarOperandTest(unittest.TestCase):
+    """Call-proof controls only; no invented component or bitcode is executed."""
+    def call(self, primitive):
+        scalar = lambda rep, evaluated=True: dict(kind=core_original_foreign.scalar_kind(rep),
+            primReps=[] if rep is None else [rep], evaluated=evaluated)
+        output = dict(kind='unknown', primReps=[primitive], aggregate='unboxed-tuple', evaluated=True,
+                      components=[scalar(None), scalar(primitive)])
+        abi = dict(symbol='scalar_leaf', entry='unused', arguments=[primitive], result=primitive)
+        descriptor = dict(schema=1, target=dict(kind='static', symbol=abi['symbol'], unit='first', isFunction=True),
+                          convention='ccall', safety='unsafe', arity=2, suppliedArity=2,
+                          argumentReps=[scalar(primitive, False), scalar(None, False)],
+                          resultRep=dict(output, evaluated=False))
+        expression = ['app', ['var', 'foreign-head', dict(rep=CLOSURE)],
+                      [['var', 'argument', dict(rep=scalar(primitive))], ['void', dict(rep=scalar(None))]],
+                      [False, False], None, None, dict(rep=output, foreignCall=descriptor)]
+        return abi, expression, scalar(primitive)
+
+    def inspect(self, abi, expression, stored):
+        audit = audit_core.Audit([], CAP)
+        audit.package_scalar_links['first'] = dict(unit='first', abi=[abi])
+        self.assertTrue(audit.polyglot_call(expression, dict(argument=stored), 'root', 'root'))
+        return audit.issues
+
+    def test_package_scalar_occurrences_cannot_hide_stored_or_intrinsic_carriers(self):
+        for primitive in ('Int32Rep', 'Int64Rep', 'FloatRep', 'DoubleRep'):
+            abi, expression, stored = self.call(primitive)
+            self.assertEqual([], self.inspect(abi, expression, stored), primitive)
+            altered = dict(stored, primReps=['Word64Rep'])
+            self.assertIn('stored operand', str(self.inspect(abi, expression, altered)), primitive)
+            altered = copy.deepcopy(expression)
+            altered[2][0] = ['lit', 'word32', '1', dict(rep=stored)]
+            self.assertIn('lowered operand', str(self.inspect(abi, altered, stored)), primitive)
+            altered = copy.deepcopy(expression)
+            altered[2][1] = ['lit', 'int', '1', expression[2][1][1]]
+            self.assertIn('lowered operand', str(self.inspect(abi, altered, stored)), primitive)
+
+    def test_package_scalar_needs_raw_state_and_result_proof(self):
+        abi, expression, stored = self.call('Int32Rep')
+        altered = copy.deepcopy(expression)
+        altered[2][1] = ['void']
+        self.assertIn('exact scalar/State ABI', str(self.inspect(abi, altered, stored)))
+        altered = copy.deepcopy(expression)
+        del altered[6]['rep']
+        self.assertIn('exact scalar/State ABI', str(self.inspect(abi, altered, stored)))
+
+
 class ArchiveReachabilityTest(unittest.TestCase):
     def report(self, expression, initializers=(), finalizers=(), files=()):
         root = dict(schema=1, ghc='9.14.1', bindings=[bind('root', expression)], constructors=[])

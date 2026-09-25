@@ -177,6 +177,7 @@ def require(condition, detail):
 
 def scalar_kind(primitive):
     return ('void' if primitive is None else 'address' if primitive == 'AddrRep'
+            else 'float' if primitive == 'FloatRep' else 'double' if primitive == 'DoubleRep'
             else 'object' if primitive in ('BoxedRep (Just Unlifted)', 'BoxedRep (Just Lifted)') else 'long')
 
 

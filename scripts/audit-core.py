@@ -665,7 +665,10 @@ class Audit:
                     head['primReps'] != ['BoxedRep (Just Lifted)'] or head['evaluated'] is not True):
                     raise ValueError('Package C call requires its unresolved foreign identifier')
                 core_package_manifest.validate_package_scalar_call(call, package_abi, package_link['unit'],
-                    [self.expression_rep(argument) for argument in arguments], expr[3], self.expression_rep(expr))
+                    [core_original_foreign.raw_rep(argument) for argument in arguments], expr[3],
+                    core_original_foreign.raw_rep(expr))
+                for index, (argument, primitive) in enumerate(zip(arguments, package_abi['arguments'] + [None])):
+                    self.original_stack_operand(argument, primitive, bound, index)
                 self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path, linkedUnit=package_link['unit']))
             except (ValueError, KeyError, TypeError) as error:
                 self.issue('foreign-call', owner, path, str(error))
