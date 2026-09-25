@@ -23,7 +23,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "9f2c61bbd3ba339991b2019ff65ff759f9763524da0bd3bffb71c22856df38d2"
+FULL_PREPARATION_PLAN = "c8aabf75a16c13b6f58777beb0599a0e3443396622e427d5031c43f93c7a6e4b"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -133,6 +133,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/original-stdio/manifest.json",
     "build/original-stdio-read/manifest.json", "build/original-stdio-read/oracle.json",
     "build/original-stdio-close/manifest.json", "build/original-stdio-close/oracle.json",
+    "build/original-posix-dup/manifest.json", "build/original-posix-dup/oracle.json",
     "build/original-stdio-seek/manifest.json", "build/original-stdio-seek/oracle.json",
     "build/original-stdio-truncate/manifest.json", "build/original-stdio-truncate/oracle.json",
     *fast_inputs.ORIGINAL_FD_READY_OUTPUTS,

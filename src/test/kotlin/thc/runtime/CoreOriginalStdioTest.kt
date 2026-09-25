@@ -23,8 +23,8 @@ class CoreOriginalStdioTest {
         assertTrue(error.message.orEmpty().startsWith("Invalid original stdio call: "), error.message)
     }
 
-    @Test fun allSixExactContracts() {
-        assertEquals(6, OriginalStdioFixtures.signatures.size)
+    @Test fun allEightExactContracts() {
+        assertEquals(8, OriginalStdioFixtures.signatures.size)
         for (name in OriginalStdioFixtures.signatures.keys) {
             val input = Input(name)
             assertEquals(OriginalStdioFixtures.symbols.getValue(name), input.validate()!!.symbol)
@@ -53,7 +53,7 @@ class CoreOriginalStdioTest {
             for ((field, values) in mapOf("kind" to listOf(null, "dynamic", false),
                 "unit" to listOf(null, "", "main", "other-package", 7L, false), "isFunction" to listOf(null, false, 1L, "true")))
                 for (value in values) Input(name).also { it.target[field] = value; reject(it) }
-            for ((field, values) in mapOf("convention" to listOf(null, "prim", "javascript", if (name == "errno") "capi" else "ccall"),
+            for ((field, values) in mapOf("convention" to listOf(null, "prim", "javascript", if (OriginalStdioFixtures.convention(name) == "ccall") "capi" else "ccall"),
                 "safety" to listOf(null, "interruptible", if (name == "safe_write") "unsafe" else "safe")))
                 for (value in values) Input(name).also { it.descriptor[field] = value; reject(it) }
             Input(name).also { it.target.remove("unit"); reject(it) }
@@ -99,7 +99,7 @@ class CoreOriginalStdioTest {
     }
 
     @Test fun allThreeResultProofsPreserveExactStateAndPayload() {
-        for (name in listOf("safe_write", "errno")) for (site in 0..2) {
+        for (name in listOf("safe_write", "errno", "dup", "dup2")) for (site in 0..2) {
             fun proof(input: Input): MutableMap<String, Any?> = when (site) {
                 0 -> input.descriptor["resultRep"] as MutableMap<String, Any?>
                 1 -> input.metadata["rep"]!!

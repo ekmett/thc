@@ -72,6 +72,23 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return closed
     }
 
+    @TruffleBoundary fun duplicate(fd: Long): Long {
+        val abi = hostAbi
+        if (fd != fd.toInt().toLong()) fault("Original dup requires a canonical signed CInt descriptor")
+        val result = files.duplicate(fd)
+        if (result < 0) lastError.set(abi.error(files.errorKind()))
+        return result
+    }
+
+    @TruffleBoundary fun duplicateTo(fd: Long, target: Long): Long {
+        val abi = hostAbi
+        if (fd != fd.toInt().toLong() || target != target.toInt().toLong())
+            fault("Original dup2 requires canonical signed CInt descriptors")
+        val result = files.duplicateTo(fd, target)
+        if (result < 0) lastError.set(abi.error(files.errorKind()))
+        return result
+    }
+
     @TruffleBoundary fun seek(fd: Long, displacement: Long, whence: Long): Long {
         val abi = hostAbi
         if (fd != fd.toInt().toLong() || whence != whence.toInt().toLong())

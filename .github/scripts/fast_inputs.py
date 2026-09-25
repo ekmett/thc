@@ -39,7 +39,7 @@ MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers shrink-bytearrays fetch-add-int-array
-narrow-literal-proofs original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-stdio-seek original-stdio-truncate original-fd-ready original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+narrow-literal-proofs original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-stdio-seek original-stdio-truncate original-fd-ready original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops simd-capability-smoke synchronous-exceptions tuple-arithmetic word-floating""".split()
 SIMD_SMOKE_SOURCES = frozenset("build/generated/simd/fixtures/" + name for name in (
     "GeneratedSimdSmoke.hs", "GeneratedSimdSmokeScalar.hs",
@@ -90,6 +90,7 @@ NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate",
     "build/original-stdio/native/original-stdio-oracle",
     "build/original-stdio-read/native/original-stdio-read-oracle",
     "build/original-stdio-close/native/oracle",
+    "build/original-posix-dup/native/oracle",
     "build/original-stdio-seek/native/oracle",
     "build/original-stdio-truncate/native/oracle",
     "build/original-fd-ready/native/oracle",
@@ -172,6 +173,19 @@ ORIGINAL_POSIX_STAT_OUTPUTS = frozenset("build/original-posix-stat/" + name for 
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
         "core/OriginalPosixStatAudit.json", "core/THC.InterfaceClosure.json",
         *(f"{entry}.audit.json" for entry in ORIGINAL_POSIX_STAT_ENTRIES))),
+))
+
+ORIGINAL_POSIX_DUP_ENTRIES = ("originalDup", "originalDupErrno", "originalDup2", "originalDup2Errno")
+ORIGINAL_POSIX_DUP_LOGS = ("ghc-version", "ghc-info", "native-build", "pre-export", "post-export") + tuple(
+    f"native-{index}" for index in range(19)) + tuple(
+    f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_POSIX_DUP_ENTRIES)
+ORIGINAL_POSIX_DUP_OUTPUTS = frozenset("build/original-posix-dup/" + name for name in (
+    "manifest.json", "oracle.json", "native/oracle",
+    *(f"results/{index}.{suffix}" for index in range(19) for suffix in ("txt", "private", "other")),
+    *(f"logs/{label}.{suffix}" for label in ORIGINAL_POSIX_DUP_LOGS for suffix in ("stdout", "stderr", "command.json")),
+    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
+        "core/OriginalPosixDupAudit.json", "core/THC.InterfaceClosure.json",
+        *(f"{entry}.audit.json" for entry in ORIGINAL_POSIX_DUP_ENTRIES))),
 ))
 
 ORIGINAL_STDIO_CLOSE_LOGS = (
@@ -538,6 +552,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_STDIO_READ_OUTPUTS
     if parts[1] == "original-stdio-close":
         return name in ORIGINAL_STDIO_CLOSE_OUTPUTS
+    if parts[1] == "original-posix-dup":
+        return name in ORIGINAL_POSIX_DUP_OUTPUTS
     if parts[1] == "original-stdio-seek":
         return name in ORIGINAL_STDIO_SEEK_OUTPUTS
     if parts[1] == "original-stdio-truncate":

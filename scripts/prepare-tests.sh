@@ -76,6 +76,7 @@ case "$(uname -s)-$(uname -m)" in
   Linux-x86_64) "$fixture_bin" original-gmp --require-supported ;;
 esac
 "$fixture_bin" original-stdio-close
+"$fixture_bin" original-posix-dup
 "$fixture_bin" original-stdio-seek
 "$fixture_bin" original-stdio-truncate
 "$fixture_bin" original-fd-ready
