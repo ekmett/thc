@@ -11,7 +11,7 @@ import thc.Language
 private const val UNIT_CONSTRUCTOR_ID = "ghc-internal:GHC.Internal.Tuple.()"
 
 /** Consumes the only supported host IO result after the guest action has run. */
-private class IoUnitDestination(shape: TupleShape, private val language: Language) : TupleDestination(shape) {
+internal class IoUnitDestination(shape: TupleShape, private val language: Language) : TupleDestination(shape) {
     override fun consume(frame: VirtualFrame, node: Node, result: Any?) {
         AsyncContinuations.publicResult(result, node)
         val raw = if (result === TupleComplete) {

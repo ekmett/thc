@@ -126,6 +126,12 @@
       "sources": ["compiler/test-fixtures/RtsDiagnosticsNative.hs", "test/haskell-fixtures/RtsDiagnosticFixtures.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
+    "rts-shutdown": {
+      "junit": ["thc.runtime.RtsShutdownTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "rts-shutdown"]}],
+      "outputs": ["build/rts-shutdown"],
+      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/haskell-fixtures/RtsShutdownFixtures.hs", "compiler/test-fixtures/RtsShutdownNative.hs"]
+    },
     "original-rts-locks": {
       "junit": ["thc.runtime.OriginalRtsLocksTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-rts-locks", "--require-supported"]}],

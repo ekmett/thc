@@ -239,7 +239,7 @@ internal class GuestThreads internal constructor(
         } catch (failure: Throwable) {
             // Completion may race the wake. A dead target is a successful
             // no-op for throwTo, even if its last wake was rejected.
-            if (request.fail(failure)) throw failure
+            if (failure is ThreadDeath || request.fail(failure)) throw failure
         }
         return request
     }
@@ -371,7 +371,9 @@ internal class GuestThreads internal constructor(
             target.thread
         }
         try { wake(thread) }
-        catch (failure: Throwable) { if (request.fail(failure)) throw failure }
+        catch (failure: Throwable) {
+            if (failure is ThreadDeath || request.fail(failure)) throw failure
+        }
     }
 
     companion object {

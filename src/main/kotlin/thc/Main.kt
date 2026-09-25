@@ -4,8 +4,11 @@
 package thc
 
 import org.graalvm.polyglot.Context
+import org.graalvm.polyglot.PolyglotException
 import org.graalvm.polyglot.Value
 import org.graalvm.polyglot.io.IOAccess
+import thc.runtime.NativeProcessSignals
+import kotlin.system.exitProcess
 
 /** One preference order for the command line, module requests and direct Core requests. */
 fun defaultBackend(): String = System.getProperty("thc.backend", System.getenv("THC_BACKEND") ?: "bytecode")
@@ -14,7 +17,7 @@ fun defaultBackend(): String = System.getProperty("thc.backend", System.getenv("
 internal enum class ContextProfile { NATIVE, SYNCHRONOUS_TEST, LAUNCHER }
 
 internal fun Context.Builder.withContextProfile(profile: ContextProfile): Context.Builder {
-    allowCreateThread(true)
+    allowCreateThread(true).useSystemExit(false)
     if (profile == ContextProfile.NATIVE) return this
     allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false")
@@ -81,6 +84,17 @@ fun loadManagedExports(context: Context, modules: List<String>, backend: String 
 
 /** JVM launcher implementation; ordinary package users should invoke the Haskell `thc run` driver. */
 fun main(args: Array<String>) {
+    try { launch(args) }
+    catch (exit: PolyglotException) {
+        if (!exit.isExit) throw exit
+        // All owning context.use scopes have closed before terminating the CLI.
+        // Embedded loadEntry/runIO callers only receive the polyglot exit.
+        if (exit.exitStatus < 0) NativeProcessSignals.exitBySignal(-exit.exitStatus)
+        exitProcess(exit.exitStatus)
+    }
+}
+
+private fun launch(args: Array<String>) {
     if (args.firstOrNull() == "--run-executable") {
         require(args.size == 4) {
             "Usage: thc --run-executable MODULE.json[,MODULE.json...] ENTRY SHUTDOWN_ENTRY"

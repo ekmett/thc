@@ -370,6 +370,8 @@ jobs:
             build/thread-label/oracle.txt
             build/rts-diagnostics/*.json
             build/rts-diagnostics/logs/
+            build/rts-shutdown/*.json
+            build/rts-shutdown/logs/
             build/original-open/
             build/libdw-unavailable/manifest.json
             build/libdw-unavailable/oracle.json

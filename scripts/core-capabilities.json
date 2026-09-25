@@ -94,6 +94,8 @@
     "reportStackOverflow",
     "reportHeapOverflow",
     "errorBelch2",
+    "shutdownHaskellAndExit",
+    "shutdownHaskellAndSignal",
     "__hsbase_MD5Init", "__hsbase_MD5Update", "__hsbase_MD5Final",
     "thc_io_v1_open", "thc_io_v1_read", "thc_io_v1_write", "thc_io_v1_close",
     "thc_io_v1_error_kind", "thc_io_v1_error_message", "thc_io_v1_seek",
@@ -992,6 +994,7 @@
   },
   "limitations": [
     "Original RTS diagnostic leaves write context stderr and return: reportStackOverflow identifies the actual guest Java thread and reports that its JVM stack limit is unavailable; reportHeapOverflow identifies the actual shared JVM maximum heap size. No native GHC TSO sizes or -K/-M advice are invented. errorBelch2 supports the original callers' %s CString format, preserving raw bytes, offset/NUL boundaries and the appended newline; other printf varargs formats reject before output. No program-name prefix is invented for an embedding that has not registered one.",
+    "Original safe shutdownHaskellAndExit/shutdownHaskellAndSignal close the owning polyglot context with the first CInt status/fast request retained. Host resources are disposed in both modes; guest shutdown finalizers are not implemented. Exit codes use their low eight bits; signals 1..64 use negative polyglot exit codes, with other signed CInt signal values mapping to 255. Only the standalone launcher terminates its JVM or re-raises the requested signal after context cleanup; embedded callers receive PolyglotException.isExit.",
     "waitRead#/waitWrite# admit exact Int# and State# contracts for live context-owned native descriptors. A logical wait token retains its original descriptor identity across async suspension and rejects close or number reuse. Bad descriptors raise the original lazy ghc-internal blockedOnBadFD payload; arbitrary host streams and nonnative readiness providers have no general readiness guarantee.",
     "Arithmetic exception primops require an exact empty unboxed tuple and retain the original ghc-internal SomeException CAF as an implicit dependency. Scalar and concrete tuple bottom results reuse guest raise semantics; vector and sum results remain rejected.",
     "Original Stack.Decode getters consume only context-owned immutable managed snapshots: a nonempty, zero-slack sequence of one-word, zero-payload RET_SMALL frames with authentic detached guest provenance. getWordzh reads the real owned native bits of each header's info-table key and requires native access. Payload, RET_BIG, BCO, RET_FUN and UNDERFLOW getters reject incompatible frame kinds, bad offsets and foreign/expired snapshots; none of those frame kinds can be produced by this snapshot constructor. Descriptor admission permits the unchanged decoder over this closed managed domain, not native RTS stack memory or resumable continuations.",

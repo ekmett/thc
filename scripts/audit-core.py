@@ -643,6 +643,8 @@ class Audit:
                 head_id = function[1] if isinstance(function, list) and len(function) > 1 else None
                 defined = isinstance(head_id, str) and (head_id in bound or head_id in self.bindings)
                 core_original_foreign.validate_head(function, defined)
+                if symbol == 'stg_sig_install':
+                    self.reference('ghc-internal:GHC.Internal.Conc.Signal.runHandlersPtr', owner, path + '/signal-dispatcher')
                 if (symbol in core_original_foreign.STACK_INFO or symbol in core_original_foreign.SEEK_CONSTANTS
                         or symbol in core_original_foreign.STAT_IMAGE
                         or symbol in core_original_foreign.GMP_SYMBOLS
@@ -653,7 +655,7 @@ class Audit:
                         or symbol == 'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask'
                         or symbol in ('getOrSetSystemEventThreadEventManagerStore',
                                       'getOrSetGHCConcSignalSignalHandlerStore')
-                        or symbol in ('reportStackOverflow', 'reportHeapOverflow', 'errorBelch2', 'malloc', 'free', 'rts_setMainThread', 'rtsSupportsBoundThreads', 'lockFile', 'unlockFile', '__hscore_fstat', '__hscore_open', 'dup', 'dup2', 'fdReady', 'localeEncoding', 'hs_iconv_open', 'hs_iconv_close', 'hs_iconv',
+                        or symbol in ('shutdownHaskellAndExit', 'shutdownHaskellAndSignal', 'stg_sig_install', 'reportStackOverflow', 'reportHeapOverflow', 'errorBelch2', 'malloc', 'free', 'rts_setMainThread', 'rtsSupportsBoundThreads', 'lockFile', 'unlockFile', '__hscore_fstat', '__hscore_open', 'dup', 'dup2', 'fdReady', 'localeEncoding', 'hs_iconv_open', 'hs_iconv_close', 'hs_iconv',
                                       'base_strerror_r')):
                     for index, (argument, primitive) in enumerate(zip(arguments, core_original_foreign.OPERATIONS[symbol][2])):
                         self.original_stack_operand(argument, primitive, bound, index)

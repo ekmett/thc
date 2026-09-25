@@ -198,6 +198,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         CoreStackInfoForeign.validateHeads(bindings)
         CoreOriginalStdio.validateHeads(bindings)
         CoreStablePointers.validateHeads(bindings)
+        CoreRtsShutdown.validateHeads(bindings)
         CoreMainThreadForeign.validateHeads(bindings)
         CoreBoundThreadForeign.validateHeads(bindings)
         CoreRtsDiagnosticForeign.validateHeads(bindings)
@@ -206,6 +207,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         CoreGmpForeign.validateHeads(bindings)
         CoreLibdwForeign.validateHeads(bindings)
         CoreNativeAllocationForeign.validateHeads(bindings)
+        CoreSignalForeign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(bindings, constructors)
             CoreInputCalls.validate(bindings, constructors)
@@ -1413,6 +1415,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val sharedCAF = CoreSharedCAFStores.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val shutdown = CoreRtsShutdown.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val mainThreadForeign = CoreMainThreadForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val boundThreadForeign = CoreBoundThreadForeign.validate(CoreRepresentations.metadata(expr),
@@ -1426,12 +1430,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
             val gmp = CoreGmpForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val processSignal = CoreSignalForeign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val nativeAllocation = CoreNativeAllocationForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && capi == null &&
-                !stableFree && !mainThreadForeign && !boundThreadForeign && rtsDiagnostic == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null)
+                !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && rtsDiagnostic == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -1656,6 +1662,20 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     state.emit(e)
                     e.builder.endBoundThreadSupport()
                 }
+            } else if (shutdown != null) {
+                CoreRtsShutdown.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreRtsShutdown.validateOperand(shutdown, index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    check(destination.isEmpty()) { "Shutdown has no result field" }
+                    e.builder.beginShutdownRuntime(shutdown)
+                    operands.forEach { it.emit(e) }
+                    e.builder.endShutdownRuntime()
+                }
             } else if (mainThreadForeign) {
                 CoreMainThreadForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
@@ -1703,6 +1723,19 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ManagedFileOp.IS_TERMINAL -> b.endFileIsTerminal()
                         ManagedFileOp.DEVICE_TYPE -> b.endFileDeviceType()
                     }
+                }
+            } else if (processSignal != null) {
+                CoreSignalForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreSignalForeign.validateOperand(processSignal, index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginInstallProcessSignal(destination.single())
+                    operands.forEach { it.emit(e) }
+                    e.builder.endInstallProcessSignal()
                 }
             } else if (nativeAllocation != null) {
                 CoreNativeAllocationForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)

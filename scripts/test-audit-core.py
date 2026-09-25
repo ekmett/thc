@@ -1583,6 +1583,28 @@ class LibdwUnavailableAuditTest(unittest.TestCase):
             self.assertEqual([], result['foreignCalls'])
 
 
+class OriginalSignalDeclarationTest(unittest.TestCase):
+    def test_exact_call_requires_capability_and_implicit_original_dispatcher(self):
+        resource = ROOT.parent / 'src/test/resources/core/original-signal-install-descriptor.json'
+        declaration = json.loads(resource.read_text())
+        fixture = LibdwUnavailableAuditTest()
+        module = fixture.fixture(declaration)
+        enabled = dict(CAP, managedForeignCalls=[*CAP['managedForeignCalls'], 'stg_sig_install'])
+        missing = fixture.audit(module, enabled)
+        self.assertFalse(missing['accepted'])
+        dispatcher = 'ghc-internal:GHC.Internal.Conc.Signal.runHandlersPtr'
+        self.assertTrue(any(item['id'] == dispatcher for item in missing['missingGlobals']), missing)
+        # A synthetic dispatcher is only a linkage control, not original delivery evidence.
+        module['bindings'].append(bind(dispatcher, lit(0)))
+        self.assertTrue(fixture.audit(module, enabled)['accepted'])
+        disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != 'stg_sig_install'])
+        self.assertFalse(fixture.audit(module, disabled)['accepted'])
+        for index in range(4):
+            wrong = copy.deepcopy(module)
+            wrong['bindings'][0]['expr'][1][index]['rep'] = LONG
+            self.assertFalse(fixture.audit(wrong, enabled)['accepted'])
+
+
 class NativeMallocDeclarationTest(unittest.TestCase):
     """Original descriptors for the bounded, owned native allocation protocol."""
     def test_two_exact_declarations_and_capability_gate(self):
@@ -2282,6 +2304,34 @@ class OriginalRtsDiagnosticTest(unittest.TestCase):
             self.assertTrue(report['accepted'], report)
             self.assertEqual([symbol], [item['symbol'] for item in report['foreignCalls']])
             for key, value in (('safety', 'safe'), ('arity', 0), ('resultRep', state)):
+                malformed = copy.deepcopy(module)
+                malformed['bindings'][0]['expr'][2][1][6]['foreignCall'][key] = value
+                self.assertFalse(audit(malformed)['accepted'])
+
+
+class OriginalShutdownAuditTest(unittest.TestCase):
+    def test_safe_shutdown_requires_exact_cint_and_state_contract(self):
+        state = dict(kind='void', primReps=[], evaluated=True)
+        cint = dict(kind='long', primReps=['Int32Rep'], evaluated=True)
+        reps = [cint, cint, state]
+        result = tuple_rep(state)
+        for symbol in ('shutdownHaskellAndExit', 'shutdownHaskellAndSignal'):
+            descriptor = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='ghc-internal', isFunction=True),
+                convention='ccall', safety='safe', arity=3, suppliedArity=3,
+                argumentReps=[dict(rep, evaluated=False) for rep in reps], resultRep=dict(result, evaluated=False))
+            formals = [dict(id=f'p{i}', lifted=False, rep=rep) for i, rep in enumerate(reps)]
+            call = ['app', ['var', 'foreign', dict(rep=CLOSURE)],
+                [['var', f'p{i}', dict(rep=rep)] for i, rep in enumerate(reps)], [False]*3,
+                False, False, dict(rep=result, foreignCall=descriptor)]
+            body = ['case', call, 'done', [['default', None, [], [*lit(0), dict(rep=LONG)]]],
+                dict(rep=LONG, binder=dict(id='done', lifted=False, rep=result))]
+            module = dict(schema=1, ghc='9.14.1', constructors=[], bindings=[
+                dict(bind('root', ['lam', formals, body, dict(rep=CLOSURE, resultRep=LONG)]), rep=CLOSURE, arity=3)])
+            audit = lambda value: audit_core.Audit([('shutdown.json', value)], CAP).run(['root'])
+            report = audit(module)
+            self.assertTrue(report['accepted'], report)
+            self.assertEqual([symbol], [item['symbol'] for item in report['foreignCalls']])
+            for key, value in (('safety', 'unsafe'), ('arity', 0), ('resultRep', state)):
                 malformed = copy.deepcopy(module)
                 malformed['bindings'][0]['expr'][2][1][6]['foreignCall'][key] = value
                 self.assertFalse(audit(malformed)['accepted'])

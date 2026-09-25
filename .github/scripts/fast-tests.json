@@ -28,6 +28,7 @@
       "junit": ["thc.runtime.CoreMainThreadForeignTest"],
       "python": []
     },
+    "src/main/kotlin/thc/runtime/CoreRtsShutdown.kt": {"junit": ["thc.runtime.RtsShutdownTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/kotlin/thc/runtime/CoreBoundThreadForeign.kt": {
       "junit": ["thc.runtime.CoreBoundThreadForeignTest"],
       "python": ["scripts/test-audit-core.py"]
@@ -248,6 +249,8 @@
     }
   },
   "owners": {
+    "test/haskell-fixtures/RtsShutdownFixtures.hs": {"junit": ["thc.runtime.RtsShutdownTest"], "python": []},
+    "compiler/test-fixtures/RtsShutdownNative.hs": {"junit": ["thc.runtime.RtsShutdownTest"], "python": []},
     "src/main/kotlin/thc/ManagedImportMetadata.kt": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
     "src/test/kotlin/thc/ManagedImportStubsNativeTest.kt": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/THC/ForeignImportProvenance.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
@@ -1097,6 +1100,7 @@
     "test/haskell-fixtures/Main.hs": {
       "junit": [
         "thc.runtime.RtsDiagnosticsTest",
+        "thc.runtime.RtsShutdownTest",
         "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest",
         "thc.runtime.OriginalSigsetTest",
         "thc.runtime.OriginalTermiosTest",
