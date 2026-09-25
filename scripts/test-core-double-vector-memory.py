@@ -126,7 +126,9 @@ class DoubleVectorMemoryProofTest(unittest.TestCase):
             module, app, body = fixture(name)
             self.assertEqual(app[6]['rep']['evaluated'], False)
             self.assertTrue(body[4]['binder']['rep']['evaluated'])
-            self.assertIsNotNone(proof_error(app[6]['rep']))
+            self.assertIsNone(proof_error(app[6]['rep']))
+            self.assertEqual('unboxed-tuple', app[6]['rep']['aggregate'])
+            self.assertEqual('unknown', app[6]['rep']['kind'])
             self.assertIsNotNone(read_case(body, {c['id']: c for c in module['constructors']}))
 
     def test_read_binders_are_values_not_coercions(self):

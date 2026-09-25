@@ -37,6 +37,29 @@ passed. JVM execution and the complete exported original dependency closure
 still require the serialized Linux worker; this checkpoint does not record a
 successful runtime result.
 
+The recovery onto integration candidate `3b2f28ac` preserves this payload and
+lowering design. The merged plugin passes GHC `-fno-code`; the auditor passes
+121 tests in both normal and optimized Python modes, and the 13 primop coverage
+checks pass. These are source checks, not a new JVM result.
+
+The historical Linux `bb042886` gate produced 42 native rows, then stopped at
+the first strict audit with 33 missing globals and 33 issues. Its fixture still
+uses the limited 54-module pinned-source export. A read-only comparison found
+all 30 ordinary missing definitions in the existing 268-module installed
+`ghc-internal` archive (SHA-256
+`f4f17ddc9eb1e5a823668039a22c42aa7c846c5b57b854d372bddf12661fcd60`),
+which carries the original target layout. The other three names are synthetic
+libdw FCallIds, requiring their foreign descriptors rather than Haskell bodies.
+
+The next fixture change must use the existing complete installed-Core provider
+and package/bundle reader, preserving its target layout and provenance, in
+place of the pinned-source export. It must acquire fresh Core with the current
+exporter for structured function labels and retain strict audits of all cold
+paths. Do not overlay both exports of the same original modules. Finalizer
+callbacks and unsupported stack getter paths remain separate runtime work;
+neither the old audit counts nor archive membership proves that the current
+complete closure passes.
+
 Run on the pinned worker, with its existing GraalVM 25.3.4.1 and GHC 9.14.1:
 
 ```sh

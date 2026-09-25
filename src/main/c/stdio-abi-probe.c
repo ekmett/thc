@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -16,9 +17,10 @@ int main(void) {
            "\"bool\":%zu,\"size\":%zu,\"ssize\":%zu},\"errno\":{\"ENOENT\":%d,"
            "\"EACCES\":%d,\"EEXIST\":%d,\"EBADF\":%d,\"EINVAL\":%d,"
            "\"EIO\":%d,\"ENOTSUP\":%d,\"EBUSY\":%d,\"EISDIR\":%d,\"ENOTTY\":%d,\"ESPIPE\":%d,\"EMFILE\":%d},"
-           "\"seek\":{\"SEEK_SET\":%d,\"SEEK_CUR\":%d,\"SEEK_END\":%d}}\n",
+           "\"seek\":{\"SEEK_SET\":%d,\"SEEK_CUR\":%d,\"SEEK_END\":%d},"
+           "\"open\":{\"modeBytes\":%zu,\"O_ACCMODE\":%d,\"O_RDONLY\":%d,\"O_WRONLY\":%d,\"O_RDWR\":%d,\"O_APPEND\":%d}}\n",
            CHAR_BIT, sizeof(void *), sizeof(int), sizeof(bool), sizeof(size_t), sizeof(ssize_t),
            ENOENT, EACCES, EEXIST, EBADF, EINVAL, EIO, ENOTSUP, EBUSY, EISDIR, ENOTTY, ESPIPE, EMFILE,
-           SEEK_SET, SEEK_CUR, SEEK_END);
+           SEEK_SET, SEEK_CUR, SEEK_END, sizeof(mode_t), O_ACCMODE, O_RDONLY, O_WRONLY, O_RDWR, O_APPEND);
     return 0;
 }

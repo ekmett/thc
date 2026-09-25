@@ -8,8 +8,8 @@ adapter. On Linux x86_64, the ordinary
 stdin, stdout and stderr. The launcher keeps its compilation settings and permits
 guest threads. Other hosts retain the existing managed-file context. Custom
 embedding contexts and the scalar CLI path retain their existing IO choices.
-This does **not** implement RTS file locks or
-establish `putStrLn`/Handle support. Arbitrary acquisition cancellation, weak
+The independent original RTS file-lock table does not establish
+`putStrLn`/Handle support. Arbitrary acquisition cancellation, weak
 references and finalizers remain outside this proof.
 
 ## Explicit authority
@@ -84,6 +84,56 @@ acquisition and publishing the descriptor into its host lease is **not yet
 proved safe**; this checkpoint makes no cancellation guarantee.
 
 ## Evidence
+
+### Original unsafe open
+
+The Linux x86_64 `ccall unsafe __hscore_open` declaration is supported only in
+the explicit native context. Its Addr#/CInt/Word32/State proof is exact; safe and
+interruptible declarations remain rejected. This does not execute the complete
+unchanged `openFileWith` acquisition, whose interruptible call is still a gap.
+
+Original open forwards all canonical flags and mode bits unchanged to libc,
+including requested truncation/append/creation behavior and the host umask.
+No flags are added, no retry occurs, and success does not require a later fstat
+or regular-file check. A complete pointer-free NUL-terminated region is copied
+before effects; pathname bytes are not decoded as UTF-8. For relative paths,
+the fixed host filesystem's public `.` URI supplies the absolute byte anchor;
+guest symlink/dot segments are appended without normalization. Empty names stay
+empty. The fixed factory does not promise a mutable working-directory API.
+
+A pending acquisition reserves the lowest free context descriptor before
+creation or truncation. Both dup and private open skip reservations; dup2 into a
+reservation fails with probed EBUSY without changing either owner. Host open runs
+outside the registry monitor. Publication or rollback completes before disposal
+can finish. Dup aliases retain the same opened lease and independent close life.
+Unlike private open, original open acquires **neither** private reader/writer
+admission claims **nor** original RTS locks. Subsequent private opens continue
+their separate policy; original `lockFile`/`unlockFile` calls govern only the
+independent RTS table. Raw close and dup2 never implicitly release RTS entries.
+
+Guest throwTo delivery is deferred within the synchronous foreign scope and the
+completed descriptor result is saved before the next guest cut. The FIFO tests
+cover pending reservation, a queued request, and completion before a manual
+guest poll, not compiled interrupted-continuation replay. Forced host cancellation
+between libc open and its lease store remains unproved; safe/interruptible
+acquisition is not inferred from rollback. Nonregular raw descriptors do not gain
+a general readiness or terminal service.
+
+Forwarding raw flags is not a claim that every subsequent descriptor operation
+already implements every Linux flag combination. In particular, O_PATH and
+access-mode 3 still expose gaps in downstream transfer/truncate/terminal
+classification, and zero-count nonregular transfers retain an existing shortcut
+that need not match native errors (for example, reading a directory). Existing
+readiness, isatty and truncate emulation remains bounded by each operation's
+contract. These are follow-on correctness obligations, not flags silently
+rejected or rewritten by open.
+
+`OriginalOpenTest` consumes genuine installed pre/post FCallIds and native GHC
+observations, checks exact first-installed entry/runRW targets on both backends,
+and rejects malformed carriers, stored proofs, safety variants and managed
+path memory before effects. Native mode observations use umask022; JVM creation
+checks account for its read-only observed process umask without changing it.
+Directory type is compared, not filesystem-dependent directory size/permissions.
 
 `NativeFileProviderTest` includes fixture-free Kotlin tests for authority denial,
 same-resource metadata, nontruncating acquisition, byte-buffer preflights, all

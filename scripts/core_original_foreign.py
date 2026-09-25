@@ -25,6 +25,21 @@ GMP_OPERATIONS = {
     'integer_gmp_mpn_tdiv_r': ((GMP_ARRAY, GMP_ARRAY, 'IntRep', GMP_ARRAY, 'IntRep', None), (None,)),
 }
 GMP_SYMBOLS = frozenset(GMP_OPERATIONS)
+# The managed runtime has no native DWARF backend, matching RTS USE_LIBDW=0.
+LIBDW_UNAVAILABLE = {
+    'libdwPoolTake': ((None,), (None, 'AddrRep')),
+    'libdwGetBacktrace': (('AddrRep', None), (None, 'AddrRep')),
+    'libdwLookupLocation': (('AddrRep', 'AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
+    'libdwPoolClear': ((None,), (None,)),
+}
+TERMIOS_OPERATIONS = {
+    '__hscore_lflag': (('AddrRep', None), (None, 'Word32Rep')),
+    '__hscore_poke_lflag': (('AddrRep', 'Word32Rep', None), (None,)),
+    '__hscore_ptr_c_cc': (('AddrRep', None), (None, 'AddrRep')),
+    '__hscore_sizeof_termios': ((None,), (None, 'IntRep')),
+    **{f'__hscore_{name}': ((None,), (None, 'Int32Rep')) for name in ('echo', 'icanon', 'vmin', 'vtime', 'tcsanow')},
+}
+TERMIOS_SYMBOLS = frozenset(TERMIOS_OPERATIONS)
 SEEK_CONSTANTS = frozenset((
     'ghczuwrapperZC1ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuSET',
     'ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR',
@@ -37,9 +52,14 @@ STACK_INFO = frozenset(('getStackInfoTableAddrzh', 'getInfoTableAddrszh', 'looku
 
 OPERATIONS = {
     **{symbol: ('ccall', 'unsafe', arguments, output)
+       for symbol, (arguments, output) in LIBDW_UNAVAILABLE.items()},
+    **{symbol: ('ccall', 'unsafe', arguments, output)
+       for symbol, (arguments, output) in TERMIOS_OPERATIONS.items()},
+    **{symbol: ('ccall', 'unsafe', arguments, output)
        for symbol, (arguments, output) in GMP_OPERATIONS.items()},
     '__hscore_sizeof_stat': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
     '__hscore_fstat': ('ccall', 'unsafe', ('Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),
+    '__hscore_open': ('ccall', 'unsafe', ('AddrRep', 'Int32Rep', 'Word32Rep', None), (None, 'Int32Rep')),
     'lockFile': ('ccall', 'unsafe', ('Word64Rep', 'Word64Rep', 'Word64Rep', 'Int32Rep', None), (None, 'Int32Rep')),
     'unlockFile': ('ccall', 'unsafe', ('Word64Rep', None), (None, 'Int32Rep')),
     '__hscore_st_dev': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Word64Rep')),
@@ -82,6 +102,9 @@ OPERATIONS = {
     'hs_iconv': ('ccall', 'unsafe', ('Int64Rep', 'AddrRep', 'AddrRep', 'AddrRep', 'AddrRep', None), (None, 'Word64Rep')),
     'base_strerror_r': ('ccall', 'safe', ('Int32Rep', 'AddrRep', 'Word64Rep', None), (None, 'Int32Rep')),
     'hs_free_stable_ptr': ('ccall', 'unsafe', ('AddrRep', None), (None,)),
+    'getOrSetSystemEventThreadEventManagerStore': ('ccall', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
+    'getOrSetGHCConcSignalSignalHandlerStore': ('ccall', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
+    'rts_setMainThread': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', None), (None,)),
     STACK_CLONE: ('prim', 'safe', (None,), (None, 'BoxedRep (Just Unlifted)')),
     'getStackInfoTableAddrzh': ('prim', 'safe', ('BoxedRep (Just Unlifted)',), 'AddrRep'),
     'getInfoTableAddrszh': ('prim', 'safe', ('BoxedRep (Just Unlifted)', 'WordRep'), ('AddrRep', 'AddrRep')),

@@ -18,7 +18,7 @@ internal class TypedInputLayout(val language: Language, val logical: ArgumentLay
     val header = if (hasEnvironment) 2 else 1
     @field:CompilationFinal(dimensions = 1)
     val leaves = logical.physicalProofs
-    private val reps = leaves.map(::fieldRep)
+    private val reps = logical.physicalStorageReps
     val packet = language.handoffLayouts.intern(listOf("WordRep") +
         (if (hasEnvironment) listOf("BoxedRep (Just Unlifted)") else emptyList()) + reps)
     @field:CompilationFinal(dimensions = 1)
@@ -74,13 +74,6 @@ internal class TypedInputLayout(val language: Language, val logical: ArgumentLay
     /** A scalar State#/unknown/address retains one reference field in the old ABI;
      * only fields recursively inside an exact tuple are erased or flattened. */
     companion object {
-        private fun fieldRep(proof: CoreRepresentation): String = when {
-            proof.isLong -> "IntRep"
-            proof.isFloat -> "FloatRep"
-            proof.isDouble -> "DoubleRep"
-            proof.kind == CoreKind.ADDRESS -> "AddrRep"
-            else -> "BoxedRep (Just Lifted)"
-        }
         fun create(language: Language, logical: ArgumentLayout?, hasEnvironment: Boolean): TypedInputLayout? =
             logical?.takeIf { it.requiresTyped }?.let { TypedInputLayout(language, it, hasEnvironment) }
     }
@@ -426,7 +419,7 @@ internal class GenericInputCall(private val source: InputSource, private val cou
 @CompilerDirectives.TruffleBoundary
 internal fun strictInputPositions(root: GuestRoot, input: TypedInputLayout): IntArray {
     if (root is BytecodeRoot && root.isAsyncEnabled) return intArrayOf()
-    return root.entryStrict.indices.filter { root.entryStrict[it] && !input.logical.isTuple(it) &&
+    return root.entryStrict.indices.filter { root.entryStrict[it] && !input.logical.isTuple(it) && !input.logical.isVector(it) &&
         input.packet.isObject(input.header + input.logical.offset(it)) }.toIntArray()
 }
 
@@ -460,7 +453,7 @@ private fun scalarValues(frame: VirtualFrame, node: Node, source: InputSource, v
     for (i in start until start + count) {
         val proof = source.layout?.proof(i)
         if (proof?.isEmptyTuple == true) continue
-        if (proof?.isTuple == true) fault("Tuple input cannot enter a scalar packet")
+        if (proof?.isTuple == true || proof?.isVector == true) fault("Typed input cannot enter a scalar packet")
         val from = ArgumentLayout.offset(source.layout, i)
         result[to++] = when {
             proof?.isLong == true -> source.long(frame, node, values, from)
@@ -505,7 +498,7 @@ internal class AstInputOperands(arguments: Array<Expr>, frameLayout: FrameLayout
         for (i in arguments.indices) {
             val proof = layout.proof(i)
             val offset = layout.offset(i)
-            if (proof.isTuple) arguments[i].executeTuple(frame, source.slots, offset)
+            if (proof.isTuple || proof.isVector) arguments[i].executeTuple(frame, source.slots, offset)
             else if (proof.isLong) FrameAccess.writeLong(frame, source.slots[offset], arguments[i].executeRequiredLong(frame))
             else if (proof.isFloat) FrameAccess.writeFloat(frame, source.slots[offset], arguments[i].executeRequiredFloat(frame))
             else if (proof.isDouble) FrameAccess.writeDouble(frame, source.slots[offset], arguments[i].executeRequiredDouble(frame))
@@ -522,14 +515,28 @@ internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frame
         InputDispatch(operands.source, arguments.size, tail, metrics) else null
     @field:CompilationFinal(dimensions = 1) private var destinationSlots: IntArray? = null
     @CompilationFinal private var destinationOffset = -1
+    private val vector = shape?.proof?.takeIf(CoreRepresentation::isVector)?.let(::VectorLayout)
+    @field:CompilationFinal(dimensions = 1) private val vectorSlots = vector?.let { layout ->
+        IntArray(layout.lanes) { frameLayout.bind("<vector result $it>") }
+    }
     init { representation = shape?.proof?.copy(evaluated = true) ?: CoreRepresentation(CoreKind.UNKNOWN, evaluated = true) }
     override fun execute(frame: VirtualFrame): Any? {
+        if (vector != null) {
+            executeInto(frame, vectorSlots!!, 0)
+            return vector.read(frame, vectorSlots, 0)
+        }
         if (shape != null) fault("Aggregate value requires a typed destination")
         val closure = function.executeRequiredClosure(frame)
         try { operands.evaluate(frame); return dispatch!!.execute(frame, closure) }
         finally { operands.source.clear(frame) }
     }
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        if (vector == null) return executeInto(frame, slots, offset)
+        executeInto(frame, vectorSlots!!, 0)
+        vector.copy(frame, vectorSlots, 0, slots, offset)
+        return null
+    }
+    private fun executeInto(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val tuple = shape ?: fault("Scalar application has no aggregate destination")
         val closure = function.executeRequiredClosure(frame)
         try {

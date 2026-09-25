@@ -1,0 +1,279 @@
+{
+  "schema": 1,
+  "ghc": "9.14.1",
+  "source": "selected installed ghc-internal full-Core ZIP; exact original FCall applications",
+  "calls": [
+    {
+      "symbol": "getOrSetGHCConcSignalSignalHandlerStore",
+      "module": "GHC.Internal.Conc.Signal",
+      "owner": "ghc-internal:GHC.Internal.Conc.Signal.signal_handlers",
+      "member": "core/22.json",
+      "memberSha256": "c1de1c17d7ac3f953cb2a3c9934f8c11eaac5afe07bebf7ca772f26dcd7baf9b",
+      "appSha256": "da54a903149901f0edf7ad75eba2dc7bc90682513e5bcc64e251302dc8b8003f",
+      "app": [
+        "app",
+        [
+          "var",
+          "ghc-internal:GHC.Internal.Conc.Signal.{__ffi_static_ccall_unsafe ghc-internal:getOrSetGHCConcSignalSignalHandlerStore :: Addr#\n                                                                                   -> State#\n                                                                                        RealWorld\n                                                                                   -> (# State#\n                                                                                           RealWorld,\n                                                                                         Addr# #)}_i1Do",
+          {
+            "rep": {
+              "evaluated": true,
+              "kind": "closure",
+              "primReps": [
+                "BoxedRep (Just Lifted)"
+              ]
+            }
+          }
+        ],
+        [
+          [
+            "var",
+            "ghc-internal:GHC.Internal.Conc.Signal.ipv8_i1Dr",
+            {
+              "rep": {
+                "evaluated": true,
+                "kind": "address",
+                "primReps": [
+                  "AddrRep"
+                ]
+              }
+            }
+          ],
+          [
+            "var",
+            "ghc-internal:GHC.Internal.Conc.Signal.ipv7_i1Dq",
+            {
+              "rep": {
+                "evaluated": true,
+                "kind": "void",
+                "primReps": []
+              }
+            }
+          ]
+        ],
+        [
+          false,
+          false
+        ],
+        false,
+        false,
+        {
+          "callDemand": {
+            "arity": 2,
+            "strictArgs": [
+              false,
+              false
+            ]
+          },
+          "foreignCall": {
+            "argumentReps": [
+              {
+                "evaluated": false,
+                "kind": "address",
+                "primReps": [
+                  "AddrRep"
+                ]
+              },
+              {
+                "evaluated": false,
+                "kind": "void",
+                "primReps": []
+              }
+            ],
+            "arity": 2,
+            "convention": "ccall",
+            "resultRep": {
+              "aggregate": "unboxed-tuple",
+              "components": [
+                {
+                  "evaluated": true,
+                  "kind": "void",
+                  "primReps": []
+                },
+                {
+                  "evaluated": true,
+                  "kind": "address",
+                  "primReps": [
+                    "AddrRep"
+                  ]
+                }
+              ],
+              "evaluated": false,
+              "kind": "unknown",
+              "primReps": [
+                "AddrRep"
+              ]
+            },
+            "safety": "unsafe",
+            "schema": 1,
+            "suppliedArity": 2,
+            "target": {
+              "isFunction": true,
+              "kind": "static",
+              "symbol": "getOrSetGHCConcSignalSignalHandlerStore",
+              "unit": "ghc-internal"
+            }
+          },
+          "rep": {
+            "aggregate": "unboxed-tuple",
+            "components": [
+              {
+                "evaluated": true,
+                "kind": "void",
+                "primReps": []
+              },
+              {
+                "evaluated": true,
+                "kind": "address",
+                "primReps": [
+                  "AddrRep"
+                ]
+              }
+            ],
+            "evaluated": false,
+            "kind": "unknown",
+            "primReps": [
+              "AddrRep"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "symbol": "getOrSetSystemEventThreadEventManagerStore",
+      "module": "GHC.Internal.Event.Thread",
+      "owner": "ghc-internal:GHC.Internal.Event.Thread.lvl4_i19S",
+      "member": "core/97.json",
+      "memberSha256": "550ad0c3c4e62544bac91dad31aea1950c792d9d88b1e4dc0fa0c242ece7bb11",
+      "appSha256": "ea949c02e049a87bd22b1366aef85622b765562077420aff7e459402a8847544",
+      "app": [
+        "app",
+        [
+          "var",
+          "ghc-internal:GHC.Internal.Event.Thread.{__ffi_static_ccall_unsafe ghc-internal:getOrSetSystemEventThreadEventManagerStore :: Addr#\n                                                                                      -> State#\n                                                                                           RealWorld\n                                                                                      -> (# State#\n                                                                                              RealWorld,\n                                                                                            Addr# #)}_i2L5",
+          {
+            "rep": {
+              "evaluated": true,
+              "kind": "closure",
+              "primReps": [
+                "BoxedRep (Just Lifted)"
+              ]
+            }
+          }
+        ],
+        [
+          [
+            "var",
+            "ghc-internal:GHC.Internal.Event.Thread.ds2_i2L6",
+            {
+              "rep": {
+                "evaluated": true,
+                "kind": "address",
+                "primReps": [
+                  "AddrRep"
+                ]
+              }
+            }
+          ],
+          [
+            "var",
+            "ghc-internal:GHC.Internal.Event.Thread.eta_i2L3",
+            {
+              "rep": {
+                "evaluated": true,
+                "kind": "void",
+                "primReps": []
+              }
+            }
+          ]
+        ],
+        [
+          false,
+          false
+        ],
+        false,
+        false,
+        {
+          "callDemand": {
+            "arity": 2,
+            "strictArgs": [
+              false,
+              false
+            ]
+          },
+          "foreignCall": {
+            "argumentReps": [
+              {
+                "evaluated": false,
+                "kind": "address",
+                "primReps": [
+                  "AddrRep"
+                ]
+              },
+              {
+                "evaluated": false,
+                "kind": "void",
+                "primReps": []
+              }
+            ],
+            "arity": 2,
+            "convention": "ccall",
+            "resultRep": {
+              "aggregate": "unboxed-tuple",
+              "components": [
+                {
+                  "evaluated": true,
+                  "kind": "void",
+                  "primReps": []
+                },
+                {
+                  "evaluated": true,
+                  "kind": "address",
+                  "primReps": [
+                    "AddrRep"
+                  ]
+                }
+              ],
+              "evaluated": false,
+              "kind": "unknown",
+              "primReps": [
+                "AddrRep"
+              ]
+            },
+            "safety": "unsafe",
+            "schema": 1,
+            "suppliedArity": 2,
+            "target": {
+              "isFunction": true,
+              "kind": "static",
+              "symbol": "getOrSetSystemEventThreadEventManagerStore",
+              "unit": "ghc-internal"
+            }
+          },
+          "rep": {
+            "aggregate": "unboxed-tuple",
+            "components": [
+              {
+                "evaluated": true,
+                "kind": "void",
+                "primReps": []
+              },
+              {
+                "evaluated": true,
+                "kind": "address",
+                "primReps": [
+                  "AddrRep"
+                ]
+              }
+            ],
+            "evaluated": false,
+            "kind": "unknown",
+            "primReps": [
+              "AddrRep"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

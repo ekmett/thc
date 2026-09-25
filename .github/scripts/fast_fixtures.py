@@ -11,6 +11,7 @@ complete preparation script instead of assuming it has no native inputs.
 import hashlib
 import json
 from pathlib import Path
+import platform
 import re
 import stat
 import sys
@@ -23,16 +24,21 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "0f2bacb17eae22bc81e84f7fff8fb3f555ce246e0c2d031f25d06b2605b6bed6"
+FULL_PREPARATION_PLAN = "77ccdef62ad8267d82cea0ba420d13b29d815e9aa6057584a0d43abdb86d94fa"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
-    "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/uncaught-self", "build/small-arrays", "build/floating-address",
+    "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/thread-status", "build/uncaught-self", "build/small-arrays", "build/floating-address",
     "build/floating-byte-offset", "build/narrow-byte-offset", "build/int32-byte-offset",
     "build/arithmetic-exceptions", "build/explicit64-arrays", "build/mask-functions", "build/interface-core",
-    "build/original-fd-ready",
+    "build/original-fd-ready", "build/simd-calls",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    "build/simd-calls/manifest.json", "build/simd-calls/pre-core/SimdCallAudit.json",
+    "build/simd-calls/pre-audit.json",
+    *([] if platform.machine().lower() in ("arm64", "aarch64") else
+      ["build/simd-calls/oracle.tsv", "build/simd-calls/post-core/SimdCallAudit.json",
+       "build/simd-calls/post-audit.json"]),
     "build/interface-core/manifest.json", "build/interface-core/InterfaceLibrary.json",
     "build/interface-core/logs/native-oracle.stdout", "build/interface-core/native/oracle",
     "build/interface-core/full/InterfaceLibrary.hi", "build/interface-core/thin/InterfaceLibrary.hi",
@@ -74,6 +80,10 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/live-async/pre/prefixCount-audit.json", "build/live-async/post/prefixCount-audit.json",
     "build/live-async/pre/warmLoop-audit.json", "build/live-async/post/warmLoop-audit.json",
     "build/live-async/pre/asyncPayload-audit.json", "build/live-async/post/asyncPayload-audit.json",
+    "build/thread-status/manifest.json", "build/thread-status/oracle.txt",
+    *[f"build/thread-status/{stage}/{suffix}" for stage in ("pre", "post")
+      for suffix in ("core/ThreadStatusAudit.json", "selfStatus-audit.json", "maskedStatus-audit.json",
+                     "finishedStatus-audit.json", "diedStatus-audit.json", "blockedStatus-audit.json")],
     "build/thread-async/manifest.json", "build/thread-async/oracle.txt", "build/thread-async/extra-oracle.txt",
     "build/thread-async/lazy-oracle.txt",
     "build/thread-async/pre/core/ThreadAsyncAudit.json", "build/thread-async/post/core/ThreadAsyncAudit.json",
@@ -145,6 +155,8 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/original-stdio-truncate/manifest.json", "build/original-stdio-truncate/oracle.json",
     *fast_inputs.ORIGINAL_FD_READY_OUTPUTS,
     *fast_inputs.ORIGINAL_RTS_LOCK_OUTPUTS,
+    *(fast_inputs.ORIGINAL_OPEN_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-open/manifest.json"}),
+    *(fast_inputs.ORIGINAL_TERMIOS_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-termios/manifest.json"}),
     "build/original-handle-readiness/manifest.json",
     "build/small-arrays/manifest.json",
     "build/simd-capability-smoke/manifest.json",
@@ -271,6 +283,14 @@ def _output_hashes(root, group):
         name = "build/original-rts-locks/manifest.json"
         expected = fast_inputs.rts_lock_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
         return _manifest_output_hashes(root, name, expected)
+    if group["outputs"] == ["build/original-open"]:
+        name = "build/original-open/manifest.json"
+        expected = fast_inputs.original_open_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
+    if group["outputs"] == ["build/original-termios"]:
+        name = "build/original-termios/manifest.json"
+        expected = fast_inputs.termios_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
     files = set()
     for output in group["outputs"]:
         path = root / _relative(output)
@@ -396,7 +416,7 @@ def _full_output_hashes(root):
             if fast_inputs.GMP_NATIVE_HOST:
                 files.update(_gmp_output_hashes(root))
             continue
-        if name == "build/original-rts-locks":
+        if name in ("build/original-rts-locks", "build/original-open", "build/original-termios"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
         for member in path.rglob("*"):

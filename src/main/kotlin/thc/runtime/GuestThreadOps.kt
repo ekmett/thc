@@ -15,13 +15,6 @@ import thc.Language
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicReference
 
-/** An unlifted ThreadId# carries the actual JVM thread ID and its owning context. */
-internal class GuestThreadId(val javaId: Long, val owner: GuestThreads) {
-    override fun equals(other: Any?): Boolean =
-        other is GuestThreadId && owner === other.owner && javaId == other.javaId
-    override fun hashCode(): Int = 31 * System.identityHashCode(owner) + javaId.hashCode()
-}
-
 /** Exact GHC 9.14.1 Core contract for the initial Java-thread primitives. */
 internal object CoreGuestThreads {
     private val lifted = listOf("BoxedRep (Just Lifted)")
@@ -32,6 +25,14 @@ internal object CoreGuestThreads {
         rep.kind == CoreKind.OBJECT && rep.primReps == unlifted
     private fun lifted(rep: CoreRepresentation) = !rep.isAggregate && !rep.isVector &&
         rep.kind in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) && rep.primReps == lifted
+    private fun integer(rep: CoreRepresentation) = !rep.isAggregate && !rep.isVector &&
+        rep.kind == CoreKind.LONG && rep.primReps == listOf("IntRep")
+    private fun statusResult(rep: CoreRepresentation): Boolean {
+        val fields = rep.components
+        return rep.kind == CoreKind.UNKNOWN && rep.isTuple && !rep.isSum && !rep.isVector &&
+            rep.primReps == listOf("IntRep", "IntRep", "IntRep") && fields?.size == 4 &&
+            state(fields[0]) && fields.drop(1).all(::integer)
+    }
     private fun action(rep: CoreRepresentation) = rep.kind == CoreKind.CLOSURE && lifted(rep)
     private fun threadResult(rep: CoreRepresentation): Boolean {
         val fields = rep.components
@@ -45,11 +46,40 @@ internal object CoreGuestThreads {
                 flags == listOf(true, false) && threadResult(result)
             "myThreadId#" -> arguments.size == 1 && state(arguments[0]) &&
                 flags == listOf(false) && threadResult(result)
+            "threadStatus#" -> arguments.size == 2 && thread(arguments[0]) && state(arguments[1]) &&
+                flags == listOf(false, false) && statusResult(result)
             "killThread#" -> arguments.size == 3 && thread(arguments[0]) && lifted(arguments[1]) &&
                 state(arguments[2]) && flags == listOf(false, true, false) && state(result)
             else -> false
         }
         if (!valid) throw RuntimeFault("$name: expected exact GHC ThreadId#, lazy payload and State# contract")
+    }
+}
+
+internal data class GuestThreadSnapshot(val status: Long, val capability: Long, val locked: Long)
+
+internal class MyThreadId(@field:Child private var state: Expr, proof: CoreRepresentation) : Expr() {
+    init { representation = proof.copy(evaluated = true) }
+    override fun execute(frame: VirtualFrame): Nothing = fault("myThreadId# requires a tuple destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        requireVoidCarrier(state.execute(frame))
+        FrameAccess.write(frame, slots[offset], GuestThreadOps.myThreadId(this))
+        return null
+    }
+}
+
+internal class ThreadStatus(@field:Child private var identity: Expr, @field:Child private var state: Expr,
+                            proof: CoreRepresentation) : Expr() {
+    init { representation = proof.copy(evaluated = true) }
+    override fun execute(frame: VirtualFrame): Nothing = fault("threadStatus# requires a tuple destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val target = identity.execute(frame)
+        requireVoidCarrier(state.execute(frame))
+        val snapshot = GuestThreadOps.threadStatus(this, target)
+        FrameAccess.writeLong(frame, slots[offset], snapshot.status)
+        FrameAccess.writeLong(frame, slots[offset + 1], snapshot.capability)
+        FrameAccess.writeLong(frame, slots[offset + 2], snapshot.locked)
+        return null
     }
 }
 
@@ -128,7 +158,14 @@ internal object GuestThreadOps {
 
     @JvmStatic @TruffleBoundary fun myThreadId(node: Node): GuestThreadId {
         val threads = Language.currentState(node).threads
-        return GuestThreadId(threads.currentId(), threads)
+        return threads.currentIdentity()
+    }
+
+    @JvmStatic @TruffleBoundary fun threadStatus(node: Node, id: Any?): GuestThreadSnapshot {
+        val threads = Language.currentState(node).threads
+        val target = id as? GuestThreadId ?: fault("threadStatus# requires a ThreadId#")
+        // No forkOn# or affinity operation is admitted, so no thread has TSO_LOCKED.
+        return GuestThreadSnapshot(threads.status(target).code, target.capability, 0L)
     }
 
     /** Start a real Truffle thread and wait only until its guest registration is visible. */
@@ -147,29 +184,34 @@ internal object GuestThreadOps {
         val inheritedMask = state.maskingState.get()
         val ready = CountDownLatch(1)
         val registrationFailure = AtomicReference<Throwable?>()
+        val identity = AtomicReference<GuestThreadId>()
         val child = state.env.newTruffleThreadBuilder(Runnable {
             var registered = false
+            var outcome = GuestThreadStatus.FINISHED
             try {
-                threads.enterCurrent(inheritedMask)
+                threads.enterCurrent(inheritedMask, forked = true)
                 registered = true
+                identity.set(threads.currentIdentity())
                 ready.countDown()
                 root.call(action)
             } catch (uncaught: UncaughtForkAsync) {
                 // No catch# accepted the payload. The child terminates, so the
                 // sender may complete without treating a control yield as a tuple.
+                outcome = GuestThreadStatus.DIED
                 uncaught.request.acknowledge()
             } catch (failure: Throwable) {
+                outcome = GuestThreadStatus.uncaught(failure)
                 if (!registered) registrationFailure.set(failure)
                 throw failure
             } finally {
                 if (!registered) ready.countDown()
-                if (registered) threads.leaveCurrent()
+                if (registered) threads.leaveCurrent(outcome)
             }
         }).build()
         child.start()
         TruffleSafepoint.setBlockedThreadInterruptibleFunction(node, awaitRegistration, ready)
         registrationFailure.get()?.let { throw RuntimeFault("fork# child registration failed: ${it.javaClass.simpleName}") }
-        return GuestThreadId(child.threadId(), threads)
+        return identity.get() ?: fault("fork# child did not publish its ThreadId#")
     }
 
     /** Enqueue exactly once. A bytecode retry must retain this token, never call beginKill again. */
@@ -177,7 +219,7 @@ internal object GuestThreadOps {
         val threads = Language.currentState(node).threads
         val target = id as? GuestThreadId ?: fault("killThread# requires a ThreadId#")
         if (target.owner !== threads) fault("ThreadId# belongs to another guest context")
-        return threads.send(target.javaId, payload)
+        return threads.send(target, payload)
     }
 
     /** A self-target returns for the immediately following poll; it must not await itself. */

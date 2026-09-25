@@ -214,7 +214,8 @@ prepareInterfaceCore root = do
         "compiler/test-fixtures/InterfaceForeign.hs", "test/haskell-fixtures/InterfaceFixtures.hs",
         "compiler/test-fixtures/InterfaceForeignAlias.hs", "test/haskell-fixtures/InterfaceForeignFacts.hs",
         "compiler/test-fixtures/CBVCoercionAudit.hs", "compiler/interface/Main.hs",
-        "src/THC/Driver/Installed.hs", "src/THC/Driver/Project.hs", "src/THC/Driver/ForeignBitcode.hs",
+        "src/THC/Driver/Installed.hs", "src/THC/Driver/Project.hs", "src/THC/Driver/Wired.hs",
+        "src/THC/Driver/ForeignBitcode.hs", "compiler/target-layout.c",
         "src/THC/Driver/Zip.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "cabal.project",
         "scripts/audit-core.py", "scripts/core-capabilities.json"] ++
@@ -253,12 +254,17 @@ prepareInterfaceCore root = do
 checkDriver :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> String -> IO ()
 checkDriver root directory ghc ghcPkg helper baseUnit = do
   let cache = root </> directory </> "driver-cache"
+      platform = Info.arch ++ "-" ++ case Info.os of
+        "darwin" -> "osx"
+        "linux" -> "linux"
+        other -> other
       compiler = object ["id" .= ("ghc-9.14.1" :: String), "abi" .= ("fixture" :: String),
-        "platform" .= ("native-fixture" :: String), "way" .= ("dynamic-nonprofiling" :: String)]
+        "platform" .= platform, "way" .= ("dynamic-nonprofiling" :: String)]
       context mode = Installed.installedContext ghc ghcPkg helper
         [root </> directory </> mode </> "package.conf.d"] compiler
       acquire selected unit = Project.prepareInstalledBundle cache
-        (root </> directory </> "native/staging") "fixture-driver" selected unit
+        (root </> directory </> "native/staging") (root </> "compiler/target-layout.c")
+        "fixture-driver" selected unit
       loaded result = case result of Right value -> pure value; Left missing -> die (show missing)
       rejected label expected action = do
         result <- Exception.try action :: IO (Either Exception.IOException (Either Installed.MissingCore Project.InstalledBundle))
@@ -276,7 +282,7 @@ checkDriver root directory ghc ghcPkg helper baseUnit = do
       location = splitDirectories (makeRelative cache (Project.bundlePath artifact))
   case location of
     ["core-bundles", "v1", partition, exportKey, archive] ->
-      check (partition == "ghc-9.14.1-fixture-native-fixture" &&
+      check (partition == "ghc-9.14.1-fixture-" ++ platform &&
              length exportKey == 64 && all isHexDigit exportKey &&
              archive == unitName ++ ".zip")
         "Installed Core cache lost the compiler partition or registered package-cache ID"

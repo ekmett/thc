@@ -8,7 +8,16 @@ import thc.Language
 
 /** Exact pinned GHC declarations, not aliases for arbitrary POSIX imports. */
 internal enum class OriginalStdioOp(val symbol: String, val convention: String, val safety: String,
-    val arguments: List<String?>, val result: String) {
+    val arguments: List<String?>, val result: String?) {
+    LFLAG("__hscore_lflag", "ccall", "unsafe", listOf("AddrRep", null), "Word32Rep"),
+    POKE_LFLAG("__hscore_poke_lflag", "ccall", "unsafe", listOf("AddrRep", "Word32Rep", null), null),
+    PTR_C_CC("__hscore_ptr_c_cc", "ccall", "unsafe", listOf("AddrRep", null), "AddrRep"),
+    SIZEOF_TERMIOS("__hscore_sizeof_termios", "ccall", "unsafe", listOf(null), "IntRep"),
+    ECHO("__hscore_echo", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    ICANON("__hscore_icanon", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    VMIN("__hscore_vmin", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    VTIME("__hscore_vtime", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    TCSANOW("__hscore_tcsanow", "ccall", "unsafe", listOf(null), "Int32Rep"),
     READ_SAFE("ghczuwrapperZC22ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread", "capi", "safe",
         listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep"),
     READ_UNSAFE("ghczuwrapperZC23ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread", "capi", "unsafe",
@@ -22,6 +31,7 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     SEEK_CUR("ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR", "capi", "unsafe", listOf(null), "Int32Rep"),
     SEEK_END("ghczuwrapperZC0ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuEND", "capi", "unsafe", listOf(null), "Int32Rep"),
     CLOSE("close", "ccall", "unsafe", listOf("Int32Rep", null), "Int32Rep"),
+    OPEN("__hscore_open", "ccall", "unsafe", listOf("AddrRep", "Int32Rep", "Word32Rep", null), "Int32Rep"),
     DUP("dup", "ccall", "unsafe", listOf("Int32Rep", null), "Int32Rep"),
     DUP2("dup2", "ccall", "unsafe", listOf("Int32Rep", "Int32Rep", null), "Int32Rep"),
     SEEK("ghczuwrapperZC19ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZClseek", "capi", "unsafe",
@@ -59,6 +69,9 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     val statField: Boolean get() = this == ST_DEV || this == ST_INO || this == ST_MODE || this == ST_SIZE
     val iconv: Boolean get() = this == LOCALE || this == ICONV_OPEN || this == ICONV_CLOSE || this == ICONV
     val strerror: Boolean get() = this == STRERROR
+    val termios: Boolean get() = this == LFLAG || this == POKE_LFLAG || this == PTR_C_CC ||
+        this == SIZEOF_TERMIOS || this == ECHO || this == ICANON || this == VMIN || this == VTIME || this == TCSANOW
+    val termiosAddress: Boolean get() = this == LFLAG || this == POKE_LFLAG || this == PTR_C_CC
 }
 
 internal object CoreOriginalStdio {
@@ -80,7 +93,7 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation.readiness || operation.seekConstant || operation.stat || operation == OriginalStdioOp.FSTAT || operation.iconv || operation.strerror || operation.duplication || operation.locking,
+        requireProof(operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation == OriginalStdioOp.FSTAT || operation == OriginalStdioOp.OPEN || operation.iconv || operation.strerror || operation.duplication || operation.locking,
             "strict operand operation")
         val primitive = operation.arguments[index]
         val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }
@@ -126,14 +139,14 @@ internal object CoreOriginalStdio {
             value["evaluated"] is Boolean && (!declared || value["evaluated"] == false)
     }
 
-    private fun result(raw: Any?, primitive: String, declared: Boolean = false): Boolean {
+    private fun result(raw: Any?, primitive: String?, declared: Boolean = false): Boolean {
         val value = raw as? Map<*, *> ?: return false
         val components = value["components"] as? List<*> ?: return false
+        val expected = if (primitive == null) listOf(null) else listOf(null, primitive)
         return value.keys == tupleKeys && value["kind"] == "unknown" && value["aggregate"] == "unboxed-tuple" &&
-            value["primReps"] == listOf(primitive) && value["evaluated"] is Boolean &&
-            (!declared || value["evaluated"] == false) && components.size == 2 &&
-            scalar(components[0], null) && (components[0] as Map<*, *>)["evaluated"] == true &&
-            scalar(components[1], primitive) && (components[1] as Map<*, *>)["evaluated"] == true
+            value["primReps"] == listOfNotNull(primitive) && value["evaluated"] is Boolean &&
+            (!declared || value["evaluated"] == false) && components.size == expected.size &&
+            expected.indices.all { scalar(components[it], expected[it]) && (components[it] as Map<*, *>)["evaluated"] == true }
     }
 
     /** Caller binding names are irrelevant; raw FCallId proof must match exactly.

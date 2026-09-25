@@ -39,6 +39,7 @@ fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
 "$fixture_bin" int32-byte-offset
 "$fixture_bin" explicit64-arrays
 "$fixture_bin" fused-floating
+"$fixture_bin" simd-calls
 "$fixture_bin" sqrt
 "$fixture_bin" original-stack
 "$fixture_bin" original-stack-formatter
@@ -55,6 +56,7 @@ python3 scripts/prepare-address-fields.py
 python3 scripts/prepare-data-to-tag.py
 "$fixture_bin" mutvar
 "$fixture_bin" stable-pointers
+"$fixture_bin" weak-explicit
 "$fixture_bin" shrink-bytearrays
 "$fixture_bin" fetch-add-int-array
 python3 scripts/prepare-managed-mvars.py --refresh
@@ -63,6 +65,7 @@ python3 scripts/prepare-synchronous-exceptions.py
 "$fixture_bin" core-continuation
 "$fixture_bin" live-async
 "$fixture_bin" thread-async
+"$fixture_bin" thread-status
 "$fixture_bin" uncaught-self
 "$fixture_bin" arithmetic-exceptions
 "$fixture_bin" mask-functions
@@ -78,8 +81,12 @@ case "$(uname -s)-$(uname -m)" in
 esac
 "$fixture_bin" original-stdio-close
 "$fixture_bin" original-posix-dup
+"$fixture_bin" original-open
+"$fixture_bin" original-termios
 "$fixture_bin" original-rts-locks --require-supported
 "$fixture_bin" original-stdio-seek
+"$fixture_bin" libdw-unavailable
+"$fixture_bin" native-addresses
 "$fixture_bin" original-strerror
 "$fixture_bin" original-stdio-truncate
 "$fixture_bin" original-fd-ready

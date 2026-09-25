@@ -4,13 +4,42 @@
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import java.security.MessageDigest
+import java.net.URI
 
 plugins {
     application
     kotlin("jvm") version "2.4.20"
     kotlin("kapt") version "2.4.20"
+    id("org.jetbrains.dokka") version "2.2.0"
 }
 repositories { mavenCentral() }
+
+// Documentation reads handwritten sources; it does not compile the runtime,
+// generate Truffle DSL classes, or prepare native/Core fixtures.
+val docsRevision = providers.gradleProperty("thc.docsRevision").orElse(
+    providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.map { it.trim() })
+dokka {
+    moduleName.set("THC")
+    moduleVersion.set(docsRevision.map { it.take(12) })
+    dokkaPublications.html {
+        outputDirectory.set(layout.buildDirectory.dir("docs/jvm"))
+        includes.from("docs/site/jvm.md")
+        failOnWarning.set(false)
+        suppressInheritedMembers.set(true)
+    }
+    dokkaSourceSets.named("main") {
+        sourceRoots.setFrom("src/main/kotlin", "src/main/java")
+        classpath.setFrom(configurations.compileClasspath)
+        jdkVersion.set(25)
+        reportUndocumented.set(false)
+        suppressGeneratedFiles.set(true)
+        sourceLink {
+            localDirectory.set(file("src/main"))
+            remoteUrl.set(docsRevision.map { URI("https://github.com/ekmett/thc/blob/$it/src/main") })
+            remoteLineSuffix.set("#L")
+        }
+    }
+}
 // The checked family table generates concrete primitive carriers and typed nodes.
 // BytecodeRoot's DSL requires nested declarations; its marked regions are checked,
 // never rewritten by a build. Refresh them explicitly with the generator --write.
@@ -91,11 +120,13 @@ tasks.withType<Test>().configureEach {
             "integer-primops/core/**/*.json", "integer-primops/manifest.json", "integer-primops/oracle.tsv",
             "mutvar/**/*.json", "mutvar/oracle.tsv", "mutvar/NativeMutVar.hs",
             "stable-pointers/**/*.json", "stable-pointers/oracle.tsv", "stable-pointers/NativeStablePointer.hs",
+            "weak-explicit/**/*.json", "weak-explicit/oracle.tsv", "weak-explicit/NativeWeak.hs",
             "shrink-bytearrays/**/*.json", "shrink-bytearrays/oracle.tsv", "shrink-bytearrays/NativeShrinkByteArrays.hs",
             "fetch-add-int-array/**/*.json", "fetch-add-int-array/oracle.tsv", "fetch-add-int-array/NativeFetchAddIntArray.hs",
             "managed-mvars/**/*.json", "managed-mvars/*.tsv", "managed-mvars/native/**",
             "synchronous-exceptions/**/*.json", "synchronous-exceptions/*.tsv", "synchronous-exceptions/native/**",
             "core-continuation/**/*.json", "core-continuation/native-output.txt",
+            "thread-status/**/*.json", "thread-status/oracle.txt",
             "uncaught-self/**/*.json", "uncaught-self/native/oracle",
             "arithmetic-exceptions/**/*.json", "arithmetic-exceptions/logs/*.stdout", "arithmetic-exceptions/logs/*.stderr",
             "arithmetic-exceptions/native/oracle",
@@ -114,6 +145,8 @@ tasks.withType<Test>().configureEach {
             "original-handle-readiness/logs/*.stdout", "original-handle-readiness/logs/*.stderr",
             "original-posix-stat/**/*.json", "original-posix-stat/native/oracle",
             "original-posix-stat/logs/*.stdout", "original-posix-stat/logs/*.stderr",
+            "libdw-unavailable/manifest.json", "libdw-unavailable/oracle.json", "libdw-unavailable/foreign-labels.json",
+            "native-addresses/manifest.json", "native-addresses/oracle.json",
             "original-gmp/**/*.json", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
             "original-gmp/logs/*.stdout", "original-gmp/logs/*.stderr",
             "original-stdio-close/**/*.json", "original-stdio-close/results/*.txt", "original-stdio-close/results/*.private",
@@ -127,6 +160,8 @@ tasks.withType<Test>().configureEach {
             "original-stdio-truncate/native/**", "original-stdio-truncate/logs/*.stdout", "original-stdio-truncate/logs/*.stderr",
             "original-fd-ready/**/*.json", "original-fd-ready/native/oracle", "original-fd-ready/native/private-file",
             "original-rts-locks/**/*.json", "original-rts-locks/logs/*.stdout", "original-rts-locks/logs/*.stderr",
+            "original-open/**/*.json", "original-open/logs/*.stdout", "original-open/logs/*.stderr", "original-open/native/oracle",
+            "original-termios/**/*.json", "original-termios/logs/*.stdout", "original-termios/logs/*.stderr", "original-termios/native/oracle",
             "original-fd-ready/logs/*.stdout", "original-fd-ready/logs/*.stderr",
             "original-iconv/**/*.json", "original-iconv/native/oracle",
             "original-iconv/logs/*.stdout", "original-iconv/logs/*.stderr",
@@ -315,11 +350,12 @@ tasks.withType<JavaCompile>().configureEach { options.compilerArgs.addAll(listOf
 // remains an optional execution path; no native pointer is exposed to Core.
 val compileCbits by tasks.registering(Exec::class) {
     inputs.files("scripts/build-cbits.py", "src/main/c/md5-api.c", "src/main/c/iconv-api.c",
-        "src/main/c/strerror-locale.c",
+        "src/main/c/strerror-locale.c", "src/main/c/libdw-unavailable.c",
         "compiler/pinned-ghc-internal/cbits/strerror.c",
         "src/main/c/gmp-api.c",
         "bench/experiments/pinned-addresses/reference/md5.c",
         "bench/experiments/pinned-addresses/reference/md5.h")
+    inputs.files(fileTree("compiler/pinned-ghc-rts") { include("*.c", "*.h") })
     outputs.dir(layout.buildDirectory.dir("generated/cbits"))
     outputs.upToDateWhen { false }
     commandLine("python3", "scripts/build-cbits.py", "--output", layout.buildDirectory.dir("generated/cbits").get().asFile)
@@ -381,14 +417,14 @@ val generateStdioAbi by tasks.registering {
         val executable = temporaryDir.resolve("stdio-abi-probe")
         run(command + listOf("-std=c11", source.path, "-o", executable.path))
         val probe = JsonSlurper().parseText(run(listOf(executable.path))) as Map<*, *>
-        require(probe.keys == setOf("widths", "errno", "seek")) { "Malformed native stdio ABI probe" }
+        require(probe.keys == setOf("widths", "errno", "seek", "open")) { "Malformed native stdio ABI probe" }
         // The C probe asserts widths; runtime Kotlin validates all exact fields and errno values.
         val manifest = linkedMapOf<String, Any?>("schema" to 1, "system" to system,
             "architecture" to arch, "target" to target, "compilerDefaultTarget" to defaultTarget,
             "compilerVersion" to run(listOf(compiler, "--version")),
             "sourceSha256" to MessageDigest.getInstance("SHA-256").digest(source.readBytes())
                 .joinToString("") { "%02x".format(it) },
-            "widths" to probe["widths"], "errno" to probe["errno"], "seek" to probe["seek"])
+            "widths" to probe["widths"], "errno" to probe["errno"], "seek" to probe["seek"], "open" to probe["open"])
         val destination = output.get().asFile.resolve("thc/native/stdio-host-abi.json")
         destination.parentFile.mkdirs()
         destination.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n")
@@ -428,3 +464,32 @@ val generatePosixStatAbi by tasks.registering {
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/posix-stat-abi")) }
 tasks.processResources { dependsOn(generatePosixStatAbi) }
+
+val generateTermiosAbi by tasks.registering {
+    dependsOn(generateStdioAbi)
+    val source = layout.projectDirectory.file("src/main/c/termios-abi-probe.c").asFile
+    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    val output = layout.buildDirectory.dir("generated/termios-abi")
+    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output); outputs.upToDateWhen { false }
+    doLast {
+        fun run(command: List<String>) = providers.exec { commandLine(command) }.standardOutput.asText.get()
+        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
+        val target = host["target"] as String
+        val command = listOf(clang.get()) + if (host["system"] == "Linux") listOf("--target=$target") else emptyList()
+        require(run(command + "-dumpmachine").trim() == target) { "Termios compiler target changed" }
+        val executable = temporaryDir.resolve("termios-abi-probe")
+        run(command + listOf("-std=c11", source.path, "-o", executable.path))
+        val probe = JsonSlurper().parseText(run(listOf(executable.path))) as Map<*, *>
+        val manifest = linkedMapOf<String, Any?>("schema" to 1, "system" to host["system"],
+            "architecture" to host["architecture"], "target" to target,
+            "sourceSha256" to MessageDigest.getInstance("SHA-256").digest(source.readBytes()).joinToString("") { "%02x".format(it) },
+            "termios" to probe)
+        val destination = output.get().asFile.resolve("thc/native/termios-abi.json")
+        destination.parentFile.mkdirs()
+        destination.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n")
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/termios-abi")) }
+tasks.processResources { dependsOn(generateTermiosAbi) }

@@ -7,19 +7,20 @@ import thc.NativeIO.StandardEndpoint
 import java.io.Closeable
 import java.nio.channels.SeekableByteChannel
 import java.nio.file.OpenOption
+import java.nio.file.Path
 
 /** One synchronous configured-provider transaction, not a path/fd registry.
  * Completion is inseparable from the channel returned by NativeFileSystem.
  * Abort retains the same lease if a provider throws after completing acquisition. */
 internal class NativeOpenRequest(val endpoint: StandardEndpoint?,
     private val expectedOptions: Set<OpenOption>,
-    private val create: (String?) -> NativeFileResource) : OpenOption, Closeable {
+    private val create: (Path?) -> NativeFileResource) : OpenOption, Closeable {
     private val thread = Thread.currentThread()
     private var resource: NativeFileResource? = null
     private var completed = false
     private var closed = false
 
-    @Synchronized fun acquire(path: String?, options: Set<OpenOption>): SeekableByteChannel {
+    @Synchronized fun acquire(path: Path?, options: Set<OpenOption>): SeekableByteChannel {
         check(Thread.currentThread() === thread && !closed && !completed) { "Closed, late, or duplicate native acquisition" }
         require(options == expectedOptions && ((path == null) == (endpoint != null))) { "Changed native acquisition options" }
         completed = true

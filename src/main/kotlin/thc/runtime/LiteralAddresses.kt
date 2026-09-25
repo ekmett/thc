@@ -11,8 +11,9 @@ import java.lang.ref.ReferenceQueue
 import java.lang.ref.WeakReference
 import java.nio.ByteOrder
 
-/** A managed Addr#, never a native pointer. Non-null addresses have exactly one
- * final backing reference. Literal contents are immutable compilation constants;
+/** An Addr# carrier with managed storage or an unowned numeric bit pattern.
+ * Immutable storage may acquire a real, context-owned native image. Storage-backed
+ * addresses have exactly one final backing reference. Literal contents are immutable compilation constants;
  * mutable contents are ordinary array elements, even after unsafeFreezeByteArray#.
  * Each derived address strongly retains its allocation without exposing it. */
 internal class ManagedAddress private constructor(
@@ -20,14 +21,23 @@ internal class ManagedAddress private constructor(
     private val mutableBytes: ByteArray?,
     private val offset: Long,
     private val owner: ManagedAllocation? = null,
-    private val stable: StablePointers.Handle? = null
+    private val stable: StablePointers.Handle? = null,
+    private val numeric: Long? = null
 ) {
     internal fun stableHandle(): StablePointers.Handle? = stable
-    private fun requireBytes() { if (stable != null) fault("Opaque StablePtr# is not byte-addressable") }
-    // Package-internal views for original C bitcode; callers never obtain a
-    // process pointer and the byte storage is not copied or replaced.
+    private fun requireBytes() {
+        if (stable != null) fault("Opaque StablePtr# is not byte-addressable")
+        if (numeric != null) fault("Unowned numeric Addr# is not byte-addressable")
+    }
+    /** Only immutable storage can be materialized without breaking existing aliases. */
+    internal fun nativeImageKey(): Any? = literalBytes ?: owner?.takeIf { !it.isWritable }
+    internal fun nativeImageBytes(): ByteArray = owner?.takeIf { !it.isWritable }?.let { it.copyBytesOut(0, it.size) }
+        ?: literalBytes?.copyOf() ?: fault("Native image requires immutable byte storage")
+    fun toNativeBits(): Long = if (this === NULL) 0L else numeric ?: NativeAddresses.current(null).project(this)
+    // Mutable views preserve aliases. Immutable sources return snapshots so a
+    // writable JVM array cannot escape and diverge from their native image.
     internal fun rawBacking(): ByteArray { requireBytes(); return owner?.rawBytesIfPointerFree()
-        ?: literalBytes ?: mutableBytes ?: fault("Null Addr# has no backing storage")
+        ?: literalBytes?.copyOf() ?: mutableBytes ?: fault("Null Addr# has no backing storage")
     }
     internal fun cbitsBacking(): ByteArray { requireBytes(); return owner?.exposeToNative() ?: rawBacking() }
     internal fun cbitsWritable(): Boolean { requireBytes(); return owner?.isWritable ?: (mutableBytes != null) }
@@ -56,6 +66,7 @@ internal class ManagedAddress private constructor(
             StablePointers.current(null).validate(other)
             false
         }
+        else if (numeric != null || other.numeric != null) toNativeBits() == other.toNativeBits()
         else offset == other.offset && when {
             this === NULL || other === NULL -> this === other
             owner != null -> owner === other.owner
@@ -99,6 +110,8 @@ internal class ManagedAddress private constructor(
      * Comparing unrelated native pointer values would invent host addresses. */
     fun compareWithinAllocation(other: ManagedAddress): Int {
         if (stable != null || other.stable != null) fault("Opaque StablePtr# has no address ordering")
+        if (numeric != null || other.numeric != null)
+            return java.lang.Long.compareUnsigned(toNativeBits(), other.toNativeBits())
         if (this === NULL || other === NULL) {
             if (this === other) return 0
             fault("Ordered Addr# comparison requires the same managed allocation")
@@ -114,6 +127,7 @@ internal class ManagedAddress private constructor(
 
     /** Like pointer arithmetic within this allocation, including its one-past address. */
     fun plus(displacement: Long): ManagedAddress {
+        if (numeric != null) return NativeAddresses.current(null).recover(numeric + displacement)
         requireBytes()
         if (this === NULL) {
             if (displacement == 0L) return this
@@ -255,6 +269,7 @@ internal class ManagedAddress private constructor(
 
     @TruffleBoundary
     override fun toString(): String = if (stable != null) "Addr#(opaque StablePtr)" else if (this === NULL) "Addr#(null)"
+        else if (numeric != null) "Addr#(unowned numeric address)"
         else "Addr#(${if (literalBytes != null) "literal" else "managed"}+$offset)"
 
     /** Pointer cells contain references, not process address bits. */
@@ -289,6 +304,13 @@ internal class ManagedAddress private constructor(
     companion object {
         private val NULL = ManagedAddress(null, null, 0L)
         fun nullAddress(): ManagedAddress = NULL
+        internal fun unownedNumeric(bits: Long): ManagedAddress = if (bits == 0L) NULL
+            else ManagedAddress(null, null, 0L, numeric = bits)
+        internal fun fromNativeImageSource(source: Any, offset: Long): ManagedAddress = when (source) {
+            is ManagedAllocation -> fromAllocation(source).plus(offset)
+            is ByteArray -> ManagedAddress(source, null, offset)
+            else -> fault("Invalid native image source")
+        }
         internal fun fromStableHandle(handle: StablePointers.Handle): ManagedAddress =
             ManagedAddress(null, null, 0L, stable = handle)
 

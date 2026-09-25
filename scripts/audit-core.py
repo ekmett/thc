@@ -56,9 +56,21 @@ class Audit:
         self.chains = {}
         self.queue = deque()
         self.linked_foreign = {}
+        self.archive_bindings = {}
         for source, module in modules:
             linked = (type(module.get('schema')) is int and module['schema'] == 2 and
                       'foreignLink' in module and core_package_manifest.linked_foreign(module))
+            archive = core_package_manifest.foreign_execution_issue(module) if not linked else None
+            foreign = module.get('foreign')
+            stubs = foreign.get('stubs') if isinstance(foreign, dict) else None
+            registration = ((isinstance(foreign, dict) and bool(foreign.get('files'))) or
+                            (isinstance(stubs, dict) and
+                             bool(stubs.get('initializers') or stubs.get('finalizers'))))
+            if archive:
+                try:
+                    core_package_manifest.validate_archive_only_foreign(module)
+                except ValueError as error:
+                    self.issue('module-format', None, source, str(error))
             if linked:
                 for symbol in module['foreignLink']['symbols']:
                     key = (module['foreignLink']['unit'], symbol)
@@ -66,10 +78,11 @@ class Audit:
                         self.issue('module-format', None, source, 'Duplicate linked CAPI symbol ' + symbol)
                     self.linked_foreign[key] = module['foreignLink']
             if (type(module.get('schema')) is not int or
-                    (module['schema'] != 1 and not linked) or
-                    module.get('ghc') != '9.14.1' or ('foreign' in module and not linked)):
+                    (module['schema'] != 1 and not linked and not archive) or
+                    module.get('ghc') != '9.14.1' or
+                    ('foreign' in module and not linked and not archive) or registration):
                 self.issue('module-format', None, source,
-                           core_package_manifest.foreign_execution_issue(module) or
+                           archive or
                            'Requires executable Core schema 1 / GHC 9.14.1 without foreign artifacts')
             for binding in module.get('bindings', []):
                 key = binding.get('id')
@@ -81,6 +94,8 @@ class Audit:
                 else:
                     self.bindings[key] = binding
                     self.sources[key] = source
+                    if archive and not registration:
+                        self.archive_bindings[key] = (source, archive)
             for constructor in module.get('constructors', []):
                 key = constructor.get('id')
                 if not isinstance(key, str):
@@ -133,7 +148,7 @@ class Audit:
                         self.issue('aggregate-representation', owner, path, aggregate + ': unresolved component')
                     else:
                         physical.extend(registers)
-                        if 'aggregate' not in component and (component.get('kind') == 'unknown' or
+                        if 'aggregate' not in component and not self.supported_vector(component, 'tuple-fields') and (component.get('kind') == 'unknown' or
                                 any(r not in self.cap['aggregateFieldRepresentations'] for r in registers)):
                             self.issue('aggregate-representation', owner, path, aggregate + ': unsupported component')
                         if ('aggregate' not in component and registers == ['AddrRep'] and
@@ -177,7 +192,7 @@ class Audit:
             self.representation(binding.get('joinResultRep'), owner, path + '/joinResultRep')
             if is_sum(binding.get('joinResultRep')):
                 self.issue('aggregate-boundary', owner, path, 'unboxed-sum join result')
-            if is_vector(binding.get('joinResultRep')):
+            if is_vector(binding.get('joinResultRep')) and not self.supported_vector(binding['joinResultRep'], 'join-results'):
                 self.issue('vector-boundary', owner, path, 'vector join result')
             if (self.is_tuple(binding.get('joinResultRep')) and
                     'unboxed-tuple' not in self.cap.get('aggregateJoinResults', [])):
@@ -269,6 +284,10 @@ class Audit:
         # a tail-call target; a reference to it captures control flow, not fields.
         return cls.is_tuple(rep) and '_join_arity' not in rep
 
+    @staticmethod
+    def is_vector_value(rep):
+        return is_vector(rep) and '_join_arity' not in rep
+
     @classmethod
     def is_empty_tuple(cls, rep):
         return (cls.is_tuple(rep) and rep.get('kind') == 'unknown' and
@@ -282,7 +301,14 @@ class Audit:
 
     def supported_tuple_input(self, rep):
         return (self.supported_empty_input(rep) or
-                'unboxed-tuple' in self.cap.get('aggregateInputs', []) and tuple_input_proof_error(rep) is None)
+                'unboxed-tuple' in self.cap.get('aggregateInputs', []) and tuple_input_proof_error(rep,
+                    allow_vectors='tuple-fields' in self.cap.get('vectorTransport', [])) is None)
+
+    def supported_vector(self, rep, boundary):
+        return (boundary in self.cap.get('vectorTransport', []) and is_vector(rep) and
+                vector_proof_error(rep) is None and any(
+                    rep['vector'] == {key: shape[key] for key in ('lanes', 'element')}
+                    for shape in self.cap.get('vectorRepresentations', [])))
 
     @classmethod
     def shape(cls, rep):
@@ -306,6 +332,8 @@ class Audit:
             children = tuple(cls.shape(component) for component in components)
             return None if None in children else ('tuple', children)
         registers = rep.get('primReps')
+        if is_vector(rep):
+            return ('vector', tuple(registers)) if isinstance(registers, list) else None
         return ('scalar', tuple(registers)) if isinstance(registers, list) else None
 
     def compare_shapes(self, expected, actual, owner, path, component=False):
@@ -600,7 +628,11 @@ class Audit:
                 if (symbol in core_original_foreign.STACK_INFO or symbol in core_original_foreign.SEEK_CONSTANTS
                         or symbol in core_original_foreign.STAT_IMAGE
                         or symbol in core_original_foreign.GMP_SYMBOLS
-                        or symbol in ('lockFile', 'unlockFile', '__hscore_fstat', 'dup', 'dup2', 'fdReady', 'localeEncoding', 'hs_iconv_open', 'hs_iconv_close', 'hs_iconv',
+                        or symbol in core_original_foreign.LIBDW_UNAVAILABLE
+                        or symbol in core_original_foreign.TERMIOS_SYMBOLS
+                        or symbol in ('getOrSetSystemEventThreadEventManagerStore',
+                                      'getOrSetGHCConcSignalSignalHandlerStore')
+                        or symbol in ('rts_setMainThread', 'lockFile', 'unlockFile', '__hscore_fstat', '__hscore_open', 'dup', 'dup2', 'fdReady', 'localeEncoding', 'hs_iconv_open', 'hs_iconv_close', 'hs_iconv',
                                       'base_strerror_r')):
                     for index, (argument, primitive) in enumerate(zip(arguments, core_original_foreign.OPERATIONS[symbol][2])):
                         self.original_stack_operand(argument, primitive, bound, index)
@@ -961,8 +993,11 @@ class Audit:
                 for index, binder in enumerate(expr[1]):
                     if is_sum(binder.get('rep')):
                         self.issue('aggregate-boundary', owner, path, 'unboxed-sum formal argument')
-                    if is_vector(binder.get('rep')):
+                    if is_vector(binder.get('rep')) and not self.supported_vector(binder['rep'],
+                            'join-arguments' if index < join_prefix else 'arguments'):
                         self.issue('vector-boundary', owner, path, 'vector formal argument')
+                    if is_vector(binder.get('rep')) and binder.get('lifted') is not False:
+                        self.issue('application-levity', owner, path, 'Vector formal must be unlifted')
                     if self.is_tuple(binder.get('rep')) and not (
                             self.supported_empty_join_input(binder.get('rep')) if index < join_prefix else
                             self.supported_tuple_input(binder.get('rep'))):
@@ -973,18 +1008,22 @@ class Audit:
                             if self.is_tuple_value(bound[key])}
                 if any(is_sum(bound[key]) for key in (self.free_variables(expr[2]) - ids) & bound.keys()):
                     self.issue('aggregate-boundary', owner, path, 'unboxed-sum capture')
-                vector_captures = {key for key in (self.free_variables(expr[2]) - ids) & bound.keys() if is_vector(bound[key])}
-                if vector_captures:
-                    self.issue('vector-boundary', owner, path, 'vector capture')
                 # The consumed join lambda branches within its enclosing frame;
                 # a residual lambda still allocates an ordinary closure.
                 local_join_prefix = join_prefix > 0 and join_prefix == len(expr[1])
+                vector_captures = {key for key in (self.free_variables(expr[2]) - ids) & bound.keys()
+                                   if self.is_vector_value(bound[key])}
+                if vector_captures and not (local_join_prefix and
+                        all(self.supported_vector(bound[key], 'join-captures') for key in vector_captures)):
+                    self.issue('vector-boundary', owner, path, 'vector capture')
                 if captured and not (local_join_prefix and
                                      'unboxed-tuple' in self.cap.get('aggregateJoinCaptures', []) and
                                      all(self.supported_tuple_input(bound[key]) for key in captured)):
                     self.issue('aggregate-boundary', owner, path, 'unboxed-tuple capture')
                 metadata = expr[3] if len(expr) > 3 and isinstance(expr[3], dict) else {}
-                if is_vector(metadata.get('resultRep')) or is_vector(self.expression_rep(expr[2])):
+                if any(is_vector(rep) and not self.supported_vector(rep,
+                        'join-results' if local_join_prefix else 'results') for rep in
+                        (metadata.get('resultRep'), self.expression_rep(expr[2]))):
                     self.issue('vector-boundary', owner, path, 'vector function result')
                 local = bound | self.binder_scope(expr[1])
                 self.compare_shapes(metadata.get('resultRep'), self.effective_rep(expr[2], local)
@@ -1179,6 +1218,8 @@ class Audit:
                         kind, reps = rep.get('kind'), rep.get('primReps')
                         if role == 'state':
                             return kind == 'void' and reps == []
+                        if role == 'int':
+                            return kind == 'long' and reps == ['IntRep']
                         if role == 'threadId':
                             return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
                         if role == 'action':
@@ -1203,7 +1244,7 @@ class Audit:
                         valid = (self.is_tuple(proof) and proof.get('kind') == 'unknown' and
                                  isinstance(fields, list) and len(fields) == len(result) and
                                  all(thread_role(rep, role) for rep, role in zip(fields, result)) and
-                                 proof.get('primReps') == ['BoxedRep (Just Unlifted)'])
+                                 proof.get('primReps') == [rep for field in fields for rep in field['primReps']])
                     else:
                         valid = thread_role(proof, result)
                     if not valid:
@@ -1264,6 +1305,59 @@ class Audit:
                                        function[1] + ': stored ByteArray operand contradicts its required representation')
                     if not exact(proof, bytearray_primitive['result']):
                         self.issue('primitive-representation', owner, path, function[1] + ': exact ByteArray result required')
+                weak = self.cap.get('managedWeakPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
+                if weak is not None:
+                    def weak_role(rep, role):
+                        if not isinstance(rep, dict) or 'aggregate' in rep or 'vector' in rep or is_vector(rep):
+                            return False
+                        kind, reps = rep.get('kind'), rep.get('primReps')
+                        if role == 'state':
+                            return kind == 'void' and reps == []
+                        if role == 'weak':
+                            return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
+                        if role == 'flag':
+                            return kind == 'long' and reps == ['IntRep']
+                        if role == 'action':
+                            return kind in ('object', 'closure') and reps == ['BoxedRep (Just Lifted)']
+                        return role == 'boxed' and kind in ('object', 'data', 'closure') and reps in (
+                            ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)'])
+                    actual = [self.expression_rep(argument) for argument in arguments]
+                    expected = weak['arguments']
+                    expected_flags = [isinstance(rep, dict) and rep.get('primReps') == ['BoxedRep (Just Lifted)'] for rep in actual]
+                    if (len(actual) != len(expected) or not isinstance(flags, list) or
+                            any(type(flag) is not bool for flag in flags) or flags != expected_flags or
+                            any(not weak_role(rep, role) for rep, role in zip(actual, expected))):
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact Weak arguments required')
+                    for argument, rep, role in zip(arguments, actual, expected):
+                        stored = (bound.get(argument[1]) if argument[1] in bound else
+                                  self.bindings.get(argument[1], {}).get('rep')) if argument[0] == 'var' else None
+                        registers = stored.get('primReps') if isinstance(stored, dict) else None
+                        if registers == ['BoxedRep Nothing'] and isinstance(rep, dict) and rep.get('primReps') in (
+                                ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)']):
+                            stored = dict(stored, primReps=rep['primReps'])
+                        if isinstance(registers, list) and (self.shape(stored) != self.shape(rep) or
+                                stored.get('kind') != 'unknown' and not weak_role(stored, role)):
+                            self.issue('primitive-representation', owner, path,
+                                       function[1] + ': Weak argument contradicts its binding proof')
+                    fields = proof.get('components') if isinstance(proof, dict) else None
+                    output = weak['result']
+                    if not (self.is_tuple(proof) and proof.get('kind') == 'unknown' and
+                            isinstance(fields, list) and len(fields) == len(output) and
+                            all(weak_role(rep, role) for rep, role in zip(fields, output)) and
+                            proof.get('primReps') == [r for field in fields for r in field['primReps']]):
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact Weak result required')
+                    signature = self.known_function_signature(arguments[2]) if function[1] == 'mkWeak#' and len(arguments) == 4 else None
+                    if signature is not None:
+                        inputs, result = signature
+                        fields = result.get('components') if isinstance(result, dict) else None
+                        if not (len(inputs) == 1 and weak_role(inputs[0], 'state') and
+                                self.is_tuple(result) and result.get('kind') == 'unknown' and
+                                isinstance(fields, list) and len(fields) == 2 and
+                                weak_role(fields[0], 'state') and weak_role(fields[1], 'boxed') and
+                                fields[1].get('primReps') == ['BoxedRep (Just Lifted)'] and
+                                result.get('primReps') == fields[1]['primReps']):
+                            self.issue('primitive-representation', owner, path,
+                                       'mkWeak#: finalizer requires State# -> (# State#, lifted value #)')
                 mutvar = self.cap.get('managedMutVarPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
                 stable_ptr = self.cap.get('managedStablePtrPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
                 if stable_ptr is not None:
@@ -1377,7 +1471,8 @@ class Audit:
                 if formals is not None:
                     for index, (formal, actual) in enumerate(zip(formals, arguments)):
                         actual_proof = self.effective_rep(actual, bound)
-                        if self.is_tuple(formal) or self.is_tuple(actual_proof) or is_sum(formal) or is_sum(actual_proof):
+                        if (self.is_tuple(formal) or self.is_tuple(actual_proof) or is_sum(formal) or is_sum(actual_proof)
+                                or is_vector(formal) or is_vector(actual_proof)):
                             self.compare_shapes(formal, actual_proof, owner,
                                                 f'{path}/arguments/{index}/formal')
                 vector_operation = function[1] if function[0] == 'prim' and function[1] in VECTOR_OPERATIONS else None
@@ -1397,7 +1492,8 @@ class Audit:
                     if not vector_signature_matches(result, proof):
                         self.issue('vector-shape', owner, path + '/rep', 'Exact vector primitive result representation required')
                     self.compare_shapes(result, proof, owner, path + '/rep', component=True)
-                elif is_vector(proof) and not vector_memory:
+                elif is_vector(proof) and not vector_memory and not (function[0] not in ('prim', 'con') and
+                        self.supported_vector(proof, 'join-results' if isinstance(target, dict) and '_join_arity' in target else 'results')):
                     self.issue('vector-boundary', owner, path, 'vector call result')
                 if enum_application or data_tag:
                     self.expression_metadata(function, owner, path + '/function')
@@ -1426,7 +1522,13 @@ class Audit:
                             self.compare_shapes(components[index], self.effective_rep(argument, bound), owner,
                                                 f'{path}/arguments/{index}/rep', component=True)
                     if not vector_operation and not vector_memory and (is_vector(self.expression_rep(argument)) or argument[0] == 'var' and is_vector(bound.get(argument[1]))):
-                        self.issue('vector-boundary', owner, f'{path}/arguments/{index}', 'vector argument')
+                        actual = self.effective_rep(argument, bound)
+                        join = isinstance(target, dict) and '_join_arity' in target
+                        boundary = 'tuple-fields' if tuple_constructor else 'join-arguments' if join else 'arguments'
+                        if not ((tuple_constructor or function[0] not in ('prim', 'con')) and self.supported_vector(actual, boundary)):
+                            self.issue('vector-boundary', owner, f'{path}/arguments/{index}', 'vector argument')
+                        if not isinstance(flags, list) or index >= len(flags) or flags[index] is not False:
+                            self.issue('application-levity', owner, f'{path}/arguments/{index}', 'Vector argument must be unlifted')
                     if not tuple_constructor and not sum_constructor and not vector_operation:
                         argument_rep = self.effective_rep(argument, bound)
                         stored = bound.get(argument[1]) if argument[0] == 'var' else None
@@ -1453,8 +1555,11 @@ class Audit:
                         continue
                     if is_sum(binding.get('rep')) or is_sum(self.expression_rep(binding.get('expr'))):
                         self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-sum let binding')
-                    if is_vector(binding.get('rep')):
+                    if ('joinValueArity' not in binding and is_vector(binding.get('rep')) and
+                            not self.supported_vector(binding['rep'], 'let-bindings')):
                         self.issue('vector-boundary', owner, f'{path}/bindings/{index}', 'vector let binding')
+                    if is_vector(binding.get('rep')) and binding.get('lifted') is not False:
+                        self.issue('application-levity', owner, f'{path}/bindings/{index}', 'Vector let binding must be unlifted')
                     tuple_value = self.is_tuple(binding.get('rep')) or self.is_tuple(
                         self.effective_rep(binding.get('expr'), local if recursive else bound))
                     if tuple_value and 'joinValueArity' not in binding:
@@ -1463,6 +1568,9 @@ class Audit:
                         captured = (self.free_variables(binding['expr']) - (ids if recursive else set())) & bound.keys()
                         if any(is_sum(bound[key]) for key in captured):
                             self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-sum join capture')
+                        if any(self.is_vector_value(bound[key]) and not self.supported_vector(bound[key], 'join-captures')
+                               for key in captured):
+                            self.issue('vector-boundary', owner, f'{path}/bindings/{index}', 'vector join capture')
                         tuple_captures = [bound[key] for key in captured if self.is_tuple_value(bound[key])]
                         if tuple_captures and ('unboxed-tuple' not in self.cap.get('aggregateJoinCaptures', []) or
                                                not all(self.supported_tuple_input(rep) for rep in tuple_captures)):
@@ -1614,8 +1722,8 @@ class Audit:
             self.issue('io-main-boundary', key, '/entry', 'requires IO () with State# RealWorld -> (# State#, () #)')
 
     def run(self, entries, io_main=False):
-        if io_main and len(entries) != 1:
-            raise ValueError('IO main audit requires exactly one entry')
+        # Executable shutdown is another exact IO () root in the same package
+        # closure. Each root receives the same boundary check below.
         roots = []
         for entry in entries:
             candidates = [entry] if entry in self.bindings else [k for k, b in self.bindings.items() if b.get('name') == entry]
@@ -1633,6 +1741,10 @@ class Audit:
                 if io_main:
                     self.io_main_contract(key, expression, formals, result)
                 else:
+                    if formals is not None and any(self.supported_vector(proof, 'arguments') for proof in formals):
+                        self.issue('vector-boundary', key, '/entry', 'vector host argument')
+                    if self.supported_vector(result, 'results'):
+                        self.issue('vector-boundary', key, '/entry', 'vector host result')
                     if formals is not None and any(self.is_tuple(proof) for proof in formals):
                         self.issue('aggregate-boundary', key, '/entry', 'unboxed-tuple host argument')
                     if self.is_tuple(result):
@@ -1642,9 +1754,15 @@ class Audit:
                 if key not in self.chains:
                     self.chains[key] = [key]
                     self.queue.append(key)
+        reported_archives = set()
         while self.queue:
             key = self.queue.popleft()
             self.reachable.append(key)
+            if key in self.archive_bindings:
+                source, detail = self.archive_bindings[key]
+                if source not in reported_archives:
+                    self.issue('module-format', key, source, detail)
+                    reported_archives.add(source)
             binding = self.bindings[key]
             self.binding_metadata(binding, key, '/binding')
             if is_sum(binding.get('rep')) or is_sum(self.expression_rep(binding.get('expr'))):

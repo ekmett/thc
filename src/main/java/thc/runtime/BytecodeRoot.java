@@ -447,6 +447,22 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "status")
+    @ConstantOperand(type = LocalAccessor.class, name = "capability")
+    @ConstantOperand(type = LocalAccessor.class, name = "locked")
+    public static final class ThreadStatus {
+        @Specialization public static void observe(VirtualFrame frame, LocalAccessor status,
+                LocalAccessor capability, LocalAccessor locked, Object identity, Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            GuestThreadSnapshot snapshot = GuestThreadOps.threadStatus(node, identity);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            status.setLong(bytecode, frame, snapshot.getStatus());
+            capability.setLong(bytecode, frame, snapshot.getCapability());
+            locked.setLong(bytecode, frame, snapshot.getLocked());
+        }
+    }
+
     public enum ThreadPrimitiveKind { MY, FORK, BEGIN_KILL, FINISH_KILL }
 
     /** One cold instruction keeps the generated interpreter below its partition limit. */
@@ -884,13 +900,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     // below the BytecodeDSL partition limit; the direction is constant during PE.
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    @ConstantOperand(type = boolean.class, name = "reading")
+    @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
     public static final class OriginalStdioTransfer {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination, boolean reading,
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination, OriginalStdioOp operation,
                 long fd, ManagedAddress address, long count, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             ManagedStdio stdio = CoreOriginalStdio.current(node);
-            long result = reading ? stdio.read(fd, address, count) : stdio.write(fd, address, count);
+            long result;
+            if (operation == OriginalStdioOp.OPEN) result = stdio.open(address, fd, count);
+            else if (operation == OriginalStdioOp.READ_SAFE || operation == OriginalStdioOp.READ_UNSAFE)
+                result = stdio.read(fd, address, count);
+            else result = stdio.write(fd, address, count);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
@@ -928,6 +948,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             TupleResultsKt.requireVoidCarrier(state);
             // One typed instruction avoids another generated-interpreter partition;
             // the exact operation is compile-time metadata, not a guest operand.
+            if (operation.getTermios()) {
+                if (operation == OriginalStdioOp.PTR_C_CC) {
+                    destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, TermiosImage.pointer(address));
+                } else {
+                    long value = TermiosImage.scalar(operation, address, fd);
+                    if (operation.getResult() != null)
+                        destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, value);
+                }
+                return;
+            }
             long result;
             if (operation.getStat()) result = PosixStat.execute(operation, address, fd);
             else if (operation == OriginalStdioOp.FSTAT) result = CoreOriginalStdio.current(node).fstat(fd, address);
@@ -1190,6 +1220,24 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void apply(ManagedAddress output, ManagedAddress context, Object state) {
             ManagedByteArray.requireState(state);
             ManagedMd5.INSTANCE.finish(output, context);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = BytecodeVectorSlots.class, name = "slots")
+    public static final class WriteVectorSlots {
+        @Specialization public static void write(VirtualFrame frame, BytecodeVectorSlots slots,
+                Object value, @Bind("$node") Node node) {
+            slots.write(frame, (BytecodeRoot) node.getRootNode(), value);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = BytecodeVectorSlots.class, name = "slots")
+    public static final class ReadVectorSlots {
+        @Specialization public static Object read(VirtualFrame frame, BytecodeVectorSlots slots,
+                @Bind("$node") Node node) {
+            return slots.read(frame, (BytecodeRoot) node.getRootNode());
         }
     }
 
@@ -2025,6 +2073,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation public static final class AddressToInt {
+        @Specialization public static long convert(ManagedAddress address) { return address.toNativeBits(); }
+        @Fallback public static long invalid(Object address) { throw fail("Expected an Addr# carrier"); }
+    }
+    @Operation public static final class IntToAddress {
+        @Specialization public static ManagedAddress convert(long bits) { return NativeAddresses.current(null).recover(bits); }
+        @Fallback public static ManagedAddress invalid(Object bits) { throw fail("Expected primitive Long"); }
+    }
     @Operation public static final class AddressPlus {
         @Specialization public static ManagedAddress plus(ManagedAddress address, long displacement) { return address.plus(displacement); }
         @Fallback public static ManagedAddress invalid(Object address, Object displacement) {
@@ -2216,6 +2272,43 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class MakeWeak {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                Object key, Object value, Object action, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            if (action == null) throw fail("mkWeak# requires a finalizer carrier");
+            Object weak = ManagedWeaks.current(node).make(key, value, action);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, weak);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class MakeWeakPlain {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                Object key, Object value, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            Object weak = ManagedWeaks.current(node).make(key, value, null);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, weak);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "flagDestination")
+    @ConstantOperand(type = LocalAccessor.class, name = "valueDestination")
+    @ConstantOperand(type = boolean.class, name = "finalize")
+    public static final class ObserveWeak {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor flagDestination,
+                LocalAccessor valueDestination, boolean finalize, Object weak, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedWeaks registry = ManagedWeaks.current(node);
+            WeakResult result = finalize ? registry.finalize(weak) : registry.dereference(weak);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            flagDestination.setLong(bytecode, frame, result.getFlag());
+            valueDestination.setObject(bytecode, frame, result.getValue());
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = StablePointerOp.class, name = "operation")
     public static final class StablePointerTuple {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
@@ -2236,6 +2329,27 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             StablePointers.current(node).free(address);
         }
         @Fallback public static void invalid(Object address, Object state) { throw fail("Expected opaque StablePtr#"); }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = SharedCAFStore.class, name = "store")
+    public static final class RtsSharedCAFStore {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                thc.runtime.SharedCAFStore store, ManagedAddress candidate, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedAddress result = StablePointers.current(node).getOrSetSharedCAF(store, candidate);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+        @Fallback public static void invalid(VirtualFrame frame, LocalAccessor destination,
+                thc.runtime.SharedCAFStore store, Object candidate, Object state) {
+            throw fail("Expected managed Addr# for RTS shared CAF store");
+        }
+    }
+    @Operation public static final class RegisterMainThread {
+        @Specialization public static void register(Object weak, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            CoreMainThreadForeign.register(node, weak);
+        }
     }
     @Operation public static final class EqualStablePointers {
         @Specialization public static long equal(ManagedAddress left, ManagedAddress right, @Bind("$node") Node node) {
@@ -3328,7 +3442,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class DoubleToFloat { @Specialization public static float apply(double x) { return (float) x; } }
     @Operation public static final class ToFloat { @Specialization public static float apply(float x) { return x; } }
     @Operation public static final class ToDouble { @Specialization public static double apply(double x) { return x; } }
-    @Operation public static final class ToLong { @Specialization public static long apply(long x) { return x; } }
+    @Operation public static final class ToLong {
+        @Specialization public static long apply(long x) { return x; }
+        @Fallback public static long invalid(Object x) { throw fail("Expected primitive Long"); }
+    }
 
     private static RuntimeFault fail(String message) {
         CompilerDirectives.transferToInterpreterAndInvalidate();

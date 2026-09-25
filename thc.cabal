@@ -35,6 +35,10 @@ extra-source-files:
   compiler/test-fixtures/OriginalStackFormatterNative.hs
   compiler/test-fixtures/OriginalFdReadyAudit.hs
   compiler/test-fixtures/OriginalRtsLocksAudit.hs
+  compiler/test-fixtures/OriginalOpenAudit.hs
+  compiler/test-fixtures/OriginalOpenNative.hs
+  compiler/test-fixtures/OriginalTermiosAudit.hs
+  compiler/test-fixtures/OriginalTermiosNative.hs
   compiler/test-fixtures/OriginalFdReadyAuditNative.hs
   compiler/test-fixtures/OriginalIconvAudit.hs
   compiler/test-fixtures/OriginalIconvAuditNative.hs
@@ -42,11 +46,19 @@ extra-source-files:
   compiler/test-fixtures/OriginalGmpNative.hs
   compiler/test-fixtures/OriginalPosixDupAudit.hs
   compiler/test-fixtures/OriginalPosixDupAuditNative.hs
+  compiler/test-fixtures/TopHandlerMainThreadAbi.hs
+  compiler/test-fixtures/TopHandlerMainThreadAbiNative.hs
   README.md
   docs/driver.md
+  docs/documentation.md
+  docs/site/index.md
+  docs/site/embedding.md
+  docs/site/jvm.md
+  docs/site/site.css
   docs/ghc-core.md
   docs/interface-foreign.md
   docs/original-posix-dup.md
+  docs/original-termios.md
   compiler/ghc-core.settings
   compiler/patches/ghc-libraries-simplified-core.patch
   compiler/pinned-ghc-internal/GHC/Internal/Arr.hs
@@ -152,6 +164,21 @@ extra-source-files:
   test/fixtures/tiny/app/Main.hs
   test/fixtures/tiny/test/Main.hs
 build-type: Simple
+
+-- Small, docs-only assembly/link checker. No GHC API or runtime dependency.
+executable thc-docs
+  main-is: Main.hs
+  hs-source-dirs: tools/docs
+  build-depends:
+    base >= 4.22 && < 4.23,
+    containers >= 0.8 && < 0.9,
+    directory >= 1.3.10 && < 1.4,
+    filepath >= 1.5.4 && < 1.6,
+    process >= 1.6.26 && < 1.7,
+    tagsoup >= 0.14.8 && < 0.15,
+    text >= 2.1 && < 2.2
+  default-language: Haskell2010
+  ghc-options: -Wall
 
 flag development
   description: Treat compiler warnings as errors
@@ -262,6 +289,7 @@ executable thc-fixtures
     AggregateFixtures
     ContinuationFixtures
     LiveAsyncFixtures
+    ThreadStatusFixtures
     ThreadAsyncFixtures
     UncaughtSelfFixtures
     ArithmeticExceptionFixtures
@@ -276,6 +304,7 @@ executable thc-fixtures
     Int32ByteOffsetFixtures
     Explicit64ArrayFixtures
     FusedFloatingFixtures
+    SimdCallFixtures
     SqrtFixtures
     OriginalStdioFixtures
     OriginalStdioCloseFixtures
@@ -286,11 +315,16 @@ executable thc-fixtures
     OriginalHandleReadinessFixtures
     OriginalPosixStatFixtures
     OriginalGmpFixtures
+    LibdwUnavailableFixtures
+    NativeAddressFixtures
     OriginalFdReadyFixtures
     OriginalRtsLocksFixtures
+    OriginalOpenFixtures
+    OriginalTermiosFixtures
     OriginalIconvFixtures
     MutVarFixtures
     StablePointerFixtures
+    WeakFixtures
     ShrinkByteArrayFixtures
     FetchAddIntArrayFixtures
     SmallArrayFixtures

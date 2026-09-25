@@ -19,6 +19,65 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_explicit_weak_fixture_registration_preserves_native_and_strict_inputs(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['weak-explicit']
+        self.assertEqual('weak-explicit', owners['thc.runtime.ManagedWeakTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
+                                   'weak-explicit']}], group['commands'])
+        self.assertEqual(['build/weak-explicit'], group['outputs'])
+        self.assertTrue(all((project / path).is_file() for path in group['sources']))
+        self.assertIn('"$fixture_bin" weak-explicit', (project / 'scripts/prepare-tests.sh').read_text())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/weak-explicit', fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertIn('build/weak-explicit/manifest.json', fast_fixtures.FULL_REQUIRED)
+        gradle = (project / 'build.gradle.kts').read_text()
+        for pattern in ('**/*.json', 'oracle.tsv', 'NativeWeak.hs'):
+            self.assertIn('"weak-explicit/' + pattern + '"', gradle)
+        for suffix in ('manifest.json', 'oracle.tsv', 'NativeWeak.hs',
+                       'pre/audit.json', 'post/audit.json',
+                       'pre/core/WeakAudit.json', 'post/core/WeakAudit.json',
+                       'pre/core/THC.InterfaceClosure.json', 'post/core/THC.InterfaceClosure.json'):
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/weak-explicit/' + suffix, {}))
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/weak-explicit/result.xml', {}))
+
+    def test_libdw_unavailable_native_fixture_registration(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['libdw-unavailable']
+        self.assertEqual('libdw-unavailable', owners['thc.runtime.LibdwUnavailableTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
+                                   'libdw-unavailable']}], group['commands'])
+        self.assertEqual(['build/libdw-unavailable/manifest.json', 'build/libdw-unavailable/oracle.json',
+                          'build/libdw-unavailable/foreign-labels.json'], group['outputs'])
+        self.assertTrue(all((project / path).is_file() for path in group['sources']))
+        self.assertIn('"$fixture_bin" libdw-unavailable', (project / 'scripts/prepare-tests.sh').read_text())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/libdw-unavailable/manifest.json', fast_fixtures.FULL_REQUIRED)
+        for suffix in ('manifest.json', 'oracle.json', 'foreign-labels.json'):
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/libdw-unavailable/' + suffix, {}))
+            self.assertIn('"libdw-unavailable/' + suffix + '"', (project / 'build.gradle.kts').read_text())
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/libdw-unavailable/native/oracle', {}))
+        self.assertIn('build/libdw-unavailable/logs/', (project / '.github/workflows/build.yml').read_text())
+
+    def test_native_addresses_fixture_registration(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['native-addresses']
+        self.assertEqual('native-addresses', owners['thc.runtime.NativeAddressTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
+                                   'native-addresses']}], group['commands'])
+        self.assertEqual(['build/native-addresses/manifest.json', 'build/native-addresses/oracle.json'], group['outputs'])
+        self.assertTrue(all((project / path).is_file() for path in group['sources']))
+        self.assertIn('"$fixture_bin" native-addresses', (project / 'scripts/prepare-tests.sh').read_text())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/native-addresses/manifest.json', fast_fixtures.FULL_REQUIRED)
+        for suffix in ('manifest.json', 'oracle.json'):
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/native-addresses/' + suffix, {}))
+            self.assertIn('"native-addresses/' + suffix + '"', (project / 'build.gradle.kts').read_text())
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/native-addresses/native/oracle', {}))
+
     def test_original_gmp_registration_platform_and_exact_cache(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
@@ -131,6 +190,36 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual({'mode': 'selected', 'rebuilt': [], 'reused': []}, result)
         self.assertEqual([], self.calls)
 
+    def test_original_termios_registration_receipt_and_stale_artifact(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['original-termios']
+        self.assertEqual('original-termios', owners['thc.runtime.OriginalTermiosTest'])
+        self.assertIn('thc.runtime.TermiosAbiTest', manifest['fixtureFreeJunit'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-termios']}], group['commands'])
+        self.assertIn('"$fixture_bin" original-termios', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('build/original-termios', fast_fixtures.FULL_OUTPUT_ROOTS)
+        cache = fast_fixtures.fast_inputs
+        name = 'build/original-termios/manifest.json'
+        with mock.patch.object(cache, 'GMP_NATIVE_HOST', True):
+            artifacts = {}
+            for item in cache.ORIGINAL_TERMIOS_OUTPUTS - {name}:
+                path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
+            receipt = dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
+                           installedArtifactsHashed=False, nativeRows=6,
+                           entries=list(cache.ORIGINAL_TERMIOS_ENTRIES), artifactHashes=artifacts)
+            path = self.root / name; path.write_text(json.dumps(receipt))
+            self.assertEqual(cache.ORIGINAL_TERMIOS_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+            for bad in (dict(receipt, schema=True), dict(receipt, entries=[]),
+                        dict(receipt, artifactHashes={}), dict(receipt, artifactHashes=dict(artifacts, **{'build/original-termios/extra.json': '0'*64}))):
+                with self.assertRaises(cache.CacheMiss): cache.termios_artifact_hashes(bad)
+            artifact = self.root / 'build/original-termios/pre/core/OriginalTermiosAudit.json'
+            artifact.write_text('mutated')
+            with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+            artifact.unlink(); artifact.symlink_to(self.root / 'build/original-termios/oracle.json')
+            with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
+
     def test_original_posix_stat_fixture_registration_and_narrow_cache(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
@@ -204,6 +293,46 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('build/original-rts-locks', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertTrue(fast_fixtures.fast_inputs.ORIGINAL_RTS_LOCK_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         self.assertIn('"original-rts-locks/**/*.json"', (project / 'build.gradle.kts').read_text())
+
+    def test_original_open_exact_registration_and_closed_manifest(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['original-open']
+        self.assertEqual('original-open', owners['thc.runtime.OriginalOpenTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-open']}], group['commands'])
+        self.assertEqual(['build/original-open'], group['outputs'])
+        self.assertTrue(all((project / name).is_file() for name in group['sources']))
+        self.assertIn('"$fixture_bin" original-open', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/original-open', fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertIn('"original-open/**/*.json"', (project / 'build.gradle.kts').read_text())
+        name = 'build/original-open/manifest.json'
+        artifacts = {}
+        for artifact in fast_fixtures.fast_inputs.ORIGINAL_OPEN_OUTPUTS - {name}:
+            path = self.root / artifact; path.parent.mkdir(parents=True, exist_ok=True); path.write_text('{}\n')
+            artifacts[artifact] = fast_fixtures._digest(path)
+        receipt = dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
+                       installedArtifactsHashed=False, nativeRows=13, artifactHashes=artifacts)
+        path = self.root / name
+        with mock.patch.object(fast_fixtures.fast_inputs, 'GMP_NATIVE_HOST', True):
+            path.write_text(json.dumps(receipt))
+            self.assertEqual(fast_fixtures.fast_inputs.ORIGINAL_OPEN_OUTPUTS,
+                             fast_fixtures._output_hashes(self.root, group).keys())
+            for key, value in (('schema', True), ('supported', False), ('strictAccepted', False),
+                               ('runtimeVerified', True), ('installedArtifactsHashed', True), ('nativeRows', True), ('nativeRows', 12)):
+                path.write_text(json.dumps(dict(receipt, **{key: value})))
+                with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+            for change in ('unknown', 'missing', 'changed', 'symlink'):
+                path.write_text(json.dumps(receipt))
+                artifact = self.root / 'build/original-open/pre/core/OriginalOpenAudit.json'
+                if artifact.is_symlink(): artifact.unlink()
+                artifact.write_text('{}\n')
+                if change == 'unknown':
+                    path.write_text(json.dumps(dict(receipt, artifactHashes=dict(artifacts, **{'build/original-open/extra.json': '0'*64}))))
+                elif change == 'missing': artifact.unlink()
+                elif change == 'changed': artifact.write_text('changed')
+                else: artifact.unlink(); artifact.symlink_to(path)
+                with self.assertRaises((RuntimeError, FileNotFoundError)): fast_fixtures._output_hashes(self.root, group)
 
     def test_rts_lock_selected_receipt_requires_complete_strict_unchanged_artifacts(self):
         project = Path(__file__).resolve().parents[2]

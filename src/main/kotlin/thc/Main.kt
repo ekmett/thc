@@ -27,6 +27,16 @@ internal fun Context.Builder.withContextProfile(profile: ContextProfile): Contex
         .option("compiler.MaximumGraalGraphSize", "100000")
 }
 
+/**
+ * Create the experimental launcher's owning polyglot context.
+ *
+ * Close it after all guest [Value]s are no longer needed (for example with `use`).
+ * Values, heap state and native resources must not outlive or cross contexts.
+ * Native access and guest threads are enabled; this is not an untrusted-code sandbox.
+ *
+ * @param fileIO request host file IO and, on supported hosts, the native command-line provider.
+ * The fallback still grants full polyglot file IO when this is true.
+ */
 fun executionContext(fileIO: Boolean = false): Context {
     if (fileIO && NativeIO.supportedHost()) return NativeIO.commandLineContext()
     return Context.newBuilder("thc").allowNativeAccess(true)
@@ -34,14 +44,42 @@ fun executionContext(fileIO: Boolean = false): Context {
         .withContextProfile(ContextProfile.LAUNCHER).build()
 }
 
+/**
+ * Load an accepted entry into [context], returning a value owned by that context.
+ *
+ * Scalar entries use the current integer-only `execute` contract. An [ioMain]
+ * entry instead exposes `runIO`; invoking that member executes the accepted IO action.
+ * Loading does not imply support for arbitrary Haskell types or foreign artifacts.
+ *
+ * @param modules individual Core JSON paths, or one `@/absolute/path/packages.json`
+ * for a checked package closure with strict linking.
+ * @param entry exact binder ID or unambiguous exported name.
+ * @param instrument enable runtime development metrics.
+ * @param backend `bytecode` or `ast`, selected when loading this entry.
+ * @param ioMain select the `IO ()` entry contract and disable diagnostic unsupported traps.
+ * @param shutdownEntry distinct accepted IO shutdown entry for full executable lifecycle;
+ * only valid with [ioMain].
+ */
 @JvmOverloads
 fun loadEntry(context: Context, modules: List<String>, entry: String, instrument: Boolean = true,
-              backend: String = defaultBackend(), ioMain: Boolean = false): Value =
+              backend: String = defaultBackend(), ioMain: Boolean = false, shutdownEntry: String? = null): Value =
     context.eval("thc", CoreModules.request(modules, entry, instrument,
         !ioMain && java.lang.Boolean.getBoolean("thc.diagnosticUnsupported"), backend,
-        System.getProperty("thc.sourceNotesEnabled", "true").toBooleanStrict(), ioMain))
+        System.getProperty("thc.sourceNotesEnabled", "true").toBooleanStrict(), ioMain, shutdownEntry))
 
+/** JVM launcher implementation; ordinary package users should invoke the Haskell `thc run` driver. */
 fun main(args: Array<String>) {
+    if (args.firstOrNull() == "--run-executable") {
+        require(args.size == 4) {
+            "Usage: thc --run-executable MODULE.json[,MODULE.json...] ENTRY SHUTDOWN_ENTRY"
+        }
+        executionContext(fileIO = true).use { context ->
+            val action = loadEntry(context, args[1].split(','), args[2], ioMain = true, shutdownEntry = args[3])
+            check(action.invokeMember("runIO").asBoolean()) { "Executable IO did not complete" }
+            System.err.println(action.getMember("diagnostics").asString())
+        }
+        return
+    }
     if (args.firstOrNull() == "--run-io") {
         require(args.size == 3) { "Usage: thc --run-io MODULE.json[,MODULE.json...] ENTRY" }
         val modules = args[1].split(',')

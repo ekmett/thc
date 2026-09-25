@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.TermiosAbiTest",
     "thc.runtime.NativeFileProviderTest",
     "thc.runtime.ManagedFileCallTest",
     "thc.runtime.ManagedFilesTest",
@@ -10,10 +11,13 @@
     "thc.GuestExceptionsTest",
     "thc.runtime.ManagedDescriptorDupTest",
     "thc.runtime.CoreGmpForeignTest",
+    "thc.runtime.CoreMainThreadForeignTest",
     "thc.runtime.SulongLimbProviderTest",
     "thc.runtime.AstContinuationTest",
     "thc.runtime.GuestThreadsTest",
+    "thc.runtime.GuestThreadStatusTest",
     "thc.runtime.BytecodeTypedTupleInputTest",
+    "thc.runtime.SimdAstTransportTest",
     "thc.runtime.DoubleArrayTest",
     "thc.runtime.DoubleVectorMemoryProofTest",
     "thc.runtime.DoubleVectorStorageTest",
@@ -31,9 +35,42 @@
     "thc.runtime.SimdFamiliesTest",
     "thc.ScalarPrimopModelTest",
     "thc.runtime.IoMainBoundaryTest",
+    "thc.runtime.ExecutableLifecycleTest",
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "libdw-unavailable": {
+      "junit": ["thc.runtime.LibdwUnavailableTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "libdw-unavailable"]}],
+      "outputs": ["build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json", "build/libdw-unavailable/foreign-labels.json"],
+      "sources": ["compiler/test-fixtures/LibdwUnavailableNative.hs", "compiler/test-fixtures/CFinalizerNative.hs",
+        "compiler/test-fixtures/ForeignLabelAudit.hs", "test/haskell-fixtures/LibdwUnavailableFixtures.hs",
+        "compiler/THC/Plugin.hs", "compiler/THC/CBV.hs", "compiler/THC/Demands.hs", "compiler/THC/Sources.hs", "compiler/THC/Wired.hs",
+        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
+    "original-termios": {
+      "junit": ["thc.runtime.OriginalTermiosTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-termios"]}],
+      "outputs": ["build/original-termios"],
+      "sources": ["compiler/test-fixtures/OriginalTermiosAudit.hs", "compiler/test-fixtures/OriginalTermiosNative.hs",
+        "test/haskell-fixtures/OriginalTermiosFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
+    "native-addresses": {
+      "junit": ["thc.runtime.NativeAddressTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "native-addresses"]}],
+      "outputs": ["build/native-addresses/manifest.json", "build/native-addresses/oracle.json"],
+      "sources": ["compiler/test-fixtures/NativeAddressNative.hs", "test/haskell-fixtures/NativeAddressFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
+    "original-open": {
+      "junit": ["thc.runtime.OriginalOpenTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-open"]}],
+      "outputs": ["build/original-open"],
+      "sources": ["compiler/test-fixtures/OriginalOpenAudit.hs", "compiler/test-fixtures/OriginalOpenNative.hs",
+        "test/haskell-fixtures/OriginalOpenFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "original-rts-locks": {
       "junit": ["thc.runtime.OriginalRtsLocksTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-rts-locks", "--require-supported"]}],
@@ -157,16 +194,33 @@
         "thc.cabal"
       ]
     },
+    "weak-explicit": {
+      "junit": ["thc.runtime.ManagedWeakTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "weak-explicit"]}],
+      "outputs": ["build/weak-explicit"],
+      "sources": [
+        "compiler/test-fixtures/WeakAudit.hs",
+        "test/haskell-fixtures/WeakFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal"
+      ]
+    },
     "stable-pointers": {
       "junit": ["thc.runtime.StablePointerTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "stable-pointers"]}],
       "outputs": ["build/stable-pointers"],
       "sources": [
         "compiler/test-fixtures/StablePointerAudit.hs",
+        "compiler/test-fixtures/SharedCAFNative.hs",
+        "compiler/test-fixtures/SharedCAFOriginalCalls.json",
         "test/haskell-fixtures/StablePointerFixtures.hs",
         "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs",
-        "thc.cabal"
+        "thc.cabal",
+        "scripts/core-capabilities.json",
+        "scripts/core_original_foreign.py",
+        "scripts/audit-core.py"
       ]
     },
     "shrink-bytearrays": {
@@ -197,13 +251,19 @@
       "junit": ["thc.runtime.InterfaceCoreNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "interface-core"]}],
       "outputs": ["build/interface-core"],
-      "sources": ["test/haskell-fixtures/InterfaceFixtures.hs", "test/haskell-fixtures/InterfaceForeignFacts.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "compiler/test-fixtures/InterfaceLibrary.hs", "compiler/test-fixtures/InterfaceNative.hs", "compiler/test-fixtures/InterfaceForeign.hs", "compiler/test-fixtures/InterfaceForeignAlias.hs", "compiler/test-fixtures/CBVCoercionAudit.hs", "compiler/interface/Main.hs", "compiler/THC/Interface.hs", "src/THC/Driver/Installed.hs", "src/THC/Driver/Project.hs", "src/THC/Driver/Zip.hs", "thc.cabal"]
+      "sources": ["test/haskell-fixtures/InterfaceFixtures.hs", "test/haskell-fixtures/InterfaceForeignFacts.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "compiler/test-fixtures/InterfaceLibrary.hs", "compiler/test-fixtures/InterfaceNative.hs", "compiler/test-fixtures/InterfaceForeign.hs", "compiler/test-fixtures/InterfaceForeignAlias.hs", "compiler/test-fixtures/CBVCoercionAudit.hs", "compiler/interface/Main.hs", "compiler/THC/Interface.hs", "compiler/target-layout.c", "src/THC/Driver/Installed.hs", "src/THC/Driver/Project.hs", "src/THC/Driver/Wired.hs", "src/THC/Driver/Zip.hs", "thc.cabal"]
     },
     "fused-floating": {
       "junit": ["thc.runtime.FusedFloatingTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "fused-floating"]}],
       "outputs": ["build/fused-floating"],
       "sources": ["test/haskell-fixtures/FusedFloatingFixtures.hs", "test/haskell-fixtures/Main.hs", "compiler/test-fixtures/FloatingAudit.hs", "compiler/test-fixtures/FloatingAuditNative.hs"]
+    },
+    "simd-calls": {
+      "junit": ["thc.runtime.SimdCallNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd-calls"]}],
+      "outputs": ["build/simd-calls"],
+      "sources": ["test/haskell-fixtures/SimdCallFixtures.hs", "test/haskell-fixtures/Main.hs", "compiler/test-fixtures/SimdCallAudit.hs", "compiler/test-fixtures/SimdCallNative.hs"]
     },
     "word-floating": {
       "junit": ["thc.runtime.WordFloatingTest"],
@@ -539,6 +599,14 @@
         "compiler/test-fixtures/LazyIOCallbackAudit.hs",
         "compiler/test-fixtures/LazyIOCallbackNative.hs"
       ]
+    },
+    "thread-status": {
+      "junit": ["thc.runtime.ThreadStatusNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-status"]}],
+      "outputs": ["build/thread-status"],
+      "sources": ["compiler/test-fixtures/ThreadStatusAudit.hs", "compiler/test-fixtures/ThreadStatusNative.hs",
+        "test/haskell-fixtures/ThreadStatusFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "thread-async": {
       "junit": ["thc.runtime.ThreadAsyncNativeTest"],

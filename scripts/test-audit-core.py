@@ -41,6 +41,34 @@ CLOSURE = dict(REFERENCE, kind='closure', evaluated=True)
 TUPLE_CAP = dict(CAP, aggregateResults=['unboxed-tuple'])
 
 
+class ArchiveReachabilityTest(unittest.TestCase):
+    def report(self, expression, initializers=(), finalizers=(), files=()):
+        root = dict(schema=1, ghc='9.14.1', bindings=[bind('root', expression)], constructors=[])
+        label = lambda name, init: dict(isInitializer=init, unit='pkg', module='M', name=name)
+        archive = dict(schema=2, ghc='9.14.1', unit='pkg', module='M',
+                       foreign=dict(schema=1, execution='not-linked',
+                                    stubs=dict(header='', source='int stub(void) { return 1; }',
+                                               initializers=[label(name, True) for name in initializers],
+                                               finalizers=[label(name, False) for name in finalizers]), files=list(files)),
+                       bindings=[bind('pkg:M.cold', lit(9))], constructors=[])
+        return audit_core.Audit([('root.json', root), ('archive.json', archive)], CAP).run(['root'])
+
+    def test_unused_archive_is_validated_but_not_executed(self):
+        report = self.report(lit(7))
+        self.assertTrue(report['accepted'], report['issues'])
+        self.assertEqual(['root'], [item['id'] for item in report['reachableBindings']])
+
+    def test_reachable_archive_and_global_registration_still_reject(self):
+        for report in (self.report(var('pkg:M.cold')),
+                       self.report(lit(7), initializers=('start',)),
+                       self.report(lit(7), finalizers=('stop',)),
+                       self.report(lit(7), files=(dict(language='RawObject', source='opaque', extension='.o'),)),
+                       self.report(lit(7), files=(dict(language='C', source='void init(void) __attribute__((constructor));', extension='.c'),))):
+            self.assertFalse(report['accepted'])
+            self.assertIn('module-format', {issue['code'] for issue in report['issues']})
+            self.assertIn('archive-only', str(report['issues']))
+
+
 def tuple_rep(*components):
     return dict(aggregate='unboxed-tuple', kind='unknown', evaluated=True,
                 components=list(components), primReps=[r for c in components for r in c['primReps']])
@@ -258,6 +286,25 @@ class AuditTest(unittest.TestCase):
                 self.assertFalse(report['accepted'], (primitive, variant))
                 self.assertTrue(any(issue['code'] in ('primitive-representation', 'primitive-arity')
                                     for issue in report['issues']), report['issues'])
+
+    def test_native_address_casts_retain_exact_scalar_registers(self):
+        address = dict(kind='address', primReps=['AddrRep'], evaluated=True)
+        for primitive, argument, result in [('addr2Int#', address, LONG), ('int2Addr#', LONG, address)]:
+            body = ['app', ['prim', primitive], [['var', 'x', dict(rep=argument)]],
+                    [False], False, False, dict(rep=result)]
+            expression = ['lam', [dict(id='x', lifted=False, rep=argument)], body,
+                          dict(rep=CLOSURE, resultRep=result)]
+            self.assertTrue(run(expression)['accepted'], primitive)
+            for mode in ('argument', 'result', 'hidden'):
+                bad = copy.deepcopy(expression)
+                if mode == 'result':
+                    bad[2][6]['rep'] = argument
+                    bad[3]['resultRep'] = argument
+                else:
+                    bad[1][0]['rep'] = result
+                    if mode == 'hidden': bad[2][2][0].pop()
+                    else: bad[2][2][0][2]['rep'] = result
+                self.assertFalse(run(bad)['accepted'], (primitive, mode))
 
     def test_scalar_primitive_signatures_reject_consistent_forgery_and_hidden_binder_proofs(self):
         for primitive, expected, result in [('plusInt64#', 'Int64Rep', 'Int64Rep'),
@@ -913,7 +960,7 @@ class AuditTest(unittest.TestCase):
         thread = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
         action = dict(kind='closure', primReps=['BoxedRep (Just Lifted)'], evaluated=True)
         payload = dict(kind='data', primReps=['BoxedRep (Just Lifted)'], evaluated=False)
-        roles = {'state': state, 'threadId': thread, 'action': action, 'payload': payload}
+        roles = {'state': state, 'threadId': thread, 'action': action, 'payload': payload, 'int': LONG}
         contracts = CAP['managedThreadPrimitives']
         self.assertEqual({name: len(spec['arguments']) for name, spec in contracts.items()},
                          {name: CAP['primitives'][name] for name in contracts})
@@ -1469,6 +1516,59 @@ class OriginalStackCloneAuditTest(unittest.TestCase):
         self.call(module)[2][0] = ['lit', 'int', '7', state]; self.reject(module)
 
 
+class LibdwUnavailableAuditTest(unittest.TestCase):
+    """Original declaration certificates; synthetic consumers, no closure claim."""
+    resource = ROOT.parent / 'src/test/resources/core/original-libdw-descriptors.json'
+
+    def fixture(self, declaration):
+        declaration = copy.deepcopy(declaration)
+        parameters = [dict(id=f'arg-{i}', lifted=False, rep=dict(rep, evaluated=True))
+                      for i, rep in enumerate(declaration['argumentReps'])]
+        call = ['app', ['var', 'synthetic-fcall-id', dict(rep=CLOSURE)],
+                [['var', p['id'], dict(rep=p['rep'])] for p in parameters],
+                [False] * len(parameters), False, False,
+                dict(rep=declaration['resultRep'], foreignCall=declaration)]
+        body = ['case', call, 'tuple-result', [['default', None, [], [*lit(0), dict(rep=LONG)]]],
+                dict(rep=LONG, binder=dict(id='tuple-result', lifted=False, rep=dict(declaration['resultRep'], evaluated=True)))]
+        wrapper = dict(bind('consumer', ['lam', parameters, body, dict(rep=CLOSURE, resultRep=LONG)]),
+                       rep=CLOSURE, arity=len(parameters))
+        return dict(schema=1, ghc='9.14.1', bindings=[wrapper], constructors=[])
+
+    def audit(self, module, cap=CAP):
+        return audit_core.Audit([('synthetic-libdw-consumer.json', module)], cap).run(['consumer'])
+
+    def test_original_declarations_admitted_only_with_explicit_unavailable_backend(self):
+        declarations = json.loads(self.resource.read_text())
+        self.assertEqual(set(core_original_foreign.LIBDW_UNAVAILABLE),
+                         {d['target']['symbol'] for d in declarations})
+        for declaration in declarations:
+            module = self.fixture(declaration)
+            result = self.audit(module)
+            self.assertTrue(result['accepted'], result)
+            self.assertEqual([], result['missingGlobals'])
+            self.assertEqual([declaration['target']['symbol']], [c['symbol'] for c in result['foreignCalls']])
+            result = self.audit(module, dict(CAP, managedForeignCalls=[]))
+            self.assertFalse(result['accepted'])
+            self.assertEqual([], result['foreignCalls'])
+
+    def test_descriptor_and_stored_operand_spoofs_rejected(self):
+        for declaration in json.loads(self.resource.read_text()):
+            target = declaration['target']
+            for incorrect in [dict(declaration, schema=1.0), dict(declaration, safety='safe'),
+                              dict(declaration, arity=0), dict(declaration, convention='capi'),
+                              dict(declaration, target=dict(target, unit='main')),
+                              dict(declaration, target=dict(target, isFunction=False)),
+                              dict(declaration, resultRep=LONG)]:
+                result = self.audit(self.fixture(incorrect))
+                self.assertFalse(result['accepted'], result)
+                self.assertEqual([], result['foreignCalls'])
+            module = self.fixture(declaration)
+            module['bindings'][0]['expr'][1][0]['rep'] = LONG
+            result = self.audit(module)
+            self.assertFalse(result['accepted'], result)
+            self.assertEqual([], result['foreignCalls'])
+
+
 class OriginalStackInfoAuditTest(unittest.TestCase):
     """Genuine unchanged FCall applications in explicitly synthetic scalar consumers.
 
@@ -1986,17 +2086,27 @@ class OriginalGmpAuditTest(unittest.TestCase):
 
 
 class OriginalDupAuditTest(unittest.TestCase):
-    """Descriptor/RTS controls; genuine declarations live in Haskell fixtures."""
-    symbols = ('dup', 'dup2', '__hscore_fstat', 'lockFile', 'unlockFile')
+    """Original scalar/State controls; genuine declarations live in Haskell fixtures."""
+    termios = {
+        '__hscore_lflag': (('AddrRep', None), 'Word32Rep'),
+        '__hscore_poke_lflag': (('AddrRep', 'Word32Rep', None), None),
+        '__hscore_ptr_c_cc': (('AddrRep', None), 'AddrRep'),
+        '__hscore_sizeof_termios': ((None,), 'IntRep'),
+        **{f'__hscore_{name}': ((None,), 'Int32Rep') for name in ('echo', 'icanon', 'vmin', 'vtime', 'tcsanow')},
+    }
+    symbols = ('dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile', *termios)
     def fixture(self, symbol):
         arguments = (('Word64Rep', 'Word64Rep', 'Word64Rep', 'Int32Rep', None) if symbol == 'lockFile' else
                      ('Word64Rep', None) if symbol == 'unlockFile' else
                      ('Int32Rep', 'AddrRep', None) if symbol == '__hscore_fstat' else
+                     ('AddrRep', 'Int32Rep', 'Word32Rep', None) if symbol == '__hscore_open' else
                      ('Int32Rep', None) if symbol == 'dup' else ('Int32Rep', 'Int32Rep', None))
+        arguments, output = self.termios.get(symbol, (arguments, 'Int32Rep'))
         scalar = lambda rep, evaluated: dict(kind='void' if rep is None else 'address' if rep == 'AddrRep' else 'long',
             primReps=[] if rep is None else [rep], evaluated=evaluated)
         parameters = [dict(id=f'a{i}', lifted=False, rep=scalar(p, True)) for i, p in enumerate(arguments)]
-        result = tuple_rep(scalar(None, True), scalar('Int32Rep', True)); result['evaluated'] = False
+        result = tuple_rep(*(scalar(rep, True) for rep in ((None,) if output is None else (None, output))))
+        result['evaluated'] = False
         descriptor = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='ghc-internal', isFunction=True),
             convention='ccall', safety='unsafe', arity=len(arguments), suppliedArity=len(arguments),
             argumentReps=[scalar(p, False) for p in arguments], resultRep=copy.deepcopy(result))
@@ -2020,7 +2130,7 @@ class OriginalDupAuditTest(unittest.TestCase):
             report = self.audit(self.fixture(symbol)); self.assertTrue(report['accepted'], report)
             self.assertEqual([symbol], [c['symbol'] for c in report['foreignCalls']])
             self.assertFalse(self.audit(self.fixture(symbol), dict(CAP, managedForeignCalls=[]))['accepted'])
-        for alias in ('dup3', '_dup', 'prefixdup', '__hscore_dup', 'prefixunlockFile', 'prefixlockFile', 'prefix__hscore_fstat', 'fstat'):
+        for alias in ('dup3', '_dup', 'prefixdup', '__hscore_dup', 'prefixunlockFile', 'prefixlockFile', 'prefix__hscore_fstat', 'fstat', 'open', '__hscore_open64', 'prefix__hscore_open'):
             self.assertNotIn(alias, core_original_foreign.OPERATIONS)
             module = self.fixture('__hscore_fstat')
             self.call(module)[6]['foreignCall']['target']['symbol'] = alias
@@ -2029,7 +2139,7 @@ class OriginalDupAuditTest(unittest.TestCase):
     def test_descriptor_flags_head_and_raw_representation_forgery_reject(self):
         for symbol in self.symbols:
             mutations = [(key, value) for key in ('schema', 'arity', 'suppliedArity')
-                for value in (None, True, 2.0, '2', 0, 1 << 32)] + [('convention', 'capi'), ('safety', 'safe'), ('extra', None)]
+                for value in (None, True, 2.0, '2', 0, 1 << 32)] + [('convention', 'capi'), ('safety', 'safe'), ('safety', 'interruptible'), ('extra', None)]
             for key, value in mutations:
                 module = self.fixture(symbol); self.call(module)[6]['foreignCall'][key] = value
                 self.assertFalse(self.audit(module)['accepted'], (symbol, key, value))
@@ -2057,6 +2167,126 @@ class OriginalDupAuditTest(unittest.TestCase):
                 result = meta['foreignCall']['resultRep'] if declared else meta['rep']
                 result['components'][0]['primReps'] = ['IntRep']
                 self.assertFalse(self.audit(module)['accepted'])
+
+    def test_termios_state_only_result_and_excluded_terminal_calls(self):
+        self.assertEqual(set(self.termios), core_original_foreign.TERMIOS_SYMBOLS)
+        for symbol in self.termios:
+            for declared in (False, True):
+                for mutation in ('bare', 'empty', 'extra', 'sum'):
+                    module = self.fixture(symbol); meta = self.call(module)[6]
+                    owner, key = (meta['foreignCall'], 'resultRep') if declared else (meta, 'rep')
+                    result = owner[key]
+                    if mutation == 'bare': owner[key] = result['components'][0]
+                    if mutation == 'empty': result['components'] = []
+                    if mutation == 'extra': result['components'].append(copy.deepcopy(result['components'][0]))
+                    if mutation == 'sum': result['aggregate'] = 'unboxed-sum'
+                    self.assertFalse(self.audit(module)['accepted'])
+        for symbol in ('prefix__hscore_lflag', 'tcgetattr', 'tcsetattr', '__hscore_sigttou', '__hscore_sizeof_sigset_t'):
+            self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
+            module = self.fixture('__hscore_lflag')
+            self.call(module)[6]['foreignCall']['target']['symbol'] = symbol
+            self.assertFalse(self.audit(module)['accepted'])
+
+
+class OriginalMainThreadRegistrationTest(unittest.TestCase):
+    """The catalog admits only TopHandler's Weak# key call, not signal setup."""
+
+    @staticmethod
+    def fixture():
+        weak = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
+        state = dict(kind='void', primReps=[], evaluated=True)
+        arguments = [dict(id='weak', lifted=False, rep=weak), dict(id='state', lifted=False, rep=state)]
+        result = tuple_rep(state); result['evaluated'] = False
+        descriptor = dict(schema=1, target=dict(kind='static', symbol='rts_setMainThread',
+            unit='ghc-internal', isFunction=True), convention='ccall', safety='unsafe',
+            arity=2, suppliedArity=2, argumentReps=[dict(weak, evaluated=False), dict(state, evaluated=False)],
+            resultRep=copy.deepcopy(result))
+        call = ['app', ['var', 'original-fcall', dict(rep=CLOSURE)],
+                [['var', p['id'], dict(rep=p['rep'])] for p in arguments], [False, False],
+                False, False, dict(rep=result, foreignCall=descriptor)]
+        case = ['case', call, 'done', [['default', None, [], [*lit(0), dict(rep=LONG)]]],
+                dict(rep=LONG, binder=dict(id='done', lifted=False, rep=dict(result, evaluated=True)))]
+        binding = dict(bind('root', ['lam', arguments, case, dict(rep=CLOSURE, resultRep=LONG)]),
+                       rep=CLOSURE, arity=2)
+        return dict(schema=1, ghc='9.14.1', bindings=[binding], constructors=[])
+
+    @staticmethod
+    def audit(module, capabilities=CAP):
+        return audit_core.Audit([('main-thread-call.json', module)], capabilities).run(['root'])
+
+    def test_exact_weak_key_call_and_capability_boundary(self):
+        module = self.fixture()
+        self.assertEqual(1, CAP['managedForeignCalls'].count('rts_setMainThread'))
+        result = self.audit(module)
+        self.assertTrue(result['accepted'], result)
+        self.assertEqual(['rts_setMainThread'], [call['symbol'] for call in result['foreignCalls']])
+        disabled = self.audit(module, dict(CAP, managedForeignCalls=[]))
+        self.assertFalse(disabled['accepted'])
+        self.assertEqual([], disabled['foreignCalls'])
+        for wrong in ('stg_sig_install', 'prefix_rts_setMainThread'):
+            altered = self.fixture()
+            altered['bindings'][0]['expr'][2][1][6]['foreignCall']['target']['symbol'] = wrong
+            self.assertFalse(self.audit(altered)['accepted'])
+        for mutation in ('wrong-key', 'wrong-state', 'wrong-unit', 'wrong-safety'):
+            altered = self.fixture()
+            call = altered['bindings'][0]['expr'][2][1]
+            if mutation == 'wrong-key': call[2][0][2]['rep']['primReps'] = ['BoxedRep (Just Lifted)']
+            if mutation == 'wrong-state': call[2][1][2]['rep']['primReps'] = ['IntRep']
+            if mutation == 'wrong-unit': call[6]['foreignCall']['target']['unit'] = 'base'
+            if mutation == 'wrong-safety': call[6]['foreignCall']['safety'] = 'safe'
+            self.assertFalse(self.audit(altered)['accepted'], mutation)
+
+
+class ExplicitWeakContractTest(unittest.TestCase):
+    """Structural rejection controls; native semantics come from WeakAudit.hs."""
+    def fixture(self, name):
+        state = dict(kind='void', primReps=[], evaluated=True)
+        weak = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
+        roles = dict(state=state, weak=weak, boxed=REFERENCE, action=CLOSURE, flag=LONG)
+        contract = CAP['managedWeakPrimitives'][name]
+        parameters = [dict(id=f'a{i}', lifted=roles[role]['primReps'] == ['BoxedRep (Just Lifted)'],
+                           rep=copy.deepcopy(roles[role])) for i, role in enumerate(contract['arguments'])]
+        result = tuple_rep(*(copy.deepcopy(roles[role]) for role in contract['result']))
+        call = ['app', ['prim', name], [[*var(p['id']), dict(rep=copy.deepcopy(p['rep']))] for p in parameters],
+                [p['lifted'] for p in parameters], False, False, dict(rep=result)]
+        body = ['case', call, 'result', [['default', None, [], [*lit(0), dict(rep=LONG)]]],
+                dict(rep=LONG, binder=dict(id='result', lifted=False, rep=copy.deepcopy(result)))]
+        root = dict(bind('root', ['lam', parameters, body, dict(rep=CLOSURE, resultRep=LONG)]),
+                    arity=len(parameters), rep=CLOSURE)
+        return dict(schema=1, ghc='9.14.1', bindings=[root], constructors=[])
+
+    def call(self, module):
+        return module['bindings'][0]['expr'][2][1]
+
+    def test_four_exact_contracts_are_partial_and_c_finalizers_stay_rejected(self):
+        self.assertEqual({'mkWeak#', 'mkWeakNoFinalizer#', 'deRefWeak#', 'finalizeWeak#'},
+                         set(CAP['managedWeakPrimitives']))
+        for name in CAP['managedWeakPrimitives']:
+            module = self.fixture(name)
+            report = run_tuple(module)
+            self.assertTrue(report['accepted'], report['issues'])
+            self.call(module)[1][1] = 'addCFinalizerToWeak#'
+            self.assertFalse(run_tuple(module)['accepted'])
+        self.assertNotIn('addCFinalizerToWeak#', CAP['primitives'])
+
+    def test_flags_arity_state_logical_tuple_and_lexical_proofs_cannot_be_forged(self):
+        for name in CAP['managedWeakPrimitives']:
+            for mutation in range(5):
+                module = self.fixture(name)
+                call = self.call(module)
+                if mutation == 0:
+                    call[3][0] = not call[3][0]
+                elif mutation == 1:
+                    call[2].pop(); call[3].pop()
+                elif mutation == 2:
+                    call[2][-1][2]['rep'] = copy.deepcopy(LONG)
+                elif mutation == 3:
+                    call[6]['rep']['components'].pop(0)  # Identical physical reps, missing logical State.
+                else:
+                    module['bindings'][0]['expr'][1][0]['rep'] = dict(kind='address', primReps=['AddrRep'])
+                report = run_tuple(module)
+                self.assertFalse(report['accepted'], (name, mutation))
+                self.assertIn('primitive-representation', {issue['code'] for issue in report['issues']})
 
 
 if __name__ == '__main__':

@@ -15,9 +15,11 @@ import NarrowByteOffsetFixtures (prepareNarrowByteOffset)
 import Int32ByteOffsetFixtures (prepareInt32ByteOffset)
 import Explicit64ArrayFixtures (prepareExplicit64Array)
 import FusedFloatingFixtures (prepareFusedFloating)
+import SimdCallFixtures (prepareSimdCalls)
 import SqrtFixtures (prepareSqrt)
 import ContinuationFixtures (prepareCoreContinuation)
 import LiveAsyncFixtures (prepareLiveAsync)
+import ThreadStatusFixtures (prepareThreadStatus)
 import ThreadAsyncFixtures (prepareThreadAsync)
 import UncaughtSelfFixtures (prepareUncaughtSelf)
 import ArithmeticExceptionFixtures (prepareArithmeticExceptions)
@@ -31,12 +33,17 @@ import OriginalStrerrorFixtures (prepareOriginalStrerror)
 import OriginalStdioTruncateFixtures (prepareOriginalStdioTruncate)
 import OriginalHandleReadinessFixtures (prepareOriginalHandleReadiness)
 import OriginalPosixStatFixtures (prepareOriginalPosixStat)
+import LibdwUnavailableFixtures (prepareLibdwUnavailable)
+import NativeAddressFixtures (prepareNativeAddress)
 import OriginalGmpFixtures (prepareOriginalGmp)
 import OriginalFdReadyFixtures (prepareOriginalFdReady)
 import OriginalRtsLocksFixtures (prepareOriginalRtsLocks)
+import OriginalOpenFixtures (prepareOriginalOpen)
+import OriginalTermiosFixtures (prepareOriginalTermios)
 import OriginalIconvFixtures (prepareOriginalIconv)
 import MutVarFixtures (prepareMutVar)
 import StablePointerFixtures (prepareStablePointers)
+import WeakFixtures (prepareWeaks)
 import ShrinkByteArrayFixtures (prepareShrinkByteArrays)
 import FetchAddIntArrayFixtures (prepareFetchAddIntArray)
 import StackFixtures (prepareOriginalStack, prepareOriginalStackFormatter, exportOriginalStackSource)
@@ -861,6 +868,7 @@ main = do
     ["int32-byte-offset"] -> prepareInt32ByteOffset root
     ["explicit64-arrays"] -> prepareExplicit64Array root
     ["fused-floating"] -> prepareFusedFloating root
+    ["simd-calls"] -> prepareSimdCalls root
     ["sqrt"] -> prepareSqrt root
     "original-stdio":options -> prepareOriginalStdio root options
     ["original-stdio-close"] -> prepareOriginalStdioClose root
@@ -871,6 +879,10 @@ main = do
     "original-stdio-read":[] -> prepareOriginalStdioRead root
     ["original-handle-readiness"] -> prepareOriginalHandleReadiness root
     ["original-posix-stat"] -> prepareOriginalPosixStat root
+    ["original-open"] -> prepareOriginalOpen root
+    ["libdw-unavailable"] -> prepareLibdwUnavailable root
+    ["original-termios"] -> prepareOriginalTermios root
+    ["native-addresses"] -> prepareNativeAddress root
     ["original-gmp"] -> prepareOriginalGmp root False
     ["original-gmp", "--require-supported"] -> prepareOriginalGmp root True
     ["original-fd-ready"] -> prepareOriginalFdReady root
@@ -879,6 +891,7 @@ main = do
     ["original-iconv"] -> prepareOriginalIconv root
     ["mutvar"] -> prepareMutVar root
     ["stable-pointers"] -> prepareStablePointers root
+    ["weak-explicit"] -> prepareWeaks root
     ["shrink-bytearrays"] -> prepareShrinkByteArrays root
     ["fetch-add-int-array"] -> prepareFetchAddIntArray root
     ["original-stack"] -> prepareOriginalStack root
@@ -894,6 +907,7 @@ main = do
     ["pinned-pointer-cells"] -> preparePinnedPointers root
     ["core-continuation"] -> prepareCoreContinuation root
     ["live-async"] -> prepareLiveAsync root
+    ["thread-status"] -> prepareThreadStatus root
     ["thread-async"] -> prepareThreadAsync root
     ["uncaught-self"] -> prepareUncaughtSelf root
     ["arithmetic-exceptions"] -> prepareArithmeticExceptions root
@@ -901,4 +915,4 @@ main = do
     ["interface-core"] -> prepareInterfaceCore root
     ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (interface-core|core-continuation|arithmetic-exceptions|mask-functions|live-async|thread-async|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|original-stdio-read|original-handle-readiness|original-stdio-close|original-posix-dup|original-stdio-seek|original-stdio-truncate|original-strerror|original-fd-ready|original-gmp [--require-supported]|original-rts-locks [--require-supported]|mutvar|stable-pointers|shrink-bytearrays|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|sqrt|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|managed-address-reads|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (interface-core|core-continuation|arithmetic-exceptions|mask-functions|live-async|thread-async|thread-status|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|original-stdio-read|original-handle-readiness|original-stdio-close|original-posix-dup|original-stdio-seek|original-stdio-truncate|original-strerror|original-fd-ready|original-gmp [--require-supported]|original-rts-locks [--require-supported]|mutvar|stable-pointers|weak-explicit|shrink-bytearrays|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|sqrt|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|managed-address-reads|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

@@ -4,7 +4,14 @@
 package thc.runtime
 
 /** Actual C errno constants from the build host, not the private service categories. */
-internal class StdioHostAbi private constructor(private val errors: Map<String, Long>, private val seek: Map<String, Long>) {
+internal class StdioHostAbi private constructor(private val errors: Map<String, Long>, private val seek: Map<String, Long>,
+    private val open: Map<String, Long>) {
+    fun requireOpenAbi() { if (open.getValue("modeBytes") != 4L) fault("Original open requires the Linux Word32 mode_t ABI") }
+    fun openReadable(flags: Long): Boolean = (flags and open.getValue("O_ACCMODE")).let {
+        it == open.getValue("O_RDONLY") || it == open.getValue("O_RDWR") }
+    fun openWritable(flags: Long): Boolean = (flags and open.getValue("O_ACCMODE")).let {
+        it == open.getValue("O_WRONLY") || it == open.getValue("O_RDWR") }
+    fun openAppend(flags: Long): Boolean = flags and open.getValue("O_APPEND") != 0L
     fun notTerminal(): Long = errors.getValue("ENOTTY")
     fun notSeekable(): Long = errors.getValue("ESPIPE")
     fun seekConstant(operation: OriginalStdioOp): Long = seek.getValue(when (operation) {
@@ -42,6 +49,7 @@ internal class StdioHostAbi private constructor(private val errors: Map<String, 
         private val widths = mapOf("charBits" to 8L, "pointer" to 8L, "int" to 4L, "bool" to 1L, "size" to 8L, "ssize" to 8L)
         private val errorNames = setOf("ENOENT", "EACCES", "EEXIST", "EBADF", "EINVAL", "EIO", "ENOTSUP", "EBUSY", "EISDIR", "ENOTTY", "ESPIPE", "EMFILE")
         private val seekNames = setOf("SEEK_SET", "SEEK_CUR", "SEEK_END")
+        private val openNames = setOf("modeBytes", "O_ACCMODE", "O_RDONLY", "O_WRONLY", "O_RDWR", "O_APPEND")
         private fun exactInteger(value: Any?): Long? = if (value is Int || value is Long) (value as Number).toLong() else null
         private fun architecture(value: String): String = when (value.lowercase()) {
             "arm64" -> "aarch64"
@@ -77,7 +85,19 @@ internal class StdioHostAbi private constructor(private val errors: Map<String, 
                 number!!
             }
             requireAbi(seek.values.toSet().size == seekNames.size, "distinct seek constants")
-            return StdioHostAbi(errors, seek)
+            val rawOpen = manifest["open"] as? Map<*, *>
+            requireAbi(rawOpen != null && rawOpen.keys == openNames, "open fields")
+            val open = openNames.associateWith { name ->
+                val number = exactInteger(rawOpen!![name])
+                requireAbi(number != null && number in 0L..Int.MAX_VALUE.toLong(), "open $name")
+                number!!
+            }
+            requireAbi(open.getValue("modeBytes") in setOf(2L, 4L), "mode_t width")
+            val access = listOf("O_RDONLY", "O_WRONLY", "O_RDWR").map(open::getValue)
+            val mask = open.getValue("O_ACCMODE")
+            requireAbi(mask != 0L && access.toSet().size == 3 && access.all { it and mask == it } &&
+                open.getValue("O_APPEND") != 0L && open.getValue("O_APPEND") and mask == 0L, "open access/status bits")
+            return StdioHostAbi(errors, seek, open)
         }
         fun load(): StdioHostAbi {
             val document = StdioHostAbi::class.java.getResourceAsStream("/thc/native/stdio-host-abi.json")?.use {

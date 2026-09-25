@@ -187,18 +187,30 @@ class TargetLayout private constructor(
             if (layout == null && receipt == null) return null
             require(layout != null && layout == receipt &&
                 index["generatedSources"] == inputs["generatedSources"]) {
-                "Wired target layout and generated-source receipts differ"
+                "GHC target layout receipts differ"
             }
-            val generated = index["generatedSources"] as? List<*>
-                ?: error("Missing generated GHC source receipts")
-            require(generated.size == generatedSourcePaths.size && generated.all { item ->
-                val source = item as? Map<*, *> ?: return@all false
-                val path = source["path"] as? String
-                val sha = source["sha256"] as? String
-                source.keys == setOf("path", "sha256") && path in generatedSourcePaths &&
-                    sha?.matches(Regex("[0-9a-f]{64}")) == true
-            } && generated.map { (it as Map<*, *>)["path"] }.toSet() == generatedSourcePaths) {
-                "Invalid generated GHC source receipts"
+            val component = inputs["component"] as? Map<*, *>
+            if (component?.get("kind") == "installed-interface") {
+                require(index["generatedSources"] == null &&
+                    (inputs["rtsRegistration"] as? String)?.isNotBlank() == true &&
+                    (inputs["recipeArtifacts"] as? List<*>)?.singleOrNull().let { item ->
+                        val recipe = item as? Map<*, *>
+                        recipe?.keys == setOf("path", "sha256") &&
+                            recipe["path"] == "compiler/target-layout.c" &&
+                            (recipe["sha256"] as? String)?.matches(Regex("[0-9a-f]{64}")) == true
+                    }) { "Invalid selected-GHC layout provenance" }
+            } else {
+                val generated = index["generatedSources"] as? List<*>
+                    ?: error("Missing generated GHC source receipts")
+                require(generated.size == generatedSourcePaths.size && generated.all { item ->
+                    val source = item as? Map<*, *> ?: return@all false
+                    val path = source["path"] as? String
+                    val sha = source["sha256"] as? String
+                    source.keys == setOf("path", "sha256") && path in generatedSourcePaths &&
+                        sha?.matches(Regex("[0-9a-f]{64}")) == true
+                } && generated.map { (it as Map<*, *>)["path"] }.toSet() == generatedSourcePaths) {
+                    "Invalid generated GHC source receipts"
+                }
             }
             return fromParts(inputs["compiler"] as? Map<*, *> ?: error("Missing target compiler"),
                 layout as? Map<*, *> ?: error("Invalid GHC target layout"))

@@ -14,6 +14,11 @@ focused pull request against `main`. Explain the problem, the change and how you
 checked it. Keep issues about the work to do; PRs carry the implementation
 discussion and merge status.
 
+Current integration uses small, reviewed PRs merged manually by the integration
+owner. Record the exact tested revision and any dependent changes. Do not treat
+the retained merge-bot implementation or its `auto-merge` label as the current
+integration workflow.
+
 When adding a primop, update its existing entry in
 [`scripts/core-capabilities.json`](../scripts/core-capabilities.json) after both
 backends and the native checks pass. Then refresh the generated
@@ -38,15 +43,15 @@ compilation outputs and verified native/Core inputs save setup work; the selecte
 tests still execute on every run.
 
 `Build` runs the full suite on main after merges: native comparisons, both
-backends, both handoff modes and library checks on Linux and macOS. A failed full
-build stops further automatic merges until a successful build containing the fix.
-A full build that is still running does not hold up an otherwise ready PR.
+backends, both handoff modes and library checks on Linux and macOS. Review those
+results when integrating changes, and carry failures and untested limits into
+the next handoff.
 
 `JIT stability` is a separate advisory workflow. It checks that ShortByteString
 call targets stay compiled throughout a warmed run, retaining failed rows and
 target snapshots in its artifacts. Code retirement is tracked in
 [#72](https://github.com/ekmett/thc/issues/72); a failure here does not block
-merges or stop the merge bot. The complete native-result comparisons, strict
+the required PR checks. The complete native-result comparisons, strict
 closure checks and handoff cleanup checks remain in the required test suite.
 Run the advisory checks locally with:
 
@@ -58,6 +63,11 @@ JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon jitStabilityTest
 
 The local task exits unsuccessfully if a stability assertion fails; only CI
 allows that failure. Its XML and reports are separate from ordinary tests.
+
+## Retained merge-bot implementation
+
+The following describes the existing automation's contract for reference, not
+the current manual integration policy above.
 
 The merge bot runs code from `main`. It checks the required workflow's exact
 commit and current attempt, then publishes the `required-tests` status enforced

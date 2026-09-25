@@ -216,10 +216,10 @@ class NativeFileProviderTest {
         var acquired: SeekableByteChannel? = null
         val failure = IOException("after completion")
         nativeContext().use { context -> entered(context) {
-            val request = NativeOpenRequest(null, emptySet()) { provider().open(it!!, 3) }
+            val request = NativeOpenRequest(null, emptySet()) { provider().open(it!!.toString(), 3) }
             assertSame(failure, assertThrows(IOException::class.java) {
                 request.use {
-                    acquired = it.acquire(directory.resolve("created").toString(), emptySet())
+                    acquired = it.acquire(directory.resolve("created"), emptySet())
                     throw failure
                 }
             })
@@ -231,9 +231,9 @@ class NativeFileProviderTest {
     @Test fun reentrantProviderDisposalAfterAcquisitionCannotPublishAClosedResource() {
         nativeContext().use { context -> entered(context) {
             val selected = provider()
-            val request = NativeOpenRequest(null, emptySet()) { selected.open(it!!, 3) }
+            val request = NativeOpenRequest(null, emptySet()) { selected.open(it!!.toString(), 3) }
             request.use {
-                val acquired = it.acquire(directory.resolve("reentrant").toString(), emptySet())
+                val acquired = it.acquire(directory.resolve("reentrant"), emptySet())
                 selected.close()
                 assertThrows(ClosedChannelException::class.java) { it.commit(acquired) }
                 assertFalse(acquired.isOpen)
@@ -245,16 +245,16 @@ class NativeFileProviderTest {
     @Test fun duplicateAndLateCompletionAreRejectedWithoutLeakingChannels() {
         nativeContext().use { context -> entered(context) {
             val selected = provider()
-            val request = NativeOpenRequest(null, emptySet()) { selected.open(it!!, 3) }
-            val acquired = request.acquire(directory.resolve("twice").toString(), emptySet())
-            assertThrows(IllegalStateException::class.java) { request.acquire("ignored", emptySet()) }
+            val request = NativeOpenRequest(null, emptySet()) { selected.open(it!!.toString(), 3) }
+            val acquired = request.acquire(directory.resolve("twice"), emptySet())
+            assertThrows(IllegalStateException::class.java) { request.acquire(directory.resolve("ignored"), emptySet()) }
             request.close()
             assertFalse(acquired.isOpen)
             assertEquals(0L, nativeDescriptors(directory.resolve("twice")))
-            assertThrows(IllegalStateException::class.java) { request.acquire("ignored", emptySet()) }
-            val once = NativeOpenRequest(null, emptySet()) { selected.open(it!!, 3) }
-            once.commit(once.acquire(directory.resolve("once").toString(), emptySet())).use { opened ->
-                assertThrows(IllegalStateException::class.java) { once.acquire("ignored", emptySet()) }
+            assertThrows(IllegalStateException::class.java) { request.acquire(directory.resolve("ignored"), emptySet()) }
+            val once = NativeOpenRequest(null, emptySet()) { selected.open(it!!.toString(), 3) }
+            once.commit(once.acquire(directory.resolve("once"), emptySet())).use { opened ->
+                assertThrows(IllegalStateException::class.java) { once.acquire(directory.resolve("ignored"), emptySet()) }
                 assertEquals(0L, opened.size())
             }
         } }

@@ -10,8 +10,41 @@ import com.oracle.truffle.api.TruffleSafepoint
 import com.oracle.truffle.api.nodes.Node
 import thc.Language
 import java.util.ArrayDeque
+import java.util.WeakHashMap
+import java.lang.ref.WeakReference
 
-/** Guest ThreadId is the Java thread ID. Entries retain their Thread until guest completion. */
+/** An unlifted ThreadId# is the actual JVM thread ID scoped to its owning context. */
+internal class GuestThreadId(val javaId: Long, val owner: GuestThreads, val capability: Long,
+                             carrier: Thread, internal val forked: Boolean) {
+    internal val carrier = WeakReference(carrier)
+    @Volatile internal var status = GuestThreadStatus.RUNNING
+    @Volatile internal var lastOutcome = GuestThreadStatus.FINISHED
+    override fun equals(other: Any?): Boolean =
+        other is GuestThreadId && owner === other.owner && javaId == other.javaId
+    override fun hashCode(): Int = 31 * System.identityHashCode(owner) + javaId.hashCode()
+}
+
+/** GHC 9.14.1 Constants.h why_blocked codes and PrimOps.cmm terminal overrides. */
+internal enum class GuestThreadStatus(val code: Long) {
+    RUNNING(0), MVAR(1), BLACK_HOLE(2), FOREIGN(10), THROW_TO(12), MVAR_READ(14),
+    FINISHED(16), DIED(17), RUNTIME_FAILURE(-1);
+
+    val terminal: Boolean get() = this == FINISHED || this == DIED || this == RUNTIME_FAILURE
+    companion object {
+        fun uncaught(failure: Throwable): GuestThreadStatus =
+            if (failure is GuestException || failure is ForeignCallbackAsyncFailure) DIED else RUNTIME_FAILURE
+    }
+}
+
+/** A lexical blocking extent follows guest re-entry and is restored even on an unwind. */
+internal class GuestThreadExtent internal constructor(private val identity: GuestThreadId?,
+                                                       private val previous: GuestThreadStatus?) : AutoCloseable {
+    override fun close() {
+        if (identity != null && !identity.status.terminal) identity.status = checkNotNull(previous)
+    }
+}
+
+/** Active guest entries own one logical capability per Java carrier, scoped to this context. */
 internal class GuestThreads internal constructor(
     private val maskingState: ThreadLocal<MaskingState>,
     private val wake: (Thread) -> Unit
@@ -22,6 +55,7 @@ internal class GuestThreads internal constructor(
     private class DeliveryState {
         var permission = DeliveryPermission.NONE
         val guestPrevious = ArrayDeque<DeliveryPermission>()
+        val foreignStatus = ArrayDeque<GuestThreadExtent>()
     }
 
     constructor(env: TruffleLanguage.Env, maskingState: ThreadLocal<MaskingState>) : this(
@@ -34,14 +68,29 @@ internal class GuestThreads internal constructor(
         }
     )
 
-    private class GuestThread(val thread: Thread) {
+    private class GuestThread(val thread: Thread, val identity: GuestThreadId) {
+        val entriesPrevious = ArrayDeque<GuestEntry>()
         val queue = ArrayDeque<AsyncRequest>()
         var claimed: AsyncRequest? = null
         var entries = 0
         @Volatile var pending = false
     }
 
+    private class GuestEntry(val active: GuestThreadId?, val status: GuestThreadStatus)
     private val threads = HashMap<Long, GuestThread>()
+    // Weak keys release dead Java carriers. Numbers are never recycled, so a
+    // retained finished ThreadId still names its original logical capability.
+    private val identities = WeakHashMap<Thread, GuestThreadId>()
+    // The RTS registration retains the Weak# capability, never its ThreadId#
+    // key or a numeric Java-thread snapshot. Signal delivery is not admitted yet.
+    private var mainThreadWeak: MainThreadWeakKey? = null
+    private var allocatedCapabilities = 0L
+    @Synchronized internal fun capabilityCount(): Long = allocatedCapabilities
+    @Synchronized fun registerMainThread(key: MainThreadWeakKey) {
+        check(!closed) { "Guest context has closed" }
+        mainThreadWeak = key
+    }
+    @Synchronized fun mainThreadRegistration(): MainThreadWeakKey? = mainThreadWeak
     private val currentSlot = ThreadLocal<GuestThread?>()
     private val delivery = ThreadLocal<DeliveryState?>()
     private var closed = false
@@ -52,6 +101,7 @@ internal class GuestThreads internal constructor(
     @TruffleBoundary fun enterForeign(): DeliveryPermission {
         val state = deliveryState()
         val previous = state.permission
+        state.foreignStatus.addLast(enterStatus(currentSlot.get()?.identity, GuestThreadStatus.FOREIGN))
         state.permission = DeliveryPermission.FOREIGN
         foreignExtents.set((foreignExtents.get() ?: 0) + 1)
         return previous
@@ -64,6 +114,7 @@ internal class GuestThreads internal constructor(
         check(depth > 0)
         if (depth == 1) foreignExtents.remove() else foreignExtents.set(depth - 1)
         state.permission = previous
+        state.foreignStatus.removeLast().close()
         if (previous == DeliveryPermission.NONE && state.guestPrevious.isEmpty()) delivery.remove()
     }
 
@@ -90,14 +141,21 @@ internal class GuestThreads internal constructor(
         return state.permission == DeliveryPermission.GUEST && (foreignExtents.get() ?: 0) > 0
     }
 
-    @TruffleBoundary @Synchronized fun enterCurrent(inheritedMask: MaskingState? = null): Long {
+    @TruffleBoundary @Synchronized fun enterCurrent(inheritedMask: MaskingState? = null, forked: Boolean = false): Long {
         check(!closed) { "Guest context has closed" }
         val current = Thread.currentThread()
         val id = current.threadId()
         val prior = threads[id]
         check(prior == null || prior.thread === current) { "Java thread ID was reused before guest completion" }
         if (prior == null && inheritedMask != null) maskingState.set(inheritedMask)
-        val slot = prior ?: GuestThread(current).also { threads[id] = it }
+        val identity = identities.getOrPut(current) {
+            GuestThreadId(id, this, allocatedCapabilities++, current, forked)
+        }
+        check(!identity.status.terminal) { "Terminated guest Java thread re-entered" }
+        val slot = prior ?: GuestThread(current, identity).also { threads[id] = it }
+        slot.entriesPrevious.addLast(GuestEntry(activeIdentity.get(), slot.identity.status))
+        slot.identity.status = GuestThreadStatus.RUNNING
+        activeIdentity.set(slot.identity)
         slot.entries++
         currentSlot.set(slot)
         enterGuestPermission()
@@ -107,8 +165,38 @@ internal class GuestThreads internal constructor(
     fun registerCurrent(): Long = enterCurrent()
 
     /** myThreadId# observes an existing guest entry; it never creates a new lifetime. */
-    fun currentId(): Long = currentSlot.get()?.takeIf { it.entries > 0 }?.thread?.threadId()
+    fun currentId(): Long = currentIdentity().javaId
+
+    fun currentIdentity(): GuestThreadId = currentSlot.get()?.takeIf { it.entries > 0 }?.identity
         ?: fault("Current Java thread has not entered this guest context")
+
+    @TruffleBoundary @Synchronized fun status(identity: GuestThreadId): GuestThreadStatus {
+        if (closed) fault("Guest context has closed")
+        if (identity.owner !== this) fault("ThreadId# belongs to another guest context")
+        if (!identity.status.terminal && identity.carrier.get()?.isAlive != true)
+            identity.status = identity.lastOutcome
+        return identity.status.also {
+            if (it == GuestThreadStatus.RUNTIME_FAILURE)
+                fault("ThreadId# terminated because of a runtime failure")
+        }
+    }
+
+    /** Snapshot only: eventual dispatch must check the same identity atomically with enqueue. */
+    @TruffleBoundary @Synchronized internal fun liveJavaId(identity: GuestThreadId): Long? {
+        if (identity.owner !== this) fault("ThreadId# belongs to another guest context")
+        if (closed || identity.status.terminal) return null
+        val carrier = identity.carrier.get() ?: return null
+        if (!carrier.isAlive || carrier.threadId() != identity.javaId || identities[carrier] !== identity) return null
+        val active = threads[identity.javaId]
+        if (active != null && (active.identity !== identity || active.thread !== carrier)) return null
+        // A live host carrier can be FOREIGN between guest entries; no new lifetime is registered.
+        return identity.javaId
+    }
+
+    @TruffleBoundary fun send(identity: GuestThreadId, payload: Any?): AsyncRequest {
+        if (identity.owner !== this) fault("ThreadId# belongs to another guest context")
+        return send(identity.javaId, payload)
+    }
 
     /** The sender waits on the returned token; mere safepoint observation is not delivery. */
     @TruffleBoundary fun send(targetId: Long, payload: Any?): AsyncRequest {
@@ -169,15 +257,23 @@ internal class GuestThreads internal constructor(
     }
 
     /** Called by the target in the same finally block that ends its guest action. */
-    @TruffleBoundary fun leaveCurrent() {
+    @TruffleBoundary fun leaveCurrent(outcome: GuestThreadStatus = GuestThreadStatus.FINISHED) {
+        require(outcome.terminal)
         leaveGuestPermission()
         val finished = synchronized(this) {
             val current = Thread.currentThread()
-            val target = threads[current.threadId()]
+            val target = currentSlot.get()
             if (target == null) return@synchronized emptyList<AsyncRequest>()
             check(target.thread === current) { "Guest completion ran on a different Java thread" }
             check(target.entries > 0)
-            if (--target.entries != 0) return@synchronized emptyList<AsyncRequest>()
+            val previous = target.entriesPrevious.removeLast()
+            if (previous.active == null) activeIdentity.remove() else activeIdentity.set(previous.active)
+            if (--target.entries != 0) {
+                if (!closed) target.identity.status = previous.status
+                return@synchronized emptyList<AsyncRequest>()
+            }
+            target.identity.lastOutcome = outcome
+            if (!closed) target.identity.status = if (target.identity.forked) outcome else GuestThreadStatus.FOREIGN
             threads.remove(current.threadId())
             target.pending = false
             target.queue.toList().also { target.queue.clear(); target.claimed = null }
@@ -194,8 +290,10 @@ internal class GuestThreads internal constructor(
     @TruffleBoundary fun close() {
         val remaining = synchronized(this) {
             closed = true
+            mainThreadWeak = null
+            identities.values.forEach { it.status = GuestThreadStatus.RUNTIME_FAILURE }
             threads.values.flatMap { slot ->
-                slot.entries = 0
+                slot.identity.status = GuestThreadStatus.RUNTIME_FAILURE
                 slot.pending = false
                 slot.queue.toList().also { slot.queue.clear(); slot.claimed = null }
             }.also { threads.clear() }
@@ -257,6 +355,16 @@ internal class GuestThreads internal constructor(
 
     companion object {
         private val foreignExtents = ThreadLocal<Int?>()
+        private val activeIdentity = ThreadLocal<GuestThreadId?>()
+
+        private fun enterStatus(identity: GuestThreadId?, status: GuestThreadStatus): GuestThreadExtent {
+            val previous = identity?.status
+            if (identity != null && !identity.status.terminal) identity.status = status
+            return GuestThreadExtent(identity, previous)
+        }
+
+        /** No guest entry means no Haskell thread to mark (also used by cell protocol tests). */
+        internal fun blocking(status: GuestThreadStatus): GuestThreadExtent = enterStatus(activeIdentity.get(), status)
 
         /** Java-callable poll for bytecode roots; it never delivers from a wake action. */
         @JvmStatic fun pollCurrent(node: Node, interruptible: Boolean): AsyncRequest? =
@@ -324,7 +432,8 @@ internal class AsyncRequest internal constructor(
             }
             synchronized(monitor) {
                 if (state == AsyncRequestState.PENDING || state == AsyncRequestState.CLAIMED ||
-                    state == AsyncRequestState.PAUSED) monitor.wait()
+                    state == AsyncRequestState.PAUSED)
+                    GuestThreads.blocking(GuestThreadStatus.THROW_TO).use { monitor.wait() }
             }
         }
     }
