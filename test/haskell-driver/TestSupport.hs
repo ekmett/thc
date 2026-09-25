@@ -96,7 +96,11 @@ runExe env cwd backend seconds executable arguments = do
       process = (Process.proc executable arguments) { Process.cwd = Just cwd, Process.env = Just extra }
   completed <- timeout (seconds * 1000000) (Process.readCreateProcessWithExitCode process "")
   case completed of
-    Nothing -> HUnit.assertFailure ("timed out: " ++ unwords arguments) >> fail "unreachable"
+    Nothing -> do
+      appendFile (scratch env </> "commands.log")
+        (unlines ["$ " ++ unwords (executable : arguments), "cwd: " ++ cwd,
+                  "timed out after " ++ show seconds ++ " seconds"])
+      HUnit.assertFailure ("timed out: " ++ unwords arguments) >> fail "unreachable"
     Just (status, stdout, stderr) -> do
       appendFile (scratch env </> "commands.log")
         (unlines ["$ " ++ unwords (executable : arguments), "cwd: " ++ cwd,

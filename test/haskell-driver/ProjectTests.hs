@@ -12,7 +12,7 @@ import Data.List (isInfixOf, isPrefixOf, sort)
 import System.Directory (canonicalizePath, copyFile, createDirectoryIfMissing,
                          doesFileExist, getModificationTime, listDirectory)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
-import System.FilePath ((</>), splitDirectories, takeDirectory)
+import System.FilePath ((</>), splitDirectories, takeDirectory, takeFileName)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
 
@@ -24,13 +24,15 @@ projectTests env = TestLabel "three-package project native versus THC run" $ Tes
   -- GHC 9.14's Linux -g assembler cannot quote a double quote in .file paths.
   -- Plan/run tests retain the quoted Unicode path coverage.
   withFixtureNamed env "test/fixtures/run-project" "project café" $ \project ->
-  withCache (takeDirectory project </> "cache") $ do
+  -- Content-keyed wired bundles survive fresh fixture directories; in-place
+  -- project bundles still belong to this fixture's native build directory.
+  withCache (scratch env </> "core-cache") $ do
     let base = takeDirectory project
         output = base </> "output"
         source = project </> "dep-data/src/Answer.hs"
         sourceOnlyRoot = base </> "THC source only"
         invoke backend target = run env base (Just backend) 240
-          ["run", project, "--exe", target, "--thc-root", sourceOnlyRoot,
+          ["run", project, "--exe", target, "--thc-root", thcRoot env,
            "--runtime", runtime env, "--dist-dir", output]
         entryOf plan = one (\value -> string (field value "pkg-name") == "app-run" &&
                                       string (field value "component-name") == "exe:completed")
@@ -52,8 +54,39 @@ projectTests env = TestLabel "three-package project native versus THC run" $ Tes
     copyFile (root env </> "docs/driver.md") (sourceOnlyRoot </> "docs/driver.md")
     initiallyBuilt <- doesFileExist (sourceOnlyRoot </> "build/compiler/plugin.json")
     assertBool "source-only checkout has no plugin manifest" (not initiallyBuilt)
+    bootstrap <- run env base Nothing 120
+      ["run", project, "--exe", "missing-bootstrap-probe", "--thc-root", sourceOnlyRoot,
+       "--runtime", runtime env, "--dist-dir", output]
+    assertFailure bootstrap
+    assertNoStdout bootstrap
+    assertContains "selected executable \"missing-bootstrap-probe\" has 0 matching local Cabal components"
+      (unwords $ words $ err bootstrap)
+    let pluginPath = sourceOnlyRoot </> "build/compiler/plugin.json"
+    requireFile pluginPath
+    plugin <- readJson pluginPath
+    assertEqual "plugin manifest schema" 1 (number $ field plugin "schema")
+    let pluginUnit = string $ field plugin "unitId"
+        pluginDb = string $ field plugin "packageDb"
+        shared = string $ field plugin "sharedLibrary"
+        registered = string $ field plugin "cabalSharedLibrary"
+    requireFile shared
+    requireFile registered
+    expectedPluginDir <- canonicalizePath (sourceOnlyRoot </> "build/compiler")
+    actualPluginDir <- canonicalizePath (takeDirectory shared)
+    assertEqual "published plugin directory" expectedPluginDir actualPluginDir
+    packageTool <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
+    let registeredField name = runExe env base Nothing 30 packageTool
+          ["--unit-id", "field", pluginUnit, name, "--simple-output",
+           "--package-db", pluginDb]
+    registeredId <- registeredField "id"
+    assertSuccess registeredId
+    assertEqual "registered plugin unit" [pluginUnit] (words $ out registeredId)
+    libraryDirs <- registeredField "dynamic-library-dirs"
+    assertSuccess libraryDirs
+    assertContains (takeDirectory registered) (out libraryDirs)
+    assertEqual "published library filename"
+      (takeFileName registered) (takeFileName shared)
     firstBundles <- forBackends env invoke output project entryOf unit bundleRef modulePath
-    requireFile (sourceOnlyRoot </> "build/compiler/plugin.json")
     original <- readText source
     assertContains "I# 42#" original
     writeText source (replaceText "I# 42#" "I# 41#" original)
@@ -81,7 +114,7 @@ projectTests env = TestLabel "three-package project native versus THC run" $ Tes
 cstringTests :: Env -> Test
 cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ TestCase $
   withFixtureNamed env "test/fixtures/run-cstring" "project café" $ \project ->
-  withCache (takeDirectory project </> "cache") $ do
+  withCache (scratch env </> "core-cache") $ do
     let output = takeDirectory project </> "output"
         invoke backend = run env (takeDirectory project) (Just backend) 240
           ["run", project, "--exe", "cstring", "--thc-root", thcRoot env,
