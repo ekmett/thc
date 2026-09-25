@@ -49,7 +49,8 @@ POLYGLOT_INPUT_PREFIXES = (
 )
 TEST_ANNOTATION = r"@\s*(?:org\.junit\.(?:jupiter\.api|jupiter\.params)\.)?(?:Test|TestFactory|TestTemplate|ParameterizedTest|RepeatedTest)\b"
 LIFECYCLE = r"@\s*(?:org\.junit\.jupiter\.api\.)?(?:BeforeEach|AfterEach|BeforeAll|AfterAll)\b"
-DECLARATION = re.compile(r"\b(class|object|interface|fun|val|var|typealias)\s+([A-Za-z_]\w*)")
+DECLARATION = re.compile(r"\b(class|object|interface|fun|val|var|typealias)\s+"
+                         r"(?:<[A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*>\s+)?([A-Za-z_]\w*)")
 SOURCE_SPECIAL = re.compile(r'''//|/\*|"""|["']''')
 
 
@@ -164,25 +165,29 @@ def polyglot_input(path, leaf_sources):
         path not in leaf_sources and path.startswith(POLYGLOT_INPUT_PREFIXES))
 
 
-def code_only(source):
-    """Mask comments/strings before structural discovery; preserve offsets/newlines.
+def lexical_source(source, comments_only=False):
+    """Mask Kotlin/Java lexical regions without mistaking strings for comments.
 
-    Handles Kotlin nested block comments, raw strings and escaped character/string
-    literals. Backtick identifiers stay visible and trigger conservative fallback.
-    This is deliberately not a Kotlin semantic parser.
+    Structural discovery masks strings and preserves offsets. The comment-only
+    comparison retains string bytes and replaces each comment with a stable
+    delimiter, so a changed literal or non-comment token cannot pass as prose.
     """
-    result = list(source)
+    result = []
     index = 0
+    previous = 0
     while index < len(source):
         token = SOURCE_SPECIAL.search(source, index)
         if token is None:
             break
         index = token.start()
         start = index
+        kind = None
         if source.startswith("//", index):
+            kind = "line"
             end = source.find("\n", index)
             index = len(source) if end < 0 else end
         elif source.startswith("/*", index):
+            kind = "block"
             depth = 1
             index += 2
             while index < len(source) and depth:
@@ -214,8 +219,32 @@ def code_only(source):
                 raise SelectionError("unclosed string")
         else:
             raise SelectionError("unexpected source token")
-        result[start:index] = ["\n" if c == "\n" else " " for c in source[start:index]]
+        result.append(source[previous:start])
+        span = source[start:index]
+        if comments_only and kind is None and source[start] == '"':
+            # A quoted token inside ${...} would terminate this lightweight
+            # scan before the outer string actually ends. Admit only simple
+            # interpolation paths/calls; otherwise the change stays full.
+            for interpolation in re.finditer(r"\$\{", span):
+                if not re.match(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*(?:\(\))?)*\}",
+                                span[interpolation.end():]):
+                    raise SelectionError("complex string interpolation")
+        if comments_only and kind == "line":
+            result.append("//")
+        elif comments_only and kind == "block":
+            result.append("/*" + "\n" * span.count("\n") + "*/")
+        elif comments_only:
+            result.append(span)
+        else:
+            result.append("".join("\n" if c == "\n" else " " for c in span))
+        previous = index
+    result.append(source[previous:])
     return "".join(result)
+
+
+def code_only(source):
+    """Mask comments and strings for structural discovery, preserving offsets."""
+    return lexical_source(source)
 
 
 def junit_info(source):
@@ -267,7 +296,7 @@ def junit_info(source):
                          code[max(0, index - 256):index]) is not None
     test_starts = {item.start() for item, _, _ in ranges}
     declaration_starts = {item.start() for item in declarations}
-    for item in re.finditer(r"\b(?:class|object|interface|fun|val|var|typealias)\b", code):
+    for item in re.finditer(r"(?<!:)\b(?:class|object|interface|fun|val|var|typealias)\b", code):
         if depths[item.start()] in (0, 1) and item.start() not in declaration_starts:
             unsafe.append("unresolved-test-declaration")
     for item in declarations:
@@ -300,7 +329,9 @@ def junit_info(source):
                 previous = item.end()
                 continue
             prefix = "".join(code[i] if depths[i] == 1 else " " for i in range(previous, item.start()))
-            if not private_at(item.start()) and not (
+            injected_directory = (item[1] == "var" and re.search(
+                r"@\s*(?:org\.junit\.jupiter\.api\.io\.)?TempDir\s+lateinit\s*$", prefix))
+            if not private_at(item.start()) and not injected_directory and not (
                     item[1] == "fun" and re.search(TEST_ANNOTATION + "|" + LIFECYCLE, prefix)):
                 unsafe.append("shared-test-member")
             previous = item.end()
@@ -649,6 +680,7 @@ def select(repo, base_ref, head_ref):
     selected_haskell = set(policy["smoke"].get("haskell", []) if policy else [])
     affected_junit, affected_python, affected_haskell = set(), set(), set()
     additive_primop_paths = set()
+    comment_only_paths = set()
     changed = {path for record in records for path in record["paths"]}
     simd_additions = None
     if (policy and base and head and SIMD_ADDITIVE <= changed and SIMD_GENERATOR not in changed
@@ -748,6 +780,15 @@ def select(repo, base_ref, head_ref):
                     widen("shared-primop-registry-change", path)
             elif path.endswith(".md") and (path.startswith("docs/") or "/" not in path):
                 pass  # Explicit documentation-only lane still executes all smoke.
+            elif base and record["status"] == "M" and path.startswith("src/main/") and path.endswith(".kt"):
+                try:
+                    previous = git(repo, "show", base + ":" + path).decode("utf-8")
+                    if lexical_source(previous, comments_only=True) == lexical_source(text(path), comments_only=True):
+                        comment_only_paths.add(path)
+                    else:
+                        widen("unmapped-source-or-configuration", path)
+                except (SelectionError, UnicodeError):
+                    widen("unmapped-source-or-configuration", path)
             else:
                 widen("unmapped-source-or-configuration", path)
     selected_junit.update(affected_junit)
@@ -756,7 +797,7 @@ def select(repo, base_ref, head_ref):
     changed_paths = {path for record in records for path in record["paths"]}
     uncertain_diff = (base is None or head is None or head != checkout
                       or any(reason["code"] == "base-not-ancestor" for reason in reasons))
-    polyglot_required = any(path not in additive_primop_paths
+    polyglot_required = any(path not in additive_primop_paths and path not in comment_only_paths
                             and polyglot_input(path, policy["leafSources"] if policy else {})
                             for path in changed_paths) or (bool(polyglot_classes) and uncertain_diff)
     if polyglot_required and not polyglot_classes:

@@ -2,6 +2,12 @@
   "schema": 1,
   "fixtureFreeJunit": [
     "thc.runtime.NativeFileProviderTest",
+    "thc.runtime.ManagedFileCallTest",
+    "thc.runtime.ManagedFilesTest",
+    "thc.runtime.ManagedStdioTest",
+    "thc.runtime.OriginalStdioCallTest",
+    "thc.runtime.StdioHostAbiTest",
+    "thc.GuestExceptionsTest",
     "thc.runtime.ManagedDescriptorDupTest",
     "thc.runtime.CoreGmpForeignTest",
     "thc.runtime.SulongLimbProviderTest",

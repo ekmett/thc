@@ -396,6 +396,71 @@ private val text = "class FakeString { @Test }"
                 self.commit()
                 self.full("unmapped-source-or-configuration")
 
+    def test_comment_only_unmapped_production_source_uses_lexical_boundaries(self):
+        path = "src/main/kotlin/thc/Language.kt"
+        before = ('package thc\nclass Language {\n'
+                  '  val address = "https://example.invalid/a//b"\n'
+                  '  val raw = """literal /* not a comment */"""\n'
+                  '  val label = "${link.unit}"\n'
+                  '  /* outer /* inner */ original */ val value = 1 // original\n}\n')
+        self.write(path, before)
+        self.base = self.commit()
+        after = before.replace('/* inner */ original', '/* nested */ revised').replace('// original', '// revised')
+        self.write(path, after)
+        self.commit()
+        result = self.plan()
+        self.assertEqual("narrow", result["mode"], result)
+        self.assertEqual([], result["affected"]["junit"])
+        self.assertFalse(result["polyglot"]["required"])
+        self.assertEqual([], result["haskell"]["suites"])
+        self.write(path, after.replace('https://example.invalid', 'http://example.invalid'))
+        self.commit()
+        self.full("unmapped-source-or-configuration")
+        self.write(path, after.replace('val value = 1', 'val value = 2'))
+        self.commit()
+        self.full("unmapped-source-or-configuration")
+        self.write(path, after.replace('/* nested */', '/* unclosed'))
+        self.commit()
+        self.full("unmapped-source-or-configuration")
+
+    def test_comment_only_proof_rejects_java_and_nested_kotlin_interpolation(self):
+        java = "src/main/java/example/Foreign.java"
+        self.write(java, "class Foreign { String text = \"// literal\"; /* old */ }\n")
+        self.base = self.commit()
+        self.write(java, "class Foreign { String text = \"// literal\"; /* new */ }\n")
+        self.commit()
+        self.full("unmapped-source-or-configuration")
+        # Kotlin permits a quoted argument inside a template expression. The
+        # outer-string scanner must reject it, not reinterpret // as a comment.
+        for source in ('val x = "${foo("// old")}" // changed\n',
+                       r'val x = "\\${foo("// old")}" // changed' + '\n',
+                       'val x = """${foo("// old")}""" // changed\n'):
+            with self.subTest(source=source), self.assertRaises(select.SelectionError):
+                select.lexical_source(source, comments_only=True)
+
+    def test_class_literals_private_generic_helpers_and_tempdir_are_local_test_syntax(self):
+        path = "src/test/kotlin/example/OtherTest.kt"
+        source = ('package example\nimport org.junit.jupiter.api.Test\n'
+                  'class OtherTest {\n'
+                  '  @TempDir lateinit var directory: Path\n'
+                  '  private fun <T> entered(body: () -> T): T = body()\n'
+                  '  @Test fun catches() = assertThrows(RuntimeFault::class.java) { entered { 1 } }\n'
+                  '}\n')
+        self.write(path, source)
+        self.base = self.commit()
+        self.write(path, source.replace('entered { 1 }', 'entered { 2 }'))
+        self.commit()
+        result = self.plan()
+        self.assertEqual("narrow", result["mode"], result)
+        self.assertEqual(["example.OtherTest"], result["affected"]["junit"])
+        for changed, reason in (
+                (source.replace('private fun <T>', 'fun <T>'), "shared-test-member"),
+                (source.replace('@TempDir lateinit var', 'lateinit var'), "shared-test-member"),
+                (source.replace('fun <T> entered', 'fun <T : Any> entered'), "unresolved-test-declaration")):
+            self.write(path, changed)
+            self.commit()
+            self.full(reason)
+
     def test_automation_changes_use_control_tests_and_smoke(self):
         for path in (".github/workflows/fast.yml", ".github/scripts/fast_ci.py"):
             with self.subTest(path=path):
