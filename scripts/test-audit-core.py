@@ -2072,7 +2072,9 @@ class OriginalDupAuditTest(unittest.TestCase):
         '__hscore_poke_lflag': (('AddrRep', 'Word32Rep', None), None),
         '__hscore_ptr_c_cc': (('AddrRep', None), 'AddrRep'),
         '__hscore_sizeof_termios': ((None,), 'IntRep'),
-        **{f'__hscore_{name}': ((None,), 'Int32Rep') for name in ('echo', 'icanon', 'vmin', 'vtime', 'tcsanow')},
+        '__hscore_sizeof_sigset_t': ((None,), 'IntRep'),
+        **{f'__hscore_{name}': ((None,), 'Int32Rep')
+           for name in ('echo', 'icanon', 'vmin', 'vtime', 'tcsanow', 'sigttou', 'sig_block', 'sig_setmask')},
     }
     symbols = ('dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile', *termios)
     def fixture(self, symbol):
@@ -2151,6 +2153,18 @@ class OriginalDupAuditTest(unittest.TestCase):
     def test_termios_state_only_result_and_excluded_terminal_calls(self):
         self.assertEqual(set(self.termios), core_original_foreign.TERMIOS_SYMBOLS)
         for symbol in self.termios:
+            output = self.termios[symbol][1]
+            if output is not None:
+                # A mutually consistent descriptor/call-site forgery still
+                # cannot change the original declaration's result width.
+                for wrong in ('IntRep', 'Int32Rep', 'Word32Rep'):
+                    if wrong == output: continue
+                    module = self.fixture(symbol); meta = self.call(module)[6]
+                    for result in (meta['rep'], meta['foreignCall']['resultRep']):
+                        result['primReps'] = [wrong]
+                        result['components'][1]['kind'] = 'long'
+                        result['components'][1]['primReps'] = [wrong]
+                    self.assertFalse(self.audit(module)['accepted'], (symbol, wrong))
             for declared in (False, True):
                 for mutation in ('bare', 'empty', 'extra', 'sum'):
                     module = self.fixture(symbol); meta = self.call(module)[6]
@@ -2161,7 +2175,8 @@ class OriginalDupAuditTest(unittest.TestCase):
                     if mutation == 'extra': result['components'].append(copy.deepcopy(result['components'][0]))
                     if mutation == 'sum': result['aggregate'] = 'unboxed-sum'
                     self.assertFalse(self.audit(module)['accepted'])
-        for symbol in ('prefix__hscore_lflag', 'tcgetattr', 'tcsetattr', '__hscore_sigttou', '__hscore_sizeof_sigset_t'):
+        for symbol in ('prefix__hscore_lflag', 'tcgetattr', 'tcsetattr', 'sigprocmask', 'sigemptyset', 'sigaddset',
+                       'prefix__hscore_sigttou', 'prefix__hscore_sizeof_sigset_t', '__hscore_get_saved_termios', '__hscore_set_saved_termios'):
             self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
             module = self.fixture('__hscore_lflag')
             self.call(module)[6]['foreignCall']['target']['symbol'] = symbol

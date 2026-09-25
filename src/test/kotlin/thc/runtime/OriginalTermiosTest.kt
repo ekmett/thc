@@ -28,9 +28,12 @@ class OriginalTermiosTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val prefix = "build/original-termios"
     private val names = listOf("originalTermiosSize", "originalEcho", "originalIcanon", "originalVmin", "originalVtime",
-        "originalTcsanow", "originalLflag", "originalPokeLflag", "originalCC")
+        "originalTcsanow", "originalSigsetSize", "originalSigttou", "originalSigBlock", "originalSigSetmask",
+        "originalLflag", "originalPokeLflag", "originalCC")
+    private val constantCount = 10
     private val symbols = listOf("__hscore_sizeof_termios", "__hscore_echo", "__hscore_icanon", "__hscore_vmin",
-        "__hscore_vtime", "__hscore_tcsanow", "__hscore_lflag", "__hscore_poke_lflag", "__hscore_ptr_c_cc")
+        "__hscore_vtime", "__hscore_tcsanow", "__hscore_sizeof_sigset_t", "__hscore_sigttou", "__hscore_sig_block",
+        "__hscore_sig_setmask", "__hscore_lflag", "__hscore_poke_lflag", "__hscore_ptr_c_cc")
     private fun json(path: String) = Json.parse(File(root, path).readText()) as Map<String, Any?>
     private fun module(stage: String) = CoreModules.merge(listOf("OriginalTermiosAudit", "THC.InterfaceClosure")
         .map { json("$prefix/$stage/core/$it.json") })
@@ -81,7 +84,8 @@ class OriginalTermiosTest {
         val probe = TermiosImage::class.java.getResourceAsStream("/thc/native/termios-abi.json")!!.use {
             Json.parse(it.reader().readText()) as Map<*, *>
         }["termios"] as Map<*, *>
-        assertEquals(listOf("size", "echo", "icanon", "vmin", "vtime", "tcsanow").map { probe[it] }, constants)
+        assertEquals(listOf("size", "echo", "icanon", "vmin", "vtime", "tcsanow",
+            "sigsetSize", "sigttou", "sigBlock", "sigSetmask").map { probe[it] }, constants)
         assertEquals(listOf(0L, 1L, 255L, 0x80000000L, 0xffffffffL, 0xdeadbeefL), rows.map { it[0] })
         for (row in rows) {
             assertEquals(0L, row[1]); assertEquals(row[0], row[2]); assertEquals(probe["ccOffset"], row[3])
@@ -126,9 +130,10 @@ class OriginalTermiosTest {
                             val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                             val result = Calls.target(entry, arrayOf(0L, *arguments))
                             if (compiled) {
-                                // The retained constant CAF is already memoized; memory consumers
-                                // execute both their entry and the immediate runRW State lambda.
-                                assertEquals(before + if (index < 6) 1 else 2,
+                                // CAF constants are already memoized; the direct size helper
+                                // also executes one entry. Memory consumers execute their entry
+                                // and the immediate runRW State lambda.
+                                assertEquals(before + if (index < constantCount) 1 else 2,
                                     (program.diagnostics().getValue("compiledEntries") as Number).toLong(), "$stage/$backend/$name")
                                 assertEquals(active, targets(entry)); active.forEach(::valid)
                             }
@@ -136,7 +141,7 @@ class OriginalTermiosTest {
                             return result
                         }
                         fun exercise(compiled: Boolean) {
-                            if (index < 6) for (extra in listOf(-7L, 0L, 13L))
+                            if (index < constantCount) for (extra in listOf(-7L, 0L, 13L))
                                 assertEquals(constants[index] + extra, invoke(arrayOf(extra), compiled))
                             else for (row in rows) {
                                 val bytes = ByteArray(constants[0].toInt() + 16) { 90 }
@@ -161,7 +166,19 @@ class OriginalTermiosTest {
                         }
                         val bindings = linked["bindings"] as List<Map<String, Any?>>
                         val binding = bindings.single { it["name"] == name }
-                        if (index < 6) {
+                        val directConstant = name == "originalSigsetSize"
+                        if (directConstant) {
+                            // This installed Int declaration is inlined by GHC directly
+                            // into the consumer, unlike the original CInt CAFs below.
+                            // Require that exact source shape, never an optional CAF.
+                            assertEquals(1, bindings.size)
+                            assertEquals(1L, binding["arity"])
+                            assertSame(entry, program.entryTarget(binding["id"] as String))
+                            assertEquals(CoreFunctionIdentity.from(linked, binding), (entry.rootNode as GuestRoot).coreIdentity)
+                            val call = OriginalStdioChecks.foreignCalls(binding["expr"]).single()
+                            assertEquals(OriginalStdioOp.SIZEOF_SIGSET, validate(call))
+                            assertEquals(listOf(entry), targets(entry))
+                        } else if (index < constantCount) {
                             // Exercise the unchanged original CAF body before forcing its shared
                             // Thunk. Calling its real target does not reset or update that Thunk.
                             assertEquals(2, bindings.size)
@@ -204,8 +221,8 @@ class OriginalTermiosTest {
                         }
                         exercise(false)
                         active = targets(entry)
-                        assertEquals(if (index < 6) 1 else 2, OriginalStdioChecks.nodes(binding["expr"]).count { it.firstOrNull() == "lam" })
-                        assertEquals(2, active.size, "$stage/$backend/$name")
+                        assertEquals(if (index < constantCount) 1 else 2, OriginalStdioChecks.nodes(binding["expr"]).count { it.firstOrNull() == "lam" })
+                        assertEquals(if (directConstant) 1 else 2, active.size, "$stage/$backend/$name")
                         active.forEach { if (it !in installed) install(it) else valid(it) }
                         exercise(true)
                     }
@@ -251,15 +268,27 @@ class OriginalTermiosTest {
     }
 
     @Test fun exactOriginalDescriptorsRejectMalformedStateOnlyAndOtherRawProofs() {
-        val calls = calls(); assertEquals(9, calls.size)
+        val calls = calls(); assertEquals(13, calls.size)
         assertEquals(symbols.toSet(), calls.map { validate(it)!!.symbol }.toSet())
         for (original in calls) {
+            val operation = validate(original)!!
             fun mutate(action: (MutableList<Any?>, MutableMap<String, Any?>, MutableMap<String, Any?>) -> Unit) {
                 val call = copy(original) as MutableList<Any?>
                 val metadata = call[6] as MutableMap<String, Any?>
                 val descriptor = metadata["foreignCall"] as MutableMap<String, Any?>
                 action(call, metadata, descriptor)
                 assertThrows(RuntimeFault::class.java) { validate(call) }
+            }
+            if (operation.result != null) for (wrong in listOf("IntRep", "Int32Rep", "Word32Rep")) {
+                if (wrong == operation.result) continue
+                mutate { _, metadata, descriptor ->
+                    for (result in listOf(metadata["rep"], descriptor["resultRep"])) {
+                        val tuple = result as MutableMap<String, Any?>
+                        tuple["primReps"] = listOf(wrong)
+                        val scalar = (tuple["components"] as List<MutableMap<String, Any?>>)[1]
+                        scalar["kind"] = "long"; scalar["primReps"] = listOf(wrong)
+                    }
+                }
             }
             for (key in listOf("schema", "arity", "suppliedArity")) for (bad in listOf(null, true, 1.0, "1", -1L, 1L shl 32))
                 mutate { _, _, descriptor -> descriptor[key] = bad }

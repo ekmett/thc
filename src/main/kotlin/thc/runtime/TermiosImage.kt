@@ -6,8 +6,8 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import java.nio.ByteOrder
 import thc.Json
 
-/** Actual header layout for caller-owned managed images, not terminal state or
- * a native pointer. No file descriptor or host terminal is observed here. */
+/** Actual terminal-image layout and read-only signal header constants, not
+ * terminal state or native pointers. No descriptor or signal mask is observed. */
 internal class TermiosImage private constructor(val size: Long, private val lflagOffset: Long,
     private val ccOffset: Long, private val constants: Map<String, Long>) {
     private fun <T> image(address: ManagedAddress, writable: Boolean = false, body: () -> T): T {
@@ -32,7 +32,11 @@ internal class TermiosImage private constructor(val size: Long, private val lfla
         else if (operation == OriginalStdioOp.ICANON) "icanon"
         else if (operation == OriginalStdioOp.VMIN) "vmin"
         else if (operation == OriginalStdioOp.VTIME) "vtime"
-        else if (operation == OriginalStdioOp.TCSANOW) "tcsanow" else fault("Invalid termios constant"))
+        else if (operation == OriginalStdioOp.TCSANOW) "tcsanow"
+        else if (operation == OriginalStdioOp.SIZEOF_SIGSET) "sigsetSize"
+        else if (operation == OriginalStdioOp.SIGTTOU) "sigttou"
+        else if (operation == OriginalStdioOp.SIG_BLOCK) "sigBlock"
+        else if (operation == OriginalStdioOp.SIG_SETMASK) "sigSetmask" else fault("Invalid termios constant"))
     private fun shift(index: Int) = (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) index else 3 - index) * 8
 
     companion object {
@@ -50,7 +54,7 @@ internal class TermiosImage private constructor(val size: Long, private val lfla
                 doc["system"] == system && doc["architecture"] == architecture && doc["target"] == "x86_64-unknown-linux-gnu")
             val layout = doc["termios"] as? Map<*, *> ?: fault("Missing termios layout")
             val names = setOf("size", "alignment", "lflagOffset", "lflagBytes", "ccOffset", "ccBytes", "ccCount",
-                "echo", "icanon", "vmin", "vtime", "tcsanow")
+                "echo", "icanon", "vmin", "vtime", "tcsanow", "sigsetSize", "sigttou", "sigBlock", "sigSetmask")
             requireAbi(layout.keys == names)
             val values = names.associateWith { integer(layout[it]) }
             val size = values.getValue("size"); val lflag = values.getValue("lflagOffset")
@@ -59,8 +63,10 @@ internal class TermiosImage private constructor(val size: Long, private val lfla
                 values.getValue("lflagBytes") == 4L && values.getValue("ccBytes") == 1L &&
                 lflag >= 0 && lflag <= size - 4 && lflag % 4 == 0L && count in 1L..size &&
                 cc >= 0 && cc <= size - count && (lflag + 4 <= cc || cc + count <= lflag))
-            val constants = values.filterKeys { it in setOf("echo", "icanon", "vmin", "vtime", "tcsanow") }
+            val constants = values.filterKeys { it in setOf("echo", "icanon", "vmin", "vtime", "tcsanow",
+                "sigsetSize", "sigttou", "sigBlock", "sigSetmask") }
             requireAbi(constants.values.all { it in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong() } &&
+                constants.getValue("sigsetSize") in 1L..4096L &&
                 constants.getValue("echo") > 0 && constants.getValue("icanon") > 0 &&
                 constants.getValue("vmin") in 0 until count && constants.getValue("vtime") in 0 until count &&
                 constants.getValue("vmin") != constants.getValue("vtime"))
