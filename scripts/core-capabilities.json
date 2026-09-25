@@ -824,6 +824,8 @@
     "plusWord32X16#": 2,
     "minusWord32X16#": 2,
     "timesWord32X16#": 2,
+    "minWord32X16#": 2,
+    "maxWord32X16#": 2,
     "packFloatX16#": 1,
     "unpackFloatX16#": 1,
     "broadcastFloatX16#": 1,
