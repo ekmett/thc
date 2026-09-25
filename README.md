@@ -19,8 +19,8 @@ You need **GHC 9.14.1** (including `ghc-pkg` and `runghc`), **cabal-install 3.16
 point `JAVA_HOME` at GraalVM. On macOS, use the bundle's `Contents/Home`
 directory. The Gradle wrapper downloads its dependencies on the first build.
 Linux x86_64 builds also require clang and the native GMP development headers
-and library (for example, `libgmp-dev` on Debian/Ubuntu) for the checked limb
-provider. This native transport does not yet admit original GHC GMP FFI calls.
+and library (for example, `libgmp-dev` on Debian/Ubuntu) for the
+[checked limb provider](docs/gmp-limb-provider.md).
 
 From the repository root:
 
@@ -83,7 +83,9 @@ On Linux x86_64, with complete installed Core and matching configured GHC source
 backend now runs ordinary `putStrLn`, including GHC's original startup and Handle
 shutdown. Select `--installed-core required --ghc-source /path/to/ghc-source`
 on the project-directory path; the [driver guide](docs/driver.md) describes the
-current Linux configuration and cache. General file IO remains incomplete.
+current Linux configuration and cache. A file-lifecycle test also matches native
+GHC on UTF-8 reads and writes, append, seeking, EOF, caught missing-file errors,
+and shutdown flushing. General file IO remains incomplete.
 The independent single-package `.cabal` path still excludes
 internal library and build-tool dependencies; use a `cabal.project` directory
 for the tested multi-package path. `thc build` and `thc repl` are future commands.
@@ -98,7 +100,8 @@ primitive fields where GHC's representation permits them.
 Both the bytecode and AST backends run lazy Core with closures, recursive
 bindings, typed constructor fields, local joins, and unboxed tuple inputs and
 results. There is also bounded support for unboxed sum results, scalar arithmetic,
-local SIMD operations, and managed arrays and mutable references.
+SIMD calls and operations for [supported shapes](docs/simd-families.md), and
+managed arrays and mutable references.
 
 The bytecode backend also supports [asynchronous exceptions](docs/async-exceptions.md)
 between Haskell threads. An interrupted shared thunk keeps its continuation, so
@@ -120,6 +123,11 @@ An explicit [full-Core locale/iconv proof group](docs/original-iconv.md) exercis
 the four original imports through native glibc/Sulong, with context-owned handles
 and checked buffer copies. It requires full installed GHC library Core and is
 separate from stock-toolchain tests; it does not establish complete Handle/IO.
+
+The [GMP provider](docs/gmp-limb-provider.md) implements eleven original GHC
+foreign calls through Sulong and native GMP. Native comparisons cover interpreted
+and compiled calls on both backends; full `Integer` and `Natural` coverage is
+still separate work.
 
 This is still an experiment, not a replacement for GHC. General `Main`/IO, the
 complete boot-library closure, full FFI coverage, and stack-safe non-tail
@@ -204,7 +212,7 @@ separate run.
   of small, reviewed PRs. Update the [primop checklist](docs/primops.md#updating-the-list) when
   adding a primitive.
 * [Cabal integration](docs/cabal.md) describes the limited working `thc run`
-  path and the planned `thc build` and GHCi-based `thc repl` commands.
+  path and the planned `thc build` and `thc repl` commands.
 
 The older runtime experiments live on the
 [legacy branch](https://github.com/ekmett/thc/tree/legacy).
