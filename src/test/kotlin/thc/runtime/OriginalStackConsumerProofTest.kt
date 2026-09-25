@@ -18,7 +18,7 @@ class OriginalStackConsumerProofTest {
     private val directory = File(root, "build/reports/original-stack")
     private val proofPath = "compiler/test-fixtures/OriginalStackProof.json"
     private val proofHash = "db63661c12a6ecb757697e759fcb95e4d51f3689619bdb7682a041788eb41d4f"
-    private val entries = listOf("captureOriginal", "decodeOriginal", "renderOriginal", "peekOriginalInfoTable", "lookupOriginalIPE", "peekOriginalInfoProv")
+    private val entries = listOf("captureOriginal", "decodeOriginal", "renderOriginal", "renderOriginalNames", "peekOriginalInfoTable", "lookupOriginalIPE", "peekOriginalInfoProv")
     private val retainedHashes = mapOf(
         "GHC.Internal.Stack.CloneStack" to "d0733836485a57ebc40a4ae52ce77319e4dbc44f617cbd396335ae977e5810e4",
         "GHC.Internal.Stack.Decode" to "c3762b0e2ed8bb2bb50b748144fcc7da01dec204c0cc48adade79962e8b35c42",

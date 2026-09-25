@@ -18,11 +18,12 @@ main = do
   let count = length first
       rendered = catMaybes (map renderOriginal first)
       provenance = length (filter (isJust . snd) first)
+  names <- renderOriginalNames snapshot
   unless (count > 0) (fail "original native stack must not be empty")
   unless (length second == count && map snd first == map snd second &&
           map renderOriginal first == map renderOriginal second)
     (fail "original native snapshot changed between decodes")
-  unless (length rendered <= count && provenance <= count)
+  unless (names == rendered && length rendered <= count && provenance <= count)
     (fail "original native rendering/provenance count exceeds frame count")
   characters <- evaluate (sum (map length rendered))
   putStrLn ("native-shape\t" ++ show count ++ "\t" ++ show provenance ++

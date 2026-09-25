@@ -19,7 +19,7 @@ import System.FilePath ((</>), makeRelative, replaceExtension, takeExtension)
 import qualified THC.Driver.Wired as Wired
 
 entries :: [String]
-entries = ["captureOriginal", "decodeOriginal", "renderOriginal", "peekOriginalInfoTable",
+entries = ["captureOriginal", "decodeOriginal", "renderOriginal", "renderOriginalNames", "peekOriginalInfoTable",
            "lookupOriginalIPE", "peekOriginalInfoProv"]
 
 proofResource :: FilePath

@@ -3,11 +3,12 @@
 
 -- Original imports deliberately remain intact: no replacement FFI or formatter.
 module OriginalStackAudit
-  ( captureOriginal, decodeOriginal, renderOriginal
+  ( captureOriginal, decodeOriginal, renderOriginal, renderOriginalNames
   , peekOriginalInfoTable, lookupOriginalIPE, peekOriginalInfoProv
   ) where
 
 import Foreign.Ptr (Ptr)
+import Data.Maybe (mapMaybe)
 import GHC.Internal.Heap.Closures (StackFrame)
 import qualified GHC.Internal.Heap.InfoTable as Heap
 import qualified GHC.Internal.InfoProv.Types as Ipe
@@ -25,6 +26,12 @@ decodeOriginal = decodeStackWithIpe
 {-# NOINLINE renderOriginal #-}
 renderOriginal :: (StackFrame, Maybe Ipe.InfoProv) -> Maybe String
 renderOriginal = prettyStackFrameWithIpe
+
+-- Keep the actual decoder and formatter together as one executable consumer.
+-- This does not reinterpret a THC frame or replace either GHC function.
+{-# NOINLINE renderOriginalNames #-}
+renderOriginalNames :: StackSnapshot -> IO [String]
+renderOriginalNames snapshot = mapMaybe prettyStackFrameWithIpe <$> decodeStackWithIpe snapshot
 
 {-# NOINLINE peekOriginalInfoTable #-}
 peekOriginalInfoTable :: Ptr Heap.StgInfoTable -> IO Heap.StgInfoTable
