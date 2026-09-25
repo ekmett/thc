@@ -209,6 +209,42 @@ class PackageManifestTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unit/module/boundary mismatch'):
             core_package_manifest.load(self.bundled(unit))
 
+    def test_archive_only_foreign_core_reports_execution_gap_not_identity_mismatch(self):
+        unit = self.unit('first')
+        source = self.root / 'first.json'
+        module = json.loads(source.read_text())
+        module['schema'] = 2
+        module['foreign'] = dict(schema=1, execution='not-linked',
+                                 stubs=dict(header='', source='foreign stub', initializers=[], finalizers=[]),
+                                 files=[])
+        source.write_text(json.dumps(module))
+        unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
+        with self.assertRaisesRegex(ValueError, 'Unsupported foreign execution for first:Shared.*typed foreign registration.*callback'):
+            core_package_manifest.load(self.bundled(unit))
+
+        result = subprocess.run(['python3', str(Path(__file__).with_name('audit-core.py')),
+                                 '--entry', 'first:Shared.entry', str(source)], text=True, capture_output=True)
+        self.assertEqual(1, result.returncode)
+        issues = json.loads(result.stdout)['issues']
+        self.assertTrue(any(issue['code'] == 'module-format' and
+                            'Unsupported foreign execution for first:Shared' in issue['detail']
+                            for issue in issues), issues)
+
+        module['unit'] = 'wrong'
+        unit = self.unit('first')
+        source.write_text(json.dumps(module))
+        unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
+        with self.assertRaisesRegex(ValueError, 'unit/module/boundary mismatch'):
+            core_package_manifest.load(self.bundled(unit))
+
+        module['unit'] = 'first'
+        module['schema'] = 1  # Renumbering must not silently discard registration obligations.
+        unit = self.unit('first')
+        source.write_text(json.dumps(module))
+        unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
+        with self.assertRaisesRegex(ValueError, 'unsupported Core module schema/foreign metadata'):
+            core_package_manifest.load(self.bundled(unit))
+
     def test_audit_keeps_strict_missing_global_closure_for_bundle(self):
         unit = self.unit('first')
         source = self.root / 'first.json'
