@@ -298,6 +298,7 @@ test-suite driver-tests
   hs-source-dirs: test/haskell-driver
   other-modules:
     TestSupport
+    TestSupportTests
     PlanTests
     RunTests
     ProjectTests

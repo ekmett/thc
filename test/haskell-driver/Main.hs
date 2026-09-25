@@ -9,13 +9,15 @@ import qualified PlanTests
 import qualified RunTests
 import qualified ProjectTests
 import qualified StoreProjectTests
+import qualified TestSupportTests
 import TestSupport (setup)
 
 main :: IO ()
 main = do
   env <- setup
   counts <- runTestTT $ TestList
-    [ PlanTests.tests env
+    [ TestSupportTests.tests
+    , PlanTests.tests env
     , RunTests.tests env
     , ProjectTests.tests env
     , StoreProjectTests.tests env
