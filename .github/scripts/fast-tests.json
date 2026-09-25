@@ -12,6 +12,10 @@
     ]
   },
   "leafSources": {
+    "src/main/kotlin/thc/runtime/ManagedWeaks.kt": {
+      "junit": ["thc.runtime.ManagedWeakTest"],
+      "python": []
+    },
     "src/main/kotlin/thc/runtime/ManagedMutVars.kt": {
       "junit": ["thc.runtime.MutVarTest"],
       "python": []
@@ -998,6 +1002,7 @@
         "thc.runtime.PosixStatAbiTest",
         "thc.runtime.MutVarTest",
         "thc.runtime.StablePointerTest",
+        "thc.runtime.ManagedWeakTest",
         "thc.runtime.ShrinkByteArrayTest",
         "thc.runtime.FetchAddIntArrayTest",
         "thc.runtime.OriginalStackConsumerProofTest",
@@ -1070,6 +1075,14 @@
     },
     "test/haskell-fixtures/StablePointerFixtures.hs": {
       "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/WeakFixtures.hs": {
+      "junit": ["thc.runtime.ManagedWeakTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/WeakAudit.hs": {
+      "junit": ["thc.runtime.ManagedWeakTest"],
       "python": []
     },
     "test/haskell-fixtures/ShrinkByteArrayFixtures.hs": {

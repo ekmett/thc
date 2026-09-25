@@ -2236,6 +2236,43 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class MakeWeak {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                Object key, Object value, Object action, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            if (action == null) throw fail("mkWeak# requires a finalizer carrier");
+            Object weak = ManagedWeaks.current(node).make(key, value, action);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, weak);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class MakeWeakPlain {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                Object key, Object value, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            Object weak = ManagedWeaks.current(node).make(key, value, null);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, weak);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "flagDestination")
+    @ConstantOperand(type = LocalAccessor.class, name = "valueDestination")
+    @ConstantOperand(type = boolean.class, name = "finalize")
+    public static final class ObserveWeak {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor flagDestination,
+                LocalAccessor valueDestination, boolean finalize, Object weak, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedWeaks registry = ManagedWeaks.current(node);
+            WeakResult result = finalize ? registry.finalize(weak) : registry.dereference(weak);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            flagDestination.setLong(bytecode, frame, result.getFlag());
+            valueDestination.setObject(bytecode, frame, result.getValue());
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = StablePointerOp.class, name = "operation")
     public static final class StablePointerTuple {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,

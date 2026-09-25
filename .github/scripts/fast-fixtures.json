@@ -166,6 +166,18 @@
         "thc.cabal"
       ]
     },
+    "weak-explicit": {
+      "junit": ["thc.runtime.ManagedWeakTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "weak-explicit"]}],
+      "outputs": ["build/weak-explicit"],
+      "sources": [
+        "compiler/test-fixtures/WeakAudit.hs",
+        "test/haskell-fixtures/WeakFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal"
+      ]
+    },
     "stable-pointers": {
       "junit": ["thc.runtime.StablePointerTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "stable-pointers"]}],
