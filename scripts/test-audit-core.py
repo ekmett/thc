@@ -692,9 +692,12 @@ class AuditTest(unittest.TestCase):
         region = producer[2]
         original = join['expr']
         proof = join['joinResultRep']
-        join['expr'] = ['lam', [dict(id='join-arg', lifted=False, rep=LONG),
-                                dict(id='closure-arg', lifted=False, rep=LONG)],
-                        [*var('held'), dict(rep=proof)], dict(rep=CLOSURE, resultRep=proof)]
+        closure = ['lam', [dict(id='closure-arg', lifted=False, rep=LONG)],
+                   [*var('held'), dict(rep=proof)], dict(rep=CLOSURE, resultRep=proof)]
+        call = ['app', closure, [['lit', 'int', '1', dict(rep=LONG)]],
+                [False], False, False, dict(rep=proof)]
+        join['expr'] = ['lam', [dict(id='join-arg', lifted=False, rep=LONG)], call,
+                        dict(rep=CLOSURE, resultRep=proof)]
         join['joinValueArity'] = 1
         producer[2] = ['case', original, 'held',
                        [['default', None, [], region, dict(binders=[])]],
