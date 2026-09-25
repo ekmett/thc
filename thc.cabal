@@ -33,6 +33,7 @@ extra-source-files:
   README.md
   docs/driver.md
   docs/ghc-core.md
+  docs/interface-foreign.md
   compiler/ghc-core.settings
   compiler/patches/ghc-libraries-simplified-core.patch
   compiler/pinned-ghc-internal/GHC/Internal/Arr.hs

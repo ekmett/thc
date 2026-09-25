@@ -46,6 +46,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/interface-core/wired-unit.json", "build/interface-core/logs/helper-wired-unit.stdout",
     "build/interface-core/logs/helper-wired-unit.command.json",
     "build/interface-core/packages.json", "build/interface-core/driver-controls.json",
+    "build/interface-core/InterfaceForeign.json", "build/interface-core/foreign-packages.json",
     "build/addr-identity/oracle.txt", "build/addr-identity/pre.audit.json", "build/addr-identity/post.audit.json",
     "build/core-continuation/core/CoreContinuationAudit.json", "build/core-continuation/audit.json",
     "build/core-continuation/application-audit.json",

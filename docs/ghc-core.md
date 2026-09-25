@@ -71,9 +71,11 @@ Resolve the expected `Module` (including its exact package unit) and interface
 path using the selected compiler session and package databases. `Nothing`
 means a valid interface lacks complete Core; wrong module/unit identities,
 way/version mismatches and malformed interfaces are errors. Nonempty foreign
-stubs or foreign files are explicitly rejected: the JSON exporter cannot
-preserve those native build products. Ordinary foreign calls in Core still
-require the runtime's normal support audit.
+stubs and foreign files are retained in [archive-only Core schema 2](interface-foreign.md),
+including exact source and initializer/finalizer identities. This is not native
+linking or executable foreign-export registration: the runtime rejects those
+modules before execution. Ordinary foreign calls in Core still require the
+runtime's normal support audit.
 
 The result exposes the original module, `ModDetails`, `CoreProgram` and foreign
 metadata. Hydration reads the raw interface before GHC's package cache strips
@@ -90,7 +92,7 @@ dependencies, or establish runtime support for an entire package.
 
 The `thc-fixtures interface-core` control separately registers full and thin
 synthetic packages, recovers an `OPAQUE` entry/private worker, checks identity,
-way and foreign rejection, then supplies the recovered JSON and native results
+way and lossless foreign archival, then supplies the recovered JSON and native results
 to `InterfaceCoreNativeTest` for strict AST/bytecode execution.
 
 ## Selected-compiler helper

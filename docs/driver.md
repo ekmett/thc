@@ -145,8 +145,10 @@ each declared owned module's dynamic interface. Hidden modules are included;
 native-only and reexport-only registrations do not acquire invented bodies.
 Reexports must have concrete providers in their dependency closure. Store-source
 and local component exports retain their existing paths. Missing complete Core
-reports the exact registration/module; wrong identity/way, malformed responses,
-foreign stubs and process failures remain errors. Nothing substitutes ordinary
+reports the exact registration/module; wrong identity/way, malformed responses
+and process failures remain errors. Foreign stubs/files are retained in
+[archive-only schema 2](interface-foreign.md), not linked or registered for execution.
+Nothing substitutes ordinary
 unfoldings or adds a second pinned provider beside a wired interface owner.
 
 Generated Core preserves original unit identities, private workers, recursive

@@ -13,6 +13,8 @@ import Data.Char (isHexDigit)
 import Data.List (isInfixOf, sort)
 import Data.Foldable (toList)
 import Data.Maybe (isNothing)
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 import FixtureSupport (CommandResult(..), hashes, runLogged, runLoggedExpect, writeJson)
 import GHC hiding (exprType, entry)
 import GHC.Plugins
@@ -20,6 +22,8 @@ import GHC.Core.TyCo.Compare (eqType)
 import qualified GHC.Data.ShortText as ShortText
 import GHC.Iface.Binary (readBinIface, CheckHiWay(..), TraceBinIFace(..))
 import GHC.Iface.Syntax (IfaceBindingX(..))
+import GHC.Cmm.CLabel (CStubLabel(..))
+import qualified GHC.Unit.Module.WholeCoreBindings as ForeignCore
 import GHC.Types.TypeEnv (typeEnvIds)
 import GHC.Unit.Module.ModDetails (md_types)
 import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist, doesFileExist,
@@ -45,7 +49,7 @@ prepareInterfaceCore root = do
       expectedModule = mkModule (stringToUnit unitName) (mkModuleName "InterfaceLibrary")
       entries = ["opaqueEntry", "inlineEntry", "recursiveEntry", "coercionEntry"] :: [String]
   mapM_ (createDirectoryIfMissing True . (root </>))
-    [directory </> name | name <- ["source", "full", "thin", "native", "no-source"]]
+    [directory </> name | name <- ["source", "full", "thin", "foreign", "native", "no-source"]]
   copyFile (root </> "compiler/test-fixtures/InterfaceLibrary.hs") (root </> generated)
   let cbvSource = directory </> "source/CBVCoercionAudit.hs"
   copyFile (root </> "compiler/test-fixtures/CBVCoercionAudit.hs") (root </> cbvSource)
@@ -104,6 +108,15 @@ prepareInterfaceCore root = do
      "-odir", directory </> "full", "-hidir", directory </> "full",
      "-stubdir", directory </> "full",
      "compiler/test-fixtures/InterfaceForeign.hs"]
+  let foreignDb = root </> directory </> "foreign/package.conf.d"
+      foreignConf = directory </> "foreign/package.conf"
+  foreignExists <- doesDirectoryExist foreignDb
+  foreignInit <- if foreignExists then pure [] else (:[]) <$> run "foreign-init" ghcPkg ["init", foreignDb]
+  writeFile (root </> foreignConf) $ unlines
+    ["name: thc-interface-fixture", "version: 0.1", "id: " ++ unitName,
+     "key: " ++ unitName, "exposed: True", "exposed-modules: InterfaceForeign",
+     "import-dirs: " ++ show (root </> directory </> "full"), "depends: " ++ baseUnit]
+  foreignRegistered <- run "foreign-register" ghcPkg ["--package-db", foreignDb, "update", root </> foreignConf]
   nativeBuild <- run "native-compile" ghc
     ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-i",
      "-package-db", directory </> "full/package.conf.d", "-package-id", unitName,
@@ -152,12 +165,13 @@ prepareInterfaceCore root = do
             case way of
               Left (ProgramError message) -> check ("profile tag" `isInfixOf` message) "Wrong-way failure was unrelated"
               _ -> die "Wrong-way interface was accepted"
-            foreignResult <- try (loadInterfaceCore environment
+            foreignResult <- loadInterfaceCore environment
               (mkModule (moduleUnit expectedModule) (mkModuleName "InterfaceForeign"))
-              (root </> directory </> "full/InterfaceForeign.hi"))
+              (root </> directory </> "full/InterfaceForeign.hi")
             case foreignResult of
-              Left (UnsupportedInterfaceForeign _) -> pure ()
-              _ -> die "Foreign stubs were silently accepted"
+              Just foreignCore -> checkForeignCore environment
+                (root </> directory </> "full/InterfaceForeign.hi") foreignCore
+              Nothing -> die "Complete foreign interface lost its Core"
             again <- loadInterfaceCore environment expectedModule path
             case again of
               Just other -> do
@@ -194,14 +208,15 @@ prepareInterfaceCore root = do
         ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
         ["scripts" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
       commands = [helperBuild, helperLocation, pluginBuild, version, libdirResult, baseResult, wiredResult] ++
-        concat builds ++ [foreignBuild, nativeBuild, oracle] ++ helperCommands ++ wiredCommands ++ audits
+        concat builds ++ [foreignBuild] ++ foreignInit ++ [foreignRegistered, nativeBuild, oracle] ++ helperCommands ++ wiredCommands ++ audits
       artifacts = concatMap commandArtifacts commands ++
         [directory </> name | name <- ["InterfaceLibrary.json", "full/InterfaceLibrary.hi", "thin/InterfaceLibrary.hi",
           "full/InterfaceLibrary.dyn_hi", "full/InterfaceForeign.hi", "native/oracle", "source/InterfaceLibrary.saved"]] ++
         [directory </> name | name <- ["CBVCoercionAudit.json", "direct/CBVCoercionAudit.json",
           "full/CBVCoercionAudit.hi", "thin/CBVCoercionAudit.hi", "source/CBVCoercionAudit.saved",
           "wired-unit.json"]] ++
-        [directory </> "packages.json", directory </> "driver-controls.json"] ++
+        [directory </> "packages.json", directory </> "foreign-packages.json", directory </> "InterfaceForeign.json",
+         directory </> "driver-controls.json"] ++
         [directory </> entry ++ "-audit.json" | entry <- entries]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
@@ -209,7 +224,7 @@ prepareInterfaceCore root = do
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= entries,
      "unit" .= unitName, "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes,
      "controls" .= (["opaque-body", "private-worker", "recursive-groups", "thin-unavailable",
-       "no-source-target", "wrong-module", "wrong-unit", "wrong-way", "foreign-rejected", "private-flags", "repeat-load",
+       "no-source-target", "wrong-module", "wrong-unit", "wrong-way", "foreign-archived", "private-flags", "repeat-load",
        "helper-protocol", "installed-cbv-worker", "installed-wired-unit"] :: [String]),
      "commands" .= map commandRecord commands, "runtimeVerified" .= False]
   putStrLn "Prepared complete interface Core: 21 native rows; full/thin/no-source/identity/way/foreign controls passed"
@@ -263,17 +278,21 @@ checkDriver root directory ghc ghcPkg helper baseUnit = do
   let wrongWay = unit {Installed.installedInterfaces =
         [(name, root </> directory </> "full" </> name ++ ".hi") | (name, _) <- Installed.installedInterfaces unit]}
   rejected "wrong interface way" "profile tag" (acquire full wrongWay)
-  rejected "foreign stubs" "foreign stubs or files" (acquire full unit {Installed.installedInterfaces =
-    [("InterfaceForeign", root </> directory </> "full/InterfaceForeign.dyn_hi")]})
   after <- BS.readFile (Project.bundlePath artifact)
   check (before == after) "Failed installed refresh changed an existing bundle"
+  foreignContext <- context "foreign"
+  foreignUnit <- Installed.discoverInstalled foreignContext unitName
+  foreignBundle <- loaded =<< acquire foreignContext foreignUnit
+  writeJson (root </> directory </> "foreign-packages.json") $ object
+    ["format" .= ("thc-core-packages" :: String), "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
+     "units" .= Project.installedRecords foreignUnit foreignBundle]
   writeJson (root </> directory </> "packages.json") $ object
     ["format" .= ("thc-core-packages" :: String), "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
      "units" .= Project.installedRecords unit first]
   writeJson (root </> directory </> "driver-controls.json") $ object
     ["sourceDeleted" .= True, "bundle" .= Project.bundlePath artifact,
      "sha256" .= Project.bundleHash artifact, "unchangedReuse" .= True,
-     "thinMissing" .= True, "identityFailure" .= True, "wrongWayFailure" .= True, "foreignStubFailure" .= True,
+     "thinMissing" .= True, "identityFailure" .= True, "wrongWayFailure" .= True, "foreignArtifactsArchived" .= True,
      "failedRefreshPreservedBundle" .= True, "installedArtifactsHashed" .= False]
 
 valueAt :: Key -> Value -> Value
@@ -311,12 +330,16 @@ checkHelper root directory libdir helper = do
   dynamicOutput <- decode dynamic
   check (valueAt "status" dynamicOutput == String "loaded") "Matching dynamic interface did not load"
   badWay <- run 1 "helper-wrong-way" (arguments "full" "InterfaceLibrary" ++ ["--way", "dynamic"])
-  foreignError <- run 1 "helper-foreign" (arguments "full" "InterfaceForeign")
+  foreignLoaded <- run 0 "helper-foreign" (arguments "full" "InterfaceForeign")
+  foreignOutput <- decode foreignLoaded
+  check (valueAt "status" foreignOutput == String "loaded" &&
+    valueAt "schema" (valueAt "core" foreignOutput) == Number 2) "Foreign Core did not use archive-only schema"
+  writeJson (root </> directory </> "InterfaceForeign.json") (valueAt "core" foreignOutput)
   badModule <- run 1 "helper-wrong-module"
     ["--libdir", libdir, "--unit", unitName, "--module", "Wrong", "--package-db",
      root </> directory </> "full/package.conf.d", "--interface", root </> directory </> "full/InterfaceLibrary.hi"]
   usageError <- run 2 "helper-duplicate-option" (arguments "full" "InterfaceLibrary" ++ ["--unit", unitName])
-  forM_ [badWay,badModule,foreignError,usageError] $ \result -> do
+  forM_ [badWay,badModule,usageError] $ \result -> do
     output <- decode result
     check (valueAt "status" output == String "error" && valueAt "core" output == Null) "Helper failure looks like loaded/unavailable"
   direct <- decodeFile (root </> directory </> "direct/CBVCoercionAudit.json")
@@ -333,7 +356,41 @@ checkHelper root directory libdir helper = do
       check (valueAt "cbvMarks" (valueAt "info" original) == valueAt "cbvMarks" (valueAt "info" hydrated))
         "Hydrated idCbvMarks changed"
     _ -> die "Missing/ambiguous installed CBV worker"
-  pure (full ++ [thin,dynamic,badWay,badModule,foreignError,usageError])
+  pure (full ++ [thin,dynamic,badWay,badModule,foreignLoaded,usageError])
+
+-- Compare every serialized foreign field against the actual binary interface,
+-- not a pretty-printed dump or a reconstructed replacement C implementation.
+checkForeignCore :: HscEnv -> FilePath -> InterfaceCore -> IO ()
+checkForeignCore environment path core = do
+  raw <- readBinIface (targetProfile (hsc_dflags environment)) (hsc_NC environment) CheckHiWay QuietBinIFace path
+  rawForeign <- case mi_simplified_core raw of
+    Just simplified -> pure (mi_sc_foreign simplified)
+    Nothing -> die "Foreign fixture lacks complete Core"
+  let expected (ForeignCore.IfaceForeign stubs files) = object
+        ["schema" .= (1 :: Int), "execution" .= ("not-linked" :: String),
+         "stubs" .= fmap stub stubs, "files" .= map file files]
+      stub (ForeignCore.IfaceCStubs header source initializers finalizers) = object
+        ["header" .= header, "source" .= source, "initializers" .= map label initializers,
+         "finalizers" .= map label finalizers]
+      label (ForeignCore.IfaceCLabel value) = object
+        ["isInitializer" .= csl_is_initializer value,
+         "unit" .= unitString (moduleUnit (csl_module value)),
+         "module" .= moduleNameString (moduleName (csl_module value)), "name" .= unpackFS (csl_name value)]
+      file (ForeignCore.IfaceForeignFile sourceLanguage source extension) = object
+        ["language" .= show sourceLanguage, "source" .= source, "extension" .= extension]
+  rendered <- interfaceCoreJSON ["unit-qualified"] core
+  value <- maybe (die "Foreign archive is not JSON") pure (decodeStrict' (Text.encodeUtf8 (Text.pack rendered)))
+  check (valueAt "schema" value == Number 2 && valueAt "foreign" value == expected rawForeign &&
+    expected (interfaceForeign core) == expected rawForeign) "Foreign interface metadata was lost or rewritten"
+  let stubs = valueAt "stubs" (valueAt "foreign" value)
+      contains needle item = case item of String s -> needle `isInfixOf` show s; _ -> False
+  check (contains "thc_interface_fixture" (valueAt "header" stubs) &&
+    contains "rts_lock" (valueAt "source" stubs) && contains "registerForeignExports" (valueAt "source" stubs))
+    "Foreign fixture no longer contains real RTS callback/registration code"
+  check (case valueAt "initializers" stubs of Array xs -> length xs == 1; _ -> False)
+    "Foreign fixture lost its original initializer"
+  check (case valueAt "files" (valueAt "foreign" value) of Array xs -> length xs == 1; _ -> False)
+    "Foreign fixture lost its actual TH-added C file"
 
 -- Inspect one actual selected boot-library interface without copying/hashing it.
 -- Stock GHC is thin; a compiler with full Core must instead load successfully.

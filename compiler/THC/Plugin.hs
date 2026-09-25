@@ -35,6 +35,8 @@ import GHC.Core.Opt.Arity (etaExpand)
 import GHC.Builtin.PrimOps (PrimOp(TagToEnumOp, MaskAsyncExceptionsOp, MaskUninterruptibleOp, UnmaskAsyncExceptionsOp), primOpOcc)
 import GHC.StgToCmm.Closure (isSmallFamily)
 import GHC.Cmm.Utils (mAX_PTR_TAG)
+import GHC.Cmm.CLabel (CStubLabel(..))
+import qualified GHC.Unit.Module.WholeCoreBindings as ForeignCore
 import qualified Data.ByteString as BS
 import Data.Char (ord)
 import Data.List (intercalate, isPrefixOf, nubBy, stripPrefix)
@@ -805,11 +807,33 @@ exportLate hsc opts pair@(guts,_)
 -- | Serialize actual post-Tidy Core, including Core hydrated from a complete
 -- installed interface. Only "source-notes" and "unit-qualified" affect this
 -- entry point. It neither writes files nor registers plugin closure roots.
--- Callers must handle foreign stubs/files separately; they are not Core.
-serializePostTidyCore :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> IO String
-serializePostTidyCore flags opts m tycons program = do
+-- Foreign products are archival metadata, not executable registration. The
+-- schema bump prevents older runtimes/auditors from silently ignoring them.
+serializePostTidyCore :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> IO String
+serializePostTidyCore flags opts m tycons program foreignArtifacts = do
   (_,result) <- postTidyModule flags opts m tycons program
-  pure (json result ++ "\n")
+  pure (json (withForeignArtifacts foreignArtifacts result) ++ "\n")
+
+withForeignArtifacts :: ForeignCore.IfaceForeign -> J -> J
+withForeignArtifacts (ForeignCore.IfaceForeign Nothing []) result = result
+withForeignArtifacts (ForeignCore.IfaceForeign (Just (ForeignCore.IfaceCStubs "" "" [] [])) []) result = result
+withForeignArtifacts (ForeignCore.IfaceForeign stubs files) (O fields) = O $
+  ("schema",num (2::Int)) : ("foreign",O
+    [("schema",num (1::Int)),("execution",S "not-linked"),
+     ("stubs",maybe Z stub stubs),("files",A (map file files))]) :
+  filter ((/= "schema") . fst) fields
+  where
+    stub (ForeignCore.IfaceCStubs header source initializers finalizers) = O
+      [("header",S header),("source",S source),
+       ("initializers",A (map label initializers)),("finalizers",A (map label finalizers))]
+    label (ForeignCore.IfaceCLabel value) = O
+      [("isInitializer",B (csl_is_initializer value)),
+       ("unit",S (unitString (moduleUnit (csl_module value)))),
+       ("module",S (moduleNameString (moduleName (csl_module value)))),
+       ("name",S (unpackFS (csl_name value)))]
+    file (ForeignCore.IfaceForeignFile sourceLanguage source extension) = O
+      [("language",S (show sourceLanguage)),("source",S source),("extension",S extension)]
+withForeignArtifacts _ _ = error "THC foreign artifacts require a module object"
 
 postTidyModule :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> IO (Ctx,J)
 postTidyModule flags opts m tycons program = do

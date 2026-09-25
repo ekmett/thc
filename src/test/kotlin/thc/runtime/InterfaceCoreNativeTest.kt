@@ -36,9 +36,9 @@ class InterfaceCoreNativeTest {
         val controls = Json.parse(File(directory, "driver-controls.json").readText()) as Map<String, Any?>
         assertEquals(false, controls["installedArtifactsHashed"])
         for (name in listOf("sourceDeleted", "unchangedReuse", "thinMissing", "identityFailure",
-            "wrongWayFailure", "foreignStubFailure", "failedRefreshPreservedBundle")) assertEquals(true, controls[name], name)
+            "wrongWayFailure", "foreignArtifactsArchived", "failedRefreshPreservedBundle")) assertEquals(true, controls[name], name)
         assertEquals(listOf("opaque-body", "private-worker", "recursive-groups", "thin-unavailable",
-            "no-source-target", "wrong-module", "wrong-unit", "wrong-way", "foreign-rejected",
+            "no-source-target", "wrong-module", "wrong-unit", "wrong-way", "foreign-archived",
             "private-flags", "repeat-load", "helper-protocol", "installed-cbv-worker", "installed-wired-unit"), manifest["controls"])
         for (kind in listOf("inputHashes", "artifactHashes"))
             for ((path, expected) in manifest[kind] as Map<String, String>) {
@@ -55,6 +55,39 @@ class InterfaceCoreNativeTest {
         rows.forEach { row -> assertEquals(listOf(row[0], row[0] * 7 + 11, row[0] + 3,
             maxOf(0L, row[0]) * 7 + 11, row[0] + 7), row) }
         return rows
+    }
+
+    @Test fun realForeignArtifactsSurviveCheckedArchiveButCannotExecute() {
+        oracle()
+        val direct = Json.parse(File(directory, "InterfaceForeign.json").readText()) as Map<String, Any?>
+        val modules = StringBuilder("[")
+        assertNull(CorePackageManifest.appendModules(modules, File(directory, "foreign-packages.json").absolutePath))
+        modules.append(']')
+        val archived = (Json.parse(modules.toString()) as List<Map<String, Any?>>).single()
+        assertEquals(2L, archived["schema"])
+        assertEquals(direct["foreign"], archived["foreign"])
+        val artifacts = archived["foreign"] as Map<String, Any?>
+        assertEquals("not-linked", artifacts["execution"])
+        val stubs = artifacts["stubs"] as Map<String, Any?>
+        assertTrue((stubs["header"] as String).contains("thc_interface_fixture"))
+        assertTrue((stubs["source"] as String).contains("rts_lock"))
+        assertTrue((stubs["source"] as String).contains("registerForeignExports"))
+        assertEquals(emptyList<Any?>(), stubs["finalizers"])
+        val initializer = (stubs["initializers"] as List<Map<String, Any?>>).single()
+        assertEquals(mapOf("isInitializer" to true, "unit" to "thc-interface-fixture-0.1",
+            "module" to "InterfaceForeign", "name" to "fexports"), initializer)
+        val file = (artifacts["files"] as List<Map<String, Any?>>).single()
+        assertEquals("int thc_interface_c_control(void) { return 29; }\n", file["source"])
+        for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) {
+            Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
+                val error = assertThrows(org.graalvm.polyglot.PolyglotException::class.java) {
+                    context.eval("thc", Json.stringify(mapOf("entry" to "exported", "backend" to backend,
+                        "diagnosticUnsupported" to diagnostic, "modules" to listOf(archived))))
+                }
+                assertTrue(error.message!!.contains("Unsupported foreign code/registration"), error.message)
+                assertTrue(error.message!!.contains("thc-interface-fixture-0.1:InterfaceForeign"))
+            }
+        }
     }
 
     @Test fun helperPreservesGenuineInstalledWorkerCbvMarks() {

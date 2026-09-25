@@ -48,7 +48,7 @@ object CoreModules {
         val bindingOrigins = linkedMapOf<String, Map<String, String>>()
         val moduleKeys = hashSetOf<Pair<String, String>>()
         for (module in modules) {
-            require((module["schema"] as? Number)?.toInt() == 1) { "Unsupported Core schema: ${module["schema"]}" }
+            CoreForeignArtifacts.requireExecutable(module)
             require(module["ghc"] == "9.14.1") { "This adapter requires GHC 9.14.1 exports" }
             val unit = module["unit"] as? String
             val name = module["module"] as? String

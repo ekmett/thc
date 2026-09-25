@@ -161,7 +161,8 @@ object CorePackageManifest {
                 val text = bytes.toString(Charsets.UTF_8)
                 val source = Json.parse(text) as? Map<String, Any?>
                     ?: error("Invalid Core package artifact: $relative")
-                require(source["schema"] == 1L && source["ghc"] == "9.14.1" &&
+                CoreForeignArtifacts.validateArchive(source)
+                require(source["ghc"] == "9.14.1" &&
                     source["unit"] == id && source["module"] == name && source["boundary"] == boundary) {
                     "Core package unit/module/boundary mismatch: $id:$name at $relative"
                 }

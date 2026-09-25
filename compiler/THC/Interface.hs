@@ -20,13 +20,13 @@ import GHC.Types.TypeEnv (emptyTypeEnv, typeEnvTyCons)
 import GHC.Unit.Module.Location (pattern ModLocation)
 import GHC.Unit.Module.ModDetails (ModDetails(..))
 import GHC.Unit.Module.ModIface
-import GHC.Unit.Module.WholeCoreBindings (WholeCoreBindings(..), IfaceForeign(..), IfaceCStubs(..))
+import GHC.Unit.Module.WholeCoreBindings (WholeCoreBindings(..), IfaceForeign)
 import System.FilePath (replaceExtension)
 import THC.Plugin (serializePostTidyCore)
 
 -- | Original GHC identities, declarations, recursive groups and foreign
--- metadata. Construction is private: successful loads have no foreign build
--- products that the JSON exporter would silently discard.
+-- metadata. Loading is archival: accompanying foreign build products are
+-- retained, not linked or registered with a runtime.
 data InterfaceCore = InterfaceCore
   { interfaceModule :: Module
   , interfaceDetails :: ModDetails
@@ -37,13 +37,10 @@ data InterfaceCore = InterfaceCore
 
 data InterfaceError
   = InterfaceModuleMismatch Module Module
-  | UnsupportedInterfaceForeign Module
 
 instance Show InterfaceError where
   show (InterfaceModuleMismatch expected actual) =
     "THC interface identity mismatch: expected " ++ identity expected ++ ", found " ++ identity actual
-  show (UnsupportedInterfaceForeign m) =
-    "THC cannot load interface foreign stubs or files for " ++ identity m
 
 instance Exception InterfaceError
 
@@ -54,8 +51,9 @@ identity m = unitString (moduleUnit m) ++ ":" ++ moduleNameString (moduleName m)
 -- package database and NameCache. The expected Module includes the exact unit
 -- identity; callers must resolve it through that same session's package state.
 -- Nothing means only that this valid interface has no complete Core payload.
--- Wrong identity, way/version, corrupt data and unsupported foreign build
--- products are errors, not reasons to substitute ordinary inline unfoldings.
+-- Wrong identity, way/version and corrupt data are errors, not reasons to
+-- substitute ordinary inline unfoldings. Foreign products remain in the
+-- archive; successful hydration does not establish executable registration.
 --
 -- Use a session retaining interface pragmas from its creation when possible.
 -- Hydration retains pragmas in a private flags/environment value regardless;
@@ -76,12 +74,6 @@ loadInterfaceCore environment expected path = do
   case mi_simplified_core iface of
     Nothing -> pure Nothing
     Just simplified -> do
-      case mi_sc_foreign simplified of
-        IfaceForeign Nothing [] -> pure ()
-        -- GHC also serializes an explicitly empty ForeignStubs record for
-        -- ordinary modules. It has no code or initialization to preserve.
-        IfaceForeign (Just (IfaceCStubs "" "" [] [])) [] -> pure ()
-        _ -> throwIO (UnsupportedInterfaceForeign m)
       types <- newIORef emptyTypeEnv
       let oldKnots = hsc_type_env_vars environment
           domain = case oldKnots of NoKnotVars -> []; KnotVars ms _ -> ms
@@ -108,3 +100,4 @@ loadInterfaceCore environment expected path = do
 interfaceCoreJSON :: [CommandLineOption] -> InterfaceCore -> IO String
 interfaceCoreJSON options core = serializePostTidyCore (interfaceFlags core) options
   (interfaceModule core) (typeEnvTyCons (md_types (interfaceDetails core))) (interfaceBindings core)
+  (interfaceForeign core)
