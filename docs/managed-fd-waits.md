@@ -1,11 +1,13 @@
 <!-- SPDX-FileCopyrightText: 2026 Edward Kmett -->
 <!-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause -->
 
-# Managed descriptor readiness — source checkpoint
+# Managed descriptor readiness — native substrate checkpoint
 
 This checkpoint adds the native waiting substrate, **not yet admission of
-`waitRead#` or `waitWrite#`**. It has not yet been compiled or run. The checks below
-are regression test source, not claimed passing evidence.
+`waitRead#` or `waitWrite#`**. On Linux x86_64 with GraalVM 25.3.4.1, the focused
+service/provider/descriptor suite passes 92 tests in both default and dense
+handoff modes. This is native substrate evidence, not raw-primop or whole-Handle
+execution proof.
 
 ## Selected GHC path
 
@@ -82,7 +84,7 @@ Linux constants and pollfd layout are confined to a lazily linked private native
 helper; macOS builds do not link eventfd or include Linux-only headers. This is
 not a portable native readiness implementation.
 
-## Regression source and next proof
+## Regression evidence and next proof
 
 `NativeFdWaitTest` uses actual nonblocking FIFOs for data absence, finite timeout,
 read readiness, EOF/hangup, full-pipe write backpressure, all three masking
@@ -93,8 +95,20 @@ are service/protocol tests, not a synthetic replacement for native GHC evidence.
 An internal notifier seam also injects an error after the real eventfd wake to
 check close, dup2 and disposal cannot strand descriptor ownership/refcounts.
 
-Before admission: run focused JVM/native-provider controls under the shared gate;
-add the exact installed blockedOnBadFD dependency using the production complete-Core
+The six readiness tests and 86 existing controls passed on 2026-09-25 in fresh
+default and dense test executions, with no skipped tests. Controls cover
+`NativeFileProviderTest`, `ManagedDescriptorDupTest`, `ManagedFilesTest`,
+`ManagedStdioTest`, `GuestThreadsTest`, `StdioHostAbiTest`,
+`CoreOriginalStdioTest` and `CoreManagedFilesTest`. The first run compiled all
+sources and passed the six new tests but exposed one obsolete expectation that
+granted native nonregular stdout must reject readiness. That assertion now
+checks real poll result domain and sticky errno, while ungranted Env streams
+still require ENOTSUP. The failing run is retained alongside the passing reports.
+No production correction was required by these runs. Standard native/Cbits/ABI
+build tasks ran normally, offline with at most two Gradle workers; no capability
+admission or compiler behavior changed.
+
+Before admission: add the exact installed blockedOnBadFD dependency using the production complete-Core
 provider; prove both raw primop contracts and saved descriptor-token retry in AST
 and bytecode; compare genuine pre/post Core plus native GHC FIFO observations,
 including catch of the original bad-fd exception and async interruption with
