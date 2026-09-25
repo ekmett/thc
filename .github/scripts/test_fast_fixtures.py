@@ -19,6 +19,37 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_original_sigset_registration_and_closed_native_receipt(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['original-sigset']
+        self.assertEqual('original-sigset', owners['thc.runtime.OriginalSigsetTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-sigset']}], group['commands'])
+        self.assertIn('"$fixture_bin" original-sigset', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/original-sigset', fast_fixtures.FULL_OUTPUT_ROOTS)
+        cache = fast_fixtures.fast_inputs
+        name = 'build/original-sigset/manifest.json'
+        with mock.patch.object(cache, 'GMP_NATIVE_HOST', True):
+            artifacts = {}
+            for item in cache.ORIGINAL_SIGSET_OUTPUTS - {name}:
+                path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
+            receipt = dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
+                           installedArtifactsHashed=False, nativeRows=532,
+                           entries=list(cache.ORIGINAL_SIGSET_ENTRIES), artifactHashes=artifacts)
+            path = self.root / name; path.write_text(json.dumps(receipt))
+            self.assertEqual(cache.ORIGINAL_SIGSET_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+            for bad in (dict(receipt, schema=True), dict(receipt, entries=[]), dict(receipt, nativeRows=531),
+                        dict(receipt, nativeRows=True), dict(receipt, runtimeVerified=True),
+                        dict(receipt, artifactHashes={}), dict(receipt, artifactHashes=dict(artifacts, **{'build/original-sigset/extra.json': '0'*64}))):
+                with self.assertRaises(cache.CacheMiss): cache.sigset_artifact_hashes(bad)
+            artifact = self.root / 'build/original-sigset/pre/core/OriginalSigsetAudit.json'
+            artifact.write_text('mutated')
+            with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+            artifact.unlink(); artifact.symlink_to(self.root / 'build/original-sigset/oracle.json')
+            with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
+
     def test_full_core_decoder_is_explicit_but_getter_controls_remain_baseline(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

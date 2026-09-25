@@ -21,6 +21,21 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def test_sigset_exact_native_image_fixture_inventory(self):
+        self.assertEqual(41, len(cache.ORIGINAL_SIGSET_OUTPUTS))
+        self.assertIn('build/original-sigset/manifest.json', DECLARED_REQUIRED)
+        for name in cache.ORIGINAL_SIGSET_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(name, {}), name)
+            if name == 'build/original-sigset/native/oracle':
+                self.assertEqual(0o755, cache.safe_mode(0o755, name))
+            else:
+                with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, name)
+        for suffix in ('native/other', 'logs/extra.stdout', 'pre/unknown.audit.json',
+                       'attempt-0/oracle.json', 'pre/core/Other.json', 'native/OriginalSigsetNative.o'):
+            self.assertFalse(cache.allowed_payload('build/original-sigset/' + suffix, {}), suffix)
+        for suffix in ('../outside', 'logs/../../outside'):
+            with self.assertRaises(cache.CacheMiss): cache.file_path(self.root, 'build/original-sigset/' + suffix)
+
     def test_floatx4_fma_payload_is_closed_and_preserves_original_provenance(self):
         manifest_path = 'build/simd-floatx4-fma/manifest.json'
         self.assertIn(manifest_path, DECLARED_REQUIRED)

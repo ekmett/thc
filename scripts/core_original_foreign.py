@@ -42,6 +42,12 @@ TERMIOS_OPERATIONS = {
        for name in ('echo', 'icanon', 'vmin', 'vtime', 'tcsanow', 'sigttou', 'sig_block', 'sig_setmask')},
 }
 TERMIOS_SYMBOLS = frozenset(TERMIOS_OPERATIONS)
+SIGSET_OPERATIONS = {
+    'ghczuwrapperZC13ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigemptyset':
+        (('AddrRep', None), (None, 'Int32Rep')),
+    'ghczuwrapperZC12ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigaddset':
+        (('AddrRep', 'Int32Rep', None), (None, 'Int32Rep')),
+}
 SEEK_CONSTANTS = frozenset((
     'ghczuwrapperZC1ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuSET',
     'ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR',
@@ -53,6 +59,8 @@ STACK_INFO = frozenset(('getStackInfoTableAddrzh', 'getInfoTableAddrszh', 'looku
     'getStackFieldszh', 'advanceStackFrameLocationzh'))
 
 OPERATIONS = {
+    **{symbol: ('capi', 'unsafe', arguments, output)
+       for symbol, (arguments, output) in SIGSET_OPERATIONS.items()},
     'rtsSupportsBoundThreads': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
     **{symbol: ('ccall', 'unsafe', arguments, output)
        for symbol, (arguments, output) in LIBDW_UNAVAILABLE.items()},

@@ -40,6 +40,14 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "original-sigset": {
+      "junit": ["thc.runtime.OriginalSigsetTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-sigset"]}],
+      "outputs": ["build/original-sigset"],
+      "sources": ["compiler/test-fixtures/OriginalSigsetAudit.hs", "compiler/test-fixtures/OriginalSigsetNative.hs",
+        "test/haskell-fixtures/OriginalSigsetFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "libdw-unavailable": {
       "junit": ["thc.runtime.LibdwUnavailableTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "libdw-unavailable"]}],
