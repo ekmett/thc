@@ -67,12 +67,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val directFloat: Boolean get() = !cell && proof.isFloat && proof.evaluated
         val directDouble: Boolean get() = !cell && proof.isDouble && proof.evaluated
     }
+    private data class VectorCapture(val proof: CoreRepresentation, val destinations: List<Local>)
     private class FunctionContext(val formalArity: Int, val entryStrict: BooleanArray = BooleanArray(formalArity)) {
         var inputLayout: ArgumentLayout? = null
         var typedInput: TypedInputLayout? = null
         var typedArguments: List<Pair<Int, Local>> = emptyList()
         var arguments: List<Local?> = emptyList()
         var captures: List<Local> = emptyList()
+        var vectorCaptures: List<VectorCapture> = emptyList()
         var captureLayout: CaptureLayout? = null
         var mayLoop = false
         var leadingCaseReturn: LeadingCaseReturn? = null
@@ -187,7 +189,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             else if (double) b.endToDouble()
         }
     }
-    private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: List<Local>)
+    private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?,
+                                    val captures: List<Local>, val hasVectorCaptures: Boolean = false)
 
     init {
         ArrayOp.validateApplications(bindings)
@@ -298,17 +301,34 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val argumentIds = args.map { it["id"] as String }.toSet()
         args.forEach { CoreRepresentations.requireInput(CoreRepresentations.binder(it)) }
         context.inputLayout = ArgumentLayout.fromProofs(args.map(CoreRepresentations::binder))
-        if ((free - argumentIds).any { it in outer.tuples }) throw UnsupportedCore("Unsupported Core aggregate capture: unboxed-tuple")
+        val freeVectors = (free - argumentIds).mapNotNull { id ->
+            outer.tuples[id]?.let { (proof, fields) ->
+                if (!proof.isVector) throw UnsupportedCore("Unsupported Core aggregate capture: unboxed-tuple")
+                Triple(id, proof, fields)
+            }
+        }
         val freeLocals = (free - argumentIds).filter { it in outer.locals }.map { outer.locals.getValue(it) }
         freeLocals.filter { it.id < 0 && it.proof.kind == CoreKind.VOID }.forEach { scope.bindVoid(it.name, it.proof) }
         val captureSources = freeLocals.filter { it.id >= 0 || it.proof.kind != CoreKind.VOID }
         captureSources.forEach { CoreRepresentations.requireNoVector(it.proof, "capture") }
         context.captures = captureSources.map { bind(scope, it.name, it.primitive, it.proof, it.cell, it.entry, it.arityCertificate) }
-        context.captureLayout = if (captureSources.isEmpty()) null else CaptureLayout(language, captureSources.map { it.primitive }.toBooleanArray(),
-            captureSources.map { it.directLong }.toBooleanArray(),
-            captureSources.map { if (it.cell) null else it.proof.referenceCarrier() }.toTypedArray(),
-            captureSources.map { it.directFloat }.toBooleanArray(),
-            captureSources.map { it.directDouble }.toBooleanArray())
+        context.vectorCaptures = freeVectors.map { (id, proof, fields) ->
+            val lanes = TupleShape.flatten(proof).mapIndexed { lane, leaf ->
+                Local(nextLocal++, "$id captured vector lane $lane", leaf.isLong, leaf)
+            }
+            if (fields.size != lanes.size) throw RuntimeFault("Vector capture lane count mismatch")
+            scope.bindTuple(id, proof, lanes)
+            VectorCapture(proof, lanes)
+        }
+        val vectorSources = freeVectors.flatMap { it.third }
+        val vectorCount = freeVectors.size
+        context.captureLayout = if (captureSources.isEmpty() && vectorCount == 0) null else CaptureLayout.withVectors(language,
+            (List(captureSources.size) { null } + freeVectors.map { it.second }).toTypedArray(),
+            (captureSources.map { it.primitive } + List(vectorCount) { false }).toBooleanArray(),
+            (captureSources.map { it.directLong } + List(vectorCount) { false }).toBooleanArray(),
+            (captureSources.map { if (it.cell) null else it.proof.referenceCarrier() } + List(vectorCount) { null }).toTypedArray(),
+            (captureSources.map { it.directFloat } + List(vectorCount) { false }).toBooleanArray(),
+            (captureSources.map { it.directDouble } + List(vectorCount) { false }).toBooleanArray())
         context.typedInput = TypedInputLayout.create(language, context.inputLayout, context.captureLayout != null)
         val physicalArguments = arrayListOf<Pair<Int, Local>>()
         context.arguments = args.mapIndexed { index, arg ->
@@ -337,7 +357,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             throw RuntimeFault("Sum function requires exact body and declared result proofs")
         val body = ProvenExpression(compiled, compiled.proof.refine(resultProof).copy(evaluated = compiled.proof.evaluated))
         context.tuple = if (body.proof.isTypedTransport) TupleShape(body.proof, language) else null
-        return FunctionSpec(build(label, context, body, forceResult = !body.proof.evaluated), context.captureLayout, captureSources)
+        return FunctionSpec(build(label, context, body, forceResult = !body.proof.evaluated),
+            context.captureLayout, captureSources + vectorSources, vectorCount != 0)
     }
 
     private fun build(label: String, context: FunctionContext, body: Expression, forceResult: Boolean = true): RootCallTarget {
@@ -356,7 +377,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     b.beginStoreLocal(it); b.emitCurrentMask(); b.endStoreLocal()
                 }
             }
-            for (local in context.captures + context.typedArguments.map { it.second }.ifEmpty { context.arguments.filterNotNull() }) {
+            for (local in context.captures + context.vectorCaptures.flatMap { it.destinations } +
+                    context.typedArguments.map { it.second }.ifEmpty { context.arguments.filterNotNull() }) {
                 e.locals[local.id] = b.createLocal(local.name, if (local.primitive) "primitive" else "object")
             }
             val typed = context.typedInput
@@ -374,7 +396,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     }.toTypedArray(),
                     context.captureLayout,
                     context.captures.map { LocalAccessor.constantOf(e.locals.getValue(it.id)) }.toTypedArray(),
-                    context.captures.map { if (it.cell) CoreRepresentation.UNKNOWN else it.proof }.toTypedArray())
+                    context.captures.map { if (it.cell) CoreRepresentation.UNKNOWN else it.proof }.toTypedArray(),
+                    vectorCaptureSlots(e, context))
                 e.typedInputSlots = slots
                 b.emitRestoreTypedInput(slots)
             } else {
@@ -384,6 +407,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     b.emitLoadArgument(1)
                     if (local.directLong) b.endCaptureReadLong() else b.endCaptureRead()
                     b.endStoreLocal()
+                }
+                vectorCaptureSlots(e, context).forEach { slots ->
+                    b.beginCaptureReadVector(slots); b.emitLoadArgument(1); b.endCaptureReadVector()
                 }
                 val offset = if (context.captureLayout == null) 1 else 2
                 context.arguments.forEachIndexed { index, local -> if (local != null) {
@@ -434,6 +460,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         roots += root
         return root.callTarget
     }
+
+    private fun vectorCaptureSlots(e: Emission, context: FunctionContext): Array<BytecodeRoot.VectorCaptureSlots> =
+        context.vectorCaptures.mapIndexed { index, vector ->
+            BytecodeRoot.VectorCaptureSlots(context.captureLayout!!, context.captures.size + index,
+                vector.destinations.map { LocalAccessor.constantOf(e.locals.getValue(it.id)) }.toTypedArray())
+        }.toTypedArray()
 
     /** The cold Yield carries the exact bytecode frame; ordinary polls allocate no packet. */
     private fun emitAsyncPoll(e: Emission) {
@@ -679,17 +711,27 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         (fn.target.rootNode as GuestRoot).tupleResult?.let { CoreRepresentations.requireScalar(it.proof, "thunk") }
         val template = BytecodeRoot.ClosureTemplate(fn.target, 0, fn.captureLayout)
         return sourced(Expression { e ->
-            e.builder.beginMakeThunk(template)
-            fn.captures.forEach { read(it, false).emit(e) }
-            e.builder.endMakeThunk()
+            if (fn.hasVectorCaptures) {
+                e.builder.emitMakeVectorCapture(BytecodeRoot.VectorCaptureSource(template,
+                    fn.captures.map { LocalAccessor.constantOf(e.locals.getValue(it.id)) }.toTypedArray(), true))
+            } else {
+                e.builder.beginMakeThunk(template)
+                fn.captures.forEach { read(it, false).emit(e) }
+                e.builder.endMakeThunk()
+            }
         }, sources.expression(expr, scope.source))
     }
     private fun closure(fn: FunctionSpec, arity: Int): Expression {
         val template = BytecodeRoot.ClosureTemplate(fn.target, arity, fn.captureLayout)
         return evaluated(Expression { e ->
-            e.builder.beginMakeClosure(template)
-            fn.captures.forEach { read(it, false).emit(e) }
-            e.builder.endMakeClosure()
+            if (fn.hasVectorCaptures) {
+                e.builder.emitMakeVectorCapture(BytecodeRoot.VectorCaptureSource(template,
+                    fn.captures.map { LocalAccessor.constantOf(e.locals.getValue(it.id)) }.toTypedArray(), false))
+            } else {
+                e.builder.beginMakeClosure(template)
+                fn.captures.forEach { read(it, false).emit(e) }
+                e.builder.endMakeClosure()
+            }
         })
     }
     private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk", allowEmpty: Boolean = false, declaredLifted: Boolean = lifted): Expression {
@@ -831,6 +873,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             b.beginTailArgument(1); b.emitLoadLocal(transfer); b.endTailArgument()
             if (local.directLong) b.endCaptureReadLong() else b.endCaptureRead()
             b.endStoreLocal()
+        }
+        vectorCaptureSlots(e, context).forEach { slots ->
+            b.beginCaptureReadVector(slots)
+            b.beginTailArgument(1); b.emitLoadLocal(transfer); b.endTailArgument()
+            b.endCaptureReadVector()
         }
         val offset = if (context.captureLayout == null) 1 else 2
         context.arguments.forEachIndexed { index, local -> if (local != null) {
@@ -1105,6 +1152,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     b.beginClosureEnvironment(); b.emitLoadLocal(fn); b.endClosureEnvironment()
                     if (local.directLong) b.endCaptureReadLong() else b.endCaptureRead()
                     b.endStoreLocal()
+                }
+                vectorCaptureSlots(e, context).forEach { slots ->
+                    b.beginCaptureReadVector(slots)
+                    b.beginClosureEnvironment(); b.emitLoadLocal(fn); b.endClosureEnvironment()
+                    b.endCaptureReadVector()
                 }
                 context.arguments.forEachIndexed { index, local -> if (local != null) {
                     restoreArgument(e, local) {
@@ -2570,7 +2622,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     e.builder.endBlock()
                 }
             } else {
-            val strict = if (fn[0] == "con" && (fn[2] as Number).toInt() == args.size) strictConstructorFields(fn[1] as String, args.size) else null
+            val constructor = if (fn[0] == "con") dataLayout(fn[1] as String) else null
+            if (constructor != null && args.size > constructor.arity)
+                throw RuntimeFault("Constructor arity mismatch: ${fn[1]}")
+            val strict = if (constructor != null && (fn[2] as Number).toInt() == args.size)
+                strictConstructorFields(fn[1] as String, args.size) else null
             val entryStrict = when (fn[0]) {
                 "lam" -> CoreEntries.lambda(fn)
                 "var" -> (fn[1] as String).let { id ->
@@ -2580,8 +2636,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             }?.takeIf { args.size >= it.size }
             val operands = args.mapIndexed { index, arg ->
                 val lifted = flags[index] as? Boolean ?: throw UnsupportedCore("Unknown argument levity")
+                val vectorField = constructor?.vectorProof(index)
                 argument(arg, scope, lifted && !callStrict[index] && strict?.get(index) != true && entryStrict?.getOrNull(index) != true,
-                    allowEmpty = fn[0] != "prim" && fn[0] != "con", declaredLifted = lifted)
+                    allowEmpty = vectorField != null || fn[0] != "prim" && fn[0] != "con", declaredLifted = lifted).also { operand ->
+                    if (vectorField != null) {
+                        if (!operand.proof.isVector) throw RuntimeFault("Constructor vector field requires an exact vector operand")
+                        TupleShape.requireCompatible(vectorField, operand.proof)
+                    }
+                }
             }
             when {
                 fn[0] == "var" && fn[1] in scope.joins -> joinCall(scope.joins.getValue(fn[1] as String), operands)
@@ -2679,13 +2741,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val scrutinee = force(compile(scrutineeExpr, scope, false))
             val binderProof = scrutinee.proof.refine(CoreRepresentations.caseBinder(expr)).copy(evaluated = true)
             if (binderProof.isSum) sumCase(expr, scrutinee, binderProof, local, tail)
-            else if (binderProof.isTuple) tupleCase(expr, scrutinee, binderProof, local, tail) else {
+            else if (binderProof.isTuple || binderProof.isVector)
+                tupleOrVectorCase(expr, scrutinee, binderProof, local, tail) else {
             val binder = bind(local, expr[2] as String, true, binderProof)
             if (scrutineeExpr[0] == "var" && scrutineeExpr[1] != expr[2]) {
                 val id = scrutineeExpr[1] as String
                 scope.locals[id]?.let { local.locals[id] = it.copy(proof = it.proof.copy(evaluated = true)) }
             }
-            data class Alternative(val kind: String, val value: Any?, val fields: List<Local>, val body: Expression)
+            data class Alternative(val kind: String, val value: Any?, val fields: List<List<Local>>, val body: Expression)
             val alternatives = (expr[3] as List<List<Any?>>).map { alt ->
                 val child = local.child(); val kind = alt[0] as String
                 val value = when (kind) {
@@ -2701,9 +2764,21 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 val ids = alt[2] as List<String>; val layout = value as? DataLayout
                 if (layout != null && layout.arity != ids.size) throw RuntimeFault("Constructor field/binder mismatch")
                 val metadata = CoreRepresentations.alternativeBinders(alt)
-                val fields = ids.mapIndexed { index, id -> bind(child, id, layout?.isLong(index) == true,
-                    (metadata.getOrNull(index)?.let { CoreRepresentations.binder(it) } ?: CoreRepresentation.UNKNOWN)
-                        .let { it.copy(evaluated = layout != null && fieldIsEvaluated(alt[1] as String, index)) }) }
+                val fields = ids.mapIndexed { index, id ->
+                    val vector = layout?.vectorProof(index)
+                    if (vector != null) {
+                        val record = metadata.getOrNull(index) ?: throw UnsupportedCore("Missing vector constructor binder proof")
+                        if (record["lifted"] != false) throw UnsupportedCore("Vector constructor binder must be unlifted")
+                        val proof = CoreRepresentations.binder(record).refine(vector)
+                        val lanes = TupleShape.flatten(proof).mapIndexed { lane, leaf ->
+                            Local(nextLocal++, "$id vector lane $lane", leaf.isLong, leaf)
+                        }
+                        child.bindTuple(id, proof, lanes)
+                        lanes
+                    } else listOf(bind(child, id, layout?.isLong(index) == true,
+                        (metadata.getOrNull(index)?.let { CoreRepresentations.binder(it) } ?: CoreRepresentation.UNKNOWN)
+                            .let { it.copy(evaluated = layout != null && fieldIsEvaluated(alt[1] as String, index)) }))
+                }
                 Alternative(kind, value, fields, compile(alt[3] as List<Any?>, child, tail))
             }
             val explicit = alternatives.filter { it.kind != "default" }
@@ -2732,17 +2807,27 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 } else restoreArgument(e, binder) { scrutinee.emit(e) }
                 fun emitAlternative(alt: Alternative) {
                     b.beginBlock()
-                    alt.fields.forEachIndexed { index, field ->
-                        e.locals[field.id] = b.createLocal(field.name, if (field.primitive) "primitive" else "object")
-                        b.beginStoreLocal(e.locals.getValue(field.id))
-                        b.beginReadDataField(alt.value as DataLayout, index)
-                        read(binder, false).emit(e)
-                        b.endReadDataField()
-                        b.endStoreLocal()
+                    alt.fields.forEachIndexed { index, fields ->
+                        fields.forEach { field ->
+                            e.locals[field.id] = b.createLocal(field.name, if (field.primitive) "primitive" else "object")
+                        }
+                        val layout = alt.value as DataLayout
+                        if (layout.isVector(index)) {
+                            b.beginTransferDataVector(BytecodeRoot.DataVectorTransfer(layout, index,
+                                fields.map { LocalAccessor.constantOf(e.locals.getValue(it.id)) }.toTypedArray(), false))
+                            read(binder, false).emit(e)
+                            b.endTransferDataVector()
+                        } else {
+                            b.beginStoreLocal(e.locals.getValue(fields.single().id))
+                            b.beginReadDataField(layout, index)
+                            read(binder, false).emit(e)
+                            b.endReadDataField()
+                            b.endStoreLocal()
+                        }
                     }
                     emitResult(alt.body, e, destination)
                     b.endBlock()
-                    alt.fields.forEach { e.locals.remove(it.id) }
+                    alt.fields.flatten().forEach { e.locals.remove(it.id) }
                 }
                 fun emitChoice(index: Int) {
                     if (index == explicit.size) {
@@ -2783,11 +2868,44 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val strict = strictConstructorFields(id, arity)
             val layout = dataLayout(id)
             if (arity == 0) construct(layout, emptyList()) else {
-                val context = FunctionContext(arity)
+                // A PAP keeps its prefix lazy; saturation discharges worker
+                // strictness before restoring the post-worker field proofs.
+                val context = FunctionContext(arity, strict)
                 val constructorScope = Scope(context)
-                val args = List(arity) { bind(constructorScope, "field$it", layout.isLong(it)) }
-                context.arguments = args
-                val body = construct(layout, args.mapIndexed { index, arg -> if (strict[index]) force(read(arg)) else read(arg) })
+                val records = constructors.getValue(id)["fieldTypes"] as? List<*>
+                if (records != null && records.size != arity) throw RuntimeFault("Constructor field type count mismatch: $id")
+                // Legacy scalar constructors may omit fieldTypes. CoreFields
+                // requires exact fieldTypes whenever a constructor owns vectors.
+                val proofs = records?.map(CoreRepresentations::parse) ?: List(arity) { CoreRepresentation.UNKNOWN }
+                context.inputLayout = ArgumentLayout.fromProofs(proofs)
+                context.typedInput = TypedInputLayout.create(language, context.inputLayout, false)
+                val physical = arrayListOf<Pair<Int, Local>>()
+                val args = proofs.mapIndexed { index, proof ->
+                    val offset = ArgumentLayout.offset(context.inputLayout, index)
+                    val vector = layout.vectorProof(index)
+                    if (vector != null) {
+                        val exact = proof.refine(vector)
+                        val lanes = TupleShape.flatten(exact).mapIndexed { lane, leaf ->
+                            Local(nextLocal++, "field$index vector lane $lane", leaf.isLong, leaf).also {
+                                physical += (offset + lane) to it
+                            }
+                        }
+                        tupleExpression(exact) { e, destination ->
+                            lanes.forEachIndexed { lane, local ->
+                                e.builder.beginStoreLocal(destination[lane]); read(local).emit(e); e.builder.endStoreLocal()
+                            }
+                        }
+                    } else {
+                        val local = bind(constructorScope, "field$index", layout.isLong(index), proof)
+                        physical += offset to local
+                        if (strict[index]) force(read(local)) else read(local)
+                    }
+                }
+                context.arguments = proofs.mapIndexed { index, _ ->
+                    if (layout.isVector(index)) null else physical.first { it.first == ArgumentLayout.offset(context.inputLayout, index) }.second
+                }
+                context.typedArguments = physical
+                val body = construct(layout, args)
                 closure(FunctionSpec(build("constructor $id", context, body), null, emptyList()), arity)
             }
             }
@@ -3356,27 +3474,38 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val value = vectorByteArray(read.operation, operands)
         val local = scope.child()
         local.bindVoid(read.stateBinder, CoreVectorMemory.stateProof)
-        val vector = bind(local, read.vectorBinder, false, read.operation.vectorProof)
+        val vectorProof = read.operation.vectorProof
+        val lanes = TupleShape.flatten(vectorProof).mapIndexed { index, proof ->
+            Local(nextLocal++, "${read.vectorBinder} read lane $index", proof.isLong, proof)
+        }
+        local.bindTuple(read.vectorBinder, vectorProof, lanes)
         val body = compile(read.body, local, tail)
-        // No whole-tuple local or result handoff is ever created here.
+        // The immediate read result owns primitive locals, including when a
+        // nested closure later snapshots those lanes into its captured frame.
         return LoweredCaseExpression(ProvenExpression(ResultExpression { e, destination ->
             val b = e.builder
             b.beginBlock()
-            e.locals[vector.id] = b.createLocal(vector.name, "object")
-            b.beginStoreLocal(e.locals.getValue(vector.id)); value.emit(e); b.endStoreLocal()
+            lanes.forEach { e.locals[it.id] = b.createLocal(it.name, "primitive") }
+            value.emitTuple(e, lanes.map { e.locals.getValue(it.id) })
             emitResult(body, e, destination)
             b.endBlock()
-            e.locals.remove(vector.id)
+            lanes.forEach { e.locals.remove(it.id) }
         }, body.proof))
     }
-    private fun tupleCase(expr: List<Any?>, scrutinee: Expression, proof: CoreRepresentation, scope: Scope, tail: Boolean): Expression {
+    private fun tupleOrVectorCase(expr: List<Any?>, scrutinee: Expression, proof: CoreRepresentation, scope: Scope, tail: Boolean): Expression {
         val shape = TupleShape(proof, language)
         val fields = shape.leaves.mapIndexed { index, field -> Local(nextLocal++, "tuple field $index", field.isLong, field) }
         scope.bindTuple(expr[2] as String, proof, fields)
         val alternatives = expr[3] as List<List<Any?>>
-        if (alternatives.size != 1) throw RuntimeFault("Tuple case requires one alternative")
+        if (alternatives.size != 1) throw RuntimeFault("Tuple or vector case requires one alternative")
         val alt = alternatives.single()
         val ids = alt[2] as List<String>
+        // A vector is one logical primitive value with no data alternatives.
+        // Keep its case binder in lane locals, as for vector formals and lets,
+        // so closures and delayed arguments copy the lanes into owned captures.
+        if (proof.isVector && (alt[0] != "default" || ids.isNotEmpty() ||
+                CoreRepresentations.alternativeBinders(alt).isNotEmpty()))
+            throw RuntimeFault("Vector case requires a binder-free DEFAULT alternative")
         if (alt[0] == "data") {
             if (constructors[alt[1]]?.get("kind") != "unboxed-tuple" || ids.size != shape.components.size ||
                 (constructors[alt[1]]?.get("arity") as? Number)?.toInt() != ids.size)
@@ -3405,7 +3534,38 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     }
 
     private fun construct(layout: DataLayout, args: List<Expression>) = evaluated(Expression { e ->
-        e.builder.beginConstruct(layout); args.forEach { it.emit(e) }; e.builder.endConstruct()
+        val b = e.builder
+        if ((0 until layout.arity).none(layout::isVector)) {
+            b.beginConstruct(layout); args.forEach { it.emit(e) }; b.endConstruct()
+        } else {
+            b.beginBlock()
+            val fields = args.mapIndexed { index, argument ->
+                if (layout.isVector(index)) {
+                    val lanes = List(layout.fieldWidth(index)) { lane -> b.createLocal("field $index lane $lane", "primitive") }
+                    argument.emitTuple(e, lanes)
+                    lanes
+                } else {
+                    val field = b.createLocal("field $index", null)
+                    b.beginStoreLocal(field); argument.emit(e); b.endStoreLocal()
+                    listOf(field)
+                }
+            }
+            val value = b.createLocal("constructed ${layout.id}", "object")
+            b.beginStoreLocal(value); b.emitAllocateData(layout); b.endStoreLocal()
+            fields.forEachIndexed { index, slots ->
+                if (layout.isVector(index)) {
+                    b.beginTransferDataVector(BytecodeRoot.DataVectorTransfer(layout, index,
+                        slots.map(LocalAccessor::constantOf).toTypedArray(), true))
+                    b.emitLoadLocal(value); b.endTransferDataVector()
+                } else {
+                    b.beginInitializeDataScalar(layout, index)
+                    b.emitLoadLocal(value); b.emitLoadLocal(slots.single())
+                    b.endInitializeDataScalar()
+                }
+            }
+            b.emitLoadLocal(value)
+            b.endBlock()
+        }
     })
     private fun floatingPrimitive(name: String, args: List<Expression>): Expression? {
         val operation = when (name) {
@@ -4610,7 +4770,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     private fun dataLayout(id: String): DataLayout = dataLayouts.getOrPut(id) {
         val info = constructors[id] ?: throw RuntimeFault("Missing constructor metadata $id")
         val fields = CoreFields(info)
-        DataLayout(language, id, info["name"] as String, fields.storage, fields.referenceTypes)
+        DataLayout.fromFields(language, id, info["name"] as String, fields)
     }
     /** The constructor adapter enforces strict fields before storing them. */
     private fun fieldIsEvaluated(id: String, index: Int): Boolean {

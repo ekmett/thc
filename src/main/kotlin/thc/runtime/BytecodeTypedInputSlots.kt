@@ -28,7 +28,8 @@ internal class BytecodeTypedInputSlots(
     @field:CompilationFinal(dimensions = 1) private val proofs: Array<CoreRepresentation>,
     private val captureLayout: CaptureLayout?,
     @field:CompilationFinal(dimensions = 1) private val captures: Array<LocalAccessor>,
-    @field:CompilationFinal(dimensions = 1) private val captureProofs: Array<CoreRepresentation>
+    @field:CompilationFinal(dimensions = 1) private val captureProofs: Array<CoreRepresentation>,
+    @field:CompilationFinal(dimensions = 1) private val vectorCaptures: Array<BytecodeRoot.VectorCaptureSlots> = emptyArray()
 ) {
     @field:CompilationFinal(dimensions = 1)
     private val references = proofs.map { it.referenceCarrier() }.toTypedArray()
@@ -73,6 +74,7 @@ internal class BytecodeTypedInputSlots(
                         captures[i].setObject(bytecode, frame, if (expected == null) value else requireReferenceCarrier(value, expected))
                     }
                 }
+                for (vector in vectorCaptures) vector.restore(frame, bytecode, environment)
             }
         } finally {
             // A failed checked reference restore still relinquishes the loan.

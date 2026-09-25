@@ -133,8 +133,8 @@ class AddressFieldTest {
         }
     }
     @Test fun constructorPartialApplicationRetainsAddressAndDefersLazyPayload() = withLanguage { language ->
-        for(backend in listOf("ast","bytecode")) {
-            val program=program(language,module(true,partial=true),backend); val address=ManagedAddress.fromHex("41")
+        for(typed in listOf(true,false)) for(backend in listOf("ast","bytecode")) {
+            val program=program(language,module(typed,partial=true),backend); val address=ManagedAddress.fromHex("41")
             val pap=Calls.target(program.hostEntryTarget(1),arrayOf(program.entryValue("entry"),arrayOf(address))) as Closure
             assertSame(address,pap.supplied[0]); assertEquals(17L,pap.supplied[1])
             val bottom=program.entryValue("bottom") as Thunk; assertEquals(0,bottom.state)
