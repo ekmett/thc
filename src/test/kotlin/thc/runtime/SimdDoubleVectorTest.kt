@@ -94,8 +94,10 @@ class SimdDoubleVectorTest {
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packDoubleX2#", CoreVectors.unpackedDouble.components!!, proof) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("broadcastDoubleX2#",
             listOf(CoreRepresentation(CoreKind.UNKNOWN, true, true, listOf("DoubleRep"))), proof) }
+        assertEquals(CoreVector(8, "DoubleElemRep"), CoreRepresentations.parse(metadata() + mapOf(
+            "primReps" to listOf("VecRep 8 DoubleElemRep"), "vector" to mapOf("lanes" to 8L, "element" to "DoubleElemRep"))).vector)
         assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(metadata() + mapOf(
-            "primReps" to listOf("VecRep 8 DoubleElemRep"), "vector" to mapOf("lanes" to 8L, "element" to "DoubleElemRep"))) }
+            "primReps" to listOf("VecRep 3 DoubleElemRep"), "vector" to mapOf("lanes" to 3L, "element" to "DoubleElemRep"))) }
     }
 
     @Test fun primitiveLanesPreserveMovementBitsAndBinary64Arithmetic() {
@@ -122,7 +124,7 @@ class SimdDoubleVectorTest {
         sameDouble(Double.fromBits(0x3ff0000000000001), precise.lane(0), "binary64 precision, not binary32")
     }
 
-    @Test fun bothLoadersRejectForgedVectorProofsAndVectorFormalArguments() = withLanguage { language ->
+    @Test fun bothLoadersAcceptVectorFormalsAndRejectForgedProofs() = withLanguage { language ->
         val input = module()
         fun rewrite(value: Any?, mutation: (Map<String, Any?>) -> Map<String, Any?>): Any? = when (value) {
             is Map<*, *> -> {
@@ -135,11 +137,12 @@ class SimdDoubleVectorTest {
         val mutations: List<(Map<String, Any?>) -> Map<String, Any?>> = listOf(
             { it - "vector" },
             { it + ("primReps" to List(2) { "DoubleRep" }) },
-            { it + mapOf("primReps" to listOf("VecRep 2 Int64ElemRep"), "vector" to mapOf("lanes" to 2L, "element" to "Int64ElemRep")) })
+            { it + mapOf("primReps" to listOf("VecRep 2 Int64ElemRep"), "vector" to mapOf("lanes" to 2L, "element" to "Int64ElemRep")) },
+            { it + mapOf("primReps" to listOf("VecRep 8 DoubleElemRep"), "vector" to mapOf("lanes" to 8L, "element" to "DoubleElemRep")) })
         for (backend in listOf("ast", "bytecode")) {
             assertNotNull(program(language, backend, input, "vectorArgument"))
-            val unsupported = rewrite(input) { it + mapOf("primReps" to listOf("VecRep 8 DoubleElemRep"),
-                "vector" to mapOf("lanes" to 8L, "element" to "DoubleElemRep")) } as Map<String, Any?>
+            val unsupported = rewrite(input) { it + mapOf("primReps" to listOf("VecRep 3 DoubleElemRep"),
+                "vector" to mapOf("lanes" to 3L, "element" to "DoubleElemRep")) } as Map<String, Any?>
             assertThrows(UnsupportedCore::class.java) { program(language, backend, unsupported, "plusCase") }
             assertTrue((program(language, backend, unsupported, "plusCase", true).diagnostics().getValue("deferredUnsupported") as Collection<*>).isNotEmpty())
             for (diagnostic in listOf(false, true)) for (mutation in mutations) {

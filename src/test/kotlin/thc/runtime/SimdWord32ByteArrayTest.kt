@@ -131,11 +131,16 @@ class SimdWord32ByteArrayTest {
         val provenance = provenance()
         for (stage in provenance["stages"] as List<String>) for (backend in listOf("ast", "bytecode")) withLanguage(true) { language ->
             val module = Json.parse(File(directory, "$stage-core/SimdWord32X4ByteArray.json").readText()) as Map<String, Any?>
-            for (name in listOf("vectorArgument", "readTupleEscape", "readVectorEscape")) {
+            for (name in listOf("vectorArgument", "readVectorEscape")) {
                 val linked = CoreModules.reachable(module, name)
                 assertNotNull(if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked),
                     "$stage/$backend/$name")
             }
+            val directRead = CoreModules.reachable(module, "readTupleEscape")
+            val error = assertThrows(UnsupportedCore::class.java) {
+                if (backend == "ast") Program(language, directRead) else BytecodeProgram(language, directRead)
+            }
+            assertEquals("Vector ByteArray read requires an immediate exact case", error.message)
         }
     }
     @Test fun publicHostTupleResultsRejectAtLoadOrTrapBeforeArgumentNormalization() {

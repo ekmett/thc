@@ -86,7 +86,7 @@ class SimdFloatVectorTest {
         sameFloat(0.0f, FloatX4.add(product, FloatX4.broadcast(-1.0f)).lane(0), "separate rounding, not FMA")
     }
 
-    @Test fun bothLoadersRejectForgedVectorProofsAndVectorFormalArguments() = withLanguage { language ->
+    @Test fun bothLoadersAcceptVectorFormalsAndRejectForgedProofs() = withLanguage { language ->
         val input = module()
         fun rewrite(value: Any?, mutation: (Map<String, Any?>) -> Map<String, Any?>): Any? = when (value) {
             is Map<*, *> -> {
