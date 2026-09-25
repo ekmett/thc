@@ -4,8 +4,9 @@ The family table adds 48 local operations across Int64X4/X8, Word64X4/X8,
 Word32X16, FloatX16 and DoubleX8. Each shape has pack, unpack, broadcast, plus,
 minus and times; signed and floating shapes also have negate, and floating
 shapes have divide. The table also includes Int16X16 and Word16X16, with pack, unpack, broadcast, plus,
-minus, times, insertion and signed negate. The table contains 108 arithmetic
-names and 24 `insert` operations, for 132 names. These remain partial entries
+minus, times, insertion and signed negate. Signed min/max use the existing
+Int8X16, Int16X8, Int32X4 and Int64X2 carriers. The table contains 116 arithmetic
+names and 24 `insert` operations, for 140 names. These remain partial entries
 in the primop checklist.
 
 The shared generator emits Kotlin carriers with final primitive lane fields,
@@ -25,9 +26,9 @@ legacy integer fields and FloatX4/DoubleX2 `pack`/`lane` APIs, preserving each
 carrier representation. Indices outside the shape's lane range raise a runtime fault before any narrowing. Insertion covers
 all currently represented vector shapes.
 
-The capability smoke uses ten operation/lane drivers containing all 132
+The capability smoke uses ten operation/lane drivers containing all 140
 generated operations. Each driver contains whole arithmetic families, with at
-most 112 lane-operation pairs to bound compiled code size. It checks 4,538
+most 112 lane-operation pairs to bound compiled code size. It checks 4,662
 cases interpreted and after explicit compilation on both backends, observes
 every lane, includes integer
 sign/overflow edges, and checks retained compiled targets and released handoff
@@ -37,10 +38,10 @@ warmup loops. Native expectations come from Haskell
 scalar primops; the default oracle requires no SIMD instruction set. Optional
 native vector comparison requires a host capable of the selected 512-bit ISA.
 
-All 132 names and 4,538 cases have passed GHC signature checks, native scalar
+All 140 names and 4,662 cases have passed GHC signature checks, native scalar
 comparisons, strict Core audits, and interpreted/compiled AST and bytecode checks
-in both handoff modes. The Int16X16/Word16X16 families add 856 cases; the previous
-3,682 expectations are unchanged. The optional native vector comparison has not
+in both handoff modes. Signed min/max add 124 cases; the previous 4,538
+expectations are unchanged. The optional native vector comparison has not
 been run for these wide shapes, and these checks make no hardware SIMD or
 performance claim.
 
