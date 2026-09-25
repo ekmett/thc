@@ -373,6 +373,7 @@ class Language : TruffleLanguage<Language.State>() {
         internal val capturedAsyncRequests = thc.runtime.CapturedAsyncRequests()
         internal val stablePointers = thc.runtime.StablePointers()
         internal val nativeAddresses = thc.runtime.NativeAddresses(env)
+        internal val nativeAllocations = thc.runtime.ManagedNativeAllocations(env)
         internal val weaks = thc.runtime.ManagedWeaks()
         // A future SHARED policy may keep the lockless thunk path while this is valid.
         // The transition is one-way and belongs to this context, not to Language.
@@ -456,7 +457,9 @@ class Language : TruffleLanguage<Language.State>() {
             }
         } finally {
             try { context.weaks.close() } finally {
-                try { context.stablePointers.close() } finally { context.nativeAddresses.close() }
+                try { context.stablePointers.close() } finally {
+                    try { context.nativeAddresses.close() } finally { context.nativeAllocations.close() }
+                }
             }
         }
     }

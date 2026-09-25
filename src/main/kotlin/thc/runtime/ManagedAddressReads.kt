@@ -12,7 +12,7 @@ internal enum class ManagedAddressRead(val width: Int, val payload: String) {
     WORD32(4, "Word32Rep"), WIDE_CHAR(4, "WordRep"), WORD(8, "WordRep"), INT32(4, "Int32Rep"), INT(8, "IntRep"),
     WORD64(8, "Word64Rep"), INT64(8, "Int64Rep");
 
-    fun read(address: ManagedAddress, elementOffset: Long): Long {
+    fun read(address: ManagedAddress, elementOffset: Long): Long = address.withNativeBorrow {
         if (elementOffset < Long.MIN_VALUE / width || elementOffset > Long.MAX_VALUE / width)
             fault("Managed Addr# element offset overflow")
         val displacement = elementOffset * width
@@ -22,7 +22,7 @@ internal enum class ManagedAddressRead(val width: Int, val payload: String) {
             val shift = if (littleEndian) byte * 8 else (width - 1 - byte) * 8
             value = value or (address.readWord8(displacement + byte) shl shift)
         }
-        return if (this == INT16) value.toShort().toLong()
+        if (this == INT16) value.toShort().toLong()
             else if (this == INT32) value.toInt().toLong()
             else value
     }

@@ -11,7 +11,7 @@ import thc.Json
 internal class TermiosImage private constructor(val size: Long, private val lflagOffset: Long,
     private val ccOffset: Long, private val constants: Map<String, Long>) {
     private fun <T> image(address: ManagedAddress, writable: Boolean = false, body: () -> T): T {
-        fun checked(): T { address.requireByteRegion(size, writable); return body() }
+        fun checked(): T = address.withNativeBorrow { address.requireByteRegion(size, writable); body() }
         val allocation = address.cbitsOwner()
         return if (allocation == null) checked() else synchronized(allocation) { checked() }
     }

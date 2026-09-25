@@ -1569,6 +1569,27 @@ class LibdwUnavailableAuditTest(unittest.TestCase):
             self.assertEqual([], result['foreignCalls'])
 
 
+class NativeMallocDeclarationTest(unittest.TestCase):
+    """Genuine descriptors; admission remains private until the native/JVM gate."""
+    def test_two_exact_declarations_and_private_admission(self):
+        resource = ROOT.parent / 'src/test/resources/core/original-malloc-descriptors.json'
+        declarations = json.loads(resource.read_text())
+        self.assertEqual(['malloc', 'free'], [d['target']['symbol'] for d in declarations])
+        fixture = LibdwUnavailableAuditTest()
+        private = dict(CAP, managedForeignCalls=[*CAP['managedForeignCalls'], 'malloc', 'free'])
+        for declaration in declarations:
+            module = fixture.fixture(declaration)
+            self.assertFalse(fixture.audit(module)['accepted'])
+            self.assertTrue(fixture.audit(module, private)['accepted'])
+            for key, value in [('safety', 'safe'), ('arity', 3), ('convention', 'capi'), ('schema', 1.0)]:
+                wrong = copy.deepcopy(declaration); wrong[key] = value
+                self.assertFalse(fixture.audit(fixture.fixture(wrong), private)['accepted'])
+            wrong = copy.deepcopy(declaration); wrong['target']['unit'] = 'other'
+            self.assertFalse(fixture.audit(fixture.fixture(wrong), private)['accepted'])
+        for symbol in ('calloc', 'realloc', 'prefixmalloc', 'free2'):
+            self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
+
+
 class OriginalStackInfoAuditTest(unittest.TestCase):
     """Genuine unchanged FCall applications in explicitly synthetic scalar consumers.
 

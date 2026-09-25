@@ -44,3 +44,27 @@ prepareNativeAddress root = do
   writeJson (root </> manifest) $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]
   putStrLn "native-addresses: nine native checks for coercions, offsets and aliases"
+  -- Keep explicit malloc/free ownership in this existing address composite.
+  let mallocDirectory = "build/native-malloc"
+      mallocNative = mallocDirectory </> "native"
+      mallocSource = "compiler/test-fixtures/NativeMallocNative.hs"
+      mallocBinary = mallocNative </> "oracle"
+      mallocOracle = mallocDirectory </> "oracle.txt"
+      mallocManifest = mallocDirectory </> "manifest.json"
+      mallocExecute = runLogged 120 root (mallocDirectory </> "logs")
+  createDirectoryIfMissing True (root </> mallocNative)
+  mallocPresent <- doesFileExist (root </> mallocManifest)
+  when mallocPresent (removeFile (root </> mallocManifest))
+  _ <- mallocExecute "native-build" [] ghc ["--make", "-O2", "-dynamic", "-fforce-recomp", "-Wall", "-Werror",
+    "-dcore-lint", "-dstg-lint", "-odir", root </> mallocNative,
+    "-hidir", root </> mallocNative, mallocSource, "-o", root </> mallocBinary]
+  mallocObserved <- mallocExecute "native-oracle" [] (root </> mallocBinary) []
+  unless (commandStdout mallocObserved == "0 0 0 0\n1 1 257 1\n2 2 514 2\n197 197 50629 197\n" &&
+    BS.null (commandStderr mallocObserved)) (die "Native malloc/free alias oracle mismatch")
+  BS.writeFile (root </> mallocOracle) (commandStdout mallocObserved)
+  mallocInputs <- hashes root [mallocSource, "test/haskell-fixtures/NativeAddressFixtures.hs",
+    "test/haskell-fixtures/FixtureSupport.hs", "src/test/resources/core/original-malloc-descriptors.json"]
+  mallocArtifacts <- hashes root [mallocOracle]
+  writeJson (root </> mallocManifest) $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
+    "inputHashes" .= mallocInputs, "artifactHashes" .= mallocArtifacts]
+  putStrLn "native-malloc: four original malloc/free/copy alias rows"

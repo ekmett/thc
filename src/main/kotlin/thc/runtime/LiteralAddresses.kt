@@ -10,6 +10,8 @@ import java.lang.ref.Reference
 import java.lang.ref.ReferenceQueue
 import java.lang.ref.WeakReference
 import java.nio.ByteOrder
+import java.lang.foreign.MemorySegment
+import java.lang.foreign.ValueLayout
 
 /** An Addr# carrier with managed storage or an unowned numeric bit pattern.
  * Immutable storage may acquire a real, context-owned native image. Storage-backed
@@ -23,8 +25,29 @@ internal class ManagedAddress private constructor(
     private val owner: ManagedAllocation? = null,
     private val stable: StablePointers.Handle? = null,
     private val numeric: Long? = null,
-    private val finalizer: CFinalizerFunction? = null
+    private val finalizer: CFinalizerFunction? = null,
+    private val native: ManagedNativeAllocations.Owner? = null
 ) {
+    internal fun nativeAllocation(): ManagedNativeAllocations.Owner? = native
+    internal fun isNativeBase(): Boolean = native != null && offset == 0L
+    /** Keep native storage alive across a complete operation, including calls
+     * whose native pointer outlives an individual checked byte access. */
+    internal fun <T> withNativeBorrow(body: () -> T): T =
+        if (native == null) body() else native.borrow().use { body() }
+    internal fun <T> withNativeSegment(body: (MemorySegment) -> T): T =
+        (native ?: fault("Address has no owned native allocation")).access { body(it.asSlice(offset)) }
+    private fun <T> withNativeBorrows(other: ManagedAddress, body: () -> T): T {
+        if (native == null) return other.withNativeBorrow(body)
+        if (other.native == null || native === other.native) return withNativeBorrow(body)
+        // Ordered acquisition also prevents two copies from deadlocking behind
+        // queued frees while each already holds the other's source allocation.
+        fun forward() = withNativeBorrow { other.withNativeBorrow(body) }
+        return when (Integer.compareUnsigned(System.identityHashCode(native), System.identityHashCode(other.native))) {
+            -1 -> forward()
+            1 -> other.withNativeBorrow { withNativeBorrow(body) }
+            else -> synchronized(NATIVE_BORROW_TIE) { forward() }
+        }
+    }
     internal fun stableHandle(): StablePointers.Handle? = stable
     internal fun finalizerFunction(): CFinalizerFunction? = finalizer
     private fun requireBytes() {
@@ -38,15 +61,18 @@ internal class ManagedAddress private constructor(
         ?: literalBytes?.copyOf() ?: fault("Native image requires immutable byte storage")
     fun toNativeBits(): Long {
         if (finalizer != null) fault("Opaque C function label has no numeric guest address")
+        native?.let { return it.access { segment -> segment.address() + offset } }
         return if (this === NULL) 0L else numeric ?: NativeAddresses.current(null).project(this)
     }
     // Mutable views preserve aliases. Immutable sources return snapshots so a
     // writable JVM array cannot escape and diverge from their native image.
-    internal fun rawBacking(): ByteArray { requireBytes(); return owner?.rawBytesIfPointerFree()
+    internal fun rawBacking(): ByteArray { requireBytes()
+        if (native != null) fault("Owned native storage cannot be exposed as a JVM byte array")
+        return owner?.rawBytesIfPointerFree()
         ?: literalBytes?.copyOf() ?: mutableBytes ?: fault("Null Addr# has no backing storage")
     }
     internal fun cbitsBacking(): ByteArray { requireBytes(); return owner?.exposeToNative() ?: rawBacking() }
-    internal fun cbitsWritable(): Boolean { requireBytes(); return owner?.isWritable ?: (mutableBytes != null) }
+    internal fun cbitsWritable(): Boolean { requireBytes(); native?.requireLive(); return native != null || (owner?.isWritable ?: (mutableBytes != null)) }
     internal fun cbitsOffset(): Long { size(); return offset }
     internal fun cbitsOwner(): ManagedAllocation? = owner
     internal fun cbitsSize(): Long = size()
@@ -58,13 +84,15 @@ internal class ManagedAddress private constructor(
         owner?.requireByteRegion(offset, count, writable)
     }
 
-    private fun size(): Long { requireBytes(); return owner?.size ?: (literalBytes ?: mutableBytes)?.size?.toLong()
+    private fun size(): Long { requireBytes(); native?.let { it.requireLive(); return it.size }
+        return owner?.size ?: (literalBytes ?: mutableBytes)?.size?.toLong()
         ?: fault("Null Addr# has no backing storage")
     }
 
     /** GHC pointer equality compares allocation identity and byte offset. */
-    fun sameLocation(other: ManagedAddress): Boolean =
-        if (finalizer != null || other.finalizer != null) {
+    fun sameLocation(other: ManagedAddress): Boolean {
+        native?.requireLive(); other.native?.requireLive()
+        return if (finalizer != null || other.finalizer != null) {
             val provider = thc.Language.currentState(null).cbits()
             finalizer?.requireOwner(provider)
             other.finalizer?.requireOwner(provider)
@@ -80,10 +108,12 @@ internal class ManagedAddress private constructor(
         else if (numeric != null || other.numeric != null) toNativeBits() == other.toNativeBits()
         else offset == other.offset && when {
             this === NULL || other === NULL -> this === other
+            native != null || other.native != null -> native != null && native === other.native
             owner != null -> owner === other.owner
             literalBytes != null -> literalBytes === other.literalBytes
             else -> mutableBytes != null && mutableBytes === other.mutableBytes
         }
+    }
 
     /** Weak allocation/offset index. Aliases keep entries alive without exposing
      * an owner; values must not retain addresses into their indexed allocation.
@@ -120,6 +150,7 @@ internal class ManagedAddress private constructor(
     /** Only offsets within one allocation have a portable managed ordering.
      * Comparing unrelated native pointer values would invent host addresses. */
     fun compareWithinAllocation(other: ManagedAddress): Int {
+        native?.requireLive(); other.native?.requireLive()
         if (finalizer != null || other.finalizer != null) fault("Opaque C function label has no address ordering")
         if (stable != null || other.stable != null) fault("Opaque StablePtr# has no address ordering")
         if (numeric != null || other.numeric != null)
@@ -129,6 +160,7 @@ internal class ManagedAddress private constructor(
             fault("Ordered Addr# comparison requires the same managed allocation")
         }
         val shared = when {
+            native != null || other.native != null -> native != null && native === other.native
             owner != null -> owner === other.owner
             literalBytes != null -> literalBytes === other.literalBytes
             else -> mutableBytes != null && mutableBytes === other.mutableBytes
@@ -148,7 +180,7 @@ internal class ManagedAddress private constructor(
         // Check before adding so even Long.MIN/MAX_VALUE cannot wrap into range.
         if (displacement < -offset || displacement > size() - offset)
             fault("Managed Addr# offset outside its backing storage")
-        return if (displacement == 0L) this else ManagedAddress(literalBytes, mutableBytes, offset + displacement, owner)
+        return if (displacement == 0L) this else ManagedAddress(literalBytes, mutableBytes, offset + displacement, owner, native = native)
     }
 
     private fun index(displacement: Long): Int {
@@ -182,6 +214,10 @@ internal class ManagedAddress private constructor(
 
     /** Both backing variants use byte offsets and return zero-extended Word8#. */
     fun readWord8(displacement: Long): Long {
+        native?.let { allocation -> return allocation.access { segment ->
+            requireRange(displacement, 1)
+            segment.get(ValueLayout.JAVA_BYTE, offset + displacement).toLong() and 255L
+        } }
         val index = index(displacement)
         owner?.let { return it.readByte(index.toLong()) }
         // Keep the immutable and mutable loads distinct: only the former may fold.
@@ -192,6 +228,10 @@ internal class ManagedAddress private constructor(
     /** The caller evaluates State# before reaching storage. Invalid writes have
      * no effect; the value contributes only its low eight bits, like writeWord8Array#. */
     fun writeWord8(displacement: Long, value: Long) {
+        native?.let { allocation -> allocation.access { segment ->
+            requireRange(displacement, 1, writable = true)
+            segment.set(ValueLayout.JAVA_BYTE, offset + displacement, value.toByte())
+        }; return }
         owner?.let { it.writeByte(index(displacement).toLong(), value); return }
         val bytes = mutableBytes ?: fault("Cannot write through an immutable literal Addr#")
         val index = index(displacement)
@@ -208,6 +248,12 @@ internal class ManagedAddress private constructor(
         val displacement = elementOffset * width
         requireRange(displacement, width.toLong(), writable = true)
         val little = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN
+        native?.let { allocation -> allocation.access { segment ->
+            for (index in 0 until width) {
+                val shift = (if (little) index else width - 1 - index) * 8
+                segment.set(ValueLayout.JAVA_BYTE, offset + displacement + index, (value ushr shift).toByte())
+            }
+        }; return }
         owner?.let { it.writeNativeScalarByteOffset(offset + displacement, width, value, little); return }
         val bytes = mutableBytes ?: fault("Cannot write through an immutable literal Addr#")
         val start = (offset + displacement).toInt()
@@ -222,7 +268,7 @@ internal class ManagedAddress private constructor(
     /** Validate a complete byte region before any effect. An empty region may
      * start one past the allocation; an immutable destination is never writable. */
     fun requireRange(displacement: Long, count: Long, writable: Boolean = false) {
-        if (writable && owner == null && mutableBytes == null)
+        if (writable && owner == null && mutableBytes == null && native == null)
             fault("Cannot write through an immutable literal Addr#")
         if (writable && owner != null && !owner.isWritable)
             fault("Cannot write through an immutable managed allocation")
@@ -240,6 +286,7 @@ internal class ManagedAddress private constructor(
         other.requireRange(otherDisplacement, otherCount)
         if (count == 0L || otherCount == 0L) return false
         val shared = when {
+            native != null || other.native != null -> native != null && native === other.native
             owner != null && other.owner != null -> owner === other.owner
             owner != null -> other.mutableBytes?.let(owner::ownsStorage) == true
             other.owner != null -> mutableBytes?.let(other.owner::ownsStorage) == true
@@ -255,15 +302,30 @@ internal class ManagedAddress private constructor(
     /** copyAddrToAddrNonOverlapping# counts bytes. Validate both complete
      * regions and aliasing before changing storage; owner-to-owner copies keep
      * managed pointer references instead of fabricating their byte values. */
-    fun copyNonOverlappingTo(destination: ManagedAddress, count: Long) {
+    fun copyNonOverlappingTo(destination: ManagedAddress, count: Long) = withNativeBorrows(destination) copy@ {
         requireRange(0, count)
         destination.requireRange(0, count, writable = true)
         if (overlaps(0, count, destination, 0, count))
             fault("copyAddrToAddrNonOverlapping# requires disjoint regions")
-        if (count == 0L) return
+        if (count == 0L) return@copy
         val sourceOwner = owner
         val destinationOwner = destination.owner
         when {
+            native != null && destination.native != null -> native.access { source -> destination.native.access { target ->
+                MemorySegment.copy(source, offset, target, destination.offset, count)
+            } }
+            native != null -> native.access { source ->
+                if (destinationOwner != null) {
+                    // The target's checked JVM capacity bounds this narrow transport.
+                    val bytes = source.asSlice(offset, count).toArray(ValueLayout.JAVA_BYTE)
+                    destinationOwner.copyBytesIn(bytes, 0, destination.offset, count)
+                } else MemorySegment.copy(source, offset, MemorySegment.ofArray(destination.mutableBytes!!), destination.offset, count)
+            }
+            destination.native != null -> destination.native.access { target ->
+                val bytes = if (sourceOwner != null) sourceOwner.copyBytesOut(offset, count)
+                    else literalBytes ?: mutableBytes ?: fault("Null Addr# has no backing storage")
+                MemorySegment.copy(MemorySegment.ofArray(bytes), if (sourceOwner == null) offset else 0, target, destination.offset, count)
+            }
             sourceOwner != null && destinationOwner != null ->
                 destinationOwner.copyFrom(sourceOwner, offset, destination.offset, count)
             sourceOwner != null -> {
@@ -314,8 +376,11 @@ internal class ManagedAddress private constructor(
     }
 
     companion object {
+        private val NATIVE_BORROW_TIE = Any()
         private val NULL = ManagedAddress(null, null, 0L)
         fun nullAddress(): ManagedAddress = NULL
+        internal fun fromNativeAllocation(owner: ManagedNativeAllocations.Owner): ManagedAddress =
+            ManagedAddress(null, null, 0L, native = owner)
         internal fun unownedNumeric(bits: Long): ManagedAddress = if (bits == 0L) NULL
             else ManagedAddress(null, null, 0L, numeric = bits)
         internal fun fromNativeImageSource(source: Any, offset: Long): ManagedAddress = when (source) {

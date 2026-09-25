@@ -61,6 +61,8 @@ STACK_INFO = frozenset(('getStackInfoTableAddrzh', 'getInfoTableAddrszh', 'looku
     'getStackFieldszh', 'advanceStackFrameLocationzh'))
 
 OPERATIONS = {
+    'malloc': ('ccall', 'unsafe', ('Word64Rep', None), (None, 'AddrRep')),
+    'free': ('ccall', 'unsafe', ('AddrRep', None), (None,)),
     **{symbol: ('capi', 'unsafe', arguments, output)
        for symbol, (arguments, output) in SIGSET_OPERATIONS.items()},
     'rtsSupportsBoundThreads': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
