@@ -152,7 +152,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
                 val offset = address.cbitsOffset().toInt()
                 val n = entry.input?.read(bytes, offset, count.toInt())
                     ?: entry.channel!!.read(ByteBuffer.wrap(bytes, offset, count.toInt()))
-                if (n < 0) 0L else n.toLong()
+                if (n < 0) 0L else if (n == 0) fail(6, "THC input made no progress") else n.toLong()
             }
         }
     }

@@ -1365,9 +1365,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     val b = e.builder
                     val result = destination.single()
                     if (originalStdio == OriginalStdioOp.ERRNO) b.beginOriginalStdioErrno(result)
+                    else if (originalStdio == OriginalStdioOp.READ_SAFE || originalStdio == OriginalStdioOp.READ_UNSAFE)
+                        b.beginOriginalStdioRead(result)
                     else b.beginOriginalStdioWrite(result)
                     operands.forEach { it.emit(e) }
                     if (originalStdio == OriginalStdioOp.ERRNO) b.endOriginalStdioErrno()
+                    else if (originalStdio == OriginalStdioOp.READ_SAFE || originalStdio == OriginalStdioOp.READ_UNSAFE)
+                        b.endOriginalStdioRead()
                     else b.endOriginalStdioWrite()
                 }
             } else if (managedFile != null) {
