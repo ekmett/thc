@@ -3,6 +3,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.TruffleSafepoint
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.nodes.RootNode
@@ -51,10 +52,12 @@ internal class ManagedSignals(private val owner: Language.State, private val lan
         if (Language.currentState() !== owner) fault("Process signals belong to another context")
     }
 
-    @Synchronized fun install(signal: Long, action: Long, mask: ManagedAddress): Long {
+    @Synchronized @TruffleBoundary(transferToInterpreterOnException = false)
+    fun install(signal: Long, action: Long, mask: ManagedAddress): Long {
         current()
         if (!authorized) fault("Process signals require explicit NativeIO launcher authority")
-        if (signal != 2L || action !in setOf(-1L, -2L, -4L, -5L) || mask !== ManagedAddress.nullAddress())
+        if (signal != 2L || (action != -1L && action != -2L && action != -4L && action != -5L) ||
+            mask !== ManagedAddress.nullAddress())
             fault("stg_sig_install supports only SIGINT, DFL/IGN/HAN/RST and a null mask")
         if (closed || stopping) fault("Process signal service is closed")
         val root = binding ?: fault("Missing original bytecode signal dispatcher")
