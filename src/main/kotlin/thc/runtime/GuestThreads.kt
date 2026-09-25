@@ -163,6 +163,7 @@ internal class GuestThreads internal constructor(
         ?: fault("Current Java thread has not entered this guest context")
 
     @TruffleBoundary @Synchronized fun status(identity: GuestThreadId): GuestThreadStatus {
+        if (closed) fault("Guest context has closed")
         if (identity.owner !== this) fault("ThreadId# belongs to another guest context")
         if (!identity.status.terminal && identity.carrier.get()?.isAlive != true)
             identity.status = identity.lastOutcome

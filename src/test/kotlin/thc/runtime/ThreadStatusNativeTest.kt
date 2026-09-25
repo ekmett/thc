@@ -68,7 +68,7 @@ class ThreadStatusNativeTest {
                         val module = Json.parse(File(directory, "$stage/core/ThreadStatusAudit.json").readText()) as Map<String, Any?>
                         val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                         val linked = CoreModules.reachable(module, entry) + ("instrument" to true)
-                        val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
+                        val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked, true)
                         val function = context.asValue(EntryValue(program, entry, if (reader == null) 1 else 2))
                         fun execute(token: Long) = if (reader == null) function.execute(token).asLong()
                             else function.execute(reader, token).asLong()
