@@ -80,6 +80,15 @@ class PrimopChecklistTest(unittest.TestCase):
         self.assertEqual('partial', row['status'])
         self.assertEqual('Managed blocking cells; no guest scheduler or async exceptions', row['scope'])
 
+    def test_explicit_weaks_do_not_claim_automatic_gc_or_ephemerons(self):
+        cap = dict(primitives={'mkWeak#': 4}, managedWeakPrimitives={
+            'mkWeak#': dict(arguments=['boxed', 'boxed', 'action', 'state'], result=['state', 'weak'])})
+        data = coverage.report([('mkWeak#', '4', 'a -> b -> IO c -> State# RealWorld -> (# State#, Weak# b #)')], cap['primitives'])
+        scalars = dict(schema=1, ghc='9.14.1', targetWordSize=64, primitives={})
+        row = coverage.classify(data, cap, scalars)['primitives'][0]
+        self.assertEqual('partial', row['status'])
+        self.assertIn('no GC, ephemerons or C finalizers', row['scope'])
+
     def test_unadvertised_is_missing_and_new_advertisements_default_to_partial(self):
         cap = copy.deepcopy(self.capability)
         del cap['tagToEnum']

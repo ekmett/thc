@@ -82,6 +82,18 @@ target and its active host-linked split/worker targets (including BytecodeDSL's
 cached calls), and explicitly installs each. It checks target identity and
 last-tier validity immediately after the first installed call, with no settling
 calls. Per-call guest-entry deltas and target names are retained in test output;
-the host wrapper itself does not increment the guest-entry counter. Every
+the host wrapper itself does not increment the guest-entry counter. Each native
+row requires exactly three compiled guest entries: the input lambda, runRW State
+lambda, and returned Haskell action. The already-forced initial-value CAF remains
+an installed target but does not execute again. Every
 compiled row also requires zero unsupported traps and released argument/result
 handoff references and depths, in both default and dense-slab runs.
+
+AST lowering uses exact Object writes for the boxed weak/payload results and
+direct enum identity predicates for operation selection. The initial enum `when`
+retained Kotlin's mutable switch-mapping array in actual Graal graphs. The first
+installed state-lambda call deoptimized under `IntrinsifyFrameAccessor` after
+frame-array materialization; typed writes alone did not fix it. Direct identity
+dispatch together with those typed writes passes the unchanged immediate
+retention checks. The registry and shared frame implementation were not changed,
+and no settling calls or disabled compiler speculation are part of this proof.

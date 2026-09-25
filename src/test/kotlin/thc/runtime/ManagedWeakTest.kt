@@ -29,6 +29,9 @@ class ManagedWeakTest {
     private fun context() = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
         .option("compiler.Inlining", "false")
+        .option("engine.TraceCompilation", System.getProperty("thc.weakTrace", "false"))
+        .option("engine.TraceTransferToInterpreter", System.getProperty("thc.weakTrace", "false"))
+        .option("engine.TraceAssumptions", System.getProperty("thc.weakTrace", "false"))
         .option("engine.SingleTierCompilationThreshold", "10000")
         .option("engine.CompilationFailureAction", "Throw").option("compiler.CompilationTimeout", "30").build()
 
@@ -369,13 +372,14 @@ class ManagedWeakTest {
                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                         assertEquals(expected, function.execute(input).asLong(), "$stage/$backend first installed $input")
                         val delta = (program.diagnostics().getValue("compiledEntries") as Number).toLong() - before
+                        println("weak-explicit $stage/$backend input=$input compiledGuestEntries=$delta targets=" +
+                            (active + original).distinct().map { target -> target.rootNode.name + ":valid=" +
+                                target.javaClass.getMethod("isValidLastTier").invoke(target) })
                         // EntryRoot does not increment compiledEntries; this is guest entry evidence.
-                        assertTrue(delta > 0, "$stage/$backend compiled guest entries")
+                        assertEquals(3L, delta, "$stage/$backend compiled input/runRW/returned-action guest entries")
                         assertSame(original, program.entryTarget("weakComposite"))
                         assertEquals(active, activeTargets(host), "$stage/$backend target graph changed")
                         (active + original).distinct().forEach(::valid)
-                        println("weak-explicit $stage/$backend input=$input compiledGuestEntries=$delta targets=" +
-                            active.filter { it.rootNode is GuestRoot }.map { it.rootNode.name })
                         assertEquals(0, Language.currentState().weaks.retainedCount())
                         assertEquals(0, language.handoffState.get().arguments.depth)
                         assertEquals(0, language.handoffState.get().arguments.retainedReferences())

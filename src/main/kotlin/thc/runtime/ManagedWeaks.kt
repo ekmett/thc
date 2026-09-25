@@ -146,20 +146,17 @@ internal class WeakExpression(private val operation: WeakOp, @field:Children pri
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val first = operands[0].execute(frame)
         val registry = ManagedWeaks.current(this)
-        when (operation) {
-            WeakOp.MAKE, WeakOp.MAKE_PLAIN -> {
-                val value = operands[1].execute(frame)
-                val action = if (operation == WeakOp.MAKE) operands[2].execute(frame)
-                    ?: fault("mkWeak# requires a finalizer carrier") else null
-                requireVoidCarrier(operands.last().execute(frame))
-                FrameAccess.write(frame, slots[offset], registry.make(first, value, action))
-            }
-            else -> {
-                requireVoidCarrier(operands[1].execute(frame))
-                val result = if (operation == WeakOp.FINALIZE) registry.finalize(first) else registry.dereference(first)
-                FrameAccess.writeLong(frame, slots[offset], result.flag)
-                FrameAccess.write(frame, slots[offset + 1], result.value)
-            }
+        if (operation == WeakOp.MAKE || operation == WeakOp.MAKE_PLAIN) {
+            val value = operands[1].execute(frame)
+            val action = if (operation == WeakOp.MAKE) operands[2].execute(frame)
+                ?: fault("mkWeak# requires a finalizer carrier") else null
+            requireVoidCarrier(operands.last().execute(frame))
+            FrameAccess.writeObject(frame, slots[offset], registry.make(first, value, action))
+        } else {
+            requireVoidCarrier(operands[1].execute(frame))
+            val result = if (operation == WeakOp.FINALIZE) registry.finalize(first) else registry.dereference(first)
+            FrameAccess.writeLong(frame, slots[offset], result.flag)
+            FrameAccess.writeObject(frame, slots[offset + 1], result.value)
         }
         return null
     }
