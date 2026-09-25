@@ -1,8 +1,10 @@
 # Checked native GMP limb provider
 
-This is a runtime foundation, **not original GHC foreign-call admission**.
-The Core validator, auditor and capability tables remain unchanged. No hello
-or lens load is established by these tests.
+This implements eleven exact original GHC foreign calls through a checked
+native provider on Linux x86_64. Genuine pre/post Core calls match a native GHC
+oracle in interpreted and first-installed compiled AST/bytecode execution,
+with inlining both enabled and disabled. No whole hello or lens load is
+established by these bounded tests.
 
 `LimbRegion` describes the original guest allocation, limb count and writable
 status. Limbs are least-significant first, eight bytes each in native byte
@@ -26,7 +28,7 @@ are checked per operation, not with one generic length/overlap rule:
 |---|---|
 | add/subtract | Positive inputs, left count >= right count; output left count; only exact-start output/input aliasing |
 | add-word | Positive input; equally sized output; exact-start aliasing |
-| compare | Equal, positive counts; signed native C-int result widened to machine Int |
+| compare | Equal, positive counts; provider returns the signed native C-int comparison |
 | multiply | Positive inputs, left >= right; output left + right; no output/input overlap |
 | multiply-word | Positive input; equally sized output; overlapping destination may start at or below input |
 | divide-word | Nonzero divisor; nonnegative input/fraction counts, including zero; output their sum; exact-start aliasing |
@@ -39,6 +41,14 @@ remainder-only adapters allocate the correctly sized discarded output in the
 same host arena; they are not ABI aliases for `mpn_tdiv_qr`. These preserve
 the behavior of GHC 9.14.1's separate `integer_gmp_mpn_tdiv_q/r` wrappers while
 replacing their stack/malloc scratch policy with host-owned lifetime.
+
+The original `c_mpn_cmp` import declares an `Int#` result for GMP's C `int`.
+The native oracle on the verified x86_64 target observes `4294967295` for a
+negative comparison, not `-1`; GHC's original `bignat_compare` applies
+`narrowCInt#` afterwards. `ManagedGmp` therefore zero-extends the provider's
+low 32 bits only at this original FCall boundary. The provider contract stays
+signed. This is a bounded native-observed ABI detail, not a claim about upper
+return-register bits on other targets.
 
 Every region, output capacity, mutability and alias contract is checked before
 the native call. Pointer-bearing managed storage is rejected. Inputs are copied
@@ -63,7 +73,7 @@ Host try/finally closes all native memory even when LLVM calls/conversion fail
 or the LLVM context is cancelled. This does not promise interruption of an
 arbitrary in-flight native GMP call.
 
-## Evidence and remaining work
+## Evidence and boundaries
 
 Six `SulongLimbProviderTest` tests exercise all eleven adapter entries using
 fixed arithmetic controls, unsigned carry/borrow, aliases, canaries, empty
@@ -78,8 +88,36 @@ An initial test had an incorrect expected multi-limb division result:
 quotient 2/remainder 1. The retained failure was fixed only in test constants,
 and a native GHC arithmetic control independently confirmed `(2,1)`.
 
-These are provider controls, not a native Haskell original-declaration oracle
-or first-installed compiled Core evidence. Remaining gates before admission:
-exact original FCallId/ABI/representation/State validation, genuine Haskell
-pre/post fixtures, typed AST/bytecode lowering and compiled-entry tests, then
-fresh strict whole-program audits. No support table is advanced by this slice.
+`OriginalGmpAudit.hs` imports the actual hidden installed GMP module through a
+fixture-local registration that exposes only that module; unit identity,
+dependencies and installed interface/library paths remain unchanged. No new
+FFI declarations, aliases, copied bodies or installed database mutations are
+used. Both stock and full-Core GHC 9.14.1 produced the same 92 native rows and
+all eleven genuine pre/post FCallIds. The native driver sequences original IO
+actions and records every buffer before and after each operation. Pure cmp/mod
+imports retain their genuine definitions in the interface closure.
+
+`OriginalGmpTest` compares every native result, input/output byte, permitted
+alias and canary across both Core stages, both backends and both inlining
+settings. It explicitly compiles each observed target once, then checks the
+first compiled entry count and retained target on every subsequent call.
+There is no compiled settling/retry or diagnostic-mode admission. Both modes
+also exercise malformed genuine metadata through both loaders, native-access
+denial and invalid counts without guest stores. `CoreGmpForeignTest` covers
+all exact descriptors, stored operand kinds and the load-time null-sentinel
+predicate; the auditor independently enforces those shapes before admission.
+
+The native fixture producer's `--require-supported` mode requires all 22
+strict entry audits to accept. Its `runtimeVerified:false` field correctly
+describes a producer that does not run JVM tests; those results are separate.
+CI includes the stock-compatible Linux fixture and a closed receipt allowlist,
+never a package DB or arbitrary native intermediates.
+
+Initial compiled tests exposed two partial-evaluation issues: a representation
+list comparison inside `LocalRead`, and Kotlin's synthetic enum-switch table
+inside the new AST node. The exact predicate is now computed at load time,
+and direct enum comparisons preserve constant operand selection. Failures and
+Graal diagnostics were retained. A harness-only correction invokes genuine
+pure aliases through the normal host dispatcher; original Core is unchanged.
+The raw cmp discrepancy above was corrected at the runtime boundary, not by
+altering native expectations. Fresh whole-program integration remains separate.

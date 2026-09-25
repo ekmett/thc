@@ -8,6 +8,15 @@ import org.junit.jupiter.api.Test
 
 /** Descriptor controls only; genuine imported declarations have a separate oracle. */
 class CoreGmpForeignTest {
+    @Test fun loadTimeUnliftedObjectPredicateRetainsExactNullSentinelRule() {
+        for (kind in CoreKind.entries) for (evaluated in listOf(false, true))
+            for (primitive in listOf(null, "BoxedRep (Just Lifted)", GMP_ARRAY_REP, "IntRep")) {
+                val proof = CoreRepresentation(kind, evaluated, true, listOfNotNull(primitive))
+                assertEquals(kind == CoreKind.OBJECT && evaluated && primitive == GMP_ARRAY_REP,
+                    proof.isEvaluatedUnliftedObject)
+                assertFalse(proof.copy(evaluated = false).isEvaluatedUnliftedObject)
+            }
+    }
     private fun scalar(primitive: String?, evaluated: Boolean) = mapOf("kind" to when (primitive) {
         null -> "void"; GMP_ARRAY_REP -> "object"; else -> "long"
     }, "primReps" to listOfNotNull(primitive), "evaluated" to evaluated)

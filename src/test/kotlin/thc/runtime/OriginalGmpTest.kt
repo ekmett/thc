@@ -35,6 +35,7 @@ class OriginalGmpTest {
         .map { json("$prefix/$stage/core/$it.json") as Map<String, Any?> })
     private fun rows(): List<Map<String, Any?>> {
         val manifest = json("$prefix/manifest.json") as Map<String, Any?>
+        assertEquals(true, manifest["strictAccepted"])
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf(
             "compiler/test-fixtures/OriginalGmpAudit.hs", "compiler/test-fixtures/OriginalGmpNative.hs",
             "test/haskell-fixtures/OriginalGmpFixtures.hs", "scripts/core_original_foreign.py"))
@@ -48,6 +49,12 @@ class OriginalGmpTest {
             "originalMulWord" to 8, "originalCmp" to 5, "originalMul" to 4, "originalDivWord" to 12,
             "originalModWord" to 5, "originalQuotRem" to 8, "originalQuot" to 4, "originalRem" to 8),
             rows.groupingBy { it["entry"] as String }.eachCount())
+        for (stage in listOf("pre", "post")) for (entry in rows.map { it["entry"] as String }.toSet()) {
+            val audit = json("$prefix/$stage/$entry.audit.json") as Map<String, Any?>
+            assertEquals(true, audit["accepted"])
+            assertEquals(emptyList<Any?>(), audit["issues"])
+            assertEquals(emptyList<Any?>(), audit["missingGlobals"])
+        }
         return rows
     }
     private fun bytes(value: Any?): ByteArray {
