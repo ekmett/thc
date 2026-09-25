@@ -5,6 +5,7 @@ package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.bytecode.BytecodeTier
 import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.NodeUtil
 import org.junit.jupiter.api.Assertions.*
@@ -37,6 +38,9 @@ class HostEntryCompilationTest {
                 else -> error("Unexpected backend: $backend")
             }
             val original = program.entryTarget("entry")
+            if (backend == "bytecode") assertEquals(BytecodeTier.CACHED,
+                (original.rootNode as BytecodeRoot).bytecodeNode.tier,
+                "The first guest instruction must start in the cached interpreter")
             val host = program.hostEntryTarget(1)
             assertFalse(host.rootNode.isCloningAllowed, "The host dispatch tree must remain stable")
             val function = context.asValue(EntryValue(program, "entry", 1))
