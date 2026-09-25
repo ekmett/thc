@@ -20,8 +20,17 @@ internal class ManagedExportScalar private constructor(
 ) {
     internal enum class Role { ARGUMENT, RESULT }
     private enum class Kind { SIGNED, UNSIGNED, FLOAT, DOUBLE, CHAR, BOOL, UNIT }
+    private val minimum = if (kind == Kind.SIGNED && bits < 64) -(1L shl (bits - 1)) else
+        if (kind == Kind.SIGNED) Long.MIN_VALUE else 0L
+    private val maximum = when {
+        kind == Kind.SIGNED && bits < 64 -> (1L shl (bits - 1)) - 1
+        kind == Kind.UNSIGNED && bits < 64 -> (1L shl bits) - 1
+        kind == Kind.CHAR -> 0x10ffffL
+        else -> Long.MAX_VALUE
+    }
 
     companion object {
+        private val MAX_WORD64 = BigInteger.ONE.shiftLeft(64).subtract(BigInteger.ONE)
         private data class Specification(val owner: String, val constructor: String, val rep: String,
                                          val kind: Kind, val bits: Int = 0)
         private val specifications = mapOf(
@@ -70,21 +79,31 @@ internal class ManagedExportScalar private constructor(
         }
     }
 
-    private fun integer(value: Any?, interop: InteropLibrary): BigInteger {
-        if (value is BigInteger) return value // Java host values are not Truffle numeric values.
-        if (value == null || !interop.isNumber(value) || !interop.fitsInBigInteger(value))
-            fault("Expected an exact integral foreign-export argument")
-        return try { interop.asBigInteger(value) }
-        catch (_: UnsupportedMessageException) { fault("Expected an exact integral foreign-export argument") }
+    private fun checkedLong(number: Long): Long {
+        if (number !in minimum..maximum) fault("Foreign-export integral argument is out of range")
+        return number
+    }
+
+    private fun checkedBigInteger(number: BigInteger): Long {
+        if (kind == Kind.UNSIGNED && bits == 64) {
+            if (number.signum() < 0 || number > MAX_WORD64)
+                fault("Foreign-export integral argument is out of range")
+            return number.toLong() // Preserve the unsigned high bit in the primitive field.
+        }
+        val narrow = try { number.longValueExact() }
+                     catch (_: ArithmeticException) { fault("Foreign-export integral argument is out of range") }
+        return checkedLong(narrow)
     }
 
     private fun checkedInteger(value: Any?, interop: InteropLibrary): Long {
-        val number = integer(value, interop)
-        val minimum = if (kind == Kind.SIGNED) BigInteger.ONE.shiftLeft(bits - 1).negate() else BigInteger.ZERO
-        val maximum = if (kind == Kind.SIGNED) BigInteger.ONE.shiftLeft(bits - 1).subtract(BigInteger.ONE)
-                      else BigInteger.ONE.shiftLeft(bits).subtract(BigInteger.ONE)
-        if (number < minimum || number > maximum) fault("Foreign-export integral argument is out of range")
-        return number.toLong() // Word64 preserves its unsigned bits in the primitive field.
+        if (value is BigInteger) return checkedBigInteger(value) // Raw Java BigInteger is not Truffle numeric.
+        if (value == null || !interop.isNumber(value)) fault("Expected an exact integral foreign-export argument")
+        try {
+            if (interop.fitsInLong(value)) return checkedLong(interop.asLong(value))
+            if (kind == Kind.UNSIGNED && bits == 64 && interop.fitsInBigInteger(value))
+                return checkedBigInteger(interop.asBigInteger(value))
+        } catch (_: UnsupportedMessageException) { /* The advertised conversion was withdrawn. */ }
+        fault("Expected an exact integral foreign-export argument")
     }
 
     private fun codePoint(value: Any?, interop: InteropLibrary): Long {
@@ -94,8 +113,7 @@ internal class ManagedExportScalar private constructor(
             if (string.codePointCount(0, string.length) != 1) fault("Expected one foreign-export character")
             string.codePointAt(0).toLong()
         } else checkedInteger(value, interop)
-        if (point > 0x10ffff || point in 0xd800L..0xdfffL)
-            fault("Foreign-export character is not a Unicode scalar")
+        if (point > 0x10ffff) fault("Foreign-export character is out of range")
         return point
     }
 
@@ -139,26 +157,23 @@ internal class ManagedExportScalar private constructor(
             Kind.UNSIGNED -> checkedGuestUnsigned(layout.readLong(value, 0))
             Kind.CHAR -> {
                 val point = layout.readLong(value, 0)
-                if (point !in 0L..0x10ffffL || point in 0xd800L..0xdfffL)
-                    fault("Foreign-export result character is not a Unicode scalar")
+                if (point !in 0L..0x10ffffL) fault("Foreign-export result character is out of range")
                 String(Character.toChars(point.toInt()))
             }
             Kind.FLOAT -> layout.readFloat(value, 0)
             Kind.DOUBLE -> layout.readDouble(value, 0)
-            Kind.UNIT -> null
+            Kind.UNIT -> ForeignExportUnit
             Kind.BOOL -> error("handled above")
         }
     }
 
     private fun checkedGuestSigned(value: Long): Any {
-        val minimum = if (bits == 64) Long.MIN_VALUE else -(1L shl (bits - 1))
-        val maximum = if (bits == 64) Long.MAX_VALUE else (1L shl (bits - 1)) - 1
         if (value !in minimum..maximum) fault("Foreign-export signed result is out of range")
         return when (bits) { 8 -> value.toByte(); 16 -> value.toShort(); 32 -> value.toInt(); else -> value }
     }
 
     private fun checkedGuestUnsigned(value: Long): Any {
-        if (bits < 64 && (value < 0 || value >= (1L shl bits)))
+        if (bits < 64 && value !in minimum..maximum)
             fault("Foreign-export unsigned result is out of range")
         return when (bits) {
             8, 16 -> value.toInt()
@@ -166,6 +181,12 @@ internal class ManagedExportScalar private constructor(
             else -> if (value >= 0) value else UnsignedWord64(value)
         }
     }
+}
+
+/** Java null is not a valid receiver for Truffle interop libraries. */
+@ExportLibrary(InteropLibrary::class)
+internal object ForeignExportUnit : TruffleObject {
+    @ExportMessage fun isNull() = true
 }
 
 /** A Word64 result remains a Truffle number throughout the public interop boundary. */

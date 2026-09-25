@@ -131,10 +131,14 @@ class ManagedExportScalarsTest {
         val character = codec(layouts, "GHC.Internal.Types", "Char")
         assertEquals("😀", character.toHost(character.fromHost("😀")))
         assertEquals("A", character.toHost(character.fromHost(65)))
-        for (invalid in listOf("", "AB", "\ud800", 0x110000, 0xdfff))
+        assertEquals("\ud800", character.toHost(character.fromHost("\ud800")))
+        assertEquals("\udfff", character.toHost(character.fromHost(0xdfff)))
+        for (invalid in listOf("", "AB", 0x110000, -1))
             assertThrows(RuntimeFault::class.java) { character.fromHost(invalid) }
         val unit = codec(layouts, "GHC.Internal.Tuple", "Unit", ManagedExportScalar.Role.RESULT)
-        assertNull(unit.toHost(layouts.getValue("ghc-internal:GHC.Internal.Tuple.()").allocate()))
+        val result = unit.toHost(layouts.getValue("ghc-internal:GHC.Internal.Tuple.()").allocate())
+        assertTrue(InteropLibrary.getUncached().isNull(result))
+        assertTrue(Context.getCurrent().asValue(result).isNull)
         assertThrows(RuntimeFault::class.java) {
             codec(layouts, "GHC.Internal.Tuple", "Unit", ManagedExportScalar.Role.ARGUMENT)
         }
