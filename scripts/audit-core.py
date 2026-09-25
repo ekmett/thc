@@ -57,8 +57,9 @@ class Audit:
             archive = core_package_manifest.foreign_execution_issue(module) if not linked else None
             foreign = module.get('foreign')
             stubs = foreign.get('stubs') if isinstance(foreign, dict) else None
-            registration = (isinstance(stubs, dict) and
-                            bool(stubs.get('initializers') or stubs.get('finalizers')))
+            registration = ((isinstance(foreign, dict) and bool(foreign.get('files'))) or
+                            (isinstance(stubs, dict) and
+                             bool(stubs.get('initializers') or stubs.get('finalizers'))))
             if archive:
                 try:
                     core_package_manifest.validate_archive_only_foreign(module)

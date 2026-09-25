@@ -172,9 +172,13 @@ internal object CoreForeignArtifacts {
         if (module.containsKey("foreignLink")) linked(module)
     }
 
-    /** GHC registers these at startup, even when no Core binding refers to the module. */
+    /** Registrations and opaque foreign files can run independently of Core reachability. */
     fun hasRegistrationObligations(module: Map<*, *>): Boolean {
-        val stubs = (module["foreign"] as? Map<*, *>)?.get("stubs") as? Map<*, *> ?: return false
+        val foreign = module["foreign"] as? Map<*, *> ?: return false
+        // Extra C/object files may contain native constructors absent from the
+        // GHC stub-label lists. Their startup behavior needs a native link proof.
+        if ((foreign["files"] as? List<*>)?.isNotEmpty() == true) return true
+        val stubs = foreign["stubs"] as? Map<*, *> ?: return false
         return (stubs["initializers"] as? List<*>)?.isNotEmpty() == true ||
             (stubs["finalizers"] as? List<*>)?.isNotEmpty() == true
     }
