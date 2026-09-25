@@ -32,7 +32,7 @@ prepareOriginalHandleReadiness root = do
     _ -> die "Original Handle readiness requires a native 64-bit GHC"
   let binary = directory </> "native" </> "oracle"
   compiled <- execute "native-build" [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint",
-    "-package", "ghc-internal", "-odir", root </> directory </> "native",
+    "-package", "ghc-internal", "-package", "unix", "-odir", root </> directory </> "native",
     "-hidir", root </> directory </> "native", driver, "-o", root </> binary]
   rows <- forM [-1,1,2 :: Int] $ \fd -> do
     command <- execute ("native-" ++ show fd) [] (root </> binary) [show fd]

@@ -256,6 +256,12 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
                 ByteArray(statSize).also { image.copyTo(it, 0, it.size) }
             }
         }
+        override fun terminalStatus(): Long = live {
+            try { result("isatty", lease) }
+            catch (error: NativeFileException) {
+                if (error.errno == StdioHostAbi.load().notTerminal().toInt()) 0L else throw error
+            }
+        }
         override fun read(destination: ByteBuffer): Int = live {
             if (!readable) throw NonReadableChannelException()
             if (destination.isReadOnly) throw ReadOnlyBufferException()

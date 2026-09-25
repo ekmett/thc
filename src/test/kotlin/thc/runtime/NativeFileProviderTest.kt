@@ -387,7 +387,9 @@ class NativeFileProviderTest {
                     assertTrue(stdio.ready(1, writing, 0, 0) in 0L..1L)
                     assertEquals(error, stdio.errno())
                 }
-                assertEquals(0L, stdio.isTerminal(1)); assertEquals(StdioHostAbi.load().error(7), stdio.errno())
+                val terminal = provider().standard(StandardEndpoint.OUTPUT).use { it.terminalStatus() }
+                assertEquals(terminal, stdio.isTerminal(1), "The granted endpoint and its duplicate use isatty")
+                assertEquals(if (terminal == 0L) StdioHostAbi.load().notTerminal() else error, stdio.errno())
                 assertEquals(-1L, files.size(1)); assertEquals(7L, files.errorKind())
                 assertEquals(-1L, files.setSize(1, 0)); assertEquals(7L, files.errorKind())
                 assertEquals(-1L, stdio.truncate(1, 0)); assertEquals(StdioHostAbi.load().error(5), stdio.errno())

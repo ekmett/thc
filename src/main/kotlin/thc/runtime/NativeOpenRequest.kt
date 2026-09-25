@@ -48,6 +48,7 @@ internal class NativeOpenRequest(val endpoint: StandardEndpoint?,
 
 internal interface NativeFileResource : SeekableByteChannel {
     fun statImage(): ByteArray
+    fun terminalStatus(): Long
     fun requireLive()
     fun readinessWait(): NativeFdWait
 }
@@ -57,6 +58,7 @@ internal interface NativeFileResource : SeekableByteChannel {
 internal class OpenedNativeFile(private val channel: SeekableByteChannel,
     private val metadata: NativeFileResource) : NativeFileResource, SeekableByteChannel by channel {
     override fun statImage(): ByteArray = metadata.statImage()
+    override fun terminalStatus(): Long = metadata.terminalStatus()
     override fun requireLive() = metadata.requireLive()
     override fun readinessWait(): NativeFdWait = metadata.readinessWait()
     override fun close() {

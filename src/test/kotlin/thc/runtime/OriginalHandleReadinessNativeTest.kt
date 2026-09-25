@@ -12,13 +12,19 @@ import org.graalvm.polyglot.Context
 import org.graalvm.polyglot.io.IOAccess
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty
+import org.junit.jupiter.api.condition.EnabledOnOs
+import org.junit.jupiter.api.condition.OS
 import thc.CoreModules
 import thc.Json
 import thc.Language
+import thc.NativeIO
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.Collections
 import java.util.IdentityHashMap
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 
 /** The FCall is GHC's installed c_isatty declaration, not a synthetic alias. */
 class OriginalHandleReadinessNativeTest {
@@ -45,6 +51,69 @@ class OriginalHandleReadinessNativeTest {
         }
         visit(entry)
         return result
+    }
+
+    @Test @EnabledOnOs(OS.LINUX)
+    @EnabledIfSystemProperty(named = "os.arch", matches = "amd64|x86_64")
+    fun privatePtyUsesOriginalIsattyOnItsOwnedNativeDescriptorAfterCompilation() {
+        val oracle = ProcessBuilder(File(directory, "native/oracle").absolutePath, "--hold-pty").start()
+        try {
+            val announced = CompletableFuture.supplyAsync { oracle.inputStream.bufferedReader().readLine() }
+                .get(15, TimeUnit.SECONDS)?.split('\t') ?: fail("PTY oracle ended before announcing its path")
+            assertEquals(2, announced.size)
+            assertTrue(announced[0].startsWith("/dev/pts/"), "Expected a private Linux PTY")
+            assertEquals("1", announced[1], "Original GHC c_isatty must see the live slave")
+            val path = ManagedAddress.fromByteArray(announced[0].toByteArray() + byteArrayOf(0))
+            for (stage in listOf("pre", "post")) {
+                val prefix = "build/original-handle-readiness/$stage"
+                val module = CoreModules.merge(listOf("OriginalHandleReadinessAudit", "THC.InterfaceClosure")
+                    .map { json("$prefix/core/$it.json") })
+                for (backend in listOf("ast", "bytecode")) {
+                    NativeIO.createContext(emptySet()).use { context ->
+                        context.enter()
+                        try {
+                            val state = Language.currentState()
+                            val fd = state.files.openOriginal(path, 0x100, 0) // Linux O_NOCTTY | O_RDONLY.
+                            assertTrue(fd >= 3, "$stage/$backend: open the private PTY")
+                            try {
+                                val linked = CoreModules.reachable(module, "originalIsTerminal") + ("instrument" to true)
+                                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                                val program = if (backend == "ast") Program(language, linked)
+                                    else BytecodeProgram(language, linked)
+                                val target = program.entryTarget("originalIsTerminal")
+                                repeat(3) { assertEquals(1L, Calls.target(target, arrayOf(0L, fd))) }
+                                val active = targets(target)
+                                assertEquals(2, active.size, "Entry and original runRW local lambda")
+                                active.forEach {
+                                    it.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(it, true)
+                                    valid(it)
+                                }
+                                val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                                assertEquals(1L, Calls.target(target, arrayOf(0L, fd)))
+                                assertEquals(before + 2, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                                assertEquals(active, targets(target))
+                                active.forEach(::valid)
+                                val alias = state.files.duplicate(fd)
+                                assertTrue(alias >= 3)
+                                assertEquals(0L, state.files.close(fd))
+                                assertEquals(1L, state.stdio.isTerminal(alias), "The last owned alias retains the PTY")
+                                assertEquals(0L, state.files.close(alias))
+                                assertEquals(0L, state.stdio.isTerminal(alias))
+                                assertEquals(StdioHostAbi.load().error(4), state.stdio.errno())
+                            } finally { state.files.close(fd) }
+                        } finally { context.leave() }
+                    }
+                }
+            }
+        } finally {
+            oracle.outputStream.write('\n'.code)
+            oracle.outputStream.flush()
+            if (!oracle.waitFor(5, TimeUnit.SECONDS)) {
+                oracle.destroyForcibly()
+                assertTrue(oracle.waitFor(5, TimeUnit.SECONDS), "PTY oracle did not terminate")
+            }
+            assertEquals(0, oracle.exitValue(), oracle.errorStream.bufferedReader().readText())
+        }
     }
 
     @Test fun originalIsattyAndErrnoMatchNativeBeforeAndAfterExplicitCompilation() {

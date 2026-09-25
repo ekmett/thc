@@ -66,6 +66,13 @@ int64_t thc_file_stat(const int *lease, void *destination, int64_t *error) {
   return result;
 }
 
+int64_t thc_file_isatty(const int *lease, int64_t *error) {
+  errno = 0;
+  int terminal = isatty(*lease);
+  *error = terminal ? 0 : (errno ? errno : ENOTTY);
+  return terminal ? 1 : -1;
+}
+
 int64_t thc_file_read(const int *lease, void *bytes, int64_t count, int64_t *error) {
   if (count < 0) { *error = EINVAL; return -1; }
   ssize_t result = read(*lease, bytes, (size_t)count);
