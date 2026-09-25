@@ -12,8 +12,30 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
     override fun execute(frame: VirtualFrame): Nothing = fault("Original stdio call requires a State/result tuple destination")
 
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        if (operation == OriginalStdioOp.LOCALE) {
+            requireVoidCarrier(operands[0].execute(frame))
+            FrameAccess.write(frame, slots[offset], CoreOriginalStdio.iconv(this).localeEncoding())
+            return null
+        }
         // Direct enum comparison remains constant during partial evaluation.
-        val result = if (operation == OriginalStdioOp.ERRNO) {
+        val result = if (operation == OriginalStdioOp.ICONV_OPEN) {
+            val to = operands[0].executeRequiredAddress(frame)
+            val from = operands[1].executeRequiredAddress(frame)
+            requireVoidCarrier(operands[2].execute(frame))
+            CoreOriginalStdio.iconv(this).open(to, from)
+        } else if (operation == OriginalStdioOp.ICONV_CLOSE) {
+            val handle = operands[0].executeRequiredLong(frame)
+            requireVoidCarrier(operands[1].execute(frame))
+            CoreOriginalStdio.iconv(this).close(handle)
+        } else if (operation == OriginalStdioOp.ICONV) {
+            val handle = operands[0].executeRequiredLong(frame)
+            val input = operands[1].executeRequiredAddress(frame)
+            val inputCount = operands[2].executeRequiredAddress(frame)
+            val output = operands[3].executeRequiredAddress(frame)
+            val outputCount = operands[4].executeRequiredAddress(frame)
+            requireVoidCarrier(operands[5].execute(frame))
+            CoreOriginalStdio.iconv(this).convert(handle, input, inputCount, output, outputCount)
+        } else if (operation == OriginalStdioOp.ERRNO) {
             requireVoidCarrier(operands[0].execute(frame))
             CoreOriginalStdio.current(this).errno()
         } else if (operation.readiness) {

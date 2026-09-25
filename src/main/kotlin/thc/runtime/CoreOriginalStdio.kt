@@ -24,13 +24,19 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     TRUNCATE("__hscore_ftruncate", "ccall", "unsafe", listOf("Int32Rep", "Int64Rep", null), "Int32Rep"),
     ISATTY("isatty", "ccall", "unsafe", listOf("Int32Rep", null), "Int32Rep"),
     READY_SAFE("fdReady", "ccall", "safe", listOf("Int32Rep", "Word8Rep", "Int64Rep", "Word8Rep", null), "Int32Rep"),
-    READY_UNSAFE("fdReady", "ccall", "unsafe", listOf("Int32Rep", "Word8Rep", "Int64Rep", "Word8Rep", null), "Int32Rep");
+    READY_UNSAFE("fdReady", "ccall", "unsafe", listOf("Int32Rep", "Word8Rep", "Int64Rep", "Word8Rep", null), "Int32Rep"),
+    LOCALE("localeEncoding", "ccall", "unsafe", listOf(null), "AddrRep"),
+    ICONV_OPEN("hs_iconv_open", "ccall", "unsafe", listOf("AddrRep", "AddrRep", null), "Int64Rep"),
+    ICONV_CLOSE("hs_iconv_close", "ccall", "unsafe", listOf("Int64Rep", null), "Int32Rep"),
+    ICONV("hs_iconv", "ccall", "unsafe", listOf("Int64Rep", "AddrRep", "AddrRep", "AddrRep", "AddrRep", null), "Word64Rep");
 
     val readiness: Boolean get() = this == READY_SAFE || this == READY_UNSAFE
+    val iconv: Boolean get() = this == LOCALE || this == ICONV_OPEN || this == ICONV_CLOSE || this == ICONV
 }
 
 internal object CoreOriginalStdio {
     @JvmStatic fun current(node: Node): ManagedStdio = Language.currentState(node).stdio
+    @JvmStatic fun iconv(node: Node): ManagedIconv = Language.currentState(node).iconv
 
     private val scalarKeys = setOf("kind", "primReps", "evaluated")
     private val tupleKeys = scalarKeys + setOf("aggregate", "components")
@@ -45,9 +51,9 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored readiness operand. */
     fun validateReadyOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation.readiness, "readiness operand operation")
+        requireProof(operation.readiness || operation.iconv, "checked original operand operation")
         val primitive = operation.arguments[index]
-        val kind = if (primitive == null) CoreKind.VOID else CoreKind.LONG
+        val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }
         val reps = listOfNotNull(primitive)
         requireProof(lowered.present && !lowered.isAggregate && !lowered.isVector &&
             lowered.kind == kind && lowered.primReps == reps, "lowered readiness operand $index")

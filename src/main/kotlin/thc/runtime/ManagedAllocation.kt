@@ -121,6 +121,12 @@ internal class ManagedAllocation private constructor(
         cells()[start] = value
     }
 
+    @Synchronized internal fun requireByteRegion(offset: Long, count: Long, writable: Boolean) {
+        val start = range(offset, count)
+        if (writable) mutable()
+        if (intersectsPointer(start, count.toInt())) fault("Native byte transport overlaps a managed pointer cell")
+    }
+
     @Synchronized fun readAddressByteOffset(offset: Long): ManagedAddress {
         val start = range(offset, pointerBytes.toLong())
         return pointers?.get(start) ?: fault("No managed pointer cell at this address")

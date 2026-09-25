@@ -108,6 +108,11 @@ interpreters and compiled guest code. The [coverage guide](docs/README.md) links
 the individual contracts, native checks and remaining gaps; the generated
 [primop checklist](docs/primops.md) tracks what is implemented, partial or missing.
 
+An explicit [full-Core locale/iconv proof group](docs/original-iconv.md) exercises
+the four original imports through native glibc/Sulong, with context-owned handles
+and checked buffer copies. It requires full installed GHC library Core and is
+separate from stock-toolchain tests; it does not establish complete Handle/IO.
+
 This is still an experiment, not a replacement for GHC. General `Main`/IO, the
 complete boot-library closure, full FFI coverage, and stack-safe non-tail
 evaluation remain unfinished. The script-level scalar entry is integer-only;

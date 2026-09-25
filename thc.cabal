@@ -33,6 +33,8 @@ extra-source-files:
   compiler/test-fixtures/OriginalStackFormatterNative.hs
   compiler/test-fixtures/OriginalFdReadyAudit.hs
   compiler/test-fixtures/OriginalFdReadyAuditNative.hs
+  compiler/test-fixtures/OriginalIconvAudit.hs
+  compiler/test-fixtures/OriginalIconvAuditNative.hs
   README.md
   docs/driver.md
   docs/ghc-core.md
@@ -271,6 +273,7 @@ executable thc-fixtures
     OriginalStdioTruncateFixtures
     OriginalHandleReadinessFixtures
     OriginalFdReadyFixtures
+    OriginalIconvFixtures
     MutVarFixtures
     StablePointerFixtures
     ShrinkByteArrayFixtures

@@ -218,6 +218,7 @@ class Language : TruffleLanguage<Language.State>() {
         internal val threads = thc.runtime.GuestThreads(env, maskingState)
         internal val files = thc.runtime.ManagedFiles(env, threads)
         internal val stdio = thc.runtime.ManagedStdio(files)
+        internal val iconv = thc.runtime.ManagedIconv({ cbits() }, stdio, threads)
         internal val stackSnapshots = thc.runtime.ManagedStackRegistry()
         internal val capturedAsyncRequests = thc.runtime.CapturedAsyncRequests()
         internal val stablePointers = thc.runtime.StablePointers()
@@ -260,6 +261,7 @@ class Language : TruffleLanguage<Language.State>() {
     }
     override fun createContext(env: Env): State = State(env, this)
     override fun isThreadAccessAllowed(thread: Thread, singleThreaded: Boolean): Boolean = true
+    override fun finalizeContext(context: State) { context.iconv.dispose() }
     override fun disposeContext(context: State) {
         try {
             try { context.threads.close() } finally {

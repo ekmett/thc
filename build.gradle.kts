@@ -119,6 +119,8 @@ tasks.withType<Test>().configureEach {
             "original-stdio-truncate/native/**", "original-stdio-truncate/logs/*.stdout", "original-stdio-truncate/logs/*.stderr",
             "original-fd-ready/**/*.json", "original-fd-ready/native/oracle", "original-fd-ready/native/private-file",
             "original-fd-ready/logs/*.stdout", "original-fd-ready/logs/*.stderr",
+            "original-iconv/**/*.json", "original-iconv/native/oracle",
+            "original-iconv/logs/*.stdout", "original-iconv/logs/*.stderr",
             "managed-md5-native/**",
             "original-stack/manifest.json", "original-stack/run-*/**",
             "original-stack-formatter/manifest.json", "original-stack-formatter/run-*/logs/*",
@@ -226,6 +228,31 @@ tasks.withType<Test>().configureEach {
 tasks.test {
     useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment") }
 }
+// Actual private boot-library FCallId proofs require installed full Core. Keep
+// this named suite independent of stock/thin default fixture groups; selecting
+// it without preparing its real fixture is an error, never a skipped test.
+val fullCoreTests = sourceSets.create("fullCoreTest")
+configurations[fullCoreTests.implementationConfigurationName].extendsFrom(configurations.testImplementation.get())
+configurations[fullCoreTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
+fullCoreTests.compileClasspath += sourceSets.test.get().output
+fullCoreTests.runtimeClasspath += sourceSets.test.get().output
+kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("main"))
+kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("test"))
+tasks.register<Test>("originalIconvFullCoreTest") {
+    group = "verification"
+    description = "Tests original locale/iconv imports using the explicitly prepared full-Core GHC fixture."
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    useJUnitPlatform()
+    filter { includeTestsMatching("thc.runtime.OriginalIconvNativeTest") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Full-Core native/compiled evidence requires a fresh test process") { true }
+    doFirst {
+        check(file("build/original-iconv/manifest.json").isFile) {
+            "Missing original-iconv fixture: select a full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- original-iconv (docs/original-iconv.md)"
+        }
+    }
+}
 tasks.register<Test>("simdFamiliesExperimentTest") {
     group = "verification"
     description = "Runs the prepared generated SIMD Core, native-oracle, and compiled-path experiment."
@@ -278,7 +305,7 @@ tasks.withType<JavaCompile>().configureEach { options.compilerArgs.addAll(listOf
 // Compile the unchanged pinned GHC cbits for this host. The resulting bitcode
 // remains an optional execution path; no native pointer is exposed to Core.
 val compileCbits by tasks.registering(Exec::class) {
-    inputs.files("scripts/build-cbits.py", "src/main/c/md5-api.c",
+    inputs.files("scripts/build-cbits.py", "src/main/c/md5-api.c", "src/main/c/iconv-api.c",
         "bench/experiments/pinned-addresses/reference/md5.c",
         "bench/experiments/pinned-addresses/reference/md5.h")
     outputs.dir(layout.buildDirectory.dir("generated/cbits"))

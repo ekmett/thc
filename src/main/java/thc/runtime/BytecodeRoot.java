@@ -1074,6 +1074,51 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class OriginalLocale {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedAddress result = CoreOriginalStdio.iconv(node).localeEncoding();
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class OriginalIconvOpen {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress to, ManagedAddress from, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = CoreOriginalStdio.iconv(node).open(to, from);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class OriginalIconvClose {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                long handle, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = CoreOriginalStdio.iconv(node).close(handle);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class OriginalIconv {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                long handle, ManagedAddress input, ManagedAddress inputCount,
+                ManagedAddress output, ManagedAddress outputCount, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = CoreOriginalStdio.iconv(node).convert(handle, input, inputCount, output, outputCount);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
     public static final class Md5Update {
         @Specialization public static void apply(ManagedAddress context, ManagedAddress input, long length, Object state) {
             ManagedByteArray.requireState(state);
