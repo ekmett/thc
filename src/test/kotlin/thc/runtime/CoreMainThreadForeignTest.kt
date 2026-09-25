@@ -37,7 +37,7 @@ class CoreMainThreadForeignTest {
             application(), mapOf("rep" to closure, "resultRep" to tuple(false)))
         val binding = mapOf("id" to "register", "name" to "register", "arity" to 2,
             "lifted" to true, "rep" to closure, "expr" to body)
-        return mapOf("bindings" to listOf(binding), "constructors" to emptyList<Any?>())
+        return mapOf("bindings" to listOf(binding), "constructors" to emptyList<Any?>(), "instrument" to true)
     }
 
     @Test fun exactOriginalWeakAndStateAbiRejectsNearMisses() {
@@ -46,7 +46,7 @@ class CoreMainThreadForeignTest {
         CoreMainThreadForeign.validateHeads(application())
         val otherTarget = (descriptor()["target"] as Map<*, *>) + ("symbol" to "stg_sig_install")
         val otherCall = descriptor() + ("target" to otherTarget)
-        assertNull(CoreMainThreadForeign.validate(good + ("foreignCall" to otherCall),
+        assertFalse(CoreMainThreadForeign.validate(good + ("foreignCall" to otherCall),
             listOf(weak, state), listOf(false, false), tuple(false)))
         for ((field, wrong) in listOf("schema" to 1.0, "convention" to "capi", "safety" to "safe",
             "arity" to 1L, "suppliedArity" to 3L, "extra" to true))
@@ -83,12 +83,13 @@ class CoreMainThreadForeignTest {
                 val threads = runtime.threads
                 threads.enterCurrent()
                 try {
+                    val target = program.entryTarget("register")
                     val key = threads.currentIdentity()
                     val wrongValue = Any()
                     val first = runtime.weaks.make(key, wrongValue, null)
                     val second = runtime.weaks.make(key, Any(), null)
                     fun call(handle: Any?, token: Any? = Unit): Any? =
-                        Calls.target(program.entryTarget("register"), arrayOf(0L, handle, token))
+                        Calls.target(target, arrayOf(0L, handle, token))
                     call(first)
                     val initial = threads.mainThreadRegistration()!!
                     assertEquals(Thread.currentThread().threadId(), initial.liveJavaId())
@@ -96,14 +97,29 @@ class CoreMainThreadForeignTest {
                     assertSame(initial, threads.mainThreadRegistration(), "invalid State# must not replace registration")
                     assertThrows(RuntimeFault::class.java) { call(Any()) }
                     assertSame(initial, threads.mainThreadRegistration(), "invalid Weak# must not replace registration")
+                    repeat(3) { call(first) }
+                    val warmed = threads.mainThreadRegistration()!!
+                    target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                    assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), backend)
+                    val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                     call(second)
+                    assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong(),
+                        "$backend first installed guest entry")
+                    assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), backend)
+                    assertSame(target, program.entryTarget("register"))
                     val replacement = threads.mainThreadRegistration()!!
-                    assertNotSame(initial, replacement)
+                    assertNotSame(warmed, replacement)
                     assertEquals(0L, runtime.weaks.finalize(first).flag)
                     assertNull(initial.liveJavaId())
                     assertEquals(Thread.currentThread().threadId(), replacement.liveJavaId())
                     assertEquals(0L, runtime.weaks.finalize(second).flag)
                     assertNull(replacement.liveJavaId(), "registration may retain only the now-dead capability")
+                    val handoff = language.handoffState.get()
+                    assertEquals(0, handoff.arguments.depth)
+                    assertEquals(0, handoff.arguments.retainedReferences())
+                    assertEquals(0, handoff.results.depth)
+                    assertEquals(0, handoff.results.retainedReferences())
+                    assertNull(handoff.pending)
                 } finally { threads.leaveCurrent() }
             } finally { context.leave() }
         }
