@@ -1,0 +1,78 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+name: Documentation
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Pages is latest-only: obsolete documentation does not delay the next revision.
+concurrency:
+  group: docs-pages-${{ github.repository }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-user-home
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d # v2
+        with:
+          ghc-version: '9.14.1'
+          cabal-version: '3.16.0.0'
+          cabal-update: true
+      - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
+        with:
+          version: '25.3.4.1'
+          java-version: '25'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          check-for-updates: false
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cabal/store
+            build/docs/cabal
+            .gradle-user-home/caches
+            .gradle-user-home/wrapper
+            .gradle
+          key: docs-v1-${{ runner.os }}-ghc9.14.1-jdk25-${{ hashFiles('thc.cabal', 'cabal.project', 'build.gradle.kts', 'gradle.properties', 'gradle/wrapper/gradle-wrapper.properties') }}-${{ github.sha }}
+          restore-keys: |
+            docs-v1-${{ runner.os }}-ghc9.14.1-jdk25-${{ hashFiles('thc.cabal', 'cabal.project', 'build.gradle.kts', 'gradle.properties', 'gradle/wrapper/gradle-wrapper.properties') }}-
+      - name: Install Markdown renderer
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends pandoc
+      - name: Generate and validate documentation only
+        env:
+          DOCS_REVISION: ${{ github.sha }}
+        run: make docs GRADLE_FLAGS='--no-daemon --build-cache'
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/site
+          retention-days: 1
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - name: Publish verified site
+        id: deployment
+        uses: actions/deploy-pages@v4
