@@ -159,8 +159,6 @@ class Int32VectorMemoryProofTest {
         val p = BytecodeProgram(language, f.module)
         val host = p.hostEntryTarget(3)
         val original = p.entryTarget("root")
-        val active = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
-            .single { it.callTarget === original }.currentCallTarget as RootCallTarget
         fun count() = (p.diagnostics().getValue("compiledEntries") as Number).toLong()
         fun call() {
             val bytes = ByteArray(40) { (it * 47 + 129).toByte() }
@@ -168,6 +166,8 @@ class Int32VectorMemoryProofTest {
             released(language)
         }
         repeat(12) { call() }
+        val active = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
+            .single { it.callTarget === original }.currentCallTarget as RootCallTarget
         assertEquals(0L, count())
         active.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(active, true)
         assertEquals(true, active.javaClass.getMethod("isValidLastTier").invoke(active))
