@@ -124,7 +124,8 @@ class Int32ArrayNativeTest {
         require(!name.startsWith("alias") || counts == exactAlias(name)) { "Int32 alias use counts changed: $name" }
         return counts
     }
-    private fun literalCalls(name: String, evidence: ArrayCoreEvidence): Int {
+    private val unknownLiteralProof = mapOf("kind" to "unknown", "primReps" to null, "evaluated" to false)
+    private fun literalCalls(name: String, evidence: ArrayCoreEvidence, unknownProof: Boolean = false): Int {
         require(name in literalNames) { "Unknown narrow-literal entry: $name" }
         val kind = if (name == literalNames[0]) "Int32" else "Word32"
         val literal = listOf("lit", kind.lowercase(), if (kind == "Int32") "-2147483648" else "4294967295")
@@ -151,9 +152,10 @@ class Int32ArrayNativeTest {
             (args[1] as? List<*>)?.take(3) == literal &&
             call.drop(3).take(3) == listOf(listOf(false, false), false, false)) { "$name: changed worker call" }
         val literals = evidence.bindings.flatMap { evidence.nodes(it["expr"]) }.filter { it.take(3) == literal }
-        require(literals.size == 1 && CoreRepresentations.metadata(literals.single())?.get("rep") ==
-            mapOf("kind" to "unknown", "primReps" to null, "evaluated" to false)) {
-            "$name: expected one genuine unconstrained narrow literal"
+        val expectedProof = if (unknownProof) unknownLiteralProof
+            else mapOf("kind" to "long", "primReps" to listOf("${kind}Rep"), "evaluated" to true)
+        require(literals.size == 1 && CoreRepresentations.metadata(literals.single())?.get("rep") == expectedProof) {
+            "$name: narrow literal proof changed"
         }
         require(evidence.globalReferences(entry) == listOf(worker["id"]) &&
             evidence.globalReferences(workerExpr).isEmpty()) { "$name: changed global call structure" }
@@ -162,6 +164,21 @@ class Int32ArrayNativeTest {
             "$name: unexpected guest lambda"
         }
         return lambdas.size // Direct saturated worker call; no evaluator or host-bridge count.
+    }
+    private fun literalModule(paths: List<String>, name: String, unknownProof: Boolean): Map<String, Any?> {
+        val module = merged(paths)
+        val evidence = ArrayCoreEvidence(module, name)
+        assertEquals(2, literalCalls(name, evidence))
+        if (unknownProof) {
+            // Keep the genuine export exact. Separately project the older erased
+            // argument proof to exercise intrinsic refinement across a worker call.
+            val entry = evidence.root["expr"] as List<*>
+            val call = entry[2] as List<*>
+            val literal = (call[2] as List<*>)[1] as List<Any?>
+            (CoreRepresentations.metadata(literal) as MutableMap<String, Any?>)["rep"] = unknownLiteralProof
+            assertEquals(2, literalCalls(name, evidence, unknownProof = true))
+        }
+        return module
     }
     private fun model(name: String, seed: Long, order: ByteOrder = ByteOrder.nativeOrder()): Long {
         require(name in names) { "Unknown Int32-array entry: $name" }
@@ -288,7 +305,7 @@ class Int32ArrayNativeTest {
         for (paths in (manifest()["stages"] as Map<String, List<String>>).values) for (name in literalNames) {
             val source = merged(paths)
             assertEquals(2, literalCalls(name, ArrayCoreEvidence(source, name)))
-            for (mutation in 0..12) {
+            for (mutation in 0..13) {
                 val module = Json.parse(Json.stringify(source)) as Map<String, Any?>
                 val evidence = ArrayCoreEvidence(module, name)
                 val entry = evidence.root["expr"] as MutableList<Any?>
@@ -312,6 +329,7 @@ class Int32ArrayNativeTest {
                     11 -> worker[2] = listOf("let", false, listOf(mapOf("id" to "hidden", "expr" to
                         listOf("lam", worker[1], worker[2]))), listOf("lit", "int", "0"))
                     12 -> worker[2] = listOf("let", false, listOf(mapOf("id" to "duplicateLiteral", "expr" to literal)), worker[2])
+                    13 -> (CoreRepresentations.metadata(literal) as MutableMap<String, Any?>)["rep"] = unknownLiteralProof
                 }
                 assertThrows(IllegalArgumentException::class.java,
                     { literalCalls(name, ArrayCoreEvidence(module, name)) }, "$name/mutation$mutation")
@@ -321,7 +339,7 @@ class Int32ArrayNativeTest {
 
     @Test fun nativePublicArraysAndByteAliasesWithInlining() = native(true)
     @Test fun nativePublicArraysAndByteAliasesAcrossResidualCalls() = native(false)
-    @Test fun genuineNoinlineNarrowLiteralsRefineUnknownProofsInCompiledCode() {
+    @Test fun genuineNoinlineNarrowLiteralsAndUnknownProofControlsInCompiledCode() {
         val manifest = manifest()
         val entries = literalNames
         assertEquals(entries, manifest["literalEntries"])
@@ -341,11 +359,12 @@ class Int32ArrayNativeTest {
             val cases = rows.getValue(name).map { it.input to it.answer }
             assertEquals((manifest["literalInputs"] as List<Number>).map { it.toLong() }, cases.map { it.first })
             for ((input, answer) in cases) assertEquals(input + if (name == entries[0]) -2147483648L else 4294967295L, answer)
-            for (backend in listOf("ast", "bytecode")) for (inlining in listOf(false, true)) context(inlining).use { context ->
+            for (unknownProof in listOf(false, true)) for (backend in listOf("ast", "bytecode"))
+                for (inlining in listOf(false, true)) context(inlining).use { context ->
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                    val linked = CoreModules.reachable(module, name)
+                    val linked = CoreModules.reachable(literalModule(paths, name, unknownProof), name)
                     val bindings = linked["bindings"] as List<Map<String, Any?>>
                     val program = program(language, linked + ("instrument" to true), backend)
                     val entry = program.entryTarget(bindings.single { it["name"] == name }["id"] as String)
@@ -355,7 +374,7 @@ class Int32ArrayNativeTest {
                     assertEquals(expectedCalls, targets.size, "$stage/$backend/$name entry and opaque worker")
                     targets.forEach(::compile)
                     for ((input, answer) in cases) {
-                        val label = "$stage/$backend/$name/$input/inlining=$inlining"
+                        val label = "$stage/$backend/$name/$input/inlining=$inlining/unknownProof=$unknownProof"
                         val before = count()
                         assertEquals(answer, Calls.target(entry, arrayOf(0L, input)), label)
                         assertEquals(expectedCalls.toLong(), count()-before, "$label exact compiled entries")
