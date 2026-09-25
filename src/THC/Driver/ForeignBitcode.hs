@@ -14,6 +14,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.Char (intToDigit)
 import Data.List (isInfixOf, isSuffixOf, nub)
+import Data.Maybe (catMaybes, isJust)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEncoding
 import System.Directory (createDirectory, createDirectoryIfMissing, doesDirectoryExist,
@@ -54,10 +55,13 @@ linkClockGetTime libdir staging platform unit name original
               KeyMap.lookup "finalizers" stubs == Just (Array mempty))
         (fail "ClockGetTime requires unsupported callbacks or initialization")
       let calls = collectCalls value
-          symbols = nub [symbol | Object descriptor <- calls,
-                                  Just (Object target) <- [KeyMap.lookup "target" descriptor],
-                                  Just (String symbol) <- [KeyMap.lookup "symbol" target]]
-      unless (length symbols == 3 && all capiCall calls)
+          classified = map (capiAbi unit) calls
+          abi = nub (catMaybes classified)
+          symbols = map fst abi
+      unless (all isJust classified && length abi == 3 &&
+              length [() | (_, kind) <- abi, kind == "clock-id"] == 1 &&
+              length [() | (_, kind) <- abi, kind == "clock-buffer"] == 2 &&
+              length symbols == length (nub symbols))
         (fail "ClockGetTime CAPI contract differs from its three generated wrappers")
       -- Find the selected GHC's HsFFI.h, not a different compiler on PATH.
       header <- findHeader libdir
@@ -91,12 +95,13 @@ linkClockGetTime libdir staging platform unit name original
         run clang (targetFlags ++ ["-O1", "-emit-llvm", "-c", "-I", takeDirectory header,
                    cfile, "-o", bitcode])
         BS.readFile bitcode) `finally` cleanup
-      let linked = object ["schema" .= (1 :: Int), "format" .= ("llvm-bitcode" :: String),
+      let linked = object ["schema" .= (2 :: Int), "format" .= ("llvm-bitcode" :: String),
                            "unit" .= unit, "module" .= name,
                            "sourceSha256" .= sha (TextEncoding.encodeUtf8 source),
                            "bitcodeSha256" .= sha bytes, "bitcodeHex" .= hex bytes,
                            "target" .= target,
-                           "symbols" .= symbols]
+                           "symbols" .= symbols,
+                           "abi" .= [object ["symbol" .= symbol, "kind" .= kind] | (symbol, kind) <- abi]]
       pure (BL.toStrict (encode (Object (KeyMap.insert "foreignLink" linked fields))))
   where
     sha = hex . SHA.hash
@@ -116,14 +121,37 @@ collectCalls value = case value of
   Array values -> concatMap collectCalls values
   _ -> []
 
-capiCall :: Value -> Bool
-capiCall (Object fields) = KeyMap.lookup "convention" fields == Just "capi" &&
-    KeyMap.lookup "safety" fields == Just "unsafe" &&
-    case KeyMap.lookup "target" fields of
-      Just (Object target) -> KeyMap.lookup "kind" target == Just "static" &&
-        KeyMap.lookup "isFunction" target == Just (Bool True)
-      _ -> False
-capiCall _ = False
+capiAbi :: String -> Value -> Maybe (String, String)
+capiAbi unit call = do
+  Object fields <- Just call
+  Object target <- KeyMap.lookup "target" fields
+  String symbol <- KeyMap.lookup "symbol" target
+  let expected kind = object
+        ["schema" .= (1 :: Int),
+         "target" .= object ["kind" .= ("static" :: String), "symbol" .= symbol,
+                              "unit" .= unit, "isFunction" .= True],
+         "convention" .= ("capi" :: String), "safety" .= ("unsafe" :: String),
+         "arity" .= (if kind == "clock-id" then (1 :: Int) else 3),
+         "suppliedArity" .= (if kind == "clock-id" then (1 :: Int) else 3),
+         "argumentReps" .= (if kind == "clock-id" then [scalar Nothing False]
+                            else [scalar (Just "Word64Rep") False,
+                                  scalar (Just "AddrRep") False, scalar Nothing False]),
+         "resultRep" .= tuple (if kind == "clock-id" then "Word64Rep" else "Int32Rep") False]
+  if call == expected "clock-id" then Just (Text.unpack symbol, "clock-id")
+  else if call == expected "clock-buffer" then Just (Text.unpack symbol, "clock-buffer")
+  else Nothing
+  where
+    scalar primitive evaluated = object
+      ["kind" .= case primitive of Nothing -> ("void" :: String)
+                                   Just "AddrRep" -> "address"
+                                   Just _ -> "long",
+       "primReps" .= maybe ([] :: [String]) pure primitive,
+       "evaluated" .= evaluated]
+    tuple primitive evaluated = object
+      ["kind" .= ("unknown" :: String), "primReps" .= [primitive],
+       "aggregate" .= ("unboxed-tuple" :: String),
+       "components" .= [scalar Nothing True, scalar (Just primitive) True],
+       "evaluated" .= evaluated]
 
 hex :: BS.ByteString -> String
 hex = concatMap (\byte -> [intToDigit (fromIntegral byte `div` 16),

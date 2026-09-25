@@ -67,7 +67,11 @@ internal object CoreCapiForeign {
             descriptor["convention"] != "capi" || descriptor["safety"] != "unsafe")
             failProof("static target, calling convention or safety")
         val declared = descriptor["argumentReps"] as? List<*> ?: failProof("argument representations")
-        val zero = declared.size == 1
+        val zero = when (link.abi[symbol]) {
+            "clock-id" -> true
+            "clock-buffer" -> false
+            else -> failProof("symbol lacks a linked CAPI ABI")
+        }
         val expected = if (zero) listOf<String?>(null) else listOf("Word64Rep", "AddrRep", null)
         val output = if (zero) "Word64Rep" else "Int32Rep"
         if (!integer(descriptor["arity"], expected.size) ||

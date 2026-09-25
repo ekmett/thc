@@ -304,7 +304,8 @@ checkDriver root directory ghc ghcPkg helper baseUnit = do
   foreignBundle <- loaded =<< acquire foreignContext foreignUnit
   let capiUnit = "base-fixture" :: String
       capiName = "System.CPUTime.Posix.ClockGetTime" :: String
-      capiSymbols = ["fixture_clock_id", "fixture_clock_time", "fixture_clock_resolution"] :: [String]
+      capiId = "fixture_clock_id" :: String
+      capiSymbols = [capiId, "fixture_clock_time", "fixture_clock_resolution"] :: [String]
       capiSource = unlines
         ["#include <time.h>",
          "HsWord64 fixture_clock_id(void) { return CLOCK_PROCESS_CPUTIME_ID; }",
@@ -312,15 +313,32 @@ checkDriver root directory ghc ghcPkg helper baseUnit = do
          "HsInt32 fixture_clock_resolution(HsWord64 id, void* out) { return clock_getres(id, out); }"]
       capiTarget symbol = object ["kind" .= ("static" :: String), "isFunction" .= True,
                                   "unit" .= capiUnit, "symbol" .= symbol]
-      capiCall symbol = object ["foreignCall" .= object
+      capiScalar primitive evaluated = object
+        ["kind" .= case primitive of Nothing -> ("void" :: String)
+                                     Just "AddrRep" -> "address"
+                                     Just _ -> "long",
+         "primReps" .= maybe ([] :: [String]) pure primitive, "evaluated" .= evaluated]
+      capiTuple output = object
+        ["kind" .= ("unknown" :: String), "primReps" .= [output],
+         "aggregate" .= ("unboxed-tuple" :: String),
+         "components" .= [capiScalar Nothing True, capiScalar (Just output) True],
+         "evaluated" .= False]
+      capiCall zero symbol = object ["foreignCall" .= object
         ["target" .= capiTarget symbol, "convention" .= ("capi" :: String),
-         "safety" .= ("unsafe" :: String)]]
-      capiArchive = object ["schema" .= (2 :: Int), "unit" .= capiUnit,
-        "module" .= capiName, "bindings" .= map capiCall capiSymbols,
+         "safety" .= ("unsafe" :: String), "schema" .= (1 :: Int),
+         "arity" .= (if zero then (1 :: Int) else 3),
+         "suppliedArity" .= (if zero then (1 :: Int) else 3),
+         "argumentReps" .= (if zero then [capiScalar Nothing False]
+                             else [capiScalar (Just "Word64Rep") False,
+                                   capiScalar (Just "AddrRep") False, capiScalar Nothing False]),
+         "resultRep" .= capiTuple (if zero then "Word64Rep" else "Int32Rep")]]
+      capiArchiveFor bindings = object ["schema" .= (2 :: Int), "unit" .= capiUnit,
+        "module" .= capiName, "bindings" .= bindings,
         "foreign" .= object ["schema" .= (1 :: Int), "execution" .= ("not-linked" :: String),
           "stubs" .= object ["header" .= ("" :: String), "source" .= capiSource,
             "initializers" .= ([] :: [Value]), "finalizers" .= ([] :: [Value])],
           "files" .= ([] :: [Value])]]
+      capiArchive = capiArchiveFor (zipWith capiCall [True, False, False] capiSymbols)
   capiLinked <- linkClockGetTime (Installed.installedLibdir full)
     (root </> directory </> "native/staging") (Info.arch ++ "-" ++ Info.os)
     capiUnit capiName (BL.toStrict (encode capiArchive))
@@ -328,9 +346,19 @@ checkDriver root directory ghc ghcPkg helper baseUnit = do
       capiLink = valueAt "foreignLink" capiRecord
   check (valueAt "format" capiLink == "llvm-bitcode" &&
          valueAt "symbols" capiLink == toJSON capiSymbols &&
+         valueAt "abi" capiLink == toJSON
+           [object ["symbol" .= symbol, "kind" .= (if zero then "clock-id" else "clock-buffer" :: String)]
+           | (zero, symbol) <- zip [True, False, False] capiSymbols] &&
          valueAt "sourceSha256" capiLink /= Null &&
          valueAt "bitcodeSha256" capiLink /= Null)
     "Original callback-free CAPI source was not acquired as LLVM bitcode"
+  wrongAbi <- Exception.try (linkClockGetTime (Installed.installedLibdir full)
+    (root </> directory </> "native/staging") (Info.arch ++ "-" ++ Info.os)
+    capiUnit capiName (BL.toStrict (encode (capiArchiveFor
+      (capiCall False capiId : zipWith capiCall [True, False, False] capiSymbols)))))
+    :: IO (Either Exception.IOException BS.ByteString)
+  check (case wrongAbi of Left _ -> True; Right _ -> False)
+    "Original CAPI acquisition accepted a symbol with a different ABI"
   BS.writeFile (root </> directory </> "clock-capi.json") capiLinked
   writeJson (root </> directory </> "foreign-packages.json") $ object
     ["format" .= ("thc-core-packages" :: String), "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),

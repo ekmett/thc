@@ -651,7 +651,8 @@ class Audit:
                         call['convention'] != 'capi' or call['safety'] != 'unsafe'):
                     raise ValueError('Linked CAPI call lacks its exact original FCallId')
                 declared = call['argumentReps']
-                zero = isinstance(declared, list) and len(declared) == 1
+                abi = {entry['symbol']: entry['kind'] for entry in link['abi']}
+                zero = abi[symbol] == 'clock-id'
                 wanted = [None] if zero else ['Word64Rep', 'AddrRep', None]
                 output = 'Word64Rep' if zero else 'Int32Rep'
                 def exact(rep, primitive):

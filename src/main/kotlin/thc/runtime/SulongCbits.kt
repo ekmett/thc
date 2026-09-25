@@ -48,7 +48,7 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
 
     private fun sameLink(first: ForeignBitcode, second: ForeignBitcode) =
         first.unit == second.unit && first.module == second.module && first.target == second.target &&
-            first.symbols == second.symbols && first.bytes.contentEquals(second.bytes)
+            first.symbols == second.symbols && first.abi == second.abi && first.bytes.contentEquals(second.bytes)
 
     /** Parse and resolve every declared CAPI symbol before a guest entry runs. */
     fun link(record: ForeignBitcode) {

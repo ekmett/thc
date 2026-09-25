@@ -19,14 +19,42 @@ BOUNDARY = 'optimized-Core-after-Tidy-before-CorePrep'
 SHA256 = re.compile(r'[0-9a-f]{64}\Z')
 
 
+def capi_kind(call, unit, symbol):
+    def scalar(primitive, evaluated):
+        return dict(kind='void' if primitive is None else 'address' if primitive == 'AddrRep' else 'long',
+                    primReps=[] if primitive is None else [primitive], evaluated=evaluated)
+
+    def expected(kind):
+        zero = kind == 'clock-id'
+        output = 'Word64Rep' if zero else 'Int32Rep'
+        return dict(schema=1, target=dict(kind='static', symbol=symbol, unit=unit, isFunction=True),
+                    convention='capi', safety='unsafe', arity=1 if zero else 3,
+                    suppliedArity=1 if zero else 3,
+                    argumentReps=([scalar(None, False)] if zero else
+                                  [scalar('Word64Rep', False), scalar('AddrRep', False), scalar(None, False)]),
+                    resultRep=dict(kind='unknown', primReps=[output], aggregate='unboxed-tuple',
+                                   components=[scalar(None, True), scalar(output, True)], evaluated=False))
+
+    def exact(value, wanted):
+        if type(value) is not type(wanted):
+            return False
+        if isinstance(wanted, dict):
+            return value.keys() == wanted.keys() and all(exact(value[key], item) for key, item in wanted.items())
+        if isinstance(wanted, list):
+            return len(value) == len(wanted) and all(exact(a, b) for a, b in zip(value, wanted))
+        return value == wanted
+
+    return next((kind for kind in ('clock-id', 'clock-buffer') if exact(call, expected(kind))), None)
+
+
 def linked_foreign(module):
     """Verify the one fully linked, callback-free CAPI archive admitted so far."""
     link = module.get('foreignLink')
     if link is None:
         return False
     if (not isinstance(link, dict) or set(link) != {'schema', 'format', 'unit', 'module',
-            'target', 'symbols', 'sourceSha256', 'bitcodeSha256', 'bitcodeHex'} or
-            type(link['schema']) is not int or link['schema'] != 1 or
+            'target', 'symbols', 'abi', 'sourceSha256', 'bitcodeSha256', 'bitcodeHex'} or
+            type(link['schema']) is not int or link['schema'] != 2 or
             link['format'] != 'llvm-bitcode' or link['unit'] != module.get('unit') or
             link['module'] != module.get('module') or
             link['module'] != 'System.CPUTime.Posix.ClockGetTime' or
@@ -69,17 +97,27 @@ def linked_foreign(module):
             any(not isinstance(x, str) or not x for x in symbols) or
             len(set(symbols)) != 3):
         raise ValueError('invalid linked foreign symbol inventory')
+    entries = link['abi']
+    if (not isinstance(entries, list) or len(entries) != 3 or
+            any(not isinstance(entry, dict) or set(entry) != {'symbol', 'kind'} or
+                type(entry['symbol']) is not str or type(entry['kind']) is not str or
+                entry['kind'] not in ('clock-id', 'clock-buffer') for entry in entries)):
+        raise ValueError('invalid linked CAPI ABI inventory')
+    abi = {entry['symbol']: entry['kind'] for entry in entries}
+    if (set(abi) != set(symbols) or len(abi) != 3 or
+            list(abi.values()).count('clock-id') != 1 or list(abi.values()).count('clock-buffer') != 2):
+        raise ValueError('linked CAPI ABI differs from original symbols')
     found = set()
     def inspect(value):
         if isinstance(value, dict):
             call = value.get('foreignCall')
             if isinstance(call, dict):
                 target = call.get('target')
-                if (not isinstance(target, dict) or target.get('kind') != 'static' or
-                        target.get('isFunction') is not True or target.get('unit') != link['unit'] or
-                        call.get('convention') != 'capi' or call.get('safety') != 'unsafe'):
-                    raise ValueError('unsupported call in linked foreign module')
-                found.add(target.get('symbol'))
+                symbol = target.get('symbol') if isinstance(target, dict) else None
+                if not isinstance(symbol, str) or symbol not in abi or \
+                        capi_kind(call, link['unit'], symbol) != abi[symbol]:
+                    raise ValueError('original CAPI call disagrees with linked symbol ABI')
+                found.add(symbol)
             for item in value.values():
                 inspect(item)
         elif isinstance(value, list):
