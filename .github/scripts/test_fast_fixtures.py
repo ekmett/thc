@@ -42,7 +42,7 @@ class FixturePreparationTest(unittest.TestCase):
                      'source/CBVCoercionAudit.saved', 'coercionEntry-audit.json',
                      'logs/helper-thin.stdout', 'logs/helper-thin.command.json',
                      'wired-unit.json', 'logs/helper-wired-unit.stdout',
-                     'logs/helper-wired-unit.command.json'):
+                     'logs/helper-wired-unit.command.json', 'packages.json', 'driver-controls.json'):
             self.assertIn('build/interface-core/' + name, fast_fixtures.FULL_REQUIRED)
         self.assertIn('"interface-core/**/*.json"', (project / 'build.gradle.kts').read_text())
 

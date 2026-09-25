@@ -21,13 +21,22 @@ class InterfaceCoreNativeTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = File(root, "build/interface-core")
     private val entries = listOf("opaqueEntry", "inlineEntry", "recursiveEntry", "coercionEntry")
-    private fun source(entry: String = "opaqueEntry") = Json.parse(File(directory,
-        if (entry == "coercionEntry") "CBVCoercionAudit.json" else "InterfaceLibrary.json").readText()) as Map<String, Any?>
+    private fun source(entry: String = "opaqueEntry"): Map<String, Any?> {
+        val modules = StringBuilder("[")
+        assertNull(CorePackageManifest.appendModules(modules, File(directory, "packages.json").absolutePath))
+        modules.append(']')
+        val name = if (entry == "coercionEntry") "CBVCoercionAudit" else "InterfaceLibrary"
+        return (Json.parse(modules.toString()) as List<Map<String, Any?>>).single { it["module"] == name }
+    }
 
     private fun oracle(): List<List<Long>> {
         val manifest = Json.parse(File(directory, "manifest.json").readText()) as Map<String, Any?>
         assertEquals(entries, manifest["entries"])
         assertEquals("thc-interface-fixture-0.1", manifest["unit"])
+        val controls = Json.parse(File(directory, "driver-controls.json").readText()) as Map<String, Any?>
+        assertEquals(false, controls["installedArtifactsHashed"])
+        for (name in listOf("sourceDeleted", "unchangedReuse", "thinMissing", "identityFailure",
+            "wrongWayFailure", "foreignStubFailure", "failedRefreshPreservedBundle")) assertEquals(true, controls[name], name)
         assertEquals(listOf("opaque-body", "private-worker", "recursive-groups", "thin-unavailable",
             "no-source-target", "wrong-module", "wrong-unit", "wrong-way", "foreign-rejected",
             "private-flags", "repeat-load", "helper-protocol", "installed-cbv-worker", "installed-wired-unit"), manifest["controls"])

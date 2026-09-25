@@ -29,6 +29,7 @@ data RunOptions = RunOptions
   , runExecutable :: String
   , runThcRoot :: FilePath
   , runRuntime :: Maybe FilePath
+  , runInstalledCore :: String
   }
 
 -- This first run slice uses the package configuration that Cabal itself
@@ -37,6 +38,8 @@ runPackage :: RunOptions -> FilePath -> IO ()
 runPackage opts target = do
   unless (not (null (runExecutable opts))) $ fail "run requires --exe NAME"
   unless (not (null (runThcRoot opts))) $ fail "run requires --thc-root DIR"
+  unless (runInstalledCore opts == "pinned") $
+    fail "--installed-core required currently requires a cabal.project directory"
   (cabalFile, lbi) <- configurePackage (runPlan opts) target
   let packageRoot = takeDirectory cabalFile
       selectedName = runExecutable opts

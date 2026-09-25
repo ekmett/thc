@@ -904,9 +904,12 @@
       ]
     },
     "src/THC/Driver/Project.hs": {
-      "junit": [],
+      "junit": ["thc.runtime.InterfaceCoreNativeTest"],
       "python": [],
       "haskell": ["driver-tests"]
+    },
+    "src/THC/Driver/Installed.hs": {
+      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
     },
     "test/fixtures/run-pure/run-pure.cabal": {
       "junit": [],

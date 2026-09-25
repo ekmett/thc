@@ -4,6 +4,7 @@
 module InterfaceFixtures (prepareInterfaceCore) where
 
 import Control.Monad (filterM, forM, forM_, unless)
+import qualified Control.Exception as Exception
 import Data.Aeson (Value(..), Result(..), fromJSON, toJSON, object, (.=), decodeStrict')
 import Data.Aeson.Key (Key)
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -26,6 +27,8 @@ import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
 import THC.Interface
+import qualified THC.Driver.Installed as Installed
+import qualified THC.Driver.Project as Project
 
 unitName :: String
 unitName = "thc-interface-fixture-0.1"
@@ -96,7 +99,7 @@ prepareInterfaceCore root = do
     registered <- run (mode ++ "-register") ghcPkg ["--package-db", database, "update", root </> conf]
     pure ([compiled,cbvCompiled] ++ initialized ++ [registered])
   foreignBuild <- run "foreign-compile" ghc
-    ["-c", "-O2", "-fforce-recomp", "-this-unit-id", unitName, "-fwrite-if-simplified-core",
+    ["-c", "-O2", "-dynamic-too", "-fforce-recomp", "-this-unit-id", unitName, "-fwrite-if-simplified-core",
      "-odir", directory </> "full", "-hidir", directory </> "full",
      "-stubdir", directory </> "full",
      "compiler/test-fixtures/InterfaceForeign.hs"]
@@ -174,14 +177,17 @@ prepareInterfaceCore root = do
     pure ()
   helperCommands <- checkHelper root directory libdir helper
   wiredCommands <- checkWiredHelper root directory libdir helper wiredUnit baseUnit
+  checkDriver root directory ghc ghcPkg helper baseUnit
   audits <- forM entries $ \entry -> run ("audit-" ++ entry) "python3"
-    ["scripts/audit-core.py", "--entry", entry, "--output", directory </> entry ++ "-audit.json",
-     directory </> (if entry == "coercionEntry" then "CBVCoercionAudit.json" else "InterfaceLibrary.json")]
+    ["scripts/audit-core.py", "--entry", unitName ++ ":" ++
+      (if entry == "coercionEntry" then "CBVCoercionAudit." else "InterfaceLibrary.") ++ entry,
+     "--output", directory </> entry ++ "-audit.json", "--package-manifest", directory </> "packages.json"]
   plugin <- listDirectory (root </> "compiler/THC")
   scripts <- listDirectory (root </> "scripts")
   let inputs = sort $ ["compiler/test-fixtures/InterfaceLibrary.hs", "compiler/test-fixtures/InterfaceNative.hs",
         "compiler/test-fixtures/InterfaceForeign.hs", "test/haskell-fixtures/InterfaceFixtures.hs",
         "compiler/test-fixtures/CBVCoercionAudit.hs", "compiler/interface/Main.hs",
+        "src/THC/Driver/Installed.hs", "src/THC/Driver/Project.hs", "src/THC/Driver/Zip.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "cabal.project",
         "scripts/audit-core.py", "scripts/core-capabilities.json"] ++
         ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
@@ -194,6 +200,7 @@ prepareInterfaceCore root = do
         [directory </> name | name <- ["CBVCoercionAudit.json", "direct/CBVCoercionAudit.json",
           "full/CBVCoercionAudit.hi", "thin/CBVCoercionAudit.hi", "source/CBVCoercionAudit.saved",
           "wired-unit.json"]] ++
+        [directory </> "packages.json", directory </> "driver-controls.json"] ++
         [directory </> entry ++ "-audit.json" | entry <- entries]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
@@ -205,6 +212,60 @@ prepareInterfaceCore root = do
        "helper-protocol", "installed-cbv-worker", "installed-wired-unit"] :: [String]),
      "commands" .= map commandRecord commands, "runtimeVerified" .= False]
   putStrLn "Prepared complete interface Core: 21 native rows; full/thin/no-source/identity/way/foreign controls passed"
+
+-- Reuse the just-built private interfaces, with both source targets already
+-- removed. Exercise the production discovery, process and ZIP paths, not a
+-- fixture-specific bundle writer or another native rebuild.
+checkDriver :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> String -> IO ()
+checkDriver root directory ghc ghcPkg helper baseUnit = do
+  let cache = root </> directory </> "driver-cache"
+      compiler = object ["id" .= ("ghc-9.14.1" :: String), "abi" .= ("fixture" :: String),
+        "platform" .= ("native-fixture" :: String), "way" .= ("dynamic-nonprofiling" :: String)]
+      context mode = Installed.installedContext ghc ghcPkg helper
+        [root </> directory </> mode </> "package.conf.d"] compiler
+      acquire selected unit = Project.prepareInstalledBundle cache "fixture-driver" selected unit
+      loaded result = case result of Right value -> pure value; Left missing -> die (show missing)
+      rejected label expected action = do
+        result <- Exception.try action :: IO (Either Exception.IOException (Either Installed.MissingCore Project.InstalledBundle))
+        case result of
+          Left failure -> check (expected `isInfixOf` Exception.displayException failure)
+            ("Unrelated driver failure for " ++ label ++ ": " ++ show failure)
+          Right _ -> die ("Driver accepted " ++ label)
+  full <- context "full"
+  unit <- Installed.discoverInstalled full unitName
+  check (map fst (Installed.installedInterfaces unit) == ["CBVCoercionAudit", "InterfaceLibrary"])
+    "Driver selected undeclared or missing installed modules"
+  Installed.validateReexports [unit]
+  first <- loaded =<< acquire full unit
+  let artifact = Project.installedBundle first
+  before <- BS.readFile (Project.bundlePath artifact)
+  second <- loaded =<< acquire full unit
+  check (Project.installedOwner first == unitName &&
+    Project.bundlePath artifact == Project.bundlePath (Project.installedBundle second) &&
+    Project.bundleHash artifact == Project.bundleHash (Project.installedBundle second))
+    "Unchanged installed Core did not reuse the content-addressed bundle"
+  thin <- context "thin"
+  thinUnit <- Installed.discoverInstalled thin unitName
+  missing <- acquire thin thinUnit
+  case missing of
+    Left value -> check (Installed.missingUnit value == unitName) "Missing capability lost registration"
+    Right _ -> die "Driver silently fell back for a thin installed package"
+  rejected "mismatched registration" "identity mismatch" (acquire full unit {Installed.registeredId = baseUnit})
+  let wrongWay = unit {Installed.installedInterfaces =
+        [(name, root </> directory </> "full" </> name ++ ".hi") | (name, _) <- Installed.installedInterfaces unit]}
+  rejected "wrong interface way" "profile tag" (acquire full wrongWay)
+  rejected "foreign stubs" "foreign stubs or files" (acquire full unit {Installed.installedInterfaces =
+    [("InterfaceForeign", root </> directory </> "full/InterfaceForeign.dyn_hi")]})
+  after <- BS.readFile (Project.bundlePath artifact)
+  check (before == after) "Failed installed refresh changed an existing bundle"
+  writeJson (root </> directory </> "packages.json") $ object
+    ["format" .= ("thc-core-packages" :: String), "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
+     "units" .= Project.installedRecords unit first]
+  writeJson (root </> directory </> "driver-controls.json") $ object
+    ["sourceDeleted" .= True, "bundle" .= Project.bundlePath artifact,
+     "sha256" .= Project.bundleHash artifact, "unchangedReuse" .= True,
+     "thinMissing" .= True, "identityFailure" .= True, "wrongWayFailure" .= True, "foreignStubFailure" .= True,
+     "failedRefreshPreservedBundle" .= True, "installedArtifactsHashed" .= False]
 
 valueAt :: Key -> Value -> Value
 valueAt key (Object fields) = maybe Null id (KeyMap.lookup key fields)
