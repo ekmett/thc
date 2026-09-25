@@ -15,7 +15,8 @@ are different claims; each report identifies which it establishes.
 | Integer and Natural | [BigNat literals and original conversion workers](bignat-literals.md); this does not imply general large-integer arithmetic |
 | Mutable references | [ST/STRef with lazy lifted storage](mutvars.md) |
 | MVars | [Managed cells, lazy payloads and blocking handoff](managed-mvars.md); a Handle IO foundation, not complete Handle support |
-| Weak pointers | [Retained registrations and explicit finalization](weak-explicit.md); partial, no GC/ephemerons or C callbacks |
+| Weak pointers | [Retained registrations and explicit finalization](weak-explicit.md), including [bounded C finalizers](c-finalizers.md); no automatic GC/ephemerons |
+| Managed exports | [Declared scalar and IO actions](site/embedding.md) through polyglot bindings; not native C callback addresses |
 | Locale and iconv | [Original native glibc/Sulong imports](original-iconv.md); explicit full-Core proof group, not complete Handle/IO |
 | Native file ownership | [Opened-resource provider and original fstat](native-file-provider.md); Linux x86_64 `--run-io` uses it, RTS locking remains separate |
 | Threads | [Asynchronous exceptions and resumable thunk evaluation](async-exceptions.md); Java thread identities, masking and interruptible MVar waits |
@@ -59,11 +60,14 @@ unsupported.
 Sum inputs, storage, joins, nested sums and unresolved layouts remain rejected.
 These contracts distinguish lifted tuples, unboxed aggregates and scalar State.
 
-### Local SIMD
+### SIMD operations and guest transport
 
-Vector calls, returns, captures, fields and joins are outside the current scope.
-Local operations and the listed managed-memory operations have native/model
-checks and separate graph evidence.
+The current [guest transport contract](simd-families.md) carries 24 exact `VecRep`
+shapes through calls, results, PAPs, joins, tuple fields, owned closure/thunk
+captures and boxed constructor fields. Public host vector arguments/results,
+other shapes and unimplemented operations remain outside that contract. The
+local operations and listed managed-memory slices below have their own
+native/model checks and separate graph evidence.
 
 | Lanes | Local arithmetic | Managed byte-array memory |
 | --- | --- | --- |
@@ -111,4 +115,8 @@ matched header-off run. Keep graph capture separate from timed measurements.
 
 ## Project integration
 
-[The Cabal plan](cabal.md) covers the shared build/run driver and GHCi-based REPL.
+[The driver guide](driver.md) covers the current bounded Cabal build/run path,
+including the optional complete-Core executable provider. Standalone `thc build`
+and `thc repl` commands are not implemented. The separate
+[managed export API](site/embedding.md) exposes declared scalar and IO actions
+to polyglot callers.

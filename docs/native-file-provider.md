@@ -9,8 +9,10 @@ stdin, stdout and stderr. The launcher keeps its compilation settings and permit
 guest threads. Other hosts retain the existing managed-file context. Custom
 embedding contexts and the scalar CLI path retain their existing IO choices.
 The independent original RTS file-lock table does not establish
-`putStrLn`/Handle support. Arbitrary acquisition cancellation, weak
-references and finalizers remain outside this proof.
+`putStrLn`/Handle support. Original safe and interruptible open use the bounded
+owned-worker cancellation path below; cancellation during synchronous unsafe
+acquisition remains unproved. Weak references and finalizers are outside this
+provider proof.
 
 ## Explicit authority
 
@@ -63,6 +65,16 @@ Metadata therefore follows host chmod, size changes, rename, replacement and
 unlink without reopening a path. The existing native ABI probe checks the image
 layout; returned snapshots do not expose descriptor integers to Core.
 
+Read and write accept both managed byte storage and live, context-owned malloc
+allocations. Native aliases retain their exact byte offset. The complete requested
+region is validated before IO, then borrowed under the descriptor owner until
+the transfer and read copyback finish; concurrent free waits for that borrow.
+Channels receive a bounded native byte-buffer view. Embedding streams use at most
+1 MiB of staging storage and report the actual short transfer, preserving bytes
+outside a successful read. A stream that writes a prefix before throwing retains
+those writes, as with a managed destination. Freed, foreign-context and unowned
+numeric pointers remain rejected. This adds no descriptor or foreign-call authority.
+
 Managed native opens register pending acquisition before provider calls, claim
 the actual opened identity before truncation, and publish one shared owner.
 `dup`/`dup2` aliases share that owner, its IO monitor and metadata capability;
@@ -90,18 +102,20 @@ native files are known nonterminal; arbitrary Env stream behavior is unchanged.
 
 The host lease closes once using a Java FFM downcall, so ordinary context disposal
 does not re-enter a disposed LLVM context. Rollback and ordinary disposal are
-tested, including physical descriptor closure. Cancellation between libc
-acquisition and publishing the descriptor into its host lease is **not yet
-proved safe**; this checkpoint makes no cancellation guarantee.
+tested, including physical descriptor closure. For this synchronous private
+acquisition path, cancellation between libc acquisition and publishing the
+descriptor into its host lease is **not yet proved safe**. The original safe and
+interruptible open declarations use the separate owned request below.
 
 ## Evidence
 
-### Original unsafe open
+### Original unsafe, safe and interruptible open
 
-The Linux x86_64 `ccall unsafe __hscore_open` declaration is supported only in
-the explicit native context. Its Addr#/CInt/Word32/State proof is exact; safe and
-interruptible declarations remain rejected. This does not execute the complete
-unchanged `openFileWith` acquisition, whose interruptible call is still a gap.
+The Linux x86_64 original `__hscore_open` declarations are supported in their
+exact unsafe, safe and interruptible forms only in the explicit native context.
+Their Addr#/CInt/Word32/State proof is exact. The unchanged `openFileWith` path
+can reach its original interruptible declaration; this open contract alone does
+not establish every subsequent Handle operation.
 
 Original open forwards all canonical flags and mode bits unchanged to libc,
 including requested truncation/append/creation behavior and the host umask.

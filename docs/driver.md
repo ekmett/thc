@@ -6,13 +6,16 @@ declarations and native Cabal output layout. It links `Cabal` and `Cabal-syntax`
 directly. There is no subprocess call to the `cabal` command and no replacement
 dependency solver.
 
-`thc run` is the first executable slice. With an explicit `.cabal` file it uses
+`thc run` is a bounded executable path. With an explicit `.cabal` file it uses
 Cabal's library to configure one package. With a directory containing
-`cabal.project` it asks cabal-install to build all enabled project components and reads
-the resolved plan and per-component build information. Both paths export
-`Main.main :: IO ()` through `THC.Plugin`, reject unsupported reachable Core
-through the strict audit, then invoke the THC JVM runtime. The native Cabal
-executable is never run by `thc run`. The standalone `build` and `repl` commands
+`cabal.project` it asks cabal-install to build the selected executable and its
+required component closure, then reads the resolved plan and build information.
+Both paths export Core through `THC.Plugin`, strictly audit reachable bindings
+and invoke the THC JVM runtime; neither runs the native Cabal executable. The
+explicit-file and default pinned project providers run a raw `Main.main :: IO ()`
+action. The complete installed-Core project provider instead runs GHC's generated
+`main::Main.main` and, after normal completion, its original `flushStdHandles`
+using the same program and Handle CAFs. Standalone `build` and `repl` commands
 remain absent.
 
 IO launchers (`--run-io` and `--run-executable`) do not append runtime metrics to
@@ -58,8 +61,9 @@ installed package IDs to export Core. The strict `--io-main` audit checks the er
 The runtime supplies the zero-width state carrier, executes the action, and
 verifies its boxed unit result. The successful fixture performs `newMutVar#`,
 `writeMutVar#`, and `readMutVar#`; the integration check also changes its expected
-read value and requires a guest failure. Console IO such as `putStrLn` still
-fails strict audit. There is no diagnostic trap fallback or native execution.
+read value and requires a guest failure. Under the default pinned provider,
+console IO such as `putStrLn` still fails strict audit. There is no diagnostic
+trap fallback or native execution.
 
 This first slice requires an executable without internal library or build-tool
 dependencies when using an explicit `.cabal` file. It expects a source `.hs` main
@@ -106,10 +110,11 @@ mutable reference; the test compares native execution with both THC backends,
 then changes the dependency source and verifies cache invalidation and failure.
 
 This is a bounded executable path. Native code remains necessary for Template
-Haskell and build tools. THC still rejects unsupported runtime dependencies,
-including ordinary `putStrLn`; this path does not claim general Hackage, C FFI
-or no-code-only package builds. Project flags belong in `cabal.project`; the
-independent `plan-package` and explicit `.cabal` path keep their existing scope.
+Haskell and build tools. THC still rejects unsupported runtime dependencies;
+the default pinned provider rejects ordinary `putStrLn`. This path does not
+claim general Hackage, C FFI or no-code-only package builds. Project flags
+belong in `cabal.project`; the independent `plan-package` and explicit `.cabal`
+path keep their existing scope.
 Source-built store packages require a Cabal source hash and a successful Core
 capture; unsupported build modes fail before producing an incomplete manifest.
 Selected `ghc-internal` definitions come from exact, unmodified GHC 9.14.1
@@ -164,14 +169,19 @@ original `flushStdHandles` after successful completion, sharing one program's
 Handle CAFs. Relative file paths are resolved from the Cabal project directory.
 The default `pinned` provider retains the limited raw-IO entry convention.
 
-General file IO is still incomplete. The separate `file-lifecycle-full-core`
-test currently stops at unsupported original foreign calls in its strict audit.
-Enable it explicitly with `cabal test file-lifecycle-full-core -ffull-core-tests`;
+General file IO is still incomplete. On Linux x86_64 with a complete GHC 9.14.1
+installation, the separate `file-lifecycle-full-core` fixture passed native GHC
+comparison through the ordinary production driver and bytecode backend. Its
+strict audit supplied 72,884 bindings, reached 2,207, and reported zero missing
+bindings, issues or unsupported traps. The fixture verified UTF-8 file reads and
+writes, append, absolute and end-relative seek, EOF, a caught missing-path
+`IOException`, and original shutdown flushing. Its exact output was `file
+lifecycle ok` without a newline. This run had `compiledEntries=0`, so it does
+not establish a JIT-compiled path. Enable the opt-in test with
+`cabal test file-lifecycle-full-core -ffull-core-tests`;
 `THC_INSTALLED_CORE_GHC`, `THC_INSTALLED_CORE_GHC_PKG`, and
 `THC_INSTALLED_CORE_GHC_SOURCE` select the complete installation and its configured
-source tree. It checks UTF-8 files, append, seek, EOF, a caught missing-path error,
-and final output without a newline against native GHC once the full closure is
-accepted. It is not part of the stock-GHC test suite.
+source tree. The test is not part of the stock-GHC suite.
 
 The driver builds the selected-compiler `thc-interface` helper, discovers exact
 pre-existing registrations in the selected global package database, and reads
@@ -325,8 +335,8 @@ Additional cases exercise missing dependencies, unknown flags, disabled
 components, ambiguous/malformed/missing packages, project boundaries, custom
 Setup rejection, unsupported test interfaces and relative output paths. These
 are native Cabal planning checks; their test build is an independent oracle.
-The same suite checks THC IO execution on both backends and
-requires unsupported console IO to fail before launch.
+The same suite checks the limited raw THC IO action on both backends and
+requires unsupported console IO under the pinned provider to fail before launch.
 
 Future work should expand the tested project and runtime dependency closure,
 support no-code-only export where installed interface identities permit it, and

@@ -464,6 +464,32 @@ private val text = "class FakeString { @Test }"
             self.commit()
             self.full(reason)
 
+    def test_anonymous_objects_keep_private_helpers_local_without_hiding_shared_ones(self):
+        path = "src/test/kotlin/example/OtherTest.kt"
+        source = ('package example\nimport org.junit.jupiter.api.Test\n'
+                  'private val local = object { val value = 1 }\n'
+                  'class OtherTest {\n'
+                  '  private fun thunk() = Holder(object : RootNode(null) {\n'
+                  '    override fun execute() = local.value\n'
+                  '  })\n'
+                  '  @Test fun works() { assertEquals(1, thunk().execute()) }\n'
+                  '}\n')
+        self.write(path, source)
+        self.base = self.commit()
+        self.write(path, source.replace('val value = 1', 'val value = 2'))
+        self.commit()
+        result = self.plan()
+        self.assertEqual("narrow", result["mode"], result)
+        self.assertEqual(["example.OtherTest"], result["affected"]["junit"])
+        for changed, reason in (
+                (source.replace('private fun thunk', 'fun thunk'), "shared-test-member"),
+                (source.replace('private val local', 'val local'), "shared-test-helper"),
+                (source + 'object Shared { val value = 1 }\n', "shared-test-helper")):
+            with self.subTest(reason=reason):
+                self.write(path, changed)
+                self.commit()
+                self.full(reason)
+
     def test_automation_changes_use_control_tests_and_smoke(self):
         for path in (".github/workflows/fast.yml", ".github/scripts/fast_ci.py"):
             with self.subTest(path=path):
@@ -755,9 +781,10 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_native_malloc_source_and_composite_owners_select_both_consumers(self):
         malloc = "thc.runtime.NativeMallocTest"
         addresses = "thc.runtime.NativeAddressTest"
-        self.assertEqual([malloc], self.family("ManagedNativeAllocations")["junit"])
+        buffers = "thc.runtime.NativeFileBuffersTest"
+        self.assertEqual([buffers, malloc], self.family("ManagedNativeAllocations")["junit"])
         owners = self.policy["owners"]
-        self.assertEqual([malloc], owners["src/main/java/thc/runtime/NativeMallocAllocation.java"]["junit"])
+        self.assertEqual([buffers, malloc], owners["src/main/java/thc/runtime/NativeMallocAllocation.java"]["junit"])
         self.assertEqual({malloc, addresses},
                          set(owners["test/haskell-fixtures/NativeAddressFixtures.hs"]["junit"]))
         self.assertEqual({malloc, addresses},
@@ -961,7 +988,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertLessEqual(native, set(owners[path]["junit"]))
                 self.assertNotIn(path, self.families)  # Preserve the foreign callback lane.
-        self.assertLessEqual({"thc.runtime.ManagedFilesTest", "thc.runtime.GuestThreadsTest",
+        self.assertLessEqual({"thc.runtime.NativeFileBuffersTest", "thc.runtime.ManagedFilesTest", "thc.runtime.GuestThreadsTest",
                               "thc.GuestExceptionsTest"}, set(owners["src/main/kotlin/thc/runtime/ManagedFiles.kt"]["junit"]))
         self.assertLessEqual({"thc.runtime.CoreManagedFilesTest", "thc.runtime.ManagedFileCallTest"},
                              set(owners["src/main/kotlin/thc/runtime/CoreManagedFiles.kt"]["junit"]))
