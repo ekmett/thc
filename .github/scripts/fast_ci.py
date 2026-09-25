@@ -133,7 +133,7 @@ def gradle_command(selection):
     require(all(isinstance(c, str) and re.fullmatch(r"[A-Za-z_][\w.$]*", c) for c in classes),
             "Invalid selected class name")
     argv = ["./gradlew", "--daemon", "--max-workers=4", "--build-cache",
-            "--init-script", ".github/scripts/fast_ci.init.gradle", "test", "--rerun"]
+            "--init-script", ".github/scripts/fast_ci.init.gradle", "test", "--rerun", "--fail-fast"]
     if selection["mode"] == "narrow":
         require(selection["junit"]["patterns"] == classes, "Narrow patterns must name entire selected classes")
         for name in classes:
@@ -204,8 +204,8 @@ def run_mode(recorder, selection, mode):
                                allowed=tuple(range(-128, 256)))
     # Preserve failed runs as well as successful ones before the next Test task.
     preserve_previous(root, directory / mode)
-    summary = validate_xml(directory / mode / "xml", selection["junit"]["classes"])
     require(code == 0, f"Gradle {mode} failed with exit {code}")
+    summary = validate_xml(directory / mode / "xml", selection["junit"]["classes"])
     write_json(directory / mode / "summary.json", summary)
     return summary
 

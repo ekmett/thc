@@ -85,10 +85,13 @@ class FastRunnerTest(unittest.TestCase):
         narrow = ci.gradle_command(self.selection())
         self.assertIn("--build-cache", narrow)
         self.assertIn("--rerun", narrow)
+        self.assertIn("--fail-fast", narrow)
         self.assertIn(".github/scripts/fast_ci.init.gradle", narrow)
         self.assertNotIn("--rerun-tasks", narrow)
         self.assertEqual(narrow[-2:], ["--tests", "example.Test"])
-        self.assertNotIn("--tests", ci.gradle_command(self.selection("full")))
+        full = ci.gradle_command(self.selection("full"))
+        self.assertIn("--fail-fast", full)
+        self.assertNotIn("--tests", full)
         init = Path(__file__).with_name("fast_ci.init.gradle").read_text()
         self.assertIn("tasks.withType(org.gradle.api.tasks.testing.Test)", init)
         self.assertIn("outputs.doNotCacheIf", init)
@@ -100,6 +103,7 @@ class FastRunnerTest(unittest.TestCase):
         self.assertEqual("./gradlew", command[0])
         self.assertIn("polyglotTest", command)
         self.assertIn("--rerun", command)
+        self.assertNotIn("--fail-fast", command)
         self.assertNotIn("--tests", command)
         for malformed in ({"required": True, "classes": []},
                           {"required": False, "classes": ["example.PolyglotTest"]},
@@ -167,6 +171,25 @@ class FastRunnerTest(unittest.TestCase):
         self.assertEqual((destination / "xml/TEST-stale.xml").read_text(), "old")
         with self.assertRaises(RuntimeError):
             ci.validate_xml(source, ["example.Test"])
+
+    def test_failed_gradle_preserves_partial_xml_and_reports_its_exit(self):
+        class FailedRun:
+            root = self.root
+            directory = self.root / "receipts"
+
+            def command(self, name, argv, **kwargs):
+                output = self.root / "build/test-results/test"
+                output.mkdir(parents=True)
+                (output / "TEST-example.Test.xml").write_text(
+                    '<testsuite name="example.Test" tests="1" failures="1" errors="0" skipped="0">'
+                    '<testcase name="fails" classname="example.Test"><failure/></testcase></testsuite>')
+                return 1, ""
+
+        selection = self.selection() | {"junit": {"classes": ["example.Test", "later.Test"],
+                                                  "patterns": ["example.Test", "later.Test"]}}
+        with self.assertRaisesRegex(RuntimeError, "Gradle default failed with exit 1"):
+            ci.run_mode(FailedRun(), selection, "default")
+        self.assertTrue((self.root / "receipts/default/xml/TEST-example.Test.xml").exists())
 
     def test_linked_test_output_rejected(self):
         source = self.root / "build/test-results/test"
