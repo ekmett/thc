@@ -12,9 +12,9 @@ data Heap = Heap Int16X8# Int#
 consumeHeap :: Heap -> Int#
 consumeHeap (Heap vector bias) = vectorWorker vector bias
 
-{-# OPAQUE heapMaker #-}
-heapMaker :: Int16X8# -> Int# -> Heap
-heapMaker vector = Heap vector
+{-# OPAQUE applyHeapPartial #-}
+applyHeapPartial :: (Int# -> Heap) -> Int#
+applyHeapPartial partial = consumeHeap (partial 13#)
 
 {-# OPAQUE heapCase #-}
 heapCase :: Int# -> Int#
@@ -22,7 +22,7 @@ heapCase x = consumeHeap (Heap (vectorReturn x) 13#)
 
 {-# OPAQUE heapPapCase #-}
 heapPapCase :: Int# -> Int#
-heapPapCase x = consumeHeap (heapMaker (vectorReturn x) 13#)
+heapPapCase x = applyHeapPartial (Heap (vectorReturn x))
 
 {-# OPAQUE applyCaptured #-}
 applyCaptured :: (Int# -> Int#) -> Int#

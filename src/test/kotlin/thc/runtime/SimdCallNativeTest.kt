@@ -113,11 +113,13 @@ class SimdCallNativeTest {
         assertEquals(2L, (heap["arity"] as Number).toLong())
         assertEquals(listOf("VecRep 8 Int16ElemRep"), (heap["fieldReps"] as List<*>)[0])
         val bindings = source["bindings"] as List<Map<String, Any?>>
-        val expressions = nodes(bindings)
+        val heapPapRoot = bindings.single { it["name"] == "heapPapCase" }
+        val expressions = nodes(heapPapRoot["expr"])
         assertTrue(expressions.any { it.getOrNull(0) == "app" &&
             (it.getOrNull(1) as? List<*>)?.let { head -> head.getOrNull(0) == "con" && head.getOrNull(1) == heapId } == true &&
             (it.getOrNull(2) as? List<*>)?.size == 1 }, "Exported Core lacks a vector constructor PAP")
-        assertTrue(nodes(bindings).any { it.getOrNull(0) == "data" && it.getOrNull(1) == heapId },
+        val consumer = bindings.single { it["name"] == "consumeHeap" }
+        assertTrue(nodes(consumer["expr"]).any { it.getOrNull(0) == "data" && it.getOrNull(1) == heapId },
             "Exported Core lacks the real vector constructor case")
         val closureRoot = bindings.single { it["name"] == "capturedCase" }
         val thunkRoot = bindings.single { it["name"] == "thunkCase" }
