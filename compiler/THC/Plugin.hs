@@ -868,11 +868,35 @@ serializePostTidyCore flags opts m tycons program foreignArtifacts =
 -- optional inventory, never a process-local table or a previous export file.
 serializePostTidyCoreWithAnnotations :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO String
 serializePostTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations = do
-  (_,result) <- postTidyModule flags opts m tycons program
+  associations <- either (ioError . userError . ("THC: " ++)) pure
+    (Exports.readStaticExports m annotations program)
+  -- A boxed identity need not inspect or construct its argument in Core. Host
+  -- codecs still need the genuine constructor layout of its declared type.
+  let exported = case associations of
+        Nothing -> []
+        Just (Exports.StaticExports _ _ _ records) -> map (exportKey . Exports.exportBinder) records
+      signatureTycons = concat [foreignSignatureTycons (idType binder)
+        | (binder, _) <- flattenBinds program, nameKey (varName binder) `elem` exported]
+  (_,result) <- postTidyModule flags opts m (tycons ++ signatureTycons) program
   exports <- staticExportFields m annotations program
   provenance <- exportProvenanceFields m annotations program foreignArtifacts
   let annotated = case result of O fields -> O (fields ++ exports ++ provenance); _ -> result
   pure (json (withForeignArtifacts foreignArtifacts annotated) ++ "\n")
+  where
+    exportKey (Exports.ExportName unit modName occurrence _) = unit ++ ":" ++ modName ++ "." ++ occurrence
+
+-- GHC's representation view erases newtypes, including IO's state transformer.
+-- Foreign-export types are already checked closed/monomorphic by the producer.
+foreignSignatureTycons :: Type -> [TyCon]
+foreignSignatureTycons original =
+  let ty = unwrapType original
+      (parameters, result) = splitFunTys ty
+  in if not (null parameters)
+    then concatMap (foreignSignatureTycons . scaledThing) parameters ++ foreignSignatureTycons result
+    else case splitTyConApp_maybe ty of
+      Just (constructorType, arguments) -> [constructorType | isBoxedDataTyCon constructorType] ++
+        concatMap foreignSignatureTycons arguments
+      Nothing -> []
 
 exportProvenanceFields :: Module -> [Annotation] -> CoreProgram -> ForeignCore.IfaceForeign -> IO [(String,J)]
 exportProvenanceFields owner annotations program original = do
@@ -880,14 +904,20 @@ exportProvenanceFields owner annotations program original = do
   case associations of
     Nothing -> pure []
     Just (Exports.StaticExports _ _ _ exports) -> do
+      inventory <- staticExportFields owner annotations program
       verdict <- checked (ExportProvenance.inspectProvenance owner annotations
         (Just (map Exports.exportBinder exports)) original)
       let details = case verdict of
             ExportProvenance.UnknownProvenance reason -> [("status",S "unclassified"),("reason",S reason)]
             ExportProvenance.RejectedProvenance reason -> [("status",S "rejected"),("reason",S reason)]
-            ExportProvenance.VerifiedRetainedRegistration roots -> [("status",S "verified"),("roots",A (map identity roots))]
+            ExportProvenance.VerifiedRetainedRegistration roots ->
+              [("status",S "verified"),("roots",A (map identity roots)),
+               ("wordBits",num (64::Int)),("expectedForeign",foreignArtifactRecord original),
+               ("expectedExports",case lookup "staticForeignExports" inventory of
+                  Just value -> value
+                  Nothing -> error "THC verified registration lost its export inventory")]
       pure [("staticForeignExportRegistration",O
-        ([("schema",num (1::Int)),("scope",S "retained-foreign-products"),("execution",S "not-linked"),
+        ([("schema",num (2::Int)),("scope",S "retained-foreign-products"),("execution",S "not-linked"),
           ("profile",S "ghc-9.14.1-thc-only-native-static-ccall-v1")] ++ details))]
   where
     checked = either (ioError . userError . ("THC: " ++)) pure
@@ -923,11 +953,16 @@ staticExportFields owner annotations bindings = do
 withForeignArtifacts :: ForeignCore.IfaceForeign -> J -> J
 withForeignArtifacts (ForeignCore.IfaceForeign Nothing []) result = result
 withForeignArtifacts (ForeignCore.IfaceForeign (Just (ForeignCore.IfaceCStubs "" "" [] [])) []) result = result
-withForeignArtifacts (ForeignCore.IfaceForeign stubs files) (O fields) = O $
-  ("schema",num (2::Int)) : ("foreign",O
-    [("schema",num (1::Int)),("execution",S "not-linked"),
-     ("stubs",maybe Z stub stubs),("files",A (map file files))]) :
+withForeignArtifacts original (O fields) = O $
+  ("schema",num (2::Int)) : ("foreign",foreignArtifactRecord original) :
   filter ((/= "schema") . fst) fields
+withForeignArtifacts _ _ = error "THC foreign artifacts require a module object"
+
+-- One structural encoder binds the archived product to its verified evidence.
+foreignArtifactRecord :: ForeignCore.IfaceForeign -> J
+foreignArtifactRecord (ForeignCore.IfaceForeign stubs files) = O
+  [("schema",num (1::Int)),("execution",S "not-linked"),
+   ("stubs",maybe Z stub stubs),("files",A (map file files))]
   where
     stub (ForeignCore.IfaceCStubs header source initializers finalizers) = O
       [("header",S header),("source",S source),
@@ -939,7 +974,6 @@ withForeignArtifacts (ForeignCore.IfaceForeign stubs files) (O fields) = O $
        ("name",S (unpackFS (csl_name value)))]
     file (ForeignCore.IfaceForeignFile sourceLanguage source extension) = O
       [("language",S (show sourceLanguage)),("source",S source),("extension",S extension)]
-withForeignArtifacts _ _ = error "THC foreign artifacts require a module object"
 
 postTidyModule :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> IO (Ctx,J)
 postTidyModule flags opts m tycons program = do

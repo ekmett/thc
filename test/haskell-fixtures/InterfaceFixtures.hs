@@ -215,6 +215,7 @@ prepareInterfaceCore root = do
         "compiler/test-fixtures/InterfaceForeign.hs", "test/haskell-fixtures/InterfaceFixtures.hs",
         "compiler/test-fixtures/InterfaceForeignAlias.hs", "test/haskell-fixtures/InterfaceForeignFacts.hs",
         "compiler/test-fixtures/ForeignExportSignatures.hs",
+        "compiler/test-fixtures/ForeignExportManaged.hs", "compiler/test-fixtures/ManagedExportNative.hs",
         "compiler/test-fixtures/CBVCoercionAudit.hs", "compiler/interface/Main.hs",
         "src/THC/Driver/Installed.hs", "src/THC/Driver/Project.hs", "src/THC/Driver/Wired.hs",
         "src/THC/Driver/ForeignBitcode.hs", "compiler/target-layout.c",
@@ -239,7 +240,9 @@ prepareInterfaceCore root = do
          directory </> "foreign-alias/b.json", directory </> "source/InterfaceForeignAlias.hs.saved"] ++
         [directory </> "typed-foreign-exports.json"] ++
         [directory </> "typed-foreign-exports" </> variant ++ ".json" |
-          variant <- ["a", "b", "signatures", "static-signatures", "foreign-file", "instrumented"]] ++
+          variant <- ["a", "b", "signatures", "static-signatures", "foreign-file", "instrumented", "managed"]] ++
+        [directory </> "typed-foreign-exports/managed/ForeignExportManaged.hi",
+         directory </> "typed-export-source/ForeignExportManaged.hs.saved"] ++
         [directory </> entry ++ "-audit.json" | entry <- entries]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
@@ -249,7 +252,7 @@ prepareInterfaceCore root = do
      "controls" .= (["opaque-body", "private-worker", "recursive-groups", "thin-unavailable",
        "no-source-target", "wrong-module", "wrong-unit", "wrong-way", "foreign-archived", "private-flags", "repeat-load",
        "helper-protocol", "installed-cbv-worker", "installed-wired-unit", "foreign-association-absence",
-       "foreign-linked-clock", "typed-foreign-export-associations", "retained-export-registration"] :: [String]),
+       "foreign-linked-clock", "typed-foreign-export-associations", "retained-export-registration", "managed-export-original"] :: [String]),
      "commands" .= map commandRecord commands, "runtimeVerified" .= False]
   putStrLn "Prepared complete interface Core: 21 native rows; full/thin/no-source/identity/way/foreign controls passed"
 

@@ -142,11 +142,12 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
                   ("signatures", "ForeignExportSignatures", "unused"),
                   ("static-signatures", "ForeignExportSignatures", "unused"),
                   ("foreign-file", "InterfaceForeign", "unused"),
-                  ("instrumented", "InterfaceForeignAlias", "thc_interface_instrumented")]
+                  ("instrumented", "InterfaceForeignAlias", "thc_interface_instrumented"),
+                  ("managed", "ForeignExportManaged", "unused")]
       sourceFor name = directory </> "typed-export-source" </> name ++ ".hs"
   createDirectoryIfMissing True (root </> directory </> "typed-export-source")
   mapM_ (\name -> copyFile (root </> "compiler/test-fixtures" </> name ++ ".hs") (root </> sourceFor name))
-    ["InterfaceForeignAlias", "ForeignExportSignatures", "InterfaceForeign"]
+    ["InterfaceForeignAlias", "ForeignExportSignatures", "InterfaceForeign", "ForeignExportManaged"]
   commands <- forM variants $ \(variant, name, symbol) -> do
     let output = directory </> "typed-foreign-exports" </> variant
     createDirectoryIfMissing True (root </> output)
@@ -171,8 +172,15 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
        "import-dirs: " ++ show (root </> output), "depends: " ++ baseUnit]
     registered <- run "register" ["--package-db", database, "update", conf]
     pure ([compiled] ++ initialized ++ [registered])
+  let managed = directory </> "typed-foreign-exports/managed"
+      nativeRun label = runLogged 180 root (directory </> "logs") ("managed-export-" ++ label) []
+  nativeBuild <- nativeRun "native-build" ghc
+    ["--make", "-O2", "-fforce-recomp", "-i", "-package-db", managed </> "package.conf.d", "-package-id", unitName,
+     "-odir", managed, "-hidir", managed, "compiler/test-fixtures/ManagedExportNative.hs",
+     managed </> "ForeignExportManaged.o", "-o", managed </> "oracle"]
+  nativeResult <- nativeRun "native-oracle" (root </> managed </> "oracle") []
   mapM_ (\name -> renameFile (root </> sourceFor name) (root </> sourceFor name ++ ".saved"))
-    ["InterfaceForeignAlias", "ForeignExportSignatures", "InterfaceForeign"]
+    ["InterfaceForeignAlias", "ForeignExportSignatures", "InterfaceForeign", "ForeignExportManaged"]
   records <- forM variants $ \(variant, name, _) -> runGhc (Just libdir) $ do
     initial <- getSessionDynFlags
     initialEnv <- getSession
@@ -200,11 +208,21 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
             "foreign-file" -> ("rejected", "additional-foreign-files")
             "instrumented" -> ("unclassified", "unclassified-target-or-instrumentation")
             _ -> ("verified", "")
-      check (field "schema" provenance == Number 1 && field "execution" provenance == String "not-linked" &&
+      check (field "schema" provenance == Number 2 && field "execution" provenance == String "not-linked" &&
         field "scope" provenance == String "retained-foreign-products" &&
         field "status" provenance == String status &&
         (Text.null reason || field "reason" provenance == String reason))
         ("Unexpected retained registration provenance for " ++ variant ++ ": " ++ show provenance)
+      if status /= "verified" then pure () else check
+        (field "expectedForeign" provenance == field "foreign" value && field "expectedExports" provenance == metadata &&
+         field "wordBits" provenance == Number 64)
+        "Verified registration lost its exact retained product or native word width"
+      if variant /= "static-signatures" then pure () else do
+        let constructorIds = case field "constructors" value of
+              Array values -> map (field "id") (toList values)
+              _ -> []
+        check (String "ghc-internal:GHC.Internal.Int.I32#" `elem` constructorIds)
+          "Erased newtype/identity export lost its original boxed scalar constructor"
       if variant /= "a" then pure () else case interfaceForeign core of
         ForeignCore.IfaceForeign (Just (ForeignCore.IfaceCStubs header cSource initializers finalizers)) [] -> do
           -- Mutate the archived product at the public serializer boundary;
@@ -229,7 +247,7 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
       writeJson (root </> directory </> "typed-foreign-exports" </> variant ++ ".json") value
       pure (metadata, provenance)
   case records of
-    [(first, _), (second, _), (signatures, _), (staticSignatures, _), _, _] -> do
+    [(first, _), (second, _), (signatures, _), (staticSignatures, _), _, _, (managedSignatures, _)] -> do
       let a = singleExport first
           b = singleExport second
           allSignatures = entries signatures
@@ -257,13 +275,18 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
         "Typed export metadata conflated primitive widths/floats or lost newtype normalization"
       check (entries staticSignatures == allSignatures)
         "Removing only the wrapper changed the exact static export associations"
+      let unitExport = filter ((== String "thc_unit") . field "symbol") (entries managedSignatures)
+      check (case unitExport of
+        [unitRecord] -> field "occurrence" (field "name" (field "result" unitRecord)) == String "Unit" &&
+          field "effect" unitRecord == String "io"
+        _ -> False) "Managed IO unit export lost its exact normalized type"
       writeJson (root </> directory </> "typed-foreign-exports.json") (object
         ["schema" .= (1 :: Int), "execution" .= ("not-linked" :: String),
          "sourceDeleted" .= True, "aliasControls" .= [first, second], "signatureControls" .= signatures,
          "retainedRegistrationControls" .= map snd records,
          "changedProductControls" .= (["header", "body", "initializer", "finalizer"] :: [String])])
     _ -> die "Expected typed alias and signature controls"
-  pure (concat commands)
+  pure (concat commands ++ [nativeBuild, nativeResult])
   where
     field key (Object fields) = maybe Null id (KeyMap.lookup key fields)
     field _ _ = Null
