@@ -492,8 +492,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         b.endBlock()
     }
 
-    /** Blocking MVar operands are evaluated once; only an uncommitted cell request is retried. */
-    private fun emitBlockingMVar(e: Emission, operands: List<Expression>,
+    /** Blocking operands are evaluated once; only their uncommitted request is retried. */
+    private fun emitBlockingRequest(e: Emission, operands: List<Expression>,
                                  result: Boolean, operation: (List<BytecodeLocal>) -> Unit) {
         val b = e.builder
         b.beginBlock()
@@ -1984,6 +1984,34 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     b.emitLoadConstant(Unit)
                     b.endBlock()
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && CoreFileWait.named(fn[1] as String)) {
+                val name = fn[1] as String
+                CoreFileWait.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.map { argument(it, scope, false) }
+                CoreFileWait.validate(name, operands.map { it.proof }, flags, tupleProof)
+                val payload = globals[CoreFileWait.badFd]
+                    ?: throw UnsupportedCore("$name requires original blockedOnBadFD payload")
+                val writing = name == "waitWrite#"
+                ProvenExpression(Expression { e ->
+                    val b = e.builder
+                    val token = Expression { target ->
+                        target.builder.beginPrepareFileWait(writing)
+                        operands.forEach { it.emit(target) }
+                        target.builder.endPrepareFileWait()
+                    }
+                    if (enableAsync) emitBlockingRequest(e, listOf(token), true) { values ->
+                        b.beginAwaitFileWait(payload, true)
+                        b.emitLoadLocal(values.single())
+                        b.endAwaitFileWait()
+                    } else {
+                        b.beginBlock()
+                        b.beginAwaitFileWait(payload, false)
+                        token.emit(e)
+                        b.endAwaitFileWait()
+                        b.emitLoadConstant(Unit)
+                        b.endBlock()
+                    }
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && fn[1] == "getCurrentCCS#") {
                 CoreCurrentCCS.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 argument(args[0], scope, true) // Compile/prove the lifted dummy, never enter it.
@@ -2084,7 +2112,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 operation.validate(operands.map { it.proof }, flags, tupleProof)
                 if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
                     if (enableAsync && operation in setOf(MVarOp.TAKE, MVarOp.READ)) {
-                        emitBlockingMVar(e, operands, false) { values ->
+                        emitBlockingRequest(e, operands, false) { values ->
                             e.builder.beginReadMVar(destination[0], operation == MVarOp.TAKE, true)
                             values.forEach(e.builder::emitLoadLocal)
                             e.builder.endReadMVar()
@@ -2111,7 +2139,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     }
                 } else ProvenExpression(Expression { e ->
                     if (enableAsync && operation == MVarOp.PUT) {
-                        emitBlockingMVar(e, operands, true) { values ->
+                        emitBlockingRequest(e, operands, true) { values ->
                             e.builder.beginPutMVar(true)
                             values.forEach(e.builder::emitLoadLocal)
                             e.builder.endPutMVar()

@@ -2351,3 +2351,40 @@ class ExplicitWeakContractTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class DescriptorWaitAuditTest(unittest.TestCase):
+    """The RTS bad-FD CAF is an implicit original dependency of both waits."""
+
+    @staticmethod
+    def fixture(name, include_payload=True):
+        state = dict(kind='void', primReps=[], evaluated=True)
+        payload_id = 'ghc-internal:GHC.Internal.Event.Thread.blockedOnBadFD'
+        params = [dict(id='fd', lifted=False, rep=LONG), dict(id='s', lifted=False, rep=state)]
+        call = ['app', ['prim', name],
+                [['var', 'fd', dict(rep=LONG)], ['var', 's', dict(rep=state)]],
+                [False, False], False, False, dict(rep=state)]
+        root = dict(bind('root', ['lam', params, call, dict(rep=CLOSURE, resultRep=state)]),
+                    rep=CLOSURE, arity=2)
+        payload = dict(bind(payload_id, ['var', payload_id, dict(rep=REFERENCE)]), rep=REFERENCE)
+        return dict(schema=1, ghc='9.14.1', bindings=[root] + ([payload] if include_payload else []),
+                    constructors=[])
+
+    def test_original_payload_and_exact_state_contract(self):
+        for name in ('waitRead#', 'waitWrite#'):
+            report = audit_core.Audit([('wait.json', self.fixture(name))], CAP).run(['root'])
+            self.assertTrue(report['accepted'], report['issues'])
+            self.assertIn('ghc-internal:GHC.Internal.Event.Thread.blockedOnBadFD',
+                          [binding['id'] for binding in report['reachableBindings']])
+            missing = audit_core.Audit([('wait.json', self.fixture(name, False))], CAP).run(['root'])
+            self.assertFalse(missing['accepted'])
+            self.assertIn('ghc-internal:GHC.Internal.Event.Thread.blockedOnBadFD', missing['missingGlobals'])
+            for mutation in ('descriptor', 'state', 'result', 'flags'):
+                module = self.fixture(name)
+                call = module['bindings'][0]['expr'][2]
+                if mutation == 'descriptor': call[2][0][2]['rep'] = dict(LONG, primReps=['WordRep'])
+                if mutation == 'state': call[2][1][2]['rep'] = LONG
+                if mutation == 'result': call[6]['rep'] = LONG
+                if mutation == 'flags': call[3] = [False, True]
+                bad = audit_core.Audit([('wait.json', module)], CAP).run(['root'])
+                self.assertFalse(bad['accepted'], (name, mutation, bad))

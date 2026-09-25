@@ -2203,6 +2203,14 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (fn[0] == "prim" && fn[1] == "yield#") {
                 CoreYield.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 YieldThread(argument(args[0], scope, false), enableAsync, tupleProof)
+            } else if (fn[0] == "prim" && CoreFileWait.named(fn[1] as String)) {
+                val name = fn[1] as String
+                CoreFileWait.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.map { argument(it, scope, false) }
+                CoreFileWait.validate(name, operands.map { it.representation }, flags, tupleProof)
+                val payload = globals[CoreFileWait.badFd]
+                    ?: throw UnsupportedCore("$name requires original blockedOnBadFD payload")
+                WaitFileDescriptor(operands[0], operands[1], payload, name == "waitWrite#", enableAsync, tupleProof)
             } else if (fn[0] == "prim" && fn[1] in listOf("myThreadId#", "threadStatus#")) {
                 val name = fn[1] as String
                 CoreGuestThreads.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)

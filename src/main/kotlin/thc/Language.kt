@@ -152,6 +152,8 @@ object CoreModules {
         fun visit(expr: List<Any?>, bound: Set<String>) {
             when (expr[0]) {
                 "var" -> reference(expr[1] as String, bound)
+                "prim" -> if (thc.runtime.CoreFileWait.named(expr[1] as String))
+                    reference(thc.runtime.CoreFileWait.badFd, bound)
                 "lam" -> {
                     val ids = (expr[1] as List<Map<String, Any?>>).map { it["id"] as String }
                     visit(expr[2] as List<Any?>, bound + ids)
