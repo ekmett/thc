@@ -20,6 +20,7 @@ import LiveAsyncFixtures (prepareLiveAsync)
 import ThreadAsyncFixtures (prepareThreadAsync)
 import UncaughtSelfFixtures (prepareUncaughtSelf)
 import MaskFunctionFixtures (prepareMaskFunctions)
+import InterfaceFixtures (prepareInterfaceCore)
 import OriginalStdioFixtures (prepareOriginalStdio)
 import StackFixtures (prepareOriginalStack, prepareOriginalStackFormatter, exportOriginalStackSource)
 import SmallArrayFixtures (prepareSmallArrays)
@@ -856,6 +857,7 @@ main = do
     ["thread-async"] -> prepareThreadAsync root
     ["uncaught-self"] -> prepareUncaughtSelf root
     ["mask-functions"] -> prepareMaskFunctions root
+    ["interface-core"] -> prepareInterfaceCore root
     ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (core-continuation|mask-functions|live-async|thread-async|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (interface-core|core-continuation|mask-functions|live-async|thread-async|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

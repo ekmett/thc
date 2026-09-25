@@ -12,6 +12,9 @@ maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  compiler/test-fixtures/InterfaceLibrary.hs
+  compiler/test-fixtures/InterfaceNative.hs
+  compiler/test-fixtures/InterfaceForeign.hs
   scripts/check-ghc-core.hs
   test/check-ghc-core.sh
   compiler/test-fixtures/MaskFunctionAudit.hs
@@ -141,7 +144,7 @@ flag development
 
 library
   hs-source-dirs: compiler
-  exposed-modules: THC.Plugin
+  exposed-modules: THC.Plugin, THC.Interface
   other-modules:
     THC.CBV
     THC.Demands
@@ -227,6 +230,7 @@ executable thc-fixtures
     ThreadAsyncFixtures
     UncaughtSelfFixtures
     MaskFunctionFixtures
+    InterfaceFixtures
     FixtureSupport
     WordFloatingFixtures
     FloatingAddressFixtures
@@ -245,6 +249,7 @@ executable thc-fixtures
   build-depends:
     base >= 4.22 && < 4.23,
     thc,
+    ghc == 9.14.1,
     aeson >= 2.3 && < 2.4,
     bytestring >= 0.12.2 && < 0.13,
     containers >= 0.8 && < 0.9,

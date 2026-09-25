@@ -30,10 +30,46 @@ been built with it. Keep the matching compiler tools together; a `ghc-pkg`
 from another installation must not supply the package being checked.
 
 This is a capability check, not a declaration of GHC API compatibility.
-The exporter currently supports GHC 9.14.1. Reading complete installed Core
-and removing the pinned-source fallback are migration work; the normal build
-reports a missing capability without disabling that fallback. The explicit
+The exporter currently supports GHC 9.14.1. Wiring complete installed Core into
+the driver and removing the pinned-source fallback are migration work; the
+normal build reports a missing capability without disabling that fallback. The explicit
 `check-ghc-core` target fails when the required data is absent.
+
+## Library loading API
+
+`THC.Interface` exposes the GHC 9.14.1 adapter independently of the generic
+driver executable:
+
+```haskell
+loadInterfaceCore :: HscEnv -> Module -> FilePath -> IO (Maybe InterfaceCore)
+interfaceCoreJSON :: [CommandLineOption] -> InterfaceCore -> IO String
+```
+
+Resolve the expected `Module` (including its exact package unit) and interface
+path using the selected compiler session and package databases. `Nothing`
+means a valid interface lacks complete Core; wrong module/unit identities,
+way/version mismatches and malformed interfaces are errors. Nonempty foreign
+stubs or foreign files are explicitly rejected: the JSON exporter cannot
+preserve those native build products. Ordinary foreign calls in Core still
+require the runtime's normal support audit.
+
+The result exposes the original module, `ModDetails`, `CoreProgram` and foreign
+metadata. Hydration reads the raw interface before GHC's package cache strips
+complete Core. It privately retains interface pragmas/source ticks and keeps
+existing knot lookups for other modules. Use a fresh session retaining pragmas for dependency
+loading; the loader does not repair previously discarded dependency unfoldings.
+Cross-module home-package/hs-boot cycles are not yet an integration-tested use.
+
+Serialization shares `THC.Plugin.serializePostTidyCore` with the late plugin,
+including exact recursive groups, representations, existing CBV proofs and
+optional `source-notes`/`unit-qualified` metadata. No source target is required;
+missing source text stays absent. This API does not add a CLI, wire the driver
+cache, link dependencies, or establish runtime support for an entire package.
+
+The `thc-fixtures interface-core` control separately registers full and thin
+synthetic packages, recovers an `OPAQUE` entry/private worker, checks identity,
+way and foreign rejection, then supplies the recovered JSON and native results
+to `InterfaceCoreNativeTest` for strict AST/bytecode execution.
 
 ## Build a patched compiler
 

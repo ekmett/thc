@@ -2,7 +2,7 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE LambdaCase #-}
-module THC.Plugin (plugin) where
+module THC.Plugin (plugin, serializePostTidyCore) where
 
 import GHC.Plugins
 import GHC.Hs (HsParsedModule(..), HsModule(..), HsDecl(..), GhcPs)
@@ -789,21 +789,11 @@ exportLate :: LatePlugin
 exportLate hsc opts pair@(guts,_)
   | not ("post-tidy" `elem` opts) = pure pair
   | otherwise = do
-      sources <- loadSources ("source-notes" `elem` opts) (concatMap flattenBind (cg_binds guts))
+      (d,result) <- postTidyModule (hsc_dflags hsc) opts (cg_module guts) (cg_tycons guts) (cg_binds guts)
       let m = cg_module guts
-          unit = unitString (moduleUnit m)
-          d = Ctx (hsc_dflags hsc) (unit ++ ":" ++ moduleNameString (moduleName m)) (if "unit-qualified" `elem` opts then Just unit else Nothing) emptyVarSet emptyVarSet True False sources []
           dir = case opts of [] -> "build/core"; x:_ -> x
           modName = moduleNameString (moduleName m)
           binds = concatMap flattenBind (cg_binds guts)
-          cons = nubBy (\a b -> dataConName a == dataConName b) (concatMap tyConDataCons (cg_tycons guts) ++ concatMap (exprCons . snd) binds)
-          result = O $
-            [ ("schema",num (1::Int)), ("ghc",S "9.14.1"), ("module",S modName), ("unit",S (unitString (moduleUnit m)))
-            , ("boundary",S "optimized-Core-after-Tidy-before-CorePrep")
-            , ("sourceCore",S (pretty d (cg_binds guts)))
-            , ("bindings",A (concatMap (bindingGroup d) (cg_binds guts))), ("constructors",A (map (constructor d) cons))
-            , ("groups",A [O [("recursive",B (case b of Rec{} -> True; _ -> False)),("ids",A [S (varKey d v) | (v,_) <- flattenBind b])] | b <- cg_binds guts])
-            ] ++ sourceTableFields d
       let path = coreOutputPath opts dir (unitString (moduleUnit m)) modName
       createDirectoryIfMissing True (takeDirectory path)
       writeFile path (json result ++ "\n")
@@ -811,6 +801,34 @@ exportLate hsc opts pair@(guts,_)
       let roots = [v | (v,_) <- binds, occNameString (nameOccName (varName v)) `elem` mapMaybe (stripPrefix "closure=") opts]
       if null roots then pure () else exportInterfaceClosure opts dir d roots
       pure pair
+
+-- | Serialize actual post-Tidy Core, including Core hydrated from a complete
+-- installed interface. Only "source-notes" and "unit-qualified" affect this
+-- entry point. It neither writes files nor registers plugin closure roots.
+-- Callers must handle foreign stubs/files separately; they are not Core.
+serializePostTidyCore :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> IO String
+serializePostTidyCore flags opts m tycons program = do
+  (_,result) <- postTidyModule flags opts m tycons program
+  pure (json result ++ "\n")
+
+postTidyModule :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> IO (Ctx,J)
+postTidyModule flags opts m tycons program = do
+  sources <- loadSources ("source-notes" `elem` opts) binds
+  let unit = unitString (moduleUnit m)
+      modName = moduleNameString (moduleName m)
+      d = Ctx flags (unit ++ ":" ++ modName) (if "unit-qualified" `elem` opts then Just unit else Nothing)
+            emptyVarSet emptyVarSet True False sources []
+      cons = nubBy (\a b -> dataConName a == dataConName b)
+        (concatMap tyConDataCons tycons ++ concatMap (exprCons . snd) binds)
+      result = O $
+        [ ("schema",num (1::Int)), ("ghc",S "9.14.1"), ("module",S modName), ("unit",S unit)
+        , ("boundary",S "optimized-Core-after-Tidy-before-CorePrep")
+        , ("sourceCore",S (pretty d program))
+        , ("bindings",A (concatMap (bindingGroup d) program)), ("constructors",A (map (constructor d) cons))
+        , ("groups",A [O [("recursive",B (case b of Rec{} -> True; _ -> False)),("ids",A [S (varKey d v) | (v,_) <- flattenBind b])] | b <- program])
+        ] ++ sourceTableFields d
+  pure (d,result)
+  where binds = concatMap flattenBind program
 
 -- Source definitions from earlier modules of this same --make invocation let
 -- the dependency walk use their complete bodies, even when GHC did not retain
