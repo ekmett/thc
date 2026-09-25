@@ -96,12 +96,15 @@ internal class NativeReadOnlyImage(source: Any, bytes: ByteArray) {
         @Synchronized override fun run() { if (!closed) { closed = true; arena.close() } }
     }
     private val source = WeakReference(source)
+    val size: Long = bytes.size.toLong()
     private val arena = Arena.ofShared()
-    private val segment = arena.allocate(maxOf(1L, bytes.size.toLong()), 8)
+    // The inclusive guest range [base, base + size] must belong to this image
+    // even if the next allocation is adjacent. Widen the JVM array length
+    // before adding: Int.MAX_VALUE + 1 is still a valid positive Long size.
+    private val segment = arena.allocate(size + 1L, 8)
     private val cleanup = CloseArena(arena)
     private val cleanable = cleaner.register(this, cleanup)
     val base: Long = segment.address()
-    val size: Long = bytes.size.toLong()
     val hasSource: Boolean get() = source.get() != null && !cleanup.closed
     init { MemorySegment.copy(MemorySegment.ofArray(bytes), 0, segment, 0, size) }
     fun source(): Any? = source.get()

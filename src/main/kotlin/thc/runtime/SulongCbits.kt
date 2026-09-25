@@ -146,7 +146,7 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
     @Synchronized internal fun buffer(address: ManagedAddress): CbitsBuffer {
         val bytes = address.cbitsBacking()
         val owner = address.cbitsOwner()
-        val key = owner ?: bytes
+        val key = address.nativeImageKey() ?: owner ?: bytes
         return buffers[key]?.get() ?: CbitsBuffer(bytes, address.cbitsWritable(),
             LongSupplier { address.cbitsSize() }, 0,
             if (address.nativeImageKey() == null) null else Supplier {

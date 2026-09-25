@@ -34,10 +34,10 @@ internal class ManagedAddress private constructor(
     internal fun nativeImageBytes(): ByteArray = owner?.takeIf { !it.isWritable }?.let { it.copyBytesOut(0, it.size) }
         ?: literalBytes?.copyOf() ?: fault("Native image requires immutable byte storage")
     fun toNativeBits(): Long = if (this === NULL) 0L else numeric ?: NativeAddresses.current(null).project(this)
-    // Package-internal views for original C bitcode; callers never obtain a
-    // process pointer and the byte storage is not copied or replaced.
+    // Mutable views preserve aliases. Immutable sources return snapshots so a
+    // writable JVM array cannot escape and diverge from their native image.
     internal fun rawBacking(): ByteArray { requireBytes(); return owner?.rawBytesIfPointerFree()
-        ?: literalBytes ?: mutableBytes ?: fault("Null Addr# has no backing storage")
+        ?: literalBytes?.copyOf() ?: mutableBytes ?: fault("Null Addr# has no backing storage")
     }
     internal fun cbitsBacking(): ByteArray { requireBytes(); return owner?.exposeToNative() ?: rawBacking() }
     internal fun cbitsWritable(): Boolean { requireBytes(); return owner?.isWritable ?: (mutableBytes != null) }

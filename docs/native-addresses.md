@@ -12,7 +12,13 @@ never an identity hash or an encoded handle. Aliases share one image and offsets
 A live registered integer address reconstructs the original managed alias,
 including its existing pointer-cell and stack-provenance identity. The native
 copy and original bytes cannot diverge through supported operations because
-both are read-only. The original managed reads retain their bounds checks.
+both are read-only. Immutable constructors copy their input, raw-array exports
+return defensive copies, and pointer-cell installation requires mutable storage.
+Mutable array aliases keep their existing behavior and remain ineligible for
+projection, including after `unsafeFreezeByteArray#`.
+Each native allocation reserves one extra physical byte so an image's valid
+one-past address cannot coincide with another image's base. This extra byte does
+not enlarge the logical image or relax its managed access bounds.
 
 Integer values do not keep the allocation alive. Managed aliases keep the weak
 backing key alive; native transport views keep both backing and image alive.
@@ -22,6 +28,8 @@ Previously issued immutable `CbitsBuffer` views have an explicit `toNative`
 transition to this same image. Mutable views have no such transition. Sulong
 cannot pin arbitrary JVM arrays on demand: its native-pointer conversion calls
 `toNative` and then requires `asPointer` to succeed.
+Resolution uses only the current context's live registry: a numeric address
+from another context grants no access to that context's storage.
 
 Mutable managed arrays and opaque StablePtr handles still reject numeric
 projection. Supporting mutable arrays requires native-primary storage or a

@@ -169,6 +169,92 @@ class NativeAddressTest {
         }
     }
 
+    @Test fun immutableImagesKeepTheirBytesAndExclusiveOnePastAliases() {
+        context().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val registry = NativeAddresses.current(null)
+                val input = byteArrayOf(7, 9, 11, 13, 17, 19, 23, 29)
+                val owner = ManagedAllocation.immutable(input, 8)
+                val allocation = ManagedAddress.fromAllocation(owner)
+                val literal = ManagedAddress.fromHex("616263")
+                input.fill(0)
+                val cbits = Language.currentState(null).cbits()
+                for (original in listOf(allocation, literal)) {
+                    val expected = original.rawBacking()
+                    val escaped = listOf(original.rawBacking(), original.cbitsBacking()) +
+                        if (original === allocation) listOf(owner.wholeBytesForPrimitive()) else emptyList()
+                    // Exposures made before projection cannot later mutate its source.
+                    val oldBuffer = cbits.buffer(original)
+                    escaped.forEach { it.fill(0) }
+                    val bits = original.toNativeBits()
+                    original.rawBacking().fill(0)
+                    original.cbitsBacking().fill(0)
+                    val view = registry.transport(original)!!
+                    val native = MemorySegment.ofAddress(InteropLibrary.getUncached().asPointer(view))
+                        .reinterpret(expected.size.toLong())
+                    assertArrayEquals(expected, native.toArray(ValueLayout.JAVA_BYTE))
+                    assertArrayEquals(expected, original.rawBacking())
+                    assertTrue(registry.recover(bits).sameLocation(original))
+                    assertSame(oldBuffer, cbits.buffer(original.plus(1)))
+                    Reference.reachabilityFence(view)
+                }
+                assertEquals(7L, allocation.readWord8(0))
+                assertThrows(RuntimeFault::class.java) { allocation.writeAddressElementIndex(0, literal) }
+                val pointerOwner = ManagedAllocation.mutable(8, 8)
+                pointerOwner.writeAddressByteOffset(0, literal)
+                assertThrows(RuntimeFault::class.java) { owner.copyFrom(pointerOwner, 0, 0, 8) }
+                assertThrows(RuntimeFault::class.java) { ManagedAddress.fromAllocation(pointerOwner).toNativeBits() }
+
+                // Include empty images and sizes on both sides of native alignment
+                // boundaries. One-past is a valid alias, but never readable memory.
+                val originals = (0..32).map { ManagedAddress.fromAllocation(ManagedAllocation.immutable(ByteArray(it), 8)) }
+                val bases = originals.map(ManagedAddress::toNativeBits)
+                for ((index, original) in originals.withIndex()) {
+                    val end = bases[index] + original.cbitsSize()
+                    assertTrue(registry.recover(end).sameLocation(original.plus(original.cbitsSize())))
+                    assertThrows(RuntimeFault::class.java) { registry.recover(end).readWord8(0) }
+                    for (other in originals.indices) if (other != index) {
+                        val outside = java.lang.Long.compareUnsigned(end, bases[other]) < 0 ||
+                            java.lang.Long.compareUnsigned(bases[index], bases[other] + originals[other].cbitsSize()) > 0
+                        assertTrue(outside, "Immutable images must have disjoint inclusive address ranges")
+                    }
+                }
+                // Immutable hardening must not replace existing mutable aliases.
+                val mutable = ManagedAllocation.mutable(8, 8)
+                assertSame(mutable.rawBytesIfPointerFree(), mutable.exposeToNative())
+                assertSame(mutable.rawBytesIfPointerFree(), mutable.wholeBytesForPrimitive())
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun numericalResolutionCannotCrossContextOwnership() {
+        context().use { first -> context().use { second ->
+            first.initialize("thc"); second.initialize("thc")
+            val original = ManagedAddress.fromHex("41")
+            first.enter()
+            val firstBits = try { original.toNativeBits() } finally { first.leave() }
+            second.enter()
+            val secondBits = try {
+                val foreign = NativeAddresses.current(null).recover(firstBits)
+                assertEquals(firstBits, foreign.toNativeBits())
+                assertThrows(RuntimeFault::class.java) { foreign.readWord8(0) }
+                assertThrows(RuntimeFault::class.java) { foreign.cbitsBacking() }
+                original.toNativeBits().also {
+                    assertNotEquals(firstBits, it)
+                    assertTrue(NativeAddresses.current(null).recover(it).sameLocation(original))
+                }
+            } finally { second.leave() }
+            first.enter()
+            try {
+                assertTrue(NativeAddresses.current(null).recover(firstBits).sameLocation(original))
+                val foreign = NativeAddresses.current(null).recover(secondBits)
+                assertEquals(secondBits, foreign.toNativeBits())
+                assertThrows(RuntimeFault::class.java) { foreign.readWord8(0) }
+            } finally { first.leave() }
+        } }
+    }
+
     @Test fun nativeGhcOracleRetainsAllBitsAndActualPointerAliases() {
         val root = File(System.getProperty("thc.projectRoot"))
         val prefix = "build/native-addresses"
