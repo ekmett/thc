@@ -100,6 +100,9 @@ internal object ManagedByteArray {
     @JvmStatic fun writeIntGuest(value: Any?, index: Long, integer: Long) =
         if (value is ManagedAllocation) value.accessElement(index, 8, true) { ManagedIntArray.write(it, index, integer) }
         else ManagedIntArray.write(require(value), index, integer)
+    @JvmStatic fun fetchAddIntGuest(value: Any?, index: Long, delta: Long): Long =
+        (value as? ManagedAllocation
+            ?: fault("fetchAddIntArray# requires an owned MutableByteArray#")).fetchAddInt(index, delta)
     @JvmStatic fun readDoubleGuest(value: Any?, index: Long): Double =
         if (value is ManagedAllocation) value.accessElement(index, 8, false) { ManagedDoubleArray.read(it, index) }
         else ManagedDoubleArray.read(require(value), index)
@@ -271,6 +274,8 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
     INDEX("indexWord8Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
     INDEX_CHAR("indexCharArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
     READ_INT("readIntArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
+    FETCH_ADD_INT("fetchAddIntArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"),
+        listOf("IntRep"), emptyList()), true),
     WRITE_INT("writeIntArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("IntRep"), emptyList())),
     INDEX_INT("indexIntArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
     READ_INT64("readInt64Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
@@ -334,7 +339,7 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
         if (flags != List(arguments.size) { false } || actual.indices.any { !scalar(actual[it], arguments[it]) })
             throw RuntimeFault("ByteArray primitive argument representation mismatch: $primitive")
         val payload = listOf(when (this) {
-            READ_INT, GET_SIZE_MUTABLE -> "IntRep"; READ_DOUBLE, READ_WORD8_AS_DOUBLE -> "DoubleRep"
+            READ_INT, FETCH_ADD_INT, GET_SIZE_MUTABLE -> "IntRep"; READ_DOUBLE, READ_WORD8_AS_DOUBLE -> "DoubleRep"
             READ_INT64 -> "Int64Rep"; READ_WORD64 -> "Word64Rep"
             READ_INT8 -> "Int8Rep"; READ_WORD8 -> "Word8Rep"
             READ_INT16, READ_WORD8_AS_INT16 -> "Int16Rep"; READ_WORD16, READ_WORD8_AS_WORD16 -> "Word16Rep"
@@ -382,6 +387,7 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
         ByteArrayOp.INDEX, ByteArrayOp.INDEX_CHAR -> IndexByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD, ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64 ->
             ReadIntArrayExpression(operands[0], operands[1], operands[2])
+        ByteArrayOp.FETCH_ADD_INT -> FetchAddIntArrayExpression(operands[0], operands[1], operands[2], operands[3])
         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD, ByteArrayOp.WRITE_INT64, ByteArrayOp.WRITE_WORD64 ->
             WriteIntArrayExpression(operands[0], operands[1], operands[2], operands[3])
         ByteArrayOp.INDEX_INT, ByteArrayOp.INDEX_WORD, ByteArrayOp.INDEX_INT64, ByteArrayOp.INDEX_WORD64 ->
@@ -514,6 +520,19 @@ private class ReadIntArrayExpression(@field:Child private var array: Expr,
         val element = index.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
         FrameAccess.writeLong(frame, slots[offset], ManagedByteArray.readIntGuest(bytes, element))
+        return null
+    }
+}
+private class FetchAddIntArrayExpression(@field:Child private var array: Expr,
+    @field:Child private var index: Expr, @field:Child private var delta: Expr,
+    @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val bytes = array.execute(frame)
+        val element = index.executeRequiredLong(frame)
+        val amount = delta.executeRequiredLong(frame)
+        ManagedByteArray.requireState(state.execute(frame))
+        FrameAccess.writeLong(frame, slots[offset], ManagedByteArray.fetchAddIntGuest(bytes, element, amount))
         return null
     }
 }

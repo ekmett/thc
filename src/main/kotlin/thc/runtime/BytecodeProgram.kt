@@ -2110,7 +2110,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.GET_SIZE_MUTABLE -> e.builder.beginGetSizeMutableByteArray(destination[0])
                         ByteArrayOp.FREEZE -> e.builder.beginFreezeByteArray(destination[0])
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD,
-                        ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64 -> e.builder.beginReadIntArray(destination[0])
+                        ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64,
+                        ByteArrayOp.FETCH_ADD_INT -> e.builder.beginReadIntArray(
+                            operation == ByteArrayOp.FETCH_ADD_INT, destination[0])
                         ByteArrayOp.READ_DOUBLE, ByteArrayOp.READ_WORD8_AS_DOUBLE ->
                             e.builder.beginReadDoubleArray(operation == ByteArrayOp.READ_WORD8_AS_DOUBLE, destination[0])
                         ByteArrayOp.READ_FLOAT, ByteArrayOp.READ_WORD8_AS_FLOAT ->
@@ -2131,14 +2133,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                 destination[0])
                         else -> error("Scalar ByteArray operation")
                     }
-                    operands.forEach { it.emit(e) }
+                    if (operation == ByteArrayOp.FETCH_ADD_INT) operands.forEach { it.emit(e) }
+                    else if (operation in setOf(ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD,
+                            ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64)) {
+                        operands[0].emit(e)
+                        operands[1].emit(e)
+                        e.builder.emitLoadConstant(0L)
+                        operands[2].emit(e)
+                    } else operands.forEach { it.emit(e) }
                     when (operation) {
                         ByteArrayOp.NEW -> e.builder.endNewByteArray()
                         ByteArrayOp.RESIZE -> e.builder.endResizeByteArray()
                         ByteArrayOp.GET_SIZE_MUTABLE -> e.builder.endGetSizeMutableByteArray()
                         ByteArrayOp.FREEZE -> e.builder.endFreezeByteArray()
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD,
-                        ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64 -> e.builder.endReadIntArray()
+                        ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64,
+                        ByteArrayOp.FETCH_ADD_INT -> e.builder.endReadIntArray()
                         ByteArrayOp.READ_DOUBLE, ByteArrayOp.READ_WORD8_AS_DOUBLE -> e.builder.endReadDoubleArray()
                         ByteArrayOp.READ_FLOAT, ByteArrayOp.READ_WORD8_AS_FLOAT -> e.builder.endReadFloatArray()
                         ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8, ByteArrayOp.READ_CHAR -> e.builder.endReadByteArray()

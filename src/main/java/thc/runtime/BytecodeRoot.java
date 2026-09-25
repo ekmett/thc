@@ -2374,12 +2374,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static long index(Object value, long offset) { return ManagedByteArray.readGuest(value, offset, true); }
     }
     @Operation
+    @ConstantOperand(type = boolean.class, name = "fetchAdd")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ReadIntArray {
-        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
-                Object value, long index, Object state, @Bind("$node") Node node) {
+        @Specialization public static void read(VirtualFrame frame, boolean fetchAdd, LocalAccessor destination,
+                Object value, long index, long delta, Object state, @Bind("$node") Node node) {
             ManagedByteArray.requireState(state);
-            long result = ManagedByteArray.readIntGuest(value, index);
+            long result = fetchAdd ? ManagedByteArray.fetchAddIntGuest(value, index, delta)
+                    : ManagedByteArray.readIntGuest(value, index);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }

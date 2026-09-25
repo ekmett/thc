@@ -12,6 +12,29 @@ import org.junit.jupiter.api.Test
 import java.nio.ByteOrder
 
 class IntArrayTest {
+    @Test fun fetchAddValidatesStateBeforeItsSingleAtomicUpdate() {
+        val descriptor = FrameDescriptor.newBuilder()
+        val slot = descriptor.addSlot(FrameSlotKind.Long, "old", null)
+        val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), descriptor.build())
+        val owner = ManagedByteArray.allocateGuest(8)
+        val events = mutableListOf<String>()
+        fun operand(name: String, result: () -> Any?) = object : Expr() {
+            override fun execute(frame: VirtualFrame): Any? { events.add(name); return result() }
+        }
+        val fetch = byteArrayExpression(ByteArrayOp.FETCH_ADD_INT, CoreRepresentation.UNKNOWN, arrayOf(
+            operand("array") { owner }, operand("index") { 0L }, operand("delta") { 3L },
+            operand("state") { ManagedByteArray.writeIntGuest(owner, 0, 7); Unit }))
+        fetch.executeTuple(frame, intArrayOf(slot), 0)
+        assertEquals(listOf("array", "index", "delta", "state"), events)
+        assertEquals(7L, frame.getLong(slot))
+        assertEquals(10L, ManagedByteArray.readIntGuest(owner, 0))
+        val badState = byteArrayExpression(ByteArrayOp.FETCH_ADD_INT, CoreRepresentation.UNKNOWN, arrayOf(
+            operand("array") { owner }, operand("index") { 0L }, operand("delta") { 1L },
+            operand("state") { "not State#" }))
+        assertThrows(RuntimeFault::class.java) { badState.executeTuple(frame, intArrayOf(slot), 0) }
+        assertEquals(10L, ManagedByteArray.readIntGuest(owner, 0))
+    }
+
     @Test fun fullWidthNativeEndianStorageAliasesBytesAndKeepsAllocationIdentity() {
         val values = listOf(Long.MIN_VALUE, Long.MAX_VALUE, -1L, 0L, 1L,
             0x0123456789abcdefL, -0x0123456789abcdefL)
