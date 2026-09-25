@@ -16,6 +16,10 @@
       "junit": ["thc.runtime.ManagedWeakTest"],
       "python": []
     },
+    "src/main/kotlin/thc/runtime/CoreMainThreadForeign.kt": {
+      "junit": ["thc.runtime.CoreMainThreadForeignTest"],
+      "python": []
+    },
     "src/main/kotlin/thc/runtime/ManagedMutVars.kt": {
       "junit": ["thc.runtime.MutVarTest"],
       "python": []

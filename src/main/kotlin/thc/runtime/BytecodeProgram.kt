@@ -173,6 +173,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         CoreStackInfoForeign.validateHeads(bindings)
         CoreOriginalStdio.validateHeads(bindings)
         CoreStablePointers.validateHeads(bindings)
+        CoreMainThreadForeign.validateHeads(bindings)
         CoreManagedFiles.validateHeads(bindings)
         CoreMd5Foreign.validateHeads(bindings)
         CoreGmpForeign.validateHeads(bindings)
@@ -1329,6 +1330,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val sharedCAF = CoreSharedCAFStores.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val mainThreadForeign = CoreMainThreadForeign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val managedFile = CoreManagedFiles.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val javascript = if (!stackClone && stackInfo == null && originalStdio == null && managedFile == null) CoreJavaScript.validate(expr, defined) else null
@@ -1339,7 +1342,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val libdw = CoreLibdwForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && capi == null &&
-                !stableFree && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null)
+                !stableFree && !mainThreadForeign && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null)
                 CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -1510,6 +1513,20 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     e.builder.beginRtsSharedCAFStore(destination.single(), sharedCAF)
                     operands.forEach { it.emit(e) }
                     e.builder.endRtsSharedCAFStore()
+                }
+            } else if (mainThreadForeign) {
+                CoreMainThreadForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreMainThreadForeign.validateOperand(index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    if (destination.isNotEmpty()) throw RuntimeFault("Main-thread registration has no result field")
+                    e.builder.beginRegisterMainThread()
+                    operands.forEach { it.emit(e) }
+                    e.builder.endRegisterMainThread()
                 }
             } else if (managedFile != null) {
                 CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)

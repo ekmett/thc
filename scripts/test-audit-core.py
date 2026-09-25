@@ -2167,6 +2167,55 @@ class OriginalDupAuditTest(unittest.TestCase):
             self.assertFalse(self.audit(module)['accepted'])
 
 
+class OriginalMainThreadRegistrationTest(unittest.TestCase):
+    """The catalog admits only TopHandler's Weak# key call, not signal setup."""
+
+    @staticmethod
+    def fixture():
+        weak = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
+        state = dict(kind='void', primReps=[], evaluated=True)
+        arguments = [dict(id='weak', lifted=False, rep=weak), dict(id='state', lifted=False, rep=state)]
+        result = tuple_rep(state); result['evaluated'] = False
+        descriptor = dict(schema=1, target=dict(kind='static', symbol='rts_setMainThread',
+            unit='ghc-internal', isFunction=True), convention='ccall', safety='unsafe',
+            arity=2, suppliedArity=2, argumentReps=[dict(weak, evaluated=False), dict(state, evaluated=False)],
+            resultRep=copy.deepcopy(result))
+        call = ['app', ['var', 'original-fcall', dict(rep=CLOSURE)],
+                [['var', p['id'], dict(rep=p['rep'])] for p in arguments], [False, False],
+                False, False, dict(rep=result, foreignCall=descriptor)]
+        case = ['case', call, 'done', [['default', None, [], [*lit(0), dict(rep=LONG)]]],
+                dict(rep=LONG, binder=dict(id='done', lifted=False, rep=dict(result, evaluated=True)))]
+        binding = dict(bind('root', ['lam', arguments, case, dict(rep=CLOSURE, resultRep=LONG)]),
+                       rep=CLOSURE, arity=2)
+        return dict(schema=1, ghc='9.14.1', bindings=[binding], constructors=[])
+
+    @staticmethod
+    def audit(module, capabilities=CAP):
+        return audit_core.Audit([('main-thread-call.json', module)], capabilities).run(['root'])
+
+    def test_exact_weak_key_call_and_capability_boundary(self):
+        module = self.fixture()
+        self.assertEqual(1, CAP['managedForeignCalls'].count('rts_setMainThread'))
+        result = self.audit(module)
+        self.assertTrue(result['accepted'], result)
+        self.assertEqual(['rts_setMainThread'], [call['symbol'] for call in result['foreignCalls']])
+        disabled = self.audit(module, dict(CAP, managedForeignCalls=[]))
+        self.assertFalse(disabled['accepted'])
+        self.assertEqual([], disabled['foreignCalls'])
+        for wrong in ('stg_sig_install', 'prefix_rts_setMainThread'):
+            altered = self.fixture()
+            altered['bindings'][0]['expr'][2][1][6]['foreignCall']['target']['symbol'] = wrong
+            self.assertFalse(self.audit(altered)['accepted'])
+        for mutation in ('wrong-key', 'wrong-state', 'wrong-unit', 'wrong-safety'):
+            altered = self.fixture()
+            call = altered['bindings'][0]['expr'][2][1]
+            if mutation == 'wrong-key': call[2][0][2]['rep']['primReps'] = ['BoxedRep (Just Lifted)']
+            if mutation == 'wrong-state': call[2][1][2]['rep']['primReps'] = ['IntRep']
+            if mutation == 'wrong-unit': call[6]['foreignCall']['target']['unit'] = 'base'
+            if mutation == 'wrong-safety': call[6]['foreignCall']['safety'] = 'safe'
+            self.assertFalse(self.audit(altered)['accepted'], mutation)
+
+
 class ExplicitWeakContractTest(unittest.TestCase):
     """Structural rejection controls; native semantics come from WeakAudit.hs."""
     def fixture(self, name):
