@@ -11,6 +11,7 @@ retain their own evaluatedness; demanding the surrounding tuple does not force t
 LONG_REPS = {'IntRep', 'WordRep', 'Int8Rep', 'Word8Rep', 'Int16Rep', 'Word16Rep',
              'Int32Rep', 'Word32Rep', 'Int64Rep', 'Word64Rep'}
 BOXED_REPS = {'BoxedRep (Just Lifted)', 'BoxedRep (Just Unlifted)'}
+from core_vectors import is_vector, proof_error as vector_proof_error
 
 
 def contains_tuple(proof):
@@ -21,7 +22,7 @@ def contains_tuple(proof):
                 for child in (proof.get(key) if isinstance(proof.get(key), list) else [])))
 
 
-def proof_error(proof):
+def proof_error(proof, allow_vectors=False):
     """Mirror TupleShape.validate plus the input-only known boxed-levity guard."""
     def visit(rep):
         if not isinstance(rep, dict) or type(rep.get('evaluated')) is not bool:
@@ -31,12 +32,18 @@ def proof_error(proof):
             raise ValueError('Unresolved tuple input primitive representations')
         aggregate = rep.get('aggregate')
         if aggregate == 'unboxed-tuple':
+            if vector_proof_error(rep):
+                raise ValueError('Invalid physical vector annotation on tuple input')
             if rep.get('kind') != 'unknown' or not isinstance(rep.get('components'), list):
                 raise ValueError('Missing exact recursive tuple input components')
             flattened = [r for child in rep['components'] for r in visit(child)]
             if registers != flattened:
                 raise ValueError('Tuple input components disagree with physical representations')
             return flattened
+        if is_vector(rep) and allow_vectors:
+            if vector_proof_error(rep):
+                raise ValueError('Invalid exact vector tuple input component')
+            return registers
         if 'aggregate' in rep or rep.get('kind') == 'vector' or 'vector' in rep:
             raise ValueError('Sum/vector tuple input component unsupported')
         kind = rep.get('kind')

@@ -142,7 +142,7 @@ class Audit:
                         self.issue('aggregate-representation', owner, path, aggregate + ': unresolved component')
                     else:
                         physical.extend(registers)
-                        if 'aggregate' not in component and (component.get('kind') == 'unknown' or
+                        if 'aggregate' not in component and not self.supported_vector(component, 'tuple-fields') and (component.get('kind') == 'unknown' or
                                 any(r not in self.cap['aggregateFieldRepresentations'] for r in registers)):
                             self.issue('aggregate-representation', owner, path, aggregate + ': unsupported component')
                         if ('aggregate' not in component and registers == ['AddrRep'] and
@@ -186,7 +186,7 @@ class Audit:
             self.representation(binding.get('joinResultRep'), owner, path + '/joinResultRep')
             if is_sum(binding.get('joinResultRep')):
                 self.issue('aggregate-boundary', owner, path, 'unboxed-sum join result')
-            if is_vector(binding.get('joinResultRep')):
+            if is_vector(binding.get('joinResultRep')) and not self.supported_vector(binding['joinResultRep'], 'join-results'):
                 self.issue('vector-boundary', owner, path, 'vector join result')
             if (self.is_tuple(binding.get('joinResultRep')) and
                     'unboxed-tuple' not in self.cap.get('aggregateJoinResults', [])):
@@ -291,7 +291,14 @@ class Audit:
 
     def supported_tuple_input(self, rep):
         return (self.supported_empty_input(rep) or
-                'unboxed-tuple' in self.cap.get('aggregateInputs', []) and tuple_input_proof_error(rep) is None)
+                'unboxed-tuple' in self.cap.get('aggregateInputs', []) and tuple_input_proof_error(rep,
+                    allow_vectors='tuple-fields' in self.cap.get('vectorTransport', [])) is None)
+
+    def supported_vector(self, rep, boundary):
+        return (boundary in self.cap.get('vectorTransport', []) and is_vector(rep) and
+                vector_proof_error(rep) is None and any(
+                    rep['vector'] == {key: shape[key] for key in ('lanes', 'element')}
+                    for shape in self.cap.get('vectorRepresentations', [])))
 
     @classmethod
     def shape(cls, rep):
@@ -315,6 +322,8 @@ class Audit:
             children = tuple(cls.shape(component) for component in components)
             return None if None in children else ('tuple', children)
         registers = rep.get('primReps')
+        if is_vector(rep):
+            return ('vector', tuple(registers)) if isinstance(registers, list) else None
         return ('scalar', tuple(registers)) if isinstance(registers, list) else None
 
     def compare_shapes(self, expected, actual, owner, path, component=False):
@@ -974,8 +983,11 @@ class Audit:
                 for index, binder in enumerate(expr[1]):
                     if is_sum(binder.get('rep')):
                         self.issue('aggregate-boundary', owner, path, 'unboxed-sum formal argument')
-                    if is_vector(binder.get('rep')):
+                    if is_vector(binder.get('rep')) and not self.supported_vector(binder['rep'],
+                            'join-arguments' if index < join_prefix else 'arguments'):
                         self.issue('vector-boundary', owner, path, 'vector formal argument')
+                    if is_vector(binder.get('rep')) and binder.get('lifted') is not False:
+                        self.issue('application-levity', owner, path, 'Vector formal must be unlifted')
                     if self.is_tuple(binder.get('rep')) and not (
                             self.supported_empty_join_input(binder.get('rep')) if index < join_prefix else
                             self.supported_tuple_input(binder.get('rep'))):
@@ -997,7 +1009,9 @@ class Audit:
                                      all(self.supported_tuple_input(bound[key]) for key in captured)):
                     self.issue('aggregate-boundary', owner, path, 'unboxed-tuple capture')
                 metadata = expr[3] if len(expr) > 3 and isinstance(expr[3], dict) else {}
-                if is_vector(metadata.get('resultRep')) or is_vector(self.expression_rep(expr[2])):
+                if any(is_vector(rep) and not self.supported_vector(rep,
+                        'join-results' if local_join_prefix else 'results') for rep in
+                        (metadata.get('resultRep'), self.expression_rep(expr[2]))):
                     self.issue('vector-boundary', owner, path, 'vector function result')
                 local = bound | self.binder_scope(expr[1])
                 self.compare_shapes(metadata.get('resultRep'), self.effective_rep(expr[2], local)
@@ -1384,7 +1398,8 @@ class Audit:
                 if formals is not None:
                     for index, (formal, actual) in enumerate(zip(formals, arguments)):
                         actual_proof = self.effective_rep(actual, bound)
-                        if self.is_tuple(formal) or self.is_tuple(actual_proof) or is_sum(formal) or is_sum(actual_proof):
+                        if (self.is_tuple(formal) or self.is_tuple(actual_proof) or is_sum(formal) or is_sum(actual_proof)
+                                or is_vector(formal) or is_vector(actual_proof)):
                             self.compare_shapes(formal, actual_proof, owner,
                                                 f'{path}/arguments/{index}/formal')
                 vector_operation = function[1] if function[0] == 'prim' and function[1] in VECTOR_OPERATIONS else None
@@ -1404,7 +1419,8 @@ class Audit:
                     if not vector_signature_matches(result, proof):
                         self.issue('vector-shape', owner, path + '/rep', 'Exact vector primitive result representation required')
                     self.compare_shapes(result, proof, owner, path + '/rep', component=True)
-                elif is_vector(proof) and not vector_memory:
+                elif is_vector(proof) and not vector_memory and not (function[0] not in ('prim', 'con') and
+                        self.supported_vector(proof, 'join-results' if isinstance(target, dict) and '_join_arity' in target else 'results')):
                     self.issue('vector-boundary', owner, path, 'vector call result')
                 if enum_application or data_tag:
                     self.expression_metadata(function, owner, path + '/function')
@@ -1433,7 +1449,13 @@ class Audit:
                             self.compare_shapes(components[index], self.effective_rep(argument, bound), owner,
                                                 f'{path}/arguments/{index}/rep', component=True)
                     if not vector_operation and not vector_memory and (is_vector(self.expression_rep(argument)) or argument[0] == 'var' and is_vector(bound.get(argument[1]))):
-                        self.issue('vector-boundary', owner, f'{path}/arguments/{index}', 'vector argument')
+                        actual = self.effective_rep(argument, bound)
+                        join = isinstance(target, dict) and '_join_arity' in target
+                        boundary = 'tuple-fields' if tuple_constructor else 'join-arguments' if join else 'arguments'
+                        if not ((tuple_constructor or function[0] not in ('prim', 'con')) and self.supported_vector(actual, boundary)):
+                            self.issue('vector-boundary', owner, f'{path}/arguments/{index}', 'vector argument')
+                        if not isinstance(flags, list) or index >= len(flags) or flags[index] is not False:
+                            self.issue('application-levity', owner, f'{path}/arguments/{index}', 'Vector argument must be unlifted')
                     if not tuple_constructor and not sum_constructor and not vector_operation:
                         argument_rep = self.effective_rep(argument, bound)
                         stored = bound.get(argument[1]) if argument[0] == 'var' else None
@@ -1459,8 +1481,10 @@ class Audit:
                         continue
                     if is_sum(binding.get('rep')) or is_sum(self.expression_rep(binding.get('expr'))):
                         self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-sum let binding')
-                    if is_vector(binding.get('rep')):
+                    if is_vector(binding.get('rep')) and not self.supported_vector(binding['rep'], 'let-bindings'):
                         self.issue('vector-boundary', owner, f'{path}/bindings/{index}', 'vector let binding')
+                    if is_vector(binding.get('rep')) and binding.get('lifted') is not False:
+                        self.issue('application-levity', owner, f'{path}/bindings/{index}', 'Vector let binding must be unlifted')
                     tuple_value = self.is_tuple(binding.get('rep')) or self.is_tuple(
                         self.effective_rep(binding.get('expr'), local if recursive else bound))
                     if tuple_value and 'joinValueArity' not in binding:
