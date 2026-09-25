@@ -154,7 +154,9 @@ readRequests = [(entry,[fd,offset,count,start]) | entry <- readEntries,
                              (0,5,4,8),(0,3,6,7)]]
 
 -- The original GHC c_read/c_safe_read wrappers read from a real native fd0;
--- each child starts with a fresh seekable binary file duplicated onto fd0.
+-- each child receives the seekable input file as fd0 before RTS initialization,
+-- then the native harness opens and seeks its own fresh copy. Never start this
+-- oracle with fd0 closed: an RTS descriptor could occupy it before Haskell main.
 prepareOriginalStdioRead :: FilePath -> IO ()
 prepareOriginalStdioRead root = do
   let dir = "build/original-stdio-read"
@@ -186,7 +188,7 @@ prepareOriginalStdioRead root = do
         label = "native-" ++ replicate (3 - length (show index)) '0' ++ show index
     old <- doesFileExist (root </> resultPath)
     when old (removeFile (root </> resultPath))
-    command <- execute label [] (root </> binary)
+    command <- runLoggedWithInput input 120 root (dir </> "logs") label [] (root </> binary)
       (entry : map show arguments ++ [root </> input,root </> resultPath])
     text <- BSC.unpack <$> BS.readFile (root </> resultPath)
     case lines text of
