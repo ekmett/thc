@@ -29,7 +29,7 @@ import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMis
 import qualified System.Directory as Directory
 import System.Exit (ExitCode(..))
 import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
-import System.FilePath ((</>), isAbsolute, makeRelative, normalise, splitDirectories,
+import System.FilePath ((</>), (<.>), pathSeparator, isAbsolute, makeRelative, normalise, splitDirectories,
                         takeDirectory, takeExtension, takeFileName, joinPath, replaceExtension)
 import System.IO (IOMode(ReadMode), SeekMode(AbsoluteSeek), hClose, hGetContents,
                   hSetEncoding, openTempFile, stderr, utf8, withFile)
@@ -40,6 +40,7 @@ import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, wa
 import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.ForeignBitcode (linkClockGetTime)
+import THC.Driver.ScalarBitcode (ScalarBitcode, withScalarBitcode, scalarBuildInputs, linkScalarBitcode)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign
 import THC.Driver.Run (RunOptions(..))
@@ -78,7 +79,7 @@ data ExportContext = ExportContext
   , contextPluginLibrary :: FilePath, contextNative :: FilePath
   , contextCache :: FilePath, contextDriverHash :: String
   , contextGhc :: FilePath, contextGhcPkg :: Maybe FilePath
-  , contextDriver :: FilePath }
+  , contextDriver :: FilePath, contextRoot :: FilePath }
 
 boundary :: String
 boundary = "optimized-Core-after-Tidy-before-CorePrep"
@@ -155,7 +156,7 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   driver <- getExecutablePath
   driverHash <- digestFile driver
   let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
-                              pluginLibrary native cacheRoot driverHash ghc ghcPkg driver
+                              pluginLibrary native cacheRoot driverHash ghc ghcPkg driver thcRoot
   records <- field plan "install-plan" :: IO [Value]
   units <- mapM readUnit records
   let byId = Map.fromList [(unitId unit, unit) | unit <- units]
@@ -819,6 +820,14 @@ exportUnit :: ExportContext -> Map.Map String String -> Unit -> IO Bundle
 exportUnit context keys unit = do
   component <- readComponent unit (contextCompiler context)
   dist <- field (unitValue unit) "dist-dir"
+  withScalarBitcode dist (componentCompiler component) (unitId unit) (componentValue component) $
+    exportConfiguredUnit context keys unit component
+
+exportConfiguredUnit :: ExportContext -> Map.Map String String -> Unit -> Component -> Maybe ScalarBitcode -> IO Bundle
+exportConfiguredUnit context keys unit component scalar = do
+  helper <- traverse (const (prepareInterfaceHelper context (contextRoot context))) scalar
+  helperHash <- traverse (digestFile . installedHelper) helper
+  dist <- field (unitValue unit) "dist-dir"
   let productFlags = ["-odir", "-hidir", "-hiedir", "-stubdir", "-outputdir"]
       productRoots = nub [path | (flag, path) <- zip (componentArguments component)
                                                    (drop 1 (componentArguments component)),
@@ -842,16 +851,19 @@ exportUnit context keys unit = do
                      "nativeArtifacts" .= [object ["path" .= path, "sha256" .= digest]
                                            | (path, digest) <- nativeInputs],
                      "dependencies" .= [object ["id" .= identifier, "buildKey" .= identity]
-                                        | (identifier, identity) <- dependencies]]
+                                        | (identifier, identity) <- dependencies]] ++
+                    maybe [] (\recipe -> ["packageScalarRecipe" .= scalarBuildInputs recipe]) scalar
       buildKey = shaHex (BL.toStrict (encode (object inputFields)))
   pluginHash <- digestFile (contextPluginLibrary context)
-  let exporter = object ["pluginUnit" .= contextPluginUnit context,
+  let exporter = object $ ["pluginUnit" .= contextPluginUnit context,
                          "pluginDb" .= contextPluginDb context,
                          "pluginHash" .= pluginHash,
                          "driverHash" .= contextDriverHash context,
                          "options" .= (["post-tidy", "unit-qualified", "source-notes",
                                          "foreign-import-provenance",
-                                         "-g", "-dynamic", "-dcore-lint"] :: [String])]
+                                         "-g", "-dynamic", "-dcore-lint"] :: [String])] ++
+                     maybe [] (\digest -> ["scalarInterfaceHelperSha256" .= digest,
+                       "scalarInterfaceOptions" .= (["-fwrite-if-simplified-core", "-hisuf", "hi"] :: [String])]) helperHash
       exportKey = shaHex (BL.toStrict (encode ("thc-core-export-v1" :: String, buildKey, exporter)))
       buildInputs = object (inputFields ++ ["buildKey" .= buildKey,
                                            "exportKey" .= exportKey,
@@ -868,11 +880,11 @@ exportUnit context keys unit = do
       Just bundle -> pure bundle
       Nothing -> do
         when cached (removeFile destination)
-        freshExport context component unit buildKey exportKey buildInputs expected destination
+        freshExport context component unit scalar helper buildKey exportKey buildInputs expected destination
 
-freshExport :: ExportContext -> Component -> Unit -> String -> String -> Value ->
+freshExport :: ExportContext -> Component -> Unit -> Maybe ScalarBitcode -> Maybe InstalledContext -> String -> String -> Value ->
                [String] -> FilePath -> IO Bundle
-freshExport context component unit buildKey exportKey buildInputs expected destination = do
+freshExport context component unit scalar helper buildKey exportKey buildInputs expected destination = do
   let localRoot = contextNative context </> "cache/thc/staging"
   createDirectoryIfMissing True localRoot
   (staging, handle) <- openTempFile localRoot "export-"
@@ -894,6 +906,7 @@ freshExport context component unit buildKey exportKey buildInputs expected desti
            "-fplugin-opt=THC.Plugin:source-notes",
            "-fplugin-opt=THC.Plugin:foreign-import-provenance",
            "-g", "-dynamic", "-fforce-recomp", "-dcore-lint"] ++
+          maybe [] (const ["-fwrite-if-simplified-core", "-hisuf", "hi"]) scalar ++
           map snd (componentSources component)
     sourceDir <- field (componentValue component) "src-dir"
     runCommand True (componentCompiler component) arguments sourceDir
@@ -907,10 +920,15 @@ freshExport context component unit buildKey exportKey buildInputs expected desti
         ("Core artifact has wrong unit or boundary: " ++ path)
       bytes <- BS.readFile path
       pure (name, bytes)
-    let sorted = sortOn fst checked
-        actual = map fst sorted
+    let actual = sort (map fst checked)
     require (length actual == length (nub actual) && actual == expected)
       ("Core module inventory differs from Cabal build-info for " ++ unitId unit ++ ": " ++ show actual)
+    sorted <- case (scalar,helper) of
+      (Nothing,Nothing) -> pure (sortOn fst checked)
+      (Just recipe,Just selectedHelper) -> do
+        retained <- scalarInterfaceModules selectedHelper component unit objects expected
+        linkScalarBitcode recipe buildKey retained
+      _ -> fail "scalar cbits interface helper missing"
     let members = [("core/" ++ show index ++ ".json", bytes)
                   | (index, (_, bytes)) <- zip [0 :: Int ..] sorted]
         modules = [object ["name" .= name, "boundary" .= boundary,
@@ -926,6 +944,33 @@ freshExport context component unit buildKey exportKey buildInputs expected desti
       (("manifest.json", BL.toStrict (encode inner)) : ("inplace-manifest.json", inputsBytes) : members))
     atomicBytes destination (BL.toStrict archive)
     pure (Bundle destination (shaHex (BL.toStrict archive)) modules buildKey)) `finally` cleanup
+
+-- Source late-plugin JSON has no typed annotations. Recover the exact emitted
+-- full-Core interfaces through the selected GHC helper and Cabal's actual
+-- library registration; never graft an inferred proof onto that JSON.
+scalarInterfaceModules :: InstalledContext -> Component -> Unit -> FilePath -> [String] -> IO [(String,BS.ByteString)]
+scalarInterfaceModules helper component unit objects names = do
+  sourceDir <- field (componentValue component) "src-dir"
+  databases <- mapM (canonicalizePath . (sourceDir </>))
+    [path | (flag,path) <- zip (componentArguments component) (drop 1 (componentArguments component)),
+      flag == "-package-db"]
+  forM names $ \name -> do
+    let interface = objects </> map (\c -> if c == '.' then pathSeparator else c) name <.> "hi"
+        arguments = ["--libdir",installedLibdir helper,"--unit",unitId unit,"--module",name,
+          "--interface",interface,"--way","dynamic","--source-notes"] ++
+          concatMap (\database -> ["--package-db",database]) databases
+    requireFile interface
+    (status,output,diagnostic) <- readCreateProcessWithExitCode
+      (proc (installedHelper helper) arguments) {cwd=Just sourceDir} ""
+    require (status == ExitSuccess) ("scalar cbits interface acquisition failed: " ++ take 4096 (output ++ diagnostic))
+    response <- either fail pure (Aeson.eitherDecodeStrict' (Text.encodeUtf8 (Text.pack output)))
+    require (jsonField response "schema" == Just (1::Int) && jsonField response "status" == Just ("loaded"::String))
+      "scalar cbits interface helper did not return full Core"
+    value <- field response "core"
+    require (jsonField value "unit" == Just (unitId unit) && jsonField value "module" == Just name &&
+      jsonField value "boundary" == Just boundary && jsonField value "ghc" == Just ("9.14.1"::String))
+      "scalar cbits interface identity or boundary mismatch"
+    pure (name,BL.toStrict (encode value))
 
 readBundle :: BundleReceipt -> FilePath -> String -> String -> String -> Value -> [String] -> IO (Maybe Bundle)
 readBundle receipt path unit buildKey exportKey buildInputs expected = do
