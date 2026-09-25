@@ -10,7 +10,6 @@ import hashlib
 import importlib.util
 import json
 import os
-import re
 from collections import Counter
 from pathlib import Path
 import subprocess
@@ -19,7 +18,7 @@ from bignat_literal_model import ENTRIES, VALUES, SEEDS, requests, verify
 ROOT=Path(__file__).resolve().parent.parent
 OUT=ROOT/'build/bignat-literals'
 STAGES={'pre':'optimized-Core-before-Tidy','post':'optimized-Core-after-Tidy-before-CorePrep'}
-FRONTIERS=('integerAddFrontier','naturalAddFrontier')
+ARITHMETIC=('integerAddFrontier','naturalAddFrontier')
 MODULES=('BigNat','Integer','Natural')
 WORKERS={'integerRoundTrip':'Integer.integerToInt#','integerLiteral':'Integer.integerToInt#',
          'naturalRoundTrip':'Natural.naturalToWord#','naturalLiteral':'Natural.naturalToWord#',
@@ -54,7 +53,7 @@ def inventory():
         paths=[public_path,*original];stages[stage]=[str(p.relative_to(ROOT)) for p in paths]
         loaded=list(zip(map(str,paths),[public,*modules]));reports={}
         bindings={b['id']:b for _,m in loaded for b in m['bindings']}
-        for entry in (*ENTRIES,*FRONTIERS):
+        for entry in (*ENTRIES,*ARITHMETIC):
             report=audit.Audit(loaded,caps).run(['main:BigNatLiteralAudit.'+entry])
             if entry in ENTRIES:
                 check(report['accepted'],f'{stage}/{entry}: {report["summary"]} {report["issues"][:3]} {report["missingGlobals"][:3]}')
@@ -76,29 +75,21 @@ def inventory():
                     check(literals,'Real BigNat literals disappeared')
                     for literal in literals: check(literal[3]['rep']==dict(kind='object',evaluated=True,primReps=['BoxedRep (Just Unlifted)']), 'BigNat exact intrinsic proof changed')
             else:
-                # Keep the complete installed GMP arithmetic closure unsupported.
-                check(not report['accepted'],'Arithmetic frontier unexpectedly accepted')
-                # The strict foreign-call audit now reports each unsupported GMP
-                # target as well as the unresolved worker global. Keep both
-                # independent frontiers exact; accepting extra calls here would
-                # make this negative control weaker.
+                # Original GMP calls now validate independently of the remaining
+                # Integer exception dependency. Keep both outcomes exact.
                 calls={'__gmpn_add':2,'__gmpn_add_1':1}
                 if entry=='integerAddFrontier': calls.update(__gmpn_cmp=1,__gmpn_sub=1)
                 check(sum(len(primitive['uses']) for primitive in report['primitives']
                           if primitive['name']=='shrinkMutableByteArray#') ==
                       (7 if entry=='integerAddFrontier' else 5),
                       'Original supported shrinkMutableByteArray# calls disappeared')
-                wanted_issues=Counter({('foreign-call',"Unsupported foreign target '"+symbol+"'"):count
-                                       for symbol,count in calls.items()})
-                check(Counter((issue['code'],issue['detail']) for issue in report['issues'])==wanted_issues,
-                      'Changed exact arithmetic primitive/foreign-call frontier: '+str(report['summary']))
-                check(len(report['missingGlobals'])==(6 if entry=='integerAddFrontier' else 3),
-                      'Arithmetic missing-global frontier changed: '+str(report['summary']))
-                symbols=[re.search(r'__ffi_static_ccall_unsafe ghc-internal:([^ ]+)', m['id']).group(1)
-                         if '__ffi_static_ccall_unsafe ghc-internal:' in m['id'] else m['id'] for m in report['missingGlobals']]
-                wanted=['__gmpn_add','__gmpn_add','__gmpn_add_1']
-                if entry=='integerAddFrontier': wanted += ['__gmpn_cmp','__gmpn_sub','ghc-internal:GHC.Internal.Prim.Exception.raiseUnderflow']
-                check(Counter(symbols)==Counter(wanted),'Missing installed GMP/exception identities changed')
+                check(not report['issues'], 'Unexpected arithmetic audit issues: '+str(report['issues']))
+                check(Counter(call['symbol'] for call in report['foreignCalls'])==Counter(calls),
+                      'Changed exact accepted GMP arithmetic calls: '+str(report['foreignCalls']))
+                wanted=['ghc-internal:GHC.Internal.Prim.Exception.raiseUnderflow'] if entry=='integerAddFrontier' else []
+                check([missing['id'] for missing in report['missingGlobals']]==wanted,
+                      'Arithmetic missing-source identities changed: '+str(report['missingGlobals']))
+                check(report['accepted']==(not wanted), 'Arithmetic audit acceptance changed')
             (OUT/f'{stage}-{entry}.audit.json').write_text(json.dumps(report,indent=2)+'\n')
             reports[entry]=dict(accepted=report['accepted'],reachable=len(report['reachableBindings']),issues=len(report['issues']),missing=len(report['missingGlobals']))
         missing=audit.Audit([(str(public_path),public),('installed-interface',closure)],caps).run(['main:BigNatLiteralAudit.'+e for e in ENTRIES])
@@ -123,7 +114,7 @@ def main():
         run([sys.executable,'compiler/export-boot.py','--frontier','bignum','--build-dir',str(OUT/'boot')])
         for stage in STAGES:
             run(['compiler/export.sh',*(['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []),
-                 *['-fplugin-opt=THC.Plugin:closure='+e for e in (*ENTRIES,*FRONTIERS)],'compiler/test-fixtures/BigNatLiteralAudit.hs'],
+                 *['-fplugin-opt=THC.Plugin:closure='+e for e in (*ENTRIES,*ARITHMETIC)],'compiler/test-fixtures/BigNatLiteralAudit.hs'],
                 dict(THC_CORE_OUT=str(OUT/f'{stage}-core'),THC_GHC_OUT=str(OUT/f'{stage}-ghc'),THC_SOURCE_NOTES='true'))
         stages,coverage,counts=inventory()
         run([ghc,'--make','-O2','-fforce-recomp','-dcore-lint','-dstg-lint','-icompiler/test-fixtures','-odir',str(OUT/'native'),'-hidir',str(OUT/'native'),'-o',str(OUT/'native/bignat-literal-oracle'),'compiler/test-fixtures/BigNatLiteralAuditNative.hs'])
@@ -138,7 +129,7 @@ def main():
         artifacts=[OUT/'boot/boot-provenance.json',OUT/'requests.tsv',OUT/'oracle.tsv',*sorted(OUT.glob('*.audit.json'))]
         artifacts += [p for directory in ('pre-core','post-core','boot/core','native') for p in sorted((OUT/directory).rglob('*')) if p.is_file()]
         manifest_path.write_text(json.dumps(dict(schema=1,recordedAtUtc=datetime.now(timezone.utc).isoformat(),commands=commands,ghcInfo=info,
-            wordBits=64,byteOrder=sys.byteorder,entries=list(ENTRIES),frontiers=list(FRONTIERS),values=list(map(str,VALUES)),seeds=list(SEEDS),nativeRows=len(rows),
+            wordBits=64,byteOrder=sys.byteorder,entries=list(ENTRIES),arithmeticControls=list(ARITHMETIC),frontiers=['integerAddFrontier'],values=list(map(str,VALUES)),seeds=list(SEEDS),nativeRows=len(rows),
             stages=stages,coverage=coverage,sourceBindings=counts,
             sources=[record(p) for p in dict.fromkeys(sources)],artifacts=[record(p) for p in artifacts],
             claim='Fresh native conversion/complete limb and byte observations; complete original BigNat/Integer/Natural source, no arithmetic or foreign substitution. Guest compiled execution is tested separately.'),indent=2)+'\n')
@@ -147,5 +138,5 @@ def main():
     check({str(p.relative_to(ROOT)) for p in audit_inputs()} <= {r['path'] for r in manifest['sources']},'Missing auditor fingerprint')
     rows=verify((OUT/'oracle.tsv').read_text());stages,coverage,counts=inventory()
     check(stages==manifest['stages'] and coverage==manifest['coverage'] and counts==manifest['sourceBindings'] and len(rows)==manifest['nativeRows'],'Stale BigNat inventory')
-    print(f'BigNat: {len(rows)} native/model rows, 16 strict audits, 4 arithmetic and 2 missing-source frontiers; complete original sources')
+    print(f'BigNat: {len(rows)} native/model rows, 16 conversion audits, 4 arithmetic audits, 2 exception and 2 missing-source frontiers; complete original sources')
 if __name__=='__main__': main()
