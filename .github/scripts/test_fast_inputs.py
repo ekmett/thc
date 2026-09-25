@@ -50,7 +50,7 @@ class FastInputTests(unittest.TestCase):
             self.assertFalse(cache.allowed_payload('build/simd-floatx4-fma/' + suffix, {}), suffix)
 
     def test_termios_exact_image_fixture_inventory(self):
-        self.assertEqual(97, len(cache.ORIGINAL_TERMIOS_OUTPUTS))
+        self.assertEqual(129, len(cache.ORIGINAL_TERMIOS_OUTPUTS))
         self.assertIn('build/original-termios/manifest.json', DECLARED_REQUIRED)
         for name in cache.ORIGINAL_TERMIOS_OUTPUTS:
             self.assertTrue(cache.allowed_payload(name, {}), name)
