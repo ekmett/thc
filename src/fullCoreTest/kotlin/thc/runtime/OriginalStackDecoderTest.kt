@@ -95,7 +95,7 @@ class OriginalStackDecoderTest {
                     fun observe(snapshot: Any?, probe: Long): Long =
                         Calls.target(observe, arrayOf(0L, snapshot, probe)) as Long
                     val label = "$stage/$backend/inlining=$inlining"
-                    fun inspect(snapshot: Any?): String {
+                    fun inspect(snapshot: Any?): List<Long> {
                         val count = observe(snapshot, -1)
                         assertTrue(count > 0, label)
                         assertEquals(native[1], observe(snapshot, -2), "$label repeated decode")
@@ -103,13 +103,12 @@ class OriginalStackDecoderTest {
                         assertEquals(count, observe(snapshot, -4), "$label original formatter renders each managed IPE")
                         val length = observe(snapshot, -5)
                         assertTrue(length in 1..100000, label)
-                        val text = buildString { repeat(length.toInt()) { appendCodePoint(observe(snapshot, it.toLong()).toInt()) } }
-                        assertTrue(text.contains("OriginalStackDecoder.") && text.contains("captureLeaf"), "$label actual binding: $text")
-                        assertTrue(text.contains("OriginalStackDecoder.hs:"), "$label actual source: $text")
-                        return text
+                        val namedSources = observe(snapshot, -6)
+                        assertTrue(namedSources in 1..count, "$label original formatter includes captureLeaf and its source in one frame")
+                        return listOf(count, length, namedSources)
                     }
                     val snapshot = capture()
-                    val text = inspect(snapshot)
+                    val observation = inspect(snapshot)
                     // Warm each entry, then assert its very first installed entry;
                     // no settling loop after installation is allowed.
                     repeat(3) { observe(snapshot, -2); capture() }
@@ -123,7 +122,7 @@ class OriginalStackDecoderTest {
                     assertEquals(native[1], observe(snapshot, -2), "$label first installed original decode")
                     assertTrue(valid(observe), "$label first installed decode")
                     assertTrue((program.diagnostics()["compiledEntries"] as Number).toLong() >= before + 2, label)
-                    assertEquals(text, inspect(snapshot), "$label retained detached snapshot")
+                    assertEquals(observation, inspect(snapshot), "$label retained detached snapshot")
                     inspect(fresh)
                     assertEquals(0L, program.diagnostics()["unsupportedTraps"], label)
                     val loans = language.handoffState.get()

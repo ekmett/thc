@@ -385,7 +385,7 @@
       "python": []
     },
     "compiler/interface/Main.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackDecoderTest"], "python": []
+      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
     },
     "test/haskell-fixtures/InterfaceFixtures.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
@@ -452,18 +452,6 @@
     "compiler/test-fixtures/SimdCallNative.hs": {
       "junit": ["thc.runtime.SimdCallNativeTest"],
       "python": []
-    },
-    "compiler/test-fixtures/OriginalStackDecoder.hs": {
-      "junit": ["thc.runtime.OriginalStackDecoderTest"], "python": []
-    },
-    "compiler/test-fixtures/OriginalStackDecoderNative.hs": {
-      "junit": ["thc.runtime.OriginalStackDecoderTest"], "python": []
-    },
-    "test/haskell-fixtures/StackDecoderFixtures.hs": {
-      "junit": ["thc.runtime.OriginalStackDecoderTest"], "python": []
-    },
-    "test/haskell-fixtures/InstalledCoreFixtures.hs": {
-      "junit": ["thc.runtime.OriginalStackDecoderTest"], "python": []
     },
     "compiler/test-fixtures/OriginalStackAudit.hs": {
       "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
@@ -689,17 +677,17 @@
       "haskell": ["driver-tests"]
     },
     "src/THC/Driver/Cabal.hs": {
-      "junit": ["thc.runtime.OriginalStackDecoderTest"],
+      "junit": [],
       "python": [],
       "haskell": ["driver-tests"]
     },
     "src/THC/Driver/Json.hs": {
-      "junit": ["thc.runtime.OriginalStackDecoderTest"],
+      "junit": [],
       "python": [],
       "haskell": ["driver-tests"]
     },
     "src/THC/Driver/Run.hs": {
-      "junit": ["thc.runtime.OriginalStackDecoderTest"],
+      "junit": [],
       "python": [],
       "haskell": ["driver-tests"]
     },
@@ -1063,8 +1051,7 @@
         "thc.runtime.Int32ArrayNativeTest",
         "thc.runtime.IntArrayNativeTest",
         "thc.runtime.DoubleArrayNativeTest",
-        "thc.runtime.FloatWordArrayNativeTest",
-        "thc.runtime.OriginalStackDecoderTest"
+        "thc.runtime.FloatWordArrayNativeTest"
       ],
       "python": []
     },
@@ -1255,12 +1242,12 @@
       ]
     },
     "src/THC/Driver/Project.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackDecoderTest"],
+      "junit": ["thc.runtime.InterfaceCoreNativeTest"],
       "python": [],
       "haskell": ["driver-tests"]
     },
     "src/THC/Driver/Installed.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackDecoderTest"], "python": [],
+      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": [],
       "haskell": ["driver-tests"]
     },
     "src/main/kotlin/thc/runtime/TargetLayout.kt": {
@@ -1268,11 +1255,11 @@
       "python": []
     },
     "src/THC/Driver/Wired.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest", "thc.runtime.OriginalStackDecoderTest"], "python": [],
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"], "python": [],
       "haskell": ["driver-tests"]
     },
     "compiler/target-layout.c": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest", "thc.runtime.OriginalStackDecoderTest"], "python": [],
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"], "python": [],
       "haskell": ["driver-tests"]
     },
     "test/fixtures/run-pure/run-pure.cabal": {

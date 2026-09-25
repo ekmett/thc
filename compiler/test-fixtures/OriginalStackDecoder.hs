@@ -4,8 +4,7 @@
 {-# OPTIONS_GHC -fno-full-laziness -fno-cse #-}
 module OriginalStackDecoder (captureNamed, observeSnapshot) where
 
-import Data.Char (ord)
-import Data.List (intercalate)
+import Data.List (intercalate, isInfixOf)
 import Data.Maybe (catMaybes, isJust)
 import GHC.Exts
 import GHC.Internal.Stack.CloneStack (StackSnapshot(..), cloneMyStack)
@@ -24,8 +23,9 @@ captureLeaf token = unsafePerformIO $ do
 captureNamed :: Int# -> StackSnapshot
 captureNamed token = case captureLeaf token of snapshot@(StackSnapshot _) -> snapshot
 
--- Negative probes inspect the same captured stack twice. Nonnegative probes
--- return actual original formatter characters, never a replacement JVM renderer.
+-- A fixed number of probes inspects the unchanged original decoder/formatter.
+-- Check the actual binding and source in one rendered frame inside the guest;
+-- reading one character per host call would decode/render the whole stack again.
 {-# NOINLINE observeSnapshot #-}
 observeSnapshot :: StackSnapshot -> Int# -> Int#
 observeSnapshot snapshot probe# = case unsafePerformIO observation of I# result# -> result#
@@ -43,4 +43,8 @@ observeSnapshot snapshot probe# = case unsafePerformIO observation of I# result#
         -3 -> length (filter (isJust . snd) first)
         -4 -> length (catMaybes rendered)
         -5 -> length text
-        index -> if index >= 0 && index < length text then ord (text !! index) else -1
+        -6 -> length (filter namedSource (catMaybes rendered))
+        _ -> -1
+    namedSource line = "OriginalStackDecoder." `isInfixOf` line &&
+                       "captureLeaf" `isInfixOf` line &&
+                       "OriginalStackDecoder.hs:" `isInfixOf` line

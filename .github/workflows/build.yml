@@ -363,10 +363,6 @@ jobs:
             build/boxed-arrays/
             build/boxed-array-extensions/
             build/original-stack-formatter/
-            build/original-stack-decoder/manifest.json
-            build/original-stack-decoder/logs/
-            build/original-stack-decoder/pre/*-audit.json
-            build/original-stack-decoder/post/*-audit.json
             build/original-posix-stat/
             build/original-posix-dup/
             build/original-rts-locks/
