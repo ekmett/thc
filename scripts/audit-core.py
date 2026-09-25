@@ -641,6 +641,7 @@ class Audit:
                         or symbol in core_original_foreign.GMP_SYMBOLS
                         or symbol in core_original_foreign.LIBDW_UNAVAILABLE
                         or symbol in core_original_foreign.TERMIOS_SYMBOLS
+                        or symbol == core_original_foreign.TCGETATTR_SYMBOL
                         or symbol in core_original_foreign.SIGSET_OPERATIONS
                         or symbol in ('getOrSetSystemEventThreadEventManagerStore',
                                       'getOrSetGHCConcSignalSignalHandlerStore')

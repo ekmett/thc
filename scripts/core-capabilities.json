@@ -57,6 +57,7 @@
     "ghczuwrapperZC12ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigaddset",
     "__hscore_sizeof_stat",
     "__hscore_fstat",
+    "ghczuwrapperZC10ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCtcgetattr",
     "__hscore_open",
     "__hscore_st_dev",
     "__hscore_st_ino",
