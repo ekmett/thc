@@ -836,7 +836,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest", "FloatArrayTest",
             "FloatVectorMemoryProofTest", "FloatVectorStorageTest", "FloatWordArrayNativeTest",
             "FloatingPrimitiveTest", "FloatingTupleTest", "FusedFloatingTest", "WordFloatingTest", "ScalarBitCastTest", "SimdDoubleByteArrayTest",
-            "SimdDoubleVectorTest", "SimdFloatByteArrayTest", "SimdFloatVectorTest", "SqrtPrimitiveTest",
+            "SimdDoubleVectorTest", "SimdFloatByteArrayTest", "SimdFloatVectorTest", "SimdFloatFmaTest", "SqrtPrimitiveTest",
             "SumProtocolTest", "SumResultTest", "TupleInputNativeTest", "TypedInputScalarSourceTest")}},
                          set(floating["junit"]))
         self.assertLessEqual({"scripts/test-scalar-bitcasts.py", "scripts/test-core-sums.py",
@@ -850,6 +850,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_floating_haskell_producers_and_main_keep_their_consumers(self):
         owners = self.policy["owners"]
         for producer, consumer in (("FusedFloatingFixtures", "FusedFloatingTest"),
+                                   ("SimdFloatFmaFixtures", "SimdFloatFmaTest"),
                                    ("WordFloatingFixtures", "WordFloatingTest")):
             with self.subTest(producer=producer):
                 junit = "thc.runtime." + consumer
@@ -869,7 +870,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                 "SimdInt32ByteArrayTest", "Int32VectorMemoryProofTest", "Int32VectorStorageTest",
                 "SimdWord32VectorTest", "SimdWord32ByteArrayTest", "Word32VectorMemoryProofTest",
                 "Word32VectorStorageTest"],
-            "FloatingVectorPrimitives": ["SimdFloatVectorTest", "SimdFloatByteArrayTest",
+            "FloatingVectorPrimitives": ["SimdFloatVectorTest", "SimdFloatFmaTest", "SimdFloatByteArrayTest",
                 "FloatVectorMemoryProofTest", "FloatVectorStorageTest", "SimdDoubleVectorTest",
                 "SimdDoubleByteArrayTest", "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest"],
         }

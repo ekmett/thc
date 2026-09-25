@@ -77,6 +77,7 @@
         "thc.runtime.SimdDoubleVectorTest",
         "thc.runtime.SimdFloatByteArrayTest",
         "thc.runtime.SimdFloatVectorTest",
+        "thc.runtime.SimdFloatFmaTest",
         "thc.runtime.SqrtPrimitiveTest",
         "thc.runtime.SumProtocolTest",
         "thc.runtime.SumResultTest",
@@ -119,6 +120,7 @@
         "thc.runtime.SimdDoubleVectorTest",
         "thc.runtime.SimdFloatByteArrayTest",
         "thc.runtime.SimdFloatVectorTest",
+        "thc.runtime.SimdFloatFmaTest",
         "thc.runtime.SqrtPrimitiveTest",
         "thc.runtime.SumProtocolTest",
         "thc.runtime.SumResultTest",
@@ -179,7 +181,8 @@
         "thc.runtime.SimdDoubleByteArrayTest",
         "thc.runtime.SimdDoubleVectorTest",
         "thc.runtime.SimdFloatByteArrayTest",
-        "thc.runtime.SimdFloatVectorTest"
+        "thc.runtime.SimdFloatVectorTest",
+        "thc.runtime.SimdFloatFmaTest"
       ],
       "python": [
         "scripts/test-core-double-vector-memory.py",
@@ -451,6 +454,14 @@
     },
     "compiler/test-fixtures/SimdCallNative.hs": {
       "junit": ["thc.runtime.SimdCallNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/SimdFloatFma.hs": {
+      "junit": ["thc.runtime.SimdFloatFmaTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/SimdFloatFmaNative.hs": {
+      "junit": ["thc.runtime.SimdFloatFmaTest"],
       "python": []
     },
     "compiler/test-fixtures/OriginalStackAudit.hs": {
@@ -1015,6 +1026,7 @@
         "thc.runtime.FloatingByteOffsetTest",
         "thc.runtime.FusedFloatingTest",
         "thc.runtime.SimdCallNativeTest",
+        "thc.runtime.SimdFloatFmaTest",
         "thc.runtime.SqrtPrimitiveTest",
         "thc.runtime.WordFloatingTest",
         "thc.runtime.OriginalStackFormatterTest",
@@ -1186,6 +1198,10 @@
     },
     "test/haskell-fixtures/SimdCallFixtures.hs": {
       "junit": ["thc.runtime.SimdCallNativeTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/SimdFloatFmaFixtures.hs": {
+      "junit": ["thc.runtime.SimdFloatFmaTest"],
       "python": []
     },
     "test/haskell-fixtures/WordFloatingFixtures.hs": {

@@ -66,6 +66,12 @@ class SimdFloatFmaTest {
 
     @Test fun genuineCoreAndNativeLaneBitsSurviveBothCompiledBackends() {
         val manifest = Json.parse(File(directory, "manifest.json").readText()) as Map<String, Any?>
+        assertEquals(1L, manifest["schema"])
+        assertEquals("9.14.1", manifest["ghc"])
+        val exportOnly = System.getProperty("os.arch") in listOf("aarch64", "arm64")
+        assertEquals(if (exportOnly) listOf("pre") else listOf("pre", "post"), manifest["stages"])
+        assertEquals(if (exportOnly) null else 352L, manifest["nativeRows"], "Native preparation cannot silently downgrade")
+        assertEquals(listOf("-mavx", "-mfma"), manifest["nativeFlags"])
         for ((path, want) in ((manifest["inputHashes"] as Map<String, String>) +
                 (manifest["artifactHashes"] as Map<String, String>))) {
             val hash = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
@@ -73,6 +79,12 @@ class SimdFloatFmaTest {
             assertEquals(want, hash, "Stale FloatX4 fused fixture $path")
         }
         assertEquals(names, manifest["entries"])
+        for (stage in manifest["stages"] as List<String>) {
+            val audit = Json.parse(File(directory, "$stage-audit.json").readText()) as Map<String, Any?>
+            assertEquals(true, audit["accepted"], "$stage canonical audit")
+            assertEquals(emptyList<Any?>(), audit["issues"])
+            assertEquals(emptyList<Any?>(), audit["missingGlobals"])
+        }
         val inputs = (manifest["inputs"] as List<List<Number>>).map { row -> row.map { it.toLong() } }
         assertEquals(22, inputs.size)
         val native = if (manifest["nativeRows"] != null) File(directory, "oracle.txt").readLines().map { it.split(' ') } else null

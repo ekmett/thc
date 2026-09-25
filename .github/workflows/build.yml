@@ -450,6 +450,7 @@ jobs:
             build/explicit64-primops/*.audit.json
             build/simd-int32x4/
             build/simd-floatx4/
+            build/simd-floatx4-fma/
             build/simd-doublex2/
             build/simd-int16x8/
             build/simd-int8x16/

@@ -743,6 +743,28 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertIn("build/explicit64-arrays/" + name, fast_fixtures.FULL_REQUIRED)
         self.assertIn('"explicit64-arrays/*.tsv"', (project / "build.gradle.kts").read_text())
 
+    def test_floatx4_fma_has_focused_full_and_closed_native_inputs(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['simd-floatx4-fma']
+        self.assertEqual('simd-floatx4-fma', owners['thc.runtime.SimdFloatFmaTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
+                                   'simd-floatx4-fma']}], group['commands'])
+        self.assertEqual(['build/simd-floatx4-fma'], group['outputs'])
+        self.assertTrue(all((project / name).is_file() for name in group['sources']))
+        self.assertIn('"$fixture_bin" simd-floatx4-fma', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/simd-floatx4-fma', fast_fixtures.FULL_OUTPUT_ROOTS)
+        for suffix in ('manifest.json', 'pre-audit.json', 'pre-core/SimdFloatFma.json'):
+            self.assertIn('build/simd-floatx4-fma/' + suffix, fast_fixtures.FULL_REQUIRED)
+        native = fast_fixtures.platform.machine().lower() not in ('arm64', 'aarch64')
+        for suffix in ('oracle.txt', 'post-audit.json', 'post-core/SimdFloatFma.json'):
+            self.assertEqual(native, 'build/simd-floatx4-fma/' + suffix in fast_fixtures.FULL_REQUIRED)
+        gradle = (project / 'build.gradle.kts').read_text()
+        for suffix in ('**/*.json', 'oracle.txt'):
+            self.assertIn('"simd-floatx4-fma/' + suffix + '"', gradle)
+        self.assertIn('build/simd-floatx4-fma/', (project / '.github/workflows/build.yml').read_text())
+
     def test_floating_address_fixture_is_selected_and_receipted(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
