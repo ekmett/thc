@@ -13,12 +13,19 @@ import GHC.Exts (Int(I#))
 import GHC.Internal.System.Posix.Internals (c_close)
 import System.Environment (getArgs)
 import System.IO (SeekMode(..))
-import System.Posix.IO (OpenMode(..), OpenFileFlags(..), defaultFileFlags, dup, dupTo, fdRead, fdSeek, fdWrite, openFd)
+import System.Posix.IO (OpenMode(..), OpenFileFlags(..), closeFd, defaultFileFlags, dup, dupTo, fdRead, fdSeek, fdWrite, openFd)
 import System.Posix.Types (Fd(..))
 import qualified OriginalPosixDupAudit as Original
 
 number :: Fd -> Int
 number (Fd raw) = fromIntegral raw
+
+-- The fixture runner closes stdin. Fill any vacant standard descriptors before
+-- opening test files, so lowest0 never closes the source it is meant to copy.
+reserveStandardDescriptors :: IO ()
+reserveStandardDescriptors = do
+  fd <- openFd "/dev/null" ReadWrite defaultFileFlags
+  if number fd < 3 then reserveStandardDescriptors else closeFd fd
 
 run :: String -> Int -> Int -> Int
 run entry (I# fd) (I# target) = I# (case entry of
@@ -31,6 +38,7 @@ run entry (I# fd) (I# target) = I# (case entry of
 main :: IO ()
 main = do
   [entry, scenario, privatePath, otherPath, resultPath] <- getArgs
+  reserveStandardDescriptors
   BS.writeFile privatePath (BS.pack [97..102])
   BS.writeFile otherPath (BS.pack [116,97,114,103,101,116])
   source <- openFd privatePath (if scenario == "append" then WriteOnly else ReadWrite)
