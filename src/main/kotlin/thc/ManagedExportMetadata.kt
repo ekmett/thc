@@ -125,18 +125,22 @@ internal class ManagedExportAdmission private constructor(val module: Map<String
 internal class ManagedExportPlan(val linked: Map<String, Any?>, val exports: List<ManagedExportSignature>, val backend: String) {
     companion object {
         fun read(input: Map<String, Any?>): ManagedExportPlan {
-            require(input.keys.all { it in setOf("mode", "modules", "backend", "instrument", "sourceNotesEnabled", "strictLink", "targetLayout") } &&
+            require(input.keys.all { it in setOf("mode", "modules", "backend", "instrument", "sourceNotesEnabled", "strictLink", "targetLayout",
+                "packageManifest", "packageManifestSha256", "packageCapability") } &&
                 input["mode"] == "managed-exports" && input["strictLink"] == true) { "Managed export loading requires its explicit strict request" }
-            val modules = immutable(input["modules"]) as? List<Map<String, Any?>> ?: error("Missing Core modules")
-            val admissions = modules.mapNotNull { module ->
+            val merger = CoreModules.Merger()
+            val admissions = arrayListOf<ManagedExportAdmission>()
+            val layout = CoreModules.visitRequestModules(input) { original ->
+                val module = immutable(original) as Map<String, Any?>
                 require(!module.containsKey("foreignLink")) { "Native linked products are not managed export registration" }
-                if (module["schema"] == 2L) ManagedExportAdmission.read(module) else null
+                val admission = if (module["schema"] == 2L) ManagedExportAdmission.read(module) else null
+                if (admission != null) admissions.add(admission)
+                merger.add(module, admission)
             }
             val exports = admissions.flatMap { it.exports }
             require(exports.isNotEmpty()) { "No verified static foreign exports supplied" }
-            val layout = input["targetLayout"]?.let(TargetLayout::fromDocument)
             require(layout == null || layout.wordBytes * 8 == 64) { "Managed export target word width differs" }
-            val linked = CoreModules.reachable(CoreModules.mergeManagedExports(modules, admissions),
+            val linked = CoreModules.reachable(merger.finish(),
                 exports.map { it.binder }.distinct(), true) + mapOf("instrument" to (input["instrument"] != false),
                 "diagnosticUnsupported" to false, "sourceNotesEnabled" to (input["sourceNotesEnabled"] != false)) +
                 (if (layout == null) emptyMap() else mapOf("targetLayout" to layout))
