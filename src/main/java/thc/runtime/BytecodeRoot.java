@@ -3230,7 +3230,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class Multiply { @Specialization public static long apply(long x, long y) { return x * y; } }
     @Operation public static final class Negate { @Specialization public static long apply(long x) { return -x; } }
     @Operation public static final class Quotient { @Specialization public static long apply(long x, long y) { return x / y; } }
-    @Operation public static final class Remainder { @Specialization public static long apply(long x, long y) { return x % y; } }
+    @Operation public static final class Remainder {
+        @Specialization public static long apply(long x, long y) {
+            // Graal 25.3.4.1 can retain a dead Phi while virtualizing a remainder
+            // stored in a bytecode frame. The quotient form has the same wrapping
+            // long semantics, including MIN_VALUE / -1 and division by zero.
+            return x - (x / y) * y;
+        }
+    }
     /** No forcing or thunk-indirection traversal: compare the current operand references. */
     @Operation public static final class PointerEqual {
         @Specialization public static long apply(Object left, Object right) { return left == right ? 1L : 0L; }
