@@ -193,7 +193,7 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
           b = singleExport second
           allSignatures = entries signatures
           named symbol = case filter ((== String symbol) . field "symbol") allSignatures of
-            [entry] -> entry
+            [exportRecord] -> exportRecord
             _ -> Null
           countExport = named "thc_export_count"
       check (field "symbol" a == String "thc_interface_alias_a" && field "symbol" b == String "thc_interface_alias_b")
@@ -223,7 +223,7 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
     field key (Object fields) = maybe Null id (KeyMap.lookup key fields)
     field _ _ = Null
     entries value = case field "exports" value of Array values -> toList values; _ -> []
-    singleExport value = case entries value of [entry] -> entry; _ -> Null
+    singleExport value = case entries value of [exportRecord] -> exportRecord; _ -> Null
 
 -- The selected installed compiler may legitimately have thin boot interfaces.
 -- Inspect Bound only when its real complete Core exists; never copy/hash it.
