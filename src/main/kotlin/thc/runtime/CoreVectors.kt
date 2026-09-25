@@ -73,7 +73,8 @@ internal object CoreVectors {
     val proofFloat = CoreRepresentation(CoreKind.VECTOR, true, true, listOf("VecRep 4 FloatElemRep"), vector = CoreVector.FLOATX4)
     private val laneFloat = CoreRepresentation(CoreKind.FLOAT, true, true, listOf("FloatRep"))
     val unpackedFloat = CoreRepresentation(CoreKind.UNKNOWN, true, true, List(4) { "FloatRep" }, List(4) { laneFloat })
-    val operationsFloat = setOf("packFloatX4#", "unpackFloatX4#", "broadcastFloatX4#", "plusFloatX4#", "minusFloatX4#", "timesFloatX4#")
+    val fusedFloat = listOf("fmaddFloatX4#", "fmsubFloatX4#", "fnmaddFloatX4#", "fnmsubFloatX4#")
+    val operationsFloat = setOf("packFloatX4#", "unpackFloatX4#", "broadcastFloatX4#", "plusFloatX4#", "minusFloatX4#", "timesFloatX4#") + fusedFloat
     val proofDouble = CoreRepresentation(CoreKind.VECTOR, true, true, listOf("VecRep 2 DoubleElemRep"), vector = CoreVector.DOUBLEX2)
     private val laneDouble = CoreRepresentation(CoreKind.DOUBLE, true, true, listOf("DoubleRep"))
     val unpackedDouble = CoreRepresentation(CoreKind.UNKNOWN, true, true, List(2) { "DoubleRep" }, List(2) { laneDouble })
@@ -134,6 +135,7 @@ internal object CoreVectors {
             "unpackFloatX4#" -> listOf(proofFloat)
             "broadcastFloatX4#" -> listOf(laneFloat)
             "plusFloatX4#", "minusFloatX4#", "timesFloatX4#" -> listOf(proofFloat, proofFloat)
+            in fusedFloat -> listOf(proofFloat, proofFloat, proofFloat)
             else -> throw UnsupportedCore("Unsupported vector primitive $name")
         }
         val expectedResult = when (name) {

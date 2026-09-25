@@ -53,4 +53,12 @@ public final class FloatX4 {
     public static FloatX4 multiply(FloatX4 a, FloatX4 b) { return new FloatX4(a.vector.mul(b.vector)); }
     public static FloatX4 negate(FloatX4 a) { return new FloatX4(a.vector.neg()); }
     public static FloatX4 divide(FloatX4 a, FloatX4 b) { return new FloatX4(a.vector.div(b.vector)); }
+    /** GHC VecFM{Add,Sub}/VecFNM{Add,Sub}: negate inputs before the single rounding.
+     * In particular, negating a rounded result would change cancellation's signed zero. */
+    public static FloatX4 fused(int operation, FloatX4 a, FloatX4 b, FloatX4 c) {
+        if (operation < 0 || operation > 3) throw new RuntimeFault("Invalid FloatX4 fused operation");
+        FloatVector left = operation >= 2 ? a.vector.neg() : a.vector;
+        FloatVector addend = (operation & 1) != 0 ? c.vector.neg() : c.vector;
+        return new FloatX4(left.fma(b.vector, addend));
+    }
 }
