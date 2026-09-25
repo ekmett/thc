@@ -93,12 +93,19 @@ class FileWaitPrimitiveTest {
                     val target = program.entryTarget("wait")
                     fun call(descriptor: Long) = Calls.target(target, arrayOf(0L, descriptor, Unit))
                     repeat(6) { assertSame(Unit, call(opened)) }
+                    val original = program.entryValue(CoreFileWait.badFd) as Thunk
+                    // Graal profiles the guest exception before installation;
+                    // the first installed failure must still retain this target.
+                    repeat(2) {
+                        val failure = assertThrows(GuestException::class.java) { call(-1L) }
+                        assertSame(original, failure.payload)
+                        assertEquals(0, original.state)
+                    }
                     compile(target)
                     val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                     assertSame(Unit, call(opened))
                     assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
                     assertTrue(valid(target), "$backend/$name keeps its installed target")
-                    val original = program.entryValue(CoreFileWait.badFd) as Thunk
                     for (bad in listOf(-1L, opened)) {
                         if (bad == opened) assertEquals(0L, files.close(opened))
                         val failure = assertThrows(GuestException::class.java) { call(bad) }
@@ -175,7 +182,6 @@ class FileWaitPrimitiveTest {
 
             val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
             val (ready, firstRequest) = cut(MaskingState.UNMASKED)
-            assertTrue(valid(target), "Target invalidated by first async cut")
             assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
             assertEquals(AsyncRequestState.ACKNOWLEDGED, firstRequest.state)
             context.enter()
@@ -183,7 +189,10 @@ class FileWaitPrimitiveTest {
                 assertEquals(1L, state.stdio.write(write, ManagedAddress.fromByteArray(byteArrayOf(9)), 1))
                 assertSame(Unit, ready.continueWith(Unit))
                 assertEquals(1L, state.stdio.read(read, ManagedAddress.fromByteArray(byteArrayOf(0)), 1))
-                assertTrue(valid(target), "Target invalidated by continuation resume")
+                // The first captured cut profiles BytecodeRoot's handler and
+                // deoptimizes that cold installation. Compile the learned path
+                // explicitly before checking later compiled masked waits.
+                compile(target)
             } finally { context.leave() }
 
             val id = AtomicLong(-1)
@@ -211,6 +220,7 @@ class FileWaitPrimitiveTest {
             assertSame(maskedRequest, delivered.get())
             assertEquals(AsyncRequestState.ACKNOWLEDGED, maskedRequest.state)
             assertEquals(before + 2, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+            assertTrue(valid(target), "Learned masked wait retains its installed target")
             context.enter()
             try { assertEquals(1L, state.stdio.read(read, ManagedAddress.fromByteArray(byteArrayOf(0)), 1)) }
             finally { context.leave() }
