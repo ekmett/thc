@@ -10,7 +10,7 @@ import Foreign.C.Types (CChar, CInt(..), CSize(..))
 import Foreign.Marshal.Array (peekArray, withArray)
 import Foreign.Ptr (Ptr, castPtr)
 import GHC.Internal.Foreign.C.Error (Errno(..), errnoToIOError)
-import System.IO.Error (ioeGetErrorString)
+import GHC.Internal.IO.Exception (IOException(ioe_description))
 
 -- The installed ghc-internal implementation calls its original
 -- base_strerror_r, then peeks the caller-owned C buffer into a String.
@@ -21,7 +21,7 @@ foreign import ccall safe "base_strerror_r"
 
 main :: IO ()
 main = do
-  let messages = [(number, ioeGetErrorString (errnoToIOError "fixture"
+  let messages = [(number, ioe_description (errnoToIOError "fixture"
         (Errno (fromIntegral number)) Nothing Nothing)) | number <- [2 :: Int, 22]]
   raw <- forM [(22 :: Int, 512), (999999, 512), (22, 4), (22, 8)] $ \(number, size) ->
     withArray (replicate size (0x55 :: Word8)) $ \buffer -> do
