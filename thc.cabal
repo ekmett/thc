@@ -308,6 +308,7 @@ executable thc-fixtures
     ThreadStatusFixtures
     ThreadAsyncFixtures
     UncaughtSelfFixtures
+    ArithmeticExceptionFixtures
     MaskFunctionFixtures
     InterfaceFixtures
     InterfaceForeignFacts

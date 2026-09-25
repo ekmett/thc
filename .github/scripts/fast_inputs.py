@@ -691,6 +691,16 @@ def allowed_payload(name, pins):
 def hashes_in(value, tc):
     """All fingerprint spellings used by current original preparation manifests."""
     if isinstance(value, dict):
+        if value.get("format") == "thc-core-packages":
+            # Module members name paths inside the independently hashed ZIP,
+            # not files relative to the checkout. Preserve the full ZIP hash;
+            # the production package reader validates its members and layout.
+            for unit in value.get("units", []):
+                if "bundle" in unit:
+                    yield from hashes_in(unit["bundle"], tc)
+                else:
+                    yield from hashes_in(unit.get("modules", []), tc)
+            return
         if "path" in value and "sha256" in value:
             yield value["path"], value["sha256"]
         for stem in ("ghcBinary", "ghcLauncher"):

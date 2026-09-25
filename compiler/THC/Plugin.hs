@@ -12,6 +12,10 @@
 module THC.Plugin (plugin, serializeOptimizedCore, serializePostTidyCore, serializePostTidyCoreWithAnnotations) where
 
 import GHC.Plugins
+import GHC.Iface.Env (lookupOrig)
+import GHC.Tc.Utils.Env (lookupGlobal, TyThing(AnId))
+import GHC.Tc.Utils.Monad (initIfaceCheck)
+import GHC.Unit.Types (ghcInternalUnit)
 import GHC.Hs (HsParsedModule(..), HsModule(..), HsDecl(..), GhcPs)
 import GHC.Hs.Decls (ForeignDecl(..), ForeignImport(..), CImportSpec(..))
 import GHC.Hs.Type (LHsSigType, HsSigType(..), HsType(..))
@@ -791,6 +795,7 @@ exprCons = \case
 exportModule :: [CommandLineOption] -> ModGuts -> CoreM ModGuts
 exportModule opts guts = do
   flags <- getDynFlags
+  hsc <- getHscEnv
   (d,result) <- liftIO $ optimizedModule flags opts guts
   let dir = case opts of [] -> "build/core"; x:_ -> x
       closureRoots = mapMaybe (stripPrefix "closure=") (drop 1 opts)
@@ -802,7 +807,7 @@ exportModule opts guts = do
     writeFile path (json result ++ "\n")
     modifyIORef' sourceDefinitions ((d,binds):)
     let roots = [v | (v,_) <- binds, occNameString (nameOccName (varName v)) `elem` closureRoots]
-    if null roots then pure () else exportInterfaceClosure opts dir d roots
+    if null roots then pure () else exportInterfaceClosure hsc opts dir d roots
   pure guts
 
 -- | The same pre-Tidy serializer used by the plugin, without filesystem writes
@@ -851,7 +856,7 @@ exportLate hsc opts pair@(guts,_)
       writeFile path (json result ++ "\n")
       modifyIORef' sourceDefinitions ((d,binds):)
       let roots = [v | (v,_) <- binds, occNameString (nameOccName (varName v)) `elem` mapMaybe (stripPrefix "closure=") opts]
-      if null roots then pure () else exportInterfaceClosure opts dir d roots
+      if null roots then pure () else exportInterfaceClosure hsc opts dir d roots
       pure pair
 
 -- | Serialize actual post-Tidy Core, including Core hydrated from a complete
@@ -1001,8 +1006,8 @@ postTidyModule flags opts m tycons program = do
 sourceDefinitions :: IORef [(Ctx,[(Id,CoreExpr)])]
 sourceDefinitions = unsafePerformIO (newIORef [])
 
-exportInterfaceClosure :: [CommandLineOption] -> FilePath -> Ctx -> [Id] -> IO ()
-exportInterfaceClosure opts dir rootCtx roots = do
+exportInterfaceClosure :: HscEnv -> [CommandLineOption] -> FilePath -> Ctx -> [Id] -> IO ()
+exportInterfaceClosure hsc opts dir rootCtx roots = do
   modules <- readIORef sourceDefinitions
   let sourceEnv = mkVarEnv [(v,(d,e)) | (d,bs) <- modules, (v,e) <- bs]
       -- exprFreeVars deliberately omits global IDs. Dependency discovery
@@ -1031,9 +1036,26 @@ exportInterfaceClosure opts dir rootCtx roots = do
       originCtx v = case nameModule_maybe (varName v) of
         Nothing -> rootCtx
         Just m -> rootCtx { modulePrefix = unitString (moduleUnit m) ++ ":" ++ moduleNameString (moduleName m) }
-      walk _ [] found missing = (reverse found, reverse missing)
+      -- Exception.cmm supplies these closures implicitly. Resolve their real
+      -- installed Ids/unfoldings in the current GHC session so the normal
+      -- dependency walk retains the SomeException dictionary and Typeable data.
+      arithmeticException op = lookup (occNameString (primOpOcc op))
+        [("raiseDivZero#", "divZeroException"), ("raiseOverflow#", "overflowException"),
+         ("raiseUnderflow#", "underflowException")]
+      exceptionId occurrence = do
+        name <- initIfaceCheck (text "THC implicit arithmetic exception") hsc $
+          lookupOrig (mkModule ghcInternalUnit (mkModuleName "GHC.Internal.Exception.Type")) (mkVarOcc occurrence)
+        thing <- lookupGlobal hsc name
+        case thing of
+          AnId v -> pure v
+          _ -> error "THC implicit arithmetic exception is not an Id"
+      walk _ [] found missing = pure (reverse found, reverse missing)
       walk seen (v:todo) found missing
         | v `elemVarSet` seen = walk seen todo found missing
+        | Just op <- isPrimOpId_maybe v
+        , Just occurrence <- arithmeticException op = do
+            payload <- exceptionId occurrence
+            walk seen' (payload : todo) found missing
         | Just _ <- isPrimOpId_maybe v = walk seen' todo found missing
         | Just _ <- isDataConWorkId_maybe v = walk seen' todo found missing
         | polyglotForeign v = walk seen' todo found missing
@@ -1043,8 +1065,8 @@ exportInterfaceClosure opts dir rootCtx roots = do
             in walk seen' (refs e ++ todo) ((originCtx v,v,e,kind):found) missing
         | otherwise = walk seen' todo found ((originCtx v,v):missing)
         where seen' = extendVarSet seen v
-      (imports,missing) = walk emptyVarSet roots [] []
-      -- Interfaces do not retain complete source recursive-group boundaries.
+  (imports,missing) <- walk emptyVarSet roots [] []
+  let -- Interfaces do not retain complete source recursive-group boundaries.
       -- Conservatively forbid speculation of every imported definition while
       -- exporting their RHSs; this preserves recursive dictionary guards.
       recIds = mkVarSet [v | (_,v,_,_) <- imports]

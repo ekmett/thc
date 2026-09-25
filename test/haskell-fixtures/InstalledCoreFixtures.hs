@@ -30,7 +30,8 @@ readJson path = maybe (die ("Invalid JSON: " ++ path)) pure . decodeStrict' =<< 
 
 data InstalledFixture = InstalledFixture
   { fixtureGhc :: FilePath, fixturePackages :: FilePath, fixtureArtifacts :: [FilePath]
-  , fixtureCommands :: [CommandResult] }
+  , fixtureCommands :: [CommandResult], fixtureContext :: Installed.InstalledContext
+  , fixtureRegistration :: String }
 
 -- Fixture orchestration only. Production Installed and Project own discovery,
 -- complete-Core validation, native companion linkage, TargetLayout and ZIP/cache
@@ -72,6 +73,10 @@ prepareInstalledCore root directory = do
             discover (unit:seen) (Installed.installedDepends unit ++ todo)
   units <- discover [] [internal]
   Installed.validateReexports units
+  internalRegistration <- case [Installed.registration unit | unit <- units,
+                                Installed.registeredId unit == internal] of
+    [value] -> pure value
+    _ -> die "Installed fixture lost its selected ghc-internal registration"
   cache <- Cache.coreCacheDirectory
   driverHash <- hashFile =<< getExecutablePath
   createDirectoryIfMissing True (root </> directory </> "installed/bundles")
@@ -93,4 +98,5 @@ prepareInstalledCore root directory = do
   writeJson (root </> packagePath) $ object
     ["format" .= ("thc-core-packages" :: String), "schema" .= (1 :: Int),
      "ghc" .= ("9.14.1" :: String), "units" .= concatMap fst bundles]
-  pure (InstalledFixture ghc packagePath (packagePath : map snd bundles) [version, built, located, registration])
+  pure (InstalledFixture ghc packagePath (packagePath : map snd bundles)
+    [version, built, located, registration] selected internalRegistration)
