@@ -117,7 +117,8 @@ def result(family, operation, lane, a, b):
         right = signed(right, width)
         value = {'broadcast': lambda: a, 'insert': lambda: b, 'negate': lambda: -left,
                  'plus': lambda: left + right, 'minus': lambda: left - right,
-                 'times': lambda: left * right}[operation]()
+                 'times': lambda: left * right, 'min': lambda: min(left, right),
+                 'max': lambda: max(left, right)}[operation]()
         value = value & ((1 << width) - 1) if family['laneRep'].startswith('Word') else signed(value, width)
     # Public wrappers retain an OPAQUE scalar worker and a post-call addition.
     return signed(value + 17)

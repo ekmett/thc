@@ -30,8 +30,8 @@ LANES = {
     'DoubleRep': ('double', 64, 'DoubleVector', 'Double'),
 }
 UNSIGNED_MASK = {'Word8Rep': '0xffL', 'Word16Rep': '0xffffL', 'Word32Rep': '0xffff_ffffL'}
-BINARY = {'plus': 'add', 'minus': 'subtract', 'times': 'multiply', 'divide': 'divide'}
-VECTOR_METHOD = {'add': 'add', 'subtract': 'sub', 'multiply': 'mul', 'divide': 'div'}
+BINARY = {'plus': 'add', 'minus': 'subtract', 'times': 'multiply', 'divide': 'divide', 'min': 'min', 'max': 'max'}
+VECTOR_METHOD = {'add': 'add', 'subtract': 'sub', 'multiply': 'mul', 'divide': 'div', 'min': 'min', 'max': 'max'}
 LEGACY_INSERT = {'Int8X16', 'Word8X16', 'Int16X8', 'Word16X8', 'Int32X4', 'Word32X4', 'Int64X2', 'FloatX4', 'DoubleX2'}
 OPS = {'pack', 'unpack', 'broadcast', 'negate', 'insert'} | BINARY.keys()
 HEADER = ('// SPDX-FileCopyrightText: 2026 Edward Kmett\n'
@@ -433,6 +433,10 @@ def smoke_sources(fs):
                      ('sub' if op == 'minus' and rep not in ('FloatRep', 'DoubleRep') else op) + stem + '#')
         if op == 'insert':
             scalar.append(f'  {index}# -> case ({lane}) ==# ({inserted}) of {{ 1# -> {observe(rep, convert[rep]("b"), True)}; _ -> {observe(rep, left, True)} }}')
+        elif op in ('min', 'max'):
+            # GHC has vector min/max but no scalar minIntN#/maxIntN# primops.
+            first, second = (left, right) if op == 'min' else (right, left)
+            scalar.append(f'  {index}# -> case lt{stem}# ({left}) ({right}) of {{ 1# -> {observe(rep, first)}; _ -> {observe(rep, second)} }}')
         else:
             value = left if op == 'broadcast' else f'{primitive} ({left})' + (f' ({right})' if op in BINARY else '')
             scalar.append(f'  {index}# -> {observe(rep, value)}')

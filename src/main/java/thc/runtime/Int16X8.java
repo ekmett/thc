@@ -37,4 +37,6 @@ public final class Int16X8 {
     public static Int16X8 subtract(Int16X8 a, Int16X8 b) { return lanes(a.vector().sub(b.vector())); }
     public static Int16X8 negate(Int16X8 a) { return lanes(a.vector().neg()); }
     public static Int16X8 multiply(Int16X8 a, Int16X8 b) { return lanes(a.vector().mul(b.vector())); }
+    public static Int16X8 min(Int16X8 a, Int16X8 b) { return lanes(a.vector().min(b.vector())); }
+    public static Int16X8 max(Int16X8 a, Int16X8 b) { return lanes(a.vector().max(b.vector())); }
 }

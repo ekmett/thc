@@ -13,7 +13,7 @@ import unittest
 from unittest.mock import patch
 
 from core_vectors import OPERATIONS, proof_error, signature_matches
-from simd_family_model import cases, entries, float_operation, result
+from simd_family_model import cases, entries, float_operation, result, signed
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = importlib.util.spec_from_file_location('simd_generator', ROOT / 'scripts/generate-simd-families.py')
@@ -121,7 +121,7 @@ class SimdFamiliesTest(unittest.TestCase):
 
     def test_exact_machine_contracts_and_recursive_lanes(self):
         families = GEN.families()
-        self.assertEqual(132, len(GEN.contracts(families)))
+        self.assertEqual(140, len(GEN.contracts(families)))
         for family in families:
             for operation in family['operations']:
                 name = operation + family['name'] + '#'
@@ -169,6 +169,16 @@ class SimdFamiliesTest(unittest.TestCase):
         for i in range(family['lanes']):
             self.assertIn(f'frame, slots[offset + {i}], value.lane{i}.toLong())', ast)
             self.assertIn(f'frame, value.lane{i});', bytecode)
+
+    def test_signed_min_max_select_high_bit_lanes(self):
+        for name in ('Int8X16', 'Int16X8', 'Int32X4', 'Int64X2'):
+            family = next(f for f in GEN.families() if f['name'] == name)
+            width = family['bits'] // family['lanes']
+            low, high = -(1 << (width - 1)), (1 << (width - 1)) - 1
+            for lane in (0, family['lanes'] - 1):
+                a, b = low - lane * 104729, high + lane * 7919
+                self.assertEqual(low + 17, result(family, 'min', lane, a, b))
+                self.assertEqual(signed(high + 17), result(family, 'max', lane, a, b))
 
     def test_smoke_composites_bound_compilation_work_and_cover_every_selector(self):
         families = GEN.families()

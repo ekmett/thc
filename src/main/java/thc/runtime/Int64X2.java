@@ -16,4 +16,6 @@ public final class Int64X2 {
     public static Int64X2 subtract(Int64X2 a, Int64X2 b) { return lanes(a.vector().sub(b.vector())); }
     public static Int64X2 multiply(Int64X2 a, Int64X2 b) { return lanes(a.vector().mul(b.vector())); }
     public static Int64X2 negate(Int64X2 a) { return lanes(a.vector().neg()); }
+    public static Int64X2 min(Int64X2 a, Int64X2 b) { return lanes(a.vector().min(b.vector())); }
+    public static Int64X2 max(Int64X2 a, Int64X2 b) { return lanes(a.vector().max(b.vector())); }
 }

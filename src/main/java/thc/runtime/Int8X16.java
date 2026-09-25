@@ -54,4 +54,6 @@ public final class Int8X16 {
     public static Int8X16 negate(Int8X16 a) { return lanes(a.vector().neg()); }
     /** Low-eight-bit products; hardware lowering is verified separately for the pinned target. */
     public static Int8X16 multiply(Int8X16 a, Int8X16 b) { return lanes(a.vector().mul(b.vector())); }
+    public static Int8X16 min(Int8X16 a, Int8X16 b) { return lanes(a.vector().min(b.vector())); }
+    public static Int8X16 max(Int8X16 a, Int8X16 b) { return lanes(a.vector().max(b.vector())); }
 }
