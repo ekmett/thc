@@ -2064,7 +2064,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio == OriginalStdioOp.FSTAT || originalStdio == OriginalStdioOp.OPEN ||
+                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio == OriginalStdioOp.OPEN ||
                             originalStdio.iconv || originalStdio.strerror || originalStdio.duplication || originalStdio.locking)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.representation, if (argument[0] == "var")

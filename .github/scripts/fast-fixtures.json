@@ -41,6 +41,14 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "original-tcgetattr": {
+      "junit": ["thc.runtime.OriginalTcgetattrTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-tcgetattr"]}],
+      "outputs": ["build/original-tcgetattr"],
+      "sources": ["compiler/test-fixtures/OriginalTcgetattrAudit.hs", "compiler/test-fixtures/OriginalTcgetattrNative.hs",
+        "test/haskell-fixtures/OriginalTcgetattrFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "original-sigset": {
       "junit": ["thc.runtime.OriginalSigsetTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-sigset"]}],

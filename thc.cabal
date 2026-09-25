@@ -48,6 +48,8 @@ extra-source-files:
   compiler/test-fixtures/OriginalSavedTermiosAudit.hs
   compiler/test-fixtures/OriginalSavedTermiosNative.hs
   compiler/test-fixtures/OriginalTermiosNative.hs
+  compiler/test-fixtures/OriginalTcgetattrAudit.hs
+  compiler/test-fixtures/OriginalTcgetattrNative.hs
   compiler/test-fixtures/OriginalSigsetAudit.hs
   compiler/test-fixtures/OriginalSigsetNative.hs
   compiler/test-fixtures/OriginalFdReadyAuditNative.hs
@@ -345,6 +347,7 @@ executable thc-fixtures
     OriginalRtsLocksFixtures
     OriginalOpenFixtures
     OriginalTermiosFixtures
+    OriginalTcgetattrFixtures
     OriginalSigsetFixtures
     OriginalIconvFixtures
     MutVarFixtures
