@@ -187,7 +187,8 @@ ORIGINAL_RTS_LOCK_OUTPUTS = frozenset("build/original-rts-locks/" + name for nam
 ))
 
 ORIGINAL_TERMIOS_ENTRIES = ("originalTermiosSize", "originalEcho", "originalIcanon", "originalVmin", "originalVtime",
-                          "originalTcsanow", "originalLflag", "originalPokeLflag", "originalCC")
+                          "originalTcsanow", "originalSigsetSize", "originalSigttou", "originalSigBlock", "originalSigSetmask",
+                          "originalLflag", "originalPokeLflag", "originalCC")
 ORIGINAL_TERMIOS_OUTPUTS = frozenset("build/original-termios/" + name for name in (
     "manifest.json", "oracle.json", "native/oracle",
     *(f"logs/{label}.{suffix}" for label in (

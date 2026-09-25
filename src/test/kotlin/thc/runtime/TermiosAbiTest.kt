@@ -69,7 +69,17 @@ class TermiosAbiTest {
         }
         for ((key, bad) in listOf("extra" to 0L, "size" to 0L, "lflagOffset" to -1L, "ccOffset" to -1L,
             "ccCount" to 0L, "lflagBytes" to 8L, "ccBytes" to 4L, "alignment" to 8L,
-            "ccOffset" to layout["lflagOffset"], "vmin" to layout["vtime"]))
+            "ccOffset" to layout["lflagOffset"], "vmin" to layout["vtime"], "sigsetSize" to 0L,
+            "sigsetSize" to 4097L, "sigttou" to (Int.MIN_VALUE.toLong() - 1)))
             assertThrows(RuntimeFault::class.java) { parse(doc + ("termios" to (layout + (key to bad)))) }
+    }
+
+    @Test fun signalHeaderFallbackZeroIsValidWithoutChangingTheSignalMask() {
+        val doc = document()
+        val layout = doc["termios"] as Map<*, *>
+        val abi = parse(doc + ("termios" to (layout + mapOf("sigttou" to 0L, "sigBlock" to 0L, "sigSetmask" to 0L))))
+        for (operation in listOf(OriginalStdioOp.SIGTTOU, OriginalStdioOp.SIG_BLOCK, OriginalStdioOp.SIG_SETMASK))
+            assertEquals(0L, abi.constant(operation))
+        assertEquals(layout["sigsetSize"], abi.constant(OriginalStdioOp.SIZEOF_SIGSET))
     }
 }

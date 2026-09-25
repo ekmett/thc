@@ -37,7 +37,9 @@ TERMIOS_OPERATIONS = {
     '__hscore_poke_lflag': (('AddrRep', 'Word32Rep', None), (None,)),
     '__hscore_ptr_c_cc': (('AddrRep', None), (None, 'AddrRep')),
     '__hscore_sizeof_termios': ((None,), (None, 'IntRep')),
-    **{f'__hscore_{name}': ((None,), (None, 'Int32Rep')) for name in ('echo', 'icanon', 'vmin', 'vtime', 'tcsanow')},
+    '__hscore_sizeof_sigset_t': ((None,), (None, 'IntRep')),
+    **{f'__hscore_{name}': ((None,), (None, 'Int32Rep'))
+       for name in ('echo', 'icanon', 'vmin', 'vtime', 'tcsanow', 'sigttou', 'sig_block', 'sig_setmask')},
 }
 TERMIOS_SYMBOLS = frozenset(TERMIOS_OPERATIONS)
 SEEK_CONSTANTS = frozenset((
