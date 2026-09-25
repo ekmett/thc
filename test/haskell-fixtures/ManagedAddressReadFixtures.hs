@@ -15,6 +15,7 @@ import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory,
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
+import Text.Read (readMaybe)
 
 entries :: [(String,String,Int)]
 entries = [("word32Read","readWord32OffAddr#",4),
@@ -46,8 +47,10 @@ prepareManagedAddressReads root = do
   when present (removeFile manifest)
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   version <- run root [] ghc ["--numeric-version"] ""
-  unless (lines version == ["9.14.1"] && finiteBitSize (0 :: Int) == 64)
-    (die "Managed address reads require native 64-bit GHC 9.14.1")
+  info <- run root [] ghc ["--info"] ""
+  let targetWordBits = (readMaybe info :: Maybe [(String,String)]) >>= lookup "target word size in bits"
+  unless (lines version == ["9.14.1"] && targetWordBits == Just "64" && finiteBitSize (0 :: Int) == 64)
+    (die "Managed address reads require a 64-bit host and selected GHC 9.14.1 target")
   writeFile (output </> "requests.tsv") requestText
   createDirectoryIfMissing True (root </> native)
   _ <- run root [] ghc ["--make","-O2","-j2","-fforce-recomp","-dcore-lint","-dstg-lint",
