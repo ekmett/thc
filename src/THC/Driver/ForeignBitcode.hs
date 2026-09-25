@@ -84,21 +84,9 @@ linkClockGetTime libdir staging platform unit name original
           bitcode = temporary </> "clock.bc"
           cleanup = removePathForcibly temporary
       bytes <- (do
-        writeFile cfile ("#include \"HsFFI.h\"\n#include <errno.h>\n#include <stdlib.h>\n#include <time.h>\n" ++
+        writeFile cfile ("#include \"HsFFI.h\"\n#include <errno.h>\n#include <time.h>\n" ++
           Text.unpack source ++ "\n" ++ unlines
           ["_Static_assert(sizeof(struct timespec) == 16, \"unsupported timespec ABI\");",
-           "void *thc_capi_alloc_timespec(void) {",
-           "  void *native = malloc(sizeof(struct timespec));",
-           "  if (!native) errno = ENOMEM;",
-           "  return native;",
-           "}",
-           "void thc_capi_copy_timespec(void *native, void *managed) {",
-           "  struct timespec *value = (struct timespec *)native;",
-           "    volatile HsWord64 *result = (volatile HsWord64 *)managed;",
-           "    result[0] = (HsWord64)value->tv_sec;",
-           "    result[1] = (HsWord64)value->tv_nsec;",
-           "}",
-           "void thc_capi_free_timespec(void *native) { free(native); }",
            "HsInt32 thc_capi_errno(void) { return errno; }"])
         run clang (targetFlags ++ ["-O1", "-emit-llvm", "-c", "-I", takeDirectory header,
                    cfile, "-o", bitcode])

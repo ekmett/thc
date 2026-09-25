@@ -261,7 +261,7 @@ prepareInstalledBundle cache staging driverHash context registrationUnit = do
           buildKey = shaHex (BL.toStrict (encode (object inputFields)))
           exporter = object (["helperHash" .= helperHash, "driverHash" .= driverHash,
                              "options" .= (["post-tidy", "unit-qualified", "source-notes", "dynamic"] :: [String])] ++
-                             ["foreignLinkRecipe" .= ("original-capi-llvm-v2" :: String)
+                             ["foreignLinkRecipe" .= ("original-capi-llvm-v3" :: String)
                              | any ((== "System.CPUTime.Posix.ClockGetTime") . fst) modules])
           exportKey = shaHex (BL.toStrict (encode ("thc-installed-interface-v1" :: String, buildKey, exporter)))
           inputs = object (inputFields ++ ["buildKey" .= buildKey, "exportKey" .= exportKey, "exporter" .= exporter])
