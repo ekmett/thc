@@ -695,7 +695,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         if (CoreApplicationCertificates.eagerApplication(expr, arityCertificate)) return lowered()
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> lowered(); else -> delay(expr, scope, label) }
     }
-    private fun literal(kind: String, value: String): Any = when (kind) {
+    private fun literal(kind: String, value: String, proof: CoreRepresentation? = null): Any = when (kind) {
         "int8" -> int8Literal(value)
         "int16" -> int16Literal(value)
         "int32" -> int32Literal(value)
@@ -708,6 +708,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
         "string-bytes" -> ManagedAddress.fromHex(value)
         "null-addr" -> if (value == "0") ManagedAddress.nullAddress() else throw UnsupportedCore("Malformed null Addr# literal")
+        "function-addr" -> CFinalizerLabels.fromCore(value, proof)
         "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
@@ -1300,7 +1301,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     else Expression { it.builder.emitReadGlobal(binding) }, stored)
                 } ?: throw UnsupportedCore("Unresolved external binding $id")
         }
-        "lit" -> constant(literal(expr[1] as String, expr[2] as String)).let {
+        "lit" -> constant(literal(expr[1] as String, expr[2] as String, CoreRepresentations.expression(expr))).let {
             if (expr[1] in listOf("int8", "word8", "int16", "word16", "int32", "word32")) ProvenExpression(it, CoreRepresentations.narrowLiteralProof(expr))
             else if (expr[1] == "bignat") ProvenExpression(it, BigNatLiterals.proof(expr)) else it
         }
@@ -2061,12 +2062,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     when (operation) {
                         WeakOp.MAKE -> e.builder.beginMakeWeak(destination.single())
                         WeakOp.MAKE_PLAIN -> e.builder.beginMakeWeakPlain(destination.single())
+                        WeakOp.ADD_C_FINALIZER -> e.builder.beginAddCFinalizerToWeak(destination.single())
                         else -> e.builder.beginObserveWeak(destination[0], destination[1], operation == WeakOp.FINALIZE)
                     }
                     operands.forEach { it.emit(e) }
                     when (operation) {
                         WeakOp.MAKE -> e.builder.endMakeWeak()
                         WeakOp.MAKE_PLAIN -> e.builder.endMakeWeakPlain()
+                        WeakOp.ADD_C_FINALIZER -> e.builder.endAddCFinalizerToWeak()
                         else -> e.builder.endObserveWeak()
                     }
                 }

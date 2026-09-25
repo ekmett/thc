@@ -2291,6 +2291,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class AddCFinalizerToWeak {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress function, ManagedAddress address, long flag, ManagedAddress environment,
+                Object weak, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long added = ManagedWeaks.current(node).addCFinalizer(function, address, flag, weak,
+                    SulongCbits.current(node));
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, added);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = StablePointerOp.class, name = "operation")
     public static final class StablePointerTuple {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,

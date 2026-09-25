@@ -11,7 +11,8 @@ import thc.Language
 /** PARTIAL weak support: retain registrations until explicit finalization/close, not guest GC. */
 internal class ManagedWeaks {
     private class Handle(val owner: ManagedWeaks)
-    private class Payload(val key: Any, val value: Any, val action: Any?)
+    private class Payload(val key: Any, val value: Any, val action: Any?,
+        val callbacks: MutableList<() -> Unit> = ArrayList())
     private val live = HashMap<Handle, Payload>()
     private var closed = false
 
@@ -32,11 +33,30 @@ internal class ManagedWeaks {
     @Synchronized @TruffleBoundary
     fun dereference(value: Any?): WeakResult = live[handle(value)]?.let { WeakResult(1L, it.value) } ?: dead
 
+    /** The exact original two one-argument callbacks use a zero environment flag. */
+    @TruffleBoundary
+    fun addCFinalizer(function: ManagedAddress, address: ManagedAddress, flag: Long,
+        weak: Any?, provider: SulongCbits): Long {
+        val callback = function.finalizerFunction() ?: fault("Expected an original C function label")
+        callback.requireOwner(provider)
+        if (flag != 0L) fault("Original C finalizer requires a one-address ABI")
+        // The zero-flag RTS form ignores environment; lowering checks its Addr# carrier.
+        if (address !== ManagedAddress.nullAddress()) address.requireByteRegion(0)
+        return addCallback(weak) { callback.invoke(address) }
+    }
+
     @Synchronized @TruffleBoundary
+    internal fun addCallback(value: Any?, callback: () -> Unit): Long {
+        val payload = live[handle(value)] ?: return 0L
+        payload.callbacks.add(0, callback) // RTS prepends: explicit finalize visits newest first.
+        return 1L
+    }
+
+    @TruffleBoundary
     fun finalize(value: Any?): WeakResult {
-        // Removing the entire payload publishes DEAD before returning the actual action.
-        // No guest action runs here or under the lock. There are no admitted C callbacks.
-        val payload = live.remove(handle(value)) ?: return dead
+        // Publish DEAD before calling C; neither Sulong nor guest code runs under this monitor.
+        val payload = synchronized(this) { live.remove(handle(value)) } ?: return dead
+        payload.callbacks.forEach { it() }
         return payload.action?.let { WeakResult(1L, it) } ?: dead
     }
 
@@ -85,6 +105,8 @@ internal enum class WeakOp(val primitive: String, private val arguments: List<St
                            private val resultRoles: List<String>) {
     MAKE("mkWeak#", listOf("boxed", "boxed", "action", "state"), listOf("state", "weak")),
     MAKE_PLAIN("mkWeakNoFinalizer#", listOf("boxed", "boxed", "state"), listOf("state", "weak")),
+    ADD_C_FINALIZER("addCFinalizerToWeak#", listOf("address", "address", "flag", "address", "weak", "state"),
+        listOf("state", "flag")),
     DEREFERENCE("deRefWeak#", listOf("weak", "state"), listOf("state", "flag", "boxed")),
     FINALIZE("finalizeWeak#", listOf("weak", "state"), listOf("state", "flag", "action"));
 
@@ -134,6 +156,7 @@ internal enum class WeakOp(val primitive: String, private val arguments: List<St
                 "state" -> proof.kind == CoreKind.VOID && proof.primReps == emptyList<String>()
                 "weak" -> proof.kind == CoreKind.OBJECT && proof.primReps == listOf(UNLIFTED)
                 "flag" -> proof.kind == CoreKind.LONG && proof.primReps == listOf("IntRep")
+                "address" -> proof.kind == CoreKind.ADDRESS && proof.primReps == listOf("AddrRep")
                 "action" -> proof.kind in setOf(CoreKind.CLOSURE, CoreKind.OBJECT) && proof.primReps == listOf(LIFTED)
                 else -> proof.kind in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) &&
                     proof.primReps?.singleOrNull() in setOf(LIFTED, UNLIFTED)
@@ -152,6 +175,16 @@ internal class WeakExpression(private val operation: WeakOp, @field:Children pri
                 ?: fault("mkWeak# requires a finalizer carrier") else null
             requireVoidCarrier(operands.last().execute(frame))
             FrameAccess.writeObject(frame, slots[offset], registry.make(first, value, action))
+        } else if (operation == WeakOp.ADD_C_FINALIZER) {
+            val function = first as? ManagedAddress ?: fault("Expected a C function Addr#")
+            val address = operands[1].executeRequiredAddress(frame)
+            val flag = operands[2].executeLong(frame)
+            operands[3].executeRequiredAddress(frame)
+            val weak = operands[4].execute(frame)
+            requireVoidCarrier(operands[5].execute(frame))
+            val provider = Language.currentState(this).cbits()
+            FrameAccess.writeLong(frame, slots[offset], registry.addCFinalizer(function, address,
+                flag, weak, provider))
         } else {
             requireVoidCarrier(operands[1].execute(frame))
             val result = if (operation == WeakOp.FINALIZE) registry.finalize(first) else registry.dereference(first)

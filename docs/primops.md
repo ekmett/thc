@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 451 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 731 | No declared lowering. |
+| Partial | 452 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 730 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -46,7 +46,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - shrinkMutableByteArray# changes the logical size of a THC-owned allocation in place, preserving frozen and pinned aliases while retaining backing capacity. Managed byte, scalar, vector, address and C-bitcode buffer accesses observe the shorter bound; partial truncation of a managed pointer cell is rejected. Host-injected raw byte arrays cannot be shrunk in place.
 - fetchAddIntArray# atomically returns the previous signed machine Int and writes the wrapped sum under the allocation monitor, with a full memory barrier. It requires a THC-owned mutable byte array and a contained machine-word element; raw host arrays and pointer-cell overlaps are rejected.
 - StablePtr# uses context-owned opaque AddrRep handles, with lazy referents and exact hs_free_stable_ptr. The two original RTS shared-CAF getOrSet calls atomically retain their first live handle per context until disposal; null queries leave empty slots unchanged. Live identity casts may be compared, but the handles have no byte storage, pointer arithmetic or ordering. Stable-pointer array and byte-memory index/read/write primops remain unsupported.
-- Weak# support is PARTIAL: context-owned registrations retain lazy keys, values and Haskell actions until explicit finalizeWeak# or context close. Finalization atomically marks dead and returns the real action without invoking it; close never runs Haskell finalizers. Original rts_setMainThread stores the Weak# key capability, not its boxed value or a permanent Java thread ID; signal installation/delivery remain unsupported. There is no automatic GC/ephemeron reclamation, and addCFinalizerToWeak# remains rejected.
+- Weak# support is PARTIAL: context-owned registrations retain lazy keys, values and Haskell actions until explicit finalizeWeak# or context close. Exact source-certified USE_LIBDW=0 C labels can register one-argument callbacks; explicit finalization makes the weak dead before invoking them through Sulong outside the registry lock, then returns the real Haskell action without invoking it. Close discards outstanding callbacks. Original rts_setMainThread stores the Weak# key capability, not its boxed value or a permanent Java thread ID; signal installation/delivery remain unsupported. Automatic GC/ephemeron reclamation and arbitrary C function/data labels remain unsupported.
 - Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Local joins may read an enclosing tuple's existing typed frame slots; ordinary function captures, heap fields and ordinary let bindings remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums, vectors and unresolved leaves cannot appear in tuple inputs; exact evaluated AddrRep leaves use managed address references.
 - Binary unboxed sum results and immediate cases support exact machine Int/Word, Float, Double, known reference, void and tuple payloads. Nested sums, width-changing payload casts, vector/address or unknown leaves, sum inputs/captures/heap fields/local lets/joins/host results remain unsupported.
 
@@ -364,6 +364,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 
 ## Partial forms
 
+- [ ] `addCFinalizerToWeak#` — arity 6 — PARTIAL: retained registrations and explicit Haskell finalization; no GC, ephemerons or C finalizers
 - [ ] `addIntC#` — arity 2 — Exact tuple arithmetic
 - [ ] `addWordC#` — arity 2 — Exact tuple arithmetic
 - [ ] `addr2Int#` — arity 1 — Managed addresses with operation-specific storage restrictions
@@ -823,7 +824,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 
 - [ ] `acoshDouble#` — arity 1
 - [ ] `acoshFloat#` — arity 1
-- [ ] `addCFinalizerToWeak#` — arity 6
 - [ ] `addrToAny#` — arity 1
 - [ ] `annotateStack#` — arity 3
 - [ ] `anyToAddr#` — arity 2

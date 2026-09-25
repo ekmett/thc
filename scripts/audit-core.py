@@ -251,6 +251,8 @@ class Audit:
         if kind not in self.cap['literalKinds']:
             self.issue('unsupported-literal', owner, path, kind)
             return
+        if kind == 'function-addr' and value not in self.cap.get('functionLabels', []):
+            self.issue('unsupported-literal', owner, path, f'uncertified C function label {value}')
         if kind == 'bignat':
             if not isinstance(value, str) or not value or any(c not in '0123456789' for c in value) or len(value) > 1 and value[0] == '0':
                 self.issue('invalid-literal-value', owner, path, 'bignat requires canonical nonnegative decimal')
@@ -1283,6 +1285,8 @@ class Audit:
                             return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
                         if role == 'flag':
                             return kind == 'long' and reps == ['IntRep']
+                        if role == 'address':
+                            return kind == 'address' and reps == ['AddrRep']
                         if role == 'action':
                             return kind in ('object', 'closure') and reps == ['BoxedRep (Just Lifted)']
                         return role == 'boxed' and kind in ('object', 'data', 'closure') and reps in (

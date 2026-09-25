@@ -15,8 +15,10 @@ import java.util.function.Supplier
 import java.util.concurrent.FutureTask
 import java.util.concurrent.ExecutionException
 import com.oracle.truffle.api.TruffleSafepoint
+import com.oracle.truffle.api.nodes.Node
 import java.util.concurrent.ConcurrentHashMap
 import thc.ForeignBitcode
+import thc.Language
 
 /** Context-owned original C code and checked managed/native allocation views. */
 internal class SulongCbits(private val env: TruffleLanguage.Env) {
@@ -44,6 +46,43 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
     private val iconvTask = FutureTask { load(env, "iconv") }
     private val strerrorTask = FutureTask { load(env, "strerror") }
     private val strerrorLocaleTask = FutureTask { load(env, "strerror-locale") }
+    private val finalizerTask = FutureTask {
+        val original = load(env, "libdw-unavailable")
+        listOf("libdwPoolRelease", "backtraceFree").associateWith { symbol ->
+            if (!interop.isMemberReadable(original, symbol)) fault("Missing original RTS finalizer: $symbol")
+            val callable = interop.readMember(original, symbol)
+            if (!interop.isExecutable(callable)) fault("Original RTS finalizer is not callable: $symbol")
+            CFinalizerFunction(this, symbol, callable)
+        }
+    }
+    private fun originalFinalizers(): Map<String, CFinalizerFunction> {
+        finalizerTask.run()
+        return try {
+            if (finalizerTask.isDone) finalizerTask.get()
+            else TruffleSafepoint.setBlockedThreadInterruptibleFunction(null,
+                TruffleSafepoint.InterruptibleFunction<FutureTask<Map<String, CFinalizerFunction>>,
+                    Map<String, CFinalizerFunction>> { it.get() }, finalizerTask)
+        } catch (failure: ExecutionException) { throw (failure.cause ?: failure) }
+    }
+    /** Only the two source-certified USE_LIBDW=0 void(void*) labels have this ABI. */
+    internal fun finalizerLabel(symbol: String): ManagedAddress =
+        ManagedAddress.fromCFinalizer(originalFinalizers()[symbol]
+            ?: fault("Unsupported original C function label: $symbol"))
+
+    internal fun invokeFinalizer(function: CFinalizerFunction, address: ManagedAddress) {
+        function.requireOwner(this)
+        val pointer = if (address === ManagedAddress.nullAddress()) 0L else {
+            address.requireByteRegion(0)
+            transport(address)
+        }
+        val threads = Language.currentState(null).threads
+        val previous = threads.enterForeign()
+        try { executeWithOwners(function.callable, pointer) }
+        finally {
+            threads.leaveForeign(previous)
+            Reference.reachabilityFence(address)
+        }
+    }
     internal fun strerrorLibrary(): Any {
         strerrorTask.run()
         return try {
@@ -172,5 +211,27 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
     }
     fun finish(output: ManagedAddress, context: ManagedAddress) {
         executeWithOwners(finish, transport(output), output.cbitsOffset(), transport(context), context.cbitsOffset())
+    }
+    companion object {
+        @JvmStatic fun current(node: Node?): SulongCbits = Language.currentState(node).cbits()
+    }
+}
+
+/** A callable Sulong member, never a synthetic address or untyped symbol lookup. */
+internal class CFinalizerFunction internal constructor(
+    private val owner: SulongCbits, val symbol: String, internal val callable: Any
+) {
+    fun requireOwner(provider: SulongCbits) {
+        if (provider !== owner) fault("C function label belongs to another THC context")
+    }
+    fun invoke(address: ManagedAddress) = owner.invokeFinalizer(this, address)
+}
+
+internal object CFinalizerLabels {
+    fun fromCore(symbol: String, proof: CoreRepresentation?): ManagedAddress {
+        if (proof?.present != true || proof.kind != CoreKind.ADDRESS || proof.isAggregate ||
+            proof.isVector || proof.primReps != listOf("AddrRep"))
+            fault("Original C function label requires exact AddrRep proof")
+        return Language.currentState(null).cbits().finalizerLabel(symbol)
     }
 }

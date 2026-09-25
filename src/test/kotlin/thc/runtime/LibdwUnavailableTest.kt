@@ -60,6 +60,109 @@ class LibdwUnavailableTest {
         assertEquals(0, handoff.arguments.retainedReferences()); assertEquals(0, handoff.results.retainedReferences())
     }
 
+    private fun originalPoolLabel(): List<Any?> {
+        val root = File(System.getProperty("thc.projectRoot"))
+        val source = Json.parse(File(root, "build/libdw-unavailable/foreign-labels.json").readText())
+        fun find(value: Any?): List<Any?>? = when (value) {
+            is List<*> -> if (value.take(3) == listOf("lit", "function-addr", "libdwPoolRelease"))
+                value as List<Any?> else value.firstNotNullOfOrNull(::find)
+            is Map<*, *> -> value.values.firstNotNullOfOrNull(::find)
+            else -> null
+        }
+        return find(source) ?: error("Missing genuine GHC libdwPoolRelease label")
+    }
+
+    private fun cFinalizerConsumer(label: List<Any?>): Map<String, Any?> {
+        val state = mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true)
+        val address = mapOf("kind" to "address", "primReps" to listOf("AddrRep"), "evaluated" to true)
+        val weak = mapOf("kind" to "object", "primReps" to listOf("BoxedRep (Just Unlifted)"), "evaluated" to true)
+        val flag = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
+        val closure = mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)
+        val result = mapOf("kind" to "unknown", "aggregate" to "unboxed-tuple", "components" to listOf(state, flag),
+            "primReps" to listOf("IntRep"), "evaluated" to true)
+        val formals = listOf(mapOf("id" to "pointer", "lifted" to false, "rep" to address),
+            mapOf("id" to "weak", "lifted" to false, "rep" to weak))
+        val operands = listOf(label, listOf("var", "pointer", mapOf("rep" to address)),
+            listOf("lit", "int", "0", mapOf("rep" to flag)),
+            listOf("lit", "null-addr", "0", mapOf("rep" to address)),
+            listOf("var", "weak", mapOf("rep" to weak)), listOf("void", mapOf("rep" to state)))
+        val call = listOf("app", listOf("prim", "addCFinalizerToWeak#"), operands,
+            List(6) { false }, false, false, mapOf("rep" to result))
+        val fields = listOf(mapOf("id" to "outState", "lifted" to false, "rep" to state),
+            mapOf("id" to "outFlag", "lifted" to false, "rep" to flag))
+        val body = listOf("case", call, "outTuple", listOf(listOf("data", "tuple2",
+            listOf("outState", "outFlag"), listOf("var", "outFlag", mapOf("rep" to flag)),
+            mapOf("binders" to fields))),
+            mapOf("rep" to flag, "binder" to mapOf("id" to "outTuple", "lifted" to false, "rep" to result)))
+        return mapOf("schema" to 1, "module" to "SyntheticCFinalizerConsumer", "unit" to "test", "ghc" to "9.14.1",
+            "instrument" to true, "bindings" to listOf(mapOf("id" to "attach", "name" to "attach", "arity" to 2,
+                "lifted" to true, "rep" to closure, "expr" to listOf("lam", formals, body,
+                    mapOf("rep" to closure, "resultRep" to flag)))),
+            "constructors" to listOf(mapOf("id" to "tuple2", "name" to "(#,#)", "kind" to "unboxed-tuple",
+                "arity" to 2, "tag" to 1)))
+    }
+
+    @Test fun actualGhcFunctionLabelAndTypedWeakRegistrationCompileOnBothBackends() {
+        val module = cFinalizerConsumer(originalPoolLabel())
+        for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").allowNativeAccess(true)
+            .allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
+            .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build().use { context ->
+                context.initialize("thc"); context.enter()
+                try {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val program = load(language, backend, module)
+                    val target = program.entryTarget("attach")
+                    val pointer = ManagedAddress.fromAllocation(ManagedAllocation.mutable(16, 8))
+                    fun call(): Long {
+                        val weak = Language.currentState().weaks.make(Any(), Any(), null)
+                        val added = Calls.target(target, arrayOf(0L, pointer, weak)) as Long
+                        assertEquals(1L, added)
+                        assertEquals(0L, Language.currentState().weaks.finalize(weak).flag)
+                        released(language)
+                        return added
+                    }
+                    repeat(3) { call() }
+                    target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                    valid(target)
+                    val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                    assertEquals(1L, call())
+                    assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                    valid(target)
+                } finally { context.leave() }
+            }
+    }
+
+    @Test fun certifiedLabelsUseContextOwnedSulongCallablesOnlyOnExplicitFinalization() {
+        val proof = CoreRepresentation(CoreKind.ADDRESS, evaluated = true, present = true, primReps = listOf("AddrRep"))
+        Context.newBuilder("thc").allowNativeAccess(true).build().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val state = Language.currentState()
+                val first = CFinalizerLabels.fromCore("libdwPoolRelease", proof)
+                val second = CFinalizerLabels.fromCore("backtraceFree", proof)
+                assertTrue(first.sameLocation(CFinalizerLabels.fromCore("libdwPoolRelease", proof)))
+                assertFalse(first.sameLocation(second))
+                assertFalse(first.sameLocation(ManagedAddress.nullAddress()))
+                assertThrows(RuntimeFault::class.java) { first.toNativeBits() }
+                assertThrows(RuntimeFault::class.java) { first.plus(0) }
+                assertThrows(RuntimeFault::class.java) { first.readWord8(0) }
+                assertThrows(RuntimeFault::class.java) { CFinalizerLabels.fromCore("enabled_capabilities", proof) }
+                assertThrows(RuntimeFault::class.java) { CFinalizerLabels.fromCore("libdwPoolRelease", proof.copy(primReps = listOf("WordRep"))) }
+                val bytes = ManagedAllocation.mutable(16, 8)
+                for (index in 0L until 16L) bytes.writeByte(index, 165)
+                val pointer = ManagedAddress.fromAllocation(bytes)
+                val weak = state.weaks.make(Any(), Any(), null)
+                assertEquals(1L, state.weaks.addCFinalizer(first, pointer, 0, weak, state.cbits()))
+                assertEquals(1L, state.weaks.addCFinalizer(second, pointer, 0, weak, state.cbits()))
+                assertThrows(RuntimeFault::class.java) { state.weaks.addCFinalizer(first, pointer, 1, weak, state.cbits()) }
+                assertEquals(0L, state.weaks.finalize(weak).flag)
+                assertEquals(List(16) { 165L }, (0L until 16L).map(bytes::readByte))
+                assertEquals(0L, state.weaks.addCFinalizer(first, pointer, 0, weak, state.cbits()))
+                assertEquals(0L, state.weaks.finalize(weak).flag)
+            } finally { context.leave() }
+        }
+    }
+
     @Test fun unavailableBackendMatchesNativeFailureAndNeverTouchesLocationIncludingFirstCompiledEntry() {
         for (backend in listOf("ast", "bytecode")) for (inlining in listOf(false, true)) context(inlining).use { context ->
             context.initialize("thc"); context.enter()
@@ -138,7 +241,7 @@ class LibdwUnavailableTest {
         }
         walk(Json.parse(File(root, "$prefix/foreign-labels.json").readText()))
         assertEquals(listOf("data-addr" to "enabled_capabilities", "function-addr" to "backtraceFree",
-            "function-addr" to "libdwPoolRelease"), labels.sortedWith(compareBy({ it.first }, { it.second })))
+            "function-addr" to "libdwPoolRelease"), labels.distinct().sortedWith(compareBy({ it.first }, { it.second })))
     }
 
     @Test fun declarationAndStoredOperandProofsCannotBeForged() {
