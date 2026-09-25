@@ -348,6 +348,47 @@ class ManagedWeakTest {
         }
     }
 
+    @Test fun delayedBoxedCasesPreserveWeakOperandProofs() {
+        val manifest = json(File(directory, "manifest.json"))
+        val rows = File(directory, "oracle.tsv").readLines().map { line ->
+            line.split('\t').let { it[0].toLong() to it[1].toLong() }
+        }
+        val integer = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
+        val zero = listOf("lit", "int", "0", mapOf("rep" to integer))
+        for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) {
+            val original = CoreModules.reachable(CoreModules.merge(paths.map { json(File(root, it)) }),
+                "weakComposite", strictLink = true)
+            for (backend in listOf("ast", "bytecode")) context().use { context ->
+                context.initialize("thc"); context.enter()
+                try {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    for (contradictory in listOf(false, true)) {
+                        val module = Json.parse(Json.stringify(original)) as Map<String, Any?>
+                        val app = applications(module).first { (it[1] as? List<*>)?.take(2) == listOf("prim", "mkWeak#") }
+                        val args = app[2] as MutableList<Any?>
+                        val value = args[1] as List<Any?>
+                        val proof = CoreRepresentations.metadata(value)!!["rep"] as Map<String, Any?>
+                        // The original ForeignPtr finalizer uses this lifted CASE
+                        // shape: delaying it must retain its value proof, not claim WHNF.
+                        args[1] = listOf("case", zero, "delayedWeakCase",
+                            listOf(listOf("default", null, emptyList<String>(), if (contradictory) zero else value)),
+                            mapOf("rep" to (proof + ("evaluated" to false)),
+                                "binder" to mapOf("id" to "delayedWeakCase", "lifted" to false, "rep" to integer)))
+                        fun load() = if (backend == "ast") Program(language, module) else BytecodeProgram(language, module)
+                        if (contradictory) assertThrows(RuntimeFault::class.java, { load() }, "$stage/$backend contradictory delayed result")
+                        else {
+                            val function = context.asValue(EntryValue(load(), "weakComposite", 1))
+                            for ((input, expected) in rows) assertEquals(expected, function.execute(input).asLong(), "$stage/$backend/$input")
+                            assertEquals(0, Language.currentState().weaks.retainedCount())
+                            assertEquals(0, language.handoffState.get().arguments.retainedReferences())
+                            assertEquals(0, language.handoffState.get().results.retainedReferences())
+                        }
+                    }
+                } finally { context.leave() }
+            }
+        }
+    }
+
     @Test fun genuineNativeCompositeAgreesOnTheFirstInstalledAstAndBytecodeCalls() {
         val manifest = json(File(directory, "manifest.json"))
         assertEquals(1L, manifest["schema"])

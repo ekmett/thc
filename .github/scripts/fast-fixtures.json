@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.SavedTermiosTest",
     "thc.runtime.TermiosAbiTest",
     "thc.runtime.NativeFileProviderTest",
     "thc.runtime.NativeFdWaitTest",
@@ -74,10 +75,11 @@
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-termios": {
-      "junit": ["thc.runtime.OriginalTermiosTest"],
+      "junit": ["thc.runtime.OriginalTermiosTest", "thc.runtime.OriginalSavedTermiosTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-termios"]}],
       "outputs": ["build/original-termios"],
       "sources": ["compiler/test-fixtures/OriginalTermiosAudit.hs", "compiler/test-fixtures/OriginalTermiosNative.hs",
+        "compiler/test-fixtures/OriginalSavedTermiosAudit.hs", "compiler/test-fixtures/OriginalSavedTermiosNative.hs",
         "test/haskell-fixtures/OriginalTermiosFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },

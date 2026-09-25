@@ -711,7 +711,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val fn = function(label, emptyList(), expr, scope)
         (fn.target.rootNode as GuestRoot).tupleResult?.let { CoreRepresentations.requireScalar(it.proof, "thunk") }
         val template = BytecodeRoot.ClosureTemplate(fn.target, 0, fn.captureLayout)
-        return sourced(Expression { e ->
+        // Preserve the denoted value's proof without treating its thunk as WHNF.
+        return sourced(ProvenExpression(Expression { e ->
             if (fn.hasVectorCaptures) {
                 e.builder.emitMakeVectorCapture(BytecodeRoot.VectorCaptureSource(template,
                     fn.captures.map { LocalAccessor.constantOf(e.locals.getValue(it.id)) }.toTypedArray(), true))
@@ -720,7 +721,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 fn.captures.forEach { read(it, false).emit(e) }
                 e.builder.endMakeThunk()
             }
-        }, sources.expression(expr, scope.source))
+        }, CoreRepresentations.expression(expr).copy(evaluated = false)), sources.expression(expr, scope.source))
     }
     private fun closure(fn: FunctionSpec, arity: Int): Expression {
         val template = BytecodeRoot.ClosureTemplate(fn.target, arity, fn.captureLayout)
@@ -1487,7 +1488,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.readImage || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio == OriginalStdioOp.OPEN ||
+                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio == OriginalStdioOp.OPEN ||
                             originalStdio.iconv || originalStdio.strerror || originalStdio.duplication || originalStdio.locking)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
@@ -1512,7 +1513,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         (0..1).map { index -> b.createLocal("original tcsetattr integer $index", "primitive").also {
                             b.beginStoreLocal(it); operands[index].emit(e); b.endStoreLocal()
                         } } else null
-                    val status = originalStdio.termios || originalStdio.sigset || originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
+                    val status = originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
                         originalStdio == OriginalStdioOp.CLOSE || originalStdio == OriginalStdioOp.DUP || originalStdio.readImage || originalStdio == OriginalStdioOp.UNLOCK || originalStdio.seekConstant || originalStdio.stat
                     // Image updates declare address before value. Store that operand
                     // once before filling the shared long/address/State lanes.
@@ -1538,6 +1539,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     } else if (originalStdio == OriginalStdioOp.TCSETATTR) {
                         b.emitLoadLocal(termiosArguments!![0]); operands[2].emit(e)
                         b.emitLoadLocal(termiosArguments[1]); operands[3].emit(e)
+                    } else if (originalStdio.savedTermios) {
+                        operands[0].emit(e)
+                        if (originalStdio == OriginalStdioOp.SET_SAVED_TERMIOS) operands[1].emit(e)
+                        else b.emitLoadConstant(ManagedAddress.nullAddress())
+                        operands.last().emit(e)
                     } else if (originalStdio.termios || originalStdio.sigset) {
                         if (originalStdio == OriginalStdioOp.POKE_LFLAG || originalStdio == OriginalStdioOp.SIGADDSET)
                             operands[1].emit(e) else b.emitLoadConstant(0L)
@@ -2820,6 +2826,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "default" -> 0; "data" -> 1; else -> 2
             } }, alternatives.all { it.kind != "lit" || it.value is Long })
             val resultProof = CoreRepresentations.expression(expr)
+            CoreRepresentations.validateDeclaredCaseResult(resultProof, alternatives.map { it.body.proof })
             CoreRepresentations.validateAggregateCaseResult(resultProof, alternatives.map { it.body.proof })
             CoreRepresentations.validateFloatingCaseResult(resultProof, alternatives.map { it.body.proof })
             // A missing outer case record must not erase an exact aggregate

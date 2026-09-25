@@ -752,6 +752,17 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                           "python": ["scripts/test-audit-core.py"]},
                          self.family("CoreBoundThreadForeign"))
 
+    def test_saved_termios_owners_select_pointer_and_original_fixture_controls(self):
+        owners = self.policy["owners"]
+        original = "thc.runtime.OriginalSavedTermiosTest"
+        self.assertEqual({"thc.runtime.SavedTermiosTest", original},
+                         set(owners["src/main/kotlin/thc/runtime/SavedTermios.kt"]["junit"]))
+        for fixture in ("Audit", "Native"):
+            self.assertEqual([original], owners[f"compiler/test-fixtures/OriginalSavedTermios{fixture}.hs"]["junit"])
+        for path in ("test/haskell-fixtures/OriginalTermiosFixtures.hs", "test/haskell-fixtures/Main.hs",
+                     "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt", "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt"):
+            self.assertIn(original, owners[path]["junit"])
+
     def test_fixture_owners_match_the_preparation_manifest(self):
         fixture = json.loads(Path(__file__).with_name("fast-fixtures.json").read_text())
         owners = self.policy["owners"]

@@ -164,6 +164,7 @@ tasks.withType<Test>().configureEach {
             "original-tcsetattr/**/*.json", "original-tcsetattr/logs/*.stdout", "original-tcsetattr/logs/*.stderr", "original-tcsetattr/native/oracle",
             "original-tcgetattr/**/*.json", "original-tcgetattr/logs/*.stdout", "original-tcgetattr/logs/*.stderr", "original-tcgetattr/native/oracle",
             "original-sigset/**/*.json", "original-sigset/logs/*.stdout", "original-sigset/logs/*.stderr", "original-sigset/native/oracle",
+            "original-termios/saved/native/oracle",
             "original-fd-ready/logs/*.stdout", "original-fd-ready/logs/*.stderr",
             "original-iconv/**/*.json", "original-iconv/native/oracle",
             "original-iconv/logs/*.stdout", "original-iconv/logs/*.stderr",
