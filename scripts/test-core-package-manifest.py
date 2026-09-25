@@ -266,6 +266,8 @@ class PackageManifestTest(unittest.TestCase):
         module['foreign'] = dict(schema=1, execution='not-linked',
                                  stubs=dict(header='', source='foreign stub', initializers=[], finalizers=[]),
                                  files=[])
+        module['bindings'] = [dict(id='first:Shared.entry', name='entry', lifted=True,
+                                   arity=0, expr=['lit', 'int', '7'])]
         source.write_text(json.dumps(module))
         unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
         with self.assertRaisesRegex(ValueError, 'Unsupported foreign execution for first:Shared.*typed foreign registration.*callback'):
@@ -309,12 +311,12 @@ class PackageManifestTest(unittest.TestCase):
             unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
             return self.bundled(unit)
 
-        def audit(path):
+        def audit(path, entry='first:Shared.entry', status=1):
             output = self.root / 'audit.json'
             result = subprocess.run(['python3', str(Path(__file__).with_name('audit-core.py')),
-                                     '--package-manifest', str(path), '--entry', 'first:Shared.entry',
+                                     '--package-manifest', str(path), '--entry', entry,
                                      '--output', str(output)], text=True, capture_output=True)
-            self.assertEqual(1, result.returncode, result.stderr)
+            self.assertEqual(status, result.returncode, result.stderr)
             return json.loads(output.read_text())
 
         safe = archive(['lit', 'int', '42'])
@@ -325,6 +327,18 @@ class PackageManifestTest(unittest.TestCase):
         self.assertEqual(['first:Shared.entry'], [item['id'] for item in report['reachableBindings']])
         self.assertEqual({'module-format'}, {issue['code'] for issue in report['issues']})
         self.assertIn('execution=not-linked', report['issues'][0]['detail'])
+
+        archived_unit = json.loads(safe.read_text())['units'][0]
+        other = self.unit('second')
+        other_source = self.root / 'second.json'
+        document = json.loads(other_source.read_text())
+        document['bindings'] = [dict(id='second:Shared.main', name='main', lifted=True,
+                                     arity=0, expr=['lit', 'int', '7'])]
+        other_source.write_text(json.dumps(document))
+        other['modules'][0]['sha256'] = hashlib.sha256(other_source.read_bytes()).hexdigest()
+        unused = audit(self.manifest([archived_unit, other]), 'second:Shared.main', status=0)
+        self.assertTrue(unused['accepted'], unused['issues'])
+        self.assertEqual(['second:Shared.main'], [item['id'] for item in unused['reachableBindings']])
 
         unsupported = archive(['app', ['prim', 'unsupported#'], [['lit', 'int', '1']], [False]])
         report = audit(unsupported)

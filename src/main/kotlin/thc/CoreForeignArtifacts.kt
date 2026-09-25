@@ -114,6 +114,11 @@ internal object CoreForeignArtifacts {
 
     /** Backend tests may supply unversioned synthetic Core, but not foreign archives. */
     fun requireExecutableInput(module: Map<*, *>) {
+        if (module.containsKey("archiveBindings")) {
+            val pending = module["archiveBindings"] as? Map<*, *>
+                ?: throw IllegalArgumentException("Invalid Core archive admission state")
+            require(pending.isEmpty()) { "Unresolved archive-only Core modules require entry reachability" }
+        }
         if (module.containsKey("schema") || module.containsKey("foreign")) requireExecutable(module)
     }
 
@@ -165,6 +170,13 @@ internal object CoreForeignArtifacts {
         }
         require(nonempty) { "Core schema 2 requires foreign artifacts" }
         if (module.containsKey("foreignLink")) linked(module)
+    }
+
+    /** GHC registers these at startup, even when no Core binding refers to the module. */
+    fun hasRegistrationObligations(module: Map<*, *>): Boolean {
+        val stubs = (module["foreign"] as? Map<*, *>)?.get("stubs") as? Map<*, *> ?: return false
+        return (stubs["initializers"] as? List<*>)?.isNotEmpty() == true ||
+            (stubs["finalizers"] as? List<*>)?.isNotEmpty() == true
     }
 
     fun requireExecutable(module: Map<*, *>) {
