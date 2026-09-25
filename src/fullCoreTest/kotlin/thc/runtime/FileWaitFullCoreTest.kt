@@ -78,17 +78,12 @@ class FileWaitFullCoreTest {
                         val target = program.entryTarget(entry)
                         fun invoke(fd: Long) = Calls.target(target, arrayOf(0L, fd, Unit))
                         repeat(6) { assertSame(Unit, invoke(descriptor)) }
-                        val original = program.entryValue(CoreFileWait.badFd)
-                        repeat(2) {
-                            val failure = assertThrows(GuestException::class.java) { invoke(-1L) }
-                            assertSame(original, failure.payload)
-                            if (original is Thunk) assertEquals(0, original.state, "original CAF remains lazy")
-                        }
                         compile(target)
                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                         assertSame(Unit, invoke(descriptor))
                         assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
                         assertTrue(valid(target))
+                        val original = program.entryValue(CoreFileWait.badFd)
                         for (bad in listOf(-1L, descriptor)) {
                             if (bad == descriptor) assertEquals(0L, files.close(descriptor))
                             val failure = assertThrows(GuestException::class.java) { invoke(bad) }

@@ -514,7 +514,10 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         // the same bad-FD event as a later close; neither may follow fd reuse.
         private val entry = synchronized(this@ManagedFiles) { descriptors[fd] }
 
-        @TruffleBoundary internal fun await(node: Node, async: Boolean, compiledAtCut: Boolean = false) {
+        // ClosedChannelException and AsyncBlocked are guest control flow, not a
+        // reason to invalidate the compiled caller at this cold native boundary.
+        @TruffleBoundary(transferToInterpreterOnException = false)
+        internal fun await(node: Node, async: Boolean, compiledAtCut: Boolean = false) {
             if (Language.currentState(node).env !== env) fault("Descriptor wait belongs to another context")
             val original = entry ?: throw ClosedChannelException()
             val outcome = awaitReady(original, fd, writing, -1, node) {

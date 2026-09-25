@@ -93,19 +93,12 @@ class FileWaitPrimitiveTest {
                     val target = program.entryTarget("wait")
                     fun call(descriptor: Long) = Calls.target(target, arrayOf(0L, descriptor, Unit))
                     repeat(6) { assertSame(Unit, call(opened)) }
-                    val original = program.entryValue(CoreFileWait.badFd) as Thunk
-                    // Profile the guest failure before installation. The test
-                    // then proves the first compiled failure retains its target.
-                    repeat(2) {
-                        val failure = assertThrows(GuestException::class.java) { call(-1L) }
-                        assertSame(original, failure.payload)
-                        assertEquals(0, original.state)
-                    }
                     compile(target)
                     val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                     assertSame(Unit, call(opened))
                     assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
                     assertTrue(valid(target), "$backend/$name keeps its installed target")
+                    val original = program.entryValue(CoreFileWait.badFd) as Thunk
                     for (bad in listOf(-1L, opened)) {
                         if (bad == opened) assertEquals(0L, files.close(opened))
                         val failure = assertThrows(GuestException::class.java) { call(bad) }

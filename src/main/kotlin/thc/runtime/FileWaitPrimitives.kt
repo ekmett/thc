@@ -27,7 +27,8 @@ internal object CoreFileWait {
     }
 }
 
-@TruffleBoundary private fun badFileDescriptor(payload: GlobalBinding, node: Node): Nothing =
+@TruffleBoundary(transferToInterpreterOnException = false)
+private fun badFileDescriptor(payload: GlobalBinding, node: Node): Nothing =
     throw GuestException(payload.read(), node)
 
 /** One logical token survives a captured async cut; a new poll request does not. */
