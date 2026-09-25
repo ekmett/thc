@@ -278,6 +278,10 @@ class Audit:
         # a tail-call target; a reference to it captures control flow, not fields.
         return cls.is_tuple(rep) and '_join_arity' not in rep
 
+    @staticmethod
+    def is_vector_value(rep):
+        return is_vector(rep) and '_join_arity' not in rep
+
     @classmethod
     def is_empty_tuple(cls, rep):
         return (cls.is_tuple(rep) and rep.get('kind') == 'unknown' and
@@ -998,12 +1002,14 @@ class Audit:
                             if self.is_tuple_value(bound[key])}
                 if any(is_sum(bound[key]) for key in (self.free_variables(expr[2]) - ids) & bound.keys()):
                     self.issue('aggregate-boundary', owner, path, 'unboxed-sum capture')
-                vector_captures = {key for key in (self.free_variables(expr[2]) - ids) & bound.keys() if is_vector(bound[key])}
-                if vector_captures:
-                    self.issue('vector-boundary', owner, path, 'vector capture')
                 # The consumed join lambda branches within its enclosing frame;
                 # a residual lambda still allocates an ordinary closure.
                 local_join_prefix = join_prefix > 0 and join_prefix == len(expr[1])
+                vector_captures = {key for key in (self.free_variables(expr[2]) - ids) & bound.keys()
+                                   if self.is_vector_value(bound[key])}
+                if vector_captures and not (local_join_prefix and
+                        all(self.supported_vector(bound[key], 'join-captures') for key in vector_captures)):
+                    self.issue('vector-boundary', owner, path, 'vector capture')
                 if captured and not (local_join_prefix and
                                      'unboxed-tuple' in self.cap.get('aggregateJoinCaptures', []) and
                                      all(self.supported_tuple_input(bound[key]) for key in captured)):
@@ -1481,7 +1487,8 @@ class Audit:
                         continue
                     if is_sum(binding.get('rep')) or is_sum(self.expression_rep(binding.get('expr'))):
                         self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-sum let binding')
-                    if is_vector(binding.get('rep')) and not self.supported_vector(binding['rep'], 'let-bindings'):
+                    if ('joinValueArity' not in binding and is_vector(binding.get('rep')) and
+                            not self.supported_vector(binding['rep'], 'let-bindings')):
                         self.issue('vector-boundary', owner, f'{path}/bindings/{index}', 'vector let binding')
                     if is_vector(binding.get('rep')) and binding.get('lifted') is not False:
                         self.issue('application-levity', owner, f'{path}/bindings/{index}', 'Vector let binding must be unlifted')
@@ -1493,6 +1500,9 @@ class Audit:
                         captured = (self.free_variables(binding['expr']) - (ids if recursive else set())) & bound.keys()
                         if any(is_sum(bound[key]) for key in captured):
                             self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-sum join capture')
+                        if any(self.is_vector_value(bound[key]) and not self.supported_vector(bound[key], 'join-captures')
+                               for key in captured):
+                            self.issue('vector-boundary', owner, f'{path}/bindings/{index}', 'vector join capture')
                         tuple_captures = [bound[key] for key in captured if self.is_tuple_value(bound[key])]
                         if tuple_captures and ('unboxed-tuple' not in self.cap.get('aggregateJoinCaptures', []) or
                                                not all(self.supported_tuple_input(rep) for rep in tuple_captures)):
@@ -1661,6 +1671,10 @@ class Audit:
                 if io_main:
                     self.io_main_contract(key, expression, formals, result)
                 else:
+                    if formals is not None and any(self.supported_vector(proof, 'arguments') for proof in formals):
+                        self.issue('vector-boundary', key, '/entry', 'vector host argument')
+                    if self.supported_vector(result, 'results'):
+                        self.issue('vector-boundary', key, '/entry', 'vector host result')
                     if formals is not None and any(self.is_tuple(proof) for proof in formals):
                         self.issue('aggregate-boundary', key, '/entry', 'unboxed-tuple host argument')
                     if self.is_tuple(result):

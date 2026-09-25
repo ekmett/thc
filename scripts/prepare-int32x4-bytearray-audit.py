@@ -32,7 +32,6 @@ FRONTIERS = {
     'readVectorEscape': {('vector-boundary', 'vector function result'): 1},
     'readTupleEscape': {('aggregate-boundary', 'unboxed-tuple host result'): 1,
                         ('aggregate-representation', 'unboxed-tuple: unsupported component'): 2,
-                        ('vector-representation', 'Vector representation lacks exact vector metadata'): 2,
                         ('malformed-expression', 'Invalid local vector memory intrinsic: read requires an immediate exact case'): 1},
     **{name: {('aggregate-boundary', 'unboxed-tuple host result'): 1} for name in HOST_TUPLES}}
 
@@ -249,7 +248,15 @@ def main():
         for name in positives:
             report = audits[stage][name]
             check(report['accepted'] and not report['issues'] and not report['missingGlobals'], stage+'/'+name+': positive audit rejected')
-        for name, expected in FRONTIERS.items(): negative(audits[stage][name], expected, stage+'/'+name)
+        for name, expected in FRONTIERS.items():
+            expected = dict(expected)
+            if name == 'vectorArgument' and 'arguments' in capabilities.get('vectorTransport', []):
+                expected = {('vector-boundary', 'vector host argument'): 1}
+            elif name == 'readVectorEscape' and 'results' in capabilities.get('vectorTransport', []):
+                expected = {('vector-boundary', 'vector host result'): 1}
+            elif name == 'readTupleEscape' and 'tuple-fields' in capabilities.get('vectorTransport', []):
+                expected.pop(('aggregate-representation', 'unboxed-tuple: unsupported component'))
+            negative(audits[stage][name], expected, stage+'/'+name)
         for graph_entry in graph_entries():
             name = graph_entry['name']
             report = audits[stage][name]

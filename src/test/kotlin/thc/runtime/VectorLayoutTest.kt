@@ -142,6 +142,7 @@ class VectorLayoutTest {
             for (wrong in vectors().filter { it != proof } + tuple) {
                 assertFalse(TupleShape.compatible(proof, wrong))
                 assertFalse(TupleShape(proof, language).matches(TupleShape(wrong, language)))
+                assertThrows(RuntimeFault::class.java) { TupleShape.requireCompatible(proof, wrong) }
                 assertThrows(RuntimeFault::class.java) {
                     ArgumentLayout.validate(input, 0, ArgumentLayout.fromProofs(listOf(wrong)), 0, 1)
                 }
