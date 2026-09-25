@@ -12,6 +12,7 @@ maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  compiler/test-fixtures/CBVCoercionAudit.hs
   compiler/test-fixtures/InterfaceLibrary.hs
   compiler/test-fixtures/InterfaceNative.hs
   compiler/test-fixtures/InterfaceForeign.hs
@@ -163,6 +164,23 @@ library
   if flag(development)
     ghc-options: -Werror
 
+-- Selected-compiler subprocess boundary; the generic driver does not link ghc.
+executable thc-interface
+  main-is: Main.hs
+  hs-source-dirs: compiler/interface
+  build-depends:
+    base >= 4.22 && < 4.23,
+    thc,
+    ghc == 9.14.1,
+    aeson >= 2.3 && < 2.4,
+    bytestring >= 0.12.2 && < 0.13,
+    containers >= 0.8 && < 0.9,
+    deepseq >= 1.5 && < 1.6
+  default-language: Haskell2010
+  ghc-options: -Wall
+  if flag(development)
+    ghc-options: -Werror
+
 executable thc
   main-is: Main.hs
   hs-source-dirs: app, src
@@ -253,6 +271,7 @@ executable thc-fixtures
     base >= 4.22 && < 4.23,
     thc,
     ghc == 9.14.1,
+    ghc-boot == 9.14.1,
     aeson >= 2.3 && < 2.4,
     bytestring >= 0.12.2 && < 0.13,
     containers >= 0.8 && < 0.9,

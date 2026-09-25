@@ -20,8 +20,9 @@ import java.util.IdentityHashMap
 class InterfaceCoreNativeTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = File(root, "build/interface-core")
-    private val entries = listOf("opaqueEntry", "inlineEntry", "recursiveEntry")
-    private fun source() = Json.parse(File(directory, "InterfaceLibrary.json").readText()) as Map<String, Any?>
+    private val entries = listOf("opaqueEntry", "inlineEntry", "recursiveEntry", "coercionEntry")
+    private fun source(entry: String = "opaqueEntry") = Json.parse(File(directory,
+        if (entry == "coercionEntry") "CBVCoercionAudit.json" else "InterfaceLibrary.json").readText()) as Map<String, Any?>
 
     private fun oracle(): List<List<Long>> {
         val manifest = Json.parse(File(directory, "manifest.json").readText()) as Map<String, Any?>
@@ -29,7 +30,7 @@ class InterfaceCoreNativeTest {
         assertEquals("thc-interface-fixture-0.1", manifest["unit"])
         assertEquals(listOf("opaque-body", "private-worker", "recursive-groups", "thin-unavailable",
             "no-source-target", "wrong-module", "wrong-unit", "wrong-way", "foreign-rejected",
-            "private-flags", "repeat-load"), manifest["controls"])
+            "private-flags", "repeat-load", "helper-protocol", "installed-cbv-worker", "installed-wired-unit"), manifest["controls"])
         for (kind in listOf("inputHashes", "artifactHashes"))
             for ((path, expected) in manifest[kind] as Map<String, String>) {
                 val file = File(root, path)
@@ -43,8 +44,48 @@ class InterfaceCoreNativeTest {
         }
         assertEquals((-10L..10L).toList(), rows.map { it[0] })
         rows.forEach { row -> assertEquals(listOf(row[0], row[0] * 7 + 11, row[0] + 3,
-            maxOf(0L, row[0]) * 7 + 11), row) }
+            maxOf(0L, row[0]) * 7 + 11, row[0] + 7), row) }
         return rows
+    }
+
+    @Test fun helperPreservesGenuineInstalledWorkerCbvMarks() {
+        oracle()
+        val direct = Json.parse(File(directory, "direct/CBVCoercionAudit.json").readText()) as Map<String, Any?>
+        val loaded = source("coercionEntry")
+        fun worker(module: Map<String, Any?>) = (module["bindings"] as List<Map<String, Any?>>)
+            .single { it["name"] == "\$wwitnessed" }
+        val original = worker(direct)
+        val hydrated = worker(loaded)
+        assertEquals(listOf(false, false, true), original["entryStrict"])
+        assertEquals(original["entryStrict"], hydrated["entryStrict"])
+        assertEquals("ghc-id", original["entryStrictSource"])
+        assertEquals("ghc-id", hydrated["entryStrictSource"])
+        assertEquals((original["info"] as Map<*, *>)["cbvMarks"], (hydrated["info"] as Map<*, *>)["cbvMarks"])
+        val parameters = (hydrated["expr"] as List<*>)[1] as List<Map<String, Any?>>
+        assertEquals(true, parameters[0]["coercion"])
+        assertEquals(emptyList<String>(), CoreRepresentations.binder(parameters[0]).primReps)
+        assertEquals(true, parameters[2]["lifted"])
+        val missing = Json.parse(File(directory, "logs/helper-thin.stdout").readText()) as Map<String, Any?>
+        assertEquals("unavailable", missing["status"])
+        assertEquals("complete-interface-core", missing["capability"])
+        assertFalse(missing.containsKey("core"))
+        val command = Json.parse(File(directory, "logs/helper-thin.command.json").readText()) as Map<String, Any?>
+        assertEquals(3L, (command["exit"] as Number).toLong())
+        val wired = Json.parse(File(directory, "wired-unit.json").readText()) as Map<String, Any?>
+        val wiredResponse = Json.parse(File(directory, "logs/helper-wired-unit.stdout").readText()) as Map<String, Any?>
+        val wiredCommand = Json.parse(File(directory, "logs/helper-wired-unit.command.json").readText()) as Map<String, Any?>
+        assertEquals("ghc-internal", wired["interfaceUnit"])
+        assertNotEquals(wired["registeredUnit"], wired["interfaceUnit"])
+        assertEquals(wired["expectedExit"], wiredCommand["exit"])
+        if (wired["completeCore"] == true) {
+            assertEquals("loaded", wiredResponse["status"])
+            assertEquals(wired["interfaceUnit"], (wiredResponse["core"] as Map<*, *>)["unit"])
+        } else {
+            assertEquals("unavailable", wiredResponse["status"])
+            assertEquals("complete-interface-core", wiredResponse["capability"])
+            assertEquals(wired["registeredUnit"], wiredResponse["unit"])
+            assertFalse(wiredResponse.containsKey("core"))
+        }
     }
 
     @Test fun completeInterfacePreservesMetadataAndPassesStrictAdmission() {
@@ -103,10 +144,17 @@ class InterfaceCoreNativeTest {
                     context.initialize("thc"); context.enter()
                     try {
                         val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                        val linked = CoreModules.reachable(source(), entry, strictLink = true) + ("instrument" to true)
+                        val linked = CoreModules.reachable(source(entry), entry, strictLink = true) + ("instrument" to true)
                         val program: ExecutableProgram = if (backend == "ast") Program(language, linked)
                             else BytecodeProgram(language, linked)
                         val target = program.entryTarget(entry)
+                        // Save the target before a CAF update clears it. A
+                        // memoized constant is not a per-invocation function.
+                        val constants = (linked["bindings"] as List<Map<String, Any?>>).mapNotNull { binding ->
+                            (program.entryValue(binding["id"] as String) as? Thunk)?.let {
+                                it to checkNotNull(it.target)
+                            }
+                        }
                         fun check(row: List<Long>) {
                             assertEquals(row[index + 1], Calls.target(target, arrayOf(0L, row[0])), "$backend/$entry/${row[0]}")
                             assertEquals(0, language.handoffState.get().arguments.depth)
@@ -114,6 +162,18 @@ class InterfaceCoreNativeTest {
                         }
                         repeat(3) { rows.forEach(::check) }
                         val active = targets(target)
+                        val memoized = constants.filter { it.first.state == 2 }
+                        val perCall = active.filterNot { candidate -> memoized.any { it.second === candidate } }
+                        val thunkCounts = program.diagnostics().getValue("thunkEvaluationsByLabel")
+                        if (entry == "coercionEntry") {
+                            assertEquals(1, memoized.size, "The original lifted Spine CAF was evaluated once")
+                            assertNull(memoized.single().first.target)
+                            assertTrue(active.any { it === memoized.single().second })
+                            assertEquals(2, perCall.size)
+                            assertEquals(setOf("coercionEntry", "\$wwitnessed"), perCall.map {
+                                (it.rootNode as GuestRoot).coreIdentity?.occurrence
+                            }.toSet())
+                        } else assertEquals(active, perCall)
                         if (entry == "opaqueEntry") assertTrue(active.size >= 2, "Keep the opaque private call")
                         active.forEach {
                             it.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(it, true)
@@ -122,8 +182,14 @@ class InterfaceCoreNativeTest {
                         for (row in rows.asReversed() + rows) {
                             val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                             check(row)
-                            assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() - before >= active.size,
-                                "$backend/$entry first installed invocation must enter all retained compiled roots")
+                            val entered = (program.diagnostics().getValue("compiledEntries") as Number).toLong() - before
+                            assertTrue(entered >= perCall.size,
+                                "$backend/$entry first installed invocation entered $entered of ${perCall.map { it.rootNode.name }}")
+                            if (entry == "coercionEntry") {
+                                assertEquals(2L, entered, "Entry and real CBV worker must both execute compiled")
+                                assertEquals(thunkCounts, program.diagnostics().getValue("thunkEvaluationsByLabel"),
+                                    "The memoized Spine CAF must not execute again")
+                            }
                             active.forEach(::valid)
                         }
                         assertEquals("reject-at-load", program.diagnostics()["unsupportedPolicy"])

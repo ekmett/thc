@@ -199,6 +199,9 @@
     }
   },
   "owners": {
+    "compiler/interface/Main.hs": {
+      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
+    },
     "test/haskell-fixtures/InterfaceFixtures.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
     },
@@ -536,6 +539,7 @@
     },
     "compiler/test-fixtures/CBVCoercionAudit.hs": {
       "junit": [
+        "thc.runtime.InterfaceCoreNativeTest",
         "thc.RealCoreEntryContractTest",
         "thc.runtime.ScalarLexicalProofTest",
         "thc.runtime.BoxedLexicalProofTest",

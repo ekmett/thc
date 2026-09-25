@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module FixtureSupport
-  ( run, runWithTimeout, CommandResult(..), runLogged
+  ( run, runWithTimeout, CommandResult(..), runLogged, runLoggedExpect
   , writeJson, hashFile, hashes, hexBytes, splitTab, readInteger
   ) where
 
@@ -56,7 +56,12 @@ data CommandResult = CommandResult
 -- executable, arguments. No stdin; stdout/stderr are separate binary files, not
 -- locale-decoded strings or lazy pipes. Nonzero/timeout fails after logging.
 runLogged :: Int -> FilePath -> FilePath -> String -> [(String,String)] -> FilePath -> [String] -> IO CommandResult
-runLogged seconds root logs label overrides program args = do
+runLogged = runLoggedExpect 0
+
+-- Negative CLI controls retain the actual exit status and require exactly the
+-- expected code; they are not successful commands with swallowed failures.
+runLoggedExpect :: Int -> Int -> FilePath -> FilePath -> String -> [(String,String)] -> FilePath -> [String] -> IO CommandResult
+runLoggedExpect expected seconds root logs label overrides program args = do
   createDirectoryIfMissing True (root </> logs)
   environment <- environmentWith overrides
   let output = logs </> label ++ ".stdout"
@@ -75,7 +80,7 @@ runLogged seconds root logs label overrides program args = do
       record = object (["argv" .= (program:args), "environment" .= Map.fromList overrides,
                         "exit" .= exit] ++ ["timedOut" .= True | completed == Nothing])
   writeJson (root </> recordPath) record
-  unless (completed == Just ExitSuccess) $ die
+  unless (exit == Just expected) $ die
     (program ++ (if completed == Nothing then " timed out" else " failed") ++ "; see " ++ root </> recordPath)
   stdout <- BS.readFile (root </> output)
   stderr <- BS.readFile (root </> errors)

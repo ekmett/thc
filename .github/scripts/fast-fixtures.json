@@ -39,7 +39,7 @@
       "junit": ["thc.runtime.InterfaceCoreNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "interface-core"]}],
       "outputs": ["build/interface-core"],
-      "sources": ["test/haskell-fixtures/InterfaceFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "compiler/test-fixtures/InterfaceLibrary.hs", "compiler/test-fixtures/InterfaceNative.hs", "compiler/test-fixtures/InterfaceForeign.hs", "compiler/THC/Interface.hs", "thc.cabal"]
+      "sources": ["test/haskell-fixtures/InterfaceFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "compiler/test-fixtures/InterfaceLibrary.hs", "compiler/test-fixtures/InterfaceNative.hs", "compiler/test-fixtures/InterfaceForeign.hs", "compiler/test-fixtures/CBVCoercionAudit.hs", "compiler/interface/Main.hs", "compiler/THC/Interface.hs", "thc.cabal"]
     },
     "fused-floating": {
       "junit": ["thc.runtime.FusedFloatingTest"],

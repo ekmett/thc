@@ -3,15 +3,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 module InterfaceFixtures (prepareInterfaceCore) where
 
-import Control.Monad (forM, forM_, unless)
-import Data.Aeson (object, (.=))
+import Control.Monad (filterM, forM, forM_, unless)
+import Data.Aeson (Value(..), Result(..), fromJSON, toJSON, object, (.=), decodeStrict')
+import Data.Aeson.Key (Key)
+import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Char8 as BS
 import Data.List (isInfixOf, sort)
+import Data.Foldable (toList)
 import Data.Maybe (isNothing)
-import FixtureSupport (CommandResult(..), hashes, runLogged, writeJson)
+import FixtureSupport (CommandResult(..), hashes, runLogged, runLoggedExpect, writeJson)
 import GHC hiding (exprType, entry)
 import GHC.Plugins
 import GHC.Core.TyCo.Compare (eqType)
+import qualified GHC.Data.ShortText as ShortText
 import GHC.Iface.Binary (readBinIface, CheckHiWay(..), TraceBinIFace(..))
 import GHC.Iface.Syntax (IfaceBindingX(..))
 import GHC.Types.TypeEnv (typeEnvIds)
@@ -35,10 +39,25 @@ prepareInterfaceCore root = do
       generated = directory </> "source/InterfaceLibrary.hs"
       run label program args = runLogged 180 root (directory </> "logs") label [] program args
       expectedModule = mkModule (stringToUnit unitName) (mkModuleName "InterfaceLibrary")
-      entries = ["opaqueEntry", "inlineEntry", "recursiveEntry"] :: [String]
+      entries = ["opaqueEntry", "inlineEntry", "recursiveEntry", "coercionEntry"] :: [String]
   mapM_ (createDirectoryIfMissing True . (root </>))
     [directory </> name | name <- ["source", "full", "thin", "native", "no-source"]]
   copyFile (root </> "compiler/test-fixtures/InterfaceLibrary.hs") (root </> generated)
+  let cbvSource = directory </> "source/CBVCoercionAudit.hs"
+  copyFile (root </> "compiler/test-fixtures/CBVCoercionAudit.hs") (root </> cbvSource)
+  cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
+  helperBuild <- run "helper-build" cabal ["build", "exe:thc-interface", "--offline", "-fdevelopment"]
+  helperLocation <- run "helper-location" cabal ["list-bin", "exe:thc-interface", "--offline"]
+  helper <- case lines (BS.unpack (commandStdout helperLocation)) of
+    [path] -> pure path
+    _ -> die "Expected one selected-GHC helper executable"
+  pluginBuild <- run "plugin-build" "compiler/build.sh" []
+  pluginInfo <- decodeFile (root </> "build/compiler/plugin.json")
+  let field name = case fromJSON (valueAt name pluginInfo) of
+        Success value -> pure value
+        Error _ -> die "Bad plugin manifest"
+  pluginDb <- field "packageDb"
+  pluginUnit <- field "unitId"
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   version <- run "ghc-version" ghc ["--numeric-version"]
@@ -48,6 +67,10 @@ prepareInterfaceCore root = do
   baseUnit <- case BS.words (commandStdout baseResult) of
     [name] -> pure (BS.unpack name)
     _ -> die "Expected exactly one selected base unit"
+  wiredResult <- run "wired-unit" ghcPkg ["field", "ghc-internal", "id", "--simple-output"]
+  wiredUnit <- case BS.words (commandStdout wiredResult) of
+    [name] -> pure (BS.unpack name)
+    _ -> die "Expected exactly one selected ghc-internal registration"
   libdir <- case lines (BS.unpack (commandStdout libdirResult)) of
     [path] -> pure path
     _ -> die "Expected exactly one selected GHC libdir"
@@ -56,18 +79,22 @@ prepareInterfaceCore root = do
         database = root </> output </> "package.conf.d"
         conf = output </> "package.conf"
         complete = mode == "full"
-    compiled <- run (mode ++ "-compile") ghc
-      ["-c", "-O2", "-g", "-dynamic-too", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-       "-this-unit-id", unitName, if complete then "-fwrite-if-simplified-core" else "-fno-write-if-simplified-core",
-       "-odir", output, "-hidir", output, generated]
+    let common = ["-c", "-O2", "-g", "-dynamic-too", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
+          "-this-unit-id", unitName, if complete then "-fwrite-if-simplified-core" else "-fno-write-if-simplified-core",
+          "-odir", output, "-hidir", output] ++
+          (if complete then ["-package-db", pluginDb, "-plugin-package-id", pluginUnit,
+            "-fplugin=THC.Plugin", "-fplugin-opt=THC.Plugin:" ++ root </> directory </> "direct",
+            "-fplugin-opt=THC.Plugin:post-tidy"] else [])
+    compiled <- run (mode ++ "-compile") ghc (common ++ [generated])
+    cbvCompiled <- run (mode ++ "-cbv-compile") ghc (common ++ [cbvSource])
     exists <- doesDirectoryExist database
     initialized <- if exists then pure [] else (:[]) <$> run (mode ++ "-init") ghcPkg ["init", database]
     writeFile (root </> conf) $ unlines
       ["name: thc-interface-fixture", "version: 0.1", "id: " ++ unitName,
-       "key: " ++ unitName, "exposed: True", "exposed-modules: InterfaceLibrary",
+       "key: " ++ unitName, "exposed: True", "exposed-modules: InterfaceLibrary CBVCoercionAudit",
        "import-dirs: " ++ show (root </> output), "depends: " ++ baseUnit]
     registered <- run (mode ++ "-register") ghcPkg ["--package-db", database, "update", root </> conf]
-    pure (compiled : initialized ++ [registered])
+    pure ([compiled,cbvCompiled] ++ initialized ++ [registered])
   foreignBuild <- run "foreign-compile" ghc
     ["-c", "-O2", "-fforce-recomp", "-this-unit-id", unitName, "-fwrite-if-simplified-core",
      "-odir", directory </> "full", "-hidir", directory </> "full",
@@ -78,12 +105,14 @@ prepareInterfaceCore root = do
      "-package-db", directory </> "full/package.conf.d", "-package-id", unitName,
      "-odir", directory </> "native", "-hidir", directory </> "native",
      "compiler/test-fixtures/InterfaceNative.hs", directory </> "full/InterfaceLibrary.o",
+     directory </> "full/CBVCoercionAudit.o",
      "-o", directory </> "native/oracle"]
   oracle <- run "native-oracle" (root </> directory </> "native/oracle") []
   check (length (BS.lines (commandStdout oracle)) == 21) "Interface native oracle row count changed"
   -- Remove the compiled source target from its recorded path, preserving a
   -- copy as evidence. The loader gets only a package DB, .hi and expected ID.
   renameFile (root </> generated) (root </> directory </> "source/InterfaceLibrary.saved")
+  renameFile (root </> cbvSource) (root </> directory </> "source/CBVCoercionAudit.saved")
   sourcePresent <- doesFileExist (root </> generated)
   check (not sourcePresent) "Generated source is still present"
   withCurrentDirectory (root </> directory </> "no-source") $ do
@@ -135,22 +164,36 @@ prepareInterfaceCore root = do
                 check (externalNames core == externalNames other) "External NameCache identities changed"
                 checkCore environment path other
               Nothing -> die "Repeat interface load lost its complete payload"
+            cbv <- loadInterfaceCore environment
+              (mkModule (moduleUnit expectedModule) (mkModuleName "CBVCoercionAudit"))
+              (root </> directory </> "full/CBVCoercionAudit.hi")
+            case cbv of
+              Nothing -> die "Installed CBV control lacks complete Core"
+              Just control -> check (any (maybe False (any isMarkedCbv) . idCbvMarks_maybe . fst)
+                (flattenBinds (interfaceBindings control))) "No actual hydrated GHC CBV marks"
     pure ()
+  helperCommands <- checkHelper root directory libdir helper
+  wiredCommands <- checkWiredHelper root directory libdir helper wiredUnit baseUnit
   audits <- forM entries $ \entry -> run ("audit-" ++ entry) "python3"
     ["scripts/audit-core.py", "--entry", entry, "--output", directory </> entry ++ "-audit.json",
-     directory </> "InterfaceLibrary.json"]
+     directory </> (if entry == "coercionEntry" then "CBVCoercionAudit.json" else "InterfaceLibrary.json")]
   plugin <- listDirectory (root </> "compiler/THC")
   scripts <- listDirectory (root </> "scripts")
   let inputs = sort $ ["compiler/test-fixtures/InterfaceLibrary.hs", "compiler/test-fixtures/InterfaceNative.hs",
         "compiler/test-fixtures/InterfaceForeign.hs", "test/haskell-fixtures/InterfaceFixtures.hs",
+        "compiler/test-fixtures/CBVCoercionAudit.hs", "compiler/interface/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "cabal.project",
         "scripts/audit-core.py", "scripts/core-capabilities.json"] ++
         ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
         ["scripts" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
-      commands = [version, libdirResult, baseResult] ++ concat builds ++ [foreignBuild, nativeBuild, oracle] ++ audits
+      commands = [helperBuild, helperLocation, pluginBuild, version, libdirResult, baseResult, wiredResult] ++
+        concat builds ++ [foreignBuild, nativeBuild, oracle] ++ helperCommands ++ wiredCommands ++ audits
       artifacts = concatMap commandArtifacts commands ++
         [directory </> name | name <- ["InterfaceLibrary.json", "full/InterfaceLibrary.hi", "thin/InterfaceLibrary.hi",
           "full/InterfaceLibrary.dyn_hi", "full/InterfaceForeign.hi", "native/oracle", "source/InterfaceLibrary.saved"]] ++
+        [directory </> name | name <- ["CBVCoercionAudit.json", "direct/CBVCoercionAudit.json",
+          "full/CBVCoercionAudit.hi", "thin/CBVCoercionAudit.hi", "source/CBVCoercionAudit.saved",
+          "wired-unit.json"]] ++
         [directory </> entry ++ "-audit.json" | entry <- entries]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
@@ -158,9 +201,117 @@ prepareInterfaceCore root = do
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= entries,
      "unit" .= unitName, "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes,
      "controls" .= (["opaque-body", "private-worker", "recursive-groups", "thin-unavailable",
-       "no-source-target", "wrong-module", "wrong-unit", "wrong-way", "foreign-rejected", "private-flags", "repeat-load"] :: [String]),
+       "no-source-target", "wrong-module", "wrong-unit", "wrong-way", "foreign-rejected", "private-flags", "repeat-load",
+       "helper-protocol", "installed-cbv-worker", "installed-wired-unit"] :: [String]),
      "commands" .= map commandRecord commands, "runtimeVerified" .= False]
   putStrLn "Prepared complete interface Core: 21 native rows; full/thin/no-source/identity/way/foreign controls passed"
+
+valueAt :: Key -> Value -> Value
+valueAt key (Object fields) = maybe Null id (KeyMap.lookup key fields)
+valueAt _ _ = Null
+
+decodeFile :: FilePath -> IO Value
+decodeFile path = do
+  bytes <- BS.readFile path
+  maybe (die ("Invalid JSON: " ++ path)) pure (decodeStrict' bytes)
+
+checkHelper :: FilePath -> FilePath -> FilePath -> FilePath -> IO [CommandResult]
+checkHelper root directory libdir helper = do
+  let arguments mode name = ["--libdir", libdir, "--unit", unitName, "--module", name,
+        "--package-db", root </> directory </> mode </> "package.conf.d",
+        "--interface", root </> directory </> mode </> name ++ ".hi", "--source-notes"]
+      run code label args = runLoggedExpect code 180 root (directory </> "logs") label [] helper args
+      decode result = maybe (die "Helper output is not one JSON value") pure (decodeStrict' (commandStdout result))
+  full <- forM ["InterfaceLibrary", "CBVCoercionAudit"] $ \name -> do
+    result <- run 0 ("helper-" ++ name) (arguments "full" name)
+    output <- decode result
+    check (valueAt "schema" output == Number 1 && valueAt "status" output == String "loaded") "Helper did not load full Core"
+    let core = valueAt "core" output
+    writeJson (root </> directory </> name ++ ".json") core
+    pure result
+  thin <- run 3 "helper-thin" (arguments "thin" "InterfaceLibrary")
+  unavailable <- decode thin
+  check (valueAt "status" unavailable == String "unavailable" &&
+    valueAt "capability" unavailable == String "complete-interface-core" && valueAt "core" unavailable == Null)
+    "Thin helper input silently fell back to unfoldings"
+  dynamic <- run 0 "helper-dynamic" (map (\argument ->
+    if argument == root </> directory </> "full/InterfaceLibrary.hi"
+    then root </> directory </> "full/InterfaceLibrary.dyn_hi" else argument)
+    (arguments "full" "InterfaceLibrary") ++ ["--way", "dynamic"])
+  dynamicOutput <- decode dynamic
+  check (valueAt "status" dynamicOutput == String "loaded") "Matching dynamic interface did not load"
+  badWay <- run 1 "helper-wrong-way" (arguments "full" "InterfaceLibrary" ++ ["--way", "dynamic"])
+  foreignError <- run 1 "helper-foreign" (arguments "full" "InterfaceForeign")
+  badModule <- run 1 "helper-wrong-module"
+    ["--libdir", libdir, "--unit", unitName, "--module", "Wrong", "--package-db",
+     root </> directory </> "full/package.conf.d", "--interface", root </> directory </> "full/InterfaceLibrary.hi"]
+  usageError <- run 2 "helper-duplicate-option" (arguments "full" "InterfaceLibrary" ++ ["--unit", unitName])
+  forM_ [badWay,badModule,foreignError,usageError] $ \result -> do
+    output <- decode result
+    check (valueAt "status" output == String "error" && valueAt "core" output == Null) "Helper failure looks like loaded/unavailable"
+  direct <- decodeFile (root </> directory </> "direct/CBVCoercionAudit.json")
+  loaded <- decodeFile (root </> directory </> "CBVCoercionAudit.json")
+  let bindings value = case valueAt "bindings" value of Array xs -> toList xs; _ -> []
+      marked value = case valueAt "entryStrict" value of Array xs -> Bool True `elem` toList xs; _ -> False
+      workers = filter marked (bindings direct)
+  check (not (null workers)) "Direct late export has no genuine CBV worker"
+  forM_ workers $ \original -> case filter ((== valueAt "name" original) . valueAt "name") (bindings loaded) of
+    [hydrated] -> do
+      check (valueAt "entryStrictSource" original == String "ghc-id" &&
+        valueAt "entryStrictSource" hydrated == String "ghc-id") "CBV evidence was synthesized"
+      check (valueAt "entryStrict" original == valueAt "entryStrict" hydrated) "Hydrated CBV entryStrict changed"
+      check (valueAt "cbvMarks" (valueAt "info" original) == valueAt "cbvMarks" (valueAt "info" hydrated))
+        "Hydrated idCbvMarks changed"
+    _ -> die "Missing/ambiguous installed CBV worker"
+  pure (full ++ [thin,dynamic,badWay,badModule,foreignError,usageError])
+
+-- Inspect one actual selected boot-library interface without copying/hashing it.
+-- Stock GHC is thin; a compiler with full Core must instead load successfully.
+-- The reference identity comes from the raw header, not the helper's mapping.
+checkWiredHelper :: FilePath -> FilePath -> FilePath -> FilePath -> String -> String -> IO [CommandResult]
+checkWiredHelper root directory libdir helper registered otherRegistration = do
+  (path, canonical, complete) <- runGhc (Just libdir) $ do
+    initial <- getSessionDynFlags
+    initialEnv <- getSession
+    (flags,leftovers,_) <- parseDynamicFlags (hsc_logger initialEnv) initial
+      (map noLoc ["-clear-package-db", "-global-package-db", "-package-env", "-", "-package-id", registered])
+    liftIO $ check (null leftovers) "Unexpected wired-unit flag leftovers"
+    _ <- setSessionDynFlags flags
+    environment <- getSession
+    liftIO $ do
+      let units = hsc_units environment
+      info <- case filter ((== stringToUnit registered) . unwireUnit units . mkUnit) (listUnitInfo units) of
+        [selected] -> pure selected
+        _ -> die "Expected one exact selected wired registration"
+      existing <- filterM doesFileExist [ShortText.unpack dir </> "GHC/Internal/Char.hi" | dir <- unitImportDirs info]
+      path <- case existing of
+        [selected] -> pure selected
+        _ -> die "Expected one installed GHC.Internal.Char interface"
+      raw <- readBinIface (targetProfile flags) (hsc_NC environment) CheckHiWay QuietBinIFace path
+      let canonical = unitString (moduleUnit (mi_module raw))
+      check (canonical == "ghc-internal" && registered /= canonical) "Control does not exercise wired registration mapping"
+      check (moduleNameString (moduleName (mi_module raw)) == "GHC.Internal.Char") "Unexpected wired interface module"
+      pure (path, canonical, not (isNothing (mi_simplified_core raw)))
+  let expectedExit = if complete then 0 else 3
+      args requested = ["--libdir", libdir, "--unit", requested, "--module", "GHC.Internal.Char", "--interface", path]
+      run code label requested = runLoggedExpect code 180 root (directory </> "logs") label [] helper (args requested)
+  writeJson (root </> directory </> "wired-unit.json") $ object
+    ["registeredUnit" .= registered, "interfaceUnit" .= canonical, "module" .= ("GHC.Internal.Char" :: String),
+     "interface" .= path, "completeCore" .= complete, "expectedExit" .= expectedExit]
+  loaded <- run expectedExit "helper-wired-unit" registered
+  output <- maybe (die "Wired helper response is not JSON") pure (decodeStrict' (commandStdout loaded))
+  if complete then check (valueAt "status" output == String "loaded" &&
+      valueAt "unit" (valueAt "core" output) == String "ghc-internal") "Wired Core identity was rewritten"
+    else check (valueAt "status" output == String "unavailable" && valueAt "core" output == Null &&
+      valueAt "capability" output == String "complete-interface-core" &&
+      valueAt "unit" output == toJSON registered) "Thin wired input was not an exact-registration missing capability"
+  badUnit <- run 1 "helper-wired-wrong-unit" otherRegistration
+  canonicalAlias <- run 1 "helper-wired-canonical-alias" canonical
+  forM_ [badUnit,canonicalAlias] $ \result -> do
+    failure <- maybe (die "Wired helper failure is not JSON") pure (decodeStrict' (commandStdout result))
+    check (valueAt "status" failure == String "error" && valueAt "core" failure == Null)
+      "Wired-unit mapping accepted a different registration"
+  pure [loaded,badUnit,canonicalAlias]
 
 checkCore :: HscEnv -> FilePath -> InterfaceCore -> IO ()
 checkCore environment path core = do
