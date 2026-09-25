@@ -5,7 +5,7 @@
 
 -- Production of native observations only. Independent semantics, host ABI and
 -- exact original FCall proofs are checked by the Kotlin fixture consumers.
-module OriginalStdioFixtures (prepareOriginalStdio, prepareOriginalStdioRead) where
+module OriginalStdioFixtures (prepareOriginalStdio, prepareOriginalStdioRead, prepareOriginalFcntl) where
 
 import Control.Monad (forM, unless, when)
 import Data.Aeson (object, (.=), toJSON)
@@ -244,3 +244,85 @@ prepareOriginalStdioRead root = do
      "inputHashes" .= inputHashes,"artifactHashes" .= artifactHashes,
      "commands" .= map commandRecord commands]
   putStrLn ("original-stdio-read: " ++ show (length rows) ++ " native observations, pre/post strict Core audits")
+
+-- One composite original-declaration export/oracle; the JVM consumer checks
+-- exact flag values, shared descriptor state and each compiled operation.
+prepareOriginalFcntl :: FilePath -> IO ()
+prepareOriginalFcntl root
+  | Host.os /= "linux" || Host.arch /= "x86_64" || sizeOf (0 :: CLong) /= 8 = do
+      createDirectoryIfMissing True (root </> "build/original-fcntl")
+      inputHashes <- fcntlSources root >>= hashes root
+      writeJson (root </> "build/original-fcntl/manifest.json") $ object
+        ["schema" .= (1 :: Int), "platform" .= Host.os, "supported" .= False,
+         "reason" .= ("Original Linux x86_64 LP64 fcntl declarations only" :: String),
+         "inputHashes" .= inputHashes, "artifactHashes" .= object []]
+      putStrLn "original-fcntl: explicitly excluded on this platform"
+  | otherwise = prepareNativeFcntl root
+
+fcntlSources :: FilePath -> IO [FilePath]
+fcntlSources root = do
+  plugin <- listDirectory (root </> "compiler/THC")
+  scripts <- listDirectory (root </> "scripts")
+  pure $ sort $ ["compiler/test-fixtures/OriginalFcntlAudit.hs", "compiler/test-fixtures/OriginalFcntlNative.hs",
+    "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
+    "test/haskell-fixtures/OriginalStdioFixtures.hs", "scripts/audit-core.py", "scripts/core-capabilities.json",
+    "src/main/resources/thc/scalar-primop-signatures.json", "compiler/build.sh", "compiler/export.sh",
+    "compiler/toolchain.sh", "compiler/plugin.py"] ++
+    ["compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
+    ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
+
+prepareNativeFcntl :: FilePath -> IO ()
+prepareNativeFcntl root = do
+  let output = "build/original-fcntl"
+      coreSource = "compiler/test-fixtures/OriginalFcntlAudit.hs"
+      nativeSource = "compiler/test-fixtures/OriginalFcntlNative.hs"
+      names = ["originalAppend", "originalCreat", "originalNoctty", "originalNonblock", "originalRdonly",
+               "originalRdwr", "originalWronly", "originalGetfl", "originalSetfl", "originalGetFlags", "originalSetFlags"]
+      execute = runLogged 180 root (output </> "logs")
+      binary = output </> "native/oracle"
+      oracle = output </> "oracle.json"
+      manifest = root </> output </> "manifest.json"
+  createDirectoryIfMissing True (root </> output </> "native")
+  stale <- doesFileExist manifest
+  when stale (removeFile manifest)
+  ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+  version <- execute "ghc-version" [] ghc ["--numeric-version"]
+  unless (commandStdout version == "9.14.1\n") (die "Original fcntl requires GHC 9.14.1")
+  info <- execute "ghc-info" [] ghc ["--info"]
+  case readMaybe (BSC.unpack (commandStdout info)) :: Maybe [(String, String)] of
+    Just target | lookup "Host platform" target == Just "x86_64-unknown-linux",
+                  lookup "Target platform" target == lookup "Host platform" target,
+                  lookup "target word size" target == Just "8" -> pure ()
+    _ -> die "Original fcntl requires native Linux x86_64 GHC"
+  compiled <- execute "native-build" [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint",
+    "-package", "ghc-internal", "-package", "unix", "-icompiler/test-fixtures",
+    "-odir", root </> output </> "native", "-hidir", root </> output </> "native", nativeSource, "-o", root </> binary]
+  observed <- execute "native-run" [] (root </> binary) [root </> output </> "native/private-file"]
+  (constants, rows, invalid) <- maybe (die "Malformed original fcntl observations") pure
+    (readMaybe (BSC.unpack (commandStdout observed)) :: Maybe ([Integer], [[Integer]], [Integer]))
+  unless (length constants == 9 && length rows == 4 && all ((== 3) . length) rows && length invalid == 2)
+    (die "Incomplete original fcntl observations")
+  writeJson (root </> oracle) $ object ["constants" .= constants, "rows" .= rows, "invalid" .= invalid]
+  exports <- forM ["pre", "post"] $ \stage -> do
+    let core = output </> stage </> "core"
+        modules = [core </> "OriginalFcntlAudit.json", core </> "THC.InterfaceClosure.json"]
+        options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+          ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- names]
+    exported <- execute (stage ++ "-export")
+      [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> output </> stage </> "ghc")]
+      "compiler/export.sh" (["-package", "ghc-internal"] ++ options ++ [coreSource])
+    audits <- forM names $ \name -> do
+      let path = output </> stage </> name ++ ".audit.json"
+      audited <- execute (stage ++ "-audit-" ++ name) [] "python3"
+        (["scripts/audit-core.py", "--entry", name, "--output", path] ++ modules)
+      pure (path, audited)
+    pure (exported : map snd audits, modules ++ map fst audits)
+  let commands = [version, info, compiled, observed] ++ concatMap fst exports
+      artifacts = [binary, oracle] ++ concatMap snd exports ++ concatMap commandArtifacts commands
+  inputHashes <- fcntlSources root >>= hashes root
+  artifactHashes <- hashes root artifacts
+  writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= names,
+    "platform" .= Host.os, "supported" .= True, "installedArtifactsHashed" .= False,
+    "strictAccepted" .= True, "runtimeVerified" .= False, "nativeRows" .= length rows,
+    "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
+  putStrLn "original-fcntl: nine genuine constants, four native shared-status rows and eleven pre/post Core roots"

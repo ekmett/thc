@@ -14,6 +14,17 @@ references and finalizers remain outside this proof.
 
 ## Explicit authority
 
+The original GHC `__hscore_o_*` getters for append, create, no-controlling-terminal,
+nonblocking and the three access modes, plus `__hscore_f_getfl`/`__hscore_f_setfl`,
+use the generated host C ABI constants. The exact original Posix CAPI `fcntl`
+wrappers support `F_GETFL` and `F_SETFL` through a context-owned native lease.
+The setter retains its `CLong` argument; the kernel determines which status bits
+can change. Guest `dup` aliases observe the same open-description flags, and
+success preserves the guest's sticky errno. Other commands are explicitly
+unsupported; a guest integer never names an arbitrary host descriptor. Ordinary
+embedding streams have no native flag capability. These calls retain the
+original unsafe FFI contract and do not add interruptible byte transfers.
+
 `NativeIO.createContext` chooses native access and the host filesystem together.
 It installs the exact final internal `NativeFileSystem`, constructs the context,
 attaches its private provider and descriptor owners, and returns a built

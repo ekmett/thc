@@ -12,6 +12,10 @@ internal class StdioHostAbi private constructor(private val errors: Map<String, 
     fun openWritable(flags: Long): Boolean = (flags and open.getValue("O_ACCMODE")).let {
         it == open.getValue("O_WRONLY") || it == open.getValue("O_RDWR") }
     fun openAppend(flags: Long): Boolean = flags and open.getValue("O_APPEND") != 0L
+    fun flagConstant(operation: OriginalStdioOp): Long {
+        if (!operation.flagConstant) fault("Invalid original file flag constant operation")
+        return open.getValue(operation.name)
+    }
     fun notTerminal(): Long = errors.getValue("ENOTTY")
     fun notSeekable(): Long = errors.getValue("ESPIPE")
     fun seekConstant(operation: OriginalStdioOp): Long = seek.getValue(when (operation) {
@@ -49,7 +53,8 @@ internal class StdioHostAbi private constructor(private val errors: Map<String, 
         private val widths = mapOf("charBits" to 8L, "pointer" to 8L, "int" to 4L, "bool" to 1L, "size" to 8L, "ssize" to 8L)
         private val errorNames = setOf("ENOENT", "EACCES", "EEXIST", "EBADF", "EINVAL", "EIO", "ENOTSUP", "EBUSY", "EISDIR", "ENOTTY", "ESPIPE", "EMFILE")
         private val seekNames = setOf("SEEK_SET", "SEEK_CUR", "SEEK_END")
-        private val openNames = setOf("modeBytes", "O_ACCMODE", "O_RDONLY", "O_WRONLY", "O_RDWR", "O_APPEND")
+        private val openNames = setOf("modeBytes", "O_ACCMODE", "O_RDONLY", "O_WRONLY", "O_RDWR", "O_APPEND",
+            "O_CREAT", "O_NOCTTY", "O_NONBLOCK", "F_GETFL", "F_SETFL")
         private fun exactInteger(value: Any?): Long? = if (value is Int || value is Long) (value as Number).toLong() else null
         private fun architecture(value: String): String = when (value.lowercase()) {
             "arm64" -> "aarch64"
@@ -93,6 +98,7 @@ internal class StdioHostAbi private constructor(private val errors: Map<String, 
                 number!!
             }
             requireAbi(open.getValue("modeBytes") in setOf(2L, 4L), "mode_t width")
+            requireAbi(open.getValue("F_GETFL") != open.getValue("F_SETFL"), "distinct fcntl commands")
             val access = listOf("O_RDONLY", "O_WRONLY", "O_RDWR").map(open::getValue)
             val mask = open.getValue("O_ACCMODE")
             requireAbi(mask != 0L && access.toSet().size == 3 && access.all { it and mask == it } &&

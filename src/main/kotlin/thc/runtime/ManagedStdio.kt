@@ -60,6 +60,19 @@ internal class ManagedStdio(private val files: ManagedFiles) {
 
     @TruffleBoundary fun seekConstant(operation: OriginalStdioOp): Long = hostAbi.seekConstant(operation)
 
+    @TruffleBoundary fun flagConstant(operation: OriginalStdioOp): Long = hostAbi.flagConstant(operation)
+
+    @TruffleBoundary fun fcntl(fd: Long, command: Long, argument: Long, write: Boolean): Long {
+        val abi = hostAbi
+        if (fd != fd.toInt().toLong() || command != command.toInt().toLong())
+            fault("Original fcntl requires canonical signed CInt descriptor and command")
+        val expected = abi.flagConstant(if (write) OriginalStdioOp.F_SETFL else OriginalStdioOp.F_GETFL)
+        if (command != expected) fault("Original fcntl supports only F_GETFL/F_SETFL with the matching arity")
+        val result = files.fcntl(fd, argument, write)
+        if (result < 0) lastError.set(fileError(abi))
+        return result
+    }
+
     @TruffleBoundary @JvmOverloads fun ready(fd: Long, writing: Long, milliseconds: Long, socket: Long,
                                            node: Node? = null): Long {
         val abi = hostAbi

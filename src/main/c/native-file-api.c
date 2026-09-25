@@ -89,6 +89,22 @@ int64_t thc_file_isatty(const int *lease, int64_t *error) {
   return terminal ? 1 : -1;
 }
 
+// The original CAPI write wrapper passes CLong to fcntl's variadic argument.
+// Commands are fixed here: no numeric guest fd or unsupported fcntl operation
+// can escape the context's authenticated lease protocol.
+_Static_assert(sizeof(long) == 8, "original fcntl requires LP64 CLong");
+int64_t thc_file_getfl(const int *lease, int64_t *error) {
+  int result = fcntl(*lease, F_GETFL);
+  *error = result < 0 ? errno : 0;
+  return result;
+}
+
+int64_t thc_file_setfl(const int *lease, int64_t flags, int64_t *error) {
+  int result = fcntl(*lease, F_SETFL, (long)flags);
+  *error = result < 0 ? errno : 0;
+  return result;
+}
+
 int64_t thc_file_read(const int *lease, void *bytes, int64_t count, int64_t *error) {
   if (count < 0) { *error = EINVAL; return -1; }
   ssize_t result = read(*lease, bytes, (size_t)count);

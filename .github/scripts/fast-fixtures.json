@@ -94,6 +94,14 @@
         "compiler/THC/Plugin.hs", "compiler/THC/CBV.hs", "compiler/THC/Demands.hs", "compiler/THC/Sources.hs", "compiler/THC/Wired.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
+    "original-fcntl": {
+      "junit": ["thc.runtime.OriginalFcntlTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-fcntl"]}],
+      "outputs": ["build/original-fcntl"],
+      "sources": ["compiler/test-fixtures/OriginalFcntlAudit.hs", "compiler/test-fixtures/OriginalFcntlNative.hs",
+        "test/haskell-fixtures/OriginalStdioFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "original-termios": {
       "junit": ["thc.runtime.OriginalTermiosTest", "thc.runtime.OriginalSavedTermiosTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-termios"]}],

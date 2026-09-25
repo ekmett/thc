@@ -291,6 +291,8 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
                 result("tcsetattr", lease, action, bytes)
             }
         }
+        override fun statusFlags(): Long = live { result("getfl", lease) }
+        override fun setStatusFlags(flags: Long): Long = live { result("setfl", lease, flags) }
         override fun read(destination: ByteBuffer): Int = live {
             if (!readable) throw NonReadableChannelException()
             if (destination.isReadOnly) throw ReadOnlyBufferException()
