@@ -3492,6 +3492,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class GeneratedInt64X2Insert {
         @Specialization public static Int64X2 apply(Int64X2 vector, long value, long index) { return GeneratedVectorInsert.insert(vector, value, index); }
     }
+    @Operation public static final class GeneratedInt64X2Min {
+        @Specialization public static Int64X2 apply(Int64X2 left, Int64X2 right) { return Int64X2.min(left, right); }
+    }
+    @Operation public static final class GeneratedInt64X2Max {
+        @Specialization public static Int64X2 apply(Int64X2 left, Int64X2 right) { return Int64X2.max(left, right); }
+    }
     @Operation public static final class GeneratedFloatX4Negate {
         @Specialization public static FloatX4 apply(FloatX4 value) { return FloatX4.negate(value); }
     }
@@ -3911,11 +3917,29 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class GeneratedInt8X16Insert {
         @Specialization public static Int8X16 apply(Int8X16 vector, long value, long index) { return GeneratedVectorInsert.insert(vector, (byte) value, index); }
     }
+    @Operation public static final class GeneratedInt8X16Min {
+        @Specialization public static Int8X16 apply(Int8X16 left, Int8X16 right) { return Int8X16.min(left, right); }
+    }
+    @Operation public static final class GeneratedInt8X16Max {
+        @Specialization public static Int8X16 apply(Int8X16 left, Int8X16 right) { return Int8X16.max(left, right); }
+    }
     @Operation public static final class GeneratedInt16X8Insert {
         @Specialization public static Int16X8 apply(Int16X8 vector, long value, long index) { return GeneratedVectorInsert.insert(vector, (short) value, index); }
     }
+    @Operation public static final class GeneratedInt16X8Min {
+        @Specialization public static Int16X8 apply(Int16X8 left, Int16X8 right) { return Int16X8.min(left, right); }
+    }
+    @Operation public static final class GeneratedInt16X8Max {
+        @Specialization public static Int16X8 apply(Int16X8 left, Int16X8 right) { return Int16X8.max(left, right); }
+    }
     @Operation public static final class GeneratedInt32X4Insert {
         @Specialization public static Int32X4 apply(Int32X4 vector, long value, long index) { return GeneratedVectorInsert.insert(vector, (int) value, index); }
+    }
+    @Operation public static final class GeneratedInt32X4Min {
+        @Specialization public static Int32X4 apply(Int32X4 left, Int32X4 right) { return Int32X4.min(left, right); }
+    }
+    @Operation public static final class GeneratedInt32X4Max {
+        @Specialization public static Int32X4 apply(Int32X4 left, Int32X4 right) { return Int32X4.max(left, right); }
     }
     @Operation public static final class GeneratedWord8X16Insert {
         @Specialization public static Word8X16 apply(Word8X16 vector, long value, long index) { return GeneratedVectorInsert.insert(vector, (byte) value, index); }

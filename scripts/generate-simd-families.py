@@ -30,8 +30,8 @@ LANES = {
     'DoubleRep': ('double', 64, 'DoubleVector', 'Double'),
 }
 UNSIGNED_MASK = {'Word8Rep': '0xffL', 'Word16Rep': '0xffffL', 'Word32Rep': '0xffff_ffffL'}
-BINARY = {'plus': 'add', 'minus': 'subtract', 'times': 'multiply', 'divide': 'divide'}
-VECTOR_METHOD = {'add': 'add', 'subtract': 'sub', 'multiply': 'mul', 'divide': 'div'}
+BINARY = {'plus': 'add', 'minus': 'subtract', 'times': 'multiply', 'divide': 'divide', 'min': 'min', 'max': 'max'}
+VECTOR_METHOD = {'add': 'add', 'subtract': 'sub', 'multiply': 'mul', 'divide': 'div', 'min': 'min', 'max': 'max'}
 LEGACY_INSERT = {'Int8X16', 'Word8X16', 'Int16X8', 'Word16X8', 'Int32X4', 'Word32X4', 'Int64X2', 'FloatX4', 'DoubleX2'}
 OPS = {'pack', 'unpack', 'broadcast', 'negate', 'insert'} | BINARY.keys()
 HEADER = ('// SPDX-FileCopyrightText: 2026 Edward Kmett\n'
@@ -262,8 +262,9 @@ def bytecode_emitter(fs):
 
 def fixture_sources(fs):
     """Real scalar-entry Haskell; vectors never cross a function boundary."""
+    extrema = [op + f['name'] + '#' for f in fs for op in f['operations'] if op in ('min', 'max')]
     source = [*HASKELL_HEADER, '{-# LANGUAGE MagicHash, UnboxedTuples #-}', 'module GeneratedSimdFamilies where',
-              'import GHC.Exts', '',
+              'import GHC.Exts', *(['import GHC.Prim (' + ', '.join(extrema) + ')'] if extrema else []), '',
               '-- NaN payload selection is not part of arithmetic primop semantics.',
               '-- All non-NaNs are observed as exact bits, including signed zero.',
               '{-# INLINE bitsFloat #-}', 'bitsFloat :: Float# -> Int#',
@@ -402,8 +403,9 @@ def smoke_sources(fs):
             return f'case {value} of v -> case neFloat# v v of {{ 1# -> 2143289344#; _ -> word2Int# (word32ToWord# (castFloatToWord32# v)) }}'
         return f'case {value} of v -> case v /=## v of {{ 1# -> 9221120237041090560#; _ -> word2Int# (word64ToWord# (castDoubleToWord64# v)) }}'
     def header(name):
+        extrema = [op + f['name'] + '#' for f in fs for op in f['operations'] if op in ('min', 'max')]
         return [*HASKELL_HEADER, '{-# LANGUAGE MagicHash, UnboxedTuples #-}', f'module {name} where',
-                'import GHC.Exts', '']
+                'import GHC.Exts', *(['import GHC.Prim (' + ', '.join(extrema) + ')'] if name == 'GeneratedSimdSmoke' and extrema else []), '']
     def signature(entry):
         return [f'{entry} :: Int# -> Int# -> Int# -> Int#',
                 f'{entry} selector a b = case quotInt# selector 256# of']
@@ -433,6 +435,10 @@ def smoke_sources(fs):
                      ('sub' if op == 'minus' and rep not in ('FloatRep', 'DoubleRep') else op) + stem + '#')
         if op == 'insert':
             scalar.append(f'  {index}# -> case ({lane}) ==# ({inserted}) of {{ 1# -> {observe(rep, convert[rep]("b"), True)}; _ -> {observe(rep, left, True)} }}')
+        elif op in ('min', 'max'):
+            # GHC has vector min/max but no scalar minIntN#/maxIntN# primops.
+            first, second = (left, right) if op == 'min' else (right, left)
+            scalar.append(f'  {index}# -> case lt{stem}# ({left}) ({right}) of {{ 1# -> {observe(rep, first)}; _ -> {observe(rep, second)} }}')
         else:
             value = left if op == 'broadcast' else f'{primitive} ({left})' + (f' ({right})' if op in BINARY else '')
             scalar.append(f'  {index}# -> {observe(rep, value)}')

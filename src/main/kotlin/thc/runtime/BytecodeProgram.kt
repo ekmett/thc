@@ -3846,6 +3846,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedInt64X2Insert(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X2Insert()
         }, GeneratedVectors.proofInt64X2)
+        "minInt64X2#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X2Min(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X2Min()
+        }, GeneratedVectors.proofInt64X2)
+        "maxInt64X2#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X2Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X2Max()
+        }, GeneratedVectors.proofInt64X2)
         "negateFloatX4#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedFloatX4Negate(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX4Negate()
@@ -4211,13 +4219,37 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedInt8X16Insert(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X16Insert()
         }, GeneratedVectors.proofInt8X16)
+        "minInt8X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X16Min(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X16Min()
+        }, GeneratedVectors.proofInt8X16)
+        "maxInt8X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X16Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X16Max()
+        }, GeneratedVectors.proofInt8X16)
         "insertInt16X8#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedInt16X8Insert(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X8Insert()
         }, GeneratedVectors.proofInt16X8)
+        "minInt16X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X8Min(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X8Min()
+        }, GeneratedVectors.proofInt16X8)
+        "maxInt16X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X8Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X8Max()
+        }, GeneratedVectors.proofInt16X8)
         "insertInt32X4#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedInt32X4Insert(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X4Insert()
+        }, GeneratedVectors.proofInt32X4)
+        "minInt32X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X4Min(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X4Min()
+        }, GeneratedVectors.proofInt32X4)
+        "maxInt32X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X4Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X4Max()
         }, GeneratedVectors.proofInt32X4)
         "insertWord8X16#" -> ProvenExpression(Expression { e ->
             val b = e.builder
