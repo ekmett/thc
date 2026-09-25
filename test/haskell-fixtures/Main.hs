@@ -43,6 +43,7 @@ import OriginalOpenFixtures (prepareOriginalOpen)
 import OriginalTermiosFixtures (prepareOriginalTermios)
 import OriginalTcsetattrFixtures (prepareOriginalTcsetattr)
 import OriginalTcgetattrFixtures (prepareOriginalTcgetattr)
+import OriginalSigprocmaskFixtures (prepareOriginalSigprocmask)
 import OriginalSigsetFixtures (prepareOriginalSigset)
 import OriginalIconvFixtures (prepareOriginalIconv)
 import MutVarFixtures (prepareMutVar)
@@ -890,6 +891,7 @@ main = do
     ["original-termios"] -> prepareOriginalTermios root
     ["original-tcsetattr"] -> prepareOriginalTcsetattr root
     ["original-tcgetattr"] -> prepareOriginalTcgetattr root
+    ["original-sigprocmask"] -> prepareOriginalSigprocmask root
     ["original-sigset"] -> prepareOriginalSigset root
     ["native-addresses"] -> prepareNativeAddress root
     ["original-gmp"] -> prepareOriginalGmp root False

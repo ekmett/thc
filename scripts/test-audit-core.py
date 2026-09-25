@@ -2102,6 +2102,7 @@ class OriginalDupAuditTest(unittest.TestCase):
     sigset = {
         'ghczuwrapperZC13ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigemptyset': (('AddrRep', None), 'Int32Rep'),
         'ghczuwrapperZC12ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigaddset': (('AddrRep', 'Int32Rep', None), 'Int32Rep'),
+        'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask': (('Int32Rep', 'AddrRep', 'AddrRep', None), 'Int32Rep'),
     }
     symbols = (core_original_foreign.TCSETATTR_SYMBOL, core_original_foreign.TCGETATTR_SYMBOL, 'dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile', *termios, *sigset)
     def fixture(self, symbol):
@@ -2169,7 +2170,9 @@ class OriginalDupAuditTest(unittest.TestCase):
                         proof = module['bindings'][0]['expr'][1][i]['rep'] if stored else self.call(module)[2][i][2]['rep']
                         if proof['primReps'] == [rep]: continue
                         proof['primReps'] = [rep]
-                        self.assertFalse(self.audit(module)['accepted'])
+                        report = self.audit(module)
+                        self.assertFalse(report['accepted'])
+                        self.assertEqual([], report['foreignCalls'])
                 module = self.fixture(symbol); self.call(module)[2][i][2]['rep']['aggregate'] = 'unboxed-tuple'
                 self.assertFalse(self.audit(module)['accepted'])
             for declared in (False, True):
@@ -2180,7 +2183,8 @@ class OriginalDupAuditTest(unittest.TestCase):
 
     def test_termios_state_only_result_and_excluded_terminal_calls(self):
         self.assertEqual(set(self.termios), core_original_foreign.TERMIOS_SYMBOLS)
-        self.assertEqual(set(self.sigset), set(core_original_foreign.SIGSET_OPERATIONS))
+        self.assertEqual(set(self.sigset), set(core_original_foreign.SIGSET_OPERATIONS) | {
+            "ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask"})
         for symbol, (_, output) in (self.termios | self.sigset).items():
             if output is not None:
                 # A mutually consistent descriptor/call-site forgery still
@@ -2205,7 +2209,6 @@ class OriginalDupAuditTest(unittest.TestCase):
                     self.assertFalse(self.audit(module)['accepted'])
         for symbol in ('prefix__hscore_lflag', 'tcgetattr', 'tcsetattr', 'sigprocmask', 'sigemptyset', 'sigaddset',
                        'prefix__hscore_sigttou', 'prefix__hscore_sizeof_sigset_t', 'prefix__hscore_get_saved_termios', 'prefix__hscore_set_saved_termios',
-                       'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask',
                        *('prefix' + name for name in self.sigset)):
             self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
             module = self.fixture('__hscore_lflag')

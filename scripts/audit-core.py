@@ -643,6 +643,7 @@ class Audit:
                         or symbol in core_original_foreign.TERMIOS_SYMBOLS
                         or symbol in (core_original_foreign.TCGETATTR_SYMBOL, core_original_foreign.TCSETATTR_SYMBOL)
                         or symbol in core_original_foreign.SIGSET_OPERATIONS
+                        or symbol == 'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask'
                         or symbol in ('getOrSetSystemEventThreadEventManagerStore',
                                       'getOrSetGHCConcSignalSignalHandlerStore')
                         or symbol in ('rts_setMainThread', 'rtsSupportsBoundThreads', 'lockFile', 'unlockFile', '__hscore_fstat', '__hscore_open', 'dup', 'dup2', 'fdReady', 'localeEncoding', 'hs_iconv_open', 'hs_iconv_close', 'hs_iconv',

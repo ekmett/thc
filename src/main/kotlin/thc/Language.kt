@@ -366,6 +366,7 @@ class Language : TruffleLanguage<Language.State>() {
         // the CLI and explicit NativeIO factory install the fixed native provider.
         internal var nativeFiles: thc.runtime.NativeFileProvider? = null
         internal val stdio = thc.runtime.ManagedStdio(files)
+        internal val signalMask = thc.runtime.ManagedSignalMask(this)
         internal val savedTermios = thc.runtime.SavedTermios(this)
         internal val iconv = thc.runtime.ManagedIconv({ cbits() }, stdio, threads)
         internal val strerror = thc.runtime.ManagedStrerror({ cbits() }, threads)

@@ -162,6 +162,7 @@ tasks.withType<Test>().configureEach {
             "original-open/**/*.json", "original-open/logs/*.stdout", "original-open/logs/*.stderr", "original-open/native/oracle",
             "original-termios/**/*.json", "original-termios/logs/*.stdout", "original-termios/logs/*.stderr", "original-termios/native/oracle",
             "original-tcsetattr/**/*.json", "original-tcsetattr/logs/*.stdout", "original-tcsetattr/logs/*.stderr", "original-tcsetattr/native/oracle",
+            "original-sigprocmask/**/*.json", "original-sigprocmask/logs/*.stdout", "original-sigprocmask/logs/*.stderr", "original-sigprocmask/native/oracle",
             "original-tcgetattr/**/*.json", "original-tcgetattr/logs/*.stdout", "original-tcgetattr/logs/*.stderr", "original-tcgetattr/native/oracle",
             "original-sigset/**/*.json", "original-sigset/logs/*.stdout", "original-sigset/logs/*.stderr", "original-sigset/native/oracle",
             "original-termios/saved/native/oracle",
@@ -424,6 +425,28 @@ val compileNativeFiles by tasks.registering {
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-files")) }
 tasks.processResources { dependsOn(compileNativeFiles) }
+
+// Partial original sigprocmask, loaded only with explicit native authority.
+val compileNativeSignals by tasks.registering {
+    dependsOn("generateStdioAbi")
+    val source = layout.projectDirectory.file("src/main/c/native-signal-api.c")
+    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    val output = layout.buildDirectory.dir("generated/native-signals")
+    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output)
+    doLast {
+        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
+            val destination = output.get().asFile.resolve("thc/native/native-signal-api.so")
+            destination.parentFile.mkdirs()
+            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-fembed-bitcode", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+        }
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-signals")) }
+tasks.processResources { dependsOn(compileNativeSignals) }
 
 // Original stdio FCalls use target C widths/errno, not JVM or private-ABI values.
 val generateStdioAbi by tasks.registering {
