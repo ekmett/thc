@@ -98,6 +98,7 @@ NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate",
     "build/original-open/native/oracle",
     "build/original-termios/native/oracle",
     "build/original-sigset/native/oracle",
+    "build/original-termios/saved/native/oracle",
     "build/original-stdio-truncate/native/oracle",
     "build/original-strerror/native/oracle",
     "build/original-fd-ready/native/oracle",
@@ -190,6 +191,7 @@ ORIGINAL_RTS_LOCK_OUTPUTS = frozenset("build/original-rts-locks/" + name for nam
 ORIGINAL_TERMIOS_ENTRIES = ("originalTermiosSize", "originalEcho", "originalIcanon", "originalVmin", "originalVtime",
                           "originalTcsanow", "originalSigsetSize", "originalSigttou", "originalSigBlock", "originalSigSetmask",
                           "originalLflag", "originalPokeLflag", "originalCC")
+ORIGINAL_SAVED_TERMIOS_ENTRIES = ("originalGetSavedTermios", "originalSetSavedTermios")
 ORIGINAL_TERMIOS_OUTPUTS = frozenset("build/original-termios/" + name for name in (
     "manifest.json", "oracle.json", "native/oracle",
     *(f"logs/{label}.{suffix}" for label in (
@@ -199,6 +201,14 @@ ORIGINAL_TERMIOS_OUTPUTS = frozenset("build/original-termios/" + name for name i
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
         "core/OriginalTermiosAudit.json", "core/THC.InterfaceClosure.json",
         *(f"{entry}.audit.json" for entry in ORIGINAL_TERMIOS_ENTRIES))),
+    "saved/oracle.json", "saved/native/oracle",
+    *(f"logs/{label}.{suffix}" for label in (
+        "saved-native-build", "saved-native-run", "saved-pre-export", "saved-post-export",
+        *(f"saved-{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_SAVED_TERMIOS_ENTRIES))
+      for suffix in ("stdout", "stderr", "command.json")),
+    *(f"saved/{stage}/{name}" for stage in ("pre", "post") for name in (
+        "core/OriginalSavedTermiosAudit.json", "core/THC.InterfaceClosure.json",
+        *(f"{entry}.audit.json" for entry in ORIGINAL_SAVED_TERMIOS_ENTRIES))),
 ))
 
 ORIGINAL_SIGSET_ENTRIES = ("originalSigEmpty", "originalSigAdd")

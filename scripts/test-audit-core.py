@@ -2089,6 +2089,8 @@ class OriginalGmpAuditTest(unittest.TestCase):
 class OriginalDupAuditTest(unittest.TestCase):
     """Original scalar/State controls; genuine declarations live in Haskell fixtures."""
     termios = {
+        '__hscore_get_saved_termios': (('Int32Rep', None), 'AddrRep'),
+        '__hscore_set_saved_termios': (('Int32Rep', 'AddrRep', None), None),
         '__hscore_lflag': (('AddrRep', None), 'Word32Rep'),
         '__hscore_poke_lflag': (('AddrRep', 'Word32Rep', None), None),
         '__hscore_ptr_c_cc': (('AddrRep', None), 'AddrRep'),
@@ -2201,7 +2203,7 @@ class OriginalDupAuditTest(unittest.TestCase):
                     if mutation == 'sum': result['aggregate'] = 'unboxed-sum'
                     self.assertFalse(self.audit(module)['accepted'])
         for symbol in ('prefix__hscore_lflag', 'tcgetattr', 'tcsetattr', 'sigprocmask', 'sigemptyset', 'sigaddset',
-                       'prefix__hscore_sigttou', 'prefix__hscore_sizeof_sigset_t', '__hscore_get_saved_termios', '__hscore_set_saved_termios',
+                       'prefix__hscore_sigttou', 'prefix__hscore_sizeof_sigset_t', 'prefix__hscore_get_saved_termios', 'prefix__hscore_set_saved_termios',
                        'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask',
                        *('prefix' + name for name in self.sigset)):
             self.assertNotIn(symbol, core_original_foreign.OPERATIONS)

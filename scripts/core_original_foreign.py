@@ -33,6 +33,8 @@ LIBDW_UNAVAILABLE = {
     'libdwPoolClear': ((None,), (None,)),
 }
 TERMIOS_OPERATIONS = {
+    '__hscore_get_saved_termios': (('Int32Rep', None), (None, 'AddrRep')),
+    '__hscore_set_saved_termios': (('Int32Rep', 'AddrRep', None), (None,)),
     '__hscore_lflag': (('AddrRep', None), (None, 'Word32Rep')),
     '__hscore_poke_lflag': (('AddrRep', 'Word32Rep', None), (None,)),
     '__hscore_ptr_c_cc': (('AddrRep', None), (None, 'AddrRep')),
