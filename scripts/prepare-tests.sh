@@ -11,7 +11,6 @@ compiler/build.sh
 python3 scripts/prepare-io-main-pap.py
 python3 scripts/prepare-floating-audit.py
 python3 scripts/prepare-floating-tuples.py
-python3 scripts/prepare-sqrt-audit.py
 python3 scripts/prepare-scalar-bitcasts.py
 python3 scripts/prepare-tag-to-enum-audit.py
 python3 scripts/prepare-unsafe-equality-audit.py
@@ -40,6 +39,7 @@ fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
 "$fixture_bin" int32-byte-offset
 "$fixture_bin" explicit64-arrays
 "$fixture_bin" fused-floating
+"$fixture_bin" sqrt
 "$fixture_bin" original-stack
 "$fixture_bin" original-stack-formatter
 "$fixture_bin" boxed-array-extensions

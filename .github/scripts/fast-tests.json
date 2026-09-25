@@ -792,6 +792,7 @@
         "thc.runtime.FloatingAddressTest",
         "thc.runtime.FloatingByteOffsetTest",
         "thc.runtime.FusedFloatingTest",
+        "thc.runtime.SqrtPrimitiveTest",
         "thc.runtime.WordFloatingTest",
         "thc.runtime.OriginalStackFormatterTest",
         "thc.runtime.CoreContinuationNativeTest",
@@ -856,6 +857,10 @@
     },
     "test/haskell-fixtures/WordFloatingFixtures.hs": {
       "junit": ["thc.runtime.WordFloatingTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/SqrtFixtures.hs": {
+      "junit": ["thc.runtime.SqrtPrimitiveTest"],
       "python": []
     },
     "test/haskell-fixtures/WideCharAddressFixtures.hs": {

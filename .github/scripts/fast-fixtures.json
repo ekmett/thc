@@ -61,9 +61,9 @@
     },
     "sqrt": {
       "junit": ["thc.runtime.SqrtPrimitiveTest"],
-      "commands": [{"argv": ["python3", "scripts/prepare-sqrt-audit.py"]}],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "sqrt"]}],
       "outputs": ["build/sqrt"],
-      "sources": ["scripts/prepare-sqrt-audit.py", "compiler/test-fixtures/SqrtAudit.hs", "compiler/test-fixtures/SqrtAuditNative.hs"]
+      "sources": ["test/haskell-fixtures/SqrtFixtures.hs", "test/haskell-fixtures/Main.hs", "compiler/test-fixtures/SqrtAudit.hs", "compiler/test-fixtures/SqrtAuditNative.hs"]
     },
     "scalar-bitcasts": {
       "junit": ["thc.runtime.ScalarBitCastTest"],

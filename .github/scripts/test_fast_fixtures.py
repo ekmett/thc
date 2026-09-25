@@ -435,7 +435,10 @@ class FixturePreparationTest(unittest.TestCase):
                 self.assertTrue(all((project / name).is_file() for name in group["sources"]))
                 for command in group["commands"]:
                     argv = command["argv"]
-                    self.assertIn(" ".join((argv[2] if argv[:2] == ["sh", "-c"] else " ".join(argv)).split()), full)
+                    if argv[:5] == ["cabal", "run", "exe:thc-fixtures", "--offline", "--"] and len(argv) == 6:
+                        self.assertIn('"$fixture_bin" ' + argv[5], full)
+                    else:
+                        self.assertIn(" ".join((argv[2] if argv[:2] == ["sh", "-c"] else " ".join(argv)).split()), full)
         # The aggregate producer also runs the recursive-layout rejection
         # checks. Keep their inputs and outputs in the same receipt.
         sums = manifest["groups"]["sum-results"]

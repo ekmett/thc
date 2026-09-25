@@ -38,16 +38,16 @@ MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar
-narrow-literal-proofs original-stack original-stack-formatter original-stdio resize-bytearrays scalar-bitcasts short-bytes-slices
+narrow-literal-proofs original-stack original-stack-formatter original-stdio resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops synchronous-exceptions tuple-arithmetic word-floating""".split()
 PROVENANCE_DIRS = """aggregate-layout empty-join-input empty-tuple-input
-floating-tuple sqrt state-tuple sum-layout sum-result tag-to-enum tuple-input
+floating-tuple state-tuple sum-layout sum-result tag-to-enum tuple-input
 tuple-join tuple-return unsafe-equality simd simd-int32x4 simd-floatx4
 simd-doublex2 simd-int16x8 simd-int8x16 simd-word8x16 simd-word16x8 simd-word32x4
 simd-int32x4-multiply simd-int32x4-bytearray simd-word32x4-bytearray
 simd-floatx4-bytearray simd-doublex2-bytearray""".split()
 CHECK_DIRS = """aggregate-layout empty-join-input empty-tuple-input floating-tuple
-sqrt state-tuple sum-layout sum-result tag-to-enum tuple-input tuple-join
+state-tuple sum-layout sum-result tag-to-enum tuple-input tuple-join
 tuple-return unsafe-equality""".split()
 CORE_DIRS = ("build/core", "build/aggregate-core", "build/aggregate-post-core",
              "build/cbv-post-core", "build/source-core", "build/map/core", "build/map/boot-core")
