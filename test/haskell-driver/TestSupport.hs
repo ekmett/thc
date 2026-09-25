@@ -92,9 +92,17 @@ run env cwd backend seconds = runExe env cwd backend seconds (driver env)
 runExe :: Env -> FilePath -> Maybe String -> Int -> FilePath -> [String] -> IO Result
 runExe env cwd backend seconds executable arguments = do
   original <- getEnvironment
-  let extra = case backend of
+  -- Backend-comparison controls inspect launcher metrics explicitly. Restrict
+  -- the opt-in to the driver/runtime child; native oracle commands are unchanged.
+  -- JAVA_OPTS is consumed by the installed Gradle launcher without the JVM's
+  -- JAVA_TOOL_OPTIONS announcement polluting the captured stderr.
+  let withBackend = case backend of
         Nothing -> original
         Just name -> ("THC_BACKEND", name) : filter ((/= "THC_BACKEND") . fst) original
+      extra = if backend /= Nothing && executable `elem` [driver env, runtime env]
+        then ("JAVA_OPTS", maybe "" id (lookup "JAVA_OPTS" withBackend) ++ " -Dthc.diagnostics=true") :
+             filter ((/= "JAVA_OPTS") . fst) withBackend
+        else withBackend
       process = (Process.proc executable arguments) { Process.cwd = Just cwd, Process.env = Just extra }
   completed <- timeout (seconds * 1000000) (Process.readCreateProcessWithExitCode process "")
   case completed of
