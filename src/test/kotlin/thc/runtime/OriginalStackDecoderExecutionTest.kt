@@ -36,6 +36,7 @@ class OriginalStackDecoderExecutionTest {
             .single { it.endsWith("/OriginalStackAudit.json") }
         val source = json("build/original-stack-formatter/manifest.json")
         val originals = (source["originals"] as List<String>).map(::json)
+            .filter { it["schema"] == 1L || it["foreignLink"] != null }
         val attempt = (source["nativeOutput"] as String).substringBefore("/logs/")
         val fields = json("$attempt/originals/target-layout.json")
         val layout = TargetLayout.fromDocument(mapOf("format" to "thc-target-layout", "schema" to 1,

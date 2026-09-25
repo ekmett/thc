@@ -269,10 +269,13 @@ class OriginalStackConsumerProofTest {
             require(file.toPath().startsWith(formatterRoot) && path.endsWith(".json"))
             read(path)
         }
-        require(originals.any { it["module"] == "GHC.Internal.Stack.Decode" })
+        // Archive-only C modules remain unavailable. Strict linking below must
+        // expose any dependency on one rather than silently importing its Core.
+        val executable = originals.filter { it["schema"] == 1L || it["foreignLink"] != null }
+        require(executable.any { it["module"] == "GHC.Internal.Stack.Decode" })
         for (paths in (manifest()["stages"] as Map<String, List<String>>).values) {
             val consumer = read(paths.single { it.endsWith("/OriginalStackAudit.json") })
-            val linked = CoreModules.reachable(CoreModules.merge(originals + consumer),
+            val linked = CoreModules.reachable(CoreModules.merge(executable + consumer),
                 "renderOriginalNames", strictLink = true)
             val ids = (linked["bindings"] as List<Map<String, Any?>>).map { it["id"] }.toSet()
             assertTrue(ids.any { it is String && it.startsWith("ghc-internal:GHC.Internal.Stack.Decode.") })
