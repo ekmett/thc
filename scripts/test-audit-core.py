@@ -633,7 +633,7 @@ class AuditTest(unittest.TestCase):
             proof['components'][0] = tuple_rep(LONG)
             self.assert_shape_rejected(module)
 
-    def test_zero_arity_tuple_join_cannot_capture_an_aggregate(self):
+    def test_zero_arity_tuple_join_reads_lexical_aggregate_slots_only_when_supported(self):
         module, join = tuple_join_fixture(True)
         producer = module['bindings'][1]['expr']
         region = producer[2]
@@ -643,6 +643,9 @@ class AuditTest(unittest.TestCase):
         producer[2] = ['case', original, 'held', [['default', None, [], region, dict(binders=[])]],
                        dict(rep=proof, binder=dict(id='held', lifted=False, rep=proof))]
         report = run_tuple(module)
+        self.assertTrue(report['accepted'], report['issues'])
+        disabled = dict(TUPLE_CAP, aggregateJoinCaptures=[])
+        report = audit_core.Audit([('join', module)], disabled).run(['root'])
         self.assertIn('unboxed-tuple join capture', [i['detail'] for i in report['issues']])
 
     def test_inner_join_calls_outer_tuple_result_join_without_capturing_tuple(self):
@@ -657,13 +660,15 @@ class AuditTest(unittest.TestCase):
                      dict(rep=copy.deepcopy(proof))]
         report = run_tuple(module)
         self.assertTrue(report['accepted'], report['issues'])
-        # A real tuple binder in the same lexical position remains unsupported.
+        # A real tuple binder in the same lexical position needs the capture capability.
         inner['expr'] = [*var('held'), dict(rep=copy.deepcopy(proof))]
         original = outer['expr']
         producer[2] = ['case', original, 'held',
                        [['default', None, [], region, dict(binders=[])]],
                        dict(rep=proof, binder=dict(id='held', lifted=False, rep=proof))]
-        self.assertIn('unboxed-tuple join capture', [i['detail'] for i in run_tuple(module)['issues']])
+        disabled = dict(TUPLE_CAP, aggregateJoinCaptures=[])
+        report = audit_core.Audit([('join', module)], disabled).run(['root'])
+        self.assertIn('unboxed-tuple join capture', [i['detail'] for i in report['issues']])
 
     def test_join_lambda_calls_outer_tuple_result_join_without_heap_capture(self):
         module, outer = tuple_join_fixture(True)
@@ -681,6 +686,24 @@ class AuditTest(unittest.TestCase):
         region[3] = ['let', False, [inner], call, dict(rep=copy.deepcopy(proof))]
         report = run_tuple(module)
         self.assertTrue(report['accepted'], report['issues'])
+    def test_join_prefix_does_not_exempt_a_residual_closure_capture(self):
+        module, join = tuple_join_fixture(True)
+        producer = module['bindings'][1]['expr']
+        region = producer[2]
+        original = join['expr']
+        proof = join['joinResultRep']
+        closure = ['lam', [dict(id='closure-arg', lifted=False, rep=LONG)],
+                   [*var('held'), dict(rep=proof)], dict(rep=CLOSURE, resultRep=proof)]
+        call = ['app', closure, [['lit', 'int', '1', dict(rep=LONG)]],
+                [False], False, False, dict(rep=proof)]
+        join['expr'] = ['lam', [dict(id='join-arg', lifted=False, rep=LONG)], call,
+                        dict(rep=CLOSURE, resultRep=proof)]
+        join['joinValueArity'] = 1
+        producer[2] = ['case', original, 'held',
+                       [['default', None, [], region, dict(binders=[])]],
+                       dict(rep=proof, binder=dict(id='held', lifted=False, rep=proof))]
+        report = run_tuple(module)
+        self.assertIn('unboxed-tuple capture', [i['detail'] for i in report['issues']])
 
     def test_recursive_join_identity_shadows_outer_tuple_for_capture_checks(self):
         module, join = tuple_join_fixture()

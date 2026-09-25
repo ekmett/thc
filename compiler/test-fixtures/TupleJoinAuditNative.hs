@@ -18,5 +18,6 @@ main = do
   emit "nestedForwardCase" T.nestedForwardCase inputs
   emit "emptyCase" T.emptyCase inputs
   emit "nestedCase" T.nestedCase inputs
+  emit "capturePairCase" T.capturePairCase inputs
   emit "recursiveDepth" T.recursiveDepth [0,1,20000]
   emit "mutualDepth" T.mutualDepth [0,1,20001]
