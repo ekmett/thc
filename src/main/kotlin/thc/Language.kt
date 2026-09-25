@@ -28,6 +28,7 @@ import com.oracle.truffle.api.nodes.RootNode
 import thc.runtime.Program
 import thc.runtime.BytecodeProgram
 import thc.runtime.ExecutableProgram
+import thc.runtime.CoreArithmeticExceptions
 import thc.runtime.CoreRepresentations
 import thc.runtime.CoreRepresentation
 import thc.runtime.IoMainRoot
@@ -159,6 +160,7 @@ object CoreModules {
                         visit(alt[3] as List<Any?>, bound + (expr[2] as String) + (alt[2] as List<String>))
                     }
                 }
+                "prim" -> CoreArithmeticExceptions.payload(expr[1] as String)?.let { reference(it, emptySet()) }
                 "con" -> constructor(expr[1] as String)
             }
         }

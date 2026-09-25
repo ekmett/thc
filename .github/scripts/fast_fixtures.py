@@ -23,13 +23,13 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "1651fa18356d9acc433cbd6f955c346fb7b58f91d36aa7cbe85b679c598e7d1e"
+FULL_PREPARATION_PLAN = "0f2bacb17eae22bc81e84f7fff8fb3f555ce246e0c2d031f25d06b2605b6bed6"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
     "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/uncaught-self", "build/small-arrays", "build/floating-address",
     "build/floating-byte-offset", "build/narrow-byte-offset", "build/int32-byte-offset",
-    "build/explicit64-arrays", "build/mask-functions", "build/interface-core",
+    "build/arithmetic-exceptions", "build/explicit64-arrays", "build/mask-functions", "build/interface-core",
     "build/original-fd-ready",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
@@ -87,6 +87,13 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/uncaught-self/pre/core/UncaughtSelfAudit.json", "build/uncaught-self/post/core/UncaughtSelfAudit.json",
     "build/uncaught-self/pre/audit.json", "build/uncaught-self/post/audit.json",
     "build/uncaught-self/pre/io-audit.json", "build/uncaught-self/post/io-audit.json",
+    "build/arithmetic-exceptions/manifest.json",
+    "build/arithmetic-exceptions/pre/core/ArithmeticExceptionsAudit.json",
+    "build/arithmetic-exceptions/post/core/ArithmeticExceptionsAudit.json",
+    "build/arithmetic-exceptions/pre/core/THC.InterfaceClosure.json",
+    "build/arithmetic-exceptions/post/core/THC.InterfaceClosure.json",
+    "build/arithmetic-exceptions/logs/native-oracle.stdout",
+    "build/arithmetic-exceptions/native/oracle",
     "build/mask-functions/manifest.json",
     "build/mask-functions/pre/core/MaskFunctionAudit.json",
     "build/mask-functions/post/core/MaskFunctionAudit.json",

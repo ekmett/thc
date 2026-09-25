@@ -499,6 +499,19 @@
         "compiler/test-fixtures/SynchronousExceptionsNative.hs"
       ]
     },
+    "arithmetic-exceptions": {
+      "junit": ["thc.runtime.ArithmeticExceptionsNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "arithmetic-exceptions"]}],
+      "outputs": ["build/arithmetic-exceptions"],
+      "sources": [
+        "test/haskell-fixtures/ArithmeticExceptionFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/StackFixtures.hs",
+        "src/THC/Driver/Wired.hs",
+        "compiler/test-fixtures/ArithmeticExceptionsAudit.hs",
+        "compiler/test-fixtures/ArithmeticExceptionsNative.hs"
+      ]
+    },
     "mask-functions": {
       "junit": ["thc.runtime.MaskFunctionNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "mask-functions"]}],

@@ -35,7 +35,7 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 # preparers. An additional recorded runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/java/thc/runtime/DoubleX2.java")
-MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
+MANIFEST_DIRS = """arithmetic-exceptions address-fields array-slices bignat-literals bit-primops
 boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers shrink-bytearrays fetch-add-int-array

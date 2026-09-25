@@ -230,3 +230,33 @@ internal class RaiseException(@field:Child private var exception: Expr) : Expr()
         private fun raise(payload: Any?, location: Node): Nothing = throw GuestException(payload, location)
     }
 }
+
+/** GHC 9.14.1 Exception.cmm forwards these original SomeException CAFs to raise#.
+ * The empty tuple is a strict zero-width argument, not an exception payload.
+ * Linkers must retain these dependencies even though Core has no Var for them. */
+internal object CoreArithmeticExceptions {
+    fun payload(name: String): String? = when (name) {
+        "raiseDivZero#" -> "divZeroException"
+        "raiseOverflow#" -> "overflowException"
+        "raiseUnderflow#" -> "underflowException"
+        else -> null
+    }?.let { "ghc-internal:GHC.Internal.Exception.Type.$it" }
+
+    fun validate(name: String, arguments: List<CoreRepresentation>, flags: List<*>, result: CoreRepresentation) {
+        if (payload(name) == null || arguments.size != 1 || !arguments[0].isEmptyTuple || flags != listOf(false))
+            throw RuntimeFault("$name: expected one exact unlifted empty tuple argument")
+        CoreRepresentations.requireNoVector(result, "$name result")
+        CoreRepresentations.requireNoSum(result, "$name result")
+    }
+}
+
+internal class RaiseArithmeticException(@field:Child private var argument: Expr,
+    @field:Child private var raise: RaiseException) : Expr() {
+    @field:CompilationFinal(dimensions = 1) private val emptySlots = IntArray(0)
+    init { representation = CoreRepresentation(CoreKind.UNKNOWN, evaluated = true) }
+    override fun execute(frame: VirtualFrame): Nothing {
+        argument.executeTuple(frame, emptySlots, 0)
+        raise.execute(frame)
+    }
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Nothing = execute(frame)
+}

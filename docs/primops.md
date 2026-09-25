@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 444 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 738 | No declared lowering. |
+| Partial | 447 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 735 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -39,6 +39,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 
 ## Current aggregate and address limits
 
+- Arithmetic exception primops require an exact empty unboxed tuple and retain the original ghc-internal SomeException CAF as an implicit dependency. Scalar and concrete tuple bottom results reuse guest raise semantics; vector and sum results remain rejected.
 - Address operations support managed literal or byte-array backing with checked offsets; no raw pointers. Char# byte-memory operations read an unsigned byte and write the low eight bits of WordRep. Ordered Addr# comparisons are limited to offsets in the same backing allocation or null compared with itself; unrelated addresses have no synthetic order. Exact GHC MD5 calls use checked Sulong buffer views. Original localeEncoding/hs_iconv_open/hs_iconv_close/hs_iconv use Linux GNU LP64 native iconv with context-owned opaque handles, explicit native-buffer copies, checked disjoint pointer/count/byte regions, cursor writeback and captured errno; Original base_strerror_r uses the pinned GHC wrapper, a checked writable guest buffer, and a short-lived native scratch copy with thread-local C message locale and complete buffer writeback. No general native-pointer FFI is admitted.
 - shrinkMutableByteArray# changes the logical size of a THC-owned allocation in place, preserving frozen and pinned aliases while retaining backing capacity. Managed byte, scalar, vector, address and C-bitcode buffer accesses observe the shorter bound; partial truncation of a managed pointer cell is rejected. Host-injected raw byte arrays cannot be shrunk in place.
 - fetchAddIntArray# atomically returns the previous signed machine Int and writes the wrapped sum under the allocation monitor, with a full memory barrier. It requires a THC-owned mutable byte array and a contained machine-word element; raw host arrays and pointer-cell overlaps are rejected.
@@ -633,7 +634,10 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `quotRemInt#` — arity 2 — Exact tuple arithmetic
 - [ ] `quotRemWord#` — arity 2 — Exact tuple arithmetic
 - [ ] `raise#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `raiseDivZero#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `raiseIO#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `raiseOverflow#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `raiseUnderflow#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `readAddrArray#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readAddrOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readArray#` — arity 3 — Managed lifted arrays
@@ -1181,9 +1185,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `quotWord8X16#` — arity 2
 - [ ] `quotWord8X32#` — arity 2
 - [ ] `quotWord8X64#` — arity 2
-- [ ] `raiseDivZero#` — arity 1
-- [ ] `raiseOverflow#` — arity 1
-- [ ] `raiseUnderflow#` — arity 1
 - [ ] `readDoubleArrayAsDoubleX4#` — arity 3
 - [ ] `readDoubleArrayAsDoubleX8#` — arity 3
 - [ ] `readDoubleOffAddrAsDoubleX2#` — arity 3

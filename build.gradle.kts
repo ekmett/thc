@@ -97,6 +97,8 @@ tasks.withType<Test>().configureEach {
             "synchronous-exceptions/**/*.json", "synchronous-exceptions/*.tsv", "synchronous-exceptions/native/**",
             "core-continuation/**/*.json", "core-continuation/native-output.txt",
             "uncaught-self/**/*.json", "uncaught-self/native/oracle",
+            "arithmetic-exceptions/**/*.json", "arithmetic-exceptions/logs/*.stdout", "arithmetic-exceptions/logs/*.stderr",
+            "arithmetic-exceptions/native/oracle",
             "mask-functions/**/*.json", "mask-functions/logs/*.stdout", "mask-functions/logs/*.stderr",
             "mask-functions/native/oracle",
             "interface-core/**/*.json", "interface-core/logs/*.stdout", "interface-core/logs/*.stderr",
