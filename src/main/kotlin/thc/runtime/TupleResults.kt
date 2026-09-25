@@ -20,7 +20,7 @@ internal fun requireVoidCarrier(value: Any?) {
     if (value !== Unit) fault("Invalid zero-width scalar carrier")
 }
 
-/** Typed aggregate result storage; logical tuple/sum identity is independent of physical fields. */
+/** Typed result storage; logical aggregate/vector identity is independent of physical fields. */
 internal class TupleShape(val proof: CoreRepresentation, val language: Language) {
     init { if (!proof.isTypedTransport) fault("Typed result shape requires an aggregate or vector proof") }
     @field:CompilationFinal(dimensions = 1) val components = (proof.components ?: emptyList()).toTypedArray()
@@ -94,7 +94,7 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
          * never a language instance, guest payload, node, or storage carrier. */
         fun compatibilityKey(proof: CoreRepresentation): String = signature(proof).toString().intern()
         fun requireCompatible(expected: CoreRepresentation, actual: CoreRepresentation, component: Boolean = false) {
-            if (actual.present && (component || expected.isAggregate || actual.isAggregate) && !compatible(expected, actual))
+            if (actual.present && (component || expected.isTypedTransport || actual.isTypedTransport) && !compatible(expected, actual))
                 throw RuntimeFault("Conflicting logical tuple representation proofs")
         }
         private fun signature(proof: CoreRepresentation): Any = when {

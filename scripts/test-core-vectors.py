@@ -29,9 +29,11 @@ def fixture():
     return dict(schema=1, ghc='9.14.1', bindings=[dict(id='root', name='root', lifted=True, arity=0,
         rep=CLOSURE, expr=['lam', [], body, dict(rep=CLOSURE,resultRep=LONG)])], constructors=[])
 class VectorAuditTest(unittest.TestCase):
-    def transport(self, module):
-        cap = dict(CAP, vectorTransport=['arguments', 'results', 'join-arguments', 'join-results', 'tuple-fields', 'let-bindings'])
-        return audit.Audit([('vector-transport', module)], cap).run(['root'])
+    def transport(self, module, entry='root', without=()):
+        cap = dict(CAP, vectorTransport=[boundary for boundary in
+            ('arguments', 'results', 'join-arguments', 'join-results', 'join-captures', 'tuple-fields', 'let-bindings')
+            if boundary not in without])
+        return audit.Audit([('vector-transport', module)], cap).run([entry])
 
     def transport_fixture(self, pap=False):
         module = fixture()
@@ -80,6 +82,51 @@ class VectorAuditTest(unittest.TestCase):
         bad['components'][1] = copy.deepcopy(VECTOR32_REP)
         checker.representation(bad, 'root', 'result')
         self.assertTrue(checker.issues)
+
+    def test_guest_transport_does_not_admit_host_arguments_or_results(self):
+        module = self.transport_fixture()
+        self.assertTrue(self.transport(module)['accepted'])
+        report = self.transport(module, 'worker')
+        self.assertEqual({('vector-boundary', '/entry', 'vector host argument'),
+                          ('vector-boundary', '/entry', 'vector host result')},
+                         {(i['code'], i['path'], i['detail']) for i in report['issues']})
+        worker = module['bindings'][1]
+        worker['expr'][2] = ['lit', 'int', '1', dict(rep=LONG)]
+        worker['expr'][3]['resultRep'] = LONG
+        self.assertEqual(['vector host argument'], [i['detail'] for i in self.transport(module, 'worker')['issues']])
+        worker['arity'] = 0
+        worker['expr'][1] = []
+        worker['expr'][2] = fixture()['bindings'][0]['expr'][2][1]
+        worker['expr'][3]['resultRep'] = VECTOR_REP
+        self.assertEqual(['vector host result'], [i['detail'] for i in self.transport(module, 'worker')['issues']])
+
+    def test_local_join_can_read_lexical_vector_lanes_but_residual_closure_cannot(self):
+        for arity in (0, 1):
+            module = fixture()
+            outer = module['bindings'][0]['expr'][2]
+            body = ['case', ['var', 'v', dict(rep=VECTOR_REP)], 'again',
+                    [['default', None, [], ['lit', 'int', '1', dict(rep=LONG)], dict(binders=[])]],
+                    dict(rep=LONG, binder=dict(id='again', lifted=False, rep=VECTOR_REP))]
+            rhs = body if arity == 0 else ['lam', [dict(id='arg', lifted=False, rep=LONG)], body,
+                                          dict(rep=CLOSURE, resultRep=LONG)]
+            join = dict(id='join', name='join', lifted=arity != 0, rep=LONG if arity == 0 else CLOSURE,
+                        joinValueArity=arity, joinResultRep=LONG, info=dict(joinArity=arity), expr=rhs)
+            call = ['var', 'join', dict(rep=LONG)] if arity == 0 else [
+                'app', ['var', 'join', dict(rep=CLOSURE)], [['lit', 'int', '0', dict(rep=LONG)]],
+                [False], False, False, dict(rep=LONG)]
+            outer[3][0][3] = ['let', False, [join], call, dict(rep=LONG)]
+            report = self.transport(module)
+            self.assertTrue(report['accepted'], report['issues'])
+            report = self.transport(module, without=('join-captures',))
+            self.assertIn('vector join capture', [i['detail'] for i in report['issues']])
+            closure = ['lam', [dict(id='closure-arg', lifted=False, rep=LONG)], body,
+                       dict(rep=CLOSURE, resultRep=LONG)]
+            invocation = ['app', closure, [['lit', 'int', '0', dict(rep=LONG)]], [False], False, False, dict(rep=LONG)]
+            if arity == 0:
+                join['expr'] = invocation
+            else:
+                join['expr'][2] = invocation
+            self.assertIn('vector capture', [i['detail'] for i in self.transport(module)['issues']])
 
     def test_call_transport_does_not_admit_a_heap_capture(self):
         module = fixture()
