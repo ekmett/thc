@@ -53,7 +53,9 @@ class RtsShutdownTest {
             listOf(true, true, false), false, false, mapOf("rep" to io))
         val body = caseOf(caught, io, listOf("lit", "int", "99", mapOf("rep" to integer)), integer)
         return mapOf("instrument" to true, "constructors" to listOf(
-            mapOf("id" to "Unit", "name" to "()", "arity" to 0, "tag" to 1),
+            mapOf("id" to "Unit", "name" to "()", "arity" to 0, "tag" to 1,
+                "fieldReps" to emptyList<List<String>>(), "strictFields" to emptyList<Boolean>(),
+                "fieldLifted" to emptyList<Boolean>()),
             mapOf("id" to "Pair", "name" to "(#,#)", "arity" to 2, "tag" to 1, "kind" to "unboxed-tuple")),
             "bindings" to listOf(binder("entry", closure, true) + mapOf("arity" to 2,
                 "expr" to lambda(listOf(binder("code", cint), binder("fast", cint)), body, integer))))
