@@ -3652,6 +3652,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class GeneratedInt64X4Insert {
         @Specialization public static Int64X4 apply(Int64X4 vector, long value, long index) { return Int64X4.insert(vector, value, index); }
     }
+    @Operation public static final class GeneratedInt64X4Min {
+        @Specialization public static Int64X4 apply(Int64X4 left, Int64X4 right) { return Int64X4.min(left, right); }
+    }
+    @Operation public static final class GeneratedInt64X4Max {
+        @Specialization public static Int64X4 apply(Int64X4 left, Int64X4 right) { return Int64X4.max(left, right); }
+    }
     @Operation public static final class GeneratedInt64X8Pack {
         @Specialization public static Int64X8 apply(long lane0, long lane1, long lane2, long lane3, long lane4, long lane5, long lane6, long lane7) { return new Int64X8(lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7); }
     }
@@ -3694,6 +3700,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class GeneratedInt64X8Insert {
         @Specialization public static Int64X8 apply(Int64X8 vector, long value, long index) { return Int64X8.insert(vector, value, index); }
+    }
+    @Operation public static final class GeneratedInt64X8Min {
+        @Specialization public static Int64X8 apply(Int64X8 left, Int64X8 right) { return Int64X8.min(left, right); }
+    }
+    @Operation public static final class GeneratedInt64X8Max {
+        @Specialization public static Int64X8 apply(Int64X8 left, Int64X8 right) { return Int64X8.max(left, right); }
     }
     @Operation public static final class GeneratedWord64X4Pack {
         @Specialization public static Word64X4 apply(long lane0, long lane1, long lane2, long lane3) { return new Word64X4(lane0, lane1, lane2, lane3); }
