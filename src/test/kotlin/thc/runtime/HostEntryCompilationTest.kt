@@ -38,14 +38,15 @@ class HostEntryCompilationTest {
                 else -> error("Unexpected backend: $backend")
             }
             val original = program.entryTarget("entry")
-            if (backend == "bytecode") assertEquals(BytecodeTier.CACHED,
-                (original.rootNode as BytecodeRoot).bytecodeNode.tier,
-                "The first guest instruction must start in the cached interpreter")
             val host = program.hostEntryTarget(1)
             assertFalse(host.rootNode.isCloningAllowed, "The host dispatch tree must remain stable")
             val function = context.asValue(EntryValue(program, "entry", 1))
             fun check(input: Long) = assertEquals(input + 1L, function.execute(input).asLong(), "$backend input $input")
-            repeat(20) { check(it.toLong()) }
+            check(0L)
+            if (backend == "bytecode") assertEquals(BytecodeTier.CACHED,
+                (original.rootNode as BytecodeRoot).bytecodeNode.tier,
+                "The first guest call must execute in the cached interpreter")
+            (1 until 20).forEach { check(it.toLong()) }
 
             val calls = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
                 .filter { it.callTarget === original }
