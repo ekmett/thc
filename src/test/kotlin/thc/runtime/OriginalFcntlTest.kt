@@ -39,10 +39,11 @@ class OriginalFcntlTest {
     private fun source(stage: String) = CoreModules.merge(listOf("OriginalFcntlAudit", "THC.InterfaceClosure")
         .map { json("$prefix/$stage/core/$it.json") })
     private fun context() = NativeFileProvider.createContext(emptySet(), ContextProfile.SYNCHRONOUS_TEST)
-    private fun valid(target: RootCallTarget) = assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
-    private fun compile(target: RootCallTarget) {
+    private fun valid(target: RootCallTarget, label: String = target.rootNode.name) =
+        assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), label)
+    private fun compile(target: RootCallTarget, label: String = target.rootNode.name) {
         target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
-        valid(target)
+        valid(target, "$label immediately after compilation")
     }
     private fun targets(entry: RootCallTarget): List<RootCallTarget> {
         val seen = Collections.newSetFromMap(IdentityHashMap<RootCallTarget, Boolean>())
@@ -117,7 +118,7 @@ class OriginalFcntlTest {
                         val result = Calls.target(entries.getValue(name), arrayOf(0L, *arguments)) as Long
                         if (compiled) {
                             assertTrue((executable.diagnostics().getValue("compiledEntries") as Number).toLong() > before)
-                            installed.forEach(::valid)
+                            installed.forEach { valid(it) }
                         }
                         released(language)
                         return result
@@ -135,7 +136,7 @@ class OriginalFcntlTest {
                     }
                     exercise()
                     installed = entries.values.flatMap(::targets).distinct()
-                    installed.forEach(::compile); compiled = true
+                    installed.forEach { compile(it) }; compiled = true
                     exercise() // Each target's first invocation after installation is checked.
                     assertEquals(0L, state.stdio.close(fd))
                     assertEquals(rows.first()[2], call("originalGetFlags", alias))
@@ -180,11 +181,13 @@ class OriginalFcntlTest {
                     }
                     Calls.target(target, arrayOf(0L, *args))
                     assertEquals(0L, state.stdio.fcntl(fd, abi.flagConstant(OriginalStdioOp.F_SETFL), before, true))
-                    compile(target)
+                    val label = "$backend/${original.name} raw foreign entry"
+                    compile(target, label)
                     val count = (executable.diagnostics().getValue("compiledEntries") as Number).toLong()
                     val result = Calls.target(target, arrayOf(0L, *args))
-                    assertEquals(count + 1, (executable.diagnostics().getValue("compiledEntries") as Number).toLong())
-                    valid(target); released(language)
+                    assertEquals(count + 1, (executable.diagnostics().getValue("compiledEntries") as Number).toLong(),
+                        "$label first installed invocation must enter compiled code")
+                    valid(target, "$label after first installed invocation (result=$result)"); released(language)
                     assertEquals(when (original) {
                         OriginalStdioOp.FCNTL_READ -> before
                         OriginalStdioOp.FCNTL_WRITE -> 0L
