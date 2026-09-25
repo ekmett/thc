@@ -6,8 +6,8 @@ module Int16ArrayAudit where
 
 import GHC.Exts
 
--- noinline erasure deliberately drops type certificates on retained operands.
--- Narrow literal syntax still proves the exact rep, independently of metadata.
+-- noinline erasure drops only the rewritten application's result certificate;
+-- the retained narrow literal keeps its genuine GHC argument certificate.
 {-# OPAQUE literalInt16Worker #-}
 literalInt16Worker :: Int# -> Int16# -> Int#
 literalInt16Worker x value = x +# int16ToInt# value
