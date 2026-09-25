@@ -83,6 +83,7 @@ class OriginalStdioTruncateNativeTest {
                 }
             assertEquals(expected, row["result"], "$row")
             assertEquals(expectedSize[scenario], row["size"], "$row")
+            assertEquals(if (scenario in listOf("invalid", "pipe")) -1L else 4L, row["position"], "$row")
             assertEquals("", row["stdoutHex"]); assertEquals("", row["stderrHex"])
         }
         for (stage in listOf("pre", "post")) {
@@ -131,10 +132,12 @@ class OriginalStdioTruncateNativeTest {
                                                 if (scenario == "readonly") 0L else 3L)
                                                 .also { assertTrue(it >= 3L) }
                                         }
+                                        if (fd >= 3L) assertEquals(4L, files.seek(fd, 4L, 0L))
                                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                                         assertEquals(row["result"], Calls.target(entry, arrayOf(0L, fd, row["length"])),
                                             "$stage/$backend/$name/$scenario")
                                         if (fd >= 3L) {
+                                            assertEquals(4L, files.seek(fd, 0L, 1L), "ftruncate preserves the open-file position")
                                             assertEquals(expectedSize[scenario], files.size(fd))
                                             val expectedBytes = when (scenario) {
                                                 "shrink" -> "abc".toByteArray()

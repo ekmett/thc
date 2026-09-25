@@ -62,17 +62,11 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         val abi = hostAbi
         if (fd != fd.toInt().toLong())
             throw RuntimeFault("Original truncate requires a canonical signed CInt descriptor")
-        val result = files.setSize(fd, length)
+        val result = files.truncateOriginal(fd, length)
         if (result < 0) {
             val kind = files.errorKind()
-            // POSIX ftruncate distinguishes an unknown descriptor (EBADF)
-            // from a known read-only or nonseekable descriptor (EINVAL).
-            val errno = when (kind) {
-                4L -> if (files.size(fd) >= 0) abi.error(5) else abi.error(4)
-                7L -> abi.error(5)
-                else -> abi.error(kind)
-            }
-            lastError.set(errno)
+            // Streams have no channel; POSIX ftruncate reports EINVAL here.
+            lastError.set(abi.error(if (kind == 7L) 5 else kind))
         }
         return result
     }

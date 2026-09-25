@@ -258,9 +258,16 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         (entry.channel ?: fail(7, "THC stream has no file size: $fd")).size()
     } }
 
-    @TruffleBoundary fun setSize(fd: Long, length: Long): Long = result { withDescriptor(fd) { entry ->
+    @TruffleBoundary fun setSize(fd: Long, length: Long): Long = resize(fd, length, false)
+
+    /** Original ftruncate reports EINVAL for a known read-only or stream fd.
+     * Classify it while holding that descriptor's lock, without probing the
+     * provider or racing a concurrent close. The managed API retains EBADF. */
+    @TruffleBoundary fun truncateOriginal(fd: Long, length: Long): Long = resize(fd, length, true)
+
+    private fun resize(fd: Long, length: Long, original: Boolean): Long = result { withDescriptor(fd) { entry ->
         val channel = entry.channel ?: fail(7, "Cannot resize a THC stream: $fd")
-        if (!entry.writable) fail(4, "THC file descriptor is not writable: $fd")
+        if (!entry.writable) fail(if (original) 5 else 4, "THC file descriptor is not writable: $fd")
         if (length < 0) fail(5, "Negative THC file size")
         val oldSize = channel.size()
         if (length > oldSize && entry.append) fail(7, "Extending an append-mode file is not supported")

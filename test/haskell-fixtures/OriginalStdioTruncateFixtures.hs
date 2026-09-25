@@ -84,11 +84,12 @@ prepareOriginalStdioTruncate root = do
     observed <- runLogged 10 root (directory </> "logs") label [] (root </> binary)
       [entry, scenario, root </> privateFile, root </> resultFile]
     text <- BSC.unpack <$> BS.readFile (root </> resultFile)
-    (result, observedSize) <- case lines text of
-      [status, size] | Just value <- readInteger status, Just length <- readInteger size ->
-        pure (value, length)
+    (result, observedSize, observedPosition) <- case lines text of
+      [status, size, position] | Just value <- readInteger status,
+        Just sizeValue <- readInteger size, Just offset <- readInteger position ->
+        pure (value, sizeValue, offset)
       _ -> die ("Malformed native truncate result: " ++ resultFile)
-    unless (text == show result ++ "\n" ++ show observedSize ++ "\n")
+    unless (text == show result ++ "\n" ++ show observedSize ++ "\n" ++ show observedPosition ++ "\n")
       (die ("Malformed native truncate result framing: " ++ resultFile))
     when (scenario `elem` fileScenarios) $ do
       contents <- BS.readFile (root </> privateFile)
@@ -96,10 +97,11 @@ prepareOriginalStdioTruncate root = do
             "shrink" -> "abc"
             "extend" -> "abcdef\0\0\0"
             _ -> "abcdef"
-      unless (contents == expected && fromIntegral (BS.length contents) == observedSize)
+      unless (contents == expected && fromIntegral (BS.length contents) == observedSize && observedPosition == 4)
         (die "Original truncate changed unexpected private-file bytes")
     let observation = object ["entry" .= entry, "scenario" .= scenario,
-          "length" .= lengthFor scenario, "size" .= observedSize, "result" .= result,
+          "length" .= lengthFor scenario, "size" .= observedSize, "position" .= observedPosition,
+          "result" .= result,
           "stdoutHex" .= hexBytes (commandStdout observed), "stderrHex" .= hexBytes (commandStderr observed)]
     pure (observation, observed, resultFile, [privateFile | scenario `elem` fileScenarios])
   let oracle = directory </> "oracle.json"
@@ -116,7 +118,7 @@ prepareOriginalStdioTruncate root = do
       "compiler/export.sh" (["-package", "ghc-internal"] ++ postTidy ++ roots ++ [source])
     mapM_ (\path -> do
       exists <- doesFileExist (root </> path)
-      unless exists (die ("Missing genuine GHC seek export: " ++ path))) modules
+      unless exists (die ("Missing genuine GHC truncate export: " ++ path))) modules
     audits <- forM entries $ \entry -> do
       let path = stageDir </> entry ++ ".audit.json"
       audited <- execute (stage ++ "-audit-" ++ entry) [] "python3"
