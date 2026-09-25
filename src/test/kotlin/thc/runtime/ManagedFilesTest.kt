@@ -14,6 +14,7 @@ import thc.Language
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.nio.channels.SeekableByteChannel
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -22,6 +23,9 @@ import java.nio.file.Path
 import java.nio.file.attribute.FileAttribute
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /** Managed service contract tests, not a claim of ordinary GHC Handle execution. */
 class ManagedFilesTest {
@@ -39,6 +43,211 @@ class ManagedFilesTest {
         val channels = mutableListOf<SeekableByteChannel>()
         override fun newByteChannel(path: Path, options: Set<OpenOption>, vararg attributes: FileAttribute<*>): SeekableByteChannel =
             delegate.newByteChannel(path, options, *attributes).also { channels.add(it) }
+    }
+
+    @Test fun blockedInputDoesNotHoldOtherDescriptorsOrTheirClose() {
+        val reading = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val input = object : InputStream() {
+            override fun read(): Int = error("Unexpected single-byte read")
+            override fun read(target: ByteArray, offset: Int, length: Int): Int {
+                reading.countDown()
+                check(release.await(10, TimeUnit.SECONDS))
+                target[offset] = 42
+                return 1
+            }
+        }
+        val output = ByteArrayOutputStream()
+        builder().`in`(input).out(output).build().use { context ->
+            val files = entered(context) { it }
+            val workers = Executors.newFixedThreadPool(3)
+            try {
+                val read = workers.submit<Long> {
+                    context.enter()
+                    try { files.read(0, ManagedAddress.fromByteArray(ByteArray(1)), 1) }
+                    finally { context.leave() }
+                }
+                assertTrue(reading.await(10, TimeUnit.SECONDS))
+                val close = workers.submit<Long> {
+                    context.enter()
+                    try { files.close(0) } finally { context.leave() }
+                }
+                val write = workers.submit<Long> {
+                    context.enter()
+                    try { files.write(1, bytes("ready"), 5) } finally { context.leave() }
+                }
+                assertEquals(5L, write.get(3, TimeUnit.SECONDS))
+                assertEquals("ready", output.toString(Charsets.UTF_8))
+                assertFalse(close.isDone, "Close must wait for the read on its own descriptor")
+                release.countDown()
+                assertEquals(1L, read.get(10, TimeUnit.SECONDS))
+                assertEquals(0L, close.get(10, TimeUnit.SECONDS))
+            } finally {
+                release.countDown()
+                workers.shutdownNow()
+                assertTrue(workers.awaitTermination(10, TimeUnit.SECONDS))
+            }
+        }
+    }
+
+    @Test fun providerCallbackCanUseAClaimedDescriptorWithoutRegistryLockInversion() {
+        val target = directory.resolve("provider.bin")
+        val other = directory.resolve("callback.bin")
+        Files.writeString(target, "target")
+        Files.writeString(other, "other")
+        val outputEntered = CountDownLatch(1)
+        val providerEntered = CountDownLatch(1)
+        val firstWrite = AtomicBoolean(false)
+        lateinit var files: ManagedFiles
+        lateinit var context: Context
+        val nestedOpens = Executors.newSingleThreadExecutor()
+        val output = object : ByteArrayOutputStream() {
+            override fun write(value: ByteArray, offset: Int, length: Int) {
+                if (firstWrite.compareAndSet(true, false)) {
+                    outputEntered.countDown()
+                    check(providerEntered.await(5, TimeUnit.SECONDS))
+                    val nested = nestedOpens.submit<Long> {
+                        context.enter()
+                        try { files.open(text(other.toString()), 0) } finally { context.leave() }
+                    }
+                    check(nested.get(5, TimeUnit.SECONDS) >= 3)
+                }
+                super.write(value, offset, length)
+            }
+        }
+        val backing = FileSystem.newDefaultFileSystem()
+        val fs = object : TrackingFileSystem(backing) {
+            override fun newByteChannel(path: Path, options: Set<OpenOption>, vararg attributes: FileAttribute<*>): SeekableByteChannel {
+                if (path == target) {
+                    providerEntered.countDown()
+                    check(files.write(1, bytes("nested"), 6) == 6L)
+                }
+                return super.newByteChannel(path, options, *attributes)
+            }
+        }
+        builder().allowIO(IOAccess.newBuilder().fileSystem(fs).build()).out(output).build().use { active ->
+            context = active
+            files = entered(context) { it }
+            val workers = Executors.newFixedThreadPool(2)
+            try {
+                firstWrite.set(true)
+                val write = workers.submit<Long> {
+                    context.enter()
+                    try { files.write(1, bytes("outer"), 5) } finally { context.leave() }
+                }
+                assertTrue(outputEntered.await(10, TimeUnit.SECONDS))
+                val open = workers.submit<Long> {
+                    context.enter()
+                    try { files.open(text(target.toString()), 0) } finally { context.leave() }
+                }
+                assertEquals(5L, write.get(10, TimeUnit.SECONDS))
+                assertTrue(open.get(10, TimeUnit.SECONDS) >= 3)
+                assertEquals("outernested", output.toString(Charsets.UTF_8))
+            } finally {
+                workers.shutdownNow()
+                assertTrue(workers.awaitTermination(10, TimeUnit.SECONDS))
+                nestedOpens.shutdownNow()
+                assertTrue(nestedOpens.awaitTermination(10, TimeUnit.SECONDS))
+            }
+        }
+    }
+
+    @Test fun pendingWriterClaimPreventsConcurrentTruncation() {
+        val path = directory.resolve("pending-writer.bin")
+        Files.writeString(path, "keep")
+        val channelOpened = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val first = AtomicBoolean(true)
+        val fs = object : TrackingFileSystem() {
+            override fun newByteChannel(path: Path, options: Set<OpenOption>, vararg attributes: FileAttribute<*>): SeekableByteChannel {
+                val channel = super.newByteChannel(path, options, *attributes)
+                if (first.compareAndSet(true, false)) {
+                    channelOpened.countDown()
+                    check(release.await(10, TimeUnit.SECONDS))
+                }
+                return channel
+            }
+        }
+        builder().allowIO(IOAccess.newBuilder().fileSystem(fs).build()).build().use { context ->
+            val files = entered(context) { it }
+            val workers = Executors.newFixedThreadPool(2)
+            try {
+                val writer = workers.submit<Long> {
+                    context.enter()
+                    try { files.open(text(path.toString()), 1) } finally { context.leave() }
+                }
+                assertTrue(channelOpened.await(10, TimeUnit.SECONDS))
+                val competing = workers.submit<Pair<Long, Long>> {
+                    context.enter()
+                    try {
+                        val fd = files.open(text(path.toString()), 1)
+                        fd to files.errorKind()
+                    } finally { context.leave() }
+                }
+                assertEquals(-1L to 8L, competing.get(10, TimeUnit.SECONDS))
+                assertEquals("keep", Files.readString(path), "Neither open may truncate before its writer claim")
+                release.countDown()
+                assertTrue(writer.get(10, TimeUnit.SECONDS) >= 3)
+                assertEquals("", Files.readString(path))
+                assertEquals(1, fs.channels.size)
+            } finally {
+                release.countDown()
+                workers.shutdownNow()
+                assertTrue(workers.awaitTermination(10, TimeUnit.SECONDS))
+            }
+        }
+    }
+
+    @Test fun disposalDuringOpenClosesUnregisteredChannelWithoutTruncating() {
+        val path = directory.resolve("closing-open.bin")
+        Files.writeString(path, "keep")
+        val channelOpened = CountDownLatch(1)
+        val disposing = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val armed = AtomicBoolean()
+        val output = object : ByteArrayOutputStream() {
+            override fun flush() {
+                if (armed.get()) disposing.countDown()
+                super.flush()
+            }
+        }
+        val fs = object : TrackingFileSystem() {
+            override fun newByteChannel(path: Path, options: Set<OpenOption>, vararg attributes: FileAttribute<*>): SeekableByteChannel =
+                super.newByteChannel(path, options, *attributes).also {
+                    channelOpened.countDown()
+                    check(release.await(10, TimeUnit.SECONDS))
+                }
+        }
+        builder().allowIO(IOAccess.newBuilder().fileSystem(fs).build()).out(output).build().use { context ->
+            val files = entered(context) { it }
+            val workers = Executors.newFixedThreadPool(2)
+            try {
+                val opening = workers.submit<Pair<Long, Long>> {
+                    context.enter()
+                    try {
+                        val fd = files.open(text(path.toString()), 1)
+                        fd to files.errorKind()
+                    } finally { context.leave() }
+                }
+                assertTrue(channelOpened.await(10, TimeUnit.SECONDS))
+                armed.set(true)
+                val disposal = workers.submit {
+                    context.enter()
+                    try { files.dispose() } finally { context.leave() }
+                }
+                assertTrue(disposing.await(10, TimeUnit.SECONDS))
+                assertFalse(disposal.isDone, "Dispose must await the pending channel's cleanup")
+                release.countDown()
+                assertEquals(-1L to 4L, opening.get(10, TimeUnit.SECONDS))
+                disposal.get(10, TimeUnit.SECONDS)
+                assertFalse(fs.channels.single().isOpen)
+                assertEquals("keep", Files.readString(path))
+            } finally {
+                release.countDown()
+                workers.shutdownNow()
+                assertTrue(workers.awaitTermination(10, TimeUnit.SECONDS))
+            }
+        }
     }
 
     @Test fun standardStreamsAreContextOwnedAndClosingThemDoesNotCloseEmbeddingStreams() {
