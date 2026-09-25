@@ -1393,7 +1393,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio == OriginalStdioOp.FSTAT ||
+                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio == OriginalStdioOp.FSTAT || originalStdio == OriginalStdioOp.OPEN ||
                             originalStdio.iconv || originalStdio.strerror || originalStdio.duplication || originalStdio.locking)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
@@ -1403,6 +1403,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
                     val result = destination.single()
+                    // OPEN declares Addr#, CInt, Word32, State. Preserve that
+                    // evaluation order while sharing the transfer instruction's
+                    // long/address/long lanes (no extra BytecodeDSL family).
+                    val openPath = if (originalStdio == OriginalStdioOp.OPEN)
+                        b.createLocal("original open path", "object").also {
+                            b.beginStoreLocal(it); operands[0].emit(e); b.endStoreLocal()
+                        } else null
                     val status = originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
                         originalStdio == OriginalStdioOp.CLOSE || originalStdio == OriginalStdioOp.DUP || originalStdio == OriginalStdioOp.FSTAT || originalStdio == OriginalStdioOp.UNLOCK || originalStdio.seekConstant || originalStdio.stat
                     if (originalStdio == OriginalStdioOp.LOCALE) b.beginOriginalLocale(result)
@@ -1414,11 +1421,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     else if (originalStdio == OriginalStdioOp.SEEK) b.beginFileSeek(result)
                     else if (originalStdio == OriginalStdioOp.TRUNCATE || originalStdio == OriginalStdioOp.DUP2) b.beginFileSetSize(result)
                     else if (status) b.beginOriginalStdioStatus(result, originalStdio)
-                    else b.beginOriginalStdioTransfer(result,
-                        originalStdio == OriginalStdioOp.READ_SAFE || originalStdio == OriginalStdioOp.READ_UNSAFE)
+                    else b.beginOriginalStdioTransfer(result, originalStdio)
                     // errno and seek constants have only State#. This internal zero
                     // fills the shared instruction's unused typed descriptor lane.
-                    if (status) {
+                    if (originalStdio == OriginalStdioOp.OPEN) {
+                        operands[1].emit(e); b.emitLoadLocal(openPath!!)
+                        operands[2].emit(e); operands[3].emit(e)
+                    } else if (status) {
                         if (originalStdio == OriginalStdioOp.ERRNO || originalStdio.seekConstant ||
                             originalStdio == OriginalStdioOp.SIZEOF_STAT || originalStdio.statField)
                             b.emitLoadConstant(0L) else operands[0].emit(e)

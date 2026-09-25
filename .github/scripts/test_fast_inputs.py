@@ -21,6 +21,21 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def test_original_open_exact_artifact_and_executable_scope(self):
+        self.assertEqual(49, len(cache.ORIGINAL_OPEN_OUTPUTS))
+        self.assertIn('build/original-open/manifest.json', DECLARED_REQUIRED)
+        for name in cache.ORIGINAL_OPEN_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(name, {}), name)
+            if name == 'build/original-open/native/oracle':
+                self.assertEqual(0o755, cache.safe_mode(0o755, name))
+            else:
+                with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, name)
+        for suffix in ('native/other', 'native/cases/f', 'ghc/OriginalOpenAudit.o', 'logs/extra.stdout',
+                       'pre/unknown.audit.json', 'attempt-0/pre.json', 'pre/core/Other.json'):
+            self.assertFalse(cache.allowed_payload('build/original-open/' + suffix, {}), suffix)
+        for suffix in ('../outside', 'logs/../../outside'):
+            with self.assertRaises(cache.CacheMiss): cache.file_path(self.root, 'build/original-open/' + suffix)
+
     def test_rts_locks_exact_nonexecutable_cache_inventory(self):
         self.assertEqual(34, len(cache.ORIGINAL_RTS_LOCK_OUTPUTS))
         self.assertIn('build/original-rts-locks/manifest.json', DECLARED_REQUIRED)

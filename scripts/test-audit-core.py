@@ -1966,11 +1966,12 @@ class OriginalGmpAuditTest(unittest.TestCase):
 
 class OriginalDupAuditTest(unittest.TestCase):
     """Descriptor/RTS controls; genuine declarations live in Haskell fixtures."""
-    symbols = ('dup', 'dup2', '__hscore_fstat', 'lockFile', 'unlockFile')
+    symbols = ('dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile')
     def fixture(self, symbol):
         arguments = (('Word64Rep', 'Word64Rep', 'Word64Rep', 'Int32Rep', None) if symbol == 'lockFile' else
                      ('Word64Rep', None) if symbol == 'unlockFile' else
                      ('Int32Rep', 'AddrRep', None) if symbol == '__hscore_fstat' else
+                     ('AddrRep', 'Int32Rep', 'Word32Rep', None) if symbol == '__hscore_open' else
                      ('Int32Rep', None) if symbol == 'dup' else ('Int32Rep', 'Int32Rep', None))
         scalar = lambda rep, evaluated: dict(kind='void' if rep is None else 'address' if rep == 'AddrRep' else 'long',
             primReps=[] if rep is None else [rep], evaluated=evaluated)
@@ -1999,7 +2000,7 @@ class OriginalDupAuditTest(unittest.TestCase):
             report = self.audit(self.fixture(symbol)); self.assertTrue(report['accepted'], report)
             self.assertEqual([symbol], [c['symbol'] for c in report['foreignCalls']])
             self.assertFalse(self.audit(self.fixture(symbol), dict(CAP, managedForeignCalls=[]))['accepted'])
-        for alias in ('dup3', '_dup', 'prefixdup', '__hscore_dup', 'prefixunlockFile', 'prefixlockFile', 'prefix__hscore_fstat', 'fstat'):
+        for alias in ('dup3', '_dup', 'prefixdup', '__hscore_dup', 'prefixunlockFile', 'prefixlockFile', 'prefix__hscore_fstat', 'fstat', 'open', '__hscore_open64', 'prefix__hscore_open'):
             self.assertNotIn(alias, core_original_foreign.OPERATIONS)
             module = self.fixture('__hscore_fstat')
             self.call(module)[6]['foreignCall']['target']['symbol'] = alias
@@ -2008,7 +2009,7 @@ class OriginalDupAuditTest(unittest.TestCase):
     def test_descriptor_flags_head_and_raw_representation_forgery_reject(self):
         for symbol in self.symbols:
             mutations = [(key, value) for key in ('schema', 'arity', 'suppliedArity')
-                for value in (None, True, 2.0, '2', 0, 1 << 32)] + [('convention', 'capi'), ('safety', 'safe'), ('extra', None)]
+                for value in (None, True, 2.0, '2', 0, 1 << 32)] + [('convention', 'capi'), ('safety', 'safe'), ('safety', 'interruptible'), ('extra', None)]
             for key, value in mutations:
                 module = self.fixture(symbol); self.call(module)[6]['foreignCall'][key] = value
                 self.assertFalse(self.audit(module)['accepted'], (symbol, key, value))

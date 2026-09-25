@@ -51,6 +51,30 @@ class StdioHostAbiTest {
         assertThrows(RuntimeFault::class.java) { abi.seekConstant(OriginalStdioOp.ERRNO) }
     }
 
+    @Test fun openConstantsPreserveModeWidthAndAccessBitsWithoutInventingFlags() {
+        val original = document(); val raw = original["open"] as Map<*, *>
+        val abi = parse(original)
+        val read = (raw["O_RDONLY"] as Number).toLong()
+        val write = (raw["O_WRONLY"] as Number).toLong()
+        val both = (raw["O_RDWR"] as Number).toLong()
+        val append = (raw["O_APPEND"] as Number).toLong()
+        assertTrue(abi.openReadable(read)); assertFalse(abi.openWritable(read))
+        assertFalse(abi.openReadable(write)); assertTrue(abi.openWritable(write))
+        assertTrue(abi.openReadable(both)); assertTrue(abi.openWritable(both))
+        assertTrue(abi.openAppend(write or append)); assertFalse(abi.openAppend(write))
+        if (system == "Linux") assertDoesNotThrow { abi.requireOpenAbi() }
+        for (field in raw.keys) {
+            for (wrong in listOf(null, true, false, 1.0, "0", -1, 1L shl 31))
+                assertThrows(RuntimeFault::class.java) { parse(original + ("open" to (raw + (field to wrong)))) }
+            assertThrows(RuntimeFault::class.java) { parse(original + ("open" to (raw - field))) }
+        }
+        for (wrong in listOf(null, emptyList<Any?>(), raw + ("extra" to 0)))
+            assertThrows(RuntimeFault::class.java) { parse(original + ("open" to wrong)) }
+        for ((key, value) in listOf("modeBytes" to 8L, "O_ACCMODE" to 0L, "O_APPEND" to 0L,
+            "O_RDONLY" to both, "O_APPEND" to read.or(write).or(both)))
+            assertThrows(RuntimeFault::class.java) { parse(original + ("open" to (raw + (key to value)))) }
+    }
+
     @Test fun seekProbeRejectsMissingExtraDuplicateAndNonCIntFields() {
         val original = document()
         val seek = original["seek"] as Map<*, *>

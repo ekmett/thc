@@ -34,6 +34,14 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "original-open": {
+      "junit": ["thc.runtime.OriginalOpenTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-open"]}],
+      "outputs": ["build/original-open"],
+      "sources": ["compiler/test-fixtures/OriginalOpenAudit.hs", "compiler/test-fixtures/OriginalOpenNative.hs",
+        "test/haskell-fixtures/OriginalOpenFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "original-rts-locks": {
       "junit": ["thc.runtime.OriginalRtsLocksTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-rts-locks", "--require-supported"]}],

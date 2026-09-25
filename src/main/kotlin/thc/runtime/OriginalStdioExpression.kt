@@ -35,6 +35,12 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
             val key = operands[0].executeRequiredLong(frame)
             requireVoidCarrier(operands[1].execute(frame))
             CoreOriginalStdio.locks(this).unlock(key)
+        } else if (operation == OriginalStdioOp.OPEN) {
+            val path = operands[0].executeRequiredAddress(frame)
+            val flags = operands[1].executeRequiredLong(frame)
+            val mode = operands[2].executeRequiredLong(frame)
+            requireVoidCarrier(operands[3].execute(frame))
+            CoreOriginalStdio.current(this).open(path, flags, mode)
         } else if (operation == OriginalStdioOp.FSTAT) {
             val fd = operands[0].executeRequiredLong(frame)
             val address = operands[1].executeRequiredAddress(frame)

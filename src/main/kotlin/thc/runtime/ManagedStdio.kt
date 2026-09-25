@@ -79,6 +79,13 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return closed
     }
 
+    @TruffleBoundary fun open(path: ManagedAddress, flags: Long, mode: Long): Long {
+        val abi = hostAbi
+        val result = files.openOriginal(path, flags, mode)
+        if (result < 0) lastError.set(fileError(abi))
+        return result
+    }
+
     @TruffleBoundary fun duplicate(fd: Long): Long {
         val abi = hostAbi
         if (fd != fd.toInt().toLong()) fault("Original dup requires a canonical signed CInt descriptor")

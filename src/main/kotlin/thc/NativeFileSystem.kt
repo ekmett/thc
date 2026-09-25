@@ -15,7 +15,7 @@ import java.nio.file.attribute.FileAttribute
  * custom filesystem's permissions. Only NativeIO's fixed context factory may
  * pair this provider with metadata authority. Ordinary contexts are unchanged.
  * Standard endpoints require separate grants.
- * The first implementation is Linux-only and does not wire original fstat. */
+ * Native acquisition and opened-resource metadata are Linux-only. */
 internal class NativeFileSystem private constructor(private val host: FileSystem,
     private val standardEndpoints: Set<StandardEndpoint>) : FileSystem by host {
 
@@ -33,7 +33,7 @@ internal class NativeFileSystem private constructor(private val host: FileSystem
         // This provider itself authorizes the one native acquisition. There is
         // no delegate checkAccess/open followed by a second native open.
         // For an endpoint request the path is only the FileSystem dispatch anchor.
-        return request.acquire(if (endpoint == null) host.toAbsolutePath(path).toString() else null,
+        return request.acquire(if (endpoint == null) host.toAbsolutePath(path) else null,
             options - request)
     }
 }
