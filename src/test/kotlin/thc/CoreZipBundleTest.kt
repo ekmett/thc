@@ -213,29 +213,43 @@ class CoreZipBundleTest {
 
     @Test fun selectedInstalledLayoutRequiresItsRtsAndRecipeReceipt() {
         val layout = targetLayout()
-        fun inputs(rts: String?, recipe: String): ByteArray {
+        fun inputs(rts: String?, recipe: String?, digest: String = "a".repeat(64),
+                   receiptLayout: Map<String, Any?> = layout): ByteArray {
             val fields = mutableMapOf<String, Any>(
                 "format" to "thc-core-build-inputs", "schema" to 1, "unit" to "pkg-a",
                 "buildKey" to "0".repeat(64), "exportKey" to "1".repeat(64),
                 "compiler" to mapOf("id" to "ghc-9.14.1", "abi" to "bcbf",
                     "platform" to hostPlatform(), "way" to "dynamic-nonprofiling"),
                 "component" to mapOf("kind" to "installed-interface", "registration" to "selected"),
-                "recipeArtifacts" to listOf(mapOf("path" to recipe, "sha256" to "a".repeat(64))),
-                "targetLayout" to layout,
+                "targetLayout" to receiptLayout,
             )
             if (rts != null) fields["rtsRegistration"] = rts
+            if (recipe != null) fields["recipeArtifacts"] =
+                listOf(mapOf("path" to recipe, "sha256" to digest))
             return Json.stringify(fields).toByteArray()
         }
-        fun request(rts: String?, recipe: String) = CoreModules.request(listOf("@${manifest(listOf(
-            unit("pkg-a", layout = layout, generated = null, inputs = inputs(rts, recipe))
+        fun request(rts: String?, recipe: String?, digest: String = "a".repeat(64),
+                    receiptLayout: Map<String, Any?> = layout) = CoreModules.request(listOf("@${manifest(listOf(
+            unit("pkg-a", layout = layout, generated = null,
+                inputs = inputs(rts, recipe, digest, receiptLayout))
         ))}"), "pkg-a:Shared.entry")
         val accepted = Json.parse(request("rts-1.0.3", "compiler/target-layout.c")) as Map<*, *>
         assertEquals(8, TargetLayout.fromDocument(accepted["targetLayout"]).wordBytes)
-        for ((rts, recipe) in listOf(null to "compiler/target-layout.c",
-            "rts-1.0.3" to "other.c")) {
-            val error = assertThrows(RuntimeException::class.java) { request(rts, recipe) }
+        for ((rts, recipe, digest) in listOf(
+            Triple(null, "compiler/target-layout.c", "a".repeat(64)),
+            Triple("", "compiler/target-layout.c", "a".repeat(64)),
+            Triple("rts-1.0.3", null, "a".repeat(64)),
+            Triple("rts-1.0.3", "other.c", "a".repeat(64)),
+            Triple("rts-1.0.3", "compiler/target-layout.c", "z".repeat(64)),
+        )) {
+            val error = assertThrows(RuntimeException::class.java) { request(rts, recipe, digest) }
             assertTrue(error.message!!.contains("selected-GHC layout provenance"))
         }
+        val mismatch = assertThrows(RuntimeException::class.java) {
+            request("rts-1.0.3", "compiler/target-layout.c",
+                receiptLayout = layout + ("tablesNextToCode" to false))
+        }
+        assertTrue(mismatch.message!!.contains("receipts differ"))
     }
 
     @Test fun generatedReceiptCatalogRejectsMissingDuplicateStaleMalformedAndMismatchedSources() {
