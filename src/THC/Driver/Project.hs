@@ -237,6 +237,14 @@ prepareInstalledBundle cache driverHash context registrationUnit = do
     Left missing -> pure (Left missing)
     Right core -> do
       helperHash <- digestFile (installedHelper context)
+      compilerId <- field (installedCompiler context) "id" :: IO String
+      compilerAbi <- field (installedCompiler context) "abi" :: IO String
+      compilerPlatform <- field (installedCompiler context) "platform" :: IO String
+      let cacheName value = not (null value) &&
+            all (\c -> isAlphaNum c || c `elem` ("-._" :: String)) value
+          registered = registeredId registrationUnit
+      require (all cacheName [compilerId, compilerAbi, compilerPlatform, registered])
+        "installed Core compiler or registered package-cache identity is invalid"
       let unit = coreOwner core
           modules = sortOn fst (coreModules core)
           inputFields = ["format" .= ("thc-core-build-inputs" :: String), "schema" .= (1 :: Int),
@@ -251,8 +259,9 @@ prepareInstalledBundle cache driverHash context registrationUnit = do
                              "options" .= (["post-tidy", "unit-qualified", "source-notes", "dynamic"] :: [String])]
           exportKey = shaHex (BL.toStrict (encode ("thc-installed-interface-v1" :: String, buildKey, exporter)))
           inputs = object (inputFields ++ ["buildKey" .= buildKey, "exportKey" .= exportKey, "exporter" .= exporter])
-          directory = cache </> "core-bundles/v1/installed" </> exportKey
-          destination = directory </> (shaHex (BL.toStrict (encode (registeredId registrationUnit))) ++ ".zip")
+          directory = cache </> "core-bundles/v1" </>
+            (compilerId ++ "-" ++ compilerAbi ++ "-" ++ compilerPlatform) </> exportKey
+          destination = directory </> (registered ++ ".zip")
           members = [("core/" ++ show index ++ ".json", bytes) | (index, (_, bytes)) <- zip [0 :: Int ..] modules]
           refs = [object ["name" .= name, "boundary" .= boundary, "path" .= member, "sha256" .= shaHex bytes]
                  | ((name, bytes), (member, _)) <- zip modules members]
