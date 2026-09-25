@@ -3576,6 +3576,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "narrow8Word#", "narrow16Word#", "narrow32Word#" -> "NarrowWord"
             "int2Word#", "word2Int#", "ord#", "chr#", "intToInt64#", "int64ToInt#" -> "Identity"
             "raise#" -> "Raise"
+            "addr2Int#" -> "AddressToInt"
+            "int2Addr#" -> "IntToAddress"
             "plusAddr#" -> "AddressPlus"
             "eqAddr#" -> "AddressEqual"
             "neAddr#" -> "AddressNotEqual"
@@ -3585,7 +3587,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
         val unary = operation in setOf("PopulationCountWidth", "CountLeadingZerosWidth", "CountTrailingZerosWidth", "ByteSwapWidth", "BitReverseWidth", "NegateNarrowInt", "BitNotNarrowWord", "Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount",
-            "Narrow8", "Narrow16", "Narrow32", "NarrowWord", "Identity", "Raise")
+            "Narrow8", "Narrow16", "Narrow32", "NarrowWord", "Identity", "Raise", "AddressToInt", "IntToAddress")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         if (operation == "Identity") return evaluated(Expression { e -> e.builder.beginToLong(); args[0].emit(e); e.builder.endToLong() })
         return evaluated(Expression { e ->
@@ -3644,6 +3646,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "ShiftLeft" -> b.beginShiftLeft(); "ShiftRight" -> b.beginShiftRight(); "ShiftRightUnsigned" -> b.beginShiftRightUnsigned()
                 "Narrow8" -> b.beginNarrow8(); "Narrow16" -> b.beginNarrow16(); "Narrow32" -> b.beginNarrow32()
                 "NarrowWord" -> b.beginNarrowWord(wordMask)
+                "AddressToInt" -> b.beginAddressToInt(); "IntToAddress" -> b.beginIntToAddress()
                 "Raise" -> b.beginRaise(); "AddressPlus" -> b.beginAddressPlus()
                 "AddressIndexByte" -> b.beginAddressIndexByte(name == "indexInt8OffAddr#")
                 "AddressIndexManagedScalar" -> b.beginAddressIndexManagedScalar(
@@ -3711,6 +3714,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "ShiftLeft" -> b.endShiftLeft(); "ShiftRight" -> b.endShiftRight(); "ShiftRightUnsigned" -> b.endShiftRightUnsigned()
                 "Narrow8" -> b.endNarrow8(); "Narrow16" -> b.endNarrow16(); "Narrow32" -> b.endNarrow32()
                 "NarrowWord" -> b.endNarrowWord()
+                "AddressToInt" -> b.endAddressToInt(); "IntToAddress" -> b.endIntToAddress()
                 "Raise" -> b.endRaise(); "AddressPlus" -> b.endAddressPlus(); "AddressIndexByte" -> b.endAddressIndexByte()
                 "AddressIndexManagedScalar" -> b.endAddressIndexManagedScalar()
                 "AddressEqual" -> b.endAddressEqual(); "AddressNotEqual" -> b.endAddressNotEqual()

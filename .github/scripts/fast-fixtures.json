@@ -35,6 +35,13 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "native-addresses": {
+      "junit": ["thc.runtime.NativeAddressTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "native-addresses"]}],
+      "outputs": ["build/native-addresses/manifest.json", "build/native-addresses/oracle.json"],
+      "sources": ["compiler/test-fixtures/NativeAddressNative.hs", "test/haskell-fixtures/NativeAddressFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "original-open": {
       "junit": ["thc.runtime.OriginalOpenTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-open"]}],

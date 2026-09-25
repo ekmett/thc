@@ -1,0 +1,45 @@
+# Native address projection
+
+The pinned GHC coercions are `addr2Int# :: Addr# -> Int#` and
+`int2Addr# :: Int# -> Addr#`. THC preserves all 64 bits, including zero and the
+high bit. An arbitrary integer yields an opaque address carrier: it does not
+provide permission to read process memory or call C with that pointer.
+
+Immutable literals and pointer-free immutable allocation images can acquire a
+real native copy. The current context owns a weak backing-to-image index; every
+image owns a shared FFM arena and its address is `MemorySegment.address()`,
+never an identity hash or an encoded handle. Aliases share one image and offsets.
+A live registered integer address reconstructs the original managed alias,
+including its existing pointer-cell and stack-provenance identity. The native
+copy and original bytes cannot diverge through supported operations because
+both are read-only. The original managed reads retain their bounds checks.
+
+Integer values do not keep the allocation alive. Managed aliases keep the weak
+backing key alive; native transport views keep both backing and image alive.
+Synchronous C calls use reachability fences until return. Dead images are cleaned
+without re-entering LLVM, and context disposal closes every surviving arena.
+Previously issued immutable `CbitsBuffer` views have an explicit `toNative`
+transition to this same image. Mutable views have no such transition. Sulong
+cannot pin arbitrary JVM arrays on demand: its native-pointer conversion calls
+`toNative` and then requires `asPointer` to succeed.
+
+Mutable managed arrays and opaque StablePtr handles still reject numeric
+projection. Supporting mutable arrays requires native-primary storage or a
+complete coherent storage abstraction, including escaped raw array aliases,
+concurrent access, and real pointer-cell encoding. A temporary native copy or
+native identity token would not satisfy that contract. This increment does not
+add generic foreign-pointer ownership, arbitrary-pointer memory access, or
+native function pointers.
+
+The native Haskell oracle covers null, all-bit integer roundtrips, pointer offsets,
+one-past pointers, and alias writes across GC. Kotlin tests exercise actual native
+bytes, old and new Sulong transports, original MD5 input, owner closure, denied
+memory access, and the first installed compiled AST/bytecode entries.
+
+Primary contracts:
+
+- [Truffle InteropLibrary pointer messages](https://www.graalvm.org/truffle/javadoc/com/oracle/truffle/api/interop/InteropLibrary.html#toNative(java.lang.Object))
+- [Sulong native conversion](https://github.com/oracle/graal/blob/master/sulong/projects/com.oracle.truffle.llvm.runtime/src/com/oracle/truffle/llvm/runtime/library/internal/LLVMNativeLibraryDefaults.java)
+
+The installed `llvm-language-25.3.4.1.jar` also contains the explicit virtual
+byte-array conversion rejection in `LLVMNativePointerSupport.ToNativePointerHelper`.

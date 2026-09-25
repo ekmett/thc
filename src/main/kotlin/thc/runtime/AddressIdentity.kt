@@ -62,3 +62,13 @@ internal class GetCurrentCCS(@field:Child private var dummy: Expr,
         return null
     }
 }
+
+/** Address coercions preserve actual machine bits, never allocation identity hashes. */
+internal class AddressToInt(@field:Child private var address: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any = executeLong(frame)
+    override fun executeLong(frame: VirtualFrame): Long = address.executeRequiredAddress(frame).toNativeBits()
+}
+internal class IntToAddress(@field:Child private var bits: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any = executeAddress(frame)
+    override fun executeAddress(frame: VirtualFrame): ManagedAddress = NativeAddresses.current(this).recover(bits.executeRequiredLong(frame))
+}

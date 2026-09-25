@@ -2531,6 +2531,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             if (args.size != 1) throw RuntimeFault("Primitive arity mismatch: $name")
             RaiseException(args[0])
         }
+        "addr2Int#", "int2Addr#" -> {
+            if (args.size != 1) throw RuntimeFault("Primitive arity mismatch: $name")
+            if (name == "addr2Int#") AddressToInt(args[0]) else IntToAddress(args[0])
+        }
         "eqAddr#", "neAddr#" -> {
             if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
             CompareManagedAddress(args[0], args[1], name == "neAddr#")

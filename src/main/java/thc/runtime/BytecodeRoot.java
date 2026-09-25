@@ -2045,6 +2045,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation public static final class AddressToInt {
+        @Specialization public static long convert(ManagedAddress address) { return address.toNativeBits(); }
+        @Fallback public static long invalid(Object address) { throw fail("Expected an Addr# carrier"); }
+    }
+    @Operation public static final class IntToAddress {
+        @Specialization public static ManagedAddress convert(long bits) { return NativeAddresses.current(null).recover(bits); }
+        @Fallback public static ManagedAddress invalid(Object bits) { throw fail("Expected primitive Long"); }
+    }
     @Operation public static final class AddressPlus {
         @Specialization public static ManagedAddress plus(ManagedAddress address, long displacement) { return address.plus(displacement); }
         @Fallback public static ManagedAddress invalid(Object address, Object displacement) {
