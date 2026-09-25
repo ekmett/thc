@@ -109,7 +109,7 @@ class ContractAndModelTests(unittest.TestCase):
         self.assertEqual(recipe.mathematical('preciseCatch', 2**63 - 1), -2**63 + 16)
         self.assertEqual(recipe.mathematical('restoreAndRethrow', -2**63), 41)
         self.assertEqual(recipe.mathematical('restoreAndRethrow', 2**63 - 1), -217)
-        expected = [17, 19, 23, 87, 31, 37, 41, 34, 212, 7, 5]
+        expected = [17, 43, 19, 23, 87, 31, 37, 41, 34, 212, 7, 5]
         self.assertEqual([recipe.mathematical(name, 0) for name in recipe.ENTRIES], expected)
         self.assertTrue(all(recipe.mathematical('handlerMaskState', x) == 34 for x in recipe.input_vectors()))
         self.assertEqual(len(recipe.input_vectors()), 169)
