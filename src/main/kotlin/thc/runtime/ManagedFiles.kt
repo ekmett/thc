@@ -477,13 +477,13 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         val size = TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.nullAddress(), 0)
         destination.requireByteRegion(size, writable = true)
         return result { withDescriptor(fd) { entry ->
-            fun observe(): Long {
+            fun observe(): Long = destination.withNativeBorrow {
                 destination.requireByteRegion(size, writable = true)
                 val resource = entry.native ?: fail(7, "THC descriptor has no native terminal capability: $fd")
                 val image = ByteArray(size.toInt()) { destination.readWord8(it.toLong()).toByte() }
                 try { resource.readTermios(image) }
                 finally { ManagedAddress.fromByteArray(image).copyNonOverlappingTo(destination, size) }
-                return 0L
+                0L
             }
             val allocation = destination.cbitsOwner()
             if (allocation == null) observe() else synchronized(allocation) { observe() }
@@ -496,12 +496,12 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         val size = TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.nullAddress(), 0)
         source.requireByteRegion(size, writable = false)
         return result { withDescriptor(fd) { entry ->
-            fun applyImage(): Long {
+            fun applyImage(): Long = source.withNativeBorrow {
                 source.requireByteRegion(size, writable = false)
                 val resource = entry.native ?: fail(7, "THC descriptor has no native terminal capability: $fd")
                 val image = ByteArray(size.toInt()) { source.readWord8(it.toLong()).toByte() }
                 resource.writeTermios(action, image)
-                return 0L
+                0L
             }
             val allocation = source.cbitsOwner()
             if (allocation == null) applyImage() else synchronized(allocation) { applyImage() }
