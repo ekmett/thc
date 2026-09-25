@@ -2057,6 +2057,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (fn[0] == "prim" && fn[1] == "noDuplicate#") {
                 CoreNoDuplicate.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 NoDuplicate(argument(args[0], scope, false), tupleProof)
+            } else if (fn[0] == "prim" && fn[1] == "yield#") {
+                CoreYield.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                YieldThread(argument(args[0], scope, false), enableAsync, tupleProof)
             } else if (fn[0] == "prim" && fn[1] == "getCurrentCCS#") {
                 CoreCurrentCCS.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 GetCurrentCCS(argument(args[0], scope, true), argument(args[1], scope, false), tupleProof)

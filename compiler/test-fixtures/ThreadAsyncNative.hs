@@ -26,4 +26,10 @@ main = do
       case (uncaught, self, masked) of
         (5, -1, -1) -> putStr "5\n-1\n-1\n"
         other -> error ("public thread extra delivery failed: " ++ show other)
-    _ -> error "Usage: ThreadAsyncNative [extras]"
+    ["yield"] -> do
+      ordinary <- evaluate (I# (Audit.yieldProbe 0#))
+      masked <- evaluate (I# (Audit.yieldMasked 0#))
+      case (ordinary, masked) of
+        (37, 39) -> putStr "37\n39\n"
+        other -> error ("yield# State/mask oracle failed: " ++ show other)
+    _ -> error "Usage: ThreadAsyncNative [extras|yield]"

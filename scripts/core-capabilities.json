@@ -372,6 +372,7 @@
     "myThreadId#": 1,
     "killThread#": 3,
     "noDuplicate#": 1,
+    "yield#": 1,
     "packInt64X2#": 1,
     "unpackInt64X2#": 1,
     "broadcastInt64X2#": 1,

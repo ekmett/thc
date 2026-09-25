@@ -1547,6 +1547,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeWord8X32OffAddr#` — arity 4
 - [ ] `writeWord8X64Array#` — arity 4
 - [ ] `writeWord8X64OffAddr#` — arity 4
-- [ ] `yield#` — arity 1
+- [x] `yield#` — arity 1; yields the Java guest thread after validating State#. Async-enabled roots poll at a resumable guest cut after the effect.
 
 </details>
