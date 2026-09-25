@@ -247,6 +247,12 @@ class Audit:
         return isinstance(rep, dict) and rep.get('aggregate') == 'unboxed-tuple'
 
     @classmethod
+    def is_tuple_value(cls, rep):
+        # A local join can return a tuple without denoting one. Its binding is
+        # a tail-call target; a reference to it captures control flow, not fields.
+        return cls.is_tuple(rep) and '_join_arity' not in rep
+
+    @classmethod
     def is_empty_tuple(cls, rep):
         return (cls.is_tuple(rep) and rep.get('kind') == 'unknown' and
                 rep.get('components') == [] and rep.get('primReps') == [])
@@ -904,7 +910,7 @@ class Audit:
                     if self.is_tuple(binder.get('rep')) and binder.get('lifted') is not False:
                         self.issue('application-levity', owner, path, 'Tuple formal must be unlifted')
                 captured = {key for key in (self.free_variables(expr[2]) - ids) & bound.keys()
-                            if self.is_tuple(bound[key])}
+                            if self.is_tuple_value(bound[key])}
                 if any(is_sum(bound[key]) for key in (self.free_variables(expr[2]) - ids) & bound.keys()):
                     self.issue('aggregate-boundary', owner, path, 'unboxed-sum capture')
                 vector_captures = {key for key in (self.free_variables(expr[2]) - ids) & bound.keys() if is_vector(bound[key])}
@@ -1378,7 +1384,7 @@ class Audit:
                         captured = (self.free_variables(binding['expr']) - (ids if recursive else set())) & bound.keys()
                         if any(is_sum(bound[key]) for key in captured):
                             self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-sum join capture')
-                        if any(self.is_tuple(bound[key]) for key in captured):
+                        if any(self.is_tuple_value(bound[key]) for key in captured):
                             self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-tuple join capture')
                         self.compare_shapes(self.expression_rep(expr), binding.get('joinResultRep'), owner,
                                             f'{path}/bindings/{index}/joinResultRep')
