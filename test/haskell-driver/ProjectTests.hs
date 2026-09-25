@@ -202,7 +202,7 @@ cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ T
 
 assertFailFrontierAudit :: Value -> IO ()
 assertFailFrontierAudit audit = do
-  assertBool "the full MonadFail backtrace closure remains outside the supported frontier"
+  assertBool "the partial ghc-internal bundle rejects unresolved MonadFail dependencies"
     (not $ bool $ field audit "accepted")
   let missing = map (string . (`field` "id")) (objects audit "missingGlobals")
       missingName name = any (name `isInfixOf`) missing
@@ -224,10 +224,23 @@ assertFailFrontierAudit audit = do
         ("/expr/" `isPrefixOf` string (field call "path"))
       assertBool (symbol ++ " is neither missing nor rejected at its call site")
         (not (missingName symbol) && not (any sameSite issues))
-  assertBool "original stack decoding remains an explicit capability frontier" $ any (\issue ->
-    string (field issue "code") == "foreign-call" &&
-    "ghc-internal:GHC.Internal.Stack.Decode." `isPrefixOf` string (field issue "owner") &&
-    string (field issue "detail") == "Original foreign-call capability disabled") issues
+  -- This pinned source subset still lacks Bignum and encoding definitions, but
+  -- the original decoder's foreign operations are now supported. Require their
+  -- admission instead of treating the old capability failures as a test result.
+  assertBool "missing source definitions explain the rejected partial bundle" (not $ null missing)
+  assertEqual "supplied definitions have no unsupported operations" [] issues
+  let stackCalls = filter (\call ->
+        "ghc-internal:GHC.Internal.Stack.Decode." `isPrefixOf` string (field call "owner"))
+        (objects audit "foreignCalls")
+  forM_ ["getStackInfoTableAddrzh", "advanceStackFrameLocationzh", "getInfoTableAddrszh",
+         "getStackClosurezh", "getSmallBitmapzh", "isArgGenBigRetFunTypezh", "getWordzh",
+         "getRetFunSmallBitmapzh", "getUnderflowFrameNextChunkzh", "getStackFieldszh",
+         "getBCOLargeBitmapzh", "getLargeBitmapzh", "getRetFunLargeBitmapzh"] $ \symbol -> do
+    let calls = filter ((== symbol) . string . (`field` "symbol")) stackCalls
+    assertBool (symbol ++ " has a validated original stack-decoder call") (not $ null calls)
+    assertBool (symbol ++ " is not missing") (not $ missingName symbol)
+    forM_ calls $ \call -> assertBool (symbol ++ " retains its Core expression location")
+      ("/expr/" `isPrefixOf` string (field call "path"))
   assertBool "genuine MonadFail/Typeable definitions are supplied"
     (not $ any missingName ["$fMonadFailIO_$cfail", "sameTypeRep", "mkTrCon"])
 
