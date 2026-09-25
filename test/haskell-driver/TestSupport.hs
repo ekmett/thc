@@ -9,8 +9,8 @@ module TestSupport
   ) where
 
 import Codec.Archive.Zip (findEntryByPath, fromEntry, toArchiveOrFail)
-import Control.Exception (bracket)
-import Control.Monad (forM)
+import Control.Exception (bracket, onException)
+import Control.Monad (forM, forM_, void)
 import Data.Aeson (Value(..), eitherDecode', eitherDecodeStrict')
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -19,16 +19,18 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.Vector as Vector
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-import Data.List (isInfixOf, isPrefixOf, isSuffixOf)
+import Data.List (isInfixOf, isPrefixOf, isSuffixOf, sort)
 import System.Directory
   ( copyFileWithMetadata, createDirectory, createDirectoryIfMissing, doesDirectoryExist
   , doesFileExist, findExecutable, getCurrentDirectory, getTemporaryDirectory
-  , listDirectory, removeFile, removePathForcibly
+  , listDirectory, pathIsSymbolicLink, removeFile, removePathForcibly
   )
 import System.Environment (getEnvironment, lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>))
-import System.IO (hClose, openTempFile)
+import System.IO (hClose, hPutStrLn, openTempFile)
+import qualified System.IO as IO
+import System.IO.Error (tryIOError)
 import qualified System.Process as Process
 import System.Timeout (timeout)
 import Test.HUnit (assertBool, assertEqual)
@@ -66,8 +68,8 @@ withFixtureNamed env fixture name action = do
   temporary <- getTemporaryDirectory
   bracket (fresh temporary) removePathForcibly $ \base -> do
     let package = base </> name
-    copyTree (root env </> fixture) package
-    action package
+    (copyTree (root env </> fixture) package >> action package)
+      `onException` reportFixtureAudits env base
   where
     fresh parent = do
       (file, handle) <- openTempFile parent "thc-driver-tests-"
@@ -75,6 +77,56 @@ withFixtureNamed env fixture name action = do
       removeFile file
       createDirectory file
       pure file
+
+-- Failed assertions must not discard the only useful strict-audit diagnosis
+-- when the surrounding bracket deletes its temporary project and bundles.
+-- Never follow links into package stores or print the large Core/dependency maps.
+reportFixtureAudits :: Env -> FilePath -> IO ()
+reportFixtureAudits env base = do
+  found <- tryIOError (findAudits base)
+  case found of
+    Left problem -> emit ("Fixture audit discovery failed: " ++ clipped (show problem))
+    Right paths -> do
+      forM_ (take 20 paths) $ \path -> do
+        contents <- tryIOError (BS.readFile path)
+        let summary = case contents of
+              Left problem -> "unreadable audit: " ++ clipped (show problem)
+              Right bytes -> case eitherDecodeStrict' bytes of
+                Left problem -> "invalid audit JSON: " ++ clipped problem
+                Right value -> auditSummary value
+        emit ("Failed fixture audit " ++ show path ++ "\n" ++ summary)
+      if length paths > 20 then emit (show (length paths - 20) ++ " further audit files omitted") else pure ()
+  where
+    emit message = do
+      -- Either destination can be unavailable; neither may replace the original
+      -- test exception. Native/guest stdout remains solely the captured oracle.
+      void (tryIOError (hPutStrLn IO.stderr message))
+      void (tryIOError (appendFile (scratch env </> "commands.log") (message ++ "\n")))
+    findAudits directory = do
+      names <- sort <$> listDirectory directory
+      fmap concat $ forM names $ \name -> do
+        let path = directory </> name
+        linked <- pathIsSymbolicLink path
+        if linked then pure [] else do
+          nested <- doesDirectoryExist path
+          if nested then findAudits path else pure [path | "audit.json" `isSuffixOf` name]
+
+auditSummary :: Value -> String
+auditSummary value = unlines $
+  ["accepted=" ++ accepted ++ "; missingGlobals=" ++ show (length missing) ++
+   "; issues=" ++ show (length issues)] ++
+  bounded "missing" (map (\item -> "missing: " ++ clipped (string (field item "id"))) missing) ++
+  bounded "issue" (map issue issues)
+  where
+    missing = array (field value "missingGlobals")
+    issues = array (field value "issues")
+    accepted = case field value "accepted" of Bool True -> "true"; Bool False -> "false"; _ -> "unknown"
+    issue item = "issue: " ++ unwords [key ++ "=" ++ clipped (string (field item key)) |
+      key <- ["code", "owner", "path", "detail"]]
+    bounded label rows = take 100 rows ++ [show (length rows - 100) ++ " further " ++ label ++ " entries omitted" | length rows > 100]
+
+clipped :: String -> String
+clipped value = show (take 512 value) ++ if length (take 513 value) > 512 then "..." else ""
 
 copyTree :: FilePath -> FilePath -> IO ()
 copyTree source target = do

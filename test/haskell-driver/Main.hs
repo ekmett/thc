@@ -10,6 +10,7 @@ import qualified RunTests
 import qualified ProjectTests
 import qualified StoreProjectTests
 import qualified InstalledForeignTests
+import qualified TestSupportTests
 import TestSupport (setup)
 
 main :: IO ()
@@ -18,6 +19,7 @@ main = do
   counts <- runTestTT $ TestList
     [ InstalledForeignTests.tests
     , InstalledForeignTests.viewTests env
+    , TestSupportTests.tests
     , PlanTests.tests env
     , RunTests.tests env
     , ProjectTests.tests env
