@@ -95,6 +95,7 @@ object CoreModules {
 
     @Suppress("UNCHECKED_CAST")
     fun reachable(module: Map<String, Any?>, entry: String, strictLink: Boolean = false): Map<String, Any?> {
+        CoreForeignArtifacts.requireExecutableInput(module)
         val bindings = module["bindings"] as List<Map<String, Any?>>
         val byId = bindings.associateBy { it["id"] as String }
         val constructorIds = (module["constructors"] as? List<Map<String, Any?>>)

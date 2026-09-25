@@ -21,7 +21,10 @@ and its generated-Core hash cover these fields as part of the module document.
 Schema 2 is deliberately **archive-only**. Older schema-1 readers reject it;
 the current checked ZIP reader validates and transports its metadata, but the
 runtime refuses it before combining modules, pruning bindings, or executing any
-guest code. Diagnostic mode does not bypass this boundary. A schema-1 document
+guest code. Both backend constructors also enforce this before their first
+property initialization; direct construction cannot bypass the loader guard.
+Unversioned synthetic backend test inputs remain allowed only without foreign
+metadata. Diagnostic mode does not bypass this boundary. A schema-1 document
 cannot hide a `foreign` field. The strict Core auditor continues to reject
 schema 2 rather than silently treating foreign registration as implemented.
 This slice does not change the ordinary source-plugin foreign-output contract.

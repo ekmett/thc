@@ -4,6 +4,10 @@ package thc
 
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import com.oracle.truffle.api.TruffleLanguage
+import org.graalvm.polyglot.Context
+import thc.runtime.Program
+import thc.runtime.BytecodeProgram
 
 class CoreForeignArtifactsTest {
     private val label = mapOf("isInitializer" to false, "unit" to "pkg", "module" to "M", "name" to "exit")
@@ -46,6 +50,42 @@ class CoreForeignArtifactsTest {
             CoreForeignArtifacts.requireExecutable(mapOf("schema" to schema))
         assertThrows(IllegalArgumentException::class.java) {
             CoreForeignArtifacts.validateArchive(mapOf("schema" to 1L, "foreign" to null))
+        }
+    }
+
+    @Test fun directBackendConstructorsRejectBeforeInitializingBindingsEvenInDiagnosticMode() {
+        Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
+            context.initialize("thc")
+            context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                for (diagnostic in listOf(false, true)) for (async in listOf(false, true)) {
+                    // Invalid bindings make initialization order observable: the
+                    // foreign guard must run before any binding decoding too.
+                    for (data in listOf(module, module + ("bindings" to "must not inspect"))) {
+                        val input = data + ("diagnosticUnsupported" to diagnostic)
+                        val ast = assertThrows(IllegalArgumentException::class.java) { Program(language, input, async) }
+                        val bytecode = assertThrows(IllegalArgumentException::class.java) { BytecodeProgram(language, input, async) }
+                        for (failure in listOf(ast, bytecode))
+                            assertTrue(failure.message!!.contains("Unsupported foreign code/registration for pkg:M"))
+                    }
+                }
+                val synthetic = mapOf("bindings" to listOf(mapOf("id" to "entry", "name" to "entry",
+                    "type" to "Int#", "arity" to 0L, "lifted" to false, "expr" to listOf("lit", "int", "7"))),
+                    "constructors" to emptyList<Any>())
+                assertEquals(7L, Program(language, synthetic).entryValue("entry"))
+                assertEquals(7L, BytecodeProgram(language, synthetic).entryValue("entry"))
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun reachabilityCannotPruneForeignRegistrationObligations() {
+        val failure = assertThrows(IllegalArgumentException::class.java) {
+            CoreModules.reachable(module, "entry")
+        }
+        assertTrue(failure.message!!.contains("Unsupported foreign code/registration for pkg:M"))
+        assertThrows(IllegalArgumentException::class.java) {
+            CoreForeignArtifacts.requireExecutableInput(module - "schema")
         }
     }
 }

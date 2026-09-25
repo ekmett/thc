@@ -5,6 +5,12 @@ package thc
 /** Archive validation is not foreign linking, initialization, or callback registration. */
 internal object CoreForeignArtifacts {
     private fun version(value: Any?, expected: Int) = value == expected || value == expected.toLong()
+
+    /** Backend tests may supply unversioned synthetic Core, but not foreign archives. */
+    fun requireExecutableInput(module: Map<*, *>) {
+        if (module.containsKey("schema") || module.containsKey("foreign")) requireExecutable(module)
+    }
+
     fun validateArchive(module: Map<*, *>) {
         if (version(module["schema"], 1)) {
             require(!module.containsKey("foreign")) { "Foreign artifacts require Core schema 2" }

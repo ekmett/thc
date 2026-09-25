@@ -1654,6 +1654,7 @@ private data class FunctionSpec(val target: RootCallTarget, val captureLayout: C
  * until every public closure/call boundary can consume a saved continuation. */
 class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>,
               private val enableAsync: Boolean = false) : ExecutableProgram {
+    init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
     private val stackTargetLayout = moduleData["targetLayout"]
     private val callDemandsEnabled = java.lang.Boolean.getBoolean(CALL_DEMANDS_PROPERTY)
     private val metrics = Metrics(moduleData["instrument"] != false)
