@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
 import thc.ForeignBitcode
 
 /** Context-owned original C code and allocation views. No process addresses escape. */
-internal class SulongCbits(env: TruffleLanguage.Env) {
+internal class SulongCbits(private val env: TruffleLanguage.Env) {
     internal data class CapiResult(val value: Long, val errno: Long)
     private val interop = InteropLibrary.getUncached()
     private fun load(env: TruffleLanguage.Env, name: String): Any {
