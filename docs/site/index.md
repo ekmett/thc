@@ -2,6 +2,11 @@
 
 # thc
 
+<figure class="thc-mascot">
+<img class="thc-bot-light" src="turbo-haskell-bot-light.png" width="240" height="240" alt="A cheerful purple robot with a lambda badge, hovering on little rocket boosters above a soft shadow.">
+<img class="thc-bot-dark" src="turbo-haskell-bot-dark.png" width="240" height="240" alt="A cheerful purple robot with a lambda badge, hovering on little rocket boosters above a soft shadow.">
+</figure>
+
 I'm experimenting with using GHC as a frontend for a high performance Haskell
 implementation on the JVM. GHC does the parsing, type checking, desugaring and
 optimization. THC takes the resulting Core and gives Graal something it can
@@ -9,6 +14,9 @@ specialize.
 
 GHC already knows quite a lot about compiling Haskell. The intention is to keep
 that information around long enough to use it.
+
+Have a look around, try the examples, or come find us in
+[##thc](https://web.libera.chat/##thc) on `irc.libera.chat`.
 
 ## Using THC
 
