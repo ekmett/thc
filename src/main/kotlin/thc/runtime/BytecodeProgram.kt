@@ -2724,7 +2724,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val scrutinee = force(compile(scrutineeExpr, scope, false))
             val binderProof = scrutinee.proof.refine(CoreRepresentations.caseBinder(expr)).copy(evaluated = true)
             if (binderProof.isSum) sumCase(expr, scrutinee, binderProof, local, tail)
-            else if (binderProof.isTuple) tupleCase(expr, scrutinee, binderProof, local, tail) else {
+            else if (binderProof.isTuple || binderProof.isVector)
+                tupleOrVectorCase(expr, scrutinee, binderProof, local, tail) else {
             val binder = bind(local, expr[2] as String, true, binderProof)
             if (scrutineeExpr[0] == "var" && scrutineeExpr[1] != expr[2]) {
                 val id = scrutineeExpr[1] as String
@@ -3468,14 +3469,20 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             lanes.forEach { e.locals.remove(it.id) }
         }, body.proof))
     }
-    private fun tupleCase(expr: List<Any?>, scrutinee: Expression, proof: CoreRepresentation, scope: Scope, tail: Boolean): Expression {
+    private fun tupleOrVectorCase(expr: List<Any?>, scrutinee: Expression, proof: CoreRepresentation, scope: Scope, tail: Boolean): Expression {
         val shape = TupleShape(proof, language)
         val fields = shape.leaves.mapIndexed { index, field -> Local(nextLocal++, "tuple field $index", field.isLong, field) }
         scope.bindTuple(expr[2] as String, proof, fields)
         val alternatives = expr[3] as List<List<Any?>>
-        if (alternatives.size != 1) throw RuntimeFault("Tuple case requires one alternative")
+        if (alternatives.size != 1) throw RuntimeFault("Tuple or vector case requires one alternative")
         val alt = alternatives.single()
         val ids = alt[2] as List<String>
+        // A vector is one logical primitive value with no data alternatives.
+        // Keep its case binder in lane locals, as for vector formals and lets,
+        // so closures and delayed arguments copy the lanes into owned captures.
+        if (proof.isVector && (alt[0] != "default" || ids.isNotEmpty() ||
+                CoreRepresentations.alternativeBinders(alt).isNotEmpty()))
+            throw RuntimeFault("Vector case requires a binder-free DEFAULT alternative")
         if (alt[0] == "data") {
             if (constructors[alt[1]]?.get("kind") != "unboxed-tuple" || ids.size != shape.components.size ||
                 (constructors[alt[1]]?.get("arity") as? Number)?.toInt() != ids.size)

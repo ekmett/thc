@@ -136,6 +136,12 @@ class SimdAstTransportTest {
                 "Vector representation lacks exact vector metadata"),
             "wrong representation" to ((heap + ("fieldTypes" to listOf(wrongRep, int))) to
                 "Constructor field type disagrees with its primitive representation"))
+        assertEquals(CoreRepresentations.parse(vector), CoreFields(heap).vectorProofs[0])
+        for ((label, mutation) in malformed) {
+            val (changed, reason) = mutation
+            val failure = assertThrows(RuntimeFault::class.java) { CoreFields(changed) }
+            assertTrue(failure.message.orEmpty().contains(reason), "CoreFields/$label: ${failure.message}")
+        }
         for (backend in listOf("ast", "bytecode")) {
             Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
                 val request = Json.stringify(mapOf("entry" to "heapDirect", "backend" to backend,
@@ -148,7 +154,11 @@ class SimdAstTransportTest {
                 val request = Json.stringify(mapOf("entry" to "heapDirect", "backend" to backend,
                     "modules" to listOf(module)))
                 val failure = assertThrows(PolyglotException::class.java) { context.eval("thc", request) }
-                assertTrue(failure.message.orEmpty().contains(reason), "$backend/$label: ${failure.message}")
+                // Known-input validation can reject the constructor application before
+                // layout construction reaches CoreFields; both enforce the exact proof.
+                val reasons = listOf(reason, "Missing or conflicting exact vector argument proof")
+                assertTrue(reasons.any { failure.message.orEmpty().contains(it) },
+                    "$backend/$label: ${failure.message}")
             }
         }
     }
