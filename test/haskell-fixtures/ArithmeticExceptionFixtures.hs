@@ -3,7 +3,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module ArithmeticExceptionFixtures (prepareArithmeticExceptions, refreshArithmeticCore) where
 
-import Control.Monad (forM, unless)
+import Control.Exception (try)
+import Control.Monad (forM, forM_, unless, when)
 import Data.Aeson (Value, FromJSON, decodeStrict', fromJSON, Result(..), object, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -15,9 +16,9 @@ import FixtureSupport (CommandResult(..), hashFile, hashes, runLogged, writeJson
 import qualified THC.Driver.Cache as Cache
 import qualified THC.Driver.Installed as Installed
 import qualified THC.Driver.Project as Project
-import System.Directory (copyFile, createDirectoryIfMissing, doesFileExist, listDirectory)
+import System.Directory (copyFile, createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
 import System.Environment (getExecutablePath, lookupEnv)
-import System.Exit (die)
+import System.Exit (ExitCode, die)
 import System.FilePath ((</>), takeExtension)
 
 field :: FromJSON a => Value -> String -> IO a
@@ -47,6 +48,14 @@ prepare coreOnly root = do
       run label env program args = runLogged 180 root (directory </> "logs") label env program args
       packagePath = directory </> "installed/packages.json"
   createDirectoryIfMissing True (root </> directory </> "installed/bundles")
+  -- A failed refresh must never leave a prior success receipt consumable. The
+  -- independent native receipt survives: --core-only neither rebuilds nor
+  -- certifies that oracle, and a later full run revalidates its exact hashes.
+  forM_ (["core-manifest.json", "manifest.json"] ++
+         [stage </> entry ++ "-audit.json" | stage <- ["pre", "post"], entry <- entries]) $ \name -> do
+    let path = root </> directory </> name
+    exists <- doesFileExist path
+    when exists (removeFile path)
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
@@ -117,10 +126,15 @@ prepare coreOnly root = do
     exported <- run (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
       "compiler/export.sh" (["-package", "ghc-internal"] ++ options ++ [source])
-    audits <- forM entries $ \entry -> run (stage ++ "-audit-" ++ entry) [] "python3"
-      ["scripts/audit-core.py", "--package-manifest", packagePath, "--entry", entry,
-       "--output", directory </> stage </> entry ++ "-audit.json", consumer]
-    pure (stage, consumer, exported : audits)
+    audits <- forM entries $ \entry -> do
+      result <- try (run (stage ++ "-audit-" ++ entry) [] "python3"
+        ["scripts/audit-core.py", "--package-manifest", packagePath, "--entry", entry,
+         "--output", directory </> stage </> entry ++ "-audit.json", consumer]) :: IO (Either ExitCode CommandResult)
+      pure (entry, result)
+    pure (stage, consumer, exported, audits)
+  let failed = [stage ++ "/" ++ entry | (stage, _, _, audits) <- stages, (entry, Left _) <- audits]
+  unless (null failed) (die ("Arithmetic strict audits failed: " ++ unwords failed ++
+    ". Reports and command logs retained in " ++ directory ++ "; no success manifest written."))
   plugin <- listDirectory (root </> "compiler/THC")
   scripts <- listDirectory (root </> "scripts")
   drivers <- listDirectory (root </> "src/THC/Driver")
@@ -132,15 +146,16 @@ prepare coreOnly root = do
         ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
         ["src/THC/Driver" </> file | file <- drivers, takeExtension file == ".hs"] ++
         ["scripts" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
-      commands = [version, helperBuild, helperLocation, registration, pluginBuild] ++ concat [cs | (_,_,cs) <- stages]
+      commands = [version, helperBuild, helperLocation, registration, pluginBuild] ++
+        concat [exported : [result | (_, Right result) <- audits] | (_,_,exported,audits) <- stages]
       artifacts = packagePath : map snd bundles ++ concatMap commandArtifacts commands ++
-        [consumer | (_,consumer,_) <- stages] ++
+        [consumer | (_,consumer,_,_) <- stages] ++
         [directory </> stage </> "core/THC.InterfaceClosure.json" | stage <- ["pre", "post"]] ++
         [directory </> stage </> entry ++ "-audit.json" | stage <- ["pre", "post"], entry <- entries]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
   let record extra = object (["schema" .= (2 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= entries,
-        "packageManifest" .= packagePath, "stages" .= Map.fromList [(stage, consumer) | (stage, consumer, _) <- stages],
+        "packageManifest" .= packagePath, "stages" .= Map.fromList [(stage, consumer) | (stage, consumer, _, _) <- stages],
         "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes,
         "commands" .= map commandRecord commands, "runtimeVerified" .= False] ++ extra)
   writeJson (root </> directory </> "core-manifest.json") (record ["coreOnly" .= True])
