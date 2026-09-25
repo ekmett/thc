@@ -414,7 +414,7 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
     private val ioTarget = ioResult?.let { IoMainRoot(language ?: error("Missing IO language"), it).callTarget }
     private val shutdownValue = shutdownEntry?.let(program::entryValue)
     private val shutdownTarget = shutdownResult?.let { IoMainRoot(language ?: error("Missing IO language"), it).callTarget }
-    private val lifecycleStarted = java.util.concurrent.atomic.AtomicBoolean()
+    private val lifecycleStarted = if (shutdownTarget == null) null else java.util.concurrent.atomic.AtomicBoolean()
     init { require((shutdownValue == null) == (shutdownTarget == null)) }
     @ExportMessage fun isExecutable() = ioTarget == null
     @ExportMessage fun execute(arguments: Array<Any?>,
@@ -469,7 +469,7 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                      @Cached(value = "create()", uncached = "create()", neverDefault = true) dispatch: HostDispatch): Any {
         if (member == "runIO" && ioTarget != null) {
             require(arguments.isEmpty()) { "runIO takes no arguments" }
-            if (shutdownTarget != null && !lifecycleStarted.compareAndSet(false, true))
+            if (lifecycleStarted != null && !lifecycleStarted.compareAndSet(false, true))
                 throw thc.runtime.RuntimeFault("Executable IO lifecycle already started")
             val threads = Language.currentState(dispatch).threads
             threads.enterCurrent()
