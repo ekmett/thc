@@ -241,6 +241,7 @@ executable thc-fixtures
     Explicit64ArrayFixtures
     FusedFloatingFixtures
     OriginalStdioFixtures
+    MutVarFixtures
     SmallArrayFixtures
     StackFixtures
     THC.Driver.Wired

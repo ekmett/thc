@@ -12,6 +12,10 @@
     ]
   },
   "leafSources": {
+    "src/main/kotlin/thc/runtime/ManagedMutVars.kt": {
+      "junit": ["thc.runtime.MutVarTest"],
+      "python": []
+    },
     "src/main/kotlin/thc/runtime/FloatingAddresses.kt": {
       "junit": ["thc.runtime.FloatingAddressTest"],
       "python": []
@@ -794,6 +798,7 @@
         "thc.runtime.PinnedPointerCellsTest",
         "thc.runtime.WideCharAddressTest",
         "thc.runtime.OriginalStdioNativeTest",
+        "thc.runtime.MutVarTest",
         "thc.runtime.OriginalStackConsumerProofTest",
         "thc.runtime.BoxedArrayExtensionsTest",
         "thc.runtime.BitPrimopsTest",
@@ -811,6 +816,14 @@
     },
     "test/haskell-fixtures/ContinuationFixtures.hs": {
       "junit": ["thc.runtime.CoreContinuationNativeTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/MutVarFixtures.hs": {
+      "junit": ["thc.runtime.MutVarTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/MutVarAudit.hs": {
+      "junit": ["thc.runtime.MutVarTest"],
       "python": []
     },
     "compiler/test-fixtures/LazyIOCallbackAudit.hs": {
