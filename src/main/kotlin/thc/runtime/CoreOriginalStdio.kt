@@ -22,6 +22,8 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     SEEK_CUR("ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR", "capi", "unsafe", listOf(null), "Int32Rep"),
     SEEK_END("ghczuwrapperZC0ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuEND", "capi", "unsafe", listOf(null), "Int32Rep"),
     CLOSE("close", "ccall", "unsafe", listOf("Int32Rep", null), "Int32Rep"),
+    DUP("dup", "ccall", "unsafe", listOf("Int32Rep", null), "Int32Rep"),
+    DUP2("dup2", "ccall", "unsafe", listOf("Int32Rep", "Int32Rep", null), "Int32Rep"),
     SEEK("ghczuwrapperZC19ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZClseek", "capi", "unsafe",
         listOf("Int32Rep", "Int64Rep", "Int32Rep", null), "Int64Rep"),
     TRUNCATE("__hscore_ftruncate", "ccall", "unsafe", listOf("Int32Rep", "Int64Rep", null), "Int32Rep"),
@@ -46,6 +48,7 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     STRERROR("base_strerror_r", "ccall", "safe", listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int32Rep");
 
     val readiness: Boolean get() = this == READY_SAFE || this == READY_UNSAFE
+    val duplication: Boolean get() = this == DUP || this == DUP2
     val seekConstant: Boolean get() = this == SEEK_SET || this == SEEK_CUR || this == SEEK_END
     val stat: Boolean get() = this == SIZEOF_STAT || statField ||
         this == IS_REG || this == IS_CHR || this == IS_BLK || this == IS_DIR || this == IS_FIFO || this == IS_SOCK
@@ -72,7 +75,7 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation.readiness || operation.seekConstant || operation.stat || operation.iconv || operation.strerror,
+        requireProof(operation.readiness || operation.seekConstant || operation.stat || operation.iconv || operation.strerror || operation.duplication,
             "strict operand operation")
         val primitive = operation.arguments[index]
         val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }

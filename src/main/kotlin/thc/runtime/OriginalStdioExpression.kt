@@ -60,11 +60,17 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
             val socket = operands[3].executeRequiredLong(frame)
             requireVoidCarrier(operands[4].execute(frame))
             CoreOriginalStdio.current(this).ready(fd, writing, milliseconds, socket)
-        } else if (operation == OriginalStdioOp.ISATTY || operation == OriginalStdioOp.CLOSE) {
+        } else if (operation == OriginalStdioOp.ISATTY || operation == OriginalStdioOp.CLOSE || operation == OriginalStdioOp.DUP) {
             val fd = operands[0].executeRequiredLong(frame)
             requireVoidCarrier(operands[1].execute(frame))
             val stdio = CoreOriginalStdio.current(this)
-            if (operation == OriginalStdioOp.CLOSE) stdio.close(fd) else stdio.isTerminal(fd)
+            if (operation == OriginalStdioOp.CLOSE) stdio.close(fd)
+            else if (operation == OriginalStdioOp.DUP) stdio.duplicate(fd) else stdio.isTerminal(fd)
+        } else if (operation == OriginalStdioOp.DUP2) {
+            val fd = operands[0].executeRequiredLong(frame)
+            val target = operands[1].executeRequiredLong(frame)
+            requireVoidCarrier(operands[2].execute(frame))
+            CoreOriginalStdio.current(this).duplicateTo(fd, target)
         } else if (operation == OriginalStdioOp.SEEK) {
             val fd = operands[0].executeRequiredLong(frame)
             val displacement = operands[1].executeRequiredLong(frame)

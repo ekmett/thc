@@ -39,10 +39,13 @@ extra-source-files:
   compiler/test-fixtures/OriginalIconvAuditNative.hs
   compiler/test-fixtures/OriginalGmpAudit.hs
   compiler/test-fixtures/OriginalGmpNative.hs
+  compiler/test-fixtures/OriginalPosixDupAudit.hs
+  compiler/test-fixtures/OriginalPosixDupAuditNative.hs
   README.md
   docs/driver.md
   docs/ghc-core.md
   docs/interface-foreign.md
+  docs/original-posix-dup.md
   compiler/ghc-core.settings
   compiler/patches/ghc-libraries-simplified-core.patch
   compiler/pinned-ghc-internal/GHC/Internal/Arr.hs
@@ -274,6 +277,7 @@ executable thc-fixtures
     SqrtFixtures
     OriginalStdioFixtures
     OriginalStdioCloseFixtures
+    OriginalPosixDupFixtures
     OriginalStdioSeekFixtures
     OriginalStrerrorFixtures
     OriginalStdioTruncateFixtures

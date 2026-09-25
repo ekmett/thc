@@ -1394,7 +1394,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat ||
-                            originalStdio.iconv || originalStdio.strerror)
+                            originalStdio.iconv || originalStdio.strerror || originalStdio.duplication)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
                                 scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
@@ -1404,7 +1404,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     val b = e.builder
                     val result = destination.single()
                     val status = originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
-                        originalStdio == OriginalStdioOp.CLOSE || originalStdio.seekConstant || originalStdio.stat
+                        originalStdio == OriginalStdioOp.CLOSE || originalStdio == OriginalStdioOp.DUP || originalStdio.seekConstant || originalStdio.stat
                     if (originalStdio == OriginalStdioOp.LOCALE) b.beginOriginalLocale(result)
                     else if (originalStdio == OriginalStdioOp.ICONV_OPEN) b.beginOriginalIconvOpen(result)
                     else if (originalStdio == OriginalStdioOp.ICONV_CLOSE) b.beginOriginalIconvClose(result)
@@ -1412,7 +1412,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     else if (originalStdio == OriginalStdioOp.STRERROR) b.beginOriginalStrerror(result)
                     else if (originalStdio.readiness) b.beginOriginalStdioReady(result)
                     else if (originalStdio == OriginalStdioOp.SEEK) b.beginFileSeek(result)
-                    else if (originalStdio == OriginalStdioOp.TRUNCATE) b.beginFileSetSize(result)
+                    else if (originalStdio == OriginalStdioOp.TRUNCATE || originalStdio == OriginalStdioOp.DUP2) b.beginFileSetSize(result)
                     else if (status) b.beginOriginalStdioStatus(result, originalStdio)
                     else b.beginOriginalStdioTransfer(result,
                         originalStdio == OriginalStdioOp.READ_SAFE || originalStdio == OriginalStdioOp.READ_UNSAFE)
@@ -1433,11 +1433,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.beginRequireIOState(); operands[3].emit(e); b.endRequireIOState()
                         b.emitLoadConstant(OriginalStdioOp.SEEK)
                         b.endBlock()
-                    } else if (originalStdio == OriginalStdioOp.TRUNCATE) {
+                    } else if (originalStdio == OriginalStdioOp.TRUNCATE || originalStdio == OriginalStdioOp.DUP2) {
                         operands.take(2).forEach { it.emit(e) }
                         b.beginBlock()
                         b.beginRequireIOState(); operands[2].emit(e); b.endRequireIOState()
-                        b.emitLoadConstant(OriginalStdioOp.TRUNCATE)
+                        b.emitLoadConstant(originalStdio)
                         b.endBlock()
                     } else operands.forEach { it.emit(e) }
                     if (originalStdio == OriginalStdioOp.LOCALE) b.endOriginalLocale()
@@ -1447,7 +1447,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     else if (originalStdio == OriginalStdioOp.STRERROR) b.endOriginalStrerror()
                     else if (originalStdio.readiness) b.endOriginalStdioReady()
                     else if (originalStdio == OriginalStdioOp.SEEK) b.endFileSeek()
-                    else if (originalStdio == OriginalStdioOp.TRUNCATE) b.endFileSetSize()
+                    else if (originalStdio == OriginalStdioOp.TRUNCATE || originalStdio == OriginalStdioOp.DUP2) b.endFileSetSize()
                     else if (status) b.endOriginalStdioStatus() else b.endOriginalStdioTransfer()
                 }
             } else if (capi != null) {

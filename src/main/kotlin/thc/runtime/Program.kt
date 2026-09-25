@@ -1986,7 +1986,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat ||
-                            originalStdio.iconv || originalStdio.strerror)
+                            originalStdio.iconv || originalStdio.strerror || originalStdio.duplication)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.representation, if (argument[0] == "var")
                                 scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)

@@ -934,6 +934,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             else if (operation.getSeekConstant()) result = CoreOriginalStdio.current(node).seekConstant(operation);
             else if (operation == OriginalStdioOp.ISATTY) result = CoreOriginalStdio.current(node).isTerminal(fd);
             else if (operation == OriginalStdioOp.CLOSE) result = CoreOriginalStdio.current(node).close(fd);
+            else if (operation == OriginalStdioOp.DUP) result = CoreOriginalStdio.current(node).duplicate(fd);
             else throw new RuntimeFault("Invalid original stdio status operation");
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
@@ -1061,6 +1062,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 long fd, long length, Object state, @Bind("$node") Node node) {
             long result;
             if (state == OriginalStdioOp.TRUNCATE) result = CoreOriginalStdio.current(node).truncate(fd, length);
+            else if (state == OriginalStdioOp.DUP2) result = CoreOriginalStdio.current(node).duplicateTo(fd, length);
             else {
                 TupleResultsKt.requireVoidCarrier(state);
                 result = CoreManagedFiles.current(node).setSize(fd, length);

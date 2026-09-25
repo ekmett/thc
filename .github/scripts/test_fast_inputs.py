@@ -21,6 +21,25 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def test_duplication_has_exact_artifact_and_executable_scope(self):
+        self.assertEqual(168, len(cache.ORIGINAL_POSIX_DUP_OUTPUTS))
+        self.assertIn('build/original-posix-dup/manifest.json', DECLARED_REQUIRED)
+        for name in cache.ORIGINAL_POSIX_DUP_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(name, {}), name)
+            if name == 'build/original-posix-dup/native/oracle':
+                self.assertEqual(0o755, cache.safe_mode(0o755, name))
+            else:
+                with self.assertRaises(cache.CacheMiss):
+                    cache.safe_mode(0o755, name)
+        for suffix in ('results/19.txt', 'results/0.extra', 'logs/native-19.stdout',
+                       'logs/pre-audit-unknown.command.json', 'pre/core/Other.json',
+                       'native/another-executable', 'native/OriginalPosixDupAudit.o',
+                       'attempt-0/oracle.json'):
+            self.assertFalse(cache.allowed_payload('build/original-posix-dup/' + suffix, {}), suffix)
+        for suffix in ('../outside', 'native/../../outside'):
+            with self.assertRaises(cache.CacheMiss):
+                cache.file_path(self.root, 'build/original-posix-dup/' + suffix)
+
     def test_simd_smoke_generated_sources_and_native_oracle_roundtrip(self):
         name = 'build/simd-capability-smoke/manifest.json'
         self.assertIn(name, DECLARED_REQUIRED)

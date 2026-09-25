@@ -23,8 +23,8 @@ class CoreOriginalStdioTest {
         assertTrue(error.message.orEmpty().startsWith("Invalid original stdio call: "), error.message)
     }
 
-    @Test fun allSevenExactContracts() {
-        assertEquals(7, OriginalStdioFixtures.signatures.size)
+    @Test fun allNineExactContracts() {
+        assertEquals(9, OriginalStdioFixtures.signatures.size)
         for (name in OriginalStdioFixtures.signatures.keys) {
             val input = Input(name)
             assertEquals(OriginalStdioFixtures.symbols.getValue(name), input.validate()!!.symbol)
@@ -101,7 +101,7 @@ class CoreOriginalStdioTest {
     }
 
     @Test fun allThreeResultProofsPreserveExactStateAndPayload() {
-        for (name in listOf("safe_write", "errno")) for (site in 0..2) {
+        for (name in listOf("safe_write", "errno", "dup", "dup2")) for (site in 0..2) {
             fun proof(input: Input): MutableMap<String, Any?> = when (site) {
                 0 -> input.descriptor["resultRep"] as MutableMap<String, Any?>
                 1 -> input.metadata["rep"]!!

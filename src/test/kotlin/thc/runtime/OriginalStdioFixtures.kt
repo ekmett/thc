@@ -10,6 +10,7 @@ internal object OriginalStdioFixtures {
         "safe_write" to "ghczuwrapperZC20ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite",
         "unsafe_write" to "ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite",
         "errno" to "__hscore_get_errno",
+        "dup" to "dup", "dup2" to "dup2",
         "seek_set" to "ghczuwrapperZC1ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuSET",
         "seek_cur" to "ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR",
         "seek_end" to "ghczuwrapperZC0ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuEND",
@@ -17,15 +18,16 @@ internal object OriginalStdioFixtures {
     val signatures = linkedMapOf(
         "safe_write" to listOf("Int32Rep", "AddrRep", "Word64Rep", null),
         "unsafe_write" to listOf("Int32Rep", "AddrRep", "Word64Rep", null),
-        "errno" to listOf(null), "seek_set" to listOf(null), "seek_cur" to listOf(null), "seek_end" to listOf(null),
+        "errno" to listOf(null), "dup" to listOf("Int32Rep", null), "dup2" to listOf("Int32Rep", "Int32Rep", null),
+        "seek_set" to listOf(null), "seek_cur" to listOf(null), "seek_end" to listOf(null),
         "strerror" to listOf("Int32Rep", "AddrRep", "Word64Rep", null))
-    fun convention(name: String) = if (name == "errno" || name == "strerror") "ccall" else "capi"
+    fun convention(name: String) = if (name in listOf("errno", "dup", "dup2", "strerror")) "ccall" else "capi"
     fun safety(name: String) = if (name == "safe_write" || name == "strerror") "safe" else "unsafe"
 
     fun scalar(rep: String?, evaluated: Boolean = true): MutableMap<String, Any?> = mutableMapOf(
         "kind" to when (rep) { null -> "void"; "AddrRep" -> "address"; "BoxedRep (Just Lifted)" -> "closure"; else -> "long" },
         "primReps" to (rep?.let { listOf(it) } ?: emptyList<String>()), "evaluated" to evaluated)
-    fun output(name: String) = if (signatures.getValue(name).size == 1 || name == "strerror") "Int32Rep" else "Int64Rep"
+    fun output(name: String) = if (name in listOf("safe_write", "unsafe_write")) "Int64Rep" else "Int32Rep"
     fun tuple(name: String, evaluated: Boolean = true): MutableMap<String, Any?> = mutableMapOf(
         "kind" to "unknown", "primReps" to listOf(output(name)), "aggregate" to "unboxed-tuple",
         "components" to mutableListOf(scalar(null), scalar(output(name))), "evaluated" to evaluated)

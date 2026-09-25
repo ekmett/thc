@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.ManagedDescriptorDupTest",
     "thc.runtime.CoreGmpForeignTest",
     "thc.runtime.SulongLimbProviderTest",
     "thc.runtime.AstContinuationTest",
@@ -95,6 +96,14 @@
         "test/haskell-fixtures/Main.hs",
         "thc.cabal"
       ]
+    },
+    "original-posix-dup": {
+      "junit": ["thc.runtime.OriginalPosixDupNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-posix-dup"]}],
+      "outputs": ["build/original-posix-dup"],
+      "sources": ["compiler/test-fixtures/OriginalPosixDupAudit.hs", "compiler/test-fixtures/OriginalPosixDupAuditNative.hs",
+        "test/haskell-fixtures/OriginalPosixDupFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-stdio-close": {
       "junit": ["thc.runtime.OriginalStdioCloseNativeTest"],

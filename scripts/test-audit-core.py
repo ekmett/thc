@@ -1964,5 +1964,71 @@ class OriginalGmpAuditTest(unittest.TestCase):
             self.reject(module)
 
 
+class OriginalDupAuditTest(unittest.TestCase):
+    """Synthetic negative controls; genuine declarations live in the Haskell fixture."""
+    def fixture(self, symbol):
+        arguments = ('Int32Rep', None) if symbol == 'dup' else ('Int32Rep', 'Int32Rep', None)
+        scalar = lambda rep, evaluated: dict(kind='void' if rep is None else 'long',
+            primReps=[] if rep is None else [rep], evaluated=evaluated)
+        parameters = [dict(id=f'a{i}', lifted=False, rep=scalar(p, True)) for i, p in enumerate(arguments)]
+        result = tuple_rep(scalar(None, True), scalar('Int32Rep', True)); result['evaluated'] = False
+        descriptor = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='ghc-internal', isFunction=True),
+            convention='ccall', safety='unsafe', arity=len(arguments), suppliedArity=len(arguments),
+            argumentReps=[scalar(p, False) for p in arguments], resultRep=copy.deepcopy(result))
+        call = ['app', ['var', 'original-foreign', dict(rep=CLOSURE)],
+            [['var', p['id'], dict(rep=copy.deepcopy(p['rep']))] for p in parameters],
+            [False] * len(arguments), False, False, dict(rep=result, foreignCall=descriptor)]
+        case = ['case', call, 'pair', [['default', None, [], [*lit(0), dict(rep=LONG)]]],
+            dict(rep=LONG, binder=dict(id='pair', lifted=False, rep=dict(result, evaluated=True)))]
+        return dict(schema=1, ghc='9.14.1', constructors=[], bindings=[dict(bind('root',
+            ['lam', parameters, case, dict(rep=CLOSURE, resultRep=LONG)]), rep=CLOSURE, arity=len(parameters))])
+
+    def call(self, module):
+        return module['bindings'][0]['expr'][2][1]
+
+    def audit(self, module, cap=CAP):
+        return audit_core.Audit([('dup-control.json', module)], cap).run(['root'])
+
+    def test_exact_original_duplication_requires_production_capability(self):
+        for symbol in ('dup', 'dup2'):
+            self.assertEqual(1, CAP['managedForeignCalls'].count(symbol))
+            report = self.audit(self.fixture(symbol)); self.assertTrue(report['accepted'], report)
+            self.assertEqual([symbol], [c['symbol'] for c in report['foreignCalls']])
+            self.assertFalse(self.audit(self.fixture(symbol), dict(CAP, managedForeignCalls=[]))['accepted'])
+        for alias in ('dup3', '_dup', 'prefixdup', '__hscore_dup', 'unlockFile', '__hscore_fstat'):
+            self.assertNotIn(alias, core_original_foreign.OPERATIONS)
+
+    def test_descriptor_flags_head_and_raw_representation_forgery_reject(self):
+        for symbol in ('dup', 'dup2'):
+            mutations = [(key, value) for key in ('schema', 'arity', 'suppliedArity')
+                for value in (None, True, 2.0, '2', 0, 1 << 32)] + [('convention', 'capi'), ('safety', 'safe'), ('extra', None)]
+            for key, value in mutations:
+                module = self.fixture(symbol); self.call(module)[6]['foreignCall'][key] = value
+                self.assertFalse(self.audit(module)['accepted'], (symbol, key, value))
+            for key, value in (('unit', 'main'), ('kind', 'dynamic'), ('isFunction', False), ('extra', None)):
+                module = self.fixture(symbol); self.call(module)[6]['foreignCall']['target'][key] = value
+                self.assertFalse(self.audit(module)['accepted'])
+            for head in ([], ['var', None], ['prim', symbol], ['var', 'a0', dict(rep=CLOSURE)], ['var', 'root', dict(rep=CLOSURE)]):
+                module = self.fixture(symbol); self.call(module)[1] = head
+                self.assertFalse(self.audit(module)['accepted'])
+            for i in range(2 if symbol == 'dup' else 3):
+                for flag in (True, 0, None):
+                    module = self.fixture(symbol); self.call(module)[3][i] = flag
+                    self.assertFalse(self.audit(module)['accepted'])
+                for stored in (False, True):
+                    for rep in ('IntRep', 'Word32Rep', 'AddrRep'):
+                        module = self.fixture(symbol)
+                        proof = module['bindings'][0]['expr'][1][i]['rep'] if stored else self.call(module)[2][i][2]['rep']
+                        proof['primReps'] = [rep]
+                        self.assertFalse(self.audit(module)['accepted'])
+                module = self.fixture(symbol); self.call(module)[2][i][2]['rep']['aggregate'] = 'unboxed-tuple'
+                self.assertFalse(self.audit(module)['accepted'])
+            for declared in (False, True):
+                module = self.fixture(symbol); meta = self.call(module)[6]
+                result = meta['foreignCall']['resultRep'] if declared else meta['rep']
+                result['components'][0]['primReps'] = ['IntRep']
+                self.assertFalse(self.audit(module)['accepted'])
+
+
 if __name__ == '__main__':
     unittest.main()

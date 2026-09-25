@@ -25,6 +25,53 @@ class OriginalStdioCallTest {
         assertEquals(0, handoff.arguments.retainedReferences()); assertEquals(0, handoff.results.retainedReferences())
     }
 
+    @Test fun duplicateOperationsExecuteInFirstInstalledCodeAndValidateStateBeforeEffects() {
+        for (backend in listOf("ast", "bytecode")) context(ByteArrayOutputStream(), ByteArrayOutputStream()).use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val module = OriginalStdioFixtures.module(listOf("dup", "dup2"))
+                val program: ExecutableProgram = if (backend == "ast") Program(language, module) else BytecodeProgram(language, module)
+                val targets = listOf("dup", "dup2").associateWith(program::entryTarget)
+                val state = Language.currentState(); val files = state.files
+                var compiled = false
+                fun call(name: String, vararg fds: Long): Long {
+                    val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                    val result = Calls.target(targets.getValue(name), arrayOf(0L, *fds.toTypedArray(), Unit)) as Long
+                    if (compiled) {
+                        assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                        targets.values.forEach(::valid)
+                    }
+                    released(language)
+                    return result
+                }
+                fun exercise() {
+                    assertEquals(-1L, state.stdio.close(-1))
+                    assertEquals(3L, call("dup", 1))
+                    assertEquals(3L, call("dup2", 1, 3))
+                    assertEquals(3L, call("dup2", 3, 3))
+                    assertEquals(71L, call("dup2", 3, 71))
+                    assertEquals(0L, files.close(3)); assertEquals(3L, call("dup", 71))
+                    assertEquals(-1L, call("dup", -1))
+                    assertEquals(-1L, call("dup2", -1, 1))
+                    assertEquals(-1L, call("dup2", 1, -1))
+                    assertEquals(StdioHostAbi.load().error(4), state.stdio.errno())
+                    assertEquals(0L, files.close(3)); assertEquals(0L, files.close(71))
+                }
+                exercise()
+                targets.values.forEach { it.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(it, true); valid(it) }
+                compiled = true; exercise()
+                for ((name, args) in listOf("dup" to arrayOf<Any?>(0L, 1L, 9L), "dup2" to arrayOf<Any?>(0L, 1L, 0L, 9L))) {
+                    assertThrows(RuntimeFault::class.java) { Calls.target(targets.getValue(name), args) }
+                    assertEquals(3L, files.duplicate(1)); assertEquals(0L, files.close(3))
+                    assertEquals(-1L, files.write(0, ManagedAddress.fromByteArray(byteArrayOf()), 0), "Malformed State cannot replace stdin")
+                }
+                assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong())
+                released(language)
+            } finally { context.leave() }
+        }
+    }
+
     @Test fun normalAndFirstInstalledCompiledCallsPreserveBytesErrnoAndState() {
         for (backend in listOf("ast", "bytecode")) {
             val out = ByteArrayOutputStream(); val err = ByteArrayOutputStream()
@@ -140,6 +187,14 @@ class OriginalStdioCallTest {
                 } }
                 for (symbol in listOf("write", "__hscore_set_errno", OriginalStdioFixtures.symbols.getValue("safe_write").replace("ZC20ZC", "ZC22ZC")))
                     assertThrows(UnsupportedCore::class.java) { load { (descriptor(it)["target"] as MutableMap<String, Any?>)["symbol"] = symbol } }
+                for (name in listOf("dup", "dup2")) {
+                    assertThrows(RuntimeFault::class.java) { load(name) {
+                        (it[2] as List<MutableList<Any?>>)[0][1] = "p${OriginalStdioFixtures.signatures.getValue(name).lastIndex}"
+                    } }
+                    assertThrows(UnsupportedCore::class.java) { load(name) {
+                        (descriptor(it)["target"] as MutableMap<String, Any?>)["symbol"] = "dup3"
+                    } }
+                }
             } finally { context.leave() }
         }
     }

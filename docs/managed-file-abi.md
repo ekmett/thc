@@ -53,8 +53,11 @@ The sticky error category/message belongs to the current context and host
 thread; getters and successful operations do not erase it.
 
 Error categories are None 0, NotFound 1, Permission 2, AlreadyExists 3,
-BadDescriptor 4, InvalidArgument 5, Other 6, Unsupported 7, ResourceBusy 8, and
-IsDirectory 9. These values are portable THC categories, not host errno values.
+BadDescriptor 4, InvalidArgument 5, Other 6, Unsupported 7, ResourceBusy 8,
+IsDirectory 9, and DescriptorLimit 10. These values are portable THC categories,
+not host errno values. The exact original [dup/dup2 bridge](original-posix-dup.md)
+shares open descriptions across independently closeable context descriptors;
+its descriptor limit maps to the host-probed `EMFILE`.
 Malformed managed memory and invalid State carriers remain runtime faults.
 
 The loader and auditor require schema 1, an exact static function target, exact

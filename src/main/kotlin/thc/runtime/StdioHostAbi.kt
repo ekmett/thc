@@ -29,12 +29,13 @@ internal class StdioHostAbi private constructor(private val errors: Map<String, 
         7L -> "ENOTSUP"
         8L -> "EBUSY"
         9L -> "EISDIR"
+        10L -> "EMFILE"
         else -> "EIO"
     })
 
     companion object {
         private val widths = mapOf("charBits" to 8L, "pointer" to 8L, "int" to 4L, "bool" to 1L, "size" to 8L, "ssize" to 8L)
-        private val errorNames = setOf("ENOENT", "EACCES", "EEXIST", "EBADF", "EINVAL", "EIO", "ENOTSUP", "EBUSY", "EISDIR", "ENOTTY", "ESPIPE")
+        private val errorNames = setOf("ENOENT", "EACCES", "EEXIST", "EBADF", "EINVAL", "EIO", "ENOTSUP", "EBUSY", "EISDIR", "ENOTTY", "ESPIPE", "EMFILE")
         private val seekNames = setOf("SEEK_SET", "SEEK_CUR", "SEEK_END")
         private fun exactInteger(value: Any?): Long? = if (value is Int || value is Long) (value as Number).toLong() else null
         private fun architecture(value: String): String = when (value.lowercase()) {

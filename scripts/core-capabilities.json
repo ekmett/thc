@@ -49,6 +49,8 @@
     "ghczuwrapperZC4ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSzuISFIFO",
     "ghczuwrapperZC3ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSzuISSOCK",
     "close",
+    "dup",
+    "dup2",
     "ghczuwrapperZC19ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZClseek",
     "__hscore_ftruncate",
     "isatty",
