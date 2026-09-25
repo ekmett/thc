@@ -94,6 +94,7 @@
 body[data-thc-section="haskell"] { background: var(--thc-paper); color: var(--thc-ink); font-family: var(--thc-serif); }
 body[data-thc-section="haskell"] #content { max-width: 1120px; margin: auto; padding: 24px clamp(20px, 4vw, 48px); }
 body[data-thc-section="haskell"] a { color: var(--thc-link); }
+:root[data-thc-embedded] body[data-thc-section="haskell"] #package-header .caption { display: none; }
 body[data-thc-section="jvm"] { background: var(--thc-paper); color: var(--thc-ink); font-family: system-ui, sans-serif; }
 body[data-thc-section="jvm"] a { color: var(--thc-link); }
 body[data-thc-section="jvm"] h1, body[data-thc-section="jvm"] h2,
@@ -102,6 +103,8 @@ body[data-thc-section="jvm"] pre { background: var(--thc-code); border-color: va
 body[data-thc-section="jvm"] .navigation-wrapper { background: var(--thc-pale); color: var(--thc-ink); border-color: var(--thc-line); }
 body[data-thc-section="jvm"] .library-name,
 body[data-thc-section="jvm"] #theme-toggle-button { display: none !important; }
+:root[data-thc-embedded] body[data-thc-section="jvm"] .library-name--link,
+:root[data-thc-embedded] body[data-thc-section="jvm"] .library-version { display: none !important; }
 body[data-thc-section="jvm"] input, body[data-thc-section="jvm"] select,
 body[data-thc-section="jvm"] button { color: var(--thc-ink); }
 @media (max-width: 800px) {

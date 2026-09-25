@@ -4,6 +4,7 @@
   "use strict";
   const key = "thc-docs-appearance";
   const media = matchMedia("(prefers-color-scheme: dark)");
+  if (window.parent !== window) document.documentElement.dataset.thcEmbedded = "";
   let inMemoryChoice = null;
   function choice() {
     if (inMemoryChoice) return inMemoryChoice;
