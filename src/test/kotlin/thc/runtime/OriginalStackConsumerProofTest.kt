@@ -276,7 +276,7 @@ class OriginalStackConsumerProofTest {
         for (paths in (manifest()["stages"] as Map<String, List<String>>).values) {
             val consumer = read(paths.single { it.endsWith("/OriginalStackAudit.json") })
             val linked = CoreModules.reachable(CoreModules.merge(executable + consumer),
-                "renderOriginalNames", strictLink = true)
+                "${consumer.getValue("unit")}:OriginalStackAudit.renderOriginalNames", strictLink = true)
             val ids = (linked["bindings"] as List<Map<String, Any?>>).map { it["id"] }.toSet()
             assertTrue(ids.any { it is String && it.startsWith("ghc-internal:GHC.Internal.Stack.Decode.") })
             assertTrue("${consumer["unit"]}:OriginalStackAudit.renderOriginalNames" in ids)

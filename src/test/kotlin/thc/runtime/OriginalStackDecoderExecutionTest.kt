@@ -34,6 +34,8 @@ class OriginalStackDecoderExecutionTest {
         val consumer = json("build/original-stack/manifest.json")
         val path = (consumer["stages"] as Map<String, List<String>>).getValue(stage)
             .single { it.endsWith("/OriginalStackAudit.json") }
+        val fresh = json(path)
+        val entry = "${fresh.getValue("unit")}:OriginalStackAudit.renderOriginalNames"
         val source = json("build/original-stack-formatter/manifest.json")
         val originals = (source["originals"] as List<String>).map(::json)
             .filter { it["schema"] == 1L || it["foreignLink"] != null }
@@ -46,8 +48,8 @@ class OriginalStackDecoderExecutionTest {
         // The original decoder retains native-frame branches that are not valid
         // for THC's zero-payload RET_SMALL snapshots. Keep those operations as
         // diagnostic traps, and prove that this actual frame path never enters one.
-        return CoreModules.reachable(CoreModules.merge(originals + json(path)),
-            "renderOriginalNames", strictLink = true) + ("targetLayout" to layout) +
+        return CoreModules.reachable(CoreModules.merge(originals + fresh),
+            entry, strictLink = true) + ("entry" to entry) + ("targetLayout" to layout) +
             ("instrument" to true) + ("diagnosticUnsupported" to true)
     }
 
@@ -126,7 +128,7 @@ class OriginalStackDecoderExecutionTest {
                     val program: ExecutableProgram = if (backend == "ast") Program(language, input)
                         else BytecodeProgram(language, input)
                     assertEquals("diagnostic-traps", program.diagnostics()["unsupportedPolicy"])
-                    val target = program.entryTarget("renderOriginalNames")
+                    val target = program.entryTarget(input.getValue("entry") as String)
                     val action = ForceActionRoot(language).callTarget.call(
                         Calls.target(target, arrayOf(0L, snapshot))) as? Closure
                         ?: fault("Original decoder did not return an IO action")
