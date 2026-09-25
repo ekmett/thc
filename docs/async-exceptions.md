@@ -53,6 +53,12 @@ operation. Interrupting a blackhole waiter does not alter the thunk owned by
 another evaluator. If a blocked `killThread#` sender is interrupted, its pending
 outbound request is removed from the target's queue. Resuming that saved sender
 requeues the same request; an already claimed request cannot be revoked.
+The restricted captured AST route also retains that exact outbound request
+across repeated sender interruptions. A public AST entry has no general caller
+continuation, so it admits self-directed `killThread#` and rejects an external
+target before enqueueing a request. Self delivery keeps its asynchronous origin
+through `catch#`, including under an uninterruptible mask. It cannot be replaced
+by an ordinary `throwIO` failure without changing lazy thunk update semantics.
 
 This is distinct from the diagnostic stack snapshots used for backtraces.
 Those snapshots are display data, not executable continuations.
@@ -82,7 +88,7 @@ cabal run thc-fixtures --offline -- thread-async
 cabal run thc-fixtures --offline -- uncaught-self
 ```
 
-The AST backend, arbitrary JVM/native foreign calls and blocking file operations
+General AST callers, arbitrary JVM/native foreign calls and blocking file operations
 do not gain resumable asynchronous interruption from this implementation. The
 three admitted thread primops are marked partial in the coverage inventory;
 other GHC scheduling and thread-inspection primitives remain separate work.

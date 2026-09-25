@@ -61,6 +61,8 @@ internal object AstAsyncAdmission {
                 "putMVar#" -> Route.OTHER
                 "waitRead#", "waitWrite#" -> if (declared.kind == CoreKind.VOID &&
                     declared.primReps == emptyList<String>()) Route.OTHER else null
+                "killThread#" -> if (declared.kind == CoreKind.VOID &&
+                    declared.primReps == emptyList<String>()) Route.OTHER else null
                 "yield#" -> if (declared.kind == CoreKind.VOID && declared.primReps == emptyList<String>())
                     Route.OTHER else null
                 else -> null

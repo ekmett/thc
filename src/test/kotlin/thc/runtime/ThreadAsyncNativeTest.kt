@@ -107,7 +107,8 @@ class ThreadAsyncNativeTest {
         assertEquals(listOf("52", "53"), File(root, "build/thread-async/lazy-oracle.txt").readLines())
     }
 
-    private fun exercise(name: String, expected: List<Long>, module: String = "ThreadAsyncAudit") {
+    private fun exercise(name: String, expected: List<Long>, module: String = "ThreadAsyncAudit",
+                         backend: String = "bytecode") {
         checkReceipt()
         for (stage in listOf("pre", "post")) {
             val context = Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true)
@@ -118,13 +119,13 @@ class ThreadAsyncNativeTest {
             }
             try {
                 val core = File(root, "build/thread-async/$stage/core/$module.json")
-                val entry = context.eval("thc", CoreModules.request(listOf(core.path), name, backend = "bytecode"))
+                val entry = context.eval("thc", CoreModules.request(listOf(core.path), name, backend = backend))
                 val result = executor.submit<List<Long>> {
                     val interpreted = entry.execute(0L).asLong()
                     assertTrue(entry.invokeMember("compile").asBoolean())
                     listOf(interpreted, entry.execute(1L).asLong())
                 }
-                assertEquals(expected, result.get(30, TimeUnit.SECONDS), "$stage $name")
+                assertEquals(expected, result.get(30, TimeUnit.SECONDS), "$stage $backend $name")
                 val diagnostics = Json.parse(entry.getMember("diagnostics").asString()) as Map<*, *>
                 assertEquals(0L, (diagnostics["unsupportedTraps"] as Number).toLong())
             } finally {
@@ -139,6 +140,10 @@ class ThreadAsyncNativeTest {
     @Test fun selfDirectedThrowEntersTheOriginalHandler() = exercise("selfThrow", listOf(-1, 0))
     @Test fun outerUninterruptibleMaskStillCapturesCalleeThatUnmasksAndSelfThrows() =
         exercise("maskedUnmaskSelf", listOf(-1, 0))
+    @Test fun astSelfDirectedThrowReachesTheOriginalHandlerWithoutPoisoningTheAction() =
+        exercise("selfThrow", listOf(-1, 0), backend = "ast")
+    @Test fun astSelfDirectedThrowBypassesTheOuterUninterruptibleMask() =
+        exercise("maskedUnmaskSelf", listOf(-1, 0), backend = "ast")
     @Test fun forkedChildOwnsAndResumesTheSharedLazyActionHead() =
         exercise("lazyFork", listOf(52, 53), "LazyForkAudit")
 

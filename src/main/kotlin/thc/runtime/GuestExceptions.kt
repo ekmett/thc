@@ -88,6 +88,12 @@ internal class CatchException(private val shape: TupleShape,
             actionCall!!.execute(frame, requireClosure(force.execute(frame, action.execute(frame))), arrayOf(Unit))
             null
         } catch (guest: GuestException) { guest }
+        catch (delivered: AsyncDelivery) {
+            // The target has reached this exact catch# frame. Keep its async
+            // origin until here so Force cannot memoize it as an ordinary error.
+            delivered.request.acknowledge()
+            GuestException(delivered.request.payload, this)
+        }
         if (failure != null) {
             val prior = SynchronousMasking.current(this)
             if (prior == MaskingState.UNMASKED) SynchronousMasking.set(this, MaskingState.MASKED_INTERRUPTIBLE)
