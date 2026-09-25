@@ -320,9 +320,21 @@ private val text = "class FakeString { @Test }"
         self.full("shared-primop-registry-change")
 
     def test_exact_generated_simd_extrema_addition_selects_family_checks(self):
-        self.policy["primopFamilies"]["simd-generated-primops"] = dict(
-            junit=["example.OtherTest"], python=["scripts/test-other.py"])
+        group = json.loads(Path(__file__).with_name("fast-tests.json").read_text())["primopFamilies"]["simd-generated-primops"]
+        self.policy["primopFamilies"]["simd-generated-primops"] = group
         self.write(select.POLICY, json.dumps(self.policy))
+        for name in group["junit"]:
+            package, short = name.rsplit(".", 1)
+            self.write("src/test/kotlin/" + name.replace(".", "/") + ".kt",
+                       kotlin(short).replace("package example", "package " + package))
+        for path in group["python"]:
+            self.write(path, PYTHON_TEST)
+        fixtures = json.loads(Path(__file__).with_name("fast-fixtures.json").read_text())
+        owners = {name: group_id for group_id, entry in fixtures["groups"].items() for name in entry["junit"]}
+        self.assertEqual({"thc.runtime.SimdCapabilitySmokeTest": "simd-capability-smoke",
+                          "thc.runtime.SimdFamiliesTest": None},
+                         {name: owners.get(name) for name in group["junit"]})
+        self.assertIn("thc.runtime.SimdFamiliesTest", fixtures["fixtureFreeJunit"])
         spec = dict(schema=1, families=[dict(name="Word32X8", laneRep="Word32Rep", operations=["insert"])])
         capabilities = dict(primitives={"insertWord32X8#": 3})
         root = ("class BytecodeRoot {\n    // BEGIN GENERATED SIMD FAMILIES\n"
@@ -355,13 +367,14 @@ private val text = "class FakeString { @Test }"
         self.commit()
         result = self.plan()
         self.assertEqual("narrow", result["mode"], result)
-        self.assertEqual(["example.OtherTest"], result["affected"]["junit"])
-        self.assertEqual(["scripts/test-other.py"], result["affected"]["python"])
+        self.assertEqual(sorted(group["junit"]), result["affected"]["junit"])
+        self.assertEqual(sorted(group["python"]), result["affected"]["python"])
         self.assertEqual([], result["haskell"]["suites"])
         self.assertFalse(result["polyglot"]["required"])
 
         for path, body, reason in (
                 (select.BYTECODE_ROOT, updated[select.BYTECODE_ROOT].replace("class BytecodeRoot", "class OtherRoot"), "unverified-simd-generated-code"),
+                (select.BYTECODE_ROOT, updated[select.BYTECODE_ROOT].replace("    // END GENERATED SIMD FAMILIES", "    // missing marker"), "unverified-simd-generated-code"),
                 (select.BYTECODE_PROGRAM, updated[select.BYTECODE_PROGRAM].replace("// existing operation", "// changed operation"), "unverified-simd-generated-code"),
                 (select.CAPABILITIES, json.dumps(dict(primitives={**capabilities["primitives"], "plusInt#": 2})), "shared-primop-registry-change"),
                 (select.SIMD_SPEC, json.dumps(dict(schema=1, families=[dict(name="Word32X8", laneRep="Word32Rep", operations=["min", "max"])])), "unverified-simd-generation-change")):
