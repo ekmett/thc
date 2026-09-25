@@ -30,6 +30,7 @@ import qualified THC.Sources as Sources
 import qualified THC.CBV as CBV
 import qualified THC.Demands as Demands
 import qualified THC.ForeignExports as Exports
+import qualified THC.ForeignExportProvenance as ExportProvenance
 import THC.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid)
 import GHC.Types.Tickish (CoreTickish, tickishFloatable)
 import GHC.Types.Literal
@@ -67,6 +68,7 @@ plugin = defaultPlugin
   { parsedResultAction = rewriteJavaScriptImports
   , typeCheckResultAction = \options summary environment ->
       validateJavaScriptTypes options summary environment >>= Exports.recordStaticExports options
+        >>= ExportProvenance.recordProvenance options
   , installCoreToDos = \opts passes -> pure (if "post-tidy" `elem` opts then passes else passes ++ [CoreDoPluginPass "THC rich Core export" (exportModule opts)])
   , latePlugin = exportLate
   , pluginRecompile = \_ -> pure ForceRecompile
@@ -868,8 +870,29 @@ serializePostTidyCoreWithAnnotations :: DynFlags -> [CommandLineOption] -> Modul
 serializePostTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations = do
   (_,result) <- postTidyModule flags opts m tycons program
   exports <- staticExportFields m annotations program
-  let annotated = case result of O fields -> O (fields ++ exports); _ -> result
+  provenance <- exportProvenanceFields m annotations program foreignArtifacts
+  let annotated = case result of O fields -> O (fields ++ exports ++ provenance); _ -> result
   pure (json (withForeignArtifacts foreignArtifacts annotated) ++ "\n")
+
+exportProvenanceFields :: Module -> [Annotation] -> CoreProgram -> ForeignCore.IfaceForeign -> IO [(String,J)]
+exportProvenanceFields owner annotations program original = do
+  associations <- checked (Exports.readStaticExports owner annotations program)
+  case associations of
+    Nothing -> pure []
+    Just (Exports.StaticExports _ _ _ exports) -> do
+      verdict <- checked (ExportProvenance.inspectProvenance owner annotations
+        (Just (map Exports.exportBinder exports)) original)
+      let details = case verdict of
+            ExportProvenance.UnknownProvenance reason -> [("status",S "unclassified"),("reason",S reason)]
+            ExportProvenance.RejectedProvenance reason -> [("status",S "rejected"),("reason",S reason)]
+            ExportProvenance.VerifiedRetainedRegistration roots -> [("status",S "verified"),("roots",A (map identity roots))]
+      pure [("staticForeignExportRegistration",O
+        ([("schema",num (1::Int)),("scope",S "retained-foreign-products"),("execution",S "not-linked"),
+          ("profile",S "ghc-9.14.1-thc-only-native-static-ccall-v1")] ++ details))]
+  where
+    checked = either (ioError . userError . ("THC: " ++)) pure
+    identity (Exports.ExportName unit modName occurrence namespace) = O
+      [("unit",S unit),("module",S modName),("occurrence",S occurrence),("namespace",S namespace)]
 
 staticExportFields :: Module -> [Annotation] -> CoreProgram -> IO [(String,J)]
 staticExportFields owner annotations bindings = do

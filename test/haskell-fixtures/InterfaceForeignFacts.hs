@@ -19,12 +19,15 @@ import GHC.Iface.Binary (readBinIface, CheckHiWay(..), TraceBinIFace(..))
 import GHC.Iface.Ext.Fields (getExtensibleFields)
 import GHC.Tc.Utils.TcType (tcSplitPiTys, tcSplitIOType_maybe)
 import GHC.Types.RepType (typePrimRep)
+import GHC.Types.TypeEnv (typeEnvTyCons)
+import GHC.Unit.Module.ModDetails (md_types, md_anns)
 import qualified GHC.Unit.Module.WholeCoreBindings as ForeignCore
 import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist, renameFile)
 import System.Exit (die)
 import System.FilePath ((</>), takeDirectory)
 import FixtureSupport (CommandResult, runLogged, writeJson)
 import THC.Interface
+import THC.Plugin (serializePostTidyCoreWithAnnotations)
 
 check :: Bool -> String -> IO ()
 check condition message = unless condition (die message)
@@ -136,21 +139,27 @@ prepareTypedForeignAssociation :: FilePath -> FilePath -> FilePath -> FilePath -
 prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUnit pluginDb pluginUnit = do
   let variants = [("a", "InterfaceForeignAlias", "thc_interface_alias_a"),
                   ("b", "InterfaceForeignAlias", "thc_interface_alias_b"),
-                  ("signatures", "ForeignExportSignatures", "unused")]
+                  ("signatures", "ForeignExportSignatures", "unused"),
+                  ("static-signatures", "ForeignExportSignatures", "unused"),
+                  ("foreign-file", "InterfaceForeign", "unused"),
+                  ("instrumented", "InterfaceForeignAlias", "thc_interface_instrumented")]
       sourceFor name = directory </> "typed-export-source" </> name ++ ".hs"
   createDirectoryIfMissing True (root </> directory </> "typed-export-source")
   mapM_ (\name -> copyFile (root </> "compiler/test-fixtures" </> name ++ ".hs") (root </> sourceFor name))
-    ["InterfaceForeignAlias", "ForeignExportSignatures"]
+    ["InterfaceForeignAlias", "ForeignExportSignatures", "InterfaceForeign"]
   commands <- forM variants $ \(variant, name, symbol) -> do
     let output = directory </> "typed-foreign-exports" </> variant
     createDirectoryIfMissing True (root </> output)
-    compiled <- runLogged 180 root (directory </> "logs") ("typed-foreign-export-" ++ variant) [] ghc
+    compiled <- runLogged 180 root (directory </> "logs") ("typed-foreign-export-" ++ variant) [] ghc $
       ["-c", "-O2", "-fforce-recomp", "-dcore-lint", "-this-unit-id", unitName,
        "-fwrite-if-simplified-core", "-DTHC_FOREIGN_C_LABEL=\"" ++ symbol ++ "\"",
        "-package-db", pluginDb, "-plugin-package-id", pluginUnit, "-fplugin=THC.Plugin",
        "-fplugin-opt=THC.Plugin:" ++ output </> "direct", "-fplugin-opt=THC.Plugin:post-tidy",
        "-fplugin-opt=THC.Plugin:foreign-export-associations",
-       "-odir", output, "-hidir", output, "-stubdir", output, sourceFor name]
+       "-fplugin-opt=THC.Plugin:foreign-export-registration",
+       "-odir", output, "-hidir", output, "-stubdir", output, sourceFor name] ++
+      ["-DTHC_STATIC_EXPORTS_ONLY" | variant == "static-signatures"] ++
+      ["-finfo-table-map" | variant == "instrumented"]
     let database = root </> output </> "package.conf.d"
         conf = root </> output </> "package.conf"
         run label = runLogged 180 root (directory </> "logs") ("typed-export-" ++ variant ++ "-" ++ label) [] ghcPkg
@@ -163,7 +172,7 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
     registered <- run "register" ["--package-db", database, "update", conf]
     pure ([compiled] ++ initialized ++ [registered])
   mapM_ (\name -> renameFile (root </> sourceFor name) (root </> sourceFor name ++ ".saved"))
-    ["InterfaceForeignAlias", "ForeignExportSignatures"]
+    ["InterfaceForeignAlias", "ForeignExportSignatures", "InterfaceForeign"]
   records <- forM variants $ \(variant, name, _) -> runGhc (Just libdir) $ do
     initial <- getSessionDynFlags
     initialEnv <- getSession
@@ -185,10 +194,42 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
         field "scope" metadata == String "static-export-associations") "Missing archival typed export schema"
       check (field "schema" value == Number 2 && field "execution" (field "foreign" value) == String "not-linked")
         "Typed association changed original foreign archive admission"
+      let provenance = field "staticForeignExportRegistration" value
+          (status, reason) = case variant of
+            "signatures" -> ("unclassified", "foreign-import-wrapper-or-non-ccall-declaration")
+            "foreign-file" -> ("rejected", "additional-foreign-files")
+            "instrumented" -> ("unclassified", "unclassified-target-or-instrumentation")
+            _ -> ("verified", "")
+      check (field "schema" provenance == Number 1 && field "execution" provenance == String "not-linked" &&
+        field "scope" provenance == String "retained-foreign-products" &&
+        field "status" provenance == String status &&
+        (Text.null reason || field "reason" provenance == String reason))
+        ("Unexpected retained registration provenance for " ++ variant ++ ": " ++ show provenance)
+      if variant /= "a" then pure () else case interfaceForeign core of
+        ForeignCore.IfaceForeign (Just (ForeignCore.IfaceCStubs header cSource initializers finalizers)) [] -> do
+          -- Mutate the archived product at the public serializer boundary;
+          -- the preserved annotation must never certify a prefix or subset.
+          let altered = [ForeignCore.IfaceCStubs (header ++ "\n/* extra */") cSource initializers finalizers,
+                         ForeignCore.IfaceCStubs header (cSource ++ "\n/* extra */") initializers finalizers,
+                         ForeignCore.IfaceCStubs header cSource [] finalizers,
+                         ForeignCore.IfaceCStubs header cSource initializers initializers]
+              details = interfaceDetails core
+          mapM_ (\stubs -> do
+            -- setSessionDynFlags initializes target platform constants in the
+            -- session; the earlier parseDynamicFlags result does not have them.
+            changedText <- serializePostTidyCoreWithAnnotations (hsc_dflags environment) ["unit-qualified"] expected
+              (typeEnvTyCons (md_types details)) (interfaceBindings core)
+              (ForeignCore.IfaceForeign (Just stubs) []) (md_anns details)
+            changed <- either die pure (eitherDecodeStrict' (BSC.pack changedText))
+            let proof = field "staticForeignExportRegistration" changed
+            check (field "status" proof == String "rejected" &&
+              field "reason" proof == String "retained-foreign-product-differs")
+              "Changed retained stub product inherited registration-only provenance") altered
+        _ -> die "Alias registration control lost its actual native products"
       writeJson (root </> directory </> "typed-foreign-exports" </> variant ++ ".json") value
-      pure metadata
+      pure (metadata, provenance)
   case records of
-    [first, second, signatures] -> do
+    [(first, _), (second, _), (signatures, _), (staticSignatures, _), _, _] -> do
       let a = singleExport first
           b = singleExport second
           allSignatures = entries signatures
@@ -214,9 +255,13 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
       check (pureArguments == map String ["Int8", "Word16", "Float", "Double"] &&
         field "occurrence" (field "name" (field "result" countExport)) == String "Int32")
         "Typed export metadata conflated primitive widths/floats or lost newtype normalization"
+      check (entries staticSignatures == allSignatures)
+        "Removing only the wrapper changed the exact static export associations"
       writeJson (root </> directory </> "typed-foreign-exports.json") (object
         ["schema" .= (1 :: Int), "execution" .= ("not-linked" :: String),
-         "sourceDeleted" .= True, "aliasControls" .= [first, second], "signatureControls" .= signatures])
+         "sourceDeleted" .= True, "aliasControls" .= [first, second], "signatureControls" .= signatures,
+         "retainedRegistrationControls" .= map snd records,
+         "changedProductControls" .= (["header", "body", "initializer", "finalizer"] :: [String])])
     _ -> die "Expected typed alias and signature controls"
   pure (concat commands)
   where
