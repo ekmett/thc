@@ -92,10 +92,11 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     val readiness: Boolean get() = this == READY_SAFE || this == READY_UNSAFE
     val duplication: Boolean get() = this == DUP || this == DUP2
     val locking: Boolean get() = this == LOCK || this == UNLOCK
-    val flagConstant: Boolean get() = when (this) {
-        O_APPEND, O_CREAT, O_NOCTTY, O_NONBLOCK, O_RDONLY, O_RDWR, O_WRONLY, F_GETFL, F_SETFL -> true
-        else -> false
-    }
+    // Keep the operation a PE constant: enum `when` reads Kotlin's mutable
+    // synthetic switch table even when this enum receiver is constant.
+    val flagConstant: Boolean get() = this == O_APPEND || this == O_CREAT || this == O_NOCTTY ||
+        this == O_NONBLOCK || this == O_RDONLY || this == O_RDWR || this == O_WRONLY ||
+        this == F_GETFL || this == F_SETFL
     val fcntl: Boolean get() = this == FCNTL_READ || this == FCNTL_WRITE
     val seekConstant: Boolean get() = this == SEEK_SET || this == SEEK_CUR || this == SEEK_END
     val stat: Boolean get() = this == SIZEOF_STAT || statField ||
