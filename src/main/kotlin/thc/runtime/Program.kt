@@ -2519,7 +2519,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (target.proofs[index].isEmptyTuple) -1
             else scope.layout.bind("<join argument $index>")
         }
-        return LocalJoinCall(target, nodes, temps, vectorTemps, metrics)
+        return LocalJoinCall(target, nodes, temps, metrics, vectorTemps)
     }
     private fun compileJoins(expr: List<Any?>, outer: Scope, tail: Boolean,
                              definitions: List<CoreJoinDefinition>): Expr {

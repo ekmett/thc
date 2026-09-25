@@ -22,8 +22,8 @@ internal class LocalJoinJump(val target: LocalJoinTarget) : ControlFlowException
 internal class LocalJoinCall(private val target: LocalJoinTarget,
     @field:Children private var arguments: Array<Expr>,
     @field:CompilationFinal(dimensions = 1) private val temporaries: IntArray,
-    private val vectorTemporaries: Array<IntArray?>,
-    private val metrics: Metrics) : Expr() {
+    private val metrics: Metrics,
+    private val vectorTemporaries: Array<IntArray?> = arrayOfNulls(target.proofs.size)) : Expr() {
     // This node never returns a value. It must not weaken the WHNF proof
     // contributed by the region's actual returning branches.
     init { representation = target.result.copy(evaluated = true) }
