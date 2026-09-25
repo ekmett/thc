@@ -154,6 +154,8 @@ class BytecodeVectorTransportTest {
         released(language)
     }
     private val paths = listOf("exact", "pap", "roundTrip", "arithmetic", "local", "over", "selfTail", "mutualTail", "joinSwap", "tupleField")
+    private val entryCounts = mapOf("exact" to 2L, "pap" to 2L, "roundTrip" to 3L, "arithmetic" to 2L,
+        "local" to 2L, "over" to 3L, "joinSwap" to 1L, "tupleField" to 2L)
     private val values = listOf(Long.MIN_VALUE, -129L, -1L, 0L, 127L, Long.MAX_VALUE)
 
     @Test fun allExistingFamiliesCarryExactLanesThroughCallsAndJoins() = withLanguage { language ->
@@ -205,7 +207,9 @@ class BytecodeVectorTransportTest {
                     for (value in values.asReversed()) {
                         val before = program.diagnostics()["compiledEntries"] as Long
                         check(program, language, family, name, value)
-                        assertTrue(program.diagnostics()["compiledEntries"] as Long > before, "${family.name}/$name compiled entry")
+                        val entered = program.diagnostics()["compiledEntries"] as Long - before
+                        entryCounts[name]?.let { assertEquals(it, entered, "${family.name}/$name exact compiled entries") }
+                            ?: assertTrue(entered > 0, "${family.name}/$name compiled tail entry")
                         assertEquals(active, activeTargets(entry), "${family.name}/$name active targets")
                         active.forEach(::valid)
                     }
