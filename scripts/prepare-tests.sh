@@ -92,6 +92,7 @@ esac
 "$fixture_bin" libdw-unavailable
 "$fixture_bin" native-addresses
 "$fixture_bin" process-signals
+"$fixture_bin" rts-shutdown
 "$fixture_bin" original-strerror
 "$fixture_bin" original-stdio-truncate
 "$fixture_bin" original-fd-ready

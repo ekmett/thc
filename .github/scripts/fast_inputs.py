@@ -39,7 +39,7 @@ MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 thread-status boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array
-narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
 SIMD_FLOAT_FMA_OUTPUTS = frozenset("build/simd-floatx4-fma/" + name for name in (
     "manifest.json", "oracle.txt", "pre-core/SimdFloatFma.json", "post-core/SimdFloatFma.json",
@@ -171,6 +171,13 @@ ORIGINAL_GMP_OUTPUTS = frozenset("build/original-gmp/" + name for name in (
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
         "core/OriginalGmpAudit.json", "core/THC.InterfaceClosure.json",
         *(f"{entry}.audit.json" for entry in ORIGINAL_GMP_ENTRIES))),
+))
+
+RTS_SHUTDOWN_OUTPUTS = frozenset("build/rts-shutdown/" + name for name in (
+    "manifest.json", "oracle.json",
+    *(f"logs/{label}.{suffix}" for label in ("version", "native-build", "signals",
+        *(f"{case}-{fast}" for case in ("exit-0", "exit-1", "exit-2", "exit-3", "exit-4", "term", "stop") for fast in (0, 1)))
+      for suffix in ("stdout", "stderr", "command.json")),
 ))
 
 ORIGINAL_RTS_LOCK_ENTRIES = ("originalLock", "originalUnlock")
@@ -529,6 +536,18 @@ def formatter_artifact_hashes(root, manifest):
     return artifacts
 
 
+def rts_shutdown_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1,
+            "Invalid RTS shutdown manifest")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) ==
+            RTS_SHUTDOWN_OUTPUTS - {"build/rts-shutdown/manifest.json"},
+            "Incomplete/unreviewed RTS shutdown artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid RTS shutdown artifact hash")
+    return artifacts
+
+
 def rts_lock_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1 and
             manifest.get("strictAccepted") is True and manifest.get("originalIdsChecked") is True and
@@ -798,6 +817,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_HANDLE_READINESS_OUTPUTS
     if parts[1] == "original-posix-stat":
         return name in ORIGINAL_POSIX_STAT_OUTPUTS
+    if parts[1] == "rts-shutdown":
+        return name in RTS_SHUTDOWN_OUTPUTS
     if parts[1] == "original-rts-locks":
         return name in ORIGINAL_RTS_LOCK_OUTPUTS
     if parts[1] == "original-open":
@@ -920,6 +941,8 @@ def inventory(root, current, read, core_files, verified=None):
             formatter_artifact_hashes(root, doc)
         if name == "build/original-gmp/manifest.json":
             gmp_artifact_hashes(doc)
+        if name == "build/rts-shutdown/manifest.json":
+            rts_shutdown_artifact_hashes(doc)
         if name == "build/original-rts-locks/manifest.json":
             rts_lock_artifact_hashes(doc)
         if name == "build/original-open/manifest.json":

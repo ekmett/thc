@@ -77,6 +77,8 @@ OPERATIONS = {
     **{symbol: ('capi', 'unsafe', arguments, output)
        for symbol, (arguments, output) in SIGSET_OPERATIONS.items()},
     'rtsSupportsBoundThreads': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
+    'shutdownHaskellAndExit': ('ccall', 'safe', ('Int32Rep', 'Int32Rep', None), (None,)),
+    'shutdownHaskellAndSignal': ('ccall', 'safe', ('Int32Rep', 'Int32Rep', None), (None,)),
     **{symbol: ('ccall', 'unsafe', arguments, output)
        for symbol, (arguments, output) in LIBDW_UNAVAILABLE.items()},
     **{symbol: ('ccall', 'unsafe', arguments, output)

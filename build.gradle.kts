@@ -160,6 +160,7 @@ tasks.withType<Test>().configureEach {
             "original-stdio-truncate/**/*.json", "original-stdio-truncate/results/*.txt", "original-stdio-truncate/results/*.private",
             "original-stdio-truncate/native/**", "original-stdio-truncate/logs/*.stdout", "original-stdio-truncate/logs/*.stderr",
             "original-fd-ready/**/*.json", "original-fd-ready/native/oracle", "original-fd-ready/native/private-file",
+            "rts-shutdown/*.json", "rts-shutdown/logs/*.stdout", "rts-shutdown/logs/*.stderr",
             "original-rts-locks/**/*.json", "original-rts-locks/logs/*.stdout", "original-rts-locks/logs/*.stderr",
             "original-open/**/*.json", "original-open/logs/*.stdout", "original-open/logs/*.stderr", "original-open/native/oracle",
             "original-termios/**/*.json", "original-termios/logs/*.stdout", "original-termios/logs/*.stderr", "original-termios/native/oracle",

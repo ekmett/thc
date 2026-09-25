@@ -366,6 +366,8 @@ jobs:
             build/original-posix-stat/
             build/original-posix-dup/
             build/original-rts-locks/
+            build/rts-shutdown/*.json
+            build/rts-shutdown/logs/
             build/original-open/
             build/libdw-unavailable/manifest.json
             build/libdw-unavailable/oracle.json

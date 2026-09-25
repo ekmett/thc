@@ -441,6 +441,27 @@ class FixturePreparationTest(unittest.TestCase):
                      'negative/extra.json', 'native/OriginalFdReadyAudit.hi', 'test-results/pass.xml'):
             self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/original-fd-ready/' + name, {}))
 
+    def test_rts_shutdown_exact_fixture_registration(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['rts-shutdown']
+        self.assertEqual('rts-shutdown', owners['thc.runtime.RtsShutdownTest'])
+        self.assertEqual(['build/rts-shutdown'], group['outputs'])
+        self.assertTrue(all((project / name).is_file() for name in group['sources']))
+        self.assertIn('"$fixture_bin" rts-shutdown', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        outputs = fast_fixtures.fast_inputs.RTS_SHUTDOWN_OUTPUTS
+        self.assertEqual(53, len(outputs))
+        self.assertTrue(outputs <= fast_fixtures.FULL_REQUIRED)
+        self.assertTrue(all(fast_fixtures.fast_inputs.allowed_payload(path, {}) for path in outputs))
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/rts-shutdown/native/oracle', {}))
+        artifacts = {path: '0' * 64 for path in outputs if not path.endswith('/manifest.json')}
+        proof = dict(schema=1, artifactHashes=artifacts)
+        self.assertEqual(artifacts, fast_fixtures.fast_inputs.rts_shutdown_artifact_hashes(proof))
+        for invalid in (dict(artifacts, **{'build/rts-shutdown/extra.json': '0'*64}), {}):
+            with self.assertRaises(RuntimeError):
+                fast_fixtures.fast_inputs.rts_shutdown_artifact_hashes(dict(proof, artifactHashes=invalid))
+
     def test_original_rts_locks_exact_fixture_registration(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
