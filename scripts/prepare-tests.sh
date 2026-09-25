@@ -69,6 +69,7 @@ python3 scripts/prepare-managed-md5.py
 "$fixture_bin" original-handle-readiness
 "$fixture_bin" original-stdio-close
 "$fixture_bin" original-stdio-seek
+"$fixture_bin" original-stdio-truncate
 python3 scripts/prepare-pinned-addresses.py
 "$fixture_bin" pinned-pointer-cells
 "$fixture_bin" wide-char-address

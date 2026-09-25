@@ -31,6 +31,7 @@ main = do
         "cur" -> (2, 1)
         "end" -> (-2, 2)
         "beyond" -> (10, 0)
+        "wide" -> (8589934597, 0)
         "negative" -> (-1, 0)
         "bad-whence" -> (0, 9)
         "invalid" -> (0, 0)

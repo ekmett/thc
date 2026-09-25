@@ -5,7 +5,7 @@
 
 -- The installed GHC declaration supplies Core; a private native fd supplies
 -- observations. Kotlin owns the independent model and compiled comparisons.
-module OriginalStdioSeekFixtures (prepareOriginalStdioSeek) where
+module OriginalStdioTruncateFixtures (prepareOriginalStdioTruncate) where
 
 import Control.Monad (forM, unless, when)
 import Data.Aeson (object, toJSON, (.=))
@@ -26,33 +26,31 @@ import qualified System.Info as Host
 import Text.Read (readMaybe)
 
 directory, source, driver :: FilePath
-directory = "build/original-stdio-seek"
-source = "compiler/test-fixtures/OriginalStdioSeekAudit.hs"
-driver = "compiler/test-fixtures/OriginalStdioSeekAuditNative.hs"
+directory = "build/original-stdio-truncate"
+source = "compiler/test-fixtures/OriginalStdioTruncateAudit.hs"
+driver = "compiler/test-fixtures/OriginalStdioTruncateAuditNative.hs"
 
 entries :: [String]
-entries = ["originalSeek", "originalSeekErrno"]
+entries = ["originalTruncate", "originalTruncateErrno"]
 
 requests :: [(String, String)]
 requests = [(entry, scenario) | entry <- entries, scenario <- scenarios]
 
 scenarios, fileScenarios :: [String]
-scenarios = ["set", "cur", "end", "beyond", "wide", "negative", "bad-whence", "invalid", "pipe"]
-fileScenarios = take 7 scenarios
+scenarios = ["shrink", "same", "extend", "negative", "readonly", "invalid", "pipe"]
+fileScenarios = take 5 scenarios
 
-arguments :: String -> (Int, Int)
-arguments scenario = case scenario of
-  "set" -> (2, 0)
-  "cur" -> (2, 1)
-  "end" -> (-2, 2)
-  "beyond" -> (10, 0)
-  "wide" -> (8589934597, 0)
-  "negative" -> (-1, 0)
-  "bad-whence" -> (0, 9)
-  _ -> (0, 0)
+lengthFor :: String -> Int
+lengthFor scenario = case scenario of
+  "shrink" -> 3
+  "same" -> 6
+  "extend" -> 9
+  "negative" -> -1
+  "readonly" -> 3
+  _ -> 0
 
-prepareOriginalStdioSeek :: FilePath -> IO ()
-prepareOriginalStdioSeek root = do
+prepareOriginalStdioTruncate :: FilePath -> IO ()
+prepareOriginalStdioTruncate root = do
   let output = root </> directory
       execute = runLogged 120 root (directory </> "logs")
       native = directory </> "native"
@@ -63,16 +61,16 @@ prepareOriginalStdioSeek root = do
   unless (Host.os `elem` ["linux", "darwin"] && sizeOf (0 :: CInt) == 4 &&
           sizeOf (0 :: CLong) == 8 && sizeOf (0 :: COff) == 8 &&
           sizeOf (nullPtr :: Ptr ()) == 8) $
-    die "Original seek native preparation requires a Linux/macOS LP64 host"
+    die "Original truncate native preparation requires a Linux/macOS LP64 host"
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   version <- execute "ghc-version" [] ghc ["--numeric-version"]
-  unless (commandStdout version == "9.14.1\n") (die "Original seek requires pinned GHC 9.14.1")
+  unless (commandStdout version == "9.14.1\n") (die "Original truncate requires pinned GHC 9.14.1")
   info <- execute "ghc-info" [] ghc ["--info"]
   case readMaybe (BSC.unpack (commandStdout info)) :: Maybe [(String,String)] of
     Just target | Just host <- lookup "Host platform" target,
                   not (null host), lookup "Target platform" target == Just host,
                   lookup "target word size" target == Just "8" -> pure ()
-    _ -> die "Original seek preparation rejects cross-compiling or non-64-bit GHC"
+    _ -> die "Original truncate preparation rejects cross-compiling or non-64-bit GHC"
   compiled <- execute "native-build" [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
     "-package", "ghc-internal", "-package", "unix", "-i" ++ (root </> "compiler/test-fixtures"),
     "-odir", root </> native, "-hidir", root </> native, driver, "-o", root </> binary]
@@ -86,15 +84,24 @@ prepareOriginalStdioSeek root = do
     observed <- runLogged 10 root (directory </> "logs") label [] (root </> binary)
       [entry, scenario, root </> privateFile, root </> resultFile]
     text <- BSC.unpack <$> BS.readFile (root </> resultFile)
-    result <- maybe (die ("Malformed native seek result: " ++ resultFile)) pure
-      (readInteger (takeWhile (/= '\n') text))
-    unless (text == show result ++ "\n") (die ("Malformed native seek result framing: " ++ resultFile))
+    (result, observedSize, observedPosition) <- case lines text of
+      [status, size, position] | Just value <- readInteger status,
+        Just sizeValue <- readInteger size, Just offset <- readInteger position ->
+        pure (value, sizeValue, offset)
+      _ -> die ("Malformed native truncate result: " ++ resultFile)
+    unless (text == show result ++ "\n" ++ show observedSize ++ "\n" ++ show observedPosition ++ "\n")
+      (die ("Malformed native truncate result framing: " ++ resultFile))
     when (scenario `elem` fileScenarios) $ do
       contents <- BS.readFile (root </> privateFile)
-      unless (contents == "abcdef") (die "Seeking the private descriptor changed its file")
-    let (displacement, whence) = arguments scenario
-        observation = object ["entry" .= entry, "scenario" .= scenario,
-          "displacement" .= displacement, "whence" .= whence, "result" .= result,
+      let expected = case scenario of
+            "shrink" -> "abc"
+            "extend" -> "abcdef\0\0\0"
+            _ -> "abcdef"
+      unless (contents == expected && fromIntegral (BS.length contents) == observedSize && observedPosition == 4)
+        (die "Original truncate changed unexpected private-file bytes")
+    let observation = object ["entry" .= entry, "scenario" .= scenario,
+          "length" .= lengthFor scenario, "size" .= observedSize, "position" .= observedPosition,
+          "result" .= result,
           "stdoutHex" .= hexBytes (commandStdout observed), "stderrHex" .= hexBytes (commandStderr observed)]
     pure (observation, observed, resultFile, [privateFile | scenario `elem` fileScenarios])
   let oracle = directory </> "oracle.json"
@@ -102,7 +109,7 @@ prepareOriginalStdioSeek root = do
   exports <- forM ["pre", "post"] $ \stage -> do
     let stageDir = directory </> stage
         core = stageDir </> "core"
-        modules = [core </> "OriginalStdioSeekAudit.json", core </> "THC.InterfaceClosure.json"]
+        modules = [core </> "OriginalStdioTruncateAudit.json", core </> "THC.InterfaceClosure.json"]
         postTidy = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
         roots = ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
     exported <- execute (stage ++ "-export")
@@ -111,7 +118,7 @@ prepareOriginalStdioSeek root = do
       "compiler/export.sh" (["-package", "ghc-internal"] ++ postTidy ++ roots ++ [source])
     mapM_ (\path -> do
       exists <- doesFileExist (root </> path)
-      unless exists (die ("Missing genuine GHC seek export: " ++ path))) modules
+      unless exists (die ("Missing genuine GHC truncate export: " ++ path))) modules
     audits <- forM entries $ \entry -> do
       let path = stageDir </> entry ++ ".audit.json"
       audited <- execute (stage ++ "-audit-" ++ entry) [] "python3"
@@ -124,7 +131,7 @@ prepareOriginalStdioSeek root = do
   let commands = [version, info, compiled] ++ [command | (_, command, _, _) <- rows] ++
         concat [stageCommands | (_, _, _, stageCommands, _) <- exports]
       sources = sort $ [source, driver, "thc.cabal", "test/haskell-fixtures/Main.hs",
-        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/OriginalStdioSeekFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/OriginalStdioTruncateFixtures.hs",
         "scripts/audit-core.py", "scripts/core_original_foreign.py", "scripts/core-capabilities.json",
         "src/main/resources/thc/scalar-primop-signatures.json", "compiler/build.sh", "compiler/export.sh",
         "compiler/toolchain.sh", "compiler/plugin.py"] ++
@@ -144,4 +151,4 @@ prepareOriginalStdioSeek root = do
      "strictAccepted" .= True, "runtimeVerified" .= False,
      "commands" .= map commandRecord commands, "inputHashes" .= inputHashes,
      "artifactHashes" .= artifactHashes]
-  putStrLn "original-stdio-seek: 18 native observations, 2 Core stages"
+  putStrLn "original-stdio-truncate: 14 native observations, 2 Core stages"

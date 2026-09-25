@@ -23,6 +23,7 @@
     "__hscore_get_errno",
     "close",
     "ghczuwrapperZC19ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZClseek",
+    "__hscore_ftruncate",
     "isatty",
     "__hsbase_MD5Init", "__hsbase_MD5Update", "__hsbase_MD5Final",
     "thc_io_v1_open", "thc_io_v1_read", "thc_io_v1_write", "thc_io_v1_close",

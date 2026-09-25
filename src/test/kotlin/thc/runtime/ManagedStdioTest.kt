@@ -18,6 +18,7 @@ import java.nio.file.Files
 import java.nio.file.OpenOption
 import java.nio.file.Path
 import java.nio.file.attribute.FileAttribute
+import java.util.concurrent.atomic.AtomicInteger
 
 class ManagedStdioTest {
     @TempDir lateinit var directory: Path
@@ -27,6 +28,42 @@ class ManagedStdioTest {
     private fun <T> entered(context: Context, action: (ManagedStdio) -> T): T {
         context.initialize("thc"); context.enter()
         return try { action(Language.currentState().stdio) } finally { context.leave() }
+    }
+
+    @Test fun truncateClassifiesReadOnlyWithoutASecondProviderOperation() {
+        val path = directory.resolve("read-only.bin")
+        Files.writeString(path, "abcdef")
+        val sizeCalls = AtomicInteger()
+        val backing = FileSystem.newDefaultFileSystem()
+        val fs = object : FileSystem by backing {
+            override fun newByteChannel(path: Path, options: Set<OpenOption>,
+                vararg attributes: FileAttribute<*>): SeekableByteChannel {
+                val channel = backing.newByteChannel(path, options, *attributes)
+                return object : SeekableByteChannel by channel {
+                    override fun size(): Long {
+                        sizeCalls.incrementAndGet()
+                        throw IOException("size must not be queried to classify ftruncate")
+                    }
+                }
+            }
+        }
+        Context.newBuilder("thc").allowIO(IOAccess.newBuilder().fileSystem(fs).build()).build().use { context ->
+            entered(context) { stdio ->
+                val files = Language.currentState().files
+                val fd = files.open(ManagedAddress.fromByteArray((path.toString() + "\u0000").toByteArray()), 0L)
+                assertTrue(fd >= 3L)
+                // The managed operation keeps its existing EBADF category.
+                assertEquals(-1L, files.setSize(fd, 3L)); assertEquals(4L, files.errorKind())
+                assertEquals(-1L, stdio.truncate(fd, 3L))
+                assertEquals(StdioHostAbi.load().error(5), stdio.errno())
+                assertEquals(0, sizeCalls.get())
+                assertEquals(0L, files.close(fd))
+                assertEquals(-1L, stdio.truncate(fd, 3L))
+                assertEquals(StdioHostAbi.load().error(4), stdio.errno())
+                assertEquals(0, sizeCalls.get())
+            }
+        }
+        assertEquals("abcdef", Files.readString(path))
     }
 
     @Test fun originalWritesUseContextStreamsBinaryRangesAndActualStickyErrno() {

@@ -27,6 +27,7 @@ OPERATIONS = {
     'close': ('ccall', 'unsafe', ('Int32Rep', None), (None, 'Int32Rep')),
     'ghczuwrapperZC19ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZClseek':
         ('capi', 'unsafe', ('Int32Rep', 'Int64Rep', 'Int32Rep', None), (None, 'Int64Rep')),
+    '__hscore_ftruncate': ('ccall', 'unsafe', ('Int32Rep', 'Int64Rep', None), (None, 'Int32Rep')),
     'isatty': ('ccall', 'unsafe', ('Int32Rep', None), (None, 'Int32Rep')),
     STACK_CLONE: ('prim', 'safe', (None,), (None, 'BoxedRep (Just Unlifted)')),
     'getStackInfoTableAddrzh': ('prim', 'safe', ('BoxedRep (Just Unlifted)',), 'AddrRep'),

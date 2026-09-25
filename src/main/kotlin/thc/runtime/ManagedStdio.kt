@@ -58,6 +58,19 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return position
     }
 
+    @TruffleBoundary fun truncate(fd: Long, length: Long): Long {
+        val abi = hostAbi
+        if (fd != fd.toInt().toLong())
+            throw RuntimeFault("Original truncate requires a canonical signed CInt descriptor")
+        val result = files.truncateOriginal(fd, length)
+        if (result < 0) {
+            val kind = files.errorKind()
+            // Streams have no channel; POSIX ftruncate reports EINVAL here.
+            lastError.set(abi.error(if (kind == 7L) 5 else kind))
+        }
+        return result
+    }
+
     @TruffleBoundary fun isTerminal(fd: Long): Long {
         val abi = hostAbi
         if (fd != fd.toInt().toLong()) throw RuntimeFault("Original isatty requires a canonical signed CInt descriptor")
