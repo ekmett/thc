@@ -11,6 +11,7 @@ import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty
@@ -75,7 +76,10 @@ class OriginalTcsetattrTest {
         private val output = process.inputStream.bufferedReader()
         private fun line() = CompletableFuture.supplyAsync { output.readLine() }.get(5, TimeUnit.SECONDS)
             ?: error("Native PTY oracle exited before its response")
-        val path: String = try { Json.parse(line()) as String } catch (failure: Throwable) { close(); throw failure }
+        val path: String = try { Json.parse(line()) as String } catch (failure: Throwable) {
+            try { close() } catch (cleanup: Throwable) { failure.addSuppressed(cleanup) }
+            throw failure
+        }
         fun observe(action: Long, echo: Long): List<Long> {
             input.write("[$action,$echo]\n"); input.flush()
             return Json.parse(line()) as List<Long>
@@ -89,13 +93,16 @@ class OriginalTcsetattrTest {
         }
     }
 
-    @Test fun originalPrivatePtyChangesMatchNativeBeforeAndAfterCompilation() {
+    @BeforeEach fun verifyOriginalInputsAndArtifacts() {
         val manifest = json("$prefix/manifest.json")
         assertEquals(true, manifest["supported"]); assertEquals(22L, manifest["nativeRows"])
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf("compiler/test-fixtures/OriginalTcsetattrAudit.hs",
             "compiler/test-fixtures/OriginalTcsetattrNative.hs", "test/haskell-fixtures/OriginalTcsetattrFixtures.hs"))
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf("$prefix/oracle.json", "$prefix/native/oracle") +
             listOf("pre", "post").map { "$prefix/$it/originalTcsetattr.audit.json" }, "$prefix/")
+    }
+
+    @Test fun originalPrivatePtyChangesMatchNativeBeforeAndAfterCompilation() {
         val recorded = json("$prefix/oracle.json")
         assertEquals(size().toLong(), recorded["size"])
         val rows = recorded["rows"] as List<List<Any?>>
