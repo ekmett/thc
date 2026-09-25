@@ -120,8 +120,10 @@ separate from stock-toolchain tests; it does not establish complete Handle/IO.
 This is still an experiment, not a replacement for GHC. General `Main`/IO, the
 complete boot-library closure, full FFI coverage, and stack-safe non-tail
 evaluation remain unfinished. The script-level scalar entry is integer-only;
-`thc run` has the narrower `IO ()` path described above. Vector calling
-conventions and several aggregate storage forms are deliberately unsupported.
+`thc run` has the narrower `IO ()` path described above. The experimental
+[managed export API](docs/site/embedding.md) also exposes declared scalar
+functions and IO actions through polyglot bindings. Host vector arguments and
+results, and several aggregate storage forms, remain unsupported.
 
 In particular, Map and Set still have cold runtime paths that strict loading
 rejects. Diagnostic mode leaves explicit traps at those gaps. A successful

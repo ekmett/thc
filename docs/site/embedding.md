@@ -1,8 +1,9 @@
 # Embed THC on the JVM
 
 THC's current host boundary is a GraalVM polyglot `Context` and its returned
-`Value`s. `thc.executionContext` and `thc.loadEntry` are the small experimental
-entrypoints used by the JVM launcher. Their signatures and Kotlin/Java source
+`Value`s. `thc.loadManagedExports` exposes declared Haskell functions as polyglot
+members. `thc.executionContext` creates a launcher context, while `thc.loadEntry`
+provides the lower-level kernel and executable entrypoints. Their signatures and Kotlin/Java source
 links are in the **Runtime** reference navigation.
 
 Use the repository's pinned GraalVM and JVM dependencies. There is no published,
@@ -10,7 +11,59 @@ version-stable embedding SDK yet. Public classes in `thc.runtime` exist for
 Truffle specialization, Java/Kotlin interoperability, and generated nodes;
 their visibility does not make them supported host APIs.
 
-## Load an accepted scalar entry
+## Call a declared Haskell export
+
+A `foreign export ccall` declaration supplies the external name and scalar
+signature. THC can expose that declaration through Truffle interop, so a Java or
+Kotlin caller gets ordinary polyglot values:
+
+```haskell
+foreign export ccall "thc_add_one" addOne :: Int32 -> Int32
+foreign export ccall "thc_next" next :: Int32 -> IO Int32
+```
+
+The repository's `ForeignExportManaged` fixture includes these declarations.
+After preparing the `interface-core` fixtures, its retained Core can be loaded
+as follows:
+
+```kotlin
+import thc.executionContext
+import thc.loadManagedExports
+
+executionContext().use { context ->
+    val units = loadManagedExports(context,
+        listOf("build/interface-core/typed-foreign-exports/managed.json"))
+    val exports = units.getMember("thc-interface-fixture-0.1")
+        .getMember("ForeignExportManaged")
+
+    check(exports.getMember("thc_add_one").execute(41).asInt() == 42)
+    check(exports.getMember("thc_float").execute(1.25f).asFloat() == 2.25f)
+    check(exports.getMember("thc_next").execute(3).asInt() == 3)
+    check(exports.getMember("thc_next_alias").execute(4).asInt() == 7)
+}
+```
+
+The namespace is **unit → module → declared C symbol**. It is also available
+through `context.getBindings("thc")`. Aliases share their Haskell function and
+CAF state. Calling an `IO` export runs the action and returns its scalar result;
+argument validation finishes before the action starts.
+
+Accepted signatures use boxed `Int`, `Word`, their fixed-width variants,
+`Float`, `Double`, `Bool` and `Char`, with `()` additionally allowed as a result.
+Integral arguments are range-checked. Use `BigInteger` and `Value.asBigInteger()`
+for the upper half of `Word64`; a unit result has `Value.isNull == true`.
+Arbitrary algebraic data, functions and SIMD values are not host arguments yet.
+
+This is an experimental managed entrypoint, not a native C callback address.
+The loader requires the typed declarations and verified retained registration
+products produced with THC's `foreign-export-associations` and
+`foreign-export-registration` plugin options. The current producer profile is
+for GHC 9.14.1 static `ccall` exports; an old interface containing only C stubs
+does not supply that evidence. Other foreign products and unclassified
+registration remain unsupported. One managed bundle can be loaded per context;
+its members are read-only and live only as long as that context.
+
+## Load an integer kernel
 
 ```kotlin
 import thc.executionContext
@@ -28,7 +81,7 @@ executionContext().use { context ->
 }
 ```
 
-The scalar host path is integer-only. It does not marshal arbitrary Haskell
+The older `loadEntry` scalar path is integer-only. It does not marshal arbitrary Haskell
 types, aggregate arguments, or closures. Use an exported entry whose accepted
 contract matches the supplied argument. `backend` selects `bytecode` or `ast`
 when loading; the default comes from `thc.backend`, then `THC_BACKEND`, then

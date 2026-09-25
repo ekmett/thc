@@ -2,7 +2,7 @@
 
 THC executes exported GHC Core on Truffle and Graal. This reference covers the
 Kotlin and Java implementation. Host applications should start with
-`thc.executionContext` and `thc.loadEntry`, and read the site's embedding guide
+`thc.executionContext` and `thc.loadManagedExports`, and read the site's embedding guide
 for authority and lifetimes.
 
 There are two namespaces. `thc` loads and checks programs and provides the host
@@ -19,7 +19,8 @@ DSL and SIMD sources and test fixtures are intentionally excluded.
 # Package thc
 
 This namespace is the boundary between an exported program, its host, and the
-runtime. Start with `executionContext` and `loadEntry` when embedding THC.
+runtime. Start with `executionContext` and `loadManagedExports` when embedding THC;
+`loadEntry` supplies the separate integer-kernel and executable contracts.
 
 - **Loading and admission.** `CoreModules`, package manifests and foreign-artifact
   validation assemble exported Core and check the reachable program. Reading a
@@ -28,8 +29,8 @@ runtime. Start with `executionContext` and `loadEntry` when embedding THC.
   entrypoint. Its context owns guest threads, files, native resources, layout
   interning and other mutable services. These are context state, not executable
   nodes or Haskell data constructors.
-- **Host entrypoints and diagnostics.** The launcher selects a backend and an
-  entry contract. Scalar calls and executable `IO ()` have distinct contracts;
+- **Host entrypoints and diagnostics.** Managed foreign exports expose checked
+  scalar signatures through polyglot members. Kernel calls and executable `IO ()` have distinct contracts;
   public runtime classes are not a substitute for the checked host boundary.
 
 # Package thc.runtime
