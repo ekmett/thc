@@ -29,6 +29,7 @@ import OriginalStdioTruncateFixtures (prepareOriginalStdioTruncate)
 import OriginalHandleReadinessFixtures (prepareOriginalHandleReadiness)
 import OriginalPosixStatFixtures (prepareOriginalPosixStat)
 import OriginalFdReadyFixtures (prepareOriginalFdReady)
+import OriginalIconvFixtures (prepareOriginalIconv)
 import MutVarFixtures (prepareMutVar)
 import StablePointerFixtures (prepareStablePointers)
 import ShrinkByteArrayFixtures (prepareShrinkByteArrays)
@@ -864,6 +865,7 @@ main = do
     ["original-handle-readiness"] -> prepareOriginalHandleReadiness root
     ["original-posix-stat"] -> prepareOriginalPosixStat root
     ["original-fd-ready"] -> prepareOriginalFdReady root
+    ["original-iconv"] -> prepareOriginalIconv root
     ["mutvar"] -> prepareMutVar root
     ["stable-pointers"] -> prepareStablePointers root
     ["shrink-bytearrays"] -> prepareShrinkByteArrays root

@@ -12,6 +12,14 @@ internal class ManagedStdio(private val files: ManagedFiles) {
     private val hostAbi by lazy { StdioHostAbi.load() }
     private val lastError = ThreadLocal.withInitial { 0L }
 
+    /** Native adapters capture errno in C immediately, before any other call.
+     * Zero means success and must preserve the guest's sticky error slot. */
+    internal fun nativeError(error: Long) {
+        hostAbi
+        if (error < 0 || error > Int.MAX_VALUE) fault("Invalid native errno")
+        if (error != 0L) lastError.set(error)
+    }
+
     @TruffleBoundary fun read(fd: Long, address: ManagedAddress, count: Long): Long {
         val abi = hostAbi
         if (fd != fd.toInt().toLong()) throw RuntimeFault("Original read requires a canonical signed CInt descriptor")

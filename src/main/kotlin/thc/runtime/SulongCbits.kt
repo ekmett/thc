@@ -10,6 +10,9 @@ import org.graalvm.polyglot.io.ByteSequence
 import java.lang.ref.WeakReference
 import java.util.WeakHashMap
 import java.util.function.LongSupplier
+import java.util.concurrent.FutureTask
+import java.util.concurrent.ExecutionException
+import com.oracle.truffle.api.TruffleSafepoint
 
 /** Context-owned original C code and allocation views. No process addresses escape. */
 internal class SulongCbits(env: TruffleLanguage.Env) {
@@ -33,6 +36,17 @@ internal class SulongCbits(env: TruffleLanguage.Env) {
             fault("Original C bitcode does not match this runtime platform")
     }
     private val library = load(env, "md5")
+    private val iconvTask = FutureTask { load(env, "iconv") }
+    internal fun iconvLibrary(): Any {
+        if (System.getProperty("os.name") != "Linux")
+            fault("Original native iconv currently requires the Linux GNU LP64 host ABI")
+        iconvTask.run() // FutureTask publishes once; no cache lock spans guest parsing.
+        return try {
+            if (iconvTask.isDone) iconvTask.get()
+            else TruffleSafepoint.setBlockedThreadInterruptibleFunction(null,
+                TruffleSafepoint.InterruptibleFunction<FutureTask<Any>, Any> { it.get() }, iconvTask)
+        } catch (failure: ExecutionException) { throw (failure.cause ?: failure) }
+    }
     private val init = interop.readMember(library, "thc_md5_init")
     private val update = interop.readMember(library, "thc_md5_update")
     private val finish = interop.readMember(library, "thc_md5_final")

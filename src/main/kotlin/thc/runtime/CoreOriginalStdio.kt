@@ -38,17 +38,23 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     IS_SOCK("ghczuwrapperZC3ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSzuISSOCK", "capi", "unsafe", listOf("Word32Rep", null), "Int32Rep"),
     ISATTY("isatty", "ccall", "unsafe", listOf("Int32Rep", null), "Int32Rep"),
     READY_SAFE("fdReady", "ccall", "safe", listOf("Int32Rep", "Word8Rep", "Int64Rep", "Word8Rep", null), "Int32Rep"),
-    READY_UNSAFE("fdReady", "ccall", "unsafe", listOf("Int32Rep", "Word8Rep", "Int64Rep", "Word8Rep", null), "Int32Rep");
+    READY_UNSAFE("fdReady", "ccall", "unsafe", listOf("Int32Rep", "Word8Rep", "Int64Rep", "Word8Rep", null), "Int32Rep"),
+    LOCALE("localeEncoding", "ccall", "unsafe", listOf(null), "AddrRep"),
+    ICONV_OPEN("hs_iconv_open", "ccall", "unsafe", listOf("AddrRep", "AddrRep", null), "Int64Rep"),
+    ICONV_CLOSE("hs_iconv_close", "ccall", "unsafe", listOf("Int64Rep", null), "Int32Rep"),
+    ICONV("hs_iconv", "ccall", "unsafe", listOf("Int64Rep", "AddrRep", "AddrRep", "AddrRep", "AddrRep", null), "Word64Rep");
 
     val readiness: Boolean get() = this == READY_SAFE || this == READY_UNSAFE
     val seekConstant: Boolean get() = this == SEEK_SET || this == SEEK_CUR || this == SEEK_END
     val stat: Boolean get() = this == SIZEOF_STAT || statField ||
         this == IS_REG || this == IS_CHR || this == IS_BLK || this == IS_DIR || this == IS_FIFO || this == IS_SOCK
     val statField: Boolean get() = this == ST_DEV || this == ST_INO || this == ST_MODE || this == ST_SIZE
+    val iconv: Boolean get() = this == LOCALE || this == ICONV_OPEN || this == ICONV_CLOSE || this == ICONV
 }
 
 internal object CoreOriginalStdio {
     @JvmStatic fun current(node: Node): ManagedStdio = Language.currentState(node).stdio
+    @JvmStatic fun iconv(node: Node): ManagedIconv = Language.currentState(node).iconv
 
     private val scalarKeys = setOf("kind", "primReps", "evaluated")
     private val tupleKeys = scalarKeys + setOf("aggregate", "components")
@@ -63,7 +69,8 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation.readiness || operation.seekConstant || operation.stat, "strict operand operation")
+        requireProof(operation.readiness || operation.seekConstant || operation.stat || operation.iconv,
+            "strict operand operation")
         val primitive = operation.arguments[index]
         val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }
         val reps = listOfNotNull(primitive)

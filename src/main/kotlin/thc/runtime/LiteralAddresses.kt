@@ -34,6 +34,13 @@ internal class ManagedAddress private constructor(
     internal fun cbitsOffset(): Long { size(); return offset }
     internal fun cbitsOwner(): ManagedAllocation? = owner
     internal fun cbitsSize(): Long = size()
+    internal fun availableBytes(): Long = size() - offset
+
+    /** Validate byte-only transport without exposing allocation storage. */
+    internal fun requireByteRegion(count: Long, writable: Boolean = false) {
+        requireRange(0, count, writable)
+        owner?.requireByteRegion(offset, count, writable)
+    }
 
     private fun size(): Long { requireBytes(); return owner?.size ?: (literalBytes ?: mutableBytes)?.size?.toLong()
         ?: fault("Null Addr# has no backing storage")

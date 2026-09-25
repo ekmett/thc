@@ -68,7 +68,10 @@ def main():
     output = args.output.resolve() / "thc/cbits"
     output.mkdir(parents=True, exist_ok=True)
     commands = []
-    for name, source in (("md5", ROOT / "src/main/c/md5-api.c"),):
+    sources = {"md5": ROOT / "src/main/c/md5-api.c"}
+    if system == "Linux":
+        sources["iconv"] = ROOT / "src/main/c/iconv-api.c"
+    for name, source in sources.items():
         command = [*compiler, "-O1", "-g", "-fno-strict-aliasing", "-emit-llvm", "-c",
                    f"-ffile-prefix-map={ROOT}=.", f"-fdebug-prefix-map={ROOT}=.",
                    "-I", str(reference), "-I", str(headers[0].parent), str(source.relative_to(ROOT)),
@@ -80,10 +83,10 @@ def main():
                 "system": system, "architecture": arch,
                 "clangVersion": subprocess.check_output([clang, "--version"], text=True),
                 "ghc": "9.14.1", "commands": commands,
-                "sources": [record(reference / n) for n in PINNED] + [record(ROOT / "src/main/c/md5-api.c")],
-                "artifacts": [record(output / (n + ".bc")) for n in ("md5",)]}
+                "sources": [record(reference / n) for n in PINNED] + [record(p) for p in sources.values()],
+                "artifacts": [record(output / (n + ".bc")) for n in sources]}
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    print(f"Compiled unchanged GHC MD5 for {target}")
+    print(f"Compiled C resources {', '.join(sources)} for {target}")
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE LambdaCase #-}
-module THC.Plugin (plugin, serializePostTidyCore) where
+module THC.Plugin (plugin, serializeOptimizedCore, serializePostTidyCore) where
 
 import GHC.Plugins
 import GHC.Hs (HsParsedModule(..), HsModule(..), HsDecl(..), GhcPs)
@@ -771,11 +771,32 @@ exprCons = \case
 exportModule :: [CommandLineOption] -> ModGuts -> CoreM ModGuts
 exportModule opts guts = do
   flags <- getDynFlags
-  sources <- liftIO $ loadSources ("source-notes" `elem` opts) (concatMap flattenBind (mg_binds guts))
+  (d,result) <- liftIO $ optimizedModule flags opts guts
+  let dir = case opts of [] -> "build/core"; x:_ -> x
+      closureRoots = mapMaybe (stripPrefix "closure=") (drop 1 opts)
+      modName = moduleNameString (moduleName (mg_module guts))
+      binds = concatMap flattenBind (mg_binds guts)
+  liftIO $ do
+    let path = coreOutputPath opts dir (unitString (moduleUnit (mg_module guts))) modName
+    createDirectoryIfMissing True (takeDirectory path)
+    writeFile path (json result ++ "\n")
+    modifyIORef' sourceDefinitions ((d,binds):)
+    let roots = [v | (v,_) <- binds, occNameString (nameOccName (varName v)) `elem` closureRoots]
+    if null roots then pure () else exportInterfaceClosure opts dir d roots
+  pure guts
+
+-- | The same pre-Tidy serializer used by the plugin, without filesystem writes
+-- or closure registration. Callers must supply genuine optimized ModGuts.
+serializeOptimizedCore :: DynFlags -> [CommandLineOption] -> ModGuts -> IO String
+serializeOptimizedCore flags opts guts = do
+  (_,result) <- optimizedModule flags opts guts
+  pure (json result ++ "\n")
+
+optimizedModule :: DynFlags -> [CommandLineOption] -> ModGuts -> IO (Ctx,J)
+optimizedModule flags opts guts = do
+  sources <- loadSources ("source-notes" `elem` opts) (concatMap flattenBind (mg_binds guts))
   let unit = unitString (moduleUnit (mg_module guts))
       d = Ctx flags (unit ++ ":" ++ moduleNameString (moduleName (mg_module guts))) (if "unit-qualified" `elem` opts then Just unit else Nothing) emptyVarSet emptyVarSet True True sources []
-      dir = case opts of [] -> "build/core"; x:_ -> x
-      closureRoots = mapMaybe (stripPrefix "closure=") (drop 1 opts)
       modName = moduleNameString (moduleName (mg_module guts))
       binds = concatMap flattenBind (mg_binds guts)
       cons = nubBy (\a b -> dataConName a == dataConName b) $ concatMap tyConDataCons (mg_tcs guts) ++ concatMap (exprCons . snd) binds
@@ -789,14 +810,7 @@ exportModule opts guts = do
         , ("rules",S (pretty d (mg_rules guts)))
         , ("lowering",O [("typeArguments",S "erased"),("coercionArguments",S "void-value"),("casts",S "erased"),("ticks",S (if "source-notes" `elem` opts then "source-notes-metadata" else "erased"))])
         ] ++ sourceTableFields d
-  liftIO $ do
-    let path = coreOutputPath opts dir (unitString (moduleUnit (mg_module guts))) modName
-    createDirectoryIfMissing True (takeDirectory path)
-    writeFile path (json result ++ "\n")
-    modifyIORef' sourceDefinitions ((d,binds):)
-    let roots = [v | (v,_) <- binds, occNameString (nameOccName (varName v)) `elem` closureRoots]
-    if null roots then pure () else exportInterfaceClosure opts dir d roots
-  pure guts
+  pure (d,result)
 
 -- Package rebuilding needs identities that agree with the newly emitted
 -- interfaces, including Tidy-generated external names and implicit selectors.
