@@ -5,7 +5,9 @@
 @import url("linuwial.css");
 :root { color-scheme: light dark; }
 body { margin: 0; background: var(--thc-paper); color: var(--thc-ink); font: 1rem/1.6 Georgia, "Times New Roman", serif; }
-a, a:visited { color: var(--thc-link); text-decoration-color: var(--thc-line); }
+a[href]:link, a[href]:visited, a[href].def:link, a[href].def:visited {
+  color: var(--thc-link); text-decoration-color: var(--thc-line);
+}
 a:hover { text-decoration-color: currentColor; }
 a:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--thc-accent); outline-offset: 2px; }
 h1, h2, h3, h4 { color: var(--thc-heading); font-family: Georgia, "Times New Roman", serif; font-weight: 400; line-height: 1.25; }
@@ -26,7 +28,14 @@ code, tt { background: var(--thc-inline-code); }
 .quickjump, #search { color: var(--thc-ink); background: var(--thc-paper); border: 1px solid var(--thc-line); }
 #content, #description, #interface, #synopsis, #table-of-contents,
 #module-header, #module-list, .doc, .subs, .decl, table { color: var(--thc-ink); background-color: var(--thc-paper); }
-#synopsis summary, #table-of-contents .caption, .caption,
-#search-form input, #search-results { color: var(--thc-ink); background: var(--thc-pale); border-color: var(--thc-line); }
+#synopsis summary, #search-form input, #search-results {
+  color: var(--thc-ink); background: var(--thc-pale); border-color: var(--thc-line);
+}
+.caption, #table-of-contents .caption, #module-list .caption {
+  color: var(--thc-heading); background: transparent;
+  font-family: Georgia, "Times New Roman", serif; font-weight: 400;
+}
+#contents-list, table.info, .subs .src { background: var(--thc-pale); color: var(--thc-ink); border-color: var(--thc-line); }
+#footer { background: var(--thc-pale); color: var(--thc-muted); border-color: var(--thc-line); }
 html, body, blockquote { background-color: var(--thc-paper); color: var(--thc-ink); }
 @media (max-width: 800px) { #content { padding: 20px; } pre { max-width: 100%; } }
