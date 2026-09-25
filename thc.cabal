@@ -12,6 +12,11 @@ maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  test/fixtures/run-scalar-cbits/src/Scalar.hs
+  test/fixtures/run-scalar-cbits/src/ScalarAgain.hs
+  test/fixtures/run-scalar-cbits/app/Main.hs
+  test/fixtures/run-scalar-cbits/cbits/scalar.c
+  test/fixtures/run-scalar-cbits/cbits/scalar.h
   compiler/test-fixtures/OriginalStringRtsNative.hs
   compiler/test-fixtures/RtsShutdownNative.hs
   compiler/pinned-ghc-internal/cbits/strerror.c
@@ -278,6 +283,7 @@ executable thc
     THC.Driver.Cabal
     THC.Driver.Cache
     THC.Driver.ForeignBitcode
+    THC.Driver.ScalarBitcode
     THC.Driver.GhcProxy
     THC.Driver.Installed
     THC.Driver.InstalledForeign
@@ -315,9 +321,11 @@ test-suite driver-tests
     RunTests
     ProjectTests
     StoreProjectTests
+    ScalarBitcodeTests
     InstalledForeignTests
     THC.Driver.Installed
     THC.Driver.InstalledForeign
+    THC.Driver.ScalarBitcode
   build-tool-depends: thc:thc
   build-depends:
     base >= 4.22 && < 4.23,
@@ -411,6 +419,7 @@ executable thc-fixtures
     OriginalRtsLocksFixtures
     RtsDiagnosticFixtures
     OriginalOpenFixtures
+    PackageScalarFixtures
     OriginalTermiosFixtures
     OriginalTcsetattrFixtures
     OriginalTcgetattrFixtures
@@ -430,6 +439,7 @@ executable thc-fixtures
     THC.Driver.Cabal
     THC.Driver.Cache
     THC.Driver.ForeignBitcode
+    THC.Driver.ScalarBitcode
     THC.Driver.Installed
     THC.Driver.InstalledForeign
     THC.Driver.Json
