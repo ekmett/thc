@@ -122,7 +122,7 @@ class SimdFamiliesTest(unittest.TestCase):
 
     def test_exact_machine_contracts_and_recursive_lanes(self):
         families = GEN.families()
-        self.assertEqual(164, len(GEN.contracts(families)))
+        self.assertEqual(168, len(GEN.contracts(families)))
         for family in families:
             for operation in family['operations']:
                 name = operation + family['name'] + '#'
@@ -172,7 +172,7 @@ class SimdFamiliesTest(unittest.TestCase):
             self.assertIn(f'frame, value.lane{i});', bytecode)
 
     def test_signed_min_max_select_high_bit_lanes(self):
-        for name in ('Int8X16', 'Int16X8', 'Int32X4', 'Int32X8', 'Int32X16', 'Int64X2', 'Int64X4', 'Int64X8'):
+        for name in ('Int8X16', 'Int16X8', 'Int16X16', 'Int32X4', 'Int32X8', 'Int32X16', 'Int64X2', 'Int64X4', 'Int64X8'):
             family = next(f for f in GEN.families() if f['name'] == name)
             width = family['bits'] // family['lanes']
             low, high = -(1 << (width - 1)), (1 << (width - 1)) - 1
@@ -182,7 +182,7 @@ class SimdFamiliesTest(unittest.TestCase):
                 self.assertEqual(signed(high + 17), result(family, 'max', lane, a, b))
 
     def test_unsigned_min_max_select_high_bit_lanes(self):
-        for name in ('Word8X16', 'Word16X8', 'Word32X4', 'Word32X8', 'Word32X16', 'Word64X2', 'Word64X4', 'Word64X8'):
+        for name in ('Word8X16', 'Word16X8', 'Word16X16', 'Word32X4', 'Word32X8', 'Word32X16', 'Word64X2', 'Word64X4', 'Word64X8'):
             family = next(f for f in GEN.families() if f['name'] == name)
             width = family['bits'] // family['lanes']
             high = (1 << width) - 1

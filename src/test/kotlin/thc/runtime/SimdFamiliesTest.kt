@@ -74,7 +74,7 @@ class SimdFamiliesTest {
     }
 
     @Test fun exactLaneSignWidthLogicalTupleAndCallingProofsRemainRequired() {
-        assertEquals(164, GeneratedVectors.operations.size)
+        assertEquals(168, GeneratedVectors.operations.size)
         for ((name, tuple, vector) in listOf(
             Triple("Word64X2", GeneratedVectors.unpackedWord64X2, GeneratedVectors.proofWord64X2),
             Triple("Word32X8", GeneratedVectors.unpackedWord32X8, GeneratedVectors.proofWord32X8),
@@ -184,6 +184,34 @@ class SimdFamiliesTest {
             }
             for (arity in listOf(0, 1, 3)) assertThrows(RuntimeFault::class.java) {
                 CoreVectors.validate(name, List(arity) { proof }, proof)
+            }
+        }
+    }
+
+    @Test fun short16ExtremaDistinguishSignedFromUnsignedOrder() {
+        val signedLeft = Int16X16.insert(Int16X16.broadcast(Short.MIN_VALUE), -1, 15L)
+        val signedRight = Int16X16.insert(Int16X16.broadcast(Short.MAX_VALUE), 0, 15L)
+        val unsignedLeft = Word16X16.insert(Word16X16.broadcast(Short.MIN_VALUE), -1, 15L)
+        val unsignedRight = Word16X16.insert(Word16X16.broadcast(Short.MAX_VALUE), 0, 15L)
+        val signedMin = Int16X16.min(signedLeft, signedRight)
+        val signedMax = Int16X16.max(signedLeft, signedRight)
+        val unsignedMin = Word16X16.min(unsignedLeft, unsignedRight)
+        val unsignedMax = Word16X16.max(unsignedLeft, unsignedRight)
+        assertEquals(listOf(-32768, -32768, -1), listOf(signedMin.lane0, signedMin.lane7, signedMin.lane15).map { it.toInt() })
+        assertEquals(listOf(32767, 32767, 0), listOf(signedMax.lane0, signedMax.lane7, signedMax.lane15).map { it.toInt() })
+        assertEquals(listOf(32767, 32767, 0), listOf(unsignedMin.lane0, unsignedMin.lane7, unsignedMin.lane15).map { it.toInt() and 0xffff })
+        assertEquals(listOf(32768, 32768, 65535), listOf(unsignedMax.lane0, unsignedMax.lane7, unsignedMax.lane15).map { it.toInt() and 0xffff })
+        for ((family, proof, wrongSign) in listOf(
+            Triple("Int16X16", GeneratedVectors.proofInt16X16, GeneratedVectors.proofWord16X16),
+            Triple("Word16X16", GeneratedVectors.proofWord16X16, GeneratedVectors.proofInt16X16))) {
+            for (op in listOf("min", "max")) {
+                val name = "$op$family#"
+                CoreVectors.validate(name, listOf(proof, proof), proof)
+                for (wrong in listOf(wrongSign, CoreVectors.proof16, GeneratedVectors.unpackedInt16X16)) {
+                    assertThrows(RuntimeFault::class.java) { CoreVectors.validate(name, listOf(wrong, proof), proof) }
+                    assertThrows(RuntimeFault::class.java) { CoreVectors.validate(name, listOf(proof, wrong), proof) }
+                    assertThrows(RuntimeFault::class.java) { CoreVectors.validate(name, listOf(proof, proof), wrong) }
+                }
             }
         }
     }
