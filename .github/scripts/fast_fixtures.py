@@ -23,7 +23,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "542b3777f024c70cdb008d26622e71bdd5ba64dbd0cdcd3379ea2b2c2323f604"
+FULL_PREPARATION_PLAN = "808d71ee5e1225026d4157623ef7037d0f5442eb486b8a1a735d845f9aae4f49"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -143,6 +143,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     *fast_inputs.ORIGINAL_FD_READY_OUTPUTS,
     *fast_inputs.ORIGINAL_RTS_LOCK_OUTPUTS,
     *(fast_inputs.ORIGINAL_OPEN_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-open/manifest.json"}),
+    *(fast_inputs.ORIGINAL_TERMIOS_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-termios/manifest.json"}),
     "build/original-handle-readiness/manifest.json",
     "build/small-arrays/manifest.json",
     "build/simd-capability-smoke/manifest.json",
@@ -273,6 +274,10 @@ def _output_hashes(root, group):
         name = "build/original-open/manifest.json"
         expected = fast_inputs.original_open_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
         return _manifest_output_hashes(root, name, expected)
+    if group["outputs"] == ["build/original-termios"]:
+        name = "build/original-termios/manifest.json"
+        expected = fast_inputs.termios_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
     files = set()
     for output in group["outputs"]:
         path = root / _relative(output)
@@ -398,7 +403,7 @@ def _full_output_hashes(root):
             if fast_inputs.GMP_NATIVE_HOST:
                 files.update(_gmp_output_hashes(root))
             continue
-        if name in ("build/original-rts-locks", "build/original-open"):
+        if name in ("build/original-rts-locks", "build/original-open", "build/original-termios"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
         for member in path.rglob("*"):

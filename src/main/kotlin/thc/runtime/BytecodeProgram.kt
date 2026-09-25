@@ -1396,7 +1396,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio == OriginalStdioOp.FSTAT || originalStdio == OriginalStdioOp.OPEN ||
+                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio == OriginalStdioOp.FSTAT || originalStdio == OriginalStdioOp.OPEN ||
                             originalStdio.iconv || originalStdio.strerror || originalStdio.duplication || originalStdio.locking)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
@@ -1405,7 +1405,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 }
                 tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
-                    val result = destination.single()
+                    val result = if (originalStdio.result != null) destination.single()
+                        else b.createLocal("unused original State destination", "primitive")
                     // OPEN declares Addr#, CInt, Word32, State. Preserve that
                     // evaluation order while sharing the transfer instruction's
                     // long/address/long lanes (no extra BytecodeDSL family).
@@ -1413,8 +1414,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.createLocal("original open path", "object").also {
                             b.beginStoreLocal(it); operands[0].emit(e); b.endStoreLocal()
                         } else null
-                    val status = originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
+                    val status = originalStdio.termios || originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
                         originalStdio == OriginalStdioOp.CLOSE || originalStdio == OriginalStdioOp.DUP || originalStdio == OriginalStdioOp.FSTAT || originalStdio == OriginalStdioOp.UNLOCK || originalStdio.seekConstant || originalStdio.stat
+                    // Setter declares address before value. Store that operand
+                    // once before filling the shared long/address/State lanes.
+                    val termiosAddress = if (originalStdio == OriginalStdioOp.POKE_LFLAG)
+                        b.createLocal("termios setter address", "object").also {
+                            b.beginStoreLocal(it); operands[0].emit(e); b.endStoreLocal()
+                        } else null
                     if (originalStdio == OriginalStdioOp.LOCALE) b.beginOriginalLocale(result)
                     else if (originalStdio == OriginalStdioOp.ICONV_OPEN) b.beginOriginalIconvOpen(result)
                     else if (originalStdio == OriginalStdioOp.ICONV_CLOSE) b.beginOriginalIconvClose(result)
@@ -1430,6 +1437,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (originalStdio == OriginalStdioOp.OPEN) {
                         operands[1].emit(e); b.emitLoadLocal(openPath!!)
                         operands[2].emit(e); operands[3].emit(e)
+                    } else if (originalStdio.termios) {
+                        if (originalStdio == OriginalStdioOp.POKE_LFLAG) operands[1].emit(e) else b.emitLoadConstant(0L)
+                        if (termiosAddress != null) b.emitLoadLocal(termiosAddress)
+                        else if (originalStdio.termiosAddress) operands[0].emit(e)
+                        else b.emitLoadConstant(ManagedAddress.nullAddress())
+                        operands.last().emit(e)
                     } else if (status) {
                         if (originalStdio == OriginalStdioOp.ERRNO || originalStdio.seekConstant ||
                             originalStdio == OriginalStdioOp.SIZEOF_STAT || originalStdio.statField)

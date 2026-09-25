@@ -32,6 +32,14 @@ LIBDW_UNAVAILABLE = {
     'libdwLookupLocation': (('AddrRep', 'AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
     'libdwPoolClear': ((None,), (None,)),
 }
+TERMIOS_OPERATIONS = {
+    '__hscore_lflag': (('AddrRep', None), (None, 'Word32Rep')),
+    '__hscore_poke_lflag': (('AddrRep', 'Word32Rep', None), (None,)),
+    '__hscore_ptr_c_cc': (('AddrRep', None), (None, 'AddrRep')),
+    '__hscore_sizeof_termios': ((None,), (None, 'IntRep')),
+    **{f'__hscore_{name}': ((None,), (None, 'Int32Rep')) for name in ('echo', 'icanon', 'vmin', 'vtime', 'tcsanow')},
+}
+TERMIOS_SYMBOLS = frozenset(TERMIOS_OPERATIONS)
 SEEK_CONSTANTS = frozenset((
     'ghczuwrapperZC1ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuSET',
     'ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR',
@@ -45,6 +53,8 @@ STACK_INFO = frozenset(('getStackInfoTableAddrzh', 'getInfoTableAddrszh', 'looku
 OPERATIONS = {
     **{symbol: ('ccall', 'unsafe', arguments, output)
        for symbol, (arguments, output) in LIBDW_UNAVAILABLE.items()},
+    **{symbol: ('ccall', 'unsafe', arguments, output)
+       for symbol, (arguments, output) in TERMIOS_OPERATIONS.items()},
     **{symbol: ('ccall', 'unsafe', arguments, output)
        for symbol, (arguments, output) in GMP_OPERATIONS.items()},
     '__hscore_sizeof_stat': ('ccall', 'unsafe', (None,), (None, 'IntRep')),

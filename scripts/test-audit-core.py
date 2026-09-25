@@ -2046,18 +2046,27 @@ class OriginalGmpAuditTest(unittest.TestCase):
 
 
 class OriginalDupAuditTest(unittest.TestCase):
-    """Descriptor/RTS controls; genuine declarations live in Haskell fixtures."""
-    symbols = ('dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile')
+    """Original scalar/State controls; genuine declarations live in Haskell fixtures."""
+    termios = {
+        '__hscore_lflag': (('AddrRep', None), 'Word32Rep'),
+        '__hscore_poke_lflag': (('AddrRep', 'Word32Rep', None), None),
+        '__hscore_ptr_c_cc': (('AddrRep', None), 'AddrRep'),
+        '__hscore_sizeof_termios': ((None,), 'IntRep'),
+        **{f'__hscore_{name}': ((None,), 'Int32Rep') for name in ('echo', 'icanon', 'vmin', 'vtime', 'tcsanow')},
+    }
+    symbols = ('dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile', *termios)
     def fixture(self, symbol):
         arguments = (('Word64Rep', 'Word64Rep', 'Word64Rep', 'Int32Rep', None) if symbol == 'lockFile' else
                      ('Word64Rep', None) if symbol == 'unlockFile' else
                      ('Int32Rep', 'AddrRep', None) if symbol == '__hscore_fstat' else
                      ('AddrRep', 'Int32Rep', 'Word32Rep', None) if symbol == '__hscore_open' else
                      ('Int32Rep', None) if symbol == 'dup' else ('Int32Rep', 'Int32Rep', None))
+        arguments, output = self.termios.get(symbol, (arguments, 'Int32Rep'))
         scalar = lambda rep, evaluated: dict(kind='void' if rep is None else 'address' if rep == 'AddrRep' else 'long',
             primReps=[] if rep is None else [rep], evaluated=evaluated)
         parameters = [dict(id=f'a{i}', lifted=False, rep=scalar(p, True)) for i, p in enumerate(arguments)]
-        result = tuple_rep(scalar(None, True), scalar('Int32Rep', True)); result['evaluated'] = False
+        result = tuple_rep(*(scalar(rep, True) for rep in ((None,) if output is None else (None, output))))
+        result['evaluated'] = False
         descriptor = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='ghc-internal', isFunction=True),
             convention='ccall', safety='unsafe', arity=len(arguments), suppliedArity=len(arguments),
             argumentReps=[scalar(p, False) for p in arguments], resultRep=copy.deepcopy(result))
@@ -2118,6 +2127,25 @@ class OriginalDupAuditTest(unittest.TestCase):
                 result = meta['foreignCall']['resultRep'] if declared else meta['rep']
                 result['components'][0]['primReps'] = ['IntRep']
                 self.assertFalse(self.audit(module)['accepted'])
+
+    def test_termios_state_only_result_and_excluded_terminal_calls(self):
+        self.assertEqual(set(self.termios), core_original_foreign.TERMIOS_SYMBOLS)
+        for symbol in self.termios:
+            for declared in (False, True):
+                for mutation in ('bare', 'empty', 'extra', 'sum'):
+                    module = self.fixture(symbol); meta = self.call(module)[6]
+                    owner, key = (meta['foreignCall'], 'resultRep') if declared else (meta, 'rep')
+                    result = owner[key]
+                    if mutation == 'bare': owner[key] = result['components'][0]
+                    if mutation == 'empty': result['components'] = []
+                    if mutation == 'extra': result['components'].append(copy.deepcopy(result['components'][0]))
+                    if mutation == 'sum': result['aggregate'] = 'unboxed-sum'
+                    self.assertFalse(self.audit(module)['accepted'])
+        for symbol in ('prefix__hscore_lflag', 'tcgetattr', 'tcsetattr', '__hscore_sigttou', '__hscore_sizeof_sigset_t'):
+            self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
+            module = self.fixture('__hscore_lflag')
+            self.call(module)[6]['foreignCall']['target']['symbol'] = symbol
+            self.assertFalse(self.audit(module)['accepted'])
 
 
 if __name__ == '__main__':

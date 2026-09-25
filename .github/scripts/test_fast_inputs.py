@@ -21,6 +21,21 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def test_termios_exact_image_fixture_inventory(self):
+        self.assertEqual(97, len(cache.ORIGINAL_TERMIOS_OUTPUTS))
+        self.assertIn('build/original-termios/manifest.json', DECLARED_REQUIRED)
+        for name in cache.ORIGINAL_TERMIOS_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(name, {}), name)
+            if name == 'build/original-termios/native/oracle':
+                self.assertEqual(0o755, cache.safe_mode(0o755, name))
+            else:
+                with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, name)
+        for suffix in ('native/other', 'logs/extra.stdout', 'pre/unknown.audit.json',
+                       'attempt-0/oracle.json', 'pre/core/Other.json', 'native/OriginalTermiosAudit.o'):
+            self.assertFalse(cache.allowed_payload('build/original-termios/' + suffix, {}), suffix)
+        for suffix in ('../outside', 'logs/../../outside'):
+            with self.assertRaises(cache.CacheMiss): cache.file_path(self.root, 'build/original-termios/' + suffix)
+
     def test_original_open_exact_artifact_and_executable_scope(self):
         self.assertEqual(49, len(cache.ORIGINAL_OPEN_OUTPUTS))
         self.assertIn('build/original-open/manifest.json', DECLARED_REQUIRED)

@@ -370,6 +370,7 @@ jobs:
             build/libdw-unavailable/manifest.json
             build/libdw-unavailable/oracle.json
             build/libdw-unavailable/logs/
+            build/original-termios/
             build/original-gmp/
             build/address-fields/
             build/data-to-tag/

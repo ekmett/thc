@@ -128,6 +128,7 @@ tasks.withType<Test>().configureEach {
             "original-fd-ready/**/*.json", "original-fd-ready/native/oracle", "original-fd-ready/native/private-file",
             "original-rts-locks/**/*.json", "original-rts-locks/logs/*.stdout", "original-rts-locks/logs/*.stderr",
             "original-open/**/*.json", "original-open/logs/*.stdout", "original-open/logs/*.stderr", "original-open/native/oracle",
+            "original-termios/**/*.json", "original-termios/logs/*.stdout", "original-termios/logs/*.stderr", "original-termios/native/oracle",
             "original-fd-ready/logs/*.stdout", "original-fd-ready/logs/*.stderr",
             "original-iconv/**/*.json", "original-iconv/native/oracle",
             "original-iconv/logs/*.stdout", "original-iconv/logs/*.stderr",
@@ -429,3 +430,32 @@ val generatePosixStatAbi by tasks.registering {
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/posix-stat-abi")) }
 tasks.processResources { dependsOn(generatePosixStatAbi) }
+
+val generateTermiosAbi by tasks.registering {
+    dependsOn(generateStdioAbi)
+    val source = layout.projectDirectory.file("src/main/c/termios-abi-probe.c").asFile
+    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    val output = layout.buildDirectory.dir("generated/termios-abi")
+    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output); outputs.upToDateWhen { false }
+    doLast {
+        fun run(command: List<String>) = providers.exec { commandLine(command) }.standardOutput.asText.get()
+        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
+        val target = host["target"] as String
+        val command = listOf(clang.get()) + if (host["system"] == "Linux") listOf("--target=$target") else emptyList()
+        require(run(command + "-dumpmachine").trim() == target) { "Termios compiler target changed" }
+        val executable = temporaryDir.resolve("termios-abi-probe")
+        run(command + listOf("-std=c11", source.path, "-o", executable.path))
+        val probe = JsonSlurper().parseText(run(listOf(executable.path))) as Map<*, *>
+        val manifest = linkedMapOf<String, Any?>("schema" to 1, "system" to host["system"],
+            "architecture" to host["architecture"], "target" to target,
+            "sourceSha256" to MessageDigest.getInstance("SHA-256").digest(source.readBytes()).joinToString("") { "%02x".format(it) },
+            "termios" to probe)
+        val destination = output.get().asFile.resolve("thc/native/termios-abi.json")
+        destination.parentFile.mkdirs()
+        destination.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n")
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/termios-abi")) }
+tasks.processResources { dependsOn(generateTermiosAbi) }
