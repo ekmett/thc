@@ -116,6 +116,48 @@ lazySwapRef raw = runRW# (\s0 ->
     a *# 257# +# b
   } } } } } })
 
+-- GHC atomically installs a lazy selector for the first field of the shared
+-- result record. The returned old value and complete record remain distinct.
+{-# OPAQUE modifyPair #-}
+modifyPair :: Int -> (Int, Int)
+modifyPair (I# old) = (I# (old +# 17#), I# (old *# 3#))
+
+{-# OPAQUE modifyRef #-}
+modifyRef :: Int# -> Int#
+modifyRef raw = runRW# (\s0 ->
+  case newMutVar# (I# raw) s0 of { (# s1, cell #) ->
+  case atomicModifyMutVar2# cell modifyPair s1 of { (# s2, old, pair #) ->
+  case readMutVar# cell s2 of { (# _, current #) ->
+  case old of { I# a -> case pair of { (I# b, I# c) -> case current of { I# d ->
+    a +# b *# 257# +# c *# 65537# +# d *# 16777259#
+  } } } } } })
+
+{-# OPAQUE bottomPair #-}
+bottomPair :: (Box, Box)
+bottomPair = bottomPair
+
+-- Returning old must neither evaluate the modifier nor enter its record.
+{-# OPAQUE lazyModifyRef #-}
+lazyModifyRef :: Int# -> Int#
+lazyModifyRef raw = runRW# (\s0 ->
+  case newMutVar# (Box (I# raw)) s0 of { (# s1, cell #) ->
+  case atomicModifyMutVar2# cell (\_ -> bottomPair) s1 of { (# _, old, _ #) ->
+  case old of { Box (I# value) -> value }
+  } })
+
+-- The function itself is bottom, rather than a function returning a bottom record.
+{-# OPAQUE bottomModifier #-}
+bottomModifier :: Box -> (Box, Box)
+bottomModifier = bottomModifier
+
+{-# OPAQUE lazyBottomModifierRef #-}
+lazyBottomModifierRef :: Int# -> Int#
+lazyBottomModifierRef raw = runRW# (\s0 ->
+  case newMutVar# (Box (I# raw)) s0 of { (# s1, cell #) ->
+  case atomicModifyMutVar2# cell bottomModifier s1 of { (# _, old, _ #) ->
+  case old of { Box (I# value) -> value }
+  } })
+
 -- An unlifted boxed payload still contains a lazy lifted field.
 type Product :: UnliftedType
 data Product = Product Int# Box

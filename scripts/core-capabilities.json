@@ -626,6 +626,7 @@
     "eqStablePtr#": 2,
     "readMutVar#": 2,
     "atomicSwapMutVar#": 3,
+    "atomicModifyMutVar2#": 3,
     "writeMutVar#": 3,
     "newMVar#": 1,
     "takeMVar#": 2,
@@ -3246,6 +3247,10 @@
         "state",
         "boxed"
       ]
+    },
+    "atomicModifyMutVar2#": {
+      "arguments": ["mutvar", "function", "state"],
+      "result": ["state", "lifted", "lifted"]
     },
     "writeMutVar#": {
       "arguments": [

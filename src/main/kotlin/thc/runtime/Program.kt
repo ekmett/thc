@@ -2083,7 +2083,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val operation = MutVarOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 mutVarExpression(operation, tupleProof,
-                    args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }.toTypedArray())
+                    args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }.toTypedArray(),
+                    language, metrics, enableAsync)
             } else if (fn[0] == "prim" && StablePointerOp.named(fn[1] as String) != null) {
                 val operation = StablePointerOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
