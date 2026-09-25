@@ -3,11 +3,9 @@
 
 module ProjectTests (tests) where
 
-import Codec.Archive.Zip (findEntryByPath, fromEntry, toArchiveOrFail)
 import Control.Exception (bracket)
 import Control.Monad (forM, forM_)
-import Data.Aeson (Value, eitherDecode')
-import qualified Data.ByteString.Lazy as BL
+import Data.Aeson (Value)
 import Data.List (isInfixOf, isPrefixOf, sort)
 import System.Directory (canonicalizePath, copyFile, createDirectoryIfMissing,
                          doesFileExist, getModificationTime, listDirectory)
@@ -169,6 +167,7 @@ cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ T
         (sort [string (field source "path") | source <- generated])
       assertEqual "generated-source receipts match"
         generated (objects inputs "generatedSources")
+      assertImportProvenanceOption inputs
       plan <- readJson (output </> "native/cache/plan.json")
       let entry = one ((== "exe:cstring") . string . (`field` "component-name"))
                       (objects plan "install-plan")
@@ -320,6 +319,8 @@ forBackends env invoke output project entryOf unit bundleRef modulePath = go Not
       forM_ bundles $ \(_, (path, _)) ->
         assertBool "in-place Core stays in Cabal's build directory"
           (splitDirectories (output </> "native") `isPrefixOf` splitDirectories path)
+      forM_ bundles $ \(_, (path, _)) ->
+        assertImportProvenanceOption =<< readCore path "inplace-manifest.json"
       times <- mapM (getModificationTime . fst . snd) bundles
       case previous of
         Nothing -> pure ()
@@ -338,16 +339,14 @@ forBackends env invoke output project entryOf unit bundleRef modulePath = go Not
 moduleNames :: Value -> [String]
 moduleNames = map (string . (`field` "name")) . (`objects` "modules")
 
+assertImportProvenanceOption :: Value -> IO ()
+assertImportProvenanceOption inputs =
+  assertEqual "foreign import proof participates in exporter cache identity" 1
+    (length $ filter (== "foreign-import-provenance")
+      (strings $ field (field inputs "exporter") "options"))
+
 lookupBundle :: String -> [(String, (FilePath, String))] -> (FilePath, String)
 lookupBundle identifier bundles = maybe (error "missing bundle") id (lookup identifier bundles)
-
-readCore :: FilePath -> FilePath -> IO Value
-readCore bundle member = do
-  bytes <- BL.readFile bundle
-  archive <- either fail pure (toArchiveOrFail bytes)
-  entry <- maybe (fail ("missing ZIP member " ++ member)) pure
-           (findEntryByPath member archive)
-  either fail pure (eitherDecode' $ fromEntry entry)
 
 one :: (a -> Bool) -> [a] -> a
 one predicate values = case filter predicate values of

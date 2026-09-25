@@ -6,14 +6,46 @@ module StoreProjectTests (tests) where
 import Control.Exception (bracket)
 import Control.Monad (unless)
 import Data.List (isPrefixOf)
-import System.Directory (getModificationTime, removeFile, removePathForcibly)
-import System.Environment (lookupEnv, setEnv, unsetEnv)
+import System.Directory (Permissions(executable), getModificationTime, getPermissions, removeFile,
+                         removePathForcibly, setPermissions)
+import System.Environment (getEnvironment, lookupEnv, setEnv, unsetEnv)
+import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeDirectory, takeFileName)
+import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
 
 tests :: Env -> Test
-tests env = TestLabel "source-built Cabal store Core" $ TestCase $
+tests env = TestList [proxyOptionsTest env, storeProjectTest env]
+
+proxyOptionsTest :: Env -> Test
+proxyOptionsTest env = TestLabel "global Core replay opts into foreign import provenance" $ TestCase $
+  withFixtureNamed env "test/fixtures/run-store-project" "proxy" $ \project -> do
+    let compiler = project </> "compiler.sh"
+        arguments = project </> "compiler-arguments.txt"
+        settings = [("THC_PROXY_GHC", compiler), ("THC_PROXY_GLOBAL_UNITS", "sample\n"),
+                    ("THC_PROXY_CAPTURE", project </> "capture"),
+                    ("THC_PROXY_PLUGIN_DB", project </> "plugin-db"),
+                    ("THC_PROXY_PLUGIN_UNIT", "thc-plugin"),
+                    ("THC_PROXY_ARGUMENTS", arguments)]
+    writeText compiler "#!/bin/sh\nprintf 'BEGIN\\n' >> \"$THC_PROXY_ARGUMENTS\"\nprintf '%s\\n' \"$@\" >> \"$THC_PROXY_ARGUMENTS\"\n"
+    permissions <- getPermissions compiler
+    setPermissions compiler permissions { executable = True }
+    original <- getEnvironment
+    let environment = settings ++ filter ((`notElem` map fst settings) . fst) original
+        command = (proc (driver env) ["ghc-proxy", "--make", "-this-unit-id", "sample"])
+          { cwd = Just project, env = Just environment }
+    (status, _, stderr) <- readCreateProcessWithExitCode command ""
+    assertEqual stderr ExitSuccess status
+    calls <- lines <$> readText arguments
+    let (_, replay) = break (== "BEGIN") (drop 1 calls)
+        flag = "-fplugin-opt=THC.Plugin:foreign-import-provenance"
+    assertEqual "native compile and Core replay both invoked" 2 (length $ filter (== "BEGIN") calls)
+    assertEqual "replayed compiler receives exactly one provenance opt-in" 1
+      (length $ filter (== flag) replay)
+
+storeProjectTest :: Env -> Test
+storeProjectTest env = TestLabel "source-built Cabal store Core" $ TestCase $
   -- Post-Tidy export uses -g; its Linux assembler cannot quote double quotes in paths.
   withFixtureNamed env "test/fixtures/run-store-project" "project café" $ \project ->
   withCache (takeDirectory project </> "cache") $ do
@@ -47,6 +79,10 @@ tests env = TestLabel "source-built Cabal store Core" $ TestCase $
     assertEqual "native and THC output" (out native) (out first)
     firstManifest <- readJson (output </> "packages.json")
     let firstPath = string (field (bundle firstManifest firstId) "path")
+    firstInputs <- readCore firstPath "inplace-manifest.json"
+    assertEqual "store exporter cache includes foreign import proof" 1
+      (length $ filter (== "foreign-import-provenance")
+        (strings $ field (field firstInputs "exporter") "options"))
     assertBool "store ZIP uses shared application cache"
       ((base </> "cache/core-bundles/v1") `isPrefixOf` firstPath)
     assertEqual "Cabal store ID is ZIP basename" (firstId ++ ".zip") (takeFileName firstPath)

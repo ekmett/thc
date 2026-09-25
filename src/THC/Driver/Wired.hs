@@ -210,7 +210,8 @@ exportPinnedCore sourceRoot ghc ghcPkg pluginLibrary pluginUnit layoutRecipe sta
                 "-this-unit-id", "ghc-internal", "-package", "ghc-internal",
                 "-odir", overlay, "-hidir", overlay, "-I" ++ (sourceRoot </> "include")]
       plugin = "-fplugin-library=" ++ pluginLibrary ++ ";" ++ pluginUnit ++
-               ";THC.Plugin;" ++ BL.unpack (encode [core, "post-tidy", "source-notes"])
+               ";THC.Plugin;" ++ BL.unpack
+                 (encode [core, "post-tidy", "source-notes", "foreign-import-provenance"])
       compile boot path = do
         let target = overlay </> replaceExtension path (if boot then "hi-boot" else "hi")
         exists <- doesFileExist target

@@ -99,7 +99,8 @@ runPackage opts target = do
       -- GHC's optimizer and plugin active under -fno-code, including source
       -- notes, without sending source filenames through its assembler.
       exportArgs = ["-hide-all-packages", "-no-user-package-db", "-package-env", "-",
-                    "-fplugin-opt=THC.Plugin:closure=main"] ++
+                    "-fplugin-opt=THC.Plugin:closure=main",
+                    "-fplugin-opt=THC.Plugin:foreign-import-provenance"] ++
                    packages ++ concatMap (\directory -> ["-i" ++ directory]) dirs ++
                    extensions ++ cpp ++ hcOptions GHC info ++
                    ["-fno-code", "-fwrite-interface", "-fwrite-if-simplified-core", source]

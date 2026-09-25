@@ -39,7 +39,8 @@ runGhcProxy arguments = do
          "-fplugin=THC.Plugin", "-fplugin-trustworthy",
          "-fplugin-opt=THC.Plugin:" ++ core,
          "-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:unit-qualified",
-         "-fplugin-opt=THC.Plugin:source-notes", "-g", "-dcore-lint"])
+         "-fplugin-opt=THC.Plugin:source-notes",
+         "-fplugin-opt=THC.Plugin:foreign-import-provenance", "-g", "-dcore-lint"])
       unless (exported == ExitSuccess) (exitWith exported)
     _ -> pure ()
 
