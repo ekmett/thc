@@ -4151,6 +4151,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class GeneratedWord32X16Insert {
         @Specialization public static Word32X16 apply(Word32X16 vector, long value, long index) { return Word32X16.insert(vector, (int) value, index); }
     }
+    @Operation public static final class GeneratedWord32X16Min {
+        @Specialization public static Word32X16 apply(Word32X16 left, Word32X16 right) { return Word32X16.min(left, right); }
+    }
+    @Operation public static final class GeneratedWord32X16Max {
+        @Specialization public static Word32X16 apply(Word32X16 left, Word32X16 right) { return Word32X16.max(left, right); }
+    }
     @Operation public static final class GeneratedFloatX16Pack {
         @Specialization public static FloatX16 apply(float lane0, float lane1, float lane2, float lane3, float lane4, float lane5, float lane6, float lane7, float lane8, float lane9, float lane10, float lane11, float lane12, float lane13, float lane14, float lane15) { return new FloatX16(lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7, lane8, lane9, lane10, lane11, lane12, lane13, lane14, lane15); }
     }
