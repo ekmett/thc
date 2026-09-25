@@ -239,7 +239,7 @@ class NativeMallocTest {
         }
     }
 
-    @Test fun termiosTransferCopiesBackWholeImagesOnSuccessAndNativeError() = inside { _ ->
+    @Test fun termiosTransferCopiesBackWholeImagesOnSuccessAndNativeError(): Unit = inside { _ ->
         val registry = Language.currentState().nativeAllocations
         val size = TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.nullAddress(), 0).toInt()
         val base = registry.malloc(size.toLong() + 16)
