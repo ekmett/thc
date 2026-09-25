@@ -16,7 +16,7 @@ import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
-import Data.List (isSuffixOf, nub, nubBy, sort, sortOn)
+import Data.List (isSuffixOf, nub, sort, sortOn)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Text as Text
@@ -148,9 +148,11 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   let byId = Map.fromList [(unitId unit, unit) | unit <- units]
   require (Map.size byId == length units) "Cabal plan has duplicate unit IDs"
   selected <- selectExecutable executable units
-  closures <- mapM (dependencyClosure byId . unitId) (filter unitLocal units)
-  let ordered = nubBy (\a b -> unitId a == unitId b) (concat closures)
-      globals = [unit | unit <- ordered, not (unitLocal unit),
+  -- The plan also lists optional tests and benchmarks that `cabal build all`
+  -- did not build. Only the requested executable and its complete dependency
+  -- closure have required build-info; a missing member of that closure fails.
+  ordered <- dependencyClosure byId (unitId selected)
+  let globals = [unit | unit <- ordered, not (unitLocal unit),
                        jsonField (unitValue unit) "type" == Just ("configured" :: String)]
   installed <- if installedPolicy == "pinned" then pure Map.empty else do
     helperContext <- prepareInterfaceHelper context thcRoot
