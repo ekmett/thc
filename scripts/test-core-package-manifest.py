@@ -63,6 +63,38 @@ class PackageManifestTest(unittest.TestCase):
         path = self.manifest([self.unit('first'), self.unit('second')])
         self.assertEqual(['first', 'second'], [source['unit'] for _, source in core_package_manifest.load(path)])
 
+    def test_auditor_combines_verified_package_with_pre_tidy_consumer_without_overlay(self):
+        unit = self.unit('first')
+        original = self.root / 'first.json'
+        source = json.loads(original.read_text())
+        source['bindings'] = [dict(id='first:Shared.value', name='value', lifted=True,
+                                   arity=0, expr=['lit', 'int', '7'])]
+        original.write_text(json.dumps(source))
+        unit['modules'][0]['sha256'] = hashlib.sha256(original.read_bytes()).hexdigest()
+        package = self.bundled(unit)
+        consumer = self.root / 'consumer.json'
+        consumer.write_text(json.dumps(dict(schema=1, ghc='9.14.1', module='Consumer',
+            bindings=[dict(id='root', name='root', arity=0, lifted=True,
+                           expr=['var', 'first:Shared.value'])], constructors=[])))
+        command = ['python3', '-B', str(Path(__file__).with_name('audit-core.py')),
+                   '--package-manifest', str(package), '--entry', 'root', str(consumer)]
+        result = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(0, result.returncode, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual({'root', 'first:Shared.value'}, {b['id'] for b in report['reachableBindings']})
+        source['bindings'][0]['expr'] = ['lit', 'int', '8']
+        conflict = json.loads(consumer.read_text())
+        conflict['bindings'].append(source['bindings'][0])
+        consumer.write_text(json.dumps(conflict))
+        duplicate = subprocess.run(command, capture_output=True, text=True)
+        self.assertNotEqual(0, duplicate.returncode, 'A loose consumer must not replace package originals')
+        self.assertIn('duplicate-binding', {issue['code'] for issue in json.loads(duplicate.stdout)['issues']})
+        with (self.root / 'bundle.zip').open('ab') as archive:
+            archive.write(b'changed')
+        corrupted = subprocess.run(command, capture_output=True, text=True)
+        self.assertNotEqual(0, corrupted.returncode, 'Package validation must run before loose composition')
+        self.assertIn('bundle hash mismatch', corrupted.stderr)
+
     def test_linked_foreign_target_must_match_audit_host(self):
         machine = platform.machine().lower()
         arch = {'amd64': 'x86_64', 'arm64': 'aarch64'}.get(machine, machine)

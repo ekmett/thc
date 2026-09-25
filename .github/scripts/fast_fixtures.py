@@ -98,6 +98,8 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/uncaught-self/pre/audit.json", "build/uncaught-self/post/audit.json",
     "build/uncaught-self/pre/io-audit.json", "build/uncaught-self/post/io-audit.json",
     "build/arithmetic-exceptions/manifest.json",
+    "build/arithmetic-exceptions/core-manifest.json", "build/arithmetic-exceptions/installed/packages.json",
+    "build/arithmetic-exceptions/native/receipt.json",
     "build/arithmetic-exceptions/pre/core/ArithmeticExceptionsAudit.json",
     "build/arithmetic-exceptions/post/core/ArithmeticExceptionsAudit.json",
     "build/arithmetic-exceptions/pre/core/THC.InterfaceClosure.json",

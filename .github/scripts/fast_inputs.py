@@ -673,6 +673,8 @@ def allowed_payload(name, pins):
         return name == "build/original-stack-formatter/manifest.json" or original_stack_formatter_artifact(name)
     if parts[1] == "boxed-array-extensions":
         return name == "build/boxed-array-extensions/manifest.json" or boxed_array_extension_artifact(name)
+    if parts[1:3] == ("arithmetic-exceptions", "installed") and len(parts) == 5 and parts[3] == "bundles":
+        return PurePosixPath(name).suffix == ".zip"
     if parts[1] not in BUILD_DIRS or any(p in ("test-results", "reports", "classes", ".gradle") for p in parts):
         return False
     # Fixture inputs and recorded native objects only, not arbitrary executable
@@ -685,6 +687,16 @@ def allowed_payload(name, pins):
 def hashes_in(value, tc):
     """All fingerprint spellings used by current original preparation manifests."""
     if isinstance(value, dict):
+        if value.get("format") == "thc-core-packages":
+            # Module members name paths inside the independently hashed ZIP,
+            # not files relative to the checkout. Preserve the full ZIP hash;
+            # the production package reader validates its members and layout.
+            for unit in value.get("units", []):
+                if "bundle" in unit:
+                    yield from hashes_in(unit["bundle"], tc)
+                else:
+                    yield from hashes_in(unit.get("modules", []), tc)
+            return
         if "path" in value and "sha256" in value:
             yield value["path"], value["sha256"]
         for stem in ("ghcBinary", "ghcLauncher"):
