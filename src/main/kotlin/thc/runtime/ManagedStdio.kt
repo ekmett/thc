@@ -48,6 +48,16 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return closed
     }
 
+    @TruffleBoundary fun seek(fd: Long, displacement: Long, whence: Long): Long {
+        val abi = hostAbi
+        if (fd != fd.toInt().toLong() || whence != whence.toInt().toLong())
+            throw RuntimeFault("Original seek requires canonical signed CInt descriptor and whence")
+        val position = files.seek(fd, displacement, whence)
+        if (position < 0) lastError.set(if (files.errorKind() == 7L) abi.notSeekable()
+            else abi.error(files.errorKind()))
+        return position
+    }
+
     @TruffleBoundary fun isTerminal(fd: Long): Long {
         val abi = hostAbi
         if (fd != fd.toInt().toLong()) throw RuntimeFault("Original isatty requires a canonical signed CInt descriptor")

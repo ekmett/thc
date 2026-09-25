@@ -14,8 +14,8 @@ int main(void) {
     printf("{\"widths\":{\"charBits\":%d,\"pointer\":%zu,\"int\":%zu,"
            "\"size\":%zu,\"ssize\":%zu},\"errno\":{\"ENOENT\":%d,"
            "\"EACCES\":%d,\"EEXIST\":%d,\"EBADF\":%d,\"EINVAL\":%d,"
-           "\"EIO\":%d,\"ENOTSUP\":%d,\"EBUSY\":%d,\"EISDIR\":%d,\"ENOTTY\":%d}}\n",
+           "\"EIO\":%d,\"ENOTSUP\":%d,\"EBUSY\":%d,\"EISDIR\":%d,\"ENOTTY\":%d,\"ESPIPE\":%d}}\n",
            CHAR_BIT, sizeof(void *), sizeof(int), sizeof(size_t), sizeof(ssize_t),
-           ENOENT, EACCES, EEXIST, EBADF, EINVAL, EIO, ENOTSUP, EBUSY, EISDIR, ENOTTY);
+           ENOENT, EACCES, EEXIST, EBADF, EINVAL, EIO, ENOTSUP, EBUSY, EISDIR, ENOTTY, ESPIPE);
     return 0;
 }

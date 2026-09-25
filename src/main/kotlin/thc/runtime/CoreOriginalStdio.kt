@@ -19,6 +19,8 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
         listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep"),
     ERRNO("__hscore_get_errno", "ccall", "unsafe", listOf(null), "Int32Rep"),
     CLOSE("close", "ccall", "unsafe", listOf("Int32Rep", null), "Int32Rep"),
+    SEEK("ghczuwrapperZC19ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZClseek", "capi", "unsafe",
+        listOf("Int32Rep", "Int64Rep", "Int32Rep", null), "Int64Rep"),
     ISATTY("isatty", "ccall", "unsafe", listOf("Int32Rep", null), "Int32Rep");
 }
 

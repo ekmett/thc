@@ -199,6 +199,15 @@
     }
   },
   "owners": {
+    "compiler/test-fixtures/OriginalStdioSeekAudit.hs": {
+      "junit": ["thc.runtime.OriginalStdioSeekNativeTest"], "python": []
+    },
+    "compiler/test-fixtures/OriginalStdioSeekAuditNative.hs": {
+      "junit": ["thc.runtime.OriginalStdioSeekNativeTest"], "python": []
+    },
+    "test/haskell-fixtures/OriginalStdioSeekFixtures.hs": {
+      "junit": ["thc.runtime.OriginalStdioSeekNativeTest"], "python": []
+    },
     "compiler/test-fixtures/OriginalStdioCloseAudit.hs": {
       "junit": ["thc.runtime.OriginalStdioCloseNativeTest"], "python": []
     },
@@ -826,6 +835,7 @@
         "thc.runtime.OriginalStdioNativeTest",
         "thc.runtime.OriginalStdioReadTest",
         "thc.runtime.OriginalStdioCloseNativeTest",
+        "thc.runtime.OriginalStdioSeekNativeTest",
         "thc.runtime.OriginalHandleReadinessNativeTest",
         "thc.runtime.MutVarTest",
         "thc.runtime.OriginalStackConsumerProofTest",
