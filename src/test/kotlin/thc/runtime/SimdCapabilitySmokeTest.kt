@@ -69,7 +69,8 @@ class SimdCapabilitySmokeTest {
         assertEquals((manifest["rows"] as Number).toInt(), rows.values.sumOf { it.size })
         for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").allowExperimentalOptions(true)
             .option("compiler.Inlining", "false").option("engine.BackgroundCompilation", "false")
-            .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build().use { context ->
+            .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
+            .option("engine.SingleTierCompilationThreshold", "10000000").build().use { context ->
                 context.initialize("thc")
                 context.enter()
                 try {
@@ -86,6 +87,8 @@ class SimdCapabilitySmokeTest {
                                 row[3].toLong()).asLong(), "$backend/$name/${row.drop(1)}")
                         }
                         cases.forEach(::check)
+                        assertEquals(0L, (program.diagnostics().getValue("compiledEntries") as Number).toLong(),
+                            "$backend/$name interpreted cases")
                         val active = targets(host)
                         assertEquals(2, active.size, "$backend/$name target graph")
                         (active + entry).distinct().filter { it !== host }.forEach { target ->
