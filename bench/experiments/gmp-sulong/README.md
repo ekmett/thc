@@ -39,3 +39,30 @@ Next: a provider-independent checked limb-region contract, native allocation
 failure/lifetime handling, exact original FCallId recognition, native Haskell
 oracles and first-installed AST/bytecode tests. This experiment adds no
 capability-table entries and does not load hello or lens.
+
+## Host-owned arena follow-up
+
+`run-ownership.sh` compiles the separate `src/main/c/gmp-api.c` shim and the
+production `NativeLimbScope` owner. That shim has no allocation, abort, managed
+interop copies or cleanup callbacks. Four external GMP symbols are retained
+(`add`, `add_1`, `sub`, `cmp`); only `add_1` is exercised by this transport test.
+Java 25 confined arenas provide real aligned native allocations. A private
+Truffle pointer wrapper retains the segment, checks lifetime/thread access and
+never becomes a guest `Addr#`. Input snapshots and output copies remain host
+operations. Host try-with-resources closes the arena even after LLVM context
+cancellation, without relying on a guest `free` call that cancellation might
+prevent. There is no claim that arbitrary in-flight native GMP calls can be
+interrupted safely.
+
+The follow-up passes carry, alias, canary, failed-interoperability, bounds,
+thread-confinement, expired-pointer and post-context-cancellation cleanup
+controls. A first harness run incorrectly closed the cancelled polyglot context
+twice without accepting its cancellation exception; that failure is retained
+separately from the corrected passing run. This still does not admit original
+Core FFI, provide native GHC oracle evidence, or measure compiled guest speed.
+
+```sh
+THC_RUNTIME_LIB=/absolute/path/to/thc/build/install/thc/lib \
+THC_DSL_PROCESSOR=/absolute/path/to/truffle-dsl-processor-25.3.4.1.jar \
+  bash bench/experiments/gmp-sulong/run-ownership.sh
+```
