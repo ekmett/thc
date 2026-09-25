@@ -157,6 +157,22 @@ cache; no installed compiler, native library or existing ZIP is changed.
 Source/interface mismatches and present but invalid provenance fail explicitly.
 See [the producer and cache contract](interface-foreign.md#typed-annotations-and-ordinary-acquisition).
 
+This path has run an ordinary `putStrLn` executable through both cold preparation
+and warm cache reuse, matching native GHC output with a clean strict audit.
+The bytecode backend executes GHC's generated `main::Main.main` and then its
+original `flushStdHandles` after successful completion, sharing one program's
+Handle CAFs. Relative file paths are resolved from the Cabal project directory.
+The default `pinned` provider retains the limited raw-IO entry convention.
+
+General file IO is still incomplete. The separate `file-lifecycle-full-core`
+test currently stops at unsupported original foreign calls in its strict audit.
+Enable it explicitly with `cabal test file-lifecycle-full-core -ffull-core-tests`;
+`THC_INSTALLED_CORE_GHC`, `THC_INSTALLED_CORE_GHC_PKG`, and
+`THC_INSTALLED_CORE_GHC_SOURCE` select the complete installation and its configured
+source tree. It checks UTF-8 files, append, seek, EOF, a caught missing-path error,
+and final output without a newline against native GHC once the full closure is
+accepted. It is not part of the stock-GHC test suite.
+
 The driver builds the selected-compiler `thc-interface` helper, discovers exact
 pre-existing registrations in the selected global package database, and reads
 each declared owned module's dynamic interface. Hidden modules are included;

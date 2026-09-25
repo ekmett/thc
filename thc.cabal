@@ -223,6 +223,11 @@ flag development
   default: False
   manual: True
 
+flag full-core-tests
+  description: Enable tests requiring a configured full-Core GHC installation
+  default: False
+  manual: True
+
 library
   hs-source-dirs: compiler
   exposed-modules: THC.Plugin, THC.Interface
@@ -334,6 +339,8 @@ test-suite driver-tests
 -- Keep this out of the stock-GHC driver suite, with no silent fixture skip.
 test-suite file-lifecycle-full-core
   type: exitcode-stdio-1.0
+  if !flag(full-core-tests)
+    buildable: False
   main-is: FileLifecycleFullCore.hs
   hs-source-dirs: test/haskell-driver
   other-modules: TestSupport

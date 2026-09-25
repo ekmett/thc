@@ -90,10 +90,13 @@ mutable references. Tests compare native GHC results with interpreted and
 compiled guest execution. That does not yet amount to general Cabal package
 support.
 
-Complete boot-library loading, general IO and FFI, and stack-safe non-tail
-evaluation remain unfinished. Even `main = putStrLn "hello"` still fails the
-strict load audit. The narrower `thc run` example above works; arbitrary
-executables are not yet accepted. The exporter currently targets GHC 9.14.1.
+With complete installed Core and matching configured GHC sources, the bytecode
+backend now runs ordinary `putStrLn`, including GHC's original startup and Handle
+shutdown. The [driver guide](../driver.md) covers the current Linux configuration
+and `--installed-core required --ghc-source DIR` options. The default provider
+remains limited. Complete boot-library loading, general file IO and FFI, and
+stack-safe non-tail evaluation remain unfinished; arbitrary executables are not
+yet accepted. The exporter currently targets GHC 9.14.1.
 
 Unsupported reachable paths are reported before a normal run. Development
 benchmarks can explicitly use diagnostic traps, but success on one path does

@@ -79,8 +79,12 @@ Cabal builds the native dependencies needed for the helper, and THC runs the
 executable's accepted Core. The driver uses Cabal's resolved unit IDs and
 per-component build information for the export.
 
-This is a first slice of IO support: `main = putStrLn "hello"` still fails the
-strict Core audit. The independent single-package `.cabal` path still excludes
+With complete installed Core and matching configured GHC sources, the bytecode
+backend now runs ordinary `putStrLn`, including GHC's original startup and Handle
+shutdown. Select `--installed-core required --ghc-source /path/to/ghc-source`
+on the project-directory path; the [driver guide](docs/driver.md) describes the
+current Linux configuration and cache. General file IO remains incomplete.
+The independent single-package `.cabal` path still excludes
 internal library and build-tool dependencies; use a `cabal.project` directory
 for the tested multi-package path. `thc build` and `thc repl` are future commands.
 
