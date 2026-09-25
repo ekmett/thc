@@ -4,10 +4,10 @@
 # Managed descriptor readiness — native substrate checkpoint
 
 This checkpoint adds the native waiting substrate, **not yet admission of
-`waitRead#` or `waitWrite#`**. On Linux x86_64 with GraalVM 25.3.4.1, the focused
-service/provider/descriptor suite passes 92 tests in both default and dense
-handoff modes. This is native substrate evidence, not raw-primop or whole-Handle
-execution proof.
+`waitRead#` or `waitWrite#`**. On Linux x86_64 with GraalVM 25.3.4.1, 92 focused
+service/provider/descriptor tests and three existing original-fdReady tests pass
+in both default and dense handoff modes. This is native substrate and foreign-call
+boundary evidence, not raw-primop or whole-Handle execution proof.
 
 ## Selected GHC path
 
@@ -107,6 +107,17 @@ still require ENOTSUP. The failing run is retained alongside the passing reports
 No production correction was required by these runs. Standard native/Cbits/ABI
 build tasks ran normally, offline with at most two Gradle workers; no capability
 admission or compiler behavior changed.
+
+The existing `original-fd-ready` fixture was regenerated separately with selected
+GHC 9.14.1: 168 native observations, two consumers retaining exact original
+installed FCallIds, and 24 rejected ABI audits. All three unchanged
+`OriginalFdReadyNativeTest` tests pass in default and dense modes, including
+AST/bytecode with inlining off/on, first-installed execution counter deltas,
+same-target validity and released handoff storage. There was no recompilation
+settling or counter relaxation. This existing fixture proves the original foreign
+boundary for regular/EOF/closed/ignored descriptors; its declaration-only
+projection is not complete installed FD execution or native-GHC FIFO proof.
+No installed GHC artifacts were rebuilt or hashed.
 
 Before admission: add the exact installed blockedOnBadFD dependency using the production complete-Core
 provider; prove both raw primop contracts and saved descriptor-token retry in AST
