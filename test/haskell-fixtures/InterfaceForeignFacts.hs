@@ -215,7 +215,9 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
                          ForeignCore.IfaceCStubs header cSource initializers initializers]
               details = interfaceDetails core
           mapM_ (\stubs -> do
-            changedText <- serializePostTidyCoreWithAnnotations flags ["unit-qualified"] expected
+            -- setSessionDynFlags initializes target platform constants in the
+            -- session; the earlier parseDynamicFlags result does not have them.
+            changedText <- serializePostTidyCoreWithAnnotations (hsc_dflags environment) ["unit-qualified"] expected
               (typeEnvTyCons (md_types details)) (interfaceBindings core)
               (ForeignCore.IfaceForeign (Just stubs) []) (md_anns details)
             changed <- either die pure (eitherDecodeStrict' (BSC.pack changedText))
