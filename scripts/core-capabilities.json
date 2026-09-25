@@ -583,6 +583,7 @@
     "setByteArray#": 5,
     "copyMutableByteArray#": 6,
     "copyMutableByteArrayNonOverlapping#": 6,
+    "copyAddrToAddrNonOverlapping#": 4,
     "compareByteArrays#": 5,
     "sqrtFloat#": 1,
     "sqrtDouble#": 1,
@@ -1555,6 +1556,15 @@
         { "kind": "long", "primReps": ["IntRep"] },
         { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
         { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": { "kind": "void", "primReps": [] }
+    },
+    "copyAddrToAddrNonOverlapping#": {
+      "arguments": [
+        { "kind": "address", "primReps": ["AddrRep"] },
+        { "kind": "address", "primReps": ["AddrRep"] },
         { "kind": "long", "primReps": ["IntRep"] },
         { "kind": "void", "primReps": [] }
       ],

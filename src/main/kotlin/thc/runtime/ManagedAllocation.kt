@@ -25,6 +25,7 @@ internal class ManagedAllocation private constructor(
     val size: Long get() = bytes.size.toLong()
     val addressWidth: Int get() = pointerBytes
     val isWritable: Boolean get() = writable
+    internal fun ownsStorage(candidate: ByteArray): Boolean = bytes === candidate
 
     /** A raw alias is permitted only before pointer cells are installed; once
      * returned it permanently rules out later pointer installation. */

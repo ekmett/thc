@@ -768,6 +768,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    public static final class CopyAddrNonOverlapping {
+        @Specialization public static Object copy(ManagedAddress source, ManagedAddress destination,
+                long count, Object state) {
+            ManagedByteArray.requireState(state);
+            source.copyNonOverlappingTo(destination, count);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+
+    @Operation
     public static final class WriteAddrArray {
         @Specialization public static Object write(Object array, long index,
                 ManagedAddress value, Object state) {

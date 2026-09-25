@@ -807,11 +807,13 @@ preparePinnedPointers root = do
         "-fplugin-opt=THC.Plugin:closure=wideStoreByte",
         "-fplugin-opt=THC.Plugin:closure=mutableContentsRoundtrip",
         "-fplugin-opt=THC.Plugin:closure=touchLazyPayload",
+        "-fplugin-opt=THC.Plugin:closure=nonOverlappingCopy",
         "-fplugin-opt=THC.Plugin:closure=wideReadSelector", source]) ""
     _ <- run root [] "python3" ["scripts/audit-core.py", "--entry", "pointerRoundtrip",
       "--entry", "pointerArrayRoundtrip", "--entry", "pointerOrder", "--entry", "char8Roundtrip",
       "--entry", "byte8Roundtrip", "--entry", "halfwordReadRoundtrip", "--entry", "halfwordWriteRoundtrip",
       "--entry", "wideStoreByte", "--entry", "mutableContentsRoundtrip", "--entry", "touchLazyPayload",
+      "--entry", "nonOverlappingCopy",
       "--entry", "wideReadSelector",
       "--output", directory </> stage </> "audit.json",
       core </> "PinnedPointerCellsAudit.json", core </> "THC.InterfaceClosure.json"] ""
@@ -830,7 +832,7 @@ preparePinnedPointers root = do
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= version,
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]
-  putStrLn "pinned-pointer-cells: 13 native rows, eleven strict pre/post Core roots"
+  putStrLn "pinned-pointer-cells: 13 native rows, twelve strict pre/post Core roots"
 
 main :: IO ()
 main = do
