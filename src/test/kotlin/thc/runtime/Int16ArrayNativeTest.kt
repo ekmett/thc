@@ -572,7 +572,9 @@ class Int16ArrayNativeTest {
                     val program = program(language, module, backend)
                     val function = context.asValue(EntryValue(program, name, 1))
                     val failure = assertThrows(PolyglotException::class.java) { function.execute(5L) }
-                    assertTrue(failure.message.orEmpty().contains("ByteArray# 16-bit index"), "$backend/$operation/$index: $failure")
+                    val guard = if (index < 0 || index > Long.MAX_VALUE / 2) "element" else "range"
+                    assertEquals("${RuntimeFault::class.java.name}: Managed allocation $guard outside its backing storage",
+                        failure.message, "$backend/$operation/$index")
                     released(language)
                     assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong())
                 }

@@ -595,8 +595,10 @@ class FloatWordArrayNativeTest {
                     val program = program(language, module, backend)
                     val function = context.asValue(EntryValue(program, name, 1))
                     val failure = assertThrows(PolyglotException::class.java) { function.execute(5L) }
-                    val storage = if (operation.primitive.contains("Float")) "Float" else "Int"
-                    assertTrue(failure.message.orEmpty().contains("ByteArray# $storage index"), "$backend/$operation/$index: $failure")
+                    val width = if (operation.primitive.contains("Float")) 4 else 8
+                    val guard = if (index < 0 || index > Long.MAX_VALUE / width) "element" else "range"
+                    assertEquals("${RuntimeFault::class.java.name}: Managed allocation $guard outside its backing storage",
+                        failure.message, "$backend/$operation/$index")
                     released(language)
                     assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong())
                 }
