@@ -176,7 +176,7 @@ class EmptyJoinInputTest {
             } finally { context.leave() }
         }
     }
-    @Test fun shapeLevityAndUnknownProofsRejectAtLoadWithoutWideningJoinFrontier() {
+    @Test fun shapeLevityAndUnknownProofsRejectButSameFrameEmptyJoinCaptureRuns() {
         for(backend in listOf("ast","bytecode"))context(false).use { context->
             context.initialize("thc");context.enter()
             try {
@@ -201,7 +201,15 @@ class EmptyJoinInputTest {
                 val region=listOf("let",false,listOf(capturedJoin),captureCall,meta(long))
                 val body=listOf("case",listOf("con","Empty",0,meta(empty)),"held",listOf(listOf("default",null,emptyList<String>(),region)),
                     mapOf("rep" to long,"binder" to parameter("held",empty)))
-                assertThrows(UnsupportedCore::class.java) { program(language,capturing+("bindings" to listOf(binding("entry",lambda(listOf(parameter("x",long)),body)))),backend) }
+                // The join stays in this activation. Its exact empty-tuple capture
+                // has zero physical leaves; no closure environment owns a tuple.
+                val p=program(language,capturing+("bindings" to listOf(binding("entry",lambda(listOf(parameter("x",long)),body)))),backend)
+                fun call()=Calls.target(p.hostEntryTarget(1),arrayOf(p.entryValue("entry"),arrayOf(37L)))
+                assertEquals(37L,call());assertEquals(1L,p.diagnostics()["localJoinTransfers"]);released(language)
+                val target=p.entryTarget("entry");compile(target)
+                val before=p.diagnostics()["compiledEntries"] as Long
+                assertEquals(37L,call());assertEquals(before+1,p.diagnostics()["compiledEntries"])
+                assertEquals(2L,p.diagnostics()["localJoinTransfers"]);valid(target,"$backend empty join capture");released(language)
             } finally { context.leave() }
         }
     }
