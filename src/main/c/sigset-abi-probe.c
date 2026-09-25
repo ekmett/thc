@@ -8,6 +8,14 @@
 #include <stdio.h>
 #include <string.h>
 
+#if !defined(__linux__) || !defined(__x86_64__)
+/* The runtime only admits this model on Linux x86-64. Other libc contracts
+ * must not prevent an otherwise supported host from building the runtime. */
+int main(void) {
+  puts("{\"supported\":false}");
+  return 0;
+}
+#else
 /* Measure libc's caller-owned image operations, never sigprocmask or a
  * process/thread signal mask. Reject a layout outside this exact byte model. */
 int main(void) {
@@ -82,3 +90,4 @@ int main(void) {
   puts("]}");
   return 0;
 }
+#endif
