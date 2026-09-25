@@ -179,4 +179,36 @@ class SimdAstTransportTest {
                 } finally { context.leave() }
             }
     }
+
+    @Test fun bytecodeHeapConstructorFieldsAndPapRetainPrimitiveLanes() {
+        val constructorModule = heapModule().let { source ->
+            source + ("bindings" to (source["bindings"] as List<Map<String, Any?>>)
+                .filterNot { it["id"] in setOf("captured", "thunk") })
+        }
+        for (inlining in listOf(true, false)) Context.newBuilder("thc").allowExperimentalOptions(true)
+            .option("compiler.Inlining", inlining.toString())
+            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+            .option("engine.CompilationFailureAction", "Throw").build().use { context ->
+                context.initialize("thc"); context.enter()
+                try {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val program = BytecodeProgram(language, constructorModule)
+                    for (entry in listOf("heapDirect", "heapPap")) {
+                        val function = context.asValue(EntryValue(program, entry, 1))
+                        for (x in listOf(-32768L, -1L, 0L, 32767L))
+                            assertEquals(x.toShort().toLong() + 13L, function.execute(x).asLong(), "$entry/$x interpreted")
+                        assertTrue(function.invokeMember("compile").asBoolean(), "$entry first installed compilation")
+                        val target = program.entryTarget(entry)
+                        for (x in listOf(32767L, 0L, -1L, -32768L)) {
+                            val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                            assertEquals(x.toShort().toLong() + 13L, function.execute(x).asLong(), "$entry/$x compiled")
+                            assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() > before)
+                            assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                            assertEquals(0, language.handoffState.get().arguments.depth)
+                            assertEquals(0, language.handoffState.get().results.depth)
+                        }
+                    }
+                } finally { context.leave() }
+            }
+    }
 }

@@ -2665,7 +2665,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 val id = scrutineeExpr[1] as String
                 scope.locals[id]?.let { local.locals[id] = it.copy(proof = it.proof.copy(evaluated = true)) }
             }
-            data class Alternative(val kind: String, val value: Any?, val fields: List<Local>, val body: Expression)
+            data class Alternative(val kind: String, val value: Any?, val fields: List<List<Local>>, val body: Expression)
             val alternatives = (expr[3] as List<List<Any?>>).map { alt ->
                 val child = local.child(); val kind = alt[0] as String
                 val value = when (kind) {
@@ -2681,9 +2681,21 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 val ids = alt[2] as List<String>; val layout = value as? DataLayout
                 if (layout != null && layout.arity != ids.size) throw RuntimeFault("Constructor field/binder mismatch")
                 val metadata = CoreRepresentations.alternativeBinders(alt)
-                val fields = ids.mapIndexed { index, id -> bind(child, id, layout?.isLong(index) == true,
-                    (metadata.getOrNull(index)?.let { CoreRepresentations.binder(it) } ?: CoreRepresentation.UNKNOWN)
-                        .let { it.copy(evaluated = layout != null && fieldIsEvaluated(alt[1] as String, index)) }) }
+                val fields = ids.mapIndexed { index, id ->
+                    val vector = layout?.vectorProof(index)
+                    if (vector != null) {
+                        val record = metadata.getOrNull(index) ?: throw UnsupportedCore("Missing vector constructor binder proof")
+                        if (record["lifted"] != false) throw UnsupportedCore("Vector constructor binder must be unlifted")
+                        val proof = CoreRepresentations.binder(record).refine(vector)
+                        val lanes = TupleShape.flatten(proof).mapIndexed { lane, leaf ->
+                            Local(nextLocal++, "$id vector lane $lane", leaf.isLong, leaf)
+                        }
+                        child.bindTuple(id, proof, lanes)
+                        lanes
+                    } else listOf(bind(child, id, layout?.isLong(index) == true,
+                        (metadata.getOrNull(index)?.let { CoreRepresentations.binder(it) } ?: CoreRepresentation.UNKNOWN)
+                            .let { it.copy(evaluated = layout != null && fieldIsEvaluated(alt[1] as String, index)) }))
+                }
                 Alternative(kind, value, fields, compile(alt[3] as List<Any?>, child, tail))
             }
             val explicit = alternatives.filter { it.kind != "default" }
@@ -2712,17 +2724,27 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 } else restoreArgument(e, binder) { scrutinee.emit(e) }
                 fun emitAlternative(alt: Alternative) {
                     b.beginBlock()
-                    alt.fields.forEachIndexed { index, field ->
-                        e.locals[field.id] = b.createLocal(field.name, if (field.primitive) "primitive" else "object")
-                        b.beginStoreLocal(e.locals.getValue(field.id))
-                        b.beginReadDataField(alt.value as DataLayout, index)
-                        read(binder, false).emit(e)
-                        b.endReadDataField()
-                        b.endStoreLocal()
+                    alt.fields.forEachIndexed { index, fields ->
+                        fields.forEach { field ->
+                            e.locals[field.id] = b.createLocal(field.name, if (field.primitive) "primitive" else "object")
+                        }
+                        val layout = alt.value as DataLayout
+                        if (layout.isVector(index)) {
+                            b.beginTransferDataVector(layout, index,
+                                fields.map { LocalAccessor.constantOf(e.locals.getValue(it.id)) }.toTypedArray(), false)
+                            read(binder, false).emit(e)
+                            b.endTransferDataVector()
+                        } else {
+                            b.beginStoreLocal(e.locals.getValue(fields.single().id))
+                            b.beginReadDataField(layout, index)
+                            read(binder, false).emit(e)
+                            b.endReadDataField()
+                            b.endStoreLocal()
+                        }
                     }
                     emitResult(alt.body, e, destination)
                     b.endBlock()
-                    alt.fields.forEach { e.locals.remove(it.id) }
+                    alt.fields.flatten().forEach { e.locals.remove(it.id) }
                 }
                 fun emitChoice(index: Int) {
                     if (index == explicit.size) {
@@ -2765,9 +2787,39 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             if (arity == 0) construct(layout, emptyList()) else {
                 val context = FunctionContext(arity)
                 val constructorScope = Scope(context)
-                val args = List(arity) { bind(constructorScope, "field$it", layout.isLong(it)) }
-                context.arguments = args
-                val body = construct(layout, args.mapIndexed { index, arg -> if (strict[index]) force(read(arg)) else read(arg) })
+                val records = constructors.getValue(id)["fieldTypes"] as? List<*>
+                    ?: throw UnsupportedCore("Missing constructor field type proofs: $id")
+                if (records.size != arity) throw RuntimeFault("Constructor field type count mismatch: $id")
+                val proofs = records.map(CoreRepresentations::parse)
+                context.inputLayout = ArgumentLayout.fromProofs(proofs)
+                context.typedInput = TypedInputLayout.create(language, context.inputLayout, false)
+                val physical = arrayListOf<Pair<Int, Local>>()
+                val args = proofs.mapIndexed { index, proof ->
+                    val offset = ArgumentLayout.offset(context.inputLayout, index)
+                    val vector = layout.vectorProof(index)
+                    if (vector != null) {
+                        val exact = proof.refine(vector)
+                        val lanes = TupleShape.flatten(exact).mapIndexed { lane, leaf ->
+                            Local(nextLocal++, "field$index vector lane $lane", leaf.isLong, leaf).also {
+                                physical += (offset + lane) to it
+                            }
+                        }
+                        tupleExpression(exact) { e, destination ->
+                            lanes.forEachIndexed { lane, local ->
+                                e.builder.beginStoreLocal(destination[lane]); read(local).emit(e); e.builder.endStoreLocal()
+                            }
+                        }
+                    } else {
+                        val local = bind(constructorScope, "field$index", layout.isLong(index), proof)
+                        physical += offset to local
+                        if (strict[index]) force(read(local)) else read(local)
+                    }
+                }
+                context.arguments = proofs.mapIndexed { index, _ ->
+                    if (layout.isVector(index)) null else physical.first { it.first == ArgumentLayout.offset(context.inputLayout, index) }.second
+                }
+                context.typedArguments = physical
+                val body = construct(layout, args)
                 closure(FunctionSpec(build("constructor $id", context, body), null, emptyList()), arity)
             }
             }
@@ -3381,7 +3433,37 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     }
 
     private fun construct(layout: DataLayout, args: List<Expression>) = evaluated(Expression { e ->
-        e.builder.beginConstruct(layout); args.forEach { it.emit(e) }; e.builder.endConstruct()
+        val b = e.builder
+        if ((0 until layout.arity).none(layout::isVector)) {
+            b.beginConstruct(layout); args.forEach { it.emit(e) }; b.endConstruct()
+        } else {
+            b.beginBlock()
+            val fields = args.mapIndexed { index, argument ->
+                if (layout.isVector(index)) {
+                    val lanes = List(layout.fieldWidth(index)) { lane -> b.createLocal("field $index lane $lane", "primitive") }
+                    argument.emitTuple(e, lanes)
+                    lanes
+                } else {
+                    val field = b.createLocal("field $index", null)
+                    b.beginStoreLocal(field); argument.emit(e); b.endStoreLocal()
+                    listOf(field)
+                }
+            }
+            val value = b.createLocal("constructed ${layout.id}", "object")
+            b.beginStoreLocal(value); b.emitAllocateData(layout); b.endStoreLocal()
+            fields.forEachIndexed { index, slots ->
+                if (layout.isVector(index)) {
+                    b.beginTransferDataVector(layout, index, slots.map(LocalAccessor::constantOf).toTypedArray(), true)
+                    b.emitLoadLocal(value); b.endTransferDataVector()
+                } else {
+                    b.beginInitializeDataScalar(layout, index)
+                    b.emitLoadLocal(value); b.emitLoadLocal(slots.single())
+                    b.endInitializeDataScalar()
+                }
+            }
+            b.emitLoadLocal(value)
+            b.endBlock()
+        }
     })
     private fun floatingPrimitive(name: String, args: List<Expression>): Expression? {
         val operation = when (name) {
@@ -4586,7 +4668,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     private fun dataLayout(id: String): DataLayout = dataLayouts.getOrPut(id) {
         val info = constructors[id] ?: throw RuntimeFault("Missing constructor metadata $id")
         val fields = CoreFields(info)
-        DataLayout(language, id, info["name"] as String, fields.storage, fields.referenceTypes)
+        DataLayout.fromFields(language, id, info["name"] as String, fields)
     }
     /** The constructor adapter enforces strict fields before storing them. */
     private fun fieldIsEvaluated(id: String, index: Int): Boolean {

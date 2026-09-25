@@ -231,6 +231,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+
     @Operation
     @ConstantOperand(type = CaptureLayout.class, name = "layout")
     @ConstantOperand(type = int.class, name = "index")
@@ -261,6 +262,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return layout.readLong(environment, index);
         }
     }
+
 
     @Operation
     @ConstantOperand(type = Metrics.class, name = "metrics")
@@ -1700,6 +1702,45 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class Construct {
         @Specialization public static DataValue create(DataLayout layout, @Variadic Object[] fields) {
             return layout.create(fields);
+        }
+    }
+
+    /** Vector fields are initialized from owned primitive locals before publication. */
+    @Operation
+    @ConstantOperand(type = DataLayout.class, name = "layout")
+    public static final class AllocateData {
+        @Specialization public static DataValue allocate(DataLayout layout) { return layout.allocate(); }
+    }
+
+    @Operation
+    @ConstantOperand(type = DataLayout.class, name = "layout")
+    @ConstantOperand(type = int.class, name = "index")
+    public static final class InitializeDataScalar {
+        @Specialization public static void number(DataLayout layout, int index, DataValue value, long field) {
+            layout.initializeLong(value, index, field);
+        }
+        @Specialization public static void floating(DataLayout layout, int index, DataValue value, float field) {
+            layout.initializeFloat(value, index, field);
+        }
+        @Specialization public static void doubleValue(DataLayout layout, int index, DataValue value, double field) {
+            layout.initializeDouble(value, index, field);
+        }
+        @Specialization public static void object(DataLayout layout, int index, DataValue value, Object field) {
+            layout.initialize(value, index, field);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = DataLayout.class, name = "layout")
+    @ConstantOperand(type = int.class, name = "index")
+    @ConstantOperand(type = LocalAccessor[].class, name = "lanes")
+    @ConstantOperand(type = boolean.class, name = "initialize")
+    public static final class TransferDataVector {
+        @Specialization public static void transfer(VirtualFrame frame, DataLayout layout, int index,
+                LocalAccessor[] lanes, boolean initialize, DataValue value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            if (initialize) layout.initializeVector(value, index, bytecode, frame, lanes, 0);
+            else layout.restoreVector(value, index, bytecode, frame, lanes, 0);
         }
     }
 
