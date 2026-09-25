@@ -4,9 +4,12 @@
 package thc
 
 import org.graalvm.polyglot.Context
-import org.graalvm.polyglot.PolyglotException
+import com.oracle.truffle.api.TruffleLanguage
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import thc.runtime.BytecodeProgram
+import thc.runtime.Program
+import thc.runtime.UnsupportedCore
 import java.io.File
 import java.security.MessageDigest
 
@@ -52,12 +55,21 @@ class ManagedImportStubsNativeTest {
 
     @Test fun unknownCallsAreStillRejectedAfterManagedArchiveAdmission() {
         val module = original()
+        val imports = (module["staticForeignImportStubs"] as Map<String, Any?>)["imports"] as List<Map<String, Any?>>
         for (backend in listOf("ast", "bytecode")) Context.create("thc").use { context ->
-            for (name in listOf("first", "second", "direct")) {
-                val error = assertThrows(PolyglotException::class.java) { context.eval("thc", request(module, backend, name)) }
-                assertFalse(error.message.orEmpty().contains("archive-only"), error.message)
-                assertTrue(error.message.orEmpty().contains("foreign", ignoreCase = true), error.message)
-            }
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                for (name in listOf("first", "second", "direct")) {
+                    val declaration = imports.single { (it["binder"] as Map<*, *>)["occurrence"] == name }
+                    val symbol = (declaration["emitted"] as Map<*, *>)["symbol"] as String
+                    val linked = CoreModules.reachable(CoreModules.merge(listOf(module)), name, true)
+                    val error = assertThrows(UnsupportedCore::class.java) {
+                        if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
+                    }
+                    assertEquals("Unsupported foreign call: $symbol", error.message)
+                }
+            } finally { context.leave() }
         }
     }
 
