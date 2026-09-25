@@ -54,6 +54,13 @@ class BytecodeVectorTransportTest {
     private fun lambda(args: List<Map<String, Any?>>, body: VectorCore, result: VectorRep): VectorCore =
         listOf("lam", args, body, mapOf("rep" to closure, "resultRep" to result, "entryStrict" to List(args.size) { false }))
     private fun binding(id: String, body: VectorCore) = mapOf("id" to id, "name" to id, "lifted" to true, "rep" to closure, "expr" to body)
+    private fun vectorLet(id: String, proof: VectorRep, rhs: VectorCore, body: VectorCore,
+        recursive: Boolean = false, lifted: Boolean = false): VectorCore = listOf("let", recursive,
+        listOf(mapOf("id" to id, "name" to id, "lifted" to lifted, "rep" to proof, "expr" to rhs)), body)
+    private fun localLets(vector: VectorRep, payload: VectorCore): VectorCore =
+        vectorLet("x", vector, call("identity", listOf(payload), vector),
+            vectorLet("x", vector, call("identity", listOf(variable("x", vector)), vector),
+                vectorLet("copied", vector, variable("x", vector), variable("copied", vector))))
     private fun choice(condition: VectorCore, yes: VectorCore, no: VectorCore, result: VectorRep): VectorCore =
         listOf("case", condition, "condition", listOf(
             listOf("lit", listOf("int", "1"), emptyList<String>(), yes),
@@ -109,6 +116,7 @@ class BytecodeVectorTransportTest {
             entry("arithmetic", primitive("plus${family.name}#", listOf(call("identity", listOf(payload), vector),
                 primitive("broadcast${family.name}#", listOf(laneValue(family, number(0))), vector)), vector)),
             entry("local", application(lambda(listOf(parameter("v", vector)), variable("v", vector), vector), listOf(payload), vector)),
+            entry("localLet", localLets(vector, payload)),
             entry("over", call("make", listOf(number(19), payload), vector)),
             entry("selfTail", call("self", listOf(payload, number(100)), vector)),
             entry("mutualTail", call("mutualA", listOf(payload, number(100)), vector)),
@@ -153,9 +161,9 @@ class BytecodeVectorTransportTest {
         }
         released(language)
     }
-    private val paths = listOf("exact", "pap", "roundTrip", "arithmetic", "local", "over", "selfTail", "mutualTail", "joinSwap", "tupleField")
+    private val paths = listOf("exact", "pap", "roundTrip", "arithmetic", "local", "localLet", "over", "selfTail", "mutualTail", "joinSwap", "tupleField")
     private val entryCounts = mapOf("exact" to 2L, "pap" to 2L, "roundTrip" to 3L, "arithmetic" to 2L,
-        "local" to 2L, "over" to 3L, "joinSwap" to 1L, "tupleField" to 2L)
+        "local" to 2L, "localLet" to 3L, "over" to 3L, "joinSwap" to 1L, "tupleField" to 2L)
     private val values = listOf(Long.MIN_VALUE, -129L, -1L, 0L, 127L, Long.MAX_VALUE)
 
     @Test fun allExistingFamiliesCarryExactLanesThroughCallsAndJoins() = withLanguage { language ->
@@ -228,5 +236,67 @@ class BytecodeVectorTransportTest {
         val otherVector = ArgumentLayout.fromProofs(listOf(CoreRepresentations.parse(unsigned.vector)))
         assertThrows(RuntimeFault::class.java) { ArgumentLayout.validate(closureValue, otherVector, 0, 1) }
         released(language)
+    }
+
+    @Test fun vectorLetsPreserveFloatingBitsFromTheFirstCompiledEntry() {
+        for (inlining in listOf(true, false)) withLanguage(inlining) { language ->
+            for (family in families().filter { it.name in setOf("FloatX4", "DoubleX2") }) {
+                val floating = family.laneName == "Float"
+                val bitsProof = scalar("long", if (floating) "Word32Rep" else "Word64Rep")
+                val bits = primitive(if (floating) "wordToWord32#" else "wordToWord64#",
+                    listOf(primitive("int2Word#", listOf(variable("x")), word)), bitsProof)
+                val lane = primitive(if (floating) "castWord32ToFloat#" else "castWord64ToDouble#", listOf(bits), family.lane)
+                val body = localLets(family.vector, primitive("broadcast${family.name}#", listOf(lane), family.vector))
+                val original = fixture(family)
+                val module = original + ("bindings" to (original["bindings"] as List<Map<String, Any?>>) +
+                    binding("bitsLet", lambda(listOf(parameter("x")), body, family.vector)))
+                val program = BytecodeProgram(language, module)
+                val inputs = if (floating) listOf(0L, 0x80000000L, 1L, 0x7fc01234L, 0x7f800000L, 0xff800000L)
+                    else listOf(0L, Long.MIN_VALUE, 1L, 0x7ff8000000001234L, 0x7ff0000000000000L, -4503599627370496L)
+                val entry = program.entryTarget("bitsLet")
+                val shape = requireNotNull((entry.rootNode as BytecodeRoot).tupleResult)
+                fun check(value: Long) {
+                    val result = ownedTupleResult(Calls.target(entry, arrayOf(0L, value)), shape)
+                    for (index in 0 until family.lanes) {
+                        if (floating) assertEquals(value.toInt(), shape.layout.getFloat(result, index).toRawBits())
+                        else assertEquals(value, shape.layout.getDouble(result, index).toRawBits())
+                    }
+                    released(language)
+                }
+                inputs.forEach(::check)
+                val active = activeTargets(entry)
+                active.forEach { it.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(it, true); valid(it) }
+                for (value in inputs.asReversed()) {
+                    val before = program.diagnostics()["compiledEntries"] as Long
+                    check(value)
+                    assertEquals(3L, program.diagnostics()["compiledEntries"] as Long - before)
+                    assertEquals(active, activeTargets(entry))
+                    active.forEach(::valid)
+                }
+            }
+        }
+    }
+
+    @Test fun vectorLetsRejectRecursiveLiftedMismatchedAndHeapCapturedValues() = withLanguage { language ->
+        val family = families().single { it.name == "Int32X4" }
+        val payload = lanes(family, variable("x"))
+        fun reject(body: VectorCore, result: VectorRep = family.vector) {
+            val original = fixture(family)
+            val module = original + ("bindings" to (original["bindings"] as List<Map<String, Any?>>) +
+                binding("badLet", lambda(listOf(parameter("x")), body, result)))
+            assertThrows(RuntimeFault::class.java) { BytecodeProgram(language, module).entryTarget("badLet") }
+            released(language)
+        }
+        reject(vectorLet("v", family.vector, payload, variable("v", family.vector), recursive = true))
+        reject(vectorLet("v", family.vector, payload, variable("v", family.vector), lifted = true))
+        val other = families().single { it.name == "Word32X4" }
+        reject(vectorLet("v", family.vector, lanes(other, variable("x")), variable("v", family.vector)))
+        reject(vectorLet("v", family.vector, number(0), variable("v", family.vector)))
+        reject(vectorLet("v", family.vector, payload,
+            lambda(listOf(parameter("unused")), variable("v", family.vector), family.vector)), closure)
+        val fields = tuple(List(family.lanes) { family.lane })
+        reject(vectorLet("v", fields,
+            application(listOf("con", "T${family.lanes}", family.lanes),
+                List(family.lanes) { laneValue(family, number(it.toLong())) }, fields), variable("v", fields)), fields)
     }
 }

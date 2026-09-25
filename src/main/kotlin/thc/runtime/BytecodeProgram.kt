@@ -2546,44 +2546,69 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             if (group.any { CoreRepresentations.joinArity(it) != null }) {
                 joinRegion(group, expr[3] as List<Any?>, recursive, scope, tail)
             } else {
-                group.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "let binding") }
+                group.forEach {
+                    val proof = CoreRepresentations.binder(it)
+                    if (proof.isVector) {
+                        if (recursive || representation(it)) throw UnsupportedCore("Vector let binding must be nonrecursive and unlifted")
+                        CoreRepresentations.requireInput(proof)
+                    } else CoreRepresentations.requireScalar(proof, "let binding")
+                }
                 val local = scope.child()
-                val slots = group.map { bind(local, it["id"] as String, !representation(it),
-                    CoreRepresentations.binder(it).copy(evaluated = false), cell = recursive, entry = CoreEntries.binding(it),
-                    arityCertificate = CoreApplicationCertificates.binding(it)) }
+                val slots = group.map { binding ->
+                    val proof = CoreRepresentations.binder(binding)
+                    if (proof.isVector) TupleShape.flatten(proof).mapIndexed { lane, field ->
+                        Local(nextLocal++, "${binding["id"]} vector let lane $lane", field.isLong, field)
+                    }.also { local.bindTuple(binding["id"] as String, proof.copy(evaluated = true), it) }
+                    else listOf(bind(local, binding["id"] as String, !representation(binding),
+                        proof.copy(evaluated = false), cell = recursive, entry = CoreEntries.binding(binding),
+                        arityCertificate = CoreApplicationCertificates.binding(binding)))
+                }
                 val rhs = group.map {
                     val rhsExpr = it["expr"] as List<Any?>; val lifted = representation(it)
                     CoreRepresentations.requireNoSum(CoreRepresentations.expression(rhsExpr), "let binding")
                     if (recursive && !lifted) throw UnsupportedCore("Recursive unlifted binding unsupported")
                     val rhsScope = (if (recursive) local else scope).withSource(sources.binding(it, scope.source))
                     if (recursive && lifted && rhsExpr[0] !in listOf("lam", "lit", "con", "void")) delay(rhsExpr, rhsScope, it["name"].toString())
-                    else argument(rhsExpr, rhsScope, lifted, it["name"].toString())
+                    else argument(rhsExpr, rhsScope, lifted, it["name"].toString(),
+                        allowEmpty = CoreRepresentations.binder(it).isVector)
                 }
-                slots.forEachIndexed { index, slot ->
-                    val proof = slot.proof.refine(rhs[index].proof).copy(evaluated = rhs[index].proof.evaluated)
-                    // All RHS roots have already captured immutable Local records
-                    // with cell=true. Only body/new captures see published values.
-                    local.locals[slot.name] = slot.copy(proof = proof, cell = false,
-                        primitive = if (proof.present) proof.isLong else slot.primitive)
+                slots.forEachIndexed { index, fields ->
+                    if (CoreRepresentations.binder(group[index]).isVector) {
+                        if (!rhs[index].proof.isVector) throw RuntimeFault("Vector let binding requires an exact vector result proof")
+                        TupleShape.requireCompatible(CoreRepresentations.binder(group[index]), rhs[index].proof)
+                    } else {
+                        val slot = fields.single()
+                        val proof = slot.proof.refine(rhs[index].proof).copy(evaluated = rhs[index].proof.evaluated)
+                        // All RHS roots have already captured immutable Local records
+                        // with cell=true. Only body/new captures see published values.
+                        local.locals[slot.name] = slot.copy(proof = proof, cell = false,
+                            primitive = if (proof.present) proof.isLong else slot.primitive)
+                    }
                 }
                 val body = compile(expr[3] as List<Any?>, local, tail)
+                val physicalSlots = slots.flatten()
                 ProvenExpression(ResultExpression { e, destination ->
                     val b = e.builder
                     b.beginBlock()
-                    slots.forEach { e.locals[it.id] = b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
+                    physicalSlots.forEach { e.locals[it.id] = b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
                     if (recursive) {
-                        slots.forEach { b.beginStoreLocal(e.locals.getValue(it.id)); b.emitNewCell(); b.endStoreLocal() }
-                        slots.forEachIndexed { index, slot ->
+                        physicalSlots.forEach { b.beginStoreLocal(e.locals.getValue(it.id)); b.emitNewCell(); b.endStoreLocal() }
+                        slots.forEachIndexed { index, fields ->
+                            val slot = fields.single()
                             b.beginInitializeCell(); read(slot, false).emit(e); rhs[index].emit(e); b.endInitializeCell()
                         }
                         // Every RHS has captured the group before publication removes its indirections.
-                        slots.forEach { b.beginStoreLocal(e.locals.getValue(it.id)); read(it).emit(e); b.endStoreLocal() }
-                    } else slots.forEachIndexed { index, slot ->
-                        b.beginStoreLocal(e.locals.getValue(slot.id)); rhs[index].emit(e); b.endStoreLocal()
+                        physicalSlots.forEach { b.beginStoreLocal(e.locals.getValue(it.id)); read(it).emit(e); b.endStoreLocal() }
+                    } else slots.forEachIndexed { index, fields ->
+                        if (CoreRepresentations.binder(group[index]).isVector)
+                            rhs[index].emitTuple(e, fields.map { e.locals.getValue(it.id) })
+                        else {
+                            b.beginStoreLocal(e.locals.getValue(fields.single().id)); rhs[index].emit(e); b.endStoreLocal()
+                        }
                     }
                     emitResult(body, e, destination)
                     b.endBlock()
-                    slots.forEach { e.locals.remove(it.id) }
+                    physicalSlots.forEach { e.locals.remove(it.id) }
                 }, body.proof)
             }
         }
