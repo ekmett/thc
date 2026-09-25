@@ -713,7 +713,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
             synchronized(waiting.monitor) {
                 if (waiting.state == 1 && waiting.owner !== Thread.currentThread()) {
                     if (asyncMode) GuestThreads.pollCurrent(this, true)?.let { throw AsyncBlocked(it, this) }
-                    waiting.monitor.wait()
+                    GuestThreads.blocking(GuestThreadStatus.BLACK_HOLE).use { waiting.monitor.wait() }
                 }
             }
         }, segment)
@@ -839,7 +839,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
             synchronized(waiting.monitor) {
                 if (waiting.state == 1 && waiting.owner !== Thread.currentThread()) {
                     if (asyncMode) GuestThreads.pollCurrent(this, true)?.let { throw AsyncBlocked(it, this) }
-                    waiting.monitor.wait()
+                    GuestThreads.blocking(GuestThreadStatus.BLACK_HOLE).use { waiting.monitor.wait() }
                 }
             }
         }, thunk)
@@ -2089,6 +2089,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (fn[0] == "prim" && fn[1] == "yield#") {
                 CoreYield.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 YieldThread(argument(args[0], scope, false), enableAsync, tupleProof)
+            } else if (fn[0] == "prim" && fn[1] in listOf("myThreadId#", "threadStatus#")) {
+                val name = fn[1] as String
+                CoreGuestThreads.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.map { argument(it, scope, false) }
+                CoreGuestThreads.validate(name, operands.map { it.representation }, flags, tupleProof)
+                if (name == "myThreadId#") MyThreadId(operands[0], tupleProof)
+                else ThreadStatus(operands[0], operands[1], tupleProof)
             } else if (fn[0] == "prim" && fn[1] == "getCurrentCCS#") {
                 CoreCurrentCCS.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 GetCurrentCCS(argument(args[0], scope, true), argument(args[1], scope, false), tupleProof)

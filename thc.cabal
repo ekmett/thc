@@ -264,6 +264,7 @@ executable thc-fixtures
     AggregateFixtures
     ContinuationFixtures
     LiveAsyncFixtures
+    ThreadStatusFixtures
     ThreadAsyncFixtures
     UncaughtSelfFixtures
     MaskFunctionFixtures

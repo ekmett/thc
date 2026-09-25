@@ -519,6 +519,18 @@
       "junit": ["thc.runtime.Int32ByteOffsetTest"],
       "python": []
     },
+    "compiler/test-fixtures/ThreadStatusAudit.hs": {
+      "junit": ["thc.runtime.ThreadStatusNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/ThreadStatusNative.hs": {
+      "junit": ["thc.runtime.ThreadStatusNativeTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/ThreadStatusFixtures.hs": {
+      "junit": ["thc.runtime.ThreadStatusNativeTest"],
+      "python": []
+    },
     "compiler/test-fixtures/ThreadAsyncAudit.hs": {
       "junit": ["thc.runtime.ThreadAsyncNativeTest"],
       "python": []
@@ -956,6 +968,7 @@
         "thc.runtime.OriginalFdReadyNativeTest",
         "thc.runtime.ManagedAddressReadTest",
         "thc.runtime.ThreadAsyncNativeTest",
+        "thc.runtime.ThreadStatusNativeTest",
         "thc.runtime.UncaughtSelfNativeTest",
         "thc.runtime.Int32ByteOffsetTest",
         "thc.runtime.NarrowByteOffsetTest",

@@ -892,7 +892,7 @@ class AuditTest(unittest.TestCase):
         thread = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
         action = dict(kind='closure', primReps=['BoxedRep (Just Lifted)'], evaluated=True)
         payload = dict(kind='data', primReps=['BoxedRep (Just Lifted)'], evaluated=False)
-        roles = {'state': state, 'threadId': thread, 'action': action, 'payload': payload}
+        roles = {'state': state, 'threadId': thread, 'action': action, 'payload': payload, 'int': LONG}
         contracts = CAP['managedThreadPrimitives']
         self.assertEqual({name: len(spec['arguments']) for name, spec in contracts.items()},
                          {name: CAP['primitives'][name] for name in contracts})

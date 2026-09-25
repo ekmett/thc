@@ -173,7 +173,8 @@ internal class ManagedMVar {
                         check(cancel())
                         throw AsyncBlocked(interruption, checkpoint)
                     }
-                    completed.await()
+                    GuestThreads.blocking(if (operation == Operation.READ) GuestThreadStatus.MVAR_READ
+                        else GuestThreadStatus.MVAR).use { completed.await() }
                 }
                 if (status == RequestState.CANCELLED) throw CancellationException("Managed MVar request cancelled")
                 return result
