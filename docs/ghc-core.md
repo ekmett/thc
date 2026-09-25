@@ -11,23 +11,32 @@ An ordinary installed `.hi` file need not contain them. GHC already has the
 ghc-options: -fwrite-if-simplified-core
 ```
 
-The [upstream patch](../compiler/patches/ghc-internal-simplified-core.patch)
-adds that one option to the `ghc-internal` library. It does not change its
-Haskell definitions or request extra inlining. Having the compiler ship this
-data lets THC use that installation's library bodies instead of maintaining
-copies of them for each compiler release.
+The [Hadrian library patch](../compiler/patches/ghc-libraries-simplified-core.patch)
+adds that option when GHC compiles any library package after the bootstrap
+stage. This includes `ghc-internal`, `base`, and other shipped Haskell libraries
+without maintaining a package list. It does not change their definitions or
+request extra inlining. Programs, C compilation, and the bootstrap stage are
+unaffected. The compiler's own `ghc` library is included; its interface-size
+cost has not been measured. The earlier
+[single-library patch](../compiler/patches/ghc-internal-simplified-core.patch)
+remains available for an installation that only needs `ghc-internal` Core.
 
 ## Check an installation
 
 ```sh
 make check-ghc-core GHC=/path/to/ghc
+make check-ghc-core CORE_PACKAGES='base containers text' GHC=/path/to/ghc
 ```
 
-The check reads the complete-Core field of installed interfaces through the
-selected compiler's GHC API, in one process.
-Recognizing the command-line flag is insufficient: `ghc-internal` must have
-been built with it. Keep the matching compiler tools together; a `ghc-pkg`
-from another installation must not supply the package being checked.
+The default checks `ghc-internal` and `base`; `CORE_PACKAGES` selects other
+installed packages. The check includes their registered transitive package
+dependencies and reads each Haskell interface's complete-Core field through
+the selected compiler's GHC API, in one process. Native-only registrations
+have no Haskell interfaces to inspect.
+Recognizing the command-line flag is insufficient: the consumed library must
+have been built with it. Keep the matching compiler tools together; a
+`ghc-pkg` from another installation must not supply the package being checked.
+Run the check for each library whose bodies THC will load.
 
 This is a capability check, not a declaration of GHC API compatibility.
 The exporter currently supports GHC 9.14.1. Wiring complete installed Core into
@@ -92,8 +101,8 @@ cd ghc-core-build
 curl -fLO "https://downloads.haskell.org/ghc/$THC_GHC_VERSION/ghc-$THC_GHC_VERSION-src.tar.xz"
 tar -xf "ghc-$THC_GHC_VERSION-src.tar.xz"
 cd "ghc-$THC_GHC_VERSION"
-patch --dry-run -p1 < "$THC_SOURCE/compiler/patches/ghc-internal-simplified-core.patch"
-patch -p1 < "$THC_SOURCE/compiler/patches/ghc-internal-simplified-core.patch"
+patch --dry-run -p1 < "$THC_SOURCE/compiler/patches/ghc-libraries-simplified-core.patch"
+patch -p1 < "$THC_SOURCE/compiler/patches/ghc-libraries-simplified-core.patch"
 
 test -f configure || ./boot
 GHC="$THC_BOOT_GHC" ./configure --prefix="$THC_GHC_PREFIX"
@@ -122,10 +131,14 @@ database; cache entries also remain separated by target and compiler identity.
 
 ## Patch scope and checks
 
-The patch applies to GHC 9.14.1 and upstream revision
-`bf17f289eb6abf929917350e6c549474024539`. Hadrian passes the library's Cabal
-`ghc-options` through its `hcOpts` arguments. The flag is also available in
-GHC 9.6, the oldest bootstrap compiler accepted by the inspected release.
+The Hadrian patch was dry-run against GHC's `ghc-9.14.1-release` source
+(`902339d332fb4ce2b3c87dcac1ee6495d41ad886`) and upstream master at
+`35bf6f4bcf06675565992725df62e837bc7788ce`. It selects Haskell
+compilation of library packages after Stage0, for every built library way.
+It includes GHC's compiler library as well as ordinary libraries; excluding
+the compiler would make this an incomplete library-wide rule. The installed
+release libraries are built with a later stage. The earlier one-line Cabal
+patch remains a smaller alternative, not a prerequisite for this patch.
 
 A small `-O2` probe with an `OPAQUE` exported entry and a private `NOINLINE`
 worker acquired an `extra decls:` section containing both bodies. Its interface
@@ -134,8 +147,9 @@ and both executables returned the same result. This does not measure the size
 of a patched `ghc-internal` build. A complete compiler rebuild has not been
 validated here.
 
-This first patch covers `ghc-internal`. Other boot libraries still need their
-own complete Core when their bodies are required. Ordinary project packages
-can emit Core when THC builds them. GHC API changes and primop/RTS semantics
-remain explicit compatibility work; retaining library Core removes one major
-source of version-specific scaffolding, not those obligations.
+The Hadrian flag only covers libraries built by that GHC source tree. Ordinary
+project packages can emit Core when THC builds them; independently installed
+packages require their own complete-Core build. `rts` C code and primop
+semantics are separate from Haskell interface payloads. GHC API changes remain
+explicit compatibility work; retaining library Core removes one source of
+version-specific scaffolding, not those obligations.

@@ -1,0 +1,12 @@
+diff --git a/hadrian/src/Settings/Builders/Ghc.hs b/hadrian/src/Settings/Builders/Ghc.hs
+--- a/hadrian/src/Settings/Builders/Ghc.hs
++++ b/hadrian/src/Settings/Builders/Ghc.hs
+@@ -39,2 +39,3 @@
+     stage <- getStage
++    pkg <- getPackage
+     hie_path <- getHieBuildPath
+@@ -51,2 +52,4 @@
+             , commonGhcArgs
++            , builder (Ghc CompileHs) ? notStage0 ? isLibrary pkg ?
++              arg "-fwrite-if-simplified-core"
+             , ghcLinkArgs
