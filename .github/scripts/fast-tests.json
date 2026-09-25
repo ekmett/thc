@@ -312,6 +312,18 @@
     "test/haskell-fixtures/OriginalOpenFixtures.hs": {
       "junit": ["thc.runtime.OriginalOpenTest"], "python": []
     },
+    "src/main/kotlin/thc/runtime/RtsDiagnostics.kt": {
+      "junit": ["thc.runtime.RtsDiagnosticsTest"], "python": []
+    },
+    "src/main/kotlin/thc/runtime/CoreRtsDiagnosticForeign.kt": {
+      "junit": ["thc.runtime.RtsDiagnosticsTest"], "python": []
+    },
+    "compiler/test-fixtures/RtsDiagnosticsNative.hs": {
+      "junit": ["thc.runtime.RtsDiagnosticsTest"], "python": []
+    },
+    "test/haskell-fixtures/RtsDiagnosticFixtures.hs": {
+      "junit": ["thc.runtime.RtsDiagnosticsTest"], "python": []
+    },
     "src/main/kotlin/thc/runtime/RtsFileLocks.kt": {
       "junit": ["thc.runtime.OriginalRtsLocksTest"], "python": []
     },
@@ -1072,6 +1084,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.RtsDiagnosticsTest",
         "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest",
         "thc.runtime.OriginalSigsetTest",
         "thc.runtime.OriginalTermiosTest",

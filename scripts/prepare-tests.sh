@@ -88,6 +88,7 @@ esac
 "$fixture_bin" original-sigprocmask
 "$fixture_bin" original-sigset
 "$fixture_bin" original-rts-locks --require-supported
+"$fixture_bin" rts-diagnostics
 "$fixture_bin" original-stdio-seek
 "$fixture_bin" libdw-unavailable
 "$fixture_bin" native-addresses
