@@ -104,10 +104,10 @@ class SimdFamiliesTest(unittest.TestCase):
             self.assertEqual(one, float_operation('minus', two, one, width))
             self.assertEqual(one, float_operation('times', two, half, width))
             self.assertEqual(sign, float_operation('minus', sign, 0, width))
-        families = [f for f in GEN.families() if f.get('composite')]
-        self.assertEqual(['FloatX8', 'DoubleX4'], [f['name'] for f in families])
-        self.assertEqual({'floatX8Composite', 'doubleX4Composite'},
-                         {name for name, _, operation in entries() if operation == 'composite'})
+        families = [f for f in GEN.families() if f.get('composite') and f['laneRep'] in ('FloatRep', 'DoubleRep')]
+        self.assertEqual(['FloatX8', 'DoubleX4', 'FloatX16', 'DoubleX8'], [f['name'] for f in families])
+        self.assertEqual({'floatX8Composite', 'doubleX4Composite', 'floatX16Composite', 'doubleX8Composite'},
+                         {name for name, f, operation in entries() if operation == 'composite' and f['laneRep'] in ('FloatRep', 'DoubleRep')})
         source = GEN.fixture_sources(families)['fixtures/GeneratedSimdFamilies.hs']
         for family in families:
             name = family['name'][0].lower() + family['name'][1:] + 'Composite'
@@ -121,7 +121,7 @@ class SimdFamiliesTest(unittest.TestCase):
 
     def test_exact_machine_contracts_and_recursive_lanes(self):
         families = GEN.families()
-        self.assertEqual(47, len(GEN.contracts(families)))
+        self.assertEqual(95, len(GEN.contracts(families)))
         for family in families:
             for operation in family['operations']:
                 name = operation + family['name'] + '#'
@@ -146,7 +146,7 @@ class SimdFamiliesTest(unittest.TestCase):
                 continue
             source = GEN.carrier(family)
             primitive = GEN.LANES[family['laneRep']][0]
-            self.assertEqual(family['lanes'], source.count(f'public final {primitive} lane'))
+            self.assertEqual(family['lanes'], source.count('@JvmField val lane'))
             self.assertIn(f'.SPECIES_{family["bits"]}', source)
             for forbidden in ('Object', '[]', 'SPECIES_PREFERRED', 'VectorSpecies'):
                 self.assertNotIn(forbidden, source)

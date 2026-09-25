@@ -20,7 +20,6 @@ val generateSimdFamilies = tasks.register<Exec>("generateSimdFamilies") {
     outputs.dir(layout.buildDirectory.dir("generated/simd"))
     commandLine("python3", "scripts/generate-simd-families.py", "--check")
 }
-sourceSets.main { java.srcDir(layout.buildDirectory.dir("generated/simd/java")) }
 kotlin.sourceSets.main { kotlin.srcDir(layout.buildDirectory.dir("generated/simd/kotlin")) }
 tasks.matching { it.name in setOf("compileKotlin", "compileJava", "kaptGenerateStubsKotlin") }.configureEach {
     dependsOn(generateSimdFamilies)
@@ -163,7 +162,7 @@ tasks.withType<Test>().configureEach {
             "bit-primops/**/*.json", "bit-primops/oracle.tsv", "bit-primops/NativeBitPrimops.hs",
             "simd/pre-core/**/*.json", "simd/post-core/**/*.json", "simd/oracle.tsv",
             "simd-families/**/*.json", "simd-families/*.tsv", "simd-families/native/**",
-            "simd-capability-smoke/**/*.json", "simd-capability-smoke/*.tsv", "generated/simd/fixtures/*.hs",
+            "simd-capability-smoke/**/*.json", "simd-capability-smoke/*.tsv", "simd-capability-smoke/native/**", "generated/simd/fixtures/*.hs",
             "explicit64-primops/core/**/*.json", "explicit64-primops/manifest.json", "explicit64-primops/oracle.tsv",
             "simd-int32x4/pre-core/**/*.json", "simd-int32x4/post-core/**/*.json", "simd-int32x4/oracle.tsv",
             "simd-floatx4/**/*.json", "simd-floatx4/*.tsv",
