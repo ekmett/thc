@@ -2,8 +2,8 @@
 
 This Linux x86_64 checkpoint proves a private provider's bytes and metadata come
 from the same opened resource. The explicit `NativeIO` context now attaches this
-capability to shared `ManagedFiles` owners. It does **not** change the default CLI,
-admit original GHC `__hscore_fstat`, implement RTS file locks, or
+capability to shared `ManagedFiles` owners and the original GHC `__hscore_fstat`
+adapter. It does **not** change the default CLI, implement RTS file locks, or
 establish `putStrLn`/Handle support. Arbitrary acquisition cancellation, weak
 references and finalizers remain outside this proof.
 
@@ -54,7 +54,14 @@ reader/writer admission, not GHC RTS locking. Ordinary custom embeddings retain
 their existing path-sampled service and its documented acquisition limitations.
 Internal `statImage(fd)` revalidates the descriptor under the same owner; closed
 descriptors throw an IO failure and unavailable capability throws unsupported.
-It is not the future errno-returning original fstat adapter.
+The separate errno-returning original `__hscore_fstat` adapter validates the
+entire writable destination byte region before observation, including pointer-cell
+exclusion. Under the same descriptor owner it locks mutable destination storage,
+revalidates the region, obtains the native image, checks its complete length and
+copies it back. This preserves owner-before-allocation lock order and prevents
+concurrent shrink or pointer writes during observation/copyback. Ungranted
+embedding descriptors return native ENOTSUP, closed descriptors return EBADF,
+and successful calls preserve the previous errno.
 
 Native errors retain exact captured errno for original stdio calls, alongside
 the private service's portable error categories. Success preserves prior errno.
@@ -83,4 +90,13 @@ authority. The ownership checks run alongside `ManagedDescriptorDupTest`,
 `ManagedFilesTest`, `GuestThreadsTest` and existing stdio/ABI regressions in both
 handoff modes with normal native-resource compilation enabled: 75 tests passed
 per mode, including unchanged first-installed compiled-call checks. No new original
-Haskell FCall admission is claimed by this provider test.
+Haskell FCall admission is claimed by this provider test itself.
+
+`OriginalFstatTest` separately checks the exact original pre/post `ccall unsafe`
+declaration, both backends and every first-installed compiled invocation against
+native GHC. Observations cover size and chmod changes, a duplicate descriptor,
+rename/replacement/unlink identity, invalid/closed descriptors, sticky errno and
+destination canaries. Malformed State/ABI, short or immutable destinations and
+pointer-bearing storage reject before native observation. No CLI/Handle, RTS lock,
+arbitrary native pointer, or acquisition-cancellation guarantee follows from this
+bounded Linux x86_64 admission.

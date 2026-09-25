@@ -361,6 +361,26 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         } } finally { threads.leaveForeign(previous) }
     }
 
+    /** Complete destination validation precedes native observation. Match the
+     * existing IO lock order: descriptor owner, then mutable allocation. Holding
+     * the latter across snapshot/copy prevents shrink or pointer-cell races. */
+    @TruffleBoundary internal fun fstat(fd: Long, destination: ManagedAddress): Long {
+        val size = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.nullAddress(), 0)
+        destination.requireByteRegion(size, writable = true)
+        return result { withDescriptor(fd) { entry ->
+            fun copyImage(): Long {
+                destination.requireByteRegion(size, writable = true)
+                val resource = entry.native ?: fail(7, "THC descriptor has no opened-resource metadata: $fd")
+                val image = resource.statImage()
+                if (image.size.toLong() != size) fault("Native stat image has the wrong size")
+                ManagedAddress.fromByteArray(image).copyNonOverlappingTo(destination, size)
+                return 0L
+            }
+            val allocation = destination.cbitsOwner()
+            if (allocation == null) copyImage() else synchronized(allocation) { copyImage() }
+        } }
+    }
+
     @TruffleBoundary fun read(fd: Long, address: ManagedAddress, count: Long): Long {
         address.requireRange(0, count, true) // Validate the whole destination before consuming input.
         return result { withDescriptor(fd) { entry ->

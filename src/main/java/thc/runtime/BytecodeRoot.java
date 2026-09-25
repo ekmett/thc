@@ -930,6 +930,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             // the exact operation is compile-time metadata, not a guest operand.
             long result;
             if (operation.getStat()) result = PosixStat.execute(operation, address, fd);
+            else if (operation == OriginalStdioOp.FSTAT) result = CoreOriginalStdio.current(node).fstat(fd, address);
             else if (operation == OriginalStdioOp.ERRNO) result = CoreOriginalStdio.current(node).errno();
             else if (operation.getSeekConstant()) result = CoreOriginalStdio.current(node).seekConstant(operation);
             else if (operation == OriginalStdioOp.ISATTY) result = CoreOriginalStdio.current(node).isTerminal(fd);

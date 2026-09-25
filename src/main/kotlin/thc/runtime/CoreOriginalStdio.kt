@@ -27,6 +27,7 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     SEEK("ghczuwrapperZC19ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZClseek", "capi", "unsafe",
         listOf("Int32Rep", "Int64Rep", "Int32Rep", null), "Int64Rep"),
     TRUNCATE("__hscore_ftruncate", "ccall", "unsafe", listOf("Int32Rep", "Int64Rep", null), "Int32Rep"),
+    FSTAT("__hscore_fstat", "ccall", "unsafe", listOf("Int32Rep", "AddrRep", null), "Int32Rep"),
     SIZEOF_STAT("__hscore_sizeof_stat", "ccall", "unsafe", listOf(null), "IntRep"),
     ST_DEV("__hscore_st_dev", "ccall", "unsafe", listOf("AddrRep", null), "Word64Rep"),
     ST_INO("__hscore_st_ino", "ccall", "unsafe", listOf("AddrRep", null), "Word64Rep"),
@@ -75,7 +76,7 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation.readiness || operation.seekConstant || operation.stat || operation.iconv || operation.strerror || operation.duplication,
+        requireProof(operation.readiness || operation.seekConstant || operation.stat || operation == OriginalStdioOp.FSTAT || operation.iconv || operation.strerror || operation.duplication,
             "strict operand operation")
         val primitive = operation.arguments[index]
         val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }

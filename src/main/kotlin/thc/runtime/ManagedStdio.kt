@@ -114,6 +114,14 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return result
     }
 
+    @TruffleBoundary fun fstat(fd: Long, destination: ManagedAddress): Long {
+        val abi = hostAbi
+        if (fd != fd.toInt().toLong()) fault("Original fstat requires a canonical signed CInt descriptor")
+        val result = files.fstat(fd, destination)
+        if (result < 0) lastError.set(fileError(abi))
+        return result
+    }
+
     @TruffleBoundary fun isTerminal(fd: Long): Long {
         val abi = hostAbi
         if (fd != fd.toInt().toLong()) throw RuntimeFault("Original isatty requires a canonical signed CInt descriptor")

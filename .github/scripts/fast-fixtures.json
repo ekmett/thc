@@ -50,7 +50,7 @@
       ]
     },
     "original-posix-stat": {
-      "junit": ["thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest"],
+      "junit": ["thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFstatTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-posix-stat"]}],
       "outputs": ["build/original-posix-stat"],
       "sources": [

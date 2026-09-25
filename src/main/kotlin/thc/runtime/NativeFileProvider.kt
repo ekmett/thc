@@ -30,9 +30,13 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
     companion object {
         /** No arbitrary Builder, FileSystem, provider attachment, or global map.
          * The factory knows the exact final provider whose channel it authenticates. */
-        internal fun createContext(endpoints: Set<StandardEndpoint>): Context {
-            val context = Context.newBuilder("thc").allowNativeAccess(true)
-                .allowIO(IOAccess.newBuilder().fileSystem(NativeFileSystem(endpoints)).build()).build()
+        internal fun createContext(endpoints: Set<StandardEndpoint>, synchronousCompilation: Boolean = false): Context {
+            val builder = Context.newBuilder("thc").allowNativeAccess(true)
+                .allowIO(IOAccess.newBuilder().fileSystem(NativeFileSystem(endpoints)).build())
+            if (synchronousCompilation) builder.allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw")
+            val context = builder.build()
             try {
                 context.initialize("thc"); context.enter()
                 try {

@@ -275,36 +275,36 @@
       "junit": ["thc.runtime.OriginalStdioCloseNativeTest"], "python": []
     },
     "src/main/c/native-file-api.c": {
-      "junit": ["thc.runtime.NativeFileProviderTest"], "python": []
+      "junit": ["thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest"], "python": []
     },
     "src/main/java/thc/runtime/NativeFileLease.java": {
-      "junit": ["thc.runtime.NativeFileProviderTest"], "python": []
+      "junit": ["thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest"], "python": []
     },
     "src/main/kotlin/thc/NativeIO.kt": {
-      "junit": ["thc.runtime.NativeFileProviderTest"], "python": []
+      "junit": ["thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest"], "python": []
     },
     "src/main/kotlin/thc/NativeFileSystem.kt": {
-      "junit": ["thc.runtime.NativeFileProviderTest"], "python": []
+      "junit": ["thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest"], "python": []
     },
     "src/main/kotlin/thc/runtime/NativeFileException.kt": {
-      "junit": ["thc.runtime.NativeFileProviderTest"], "python": []
+      "junit": ["thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest"], "python": []
     },
     "src/main/kotlin/thc/runtime/NativeFileProvider.kt": {
-      "junit": ["thc.runtime.NativeFileProviderTest"], "python": []
+      "junit": ["thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest"], "python": []
     },
     "src/main/kotlin/thc/runtime/NativeOpenRequest.kt": {
-      "junit": ["thc.runtime.NativeFileProviderTest"], "python": []
+      "junit": ["thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest"], "python": []
     },
     "src/main/kotlin/thc/runtime/ManagedFiles.kt": {
-      "junit": ["thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedFilesTest", "thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest"],
+      "junit": ["thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedFilesTest", "thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/ManagedStdio.kt": {
-      "junit": ["thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedStdioTest", "thc.runtime.ManagedFilesTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest"],
+      "junit": ["thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedStdioTest", "thc.runtime.ManagedFilesTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/StdioHostAbi.kt": {
-      "junit": ["thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.StdioHostAbiTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest"],
+      "junit": ["thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.StdioHostAbiTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest"],
       "python": []
     },
     "src/main/c/stdio-abi-probe.c": {
@@ -320,11 +320,11 @@
       "python": []
     },
     "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt": {
-      "junit": ["thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalStrerrorNativeTest"],
+      "junit": ["thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalStrerrorNativeTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt": {
-      "junit": ["thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalStrerrorNativeTest", "thc.runtime.GuestThreadsTest"],
+      "junit": ["thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalStrerrorNativeTest", "thc.runtime.GuestThreadsTest"],
       "python": []
     },
     "compiler/test-fixtures/OriginalStdioReadAudit.hs": {
@@ -961,6 +961,7 @@
         "thc.runtime.OriginalStrerrorNativeTest",
         "thc.runtime.OriginalHandleReadinessNativeTest",
         "thc.runtime.OriginalPosixStatTest",
+        "thc.runtime.OriginalFstatTest",
         "thc.runtime.PosixStatAbiTest",
         "thc.runtime.MutVarTest",
         "thc.runtime.StablePointerTest",
@@ -1004,19 +1005,19 @@
       "python": []
     },
     "src/main/kotlin/thc/runtime/PosixStat.kt": {
-      "junit": ["thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest"], "python": []
+      "junit": ["thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest"], "python": []
     },
     "src/main/c/posix-stat-abi-probe.c": {
-      "junit": ["thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest"], "python": []
+      "junit": ["thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest"], "python": []
     },
     "test/haskell-fixtures/OriginalPosixStatFixtures.hs": {
-      "junit": ["thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest"], "python": []
+      "junit": ["thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest"], "python": []
     },
     "compiler/test-fixtures/OriginalPosixStatAudit.hs": {
-      "junit": ["thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest"], "python": []
+      "junit": ["thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest"], "python": []
     },
     "compiler/test-fixtures/OriginalPosixStatNative.hs": {
-      "junit": ["thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest"], "python": []
+      "junit": ["thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest"], "python": []
     },
     "test/haskell-fixtures/OriginalHandleReadinessFixtures.hs": {
       "junit": ["thc.runtime.OriginalHandleReadinessNativeTest"],

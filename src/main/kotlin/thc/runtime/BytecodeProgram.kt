@@ -1393,7 +1393,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat ||
+                        if (originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio == OriginalStdioOp.FSTAT ||
                             originalStdio.iconv || originalStdio.strerror || originalStdio.duplication)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
@@ -1404,7 +1404,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     val b = e.builder
                     val result = destination.single()
                     val status = originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
-                        originalStdio == OriginalStdioOp.CLOSE || originalStdio == OriginalStdioOp.DUP || originalStdio.seekConstant || originalStdio.stat
+                        originalStdio == OriginalStdioOp.CLOSE || originalStdio == OriginalStdioOp.DUP || originalStdio == OriginalStdioOp.FSTAT || originalStdio.seekConstant || originalStdio.stat
                     if (originalStdio == OriginalStdioOp.LOCALE) b.beginOriginalLocale(result)
                     else if (originalStdio == OriginalStdioOp.ICONV_OPEN) b.beginOriginalIconvOpen(result)
                     else if (originalStdio == OriginalStdioOp.ICONV_CLOSE) b.beginOriginalIconvClose(result)
@@ -1422,7 +1422,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         if (originalStdio == OriginalStdioOp.ERRNO || originalStdio.seekConstant ||
                             originalStdio == OriginalStdioOp.SIZEOF_STAT || originalStdio.statField)
                             b.emitLoadConstant(0L) else operands[0].emit(e)
-                        if (originalStdio.statField) operands[0].emit(e) else b.emitLoadConstant(ManagedAddress.nullAddress())
+                        if (originalStdio.statField) operands[0].emit(e)
+                        else if (originalStdio == OriginalStdioOp.FSTAT) operands[1].emit(e)
+                        else b.emitLoadConstant(ManagedAddress.nullAddress())
                         operands.last().emit(e)
                     } else if (originalStdio == OriginalStdioOp.SEEK) {
                         operands.take(3).forEach { it.emit(e) }
