@@ -1633,6 +1633,28 @@ class NativeMallocDeclarationTest(unittest.TestCase):
             self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
 
 
+class OriginalMemmoveDeclarationTest(unittest.TestCase):
+    def test_exact_original_descriptor_and_checked_capability(self):
+        resource = ROOT.parent / 'src/test/resources/core/original-memmove-descriptor.json'
+        declaration = json.loads(resource.read_text())
+        self.assertEqual('memmove', declaration['target']['symbol'])
+        fixture = LibdwUnavailableAuditTest()
+        module = fixture.fixture(declaration)
+        self.assertTrue(fixture.audit(module)['accepted'])
+        disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != 'memmove'])
+        self.assertFalse(fixture.audit(module, disabled)['accepted'])
+        for key, value in [('safety', 'safe'), ('arity', 3), ('schema', 1.0),
+                           ('argumentReps', declaration['argumentReps'][:3]), ('resultRep', LONG)]:
+            wrong = copy.deepcopy(declaration); wrong[key] = value
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+        wrong = copy.deepcopy(declaration); wrong['target']['unit'] = 'other'
+        self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+        for index in range(4):
+            wrong = fixture.fixture(declaration)
+            wrong['bindings'][0]['expr'][1][index]['rep'] = LONG
+            self.assertFalse(fixture.audit(wrong)['accepted'])
+
+
 class OriginalStackInfoAuditTest(unittest.TestCase):
     """Genuine unchanged FCall applications in explicitly synthetic scalar consumers.
 

@@ -328,13 +328,21 @@ internal class ManagedAddress private constructor(
         return start < otherStart + otherCount && otherStart < start + count
     }
 
-    /** copyAddrToAddrNonOverlapping# counts bytes. Validate both complete
-     * regions and aliasing before changing storage; owner-to-owner copies keep
-     * managed pointer references instead of fabricating their byte values. */
-    fun copyNonOverlappingTo(destination: ManagedAddress, count: Long) = withNativeBorrows(destination) copy@ {
+    /** memmove returns its destination address, including an interior view.
+     * Owned pointer cells move as references, never as fabricated address bits. */
+    fun moveTo(destination: ManagedAddress, count: Long): ManagedAddress {
+        copyTo(destination, count, allowOverlap = true)
+        return destination
+    }
+
+    /** copyAddrToAddrNonOverlapping# keeps its stronger disjointness contract. */
+    fun copyNonOverlappingTo(destination: ManagedAddress, count: Long) =
+        copyTo(destination, count, allowOverlap = false)
+
+    private fun copyTo(destination: ManagedAddress, count: Long, allowOverlap: Boolean) = withNativeBorrows(destination) copy@ {
         requireRange(0, count)
         destination.requireRange(0, count, writable = true)
-        if (overlaps(0, count, destination, 0, count))
+        if (!allowOverlap && overlaps(0, count, destination, 0, count))
             fault("copyAddrToAddrNonOverlapping# requires disjoint regions")
         if (count == 0L) return@copy
         val sourceOwner = owner
