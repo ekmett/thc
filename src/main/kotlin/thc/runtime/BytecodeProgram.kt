@@ -311,7 +311,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val proof = CoreRepresentations.binder(arg).copy(evaluated = !lifted || context.entryStrict[index])
             val offset = ArgumentLayout.offset(context.inputLayout, index)
             if (proof.isTypedTransport) {
-                if (lifted) throw RuntimeFault("Typed transport formal cannot be lifted")
+                if (lifted) throw RuntimeFault(if (proof.isVector) "Vector formal cannot be lifted" else "Tuple formal cannot be lifted")
                 val fields = if (arg["id"] in free) ArgumentLayout.leaves(proof).mapIndexed { leaf, field ->
                     Local(nextLocal++, "${arg["id"]} field $leaf", field.isLong, field).also {
                         physicalArguments += (offset + leaf) to it
@@ -690,7 +690,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk", allowEmpty: Boolean = false, declaredLifted: Boolean = lifted): Expression {
         fun check(value: CoreRepresentation) {
             if (allowEmpty) CoreRepresentations.requireInput(value) else CoreRepresentations.requireScalar(value, "argument")
-            if (value.isTypedTransport && declaredLifted) throw RuntimeFault("Typed transport argument cannot be lifted")
+            if (value.isTypedTransport && declaredLifted)
+                throw RuntimeFault(if (value.isVector) "Vector argument cannot be lifted" else "Tuple argument cannot be lifted")
         }
         val proof = CoreRepresentations.expression(expr)
         check(proof)
@@ -1197,7 +1198,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             definition.parameters.forEach {
                 val proof = CoreRepresentations.binder(it)
                 CoreRepresentations.requireJoinInput(proof)
-                if (proof.isTypedTransport && representation(it)) throw RuntimeFault("Typed transport join formal must be unlifted")
+                if (proof.isTypedTransport && representation(it))
+                    throw RuntimeFault(if (proof.isVector) "Vector join formal must be unlifted" else "Tuple join formal must be unlifted")
             }
             val formals = definition.parameters.map { it["id"] as String }.toSet()
             (freeVariables(definition.body) - formals - shadowed).forEach { id ->
@@ -2484,6 +2486,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     (constructors[fn[1]]?.get("arity") as? Number)?.toInt() != args.size) throw RuntimeFault("Tuple constructor arity mismatch")
                 val operands = args.mapIndexed { index, arg ->
                     TupleShape.requireCompatible(shape.components[index], CoreRepresentations.expression(arg), component = true)
+                    if (shape.components[index].isVector && flags[index] != false) throw RuntimeFault("Vector tuple field cannot be lifted")
                     if (shape.components[index].isTypedTransport) compile(arg, scope, false)
                     else argument(arg, scope, flags[index] as? Boolean ?: throw UnsupportedCore("Unknown tuple field levity"))
                 }
