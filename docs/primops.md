@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 401 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 781 | No declared lowering. |
+| Partial | 416 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 766 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -370,6 +370,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `broadcastFloatX16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `broadcastFloatX4#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `broadcastFloatX8#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `broadcastInt16X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `broadcastInt16X8#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `broadcastInt32X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `broadcastInt32X4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -378,6 +379,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `broadcastInt64X4#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `broadcastInt64X8#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `broadcastInt8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `broadcastWord16X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `broadcastWord16X8#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `broadcastWord32X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `broadcastWord32X4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -473,6 +475,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `insertFloatX16#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `insertFloatX4#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `insertFloatX8#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `insertInt16X16#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `insertInt16X8#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `insertInt32X16#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `insertInt32X4#` — arity 3 — Specialized lowering; see capability and coverage limits
@@ -481,6 +484,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `insertInt64X4#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `insertInt64X8#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `insertInt8X16#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `insertWord16X16#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `insertWord16X8#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `insertWord32X16#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `insertWord32X4#` — arity 3 — Specialized lowering; see capability and coverage limits
@@ -503,6 +507,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `minusFloatX16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusFloatX8#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `minusInt16X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusInt16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusInt32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusInt32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -511,6 +516,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `minusInt64X4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusInt64X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusInt8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `minusWord16X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusWord16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusWord32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusWord32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -528,6 +534,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `negateFloatX16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `negateFloatX4#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `negateFloatX8#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `negateInt16X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `negateInt16X8#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `negateInt32X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `negateInt32X4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -550,6 +557,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `packFloatX16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packFloatX4#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packFloatX8#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `packInt16X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packInt16X8#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packInt32X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packInt32X4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -558,6 +566,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `packInt64X4#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packInt64X8#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packInt8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `packWord16X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packWord16X8#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packWord32X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packWord32X4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -573,6 +582,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `plusFloatX16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `plusFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `plusFloatX8#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `plusInt16X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `plusInt16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `plusInt32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `plusInt32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -581,6 +591,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `plusInt64X4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `plusInt64X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `plusInt8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `plusWord16X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `plusWord16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `plusWord2#` — arity 2 — Exact tuple arithmetic
 - [ ] `plusWord32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -664,6 +675,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `timesFloatX16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesFloatX8#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `timesInt16X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesInt16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesInt2#` — arity 2 — Exact tuple arithmetic
 - [ ] `timesInt32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -673,6 +685,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `timesInt64X4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesInt64X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesInt8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `timesWord16X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesWord16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesWord2#` — arity 2 — Exact tuple arithmetic
 - [ ] `timesWord32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -693,6 +706,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `unpackFloatX16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `unpackFloatX4#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `unpackFloatX8#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `unpackInt16X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `unpackInt16X8#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `unpackInt32X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `unpackInt32X4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -701,6 +715,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `unpackInt64X4#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `unpackInt64X8#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `unpackInt8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `unpackWord16X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `unpackWord16X8#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `unpackWord32X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `unpackWord32X4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -792,11 +807,9 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `atomicWriteIntArray#` — arity 4
 - [ ] `atomicWriteWordAddr#` — arity 3
 - [ ] `atomically#` — arity 2
-- [ ] `broadcastInt16X16#` — arity 1
 - [ ] `broadcastInt16X32#` — arity 1
 - [ ] `broadcastInt8X32#` — arity 1
 - [ ] `broadcastInt8X64#` — arity 1
-- [ ] `broadcastWord16X16#` — arity 1
 - [ ] `broadcastWord16X32#` — arity 1
 - [ ] `broadcastWord8X32#` — arity 1
 - [ ] `broadcastWord8X64#` — arity 1
@@ -1010,11 +1023,9 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexWord8X32OffAddr#` — arity 2
 - [ ] `indexWord8X64Array#` — arity 2
 - [ ] `indexWord8X64OffAddr#` — arity 2
-- [ ] `insertInt16X16#` — arity 3
 - [ ] `insertInt16X32#` — arity 3
 - [ ] `insertInt8X32#` — arity 3
 - [ ] `insertInt8X64#` — arity 3
-- [ ] `insertWord16X16#` — arity 3
 - [ ] `insertWord16X32#` — arity 3
 - [ ] `insertWord8X32#` — arity 3
 - [ ] `insertWord8X64#` — arity 3
@@ -1092,11 +1103,9 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `minWord8X32#` — arity 2
 - [ ] `minWord8X64#` — arity 2
 - [ ] `minusAddr#` — arity 2
-- [ ] `minusInt16X16#` — arity 2
 - [ ] `minusInt16X32#` — arity 2
 - [ ] `minusInt8X32#` — arity 2
 - [ ] `minusInt8X64#` — arity 2
-- [ ] `minusWord16X16#` — arity 2
 - [ ] `minusWord16X32#` — arity 2
 - [ ] `minusWord8X32#` — arity 2
 - [ ] `minusWord8X64#` — arity 2
@@ -1104,7 +1113,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `mkWeak#` — arity 4
 - [ ] `mkWeakNoFinalizer#` — arity 3
 - [ ] `mulIntMayOflo#` — arity 2
-- [ ] `negateInt16X16#` — arity 1
 - [ ] `negateInt16X32#` — arity 1
 - [ ] `negateInt8X32#` — arity 1
 - [ ] `negateInt8X64#` — arity 1
@@ -1112,20 +1120,16 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `newPromptTag#` — arity 1
 - [ ] `newTVar#` — arity 2
 - [ ] `numSparks#` — arity 1
-- [ ] `packInt16X16#` — arity 1
 - [ ] `packInt16X32#` — arity 1
 - [ ] `packInt8X32#` — arity 1
 - [ ] `packInt8X64#` — arity 1
-- [ ] `packWord16X16#` — arity 1
 - [ ] `packWord16X32#` — arity 1
 - [ ] `packWord8X32#` — arity 1
 - [ ] `packWord8X64#` — arity 1
 - [ ] `par#` — arity 1
-- [ ] `plusInt16X16#` — arity 2
 - [ ] `plusInt16X32#` — arity 2
 - [ ] `plusInt8X32#` — arity 2
 - [ ] `plusInt8X64#` — arity 2
-- [ ] `plusWord16X16#` — arity 2
 - [ ] `plusWord16X32#` — arity 2
 - [ ] `plusWord8X32#` — arity 2
 - [ ] `plusWord8X64#` — arity 2
@@ -1383,11 +1387,9 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `stableNameToInt#` — arity 1
 - [ ] `threadLabel#` — arity 2
 - [ ] `threadStatus#` — arity 2
-- [ ] `timesInt16X16#` — arity 2
 - [ ] `timesInt16X32#` — arity 2
 - [ ] `timesInt8X32#` — arity 2
 - [ ] `timesInt8X64#` — arity 2
-- [ ] `timesWord16X16#` — arity 2
 - [ ] `timesWord16X32#` — arity 2
 - [ ] `timesWord8X32#` — arity 2
 - [ ] `timesWord8X64#` — arity 2
@@ -1398,11 +1400,9 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `uncheckedShiftRLInt32#` — arity 2
 - [ ] `uncheckedShiftRLInt8#` — arity 2
 - [ ] `unpackClosure#` — arity 1
-- [ ] `unpackInt16X16#` — arity 1
 - [ ] `unpackInt16X32#` — arity 1
 - [ ] `unpackInt8X32#` — arity 1
 - [ ] `unpackInt8X64#` — arity 1
-- [ ] `unpackWord16X16#` — arity 1
 - [ ] `unpackWord16X32#` — arity 1
 - [ ] `unpackWord8X32#` — arity 1
 - [ ] `unpackWord8X64#` — arity 1

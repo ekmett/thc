@@ -4231,6 +4231,76 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedWord32X4Insert(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X4Insert()
         }, GeneratedVectors.proofWord32X4)
+        "packInt16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(16) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.beginGeneratedInt16X16Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedInt16X16Pack()
+            b.endBlock()
+        }, GeneratedVectors.proofInt16X16)
+        "unpackInt16X16#" -> tupleExpression(GeneratedVectors.unpackedInt16X16) { e, destination ->
+            e.builder.beginGeneratedInt16X16Unpack(destination[0], destination[1], destination[2], destination[3], destination[4], destination[5], destination[6], destination[7], destination[8], destination[9], destination[10], destination[11], destination[12], destination[13], destination[14], destination[15])
+            operands[0].emit(e)
+            e.builder.endGeneratedInt16X16Unpack()
+        }
+        "broadcastInt16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X16Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X16Broadcast()
+        }, GeneratedVectors.proofInt16X16)
+        "plusInt16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X16Plus(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X16Plus()
+        }, GeneratedVectors.proofInt16X16)
+        "minusInt16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X16Minus(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X16Minus()
+        }, GeneratedVectors.proofInt16X16)
+        "timesInt16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X16Times(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X16Times()
+        }, GeneratedVectors.proofInt16X16)
+        "negateInt16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X16Negate(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X16Negate()
+        }, GeneratedVectors.proofInt16X16)
+        "insertInt16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X16Insert(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X16Insert()
+        }, GeneratedVectors.proofInt16X16)
+        "packWord16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(16) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.beginGeneratedWord16X16Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedWord16X16Pack()
+            b.endBlock()
+        }, GeneratedVectors.proofWord16X16)
+        "unpackWord16X16#" -> tupleExpression(GeneratedVectors.unpackedWord16X16) { e, destination ->
+            e.builder.beginGeneratedWord16X16Unpack(destination[0], destination[1], destination[2], destination[3], destination[4], destination[5], destination[6], destination[7], destination[8], destination[9], destination[10], destination[11], destination[12], destination[13], destination[14], destination[15])
+            operands[0].emit(e)
+            e.builder.endGeneratedWord16X16Unpack()
+        }
+        "broadcastWord16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X16Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X16Broadcast()
+        }, GeneratedVectors.proofWord16X16)
+        "plusWord16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X16Plus(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X16Plus()
+        }, GeneratedVectors.proofWord16X16)
+        "minusWord16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X16Minus(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X16Minus()
+        }, GeneratedVectors.proofWord16X16)
+        "timesWord16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X16Times(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X16Times()
+        }, GeneratedVectors.proofWord16X16)
+        "insertWord16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X16Insert(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X16Insert()
+        }, GeneratedVectors.proofWord16X16)
         else -> throw UnsupportedCore("Unsupported generated vector primitive $name")
     }
     // END GENERATED SIMD FAMILIES

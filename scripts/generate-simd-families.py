@@ -29,6 +29,7 @@ LANES = {
     'FloatRep': ('float', 32, 'FloatVector', 'Float'),
     'DoubleRep': ('double', 64, 'DoubleVector', 'Double'),
 }
+UNSIGNED_MASK = {'Word8Rep': '0xffL', 'Word16Rep': '0xffffL', 'Word32Rep': '0xffff_ffffL'}
 BINARY = {'plus': 'add', 'minus': 'subtract', 'times': 'multiply', 'divide': 'divide'}
 VECTOR_METHOD = {'add': 'add', 'subtract': 'sub', 'multiply': 'mul', 'divide': 'div'}
 LEGACY_INSERT = {'Int8X16', 'Word8X16', 'Int16X8', 'Word16X8', 'Int32X4', 'Word32X4', 'Int64X2', 'FloatX4', 'DoubleX2'}
@@ -190,8 +191,9 @@ def ast_code(fs):
                       '    override fun execute(frame: VirtualFrame): Nothing = fault("Vector unpack requires a tuple destination")',
                       '    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {',
                       f'        val value = argument.execute(frame) as? {n} ?: fault("Expected {n}#")']
+            mask = UNSIGNED_MASK.get(f['laneRep'])
             for i in range(count):
-                lane = (f'value.lane{i}.toLong() and 0xffff_ffffL' if f['laneRep'] == 'Word32Rep'
+                lane = (f'value.lane{i}.toLong() and {mask}' if mask
                         else f'value.lane{i}.toLong()' if cast else f'value.lane{i}')
                 lines.append(f'        FrameAccess.write{access}(frame, slots[offset + {i}], {lane})')
             lines += ['        return null','    }','}']
@@ -221,7 +223,8 @@ def bytecode_nodes(fs):
                 lines += [f'    public static final class {node} {{',
                           '        @Specialization public static void apply(VirtualFrame frame, '+', '.join(f'LocalAccessor lane{i}' for i in range(count))+f', {n} value, @Bind("$node") Node node) {{',
                           '            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();']
-                lane = (lambda i: f'value.lane{i} & 0xffff_ffffL' if f['laneRep'] == 'Word32Rep'
+                mask = UNSIGNED_MASK.get(f['laneRep'])
+                lane = (lambda i: f'value.lane{i} & {mask}' if mask
                         else f'value.lane{i}')
                 lines += [f'            lane{i}.set{access}(bytecode, frame, {lane(i)});' for i in range(count)]
                 lines += ['        }','    }']

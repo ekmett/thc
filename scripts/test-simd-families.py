@@ -121,7 +121,7 @@ class SimdFamiliesTest(unittest.TestCase):
 
     def test_exact_machine_contracts_and_recursive_lanes(self):
         families = GEN.families()
-        self.assertEqual(117, len(GEN.contracts(families)))
+        self.assertEqual(132, len(GEN.contracts(families)))
         for family in families:
             for operation in family['operations']:
                 name = operation + family['name'] + '#'
@@ -151,15 +151,32 @@ class SimdFamiliesTest(unittest.TestCase):
             for forbidden in ('Object', '[]', 'SPECIES_PREFERRED', 'VectorSpecies'):
                 self.assertNotIn(forbidden, source)
 
-    def test_word32_lanes_observe_unsigned_bits_in_both_backends(self):
-        family = next(f for f in GEN.families() if f['name'] == 'Word32X8')
-        self.assertEqual((1 << 32) - 1 + 17, result(family, 'broadcast', 0, -1, 0))
-        self.assertEqual((1 << 32) - 2 + 17, result(family, 'plus', 0, -1, -1))
-        ast = GEN.ast_code([family])
-        bytecode = GEN.bytecode_nodes([family])
+    def test_narrow_lanes_extend_with_exact_signedness_in_both_backends(self):
+        for name, width, mask in [('Word16X16', 16, '0xffffL'), ('Word32X8', 32, '0xffff_ffffL')]:
+            family = next(f for f in GEN.families() if f['name'] == name)
+            self.assertEqual((1 << width) - 1 + 17, result(family, 'broadcast', 0, -1, 0))
+            self.assertEqual((1 << width) - 2 + 17, result(family, 'plus', 0, -1, -1))
+            self.assertEqual(17, result(family, 'times', 0, 1 << (width - 1), 2))
+            ast, bytecode = GEN.ast_code([family]), GEN.bytecode_nodes([family])
+            for i in range(family['lanes']):
+                self.assertIn(f'value.lane{i}.toLong() and {mask}', ast)
+                self.assertIn(f'value.lane{i} & {mask}', bytecode)
+        family = next(f for f in GEN.families() if f['name'] == 'Int16X16')
+        self.assertEqual(-1 + 17, result(family, 'broadcast', 0, 65535, 0))
+        self.assertEqual(-32768 + 17, result(family, 'plus', 0, 32767, 1))
+        self.assertEqual(-32768 + 17, result(family, 'negate', 0, -32768, 0))
+        ast, bytecode = GEN.ast_code([family]), GEN.bytecode_nodes([family])
         for i in range(family['lanes']):
-            self.assertIn(f'value.lane{i}.toLong() and 0xffff_ffffL', ast)
-            self.assertIn(f'value.lane{i} & 0xffff_ffffL', bytecode)
+            self.assertIn(f'frame, slots[offset + {i}], value.lane{i}.toLong())', ast)
+            self.assertIn(f'frame, value.lane{i});', bytecode)
+
+    def test_smoke_composites_bound_compilation_work_and_cover_every_selector(self):
+        families = GEN.families()
+        entries = GEN.smoke_entries(families)
+        groups = GEN.smoke_groups(families)
+        self.assertEqual(list(range(len(entries))), sorted(i for group in groups.values() for i in group))
+        for group in groups.values():
+            self.assertLessEqual(sum(entries[i][0]['lanes'] for i in group), 112)
 
     def test_contradictory_tables_are_rejected(self):
         original = json.loads(GEN.SPEC.read_text())
