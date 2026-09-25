@@ -37,12 +37,12 @@ warmup loops. Native expectations come from Haskell
 scalar primops; the default oracle requires no SIMD instruction set. Optional
 native vector comparison requires a host capable of the selected 512-bit ISA.
 
-The prior 117 names and 3,682 cases have passed GHC signature checks, native scalar
+All 132 names and 4,538 cases have passed GHC signature checks, native scalar
 comparisons, strict Core audits, and interpreted/compiled AST and bytecode checks
-in both handoff modes. This includes 2,680 insertion cases. The optional native
-vector comparison has not been run for these wide shapes. The additional 15
-Int16X16/Word16X16 names and 856 cases await native scalar and JVM validation;
-source checks verify their exact GHC contracts and Haskell fixture types.
+in both handoff modes. The Int16X16/Word16X16 families add 856 cases; the previous
+3,682 expectations are unchanged. The optional native vector comparison has not
+been run for these wide shapes, and these checks make no hardware SIMD or
+performance claim.
 
 ```sh
 python3 scripts/generate-simd-families.py --check --verify-ghc
