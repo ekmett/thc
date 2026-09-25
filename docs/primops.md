@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 456 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 726 | No declared lowering. |
+| Partial | 459 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 723 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -39,6 +39,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 
 ## Current aggregate and address limits
 
+- Arithmetic exception primops require an exact empty unboxed tuple and retain the original ghc-internal SomeException CAF as an implicit dependency. Scalar and concrete tuple bottom results reuse guest raise semantics; vector and sum results remain rejected.
 - addr2Int#/int2Addr# preserve real machine address bits. Null and arbitrary integer bit patterns roundtrip; unowned numeric addresses cannot be dereferenced or passed to native code. Immutable literals and pointer-free immutable images acquire one owned native allocation per backing in the current native-enabled context; live registered ranges recover their original managed aliases. Integer values do not root allocations. Mutable managed storage and opaque StablePtr numeric projection remain unsupported; no JVM identity hashes or borrowed scratch pointers are exposed.
 - threadStatus# returns the exact State#/Int#/Int#/Int# tuple for context-owned Java thread identities. Logical capabilities are monotonically allocated per Java carrier, not physical CPU numbers; forkOn/count/affinity APIs remain unsupported. Registered MVar, black-hole, throwTo and foreign boundaries report their actual managed states. Forked threads retain normal/uncaught-guest completion; a live host carrier outside guest entry remains foreign and keeps its identity on re-entry. Existing throwTo mailboxes are scoped to active guest invocations and do not queue across separate host calls.
 - The native DWARF backend is unavailable, matching GHC 9.14.1 RTS USE_LIBDW=0: original libdwPoolTake/libdwGetBacktrace return null, libdwLookupLocation returns failure 1 without touching Location, and libdwPoolClear is a no-op. Managed IPE snapshots are separate. Native DWARF frames remain unavailable; only source-certified USE_LIBDW=0 finalizer labels are supported.
@@ -649,7 +650,10 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `quotRemInt#` — arity 2 — Exact tuple arithmetic
 - [ ] `quotRemWord#` — arity 2 — Exact tuple arithmetic
 - [ ] `raise#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `raiseDivZero#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `raiseIO#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `raiseOverflow#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `raiseUnderflow#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `readAddrArray#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readAddrOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readArray#` — arity 3 — Managed lifted arrays
@@ -1187,9 +1191,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `quotWord8X16#` — arity 2
 - [ ] `quotWord8X32#` — arity 2
 - [ ] `quotWord8X64#` — arity 2
-- [ ] `raiseDivZero#` — arity 1
-- [ ] `raiseOverflow#` — arity 1
-- [ ] `raiseUnderflow#` — arity 1
 - [ ] `readDoubleArrayAsDoubleX4#` — arity 3
 - [ ] `readDoubleArrayAsDoubleX8#` — arity 3
 - [ ] `readDoubleOffAddrAsDoubleX2#` — arity 3

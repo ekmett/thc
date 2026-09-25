@@ -1284,7 +1284,7 @@
       "python": []
     },
     "src/THC/Driver/Wired.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"], "python": [],
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest", "thc.runtime.ArithmeticExceptionsNativeTest"], "python": [],
       "haskell": ["driver-tests"]
     },
     "compiler/target-layout.c": {
