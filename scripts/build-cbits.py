@@ -75,13 +75,28 @@ def main():
                    "-o", str(output / (name + ".bc"))]
         subprocess.run(command, cwd=ROOT, check=True)
         commands.append(command)
+    sources = [reference / n for n in PINNED] + [ROOT / "src/main/c/md5-api.c"]
+    artifacts = [output / "md5.bc"]
+    # The first native limb provider is intentionally Linux x86_64 only. Keep
+    # the embedded LLVM container's DT_NEEDED entry: GMP receives real native
+    # arena pointers, not the managed buffers used by original MD5.
+    if system == "Linux" and arch == "x86_64":
+        source = ROOT / "src/main/c/gmp-api.c"
+        artifact = output / "gmp-api.so"
+        command = [*compiler, "-O1", "-g", "-fembed-bitcode", "-shared", "-fPIC",
+                   f"-ffile-prefix-map={ROOT}=.", f"-fdebug-prefix-map={ROOT}=.",
+                   str(source.relative_to(ROOT)), "-lgmp", "-o", str(artifact)]
+        subprocess.run(command, cwd=ROOT, check=True)
+        commands.append(command)
+        sources.append(source)
+        artifacts.append(artifact)
     record = lambda p: {"path": str(p), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
     manifest = {"schema": 1, "target": target, "compilerDefaultTarget": default_target,
                 "system": system, "architecture": arch,
                 "clangVersion": subprocess.check_output([clang, "--version"], text=True),
                 "ghc": "9.14.1", "commands": commands,
-                "sources": [record(reference / n) for n in PINNED] + [record(ROOT / "src/main/c/md5-api.c")],
-                "artifacts": [record(output / (n + ".bc")) for n in ("md5",)]}
+                "sources": [record(p) for p in sources],
+                "artifacts": [record(p) for p in artifacts]}
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"Compiled unchanged GHC MD5 for {target}")
 

@@ -37,3 +37,43 @@ int64_t thc_gmp_compare(void const *left, void const *right, int64_t size) {
     int (*volatile call)(mp_srcptr, mp_srcptr, mp_size_t) = &__gmpn_cmp;
     return (int64_t)call(left, right, size);
 }
+
+uint64_t thc_gmp_multiply(void *output, void const *left, int64_t left_size,
+                         void const *right, int64_t right_size) {
+    mp_limb_t (*volatile call)(mp_ptr, mp_srcptr, mp_size_t, mp_srcptr, mp_size_t) = &__gmpn_mul;
+    return call(output, left, left_size, right, right_size);
+}
+uint64_t thc_gmp_multiply_word(void *output, void const *input, int64_t size, uint64_t word) {
+    mp_limb_t (*volatile call)(mp_ptr, mp_srcptr, mp_size_t, mp_limb_t) = &__gmpn_mul_1;
+    return call(output, input, size, word);
+}
+uint64_t thc_gmp_divide_word(void *output, int64_t fractional_size,
+                            void const *input, int64_t size, uint64_t divisor) {
+    mp_limb_t (*volatile call)(mp_ptr, mp_size_t, mp_srcptr, mp_size_t, mp_limb_t) = &__gmpn_divrem_1;
+    return call(output, fractional_size, input, size, divisor);
+}
+uint64_t thc_gmp_modulo_word(void const *input, int64_t size, uint64_t divisor) {
+    mp_limb_t (*volatile call)(mp_srcptr, mp_size_t, mp_limb_t) = &__gmpn_mod_1;
+    return call(input, size, divisor);
+}
+void thc_gmp_divide(void *quotient, void *remainder, int64_t fractional_size,
+                    void const *numerator, int64_t numerator_size,
+                    void const *divisor, int64_t divisor_size) {
+    void (*volatile call)(mp_ptr, mp_ptr, mp_size_t, mp_srcptr, mp_size_t, mp_srcptr, mp_size_t) = &__gmpn_tdiv_qr;
+    call(quotient, remainder, fractional_size, numerator, numerator_size, divisor, divisor_size);
+}
+
+/* GHC's separate quotient/remainder contracts each discard the other result.
+ * Unlike the original gmp_wrappers.c stack/malloc scratch policy, all scratch
+ * is preallocated by the host arena and released by host finally. These are
+ * separate adapters, not ABI aliases for the seven-argument mpn_tdiv_qr. */
+void thc_gmp_quotient(void *output, void *remainder_scratch,
+                      void const *numerator, int64_t numerator_size,
+                      void const *divisor, int64_t divisor_size) {
+    thc_gmp_divide(output, remainder_scratch, 0, numerator, numerator_size, divisor, divisor_size);
+}
+void thc_gmp_remainder(void *output, void *quotient_scratch,
+                       void const *numerator, int64_t numerator_size,
+                       void const *divisor, int64_t divisor_size) {
+    thc_gmp_divide(quotient_scratch, output, 0, numerator, numerator_size, divisor, divisor_size);
+}

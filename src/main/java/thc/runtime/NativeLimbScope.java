@@ -10,6 +10,7 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.util.Objects;
 
 /** Host-owned native limb copies for one synchronous provider call. Closing the
@@ -52,6 +53,11 @@ public final class NativeLimbScope implements AutoCloseable {
             Objects.checkFromIndexSize(offset, count, destination.length);
             Objects.checkFromIndexSize(0L, count, capacity);
             MemorySegment.copy(segment, 0, MemorySegment.ofArray(destination), offset, count);
+        }
+
+        public long readWord(long index) {
+            Objects.checkIndex(index, capacity / Long.BYTES);
+            return segment.get(ValueLayout.JAVA_LONG, index * Long.BYTES);
         }
 
         @ExportMessage boolean isPointer() {
