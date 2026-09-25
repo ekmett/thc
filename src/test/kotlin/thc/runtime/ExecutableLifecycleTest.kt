@@ -40,6 +40,8 @@ class ExecutableLifecycleTest {
         override fun entryTarget(name: String) = when (name) {
             "main" -> main; "shutdown" -> shutdown; else -> error(name)
         }
+        override fun constructorLayout(id: String): DataLayout =
+            error("Unexpected constructor layout request in lifecycle test: $id")
         override fun diagnostics(): Map<String, Any> = emptyMap()
     }
 

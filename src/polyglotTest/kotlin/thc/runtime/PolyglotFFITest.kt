@@ -278,6 +278,8 @@ class PolyglotFFITest {
             override fun hostEntryTarget(arity: Int): RootCallTarget = target
             override fun entryValue(name: String): Any = Unit
             override fun entryTarget(name: String): RootCallTarget = target
+            override fun constructorLayout(id: String): DataLayout =
+                error("Unexpected constructor layout request in callback test: $id")
             override fun diagnostics(): Map<String, Any> = emptyMap()
         }
         return EntryValue(program, "callback", 0)
