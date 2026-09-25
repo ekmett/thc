@@ -35,12 +35,12 @@ class FileWaitPrimitiveTest {
         "evaluated" to true)
     private val payload = mapOf("kind" to "data", "primReps" to listOf("BoxedRep (Just Lifted)"),
         "evaluated" to false)
-    private fun module(name: String): Map<String, Any?> {
+    private fun module(name: String, descriptorOperand: List<Any?>? = null): Map<String, Any?> {
         val bad = CoreFileWait.badFd
         val params = listOf(mapOf("id" to "descriptor", "lifted" to false, "rep" to fd),
             mapOf("id" to "s", "lifted" to false, "rep" to state))
         val call = listOf("app", listOf("prim", name),
-            listOf(listOf("var", "descriptor", mapOf("rep" to fd)),
+            listOf(descriptorOperand ?: listOf("var", "descriptor", mapOf("rep" to fd)),
                 listOf("var", "s", mapOf("rep" to state))),
             listOf(false, false), false, false, mapOf("rep" to state))
         val root = mapOf("id" to "wait", "name" to "wait", "arity" to 2, "lifted" to true,
@@ -57,6 +57,22 @@ class FileWaitPrimitiveTest {
     private fun compile(target: RootCallTarget) {
         target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
         assertTrue(valid(target))
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    @Test fun astAsyncAdmissionRejectsAComputedDescriptorBeforeItsBlockingCut() {
+        val computed = listOf("app", listOf("var", "produceDescriptor", mapOf("rep" to closure)),
+            listOf(listOf("var", "descriptor", mapOf("rep" to fd))), listOf(false),
+            false, false, mapOf("rep" to fd))
+        for (name in listOf("waitRead#", "waitWrite#")) {
+            fun root(operand: List<Any?>? = null) =
+                (module(name, operand)["bindings"] as List<Map<String, Any?>>).first()
+            assertDoesNotThrow { AstAsyncAdmission.validate(listOf(root())) }
+            val rejected = assertThrows(RuntimeFault::class.java) {
+                AstAsyncAdmission.validate(listOf(root(computed)))
+            }
+            assertTrue(rejected.message!!.contains("AST async capture is not complete"))
+        }
     }
 
     @Test fun firstInstalledWaitsKeepExactDescriptorAndLazyBadFdPayload() {
