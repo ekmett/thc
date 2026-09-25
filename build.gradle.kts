@@ -306,6 +306,7 @@ tasks.register<Test>("originalIconvFullCoreTest") {
 tasks.register<Test>("boundThreadQueryFullCoreTest") {
     group = "verification"
     description = "Tests the original negative bound-thread capability against both native RTS modes."
+    maxHeapSize = "4g"
     testClassesDirs = fullCoreTests.output.classesDirs
     classpath = fullCoreTests.runtimeClasspath
     useJUnitPlatform()
@@ -315,6 +316,22 @@ tasks.register<Test>("boundThreadQueryFullCoreTest") {
     doFirst {
         check(file("build/bound-thread-query/manifest.json").isFile) {
             "Missing bound-thread-query fixture: run cabal run exe:thc-fixtures -- bound-thread-query with full-Core GHC9.14.1"
+        }
+    }
+}
+tasks.register<Test>("fileWaitFullCoreTest") {
+    group = "verification"
+    description = "Tests original GHC descriptor waits using explicitly prepared Linux full Core."
+    maxHeapSize = "4g"
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    useJUnitPlatform()
+    filter { includeTestsMatching("thc.runtime.FileWaitFullCoreTest") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Original descriptor-wait evidence requires a fresh test process") { true }
+    doFirst {
+        check(file("build/file-wait/manifest.json").isFile) {
+            "Missing file-wait fixture: use selected complete-Core GHC9.14.1 on Linux and run cabal run exe:thc-fixtures -- file-wait"
         }
     }
 }

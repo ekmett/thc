@@ -59,6 +59,8 @@ internal object AstAsyncAdmission {
             val capturedRoute = when (name) {
                 "takeMVar#", "readMVar#" -> Route.TUPLE
                 "putMVar#" -> Route.OTHER
+                "waitRead#", "waitWrite#" -> if (declared.kind == CoreKind.VOID &&
+                    declared.primReps == emptyList<String>()) Route.OTHER else null
                 "yield#" -> if (declared.kind == CoreKind.VOID && declared.primReps == emptyList<String>())
                     Route.OTHER else null
                 else -> null

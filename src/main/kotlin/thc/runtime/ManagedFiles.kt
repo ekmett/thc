@@ -519,12 +519,21 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
      * Original blockedOnBadFD payload linkage is a separate admission obligation;
      * this internal substrate does not substitute a synthetic Haskell exception. */
     internal inner class WaitToken internal constructor(private val fd: Long, private val writing: Boolean) {
-        private val entry = descriptor(fd)
+        // Bind the logical descriptor once. An initially unknown descriptor is
+        // the same bad-FD event as a later close; neither may follow fd reuse.
+        private val entry = synchronized(this@ManagedFiles) { descriptors[fd] }
 
-        @TruffleBoundary internal fun await(node: Node, async: Boolean) {
+        // ClosedChannelException and AsyncBlocked are guest control flow, not a
+        // reason to invalidate the compiled caller at this cold native boundary.
+        @TruffleBoundary(transferToInterpreterOnException = false)
+        internal fun await(node: Node, async: Boolean, compiledAtCut: Boolean = false) {
             if (Language.currentState(node).env !== env) fault("Descriptor wait belongs to another context")
-            val outcome = awaitReady(entry, fd, writing, -1, node) {
-                if (async) threads.poll(node, interruptible = true)?.let { throw AsyncBlocked(it, node) }
+            val original = entry ?: throw ClosedChannelException()
+            val outcome = awaitReady(original, fd, writing, -1, node) {
+                if (async) threads.poll(node, interruptible = true)?.let {
+                    it.compiledCapture = compiledAtCut
+                    throw AsyncBlocked(it, node)
+                }
             }
             if (outcome == -2) throw ClosedChannelException()
         }

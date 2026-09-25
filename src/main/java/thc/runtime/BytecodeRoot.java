@@ -2296,6 +2296,28 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = boolean.class, name = "writing")
+    public static final class PrepareFileWait {
+        @Specialization public static Object prepare(boolean writing, long fd, Object state,
+                @Bind("$node") Node node) {
+            return FileWaitPrimitivesKt.prepareFileWait(fd, state, writing, node);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = GlobalBinding.class, name = "payload")
+    @ConstantOperand(type = boolean.class, name = "async")
+    public static final class AwaitFileWait {
+        @Specialization public static void await(GlobalBinding payload, boolean async, Object token,
+                @Bind("$node") Node node) {
+            // The native wait crosses a boundary; sample before leaving this
+            // resumable bytecode operation, then tag only a claimed request.
+            boolean compiledAtCut = CompilerDirectives.inCompiledCode();
+            FileWaitPrimitivesKt.awaitFileWait(token, payload, async, compiledAtCut, node);
+        }
+    }
+
+    @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class NewMVar {
         @Specialization public static void create(VirtualFrame frame, LocalAccessor destination,
