@@ -197,14 +197,21 @@ jobs:
         run: |
           case "$(cabal --numeric-version)" in 3.16.*) ;; *) exit 1 ;; esac
           cabal build exe:thc
-      - name: Install Linux native GMP build dependencies
+      - name: Install Linux native and LLVM build dependencies
         # Persistent hosts provision these packages outside the workflow.
         if: runner.os == 'Linux' && needs.automation.outputs.persistent != 'true'
-        run: sudo apt-get update && sudo apt-get install --yes clang libgmp-dev
-      - name: Check Linux native GMP build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang-18 llvm-18 libgmp-dev
+          echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
+      - name: Check Linux native and LLVM build dependencies
         if: runner.os == 'Linux'
         run: |
-          command -v clang
+          for tool in clang llc opt; do
+            command -v "$tool"
+            major=$("$tool" --version | sed -nE 's/.*version ([0-9]+).*/\1/p' | sed -n '1p')
+            test -n "$major" && test "$major" -ge 13 && test "$major" -lt 21
+          done
           dpkg-query --show --showformat='${Status}\n' libgmp-dev | grep -Fx 'install ok installed'
       - name: Identify toolchain and fixture dependencies
         run: python3 .github/scripts/fast_ci.py identify

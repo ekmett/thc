@@ -263,7 +263,10 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertIn('"original-gmp/' + name + '"', gradle)
         self.assertIn('build/original-gmp/', (project / '.github/workflows/build.yml').read_text())
         for workflow in ('build.yml', 'fast.yml'):
-            self.assertIn('install --yes clang libgmp-dev', (project / '.github/workflows' / workflow).read_text())
+            source = (project / '.github/workflows' / workflow).read_text()
+            self.assertIn('install --yes clang-18 llvm-18 libgmp-dev', source)
+            self.assertIn('echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"', source)
+            self.assertIn('for tool in clang llc opt; do', source)
         policy = json.loads((project / '.github/scripts/fast-tests.json').read_text())
         for source in ('compiler/test-fixtures/OriginalGmpAudit.hs',
                        'compiler/test-fixtures/OriginalGmpNative.hs',
