@@ -802,6 +802,7 @@
         "thc.runtime.PinnedPointerCellsTest",
         "thc.runtime.WideCharAddressTest",
         "thc.runtime.OriginalStdioNativeTest",
+        "thc.runtime.OriginalHandleReadinessNativeTest",
         "thc.runtime.MutVarTest",
         "thc.runtime.OriginalStackConsumerProofTest",
         "thc.runtime.BoxedArrayExtensionsTest",
@@ -820,6 +821,18 @@
     },
     "test/haskell-fixtures/ContinuationFixtures.hs": {
       "junit": ["thc.runtime.CoreContinuationNativeTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/OriginalHandleReadinessFixtures.hs": {
+      "junit": ["thc.runtime.OriginalHandleReadinessNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/OriginalHandleReadinessAudit.hs": {
+      "junit": ["thc.runtime.OriginalHandleReadinessNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/OriginalHandleReadinessNative.hs": {
+      "junit": ["thc.runtime.OriginalHandleReadinessNativeTest"],
       "python": []
     },
     "test/haskell-fixtures/MutVarFixtures.hs": {

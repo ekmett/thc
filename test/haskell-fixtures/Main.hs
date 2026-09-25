@@ -22,6 +22,7 @@ import UncaughtSelfFixtures (prepareUncaughtSelf)
 import MaskFunctionFixtures (prepareMaskFunctions)
 import InterfaceFixtures (prepareInterfaceCore)
 import OriginalStdioFixtures (prepareOriginalStdio)
+import OriginalHandleReadinessFixtures (prepareOriginalHandleReadiness)
 import MutVarFixtures (prepareMutVar)
 import StackFixtures (prepareOriginalStack, prepareOriginalStackFormatter, exportOriginalStackSource)
 import SmallArrayFixtures (prepareSmallArrays)
@@ -844,6 +845,7 @@ main = do
     ["explicit64-arrays"] -> prepareExplicit64Array root
     ["fused-floating"] -> prepareFusedFloating root
     "original-stdio":options -> prepareOriginalStdio root options
+    ["original-handle-readiness"] -> prepareOriginalHandleReadiness root
     ["mutvar"] -> prepareMutVar root
     ["original-stack"] -> prepareOriginalStack root
     ["original-stack-formatter"] -> prepareOriginalStackFormatter root

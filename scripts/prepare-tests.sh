@@ -65,6 +65,7 @@ python3 scripts/prepare-synchronous-exceptions.py
 "$fixture_bin" interface-core
 python3 scripts/prepare-managed-md5.py
 "$fixture_bin" original-stdio --require-supported
+"$fixture_bin" original-handle-readiness
 python3 scripts/prepare-pinned-addresses.py
 "$fixture_bin" pinned-pointer-cells
 "$fixture_bin" wide-char-address

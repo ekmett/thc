@@ -261,6 +261,20 @@
         "thc.cabal"
       ]
     },
+    "original-handle-readiness": {
+      "junit": ["thc.runtime.OriginalHandleReadinessNativeTest"],
+      "commands": [{"argv": ["scripts/prepare-original-handle-readiness.sh"]}],
+      "outputs": ["build/original-handle-readiness"],
+      "sources": [
+        "compiler/test-fixtures/OriginalHandleReadinessAudit.hs",
+        "compiler/test-fixtures/OriginalHandleReadinessNative.hs",
+        "scripts/prepare-original-handle-readiness.sh",
+        "test/haskell-fixtures/Main.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/OriginalHandleReadinessFixtures.hs",
+        "thc.cabal"
+      ]
+    },
     "address-identity": {
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "commands": [{"argv": ["scripts/prepare-address-identity.sh"]}],

@@ -26,6 +26,7 @@ class StdioHostAbiTest {
         for ((kind, name) in listOf(1L to "ENOENT", 2L to "EACCES", 3L to "EEXIST", 4L to "EBADF",
             5L to "EINVAL", 6L to "EIO", 7L to "ENOTSUP", 8L to "EBUSY", 9L to "EISDIR"))
             assertEquals((raw[name] as Number).toLong(), abi.error(kind))
+        assertEquals((raw["ENOTTY"] as Number).toLong(), abi.notTerminal())
         assertEquals(abi.error(6), abi.error(0)); assertEquals(abi.error(6), abi.error(Long.MAX_VALUE))
     }
 

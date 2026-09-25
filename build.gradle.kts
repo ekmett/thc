@@ -102,6 +102,8 @@ tasks.withType<Test>().configureEach {
             "interface-core/source/*.saved",
             "original-stdio/**/*.json", "original-stdio/results/*.txt", "original-stdio/native/**",
             "original-stdio/logs/*.stdout", "original-stdio/logs/*.stderr",
+            "original-handle-readiness/**/*.json", "original-handle-readiness/native/**",
+            "original-handle-readiness/logs/*.stdout", "original-handle-readiness/logs/*.stderr",
             "managed-md5-native/**",
             "original-stack/manifest.json", "original-stack/run-*/**",
             "original-stack-formatter/manifest.json", "original-stack-formatter/run-*/logs/*",

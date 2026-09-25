@@ -1364,11 +1364,17 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
                     val result = destination.single()
-                    if (originalStdio == OriginalStdioOp.ERRNO) b.beginOriginalStdioErrno(result)
-                    else b.beginOriginalStdioWrite(result)
+                    when (originalStdio) {
+                        OriginalStdioOp.ERRNO -> b.beginOriginalStdioErrno(result)
+                        OriginalStdioOp.ISATTY -> b.beginOriginalStdioIsTerminal(result)
+                        else -> b.beginOriginalStdioWrite(result)
+                    }
                     operands.forEach { it.emit(e) }
-                    if (originalStdio == OriginalStdioOp.ERRNO) b.endOriginalStdioErrno()
-                    else b.endOriginalStdioWrite()
+                    when (originalStdio) {
+                        OriginalStdioOp.ERRNO -> b.endOriginalStdioErrno()
+                        OriginalStdioOp.ISATTY -> b.endOriginalStdioIsTerminal()
+                        else -> b.endOriginalStdioWrite()
+                    }
                 }
             } else if (managedFile != null) {
                 CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
