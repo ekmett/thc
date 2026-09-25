@@ -490,6 +490,64 @@ private val text = "class FakeString { @Test }"
                 self.commit()
                 self.full(reason)
 
+    def test_dot_qualified_escaped_members_keep_exact_test_selection(self):
+        path = "src/test/kotlin/example/OtherTest.kt"
+        source = kotlin("OtherTest", '@Test fun works() {\n'
+                        '  Context.newBuilder("thc").`in`(input).build()\n'
+                        '  builder?.`class`(); builder!!.\n    `value_1`\n'
+                        '}')
+        self.write(path, source)
+        self.commit()
+        result = self.plan()
+        self.assertEqual("narrow", result["mode"], result)
+        self.assertEqual(["example.OtherTest"], result["affected"]["junit"])
+        code = select.code_only(source)
+        masked = select.mask_escaped_members(code)
+        self.assertNotIn('`', masked)
+        self.assertEqual(len(code), len(masked))
+        self.assertEqual([i for i, char in enumerate(code) if char == '\n'],
+                         [i for i, char in enumerate(masked) if char == '\n'])
+        self.assertEqual(source.index('class OtherTest'), masked.index('class OtherTest'))
+
+    def test_escaped_declarations_unknown_syntax_and_shared_helpers_still_widen(self):
+        path = "src/test/kotlin/example/OtherTest.kt"
+        body = '@Test fun works() { builder.`in`(input) }'
+        for source, reason in (
+                (kotlin("OtherTest", '@Test fun `works`() {}'), "backtick-test-declaration"),
+                (kotlin("OtherTest", body + '\nprivate fun Receiver.`local`() {}'), "backtick-test-declaration"),
+                (kotlin("OtherTest", body + '\nprivate fun Receiver.\n`local`() {}'), "backtick-test-declaration"),
+                (kotlin("OtherTest", body + '\nprivate val Receiver.`local` get() = 1'), "backtick-test-declaration"),
+                (kotlin("OtherTest", body.replace('`in`', '`odd name`')), "backtick-test-declaration"),
+                (kotlin("OtherTest", body.replace('builder.', '')), "backtick-test-declaration"),
+                (kotlin("OtherTest", body.replace('builder.', 'builder..')), "backtick-test-declaration"),
+                (kotlin("OtherTest", body.replace('builder.', '.')), "backtick-test-declaration"),
+                (kotlin("OtherTest", body.replace('`in`', '`unterminated')), "backtick-test-declaration"),
+                (kotlin("OtherTest", body + '\nfun shared() = builder.`in`(input)'), "shared-test-member"),
+                (kotlin("OtherTest", body) + '\nfun shared() = builder.`in`(input)\n', "shared-test-helper")):
+            with self.subTest(source=source):
+                self.write(path, source)
+                self.commit()
+                self.full(reason)
+        self.write(path, kotlin("OtherTest"))
+        self.write("src/test/kotlin/example/ConsumerTest.kt",
+                   kotlin("ConsumerTest", '@Test fun reads() { example.`OtherTest`() }'))
+        self.base = self.commit()
+        self.write(path, kotlin("OtherTest", '@Test fun changed() {}'))
+        self.commit()
+        self.full("test-class-used-as-helper")
+
+    def test_native_file_buffers_inventory_remains_exact(self):
+        path = "src/test/kotlin/thc/runtime/NativeFileBuffersTest.kt"
+        source = (select.ROOT / path).read_text()
+        classes, unsafe, _ = select.junit_info(source)
+        self.assertEqual(["thc.runtime.NativeFileBuffersTest"], classes)
+        self.assertEqual([], unsafe)
+        self.write(path, source)
+        self.commit()
+        result = self.plan()
+        self.assertEqual("narrow", result["mode"], result)
+        self.assertEqual(["thc.runtime.NativeFileBuffersTest"], result["affected"]["junit"])
+
     def test_automation_changes_use_control_tests_and_smoke(self):
         for path in (".github/workflows/fast.yml", ".github/scripts/fast_ci.py"):
             with self.subTest(path=path):

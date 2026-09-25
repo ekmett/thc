@@ -249,8 +249,25 @@ def code_only(source):
     return lexical_source(source)
 
 
+def mask_escaped_members(code):
+    """Mask only simple, dot-qualified escaped references, preserving offsets."""
+    def reference(match):
+        prefix = code[:match.start()].rstrip()
+        # Require a receiver expression, not a bare dot or unfamiliar operator.
+        if not re.search(r"[A-Za-z_0-9)\]}](?:!!|\?)?$", prefix):
+            return match[0]
+        # A receiver can also introduce an extension declaration. Leave its
+        # backticks (and unknown declaration/import syntax) to the widening rule.
+        statement = re.split(r"[{};=]", prefix)[-1]
+        if re.search(r"\b(?:class|object|interface|fun|val|var|typealias|package|import)\b", statement):
+            return match[0]
+        return "".join("\n" if char == "\n" else " " for char in match[0])
+    return re.sub(r"\.[ \t\n]*`[A-Za-z_][A-Za-z_0-9]*`", reference, code)
+
+
 def junit_info(source):
-    code = code_only(source)
+    source_code = code_only(source)
+    code = mask_escaped_members(source_code)
     packages = re.findall(r"^\s*package\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*;?\s*$", code, re.M)
     depths = []
     depth = 0
@@ -341,7 +358,8 @@ def junit_info(source):
                     item[1] == "fun" and re.search(TEST_ANNOTATION + "|" + LIFECYCLE, prefix)):
                 unsafe.append("shared-test-member")
             previous = item.end()
-    return sorted(set(classes)), sorted(set(unsafe)), code
+    # Keep escaped identifiers visible to cross-file test-class reuse checks.
+    return sorted(set(classes)), sorted(set(unsafe)), source_code
 
 
 def standalone_python_test(source):
