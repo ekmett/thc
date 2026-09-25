@@ -304,6 +304,42 @@ class CoreZipBundleTest {
         }
     }
 
+    @Test fun largePackageRequestStreamsVerifiedModulesAndBindsItsManifestIdentity() {
+        val other = "pkg-b:Shared.entry"
+        @Suppress("UNCHECKED_CAST")
+        val first = Json.parse(module("pkg-a", other).toString(Charsets.UTF_8)) as Map<String, Any?>
+        val source = Json.stringify(first + ("sourceFiles" to listOf(mapOf("id" to "pkg-a-source",
+            "path" to "Shared.hs", "content" to "x".repeat(2 * 1024 * 1024))))).toByteArray()
+        val path = manifest(listOf(unit("pkg-b", layout = targetLayout()), unit("pkg-a", source)))
+        val request = CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry")
+        val input = Json.parse(request) as Map<*, *>
+        assertEquals(true, input["strictLink"])
+        assertFalse(input.containsKey("modules"))
+        assertEquals(path.toRealPath().toString(), input["packageManifest"])
+        assertEquals(64, (input["packageManifestSha256"] as String).length)
+        val merger = CoreModules.Merger()
+        @Suppress("UNCHECKED_CAST")
+        val decoded = input as Map<String, Any?>
+        val layout = CoreModules.visitRequestModules(decoded) { merger.add(it) }
+        assertEquals(8, layout?.wordBytes)
+        val linked = CoreModules.reachable(merger.finish(), "pkg-a:Shared.entry", true)
+        assertEquals(2, (linked["bindings"] as List<*>).size)
+        val files = linked["sourceFiles"] as List<Map<String, Any?>>
+        assertEquals(2 * 1024 * 1024, (files.single()["content"] as String).length)
+        for (backend in listOf("ast", "bytecode")) {
+            val selected = CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry", backend = backend)
+            Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
+                assertEquals(51L, context.eval("thc", selected).execute().asLong(), backend)
+            }
+        }
+        Files.writeString(path, "{}")
+        assertThrows(RuntimeException::class.java) {
+            Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
+                context.eval("thc", request)
+            }
+        }
+    }
+
     @Test fun archiveInventoryIdentityAndBothHashesAreRequired() {
         val original = unit("pkg-a")
         val path = manifest(listOf(original))

@@ -110,11 +110,20 @@ object CorePackageManifest {
         return BundleContents(entries, inputRecord?.let { TargetLayout.fromReceipts(index, it) })
     }
 
+    internal data class VisitResult(val targetLayout: TargetLayout?, val manifestSha256: String,
+                                    val manifestPath: String)
+
     @Suppress("UNCHECKED_CAST")
-    internal fun appendModules(destination: StringBuilder, manifestPath: String): TargetLayout? {
+    internal fun visitModules(manifestPath: String, expectedSha256: String? = null,
+                              accept: (Map<String, Any?>, String) -> Unit): VisitResult {
         val manifest = Path.of(manifestPath).toRealPath()
         val root = manifest.parent
-        val document = Json.parse(Files.readString(manifest)) as? Map<String, Any?>
+        val manifestBytes = Files.readAllBytes(manifest)
+        val manifestSha256 = digest(manifestBytes)
+        require(expectedSha256 == null || expectedSha256.matches(sha256) && expectedSha256 == manifestSha256) {
+            "Core package manifest changed after request: $manifest"
+        }
+        val document = Json.parse(manifestBytes.toString(Charsets.UTF_8)) as? Map<String, Any?>
             ?: error("Invalid Core package manifest: $manifest")
         require(document["format"] == "thc-core-packages" &&
             document["schema"] == 1L && document["ghc"] == "9.14.1") {
@@ -175,11 +184,20 @@ object CorePackageManifest {
                         "Foreign binding owner in $id:$name at $relative: $key"
                     }
                 }
-                if (count++ != 0) destination.append(',')
-                Json.appendObjectDocument(destination, text)
+                count++
+                accept(source, text)
             }
         }
         require(count != 0) { "Core package manifest has no executable modules: $manifest" }
-        return targetLayout
+        return VisitResult(targetLayout, manifestSha256, manifest.toString())
+    }
+
+    internal fun appendModules(destination: StringBuilder, manifestPath: String): TargetLayout? {
+        var count = 0
+        val result = visitModules(manifestPath) { _, text ->
+            if (count++ != 0) destination.append(',')
+            Json.appendObjectDocument(destination, text)
+        }
+        return result.targetLayout
     }
 }

@@ -45,31 +45,35 @@ import java.util.concurrent.atomic.AtomicReference
  * embedding callers should normally use [loadEntry].
  */
 object CoreModules {
-    @Suppress("UNCHECKED_CAST")
-    fun merge(modules: List<Map<String, Any?>>): Map<String, Any?> = merge(modules, modules.mapNotNull {
-        if ((it["schema"] == 2L || it["schema"] == 2) && it.containsKey("staticForeignExportRegistration") &&
-            CoreForeignArtifacts.hasRegistrationObligations(it)) ManagedExportAdmission.read(it) else null
-    })
+    private fun admission(module: Map<String, Any?>): ManagedExportAdmission? =
+        if ((module["schema"] == 2L || module["schema"] == 2) &&
+            module.containsKey("staticForeignExportRegistration") &&
+            CoreForeignArtifacts.hasRegistrationObligations(module)) ManagedExportAdmission.read(module) else null
 
-    internal fun mergeManagedExports(modules: List<Map<String, Any?>>, admissions: List<ManagedExportAdmission>): Map<String, Any?> =
-        merge(modules, admissions)
+    fun merge(modules: List<Map<String, Any?>>): Map<String, Any?> = Merger().also { merger ->
+        modules.forEach { merger.add(it) }
+    }.finish()
 
-    @Suppress("UNCHECKED_CAST")
-    private fun merge(modules: List<Map<String, Any?>>, admissions: List<ManagedExportAdmission>): Map<String, Any?> {
-        require(modules.isNotEmpty()) { "No Core modules supplied" }
-        val bindings = linkedMapOf<String, Map<String, Any?>>()
-        val constructors = linkedMapOf<String, Map<String, Any?>>()
-        val sourceFiles = linkedMapOf<String, Map<String, Any?>>()
-        val sourceSpans = linkedMapOf<String, Map<String, Any?>>()
-        val bindingOrigins = linkedMapOf<String, Map<String, String>>()
-        val foreignLinks = linkedMapOf<Pair<String, String>, ForeignBitcode>()
-        val archiveBindings = linkedMapOf<String, String>()
-        val moduleKeys = hashSetOf<Pair<String, String>>()
-        for (module in modules) {
+    /** Retain only linked definitions, never the complete raw package request. */
+    internal class Merger {
+        private var count = 0
+        private val admissions = arrayListOf<ManagedExportAdmission>()
+        private val bindings = linkedMapOf<String, Map<String, Any?>>()
+        private val constructors = linkedMapOf<String, Map<String, Any?>>()
+        private val sourceFiles = linkedMapOf<String, Map<String, Any?>>()
+        private val sourceSpans = linkedMapOf<String, Map<String, Any?>>()
+        private val bindingOrigins = linkedMapOf<String, Map<String, String>>()
+        private val foreignLinks = linkedMapOf<Pair<String, String>, ForeignBitcode>()
+        private val archiveBindings = linkedMapOf<String, String>()
+        private val moduleKeys = hashSetOf<Pair<String, String>>()
+        @Suppress("UNCHECKED_CAST")
+        fun add(module: Map<String, Any?>, admission: ManagedExportAdmission? = CoreModules.admission(module)) {
+            count++
+            if (admission != null) admissions.add(admission)
             CoreForeignArtifacts.validateArchive(module)
             val link = CoreForeignArtifacts.linked(module)
             val archiveOnly = module["schema"] == 2L || module["schema"] == 2
-            val managedExport = admissions.any { it.module === module }
+            val managedExport = admission != null
             if (archiveOnly && link == null && !managedExport && CoreForeignArtifacts.hasRegistrationObligations(module))
                 CoreForeignArtifacts.requireExecutable(module)
             link?.let {
@@ -117,13 +121,16 @@ object CoreModules {
                 }
             }
         }
-        return mapOf("schema" to 1L, "ghc" to "9.14.1", "module" to "THC.Bundle",
+        fun finish(): Map<String, Any?> {
+            require(count != 0) { "No Core modules supplied" }
+            return mapOf("schema" to 1L, "ghc" to "9.14.1", "module" to "THC.Bundle",
             "bindings" to bindings.values.toList(), "constructors" to constructors.values.toList(),
             "bindingOrigins" to bindingOrigins,
             "archiveBindings" to archiveBindings,
             "managedRegistrations" to admissions,
             "foreignLinks" to foreignLinks.values.toList(),
             "sourceFiles" to sourceFiles.values.toList(), "sourceSpans" to sourceSpans.values.toList())
+        }
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -247,27 +254,63 @@ object CoreModules {
         requestDocument(paths, mapOf("mode" to "managed-exports", "backend" to backend,
             "instrument" to instrument, "strictLink" to true))
 
+    @Suppress("UNCHECKED_CAST")
+    internal fun visitRequestModules(input: Map<String, Any?>, accept: (Map<String, Any?>) -> Unit): TargetLayout? {
+        val manifest = input["packageManifest"]
+        if (manifest != null) {
+            require(manifest is String && input["modules"] == null && input["targetLayout"] == null) {
+                "Package request must not mix manifest and inline modules"
+            }
+            val expected = input["packageManifestSha256"] as? String
+                ?: error("Missing package manifest identity")
+            return CorePackageManifest.visitModules(manifest, expected) { module, _ -> accept(module) }.targetLayout
+        }
+        require(input["packageManifestSha256"] == null) { "Orphan package manifest identity" }
+        val modules = input["modules"] as? List<Map<String, Any?>> ?: error("Expected modules array")
+        modules.forEach(accept)
+        return input["targetLayout"]?.let(TargetLayout::fromDocument)
+    }
+
     private fun requestDocument(paths: List<String>, settings: Map<String, Any>): String {
         val manifest = paths.singleOrNull()?.takeIf { it.startsWith("@") }?.drop(1)
         val options = StringBuilder().also { Json.appendObjectDocument(it,
             Json.stringify(settings)) }
+        if (manifest != null) {
+            // Small requests retain their established JSON shape. Large package
+            // sets carry a content-bound manifest reference, never a combined
+            // multi-gigabyte module document or raw modules array.
+            val limit = 2 * 1024 * 1024
+            var inline: StringBuilder? = StringBuilder()
+            var count = 0
+            val result = CorePackageManifest.visitModules(manifest) { _, source ->
+                val destination = inline
+                if (destination != null) {
+                    if (destination.length + source.length > limit) inline = null
+                    else {
+                        if (count++ != 0) destination.append(',')
+                        Json.appendObjectDocument(destination, source)
+                    }
+                }
+            }
+            if (inline == null) return Json.stringify(settings + mapOf(
+                "packageManifest" to result.manifestPath,
+                "packageManifestSha256" to result.manifestSha256))
+            return buildString {
+                append(options, 0, options.length - 1)
+                append(",\"modules\":[").append(inline).append(']')
+                result.targetLayout?.let { append(",\"targetLayout\":").append(Json.stringify(it.document())) }
+                append('}')
+            }
+        }
         return buildString {
             append(options, 0, options.length - 1)
             append(",\"modules\":[")
-            val layout = if (manifest != null) CorePackageManifest.appendModules(this, manifest) else {
-                paths.forEachIndexed { index, path ->
-                    if (index != 0) append(',')
-                    // Validate each complete document before embedding it. Language.parse
-                    // materializes the modules once; all bindings and metadata travel intact.
-                    Json.appendObjectDocument(this, File(path).readText())
-                }
-                null
+            paths.forEachIndexed { index, path ->
+                if (index != 0) append(',')
+                // Loose files preserve the existing explicit document protocol.
+                Json.appendObjectDocument(this, File(path).readText())
             }
             append(']')
-            if (layout != null) {
-                append(",\"targetLayout\":")
-                append(Json.stringify(layout.document()))
-            }
             append('}')
         }
     }
@@ -402,7 +445,7 @@ class Language : TruffleLanguage<Language.State>() {
                 override fun getName() = "THC load managed exports"
             }.callTarget
         }
-        val modules = input["modules"] as? List<Map<String, Any?>> ?: error("Expected modules array")
+        val merger = CoreModules.Merger()
         val entry = input["entry"] as? String ?: error("Expected entry name")
         val shutdownEntry = input["shutdownEntry"] as? String
         require(input["shutdownEntry"] == null ||
@@ -412,8 +455,8 @@ class Language : TruffleLanguage<Language.State>() {
         require(input["ioMain"] != true || input["diagnosticUnsupported"] != true) {
             "IO main requires strict unsupported-Core rejection"
         }
-        val layout = input["targetLayout"]?.let(TargetLayout::fromDocument)
-        val linked = CoreModules.reachable(CoreModules.merge(modules),
+        val layout = CoreModules.visitRequestModules(input) { merger.add(it) }
+        val linked = CoreModules.reachable(merger.finish(),
             if (shutdownEntry == null) listOf(entry) else listOf(entry, shutdownEntry),
             input["strictLink"] == true) + mapOf("instrument" to (input["instrument"] != false),
             "diagnosticUnsupported" to (input["diagnosticUnsupported"] == true),
