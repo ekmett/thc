@@ -68,7 +68,6 @@ python3 scripts/prepare-synchronous-exceptions.py
 "$fixture_bin" thread-async
 "$fixture_bin" thread-status
 "$fixture_bin" uncaught-self
-"$fixture_bin" arithmetic-exceptions
 "$fixture_bin" mask-functions
 "$fixture_bin" interface-core
 python3 scripts/prepare-managed-md5.py

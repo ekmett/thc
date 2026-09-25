@@ -24,25 +24,16 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "d41d47af05ee7ee7eeb4b6d4649bf3d4f0d9d3c84d09a6da583aff0a87a19c62"
+FULL_PREPARATION_PLAN = "4c4e6b7926a62540b51c3da2aae8e5d7aaad2bc67dd7b4886fefcab9ec62a774"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
     "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/thread-status", "build/uncaught-self", "build/small-arrays", "build/floating-address",
     "build/floating-byte-offset", "build/narrow-byte-offset", "build/int32-byte-offset",
-    "build/arithmetic-exceptions", "build/explicit64-arrays", "build/mask-functions", "build/interface-core",
+    "build/explicit64-arrays", "build/mask-functions", "build/interface-core",
     "build/original-fd-ready", "build/simd-calls",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
-    "build/arithmetic-exceptions/manifest.json",
-    "build/arithmetic-exceptions/core-manifest.json", "build/arithmetic-exceptions/installed/packages.json",
-    "build/arithmetic-exceptions/native/receipt.json",
-    "build/arithmetic-exceptions/pre/core/ArithmeticExceptionsAudit.json",
-    "build/arithmetic-exceptions/post/core/ArithmeticExceptionsAudit.json",
-    "build/arithmetic-exceptions/pre/core/THC.InterfaceClosure.json",
-    "build/arithmetic-exceptions/post/core/THC.InterfaceClosure.json",
-    "build/arithmetic-exceptions/logs/native-oracle.stdout",
-    "build/arithmetic-exceptions/native/oracle",
     "build/simd-calls/manifest.json", "build/simd-calls/pre-core/SimdCallAudit.json",
     "build/simd-calls/pre-audit.json",
     "build/simd-floatx4-fma/manifest.json", "build/simd-floatx4-fma/pre-core/SimdFloatFma.json",

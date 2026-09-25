@@ -54,7 +54,7 @@ class FastInputTests(unittest.TestCase):
         package = dict(format='thc-core-packages', units=[dict(bundle=dict(path=path, sha256='a'*64),
             modules=[dict(path='core/0.json', sha256='b'*64)])])
         self.assertEqual([(path, 'a'*64)], list(cache.hashes_in(package, {})))
-        self.assertTrue(cache.allowed_payload(path, {}))
+        self.assertFalse(cache.allowed_payload(path, {}))
         self.assertFalse(cache.allowed_payload('build/arithmetic-exceptions/native/other.zip', {}))
         with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
 

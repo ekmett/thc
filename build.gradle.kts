@@ -129,9 +129,6 @@ tasks.withType<Test>().configureEach {
             "core-continuation/**/*.json", "core-continuation/native-output.txt",
             "thread-status/**/*.json", "thread-status/oracle.txt",
             "uncaught-self/**/*.json", "uncaught-self/native/oracle",
-            "arithmetic-exceptions/**/*.json", "arithmetic-exceptions/logs/*.stdout", "arithmetic-exceptions/logs/*.stderr",
-            "arithmetic-exceptions/native/oracle",
-            "arithmetic-exceptions/installed/bundles/*.zip",
             "mask-functions/**/*.json", "mask-functions/logs/*.stdout", "mask-functions/logs/*.stderr",
             "mask-functions/native/oracle",
             "interface-core/**/*.json", "interface-core/logs/*.stdout", "interface-core/logs/*.stderr",
@@ -315,6 +312,24 @@ tasks.register<Test>("originalStackDecoderFullCoreTest") {
     doFirst {
         check(file("build/original-stack-decoder/manifest.json").isFile) {
             "Missing original-stack-decoder fixture: select a full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- original-stack-decoder"
+        }
+    }
+}
+tasks.register<Test>("arithmeticExceptionsFullCoreTest") {
+    group = "verification"
+    description = "Tests original arithmetic exception payloads using the explicitly prepared full-Core GHC fixture."
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    inputs.files(fileTree("build/arithmetic-exceptions") {
+        include("**/*.json", "installed/bundles/*.zip", "logs/*.stdout", "logs/*.stderr", "native/oracle")
+    })
+    useJUnitPlatform()
+    filter { includeTestsMatching("thc.runtime.ArithmeticExceptionsNativeTest") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Full-Core native/compiled evidence requires a fresh test process") { true }
+    doFirst {
+        check(file("build/arithmetic-exceptions/manifest.json").isFile) {
+            "Missing arithmetic-exceptions fixture: select a full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- arithmetic-exceptions"
         }
     }
 }
