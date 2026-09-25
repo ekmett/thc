@@ -303,6 +303,7 @@ tasks.register<Test>("originalIconvFullCoreTest") {
 tasks.register<Test>("fileWaitFullCoreTest") {
     group = "verification"
     description = "Tests original GHC descriptor waits using explicitly prepared Linux full Core."
+    maxHeapSize = "4g"
     testClassesDirs = fullCoreTests.output.classesDirs
     classpath = fullCoreTests.runtimeClasspath
     useJUnitPlatform()
