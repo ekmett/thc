@@ -1669,9 +1669,16 @@ private class Scope(val layout: FrameLayout, val locals: MutableMap<String, Loca
 }
 private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: IntArray)
 
-/** Exported GHC Core lowers lexical bindings to indexed frame slots, as Cadenza does.
+/**
+ * Constructs and links the AST backend's executable roots from exported GHC Core.
+ *
+ * This program holder is not a Truffle node or a guest closure. Lowering assigns
+ * lexical bindings to indexed invocation-frame slots, as Cadenza does; resulting
+ * nodes operate on the runtime's shared value and capture representations.
+ *
  * Async AST admission is opt-in for internal proofs; Language.parse keeps it disabled
- * until every public closure/call boundary can consume a saved continuation. */
+ * until every public closure/call boundary can consume a saved continuation.
+ */
 class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>,
               private val enableAsync: Boolean = false) : ExecutableProgram {
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }

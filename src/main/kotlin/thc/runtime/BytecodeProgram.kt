@@ -13,7 +13,10 @@ import com.oracle.truffle.api.source.SourceSection
 import thc.Language
 
 /**
- * Core lowers to real Bytecode DSL control flow and primitive operations. The parser is
+ * Constructs and links [BytecodeRoot]s from exported GHC Core.
+ *
+ * This program holder is not an executable node or a guest value. Core lowers to
+ * Bytecode DSL control flow and primitive operations. The parser is
  * replayable: targets, layouts and literal constants are prepared once; bytecode locals
  * and labels are created afresh on every replay. Runtime values and application use the
  * same selective captures, lazy update protocol and PAP convention as the AST backend.

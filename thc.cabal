@@ -55,6 +55,15 @@ extra-source-files:
   docs/site/embedding.md
   docs/site/jvm.md
   docs/site/site.css
+  docs/site/site.js
+  docs/site/theme.js
+  docs/site/haddock.css
+  docs/site/turbo-haskell-bot-light.png
+  docs/site/turbo-haskell-bot-dark.png
+  docs/site/turbo-haskell-bot-flipped-light.png
+  docs/site/turbo-haskell-bot-flipped-dark.png
+  docs/site/turbo-haskell-bot-blocks.webm
+  docs/site/mascot.js
   docs/ghc-core.md
   docs/interface-foreign.md
   docs/original-posix-dup.md

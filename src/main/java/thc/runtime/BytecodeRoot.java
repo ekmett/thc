@@ -24,7 +24,14 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import thc.Language;
 
-/** Concrete Core instructions sharing the AST backend's heap and application ABI. */
+/**
+ * Executable Truffle root for Core lowered through the Bytecode DSL.
+ *
+ * <p>The nested operation declarations define interpreter instructions; generated
+ * bytecode nodes execute them using invocation locals and runtime values. Neither
+ * the root nor its operation nodes are Haskell heap values or Graal compiler IR.
+ * Heap representation and application conventions are shared with the AST backend.
+ */
 // Generate only the cached interpreter. The former uncached threshold of zero
 // transitioned before executing even the first guest instruction.
 @GenerateBytecode(languageClass = Language.class, enableYield = true,
