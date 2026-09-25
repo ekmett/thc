@@ -706,12 +706,10 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         0L
     } }
 
-    // Env exposes byte streams, not terminal handles. Do not infer a terminal
-    // from System.console(): it may be unrelated to the embedding's streams.
+    // Env exposes byte streams, not terminal handles. A native descriptor is
+    // queried only through its owned opened-resource lease, never System.console().
     @TruffleBoundary fun isTerminal(fd: Long): Long = result { withDescriptor(fd) { entry ->
-        if (entry.native != null && !regular(entry))
-            fail(7, "Native endpoint terminal status requires an actual terminal query: $fd")
-        0L
+        entry.native?.terminalStatus() ?: 0L
     } }
     @TruffleBoundary fun deviceType(fd: Long): Long = result { withDescriptor(fd) { entry ->
         if (regular(entry)) 0L else 1L
