@@ -90,6 +90,11 @@ class IoMainBoundaryTest {
                 load(context, backend, module, shutdown = "missing")
             }
             assertTrue(missing.message.orEmpty().contains("Missing or ambiguous entry"))
+            val wrong = module + ("bindings" to (bindings(original) + (shutdown + ("type" to "IO Int"))))
+            val invalid = assertThrows(PolyglotException::class.java) {
+                load(context, backend, wrong, shutdown = "shutdown")
+            }
+            assertTrue(invalid.message.orEmpty().contains("IO ()"))
         }
     }
 
