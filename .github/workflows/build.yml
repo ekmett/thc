@@ -262,6 +262,13 @@ jobs:
           name: test-results-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             build/reports/tests/
+            build/original-stdio-read/logs/
+            build/original-stdio-read/results/
+            build/original-stdio-read/input.bin
+            build/original-stdio-read/oracle.json
+            build/original-stdio-read/manifest.json
+            build/original-stdio-read/*/*.audit.json
+            build/original-stdio-read/*/core/*.json
             build/floating/core/
             build/floating/checks.json
             build/floating/oracle.tsv
