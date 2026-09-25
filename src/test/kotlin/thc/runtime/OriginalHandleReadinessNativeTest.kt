@@ -16,9 +16,9 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import thc.CoreModules
+import thc.ContextProfile
 import thc.Json
 import thc.Language
-import thc.NativeIO
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.Collections
@@ -98,7 +98,7 @@ class OriginalHandleReadinessNativeTest {
                 val module = CoreModules.merge(listOf("OriginalHandleReadinessAudit", "THC.InterfaceClosure")
                     .map { json("$prefix/core/$it.json") })
                 for (backend in listOf("ast", "bytecode")) {
-                    NativeIO.createContext(emptySet()).use { context ->
+                    NativeFileProvider.createContext(emptySet(), ContextProfile.SYNCHRONOUS_TEST).use { context ->
                         context.enter()
                         try {
                             val state = Language.currentState()
