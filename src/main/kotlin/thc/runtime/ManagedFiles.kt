@@ -18,10 +18,12 @@ import java.nio.file.NoSuchFileException
 import java.nio.file.NotDirectoryException
 import java.nio.file.StandardOpenOption
 import java.util.concurrent.CountDownLatch
+import thc.NativeIO.StandardEndpoint
 
 /** Explicit thc_io_v1 service, not a POSIX ABI. Descriptors and reader/writer
- * claims belong to one THC context. Only regular files and the embedding's
- * three streams are supported. Calls are synchronous: this is not a scheduler,
+ * claims belong to one THC context. Regular files and the embedding's streams
+ * are supported, with native resources only in an explicit NativeIO context.
+ * Calls are synchronous: this is not a scheduler,
  * general readiness service, or an implementation of interruptible foreign calls. */
 internal class ManagedFiles(private val env: TruffleLanguage.Env, private val threads: GuestThreads,
     private val descriptorLimit: Long = Int.MAX_VALUE.toLong() + 1) {
@@ -35,10 +37,12 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         val input: InputStream? = null,
         val output: OutputStream? = null,
         val channel: SeekableByteChannel? = null,
+        val native: NativeFileResource? = null,
         val identity: FileIdentity? = null,
         val readable: Boolean = false,
         val writable: Boolean = false,
         val append: Boolean = false,
+        val canExtend: Boolean = true,
         val readiness: Readiness = Readiness.UNAVAILABLE
     ) {
         // References are protected by the registry. IO and physical retirement
@@ -50,7 +54,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         // Protected by the registry, independently of the shared IO lifetime.
         var closed = false
     }
-    private data class Failure(val kind: Long, val message: String)
+    private data class Failure(val kind: Long, val message: String, val nativeErrno: Long = 0)
     private class FileFailure(val kind: Long, message: String) : IOException(message)
     private val failure = ThreadLocal.withInitial { Failure(0, "") }
     private val descriptors = linkedMapOf<Long, Descriptor>(
@@ -63,12 +67,15 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     private val opening = mutableListOf<OpenClaim>()
     private var nextDescriptor = 3L // Preserve the private open API's non-reuse guarantee.
     private var disposed = false
+    private var nativeProvider: NativeFileProvider? = null
+    private val nativeAbi by lazy { StdioHostAbi.load() }
 
     init { require(descriptorLimit in 3L..(Int.MAX_VALUE.toLong() + 1)) }
 
     // Portable error categories, deliberately not host errno numbers. A successful
     // operation does not clear the last error; queries cannot destroy the message.
     @TruffleBoundary fun errorKind(): Long = failure.get().kind
+    @TruffleBoundary internal fun nativeErrno(): Long = failure.get().nativeErrno
     @TruffleBoundary fun errorMessage(): ManagedAddress {
         val bytes = failure.get().message.toByteArray(Charsets.UTF_8)
         return ManagedAddress.fromHex(bytes.joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') })
@@ -120,6 +127,75 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         return FileIdentity(device, inode)
     }
 
+    private fun nativeDescription(resource: NativeFileResource, readable: Boolean,
+        writable: Boolean, append: Boolean = false, canExtend: Boolean = true): OpenDescription {
+        val image = ManagedAddress.fromByteArray(resource.statImage())
+        val mode = PosixStat.execute(OriginalStdioOp.ST_MODE, image, 0)
+        val regular = PosixStat.execute(OriginalStdioOp.IS_REG, ManagedAddress.nullAddress(), mode) == 1L
+        val identity = if (regular) FileIdentity(PosixStat.execute(OriginalStdioOp.ST_DEV, image, 0),
+            PosixStat.execute(OriginalStdioOp.ST_INO, image, 0)) else null
+        return OpenDescription(channel = resource, native = resource, identity = identity,
+            readable = readable, writable = writable, append = append, canExtend = canExtend,
+            readiness = if (regular) Readiness.REGULAR_FILE else Readiness.UNAVAILABLE)
+    }
+
+    /** Only the fixed factory calls this before publishing its Context. All
+     * grants are acquired before replacing any descriptor; failure rolls back
+     * the acquisitions, and factory failure disposes the unpublished context. */
+    internal fun installNative(provider: NativeFileProvider, endpoints: Set<StandardEndpoint>) {
+        val claim = OpenClaim(null, false)
+        val acquired = linkedMapOf<Long, OpenDescription>()
+        val retired = mutableListOf<OpenDescription>()
+        var published = false
+        val previous = threads.enterForeign()
+        try {
+            synchronized(this) {
+                check(!disposed && nativeProvider == null && nextDescriptor == 3L && opening.isEmpty())
+                check(descriptors.keys == setOf(0L, 1L, 2L) && descriptors.values.all { it.owner.references == 1L })
+                opening.add(claim)
+            }
+            for (endpoint in endpoints) {
+                val resource = provider.standard(endpoint)
+                try {
+                    acquired[endpoint.ordinal.toLong()] = nativeDescription(resource,
+                        endpoint == StandardEndpoint.INPUT, endpoint != StandardEndpoint.INPUT, canExtend = false)
+                } catch (failure: Throwable) {
+                    try { resource.close() } catch (closing: Throwable) { failure.addSuppressed(closing) }
+                    throw failure
+                }
+            }
+            synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                for ((fd, owner) in acquired) {
+                    val old = descriptors.getValue(fd)
+                    old.closed = true
+                    old.owner.references = 0
+                    retired.add(old.owner)
+                    owners.add(owner)
+                    descriptors[fd] = Descriptor(owner)
+                }
+                nativeProvider = provider
+                published = true
+            }
+            // No registry lock spans a flush callback. Any failure here makes
+            // the factory close the context, including the newly installed set.
+            for (owner in retired) retire(owner)
+            for (owner in acquired.values) owner.native!!.requireLive()
+            synchronized(this) {
+                if (disposed) fail(4, "THC file context was disposed during native installation")
+                check(nativeProvider === provider)
+            }
+        } catch (failure: Throwable) {
+            if (!published) for (owner in acquired.values) try { retire(owner) }
+                catch (closing: Throwable) { failure.addSuppressed(closing) }
+            throw failure
+        } finally {
+            synchronized(this) { opening.remove(claim) }
+            claim.finished.countDown()
+            threads.leaveForeign(previous)
+        }
+    }
+
     private fun requireUnclaimed(identity: FileIdentity, writable: Boolean, name: String, own: OpenClaim? = null) {
         for (other in owners) {
             if (other.identity == identity && (writable || other.writable))
@@ -153,6 +229,9 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
             failure.set(Failure(5, error.message ?: "Invalid file path")); -1L
         } catch (error: UnsupportedOperationException) {
             failure.set(Failure(7, error.message ?: "File operation is not supported")); -1L
+        } catch (error: NativeFileException) {
+            failure.set(Failure(nativeAbi.privateErrorKind(error.errno.toLong()),
+                error.message ?: "Native file operation failed", error.errno.toLong())); -1L
         } catch (error: IOException) {
             failure.set(Failure(6, error.message ?: "File operation failed")); -1L
         } finally {
@@ -163,7 +242,8 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     /** Read0/Write1/Append2/ReadWrite3. Write truncates only after the context's
      * Haskell single-writer/multiple-reader check, never while acquiring a channel.
      * Claims use provider-supplied Unix device/inode identities, not retained paths.
-     * Pre/post-open checks detect simple replacement but cannot provide atomic
+     * The explicit native provider instead uses authoritative opened identity.
+     * Legacy pre/post-open checks detect simple replacement but cannot provide atomic
      * opened-channel identity against concurrent host mutation (including ABA).
      * This does not coordinate external processes or replace native file locks. */
     @TruffleBoundary fun open(path: ManagedAddress, mode: Long): Long {
@@ -175,6 +255,8 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
                 if (disposed) fail(4, "THC file context is closed")
                 unusedDescriptor(nextDescriptor)
             }
+            val native = synchronized(this) { nativeProvider }
+            if (native != null) return@result openNative(native, name, mode)
             val file = env.getPublicTruffleFile(name)
             val writable = mode != 0L
             val before = try { identity(file, name) } catch (_: NoSuchFileException) { null }
@@ -228,6 +310,55 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
                 claim.finished.countDown()
             }
         }
+    }
+
+    private fun openNative(provider: NativeFileProvider, name: String, mode: Long): Long {
+        val claim = OpenClaim(null, mode != 0L)
+        var resource: OpenedNativeFile? = null
+        try {
+            synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                unusedDescriptor(nextDescriptor)
+                opening.add(claim)
+            }
+            val acquired = provider.open(name, mode.toInt())
+            resource = acquired
+            val owner = nativeDescription(acquired, mode == 0L || mode == 3L, mode != 0L, mode == 2L)
+            val identity = owner.identity ?: fail(7, "Native acquisition is not a regular file: $name")
+            synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                requireUnclaimed(identity, owner.writable, name, claim)
+                claim.identity = identity
+            }
+            if (mode == 1L) acquired.truncate(0)
+            val fd = synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                requireUnclaimed(identity, owner.writable, name, claim)
+                val allocated = unusedDescriptor(nextDescriptor)
+                nextDescriptor = allocated + 1
+                owners.add(owner)
+                descriptors[allocated] = Descriptor(owner)
+                opening.remove(claim)
+                allocated
+            }
+            resource = null // All dup aliases share this owner and capability.
+            return fd
+        } catch (failure: Throwable) {
+            try { resource?.close() } catch (closing: Throwable) { failure.addSuppressed(closing) }
+            throw failure
+        } finally {
+            synchronized(this) { opening.remove(claim) }
+            claim.finished.countDown()
+        }
+    }
+
+    /** Internal opened-resource capability, not original fstat admission. The
+     * descriptor identity is revalidated under its shared owner before access. */
+    @TruffleBoundary internal fun statImage(fd: Long): ByteArray {
+        val previous = threads.enterForeign()
+        return try { withDescriptor(fd) { entry ->
+            (entry.native ?: throw UnsupportedOperationException("THC descriptor has no opened-resource metadata: $fd")).statImage()
+        } } finally { threads.leaveForeign(previous) }
     }
 
     @TruffleBoundary fun read(fd: Long, address: ManagedAddress, count: Long): Long {
@@ -355,6 +486,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     } }
 
     @TruffleBoundary fun size(fd: Long): Long = result { withDescriptor(fd) { entry ->
+        if (entry.readiness != Readiness.REGULAR_FILE) fail(7, "THC stream has no file size: $fd")
         (entry.channel ?: fail(7, "THC stream has no file size: $fd")).size()
     } }
 
@@ -366,11 +498,14 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     @TruffleBoundary fun truncateOriginal(fd: Long, length: Long): Long = resize(fd, length, true)
 
     private fun resize(fd: Long, length: Long, original: Boolean): Long = result { withDescriptor(fd) { entry ->
+        if (entry.readiness != Readiness.REGULAR_FILE)
+            fail(if (original) 5 else 7, "Cannot resize a THC stream: $fd")
         val channel = entry.channel ?: fail(if (original) 5 else 7, "Cannot resize a THC stream: $fd")
         if (!entry.writable) fail(if (original) 5 else 4, "THC file descriptor is not writable: $fd")
         if (length < 0) fail(5, "Negative THC file size")
         val oldSize = channel.size()
-        if (length > oldSize && entry.append) fail(7, "Extending an append-mode file is not supported")
+        if (length > oldSize && (entry.append || !entry.canExtend))
+            fail(7, "Extending an append-mode file or native standard endpoint is not supported")
         val position = channel.position()
         try {
             if (length <= oldSize) channel.truncate(length) else {
@@ -383,9 +518,13 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
 
     // Env exposes byte streams, not terminal handles. Do not infer a terminal
     // from System.console(): it may be unrelated to the embedding's streams.
-    @TruffleBoundary fun isTerminal(fd: Long): Long = result { withDescriptor(fd) { 0L } }
+    @TruffleBoundary fun isTerminal(fd: Long): Long = result { withDescriptor(fd) { entry ->
+        if (entry.native != null && entry.readiness != Readiness.REGULAR_FILE)
+            fail(7, "Native endpoint terminal status requires an actual terminal query: $fd")
+        0L
+    } }
     @TruffleBoundary fun deviceType(fd: Long): Long = result { withDescriptor(fd) { entry ->
-        if (entry.channel != null) 0L else 1L
+        if (entry.readiness == Readiness.REGULAR_FILE) 0L else 1L
     } }
 
     /** Final disposal cannot run Haskell finalizers or flush GHC's own buffers.
