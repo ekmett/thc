@@ -131,14 +131,14 @@ internal class ManagedExportScalar private constructor(
                 fault("Expected a foreign-export Float")
             val number = try { interop.asFloat(value) }
                          catch (_: UnsupportedMessageException) { fault("Expected a foreign-export Float") }
-            layout.create(arrayOf(number))
+            layout.allocate().also { layout.initializeFloat(it, 0, number) }
         }
         Kind.DOUBLE -> {
             if (value == null || !interop.isNumber(value) || !interop.fitsInDouble(value))
                 fault("Expected a foreign-export Double")
             val number = try { interop.asDouble(value) }
                          catch (_: UnsupportedMessageException) { fault("Expected a foreign-export Double") }
-            layout.create(arrayOf(number))
+            layout.allocate().also { layout.initializeDouble(it, 0, number) }
         }
         Kind.UNIT -> fault("GHC does not marshal a unit foreign-export argument")
     }
