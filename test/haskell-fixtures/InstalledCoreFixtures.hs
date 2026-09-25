@@ -57,10 +57,23 @@ prepareInstalledCore root directory = do
   arch <- field plan "arch" :: IO String
   os <- field plan "os" :: IO String
   unless (compilerId == "ghc-9.14.1") (die "Installed fixture helper selected a different compiler")
-  selected <- Installed.installedContext ghc ghcPkg helper [] (object
+  -- A private interface view may contain genuinely rebuilt Core annotations
+  -- without being a native ABI replacement. Only acquisition uses that view;
+  -- the helper and native oracles continue to use the ordinary selected GHC.
+  coreGhc <- lookupEnv "THC_INSTALLED_CORE_GHC"
+  corePkg <- lookupEnv "THC_INSTALLED_CORE_GHC_PKG"
+  (providerGhc, providerPkg, providerCommands) <- case (coreGhc, corePkg) of
+    (Nothing, Nothing) -> pure (ghc, ghcPkg, [])
+    (Just compiler, Just packageTool) -> do
+      providerVersion <- run "core-provider-version" compiler ["--numeric-version"]
+      unless (commandStdout providerVersion == commandStdout version)
+        (die "Installed Core provider and native compiler versions differ")
+      pure (compiler, packageTool, [providerVersion])
+    _ -> die "Set THC_INSTALLED_CORE_GHC and THC_INSTALLED_CORE_GHC_PKG together"
+  selected <- Installed.installedContext providerGhc providerPkg helper [] (object
     ["id" .= compilerId, "abi" .= abi, "platform" .= (arch ++ "-" ++ os),
      "way" .= ("dynamic-nonprofiling" :: String)])
-  registration <- run "ghc-internal-unit" ghcPkg
+  registration <- run "ghc-internal-unit" providerPkg
     ["--global", "--no-user-package-db", "field", "ghc-internal", "id", "--simple-output"]
   internal <- case BS.words (commandStdout registration) of
     [name] -> pure (BS.unpack name)
@@ -99,4 +112,4 @@ prepareInstalledCore root directory = do
     ["format" .= ("thc-core-packages" :: String), "schema" .= (1 :: Int),
      "ghc" .= ("9.14.1" :: String), "units" .= concatMap fst bundles]
   pure (InstalledFixture ghc packagePath (packagePath : map snd bundles)
-    [version, built, located, registration] selected internalRegistration)
+    ([version, built, located] ++ providerCommands ++ [registration]) selected internalRegistration)

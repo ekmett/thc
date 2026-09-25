@@ -35,6 +35,12 @@ cabal run exe:thc-fixtures --offline -- file-wait
 ./gradlew --no-daemon fileWaitFullCoreTest
 ```
 
+For a separate installed Core view containing rebuilt interface annotations,
+set `THC_INSTALLED_CORE_GHC` and `THC_INSTALLED_CORE_GHC_PKG` to its compiler and
+package-tool wrappers. Acquisition still uses the production package discovery,
+interface reader, and bundle builder. The helper and native oracle are built
+with the ordinary `GHC`/`GHC_PKG`; the Core view is not a native ABI replacement.
+
 The manifest is removed before preparation. A rejected strict audit leaves its
 report and logs but no success receipt. The full-Core result should be claimed
 only after the selected Linux GHC and compiled JVM gates pass.
