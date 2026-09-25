@@ -109,9 +109,11 @@ runPackage opts target = do
   unless (not (null modules)) $ fail "GHC plugin exported no Core modules"
   -- This is the GHC-generated executable action, including TopHandler, not
   -- the user's raw Main.main IO value.
-  checked True "python3" ([thcRoot </> "scripts/audit-core.py", "--entry", "main::Main.main", "--io-main",
+  let shutdown = "ghc-internal:GHC.Internal.TopHandler.flushStdHandles"
+  checked True "python3" ([thcRoot </> "scripts/audit-core.py", "--entry", "main::Main.main",
+                      "--entry", shutdown, "--io-main",
                       "--output", output </> "audit.json"] ++ modules) thcRoot inherited
-  checked False runtime ["--run-io", intercalate "," modules, "main::Main.main"] thcRoot inherited
+  checked False runtime ["--run-executable", intercalate "," modules, "main::Main.main", shutdown] thcRoot inherited
 
 filterMFile :: (a -> IO Bool) -> [a] -> IO [a]
 filterMFile predicate items = do

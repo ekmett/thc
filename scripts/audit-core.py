@@ -1597,8 +1597,8 @@ class Audit:
             self.issue('io-main-boundary', key, '/entry', 'requires IO () with State# RealWorld -> (# State#, () #)')
 
     def run(self, entries, io_main=False):
-        if io_main and len(entries) != 1:
-            raise ValueError('IO main audit requires exactly one entry')
+        # Executable shutdown is another exact IO () root in the same package
+        # closure. Each root receives the same boundary check below.
         roots = []
         for entry in entries:
             candidates = [entry] if entry in self.bindings else [k for k, b in self.bindings.items() if b.get('name') == entry]

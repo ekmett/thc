@@ -205,13 +205,14 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
       -- Main.main in GHC.Internal.TopHandler.runMainIO; selecting the user's
       -- action directly skips GHC's main-thread and top-level exception path.
       entry = unitId selected ++ "::Main.main"
+      shutdown = "ghc-internal:GHC.Internal.TopHandler.flushStdHandles"
       audit = output </> "audit.json"
   atomicJson manifest (object ["format" .= ("thc-core-packages" :: String),
                                "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
                                "units" .= (described ++ wired)])
   runCommand True "python3" [thcRoot </> "scripts/audit-core.py", "--package-manifest", manifest,
-                             "--entry", entry, "--io-main", "--output", audit] thcRoot
-  runCommand False runtime ["--run-io", '@' : manifest, entry] thcRoot
+                             "--entry", entry, "--entry", shutdown, "--io-main", "--output", audit] thcRoot
+  runCommand False runtime ["--run-executable", '@' : manifest, entry, shutdown] thcRoot
 
 prepareInterfaceHelper :: ExportContext -> FilePath -> IO InstalledContext
 prepareInterfaceHelper context root = do

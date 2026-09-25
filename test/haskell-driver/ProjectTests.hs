@@ -293,11 +293,15 @@ forBackends env invoke output project entryOf unit bundleRef modulePath = go Not
       assertEqual "entry Core" ["Main"] (moduleNames $ unit manifest entryId)
       audit <- readJson (output </> "audit.json")
       assertBool "accepted" (bool $ field audit "accepted")
-      assertEqual "GHC executable IO root" [entryId ++ "::Main.main"]
+      assertEqual "GHC executable IO roots" [entryId ++ "::Main.main",
+        "ghc-internal:GHC.Internal.TopHandler.flushStdHandles"]
         (strings $ field audit "roots")
       assertEqual "no missing globals" [] (array $ field audit "missingGlobals")
       assertBool "original TopHandler startup reachable" $ any
         ((== "ghc-internal:GHC.Internal.TopHandler.runMainIO1") . string . (`field` "id"))
+        (objects audit "reachableBindings")
+      assertBool "original Handle shutdown reachable" $ any
+        ((== "ghc-internal:GHC.Internal.TopHandler.flushStdHandles") . string . (`field` "id"))
         (objects audit "reachableBindings")
       assertBool "imported thunk reachable" $ any
         ((== depId ++ ":Answer.answerValue") . string . (`field` "id"))

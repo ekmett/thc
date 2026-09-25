@@ -31,7 +31,8 @@ tests env = TestLabel "single-package native versus THC run" $ TestCase $
       assertEqual "unsupported traps" 0 (number $ field diagnostics "unsupportedTraps")
       audit <- readJson (exported output </> "audit.json")
       assertBool "strict Core accepted" (bool $ field audit "accepted")
-      assertEqual "GHC executable IO root" ["main::Main.main"] (strings $ field audit "roots")
+      assertEqual "GHC executable IO roots" ["main::Main.main",
+        "ghc-internal:GHC.Internal.TopHandler.flushStdHandles"] (strings $ field audit "roots")
       mainCore <- readJson (exported output </> "core/Main.json")
       assertBool "GHC-generated wrapper exported" $ any
         ((== "main::Main.main") . string . (`field` "id"))

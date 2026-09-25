@@ -179,7 +179,11 @@ object CoreModules {
     }
 
     fun request(paths: List<String>, entry: String, instrument: Boolean = true, diagnosticUnsupported: Boolean = false,
-                backend: String = defaultBackend(), sourceNotesEnabled: Boolean = true, ioMain: Boolean = false): String {
+                backend: String = defaultBackend(), sourceNotesEnabled: Boolean = true, ioMain: Boolean = false,
+                shutdownEntry: String? = null): String {
+        require(shutdownEntry == null || (ioMain && shutdownEntry.isNotBlank() && shutdownEntry != entry)) {
+            "Executable shutdown requires a distinct IO entry"
+        }
         val manifest = paths.singleOrNull()?.takeIf { it.startsWith("@") }?.drop(1)
         val settings = linkedMapOf<String, Any>(
             "entry" to entry, "instrument" to instrument,
@@ -187,6 +191,7 @@ object CoreModules {
             "sourceNotesEnabled" to sourceNotesEnabled)
         if (manifest != null) settings["strictLink"] = true
         if (ioMain) settings["ioMain"] = true
+        if (shutdownEntry != null) settings["shutdownEntry"] = shutdownEntry
         val options = StringBuilder().also { Json.appendObjectDocument(it,
             Json.stringify(settings)) }
         return buildString {
@@ -324,11 +329,18 @@ class Language : TruffleLanguage<Language.State>() {
         val input = Json.parse(request.source.characters.toString()) as Map<String, Any?>
         val modules = input["modules"] as? List<Map<String, Any?>> ?: error("Expected modules array")
         val entry = input["entry"] as? String ?: error("Expected entry name")
+        val shutdownEntry = input["shutdownEntry"] as? String
+        require(input["shutdownEntry"] == null ||
+            (input["ioMain"] == true && !shutdownEntry.isNullOrBlank() && shutdownEntry != entry)) {
+            "Executable shutdown requires a distinct IO entry"
+        }
         require(input["ioMain"] != true || input["diagnosticUnsupported"] != true) {
             "IO main requires strict unsupported-Core rejection"
         }
         val layout = input["targetLayout"]?.let(TargetLayout::fromDocument)
-        val linked = CoreModules.reachable(CoreModules.merge(modules), entry, input["strictLink"] == true) + mapOf("instrument" to (input["instrument"] != false),
+        val linked = CoreModules.reachable(CoreModules.merge(modules),
+            if (shutdownEntry == null) listOf(entry) else listOf(entry, shutdownEntry),
+            input["strictLink"] == true) + mapOf("instrument" to (input["instrument"] != false),
             "diagnosticUnsupported" to (input["diagnosticUnsupported"] == true),
             "sourceNotesEnabled" to (input["sourceNotesEnabled"] != false)) +
             (if (layout == null) emptyMap() else mapOf("targetLayout" to layout))
@@ -337,6 +349,11 @@ class Language : TruffleLanguage<Language.State>() {
         val selected = bindings.singleOrNull { it["id"] == entry } ?: bindings.single { it["name"] == entry }
         val selectedExpression = selected["expr"] as List<Any?>
         val ioResult = if (input["ioMain"] == true) CoreRepresentations.ioUnitMainResult(selected, bindings) else null
+        val shutdownResult = shutdownEntry?.let { name ->
+            val shutdown = bindings.singleOrNull { it["id"] == name }
+                ?: throw IllegalArgumentException("Missing exact executable shutdown entry: $name")
+            CoreRepresentations.ioUnitMainResult(shutdown, bindings)
+        }
         val hostResultFault = if (ioResult != null) null else try {
             thc.runtime.CoreRepresentations.knownFunctionSignature(selectedExpression, bindings)?.let { (inputs, result) ->
                 inputs.forEach { thc.runtime.CoreRepresentations.requireScalar(it, "host argument") }
@@ -358,7 +375,8 @@ class Language : TruffleLanguage<Language.State>() {
             "bytecode" -> BytecodeProgram(this, linked, true)
             else -> throw IllegalArgumentException("Unknown THC backend: $backend")
         }
-        val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), hostResultFault, ioResult, this)
+        val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), hostResultFault, ioResult, this,
+            shutdownEntry, shutdownResult)
         return object : RootNode(this) {
             override fun execute(frame: VirtualFrame): Any = value
             override fun getName(): String = "THC load $entry"
@@ -369,10 +387,15 @@ class Language : TruffleLanguage<Language.State>() {
 @ExportLibrary(InteropLibrary::class)
 internal class EntryValue(private val program: ExecutableProgram, private val entry: String, private val argumentCount: Int,
                  private val hostResultFault: String? = null, ioResult: CoreRepresentation? = null,
-                 language: Language? = null) : TruffleObject {
+                 language: Language? = null, shutdownEntry: String? = null,
+                 shutdownResult: CoreRepresentation? = null) : TruffleObject {
     private val guestTarget = program.hostEntryTarget(argumentCount)
     private val guestEntry = program.entryValue(entry)
     private val ioTarget = ioResult?.let { IoMainRoot(language ?: error("Missing IO language"), it).callTarget }
+    private val shutdownValue = shutdownEntry?.let(program::entryValue)
+    private val shutdownTarget = shutdownResult?.let { IoMainRoot(language ?: error("Missing IO language"), it).callTarget }
+    private val lifecycleStarted = java.util.concurrent.atomic.AtomicBoolean()
+    init { require((shutdownValue == null) == (shutdownTarget == null)) }
     @ExportMessage fun isExecutable() = ioTarget == null
     @ExportMessage fun execute(arguments: Array<Any?>,
                                @Cached(value = "create()", uncached = "create()", neverDefault = true) dispatch: HostDispatch): Any? {
@@ -426,9 +449,17 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                      @Cached(value = "create()", uncached = "create()", neverDefault = true) dispatch: HostDispatch): Any {
         if (member == "runIO" && ioTarget != null) {
             require(arguments.isEmpty()) { "runIO takes no arguments" }
+            if (shutdownTarget != null && !lifecycleStarted.compareAndSet(false, true))
+                throw thc.runtime.RuntimeFault("Executable IO lifecycle already started")
             val threads = Language.currentState(dispatch).threads
             threads.enterCurrent()
-            try { dispatch.execute(ioTarget, arrayOf(guestEntry)) }
+            try {
+                dispatch.execute(ioTarget, arrayOf(guestEntry))
+                // GHC's runMainIO relies on hs_exit for normal stdout/stderr
+                // flushing. Run its genuine Handle action before this context
+                // disposes the same CAFs; runMainIO handles failure itself.
+                if (shutdownTarget != null) dispatch.execute(shutdownTarget, arrayOf(shutdownValue))
+            }
             catch (suspended: thc.runtime.ThunkSuspended) {
                 thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
             } catch (suspended: thc.runtime.CallSegmentSuspended) {

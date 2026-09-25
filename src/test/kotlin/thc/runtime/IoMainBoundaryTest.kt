@@ -45,9 +45,11 @@ class IoMainBoundaryTest {
                 mapOf("id" to returnedConstructor, "name" to "()", "kind" to "boxed", "arity" to 0,
                     "strictFields" to emptyList<Boolean>(), "fieldLifted" to emptyList<Boolean>(), "fieldReps" to emptyList<String>())))
     }
-    private fun load(context: Context, backend: String, module: Map<String, Any?>, diagnostic: Boolean = false): Value =
-        context.eval("thc", Json.stringify(mapOf("entry" to "main", "ioMain" to true,
-            "backend" to backend, "diagnosticUnsupported" to diagnostic, "modules" to listOf(module))))
+    private fun load(context: Context, backend: String, module: Map<String, Any?>, diagnostic: Boolean = false,
+                     shutdown: String? = null): Value = context.eval("thc", Json.stringify(
+        mapOf("entry" to "main", "ioMain" to true, "backend" to backend,
+            "diagnosticUnsupported" to diagnostic, "modules" to listOf(module)) +
+            (if (shutdown == null) emptyMap() else mapOf("shutdownEntry" to shutdown))))
     private fun bindings(module: Map<String, Any?>) = module["bindings"] as List<Map<String, Any?>>
     private fun mainExpression(module: Map<String, Any?>, expression: List<Any?>) =
         module + ("bindings" to bindings(module).map { if (it["id"] == "main") it + ("expr" to expression) else it })
@@ -69,6 +71,25 @@ class IoMainBoundaryTest {
             repeat(2) { assertTrue(action.invokeMember("runIO").asBoolean()) }
             val diagnostics = Json.parse(action.getMember("diagnostics").asString()) as Map<String, Any?>
             assertEquals(0L, (diagnostics["unsupportedTraps"] as Number).toLong())
+        }
+    }
+
+    @Test fun executableShutdownKeepsBothIoRootsAndRunsOnlyOnce() {
+        val original = fixture()
+        val shutdown = binding("shutdown", v("worker"))
+        val module = original + ("bindings" to (bindings(original) + shutdown))
+        for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
+            val action = load(context, backend, module, shutdown = "shutdown")
+            assertTrue(action.invokeMember("runIO").asBoolean())
+            val repeated = assertThrows(PolyglotException::class.java) { action.invokeMember("runIO") }
+            assertTrue(repeated.message.orEmpty().contains("already started"))
+            // A raw --run-io action remains reusable for low-level fixtures.
+            val raw = load(context, backend, module)
+            repeat(2) { assertTrue(raw.invokeMember("runIO").asBoolean()) }
+            val missing = assertThrows(PolyglotException::class.java) {
+                load(context, backend, module, shutdown = "missing")
+            }
+            assertTrue(missing.message.orEmpty().contains("Missing or ambiguous entry"))
         }
     }
 
