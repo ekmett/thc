@@ -12,6 +12,7 @@ import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.CoreModules
+import thc.CorePackageManifest
 import thc.EntryValue
 import thc.Json
 import thc.Language
@@ -23,6 +24,12 @@ class BoundThreadQueryNativeTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = File(root, "build/bound-thread-query")
     private fun json(file: File) = Json.parse(file.readText()) as Map<String, Any?>
+    private fun installed(manifest: Map<String, Any?>): Pair<List<Map<String, Any?>>, TargetLayout> {
+        val documents = StringBuilder()
+        val layout = CorePackageManifest.appendModules(documents, File(root, manifest["packageManifest"] as String).path)
+        assertNotNull(layout, "selected installed RTS target layout required")
+        return (Json.parse("[$documents]") as List<Map<String, Any?>>) to layout!!
+    }
     private fun context() = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
         .option("compiler.Inlining", "false").option("engine.SingleTierCompilationThreshold", "10000000")
@@ -56,7 +63,11 @@ class BoundThreadQueryNativeTest {
             "compiler/test-fixtures/BoundThreadQueryAudit.hs", "compiler/test-fixtures/BoundThreadQueryNative.hs",
             "compiler/THC/Plugin.hs", "scripts/core_original_foreign.py", "scripts/audit-core.py"))
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf(
-            "build/bound-thread-query/nonthreaded/oracle.tsv", "build/bound-thread-query/threaded/oracle.tsv"))
+            "build/bound-thread-query/nonthreaded/oracle.tsv", "build/bound-thread-query/threaded/oracle.tsv",
+            "build/bound-thread-query/installed/packages.json"))
+        val (originals, layout) = installed(manifest)
+        assertTrue(originals.any { it["unit"] == "ghc-internal" && it["module"] == "GHC.Internal.Conc.Bound" },
+            "complete original installed module, not a thin unfolding overlay")
         val controls = manifest["nativeControls"] as Map<String, Any?>
         assertEquals(listOf(false, false, false, false, false), controls["nonthreaded"])
         assertEquals(listOf(true, true, false, true, true), controls["threaded"])
@@ -68,12 +79,15 @@ class BoundThreadQueryNativeTest {
         assertTrue(expected.all { it.first == it.second })
         assertEquals(expected.map { it.first to it.first + 1L }, rows("threaded"))
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) {
+            assertEquals(1, paths.size, "consumer only; complete installed bundles supply boot bodies")
+            assertEquals(if (stage == "pre") "optimized-Core-before-Tidy" else "optimized-Core-after-Tidy-before-CorePrep",
+                json(File(root, paths.single()))["boundary"])
             val audit = json(File(directory, "$stage/audit.json"))
             assertEquals(true, audit["accepted"])
             assertEquals(emptyList<Any>(), audit["issues"])
             assertEquals(emptyList<Any>(), audit["missingGlobals"])
             assertEquals(setOf("rtsSupportsBoundThreads"), (audit["foreignCalls"] as List<Map<String, Any?>>).map { it["symbol"] }.toSet())
-            val merged = CoreModules.merge(paths.map { json(File(root, it)) })
+            val merged = CoreModules.merge(originals + paths.map { json(File(root, it)) }) + ("targetLayout" to layout)
             val module = CoreModules.reachable(merged, "boundThreadQuery", strictLink = true) + ("instrument" to true)
             val calls = OriginalStdioChecks.foreignCalls(module)
             assertTrue(calls.isNotEmpty(), "genuine imported foreign application retained")
@@ -136,15 +150,19 @@ class BoundThreadQueryNativeTest {
 
     @Test fun genuineOriginalImportsCannotBypassEitherLoaderWithMalformedCertificates() {
         val manifest = json(File(directory, "manifest.json"))
+        val (originals, layout) = installed(manifest)
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) {
-            val original = CoreModules.reachable(CoreModules.merge(paths.map { json(File(root, it)) }), "boundThreadQuery", strictLink = true)
+            val original = CoreModules.reachable(CoreModules.merge(originals + paths.map { json(File(root, it)) }) +
+                ("targetLayout" to layout), "boundThreadQuery", strictLink = true)
             assertTrue(OriginalStdioChecks.foreignCalls(original).isNotEmpty())
             for (backend in listOf("ast", "bytecode")) context().use { context ->
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                     for (mutation in listOf("unit", "safety", "arity", "state", "flags", "result-width", "missing-state", "head")) {
-                        val module = Json.parse(Json.stringify(original)) as Map<String, Any?>
+                        // Preserve the already validated typed target layout/foreign
+                        // links. Only JSON Core bindings are deep-copied for mutation.
+                        val module = original + ("bindings" to Json.parse(Json.stringify(original["bindings"])))
                         val call = OriginalStdioChecks.foreignCalls(module).first() as MutableList<Any?>
                         val metadata = call[6] as MutableMap<String, Any?>
                         val descriptor = metadata["foreignCall"] as MutableMap<String, Any?>

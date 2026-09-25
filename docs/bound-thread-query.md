@@ -49,11 +49,16 @@ JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --offline --no-daemon --max-
 The genuine suite is separate from stock/thin default fixture groups, like the
 original iconv suite. Explicit selection with absent/stale fixtures fails; it
 does not skip or replace library definitions. The producer uses ordinary public
-imports and the existing pre/post compiler exporter, requires actual original
-foreign applications and a complete strict closure, and records both native
-command streams plus local transitive exporter/auditor hashes. The installed
-GHC executable, interfaces and libraries are not hashed. No pinned source
-inventory or fake FFI declaration is added.
+imports and the existing pre/post compiler exporter. Boot definitions come from
+the production `Installed`/`Project.prepareInstalledBundle` provider with actual
+selected Cabal compiler ABI/platform, registered package dependency closure,
+complete interface Core, preserved archive obligations, and installed RTS layout.
+Thin interface fragments are recorded only as diagnostic exports, not overlaid
+on the complete originals. Missing full Core is an error, with no pinned fallback.
+Both native command streams, package bundles, generated Core, strict audits and
+local transitive exporter/driver/auditor inputs are hashed. The installed GHC
+executable, interfaces and libraries are not hashed. No copied source inventory
+or fake FFI declaration is added.
 
 Implementation checkpoint status: source only, unvalidated. Native, default
 and dense results remain to be established before integration.
