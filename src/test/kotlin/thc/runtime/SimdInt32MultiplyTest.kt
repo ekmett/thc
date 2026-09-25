@@ -155,7 +155,7 @@ class SimdInt32MultiplyTest {
             else -> value
         }
         for (backend in listOf("ast", "bytecode")) {
-            assertThrows(UnsupportedCore::class.java) { program(language, backend, module(), "vectorArgument") }
+            assertNotNull(program(language, backend, module(), "vectorArgument"))
             for (diagnostic in listOf(false, true)) {
                 val missing = rewrite(module()) { it - "vector" } as Map<String, Any?>
                 assertThrows(RuntimeFault::class.java) { program(language, backend, missing, "timesCase", diagnostic) }

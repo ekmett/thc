@@ -17,6 +17,7 @@ internal class EntryArguments(target: RootCallTarget, metrics: Metrics,
         it is BytecodeRoot && it.isAsyncEnabled
     }?.let { root ->
         root.entryStrict.indices.filter { root.entryStrict[it] && root.inputLayout?.isTuple(it) != true &&
+            root.inputLayout?.isVector(it) != true &&
             (it < prefixSize || knownEvaluated.getOrNull(it - prefixSize) != true)
         }.map { ArgumentLayout.offset(root.inputLayout, it) + root.entryArgumentOffset }.toIntArray()
     } ?: intArrayOf()

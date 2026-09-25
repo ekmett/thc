@@ -20,12 +20,13 @@ internal fun requireVoidCarrier(value: Any?) {
     if (value !== Unit) fault("Invalid zero-width scalar carrier")
 }
 
-/** Typed aggregate result storage; logical tuple/sum identity is independent of physical fields. */
+/** Typed result storage; logical aggregate/vector identity is independent of physical fields. */
 internal class TupleShape(val proof: CoreRepresentation, val language: Language) {
-    init { if (!proof.isAggregate) fault("Aggregate result shape requires a logical aggregate proof") }
+    init { if (!proof.isTypedTransport) fault("Typed result shape requires an aggregate or vector proof") }
     @field:CompilationFinal(dimensions = 1) val components = (proof.components ?: emptyList()).toTypedArray()
     @field:CompilationFinal(dimensions = 1) val leaves = (if (proof.isSum) SumShape.storage(proof) else flatten(proof)).toTypedArray()
-    val layout = language.handoffLayouts.intern(leaves.map { it.primReps!!.single() })
+    val layout = language.handoffLayouts.intern(if (proof.isSum) leaves.map { it.primReps!!.single() }
+        else VectorLayout.storageReps(proof))
     @field:CompilationFinal(dimensions = 1) val offsets = IntArray(components.size).also { offsets ->
         var next = 0
         components.forEachIndexed { index, component -> offsets[index] = next; next += flatten(component).size }
@@ -82,6 +83,10 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
     fun inlineResult(): Boolean = CompilerDirectives.inCompiledCode() && !CompilerDirectives.inCompilationRoot()
     companion object {
         fun flatten(proof: CoreRepresentation): List<CoreRepresentation> = proof.components?.flatMap(::flatten)
+            ?: if (proof.isVector) List(proof.vector!!.lanes) { VectorLayout.laneProof(proof.vector) }
+            else if (proof.kind == CoreKind.VOID) emptyList() else listOf(proof)
+        /** Logical GHC fields keep VecRep atomic even though its transport has multiple lanes. */
+        fun logicalLeaves(proof: CoreRepresentation): List<CoreRepresentation> = proof.components?.flatMap(::logicalLeaves)
             ?: if (proof.kind == CoreKind.VOID) emptyList() else listOf(proof)
         fun compatible(left: CoreRepresentation, right: CoreRepresentation): Boolean = signature(left) == signature(right)
         /** Canonical lowering-time key for call layouts. Known PrimRep names do
@@ -89,12 +94,13 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
          * never a language instance, guest payload, node, or storage carrier. */
         fun compatibilityKey(proof: CoreRepresentation): String = signature(proof).toString().intern()
         fun requireCompatible(expected: CoreRepresentation, actual: CoreRepresentation, component: Boolean = false) {
-            if (actual.present && (component || expected.isAggregate || actual.isAggregate) && !compatible(expected, actual))
+            if (actual.present && (component || expected.isTypedTransport || actual.isTypedTransport) && !compatible(expected, actual))
                 throw RuntimeFault("Conflicting logical tuple representation proofs")
         }
         private fun signature(proof: CoreRepresentation): Any = when {
             proof.components != null -> listOf("tuple", proof.components.map(::signature))
             proof.alternatives != null -> listOf("sum", proof.alternatives.map(::signature), proof.primReps, proof.tagSlot, proof.alternativeSlots)
+            proof.isVector -> listOf("vector", proof.vector, proof.primReps)
             else -> listOf("scalar", proof.primReps ?: listOf("?"))
         }
         fun validate(proof: CoreRepresentation) {
@@ -108,7 +114,7 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
                 throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple has unsupported fields")
             if (fields.any { it.kind == CoreKind.ADDRESS && !it.evaluated })
                 throw UnsupportedCore("Unsupported Core aggregate representation: AddrRep tuple field needs an evaluated carrier")
-            val reps = fields.map { it.primReps!!.single() }
+            val reps = logicalLeaves(proof).map { it.primReps!!.single() }
             if (proof.primReps != reps) throw RuntimeFault("Tuple components disagree with primitive representations")
         }
     }
@@ -358,7 +364,7 @@ internal class TupleConstruct(private val shape: TupleShape, @field:Children pri
         for (index in fields.indices) {
             val component = shape.components[index]
             val target = offset + shape.offsets[index]
-            if (component.isTuple) fields[index].executeTuple(frame, slots, target)
+            if (component.isTuple || component.isVector) fields[index].executeTuple(frame, slots, target)
             else if (component.isLong) FrameAccess.writeLong(frame, slots[target], fields[index].executeRequiredLong(frame))
             else if (component.isFloat) FrameAccess.writeFloat(frame, slots[target], fields[index].executeRequiredFloat(frame))
             else if (component.isDouble) FrameAccess.writeDouble(frame, slots[target], fields[index].executeRequiredDouble(frame))
@@ -370,15 +376,31 @@ internal class TupleConstruct(private val shape: TupleShape, @field:Children pri
     }
 }
 internal class TupleApplication(private val language: Language, private val shape: TupleShape,
-    function: Expr, @field:Children private var arguments: Array<Expr>, private val tail: Boolean, private val metrics: Metrics) : Expr() {
+    function: Expr, @field:Children private var arguments: Array<Expr>, private val tail: Boolean, private val metrics: Metrics,
+    @field:CompilationFinal(dimensions = 1) private val vectorSlots: IntArray? = null) : Expr() {
     @Child private var function = Evaluate(function, metrics)
     private val inputLayout = ArgumentLayout.fromProofs(arguments.map { it.representation })
     @Child @Volatile private var dispatch: TupleDispatch? = null
     @field:CompilationFinal(dimensions = 1) private var destinationSlots: IntArray? = null
     @CompilationFinal private var destinationOffset = -1
-    init { representation = shape.proof.copy(evaluated = true) }
-    override fun execute(frame: VirtualFrame): Nothing = fault("Tuple value requires a destination")
-    @ExplodeLoop override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+    private val vector = shape.proof.takeIf(CoreRepresentation::isVector)?.let(::VectorLayout)
+    init {
+        require(vector == null || vectorSlots?.size == vector.lanes)
+        require(inputLayout?.requiresTyped != true)
+        representation = shape.proof.copy(evaluated = true)
+    }
+    override fun execute(frame: VirtualFrame): Any {
+        val vector = vector ?: fault("Tuple value requires a destination")
+        executeInto(frame, vectorSlots!!, 0)
+        return vector.read(frame, vectorSlots, 0)
+    }
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        if (vector == null) return executeInto(frame, slots, offset)
+        executeInto(frame, vectorSlots!!, 0)
+        vector.copy(frame, vectorSlots, 0, slots, offset)
+        return null
+    }
+    @ExplodeLoop private fun executeInto(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val function = this.function.executeRequiredClosure(frame)
         val values = arrayOfNulls<Any>(ArgumentLayout.width(inputLayout, arguments.size))
         for (index in arguments.indices) {
