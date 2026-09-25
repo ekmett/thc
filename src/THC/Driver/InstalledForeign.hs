@@ -134,6 +134,7 @@ prepareForeignInterfaces producer cache source context registrations = do
         check (after == before) "GHC source/configuration/interfaces changed during annotation acquisition"
         pure selected
     inputs config unit = do
+      _ <- verifyUsageFiles (recipeRoot config) (recipeSourceFiles config)
       forM_ (recipeUsageFiles config) $ \(_, original) -> do
         _ <- verifyUsageFiles (recipeRoot config) original
         pure ()
@@ -162,6 +163,7 @@ prepareForeignInterfaces producer cache source context registrations = do
 data Recipe = Recipe { recipeRoot :: FilePath, recipeArguments :: [String]
                      , recipeFiles :: IO [FilePath], recipeIdentity :: Value
                      , recipeUsageFiles :: [(String, [(FilePath, String)])]
+                     , recipeSourceFiles :: [(FilePath, String)]
                      , recipeVersionHeaders :: (FilePath, FilePath)
                      , recipeProducerLibraries :: [FilePath] }
 
@@ -213,7 +215,7 @@ configuredRecipe producer context unit root = do
                       built </> "include", packageRoot </> "include"]
       roots = [built, autogen, src]
       macros = autogen </> "cabal_macros.h"
-  usageFiles <- forM [boundModule, posixModule] $ \name -> do
+  originalInputs <- forM [boundModule, posixModule] $ \name -> do
     let original = built </> modulePath name <.> "dyn_hi"
         sourceFile = src </> modulePath name <.> "hs"
     description <- command (foreignGhc producer) ["--show-iface", original] Nothing
@@ -227,8 +229,10 @@ configuredRecipe producer context unit root = do
       (if name == posixModule then [built </> "include/HsBaseConfig.h", stage </> "rts/build/include/ghcplatform.h"] else [])
     check (all (`elem` map fst verified) required)
       ("original interface lacks required CPP dependency evidence: " ++ name)
-    pure (name, verified)
-  let baseFiles = [configured </> "setup-config", packageRoot </> "ghc-internal.cabal", macros,
+    pure (name, (sourceFile, digest), verified)
+  let usageFiles = [(name, files) | (name, _, files) <- originalInputs]
+      sourceFiles = [file | (_, file, _) <- originalInputs]
+      baseFiles = [configured </> "setup-config", packageRoot </> "ghc-internal.cabal", macros,
                    root </> "hadrian/cfg/system.config", stage </> "lib/settings", installedLibdir context </> "settings",
                    src </> modulePath boundModule <.> "hs", src </> modulePath posixModule <.> "hs",
                    foreignPluginLibrary producer, foreignRegisteredLibrary producer, installedHelper context] ++
@@ -287,9 +291,10 @@ configuredRecipe producer context unit root = do
   let identity = object
         ["root" .= root, "ghc" .= foreignGhc producer, "ghcInfo" .= infoOutput,
          "arguments" .= args, "pluginUnit" .= foreignPluginUnit producer, "pluginRegistration" .= pluginDescription,
-         "originalUsageFiles" .= usageFiles, "versionHeaders" .= (originalVersion, selectedVersion),
+         "originalUsageFiles" .= usageFiles, "originalSourceFiles" .= sourceFiles,
+         "versionHeaders" .= (originalVersion, selectedVersion),
          "producerLibraries" .= producerLibraries]
-  pure (Recipe root args allFiles identity usageFiles (originalVersion, selectedVersion) producerLibraries)
+  pure (Recipe root args allFiles identity usageFiles sourceFiles (originalVersion, selectedVersion) producerLibraries)
 
 compileOriginal :: ForeignCompiler -> Recipe -> FilePath -> String -> IO ()
 compileOriginal producer recipe destination name = do
@@ -434,12 +439,14 @@ retainedUsageFiles description = do
 -- Relative UsageFile paths are relative to the original Hadrian invocation
 -- directory, which is the explicitly supplied tree root. Absolute system
 -- headers remain absolute; they too must match the original GHC fingerprint.
+-- The same observer rechecks the retained target-source fingerprint pairs,
+-- including after the initial recipe validation and before every publication.
 verifyUsageFiles :: FilePath -> [(FilePath, String)] -> IO [(FilePath, String)]
 verifyUsageFiles root records = do
   verified <- forM records $ \(path, expected) -> do
     actualPath <- canonicalizePath (if isAbsolute path then path else root </> path)
     actual <- show <$> getFileHash actualPath
-    check (actual == expected) ("original CPP input differs from retained UsageFile: " ++ actualPath)
+    check (actual == expected) ("original source/CPP input differs from retained fingerprint: " ++ actualPath)
     pure (actualPath, expected)
   pure (sort (nub verified))
 

@@ -147,6 +147,18 @@ viewTests env = TestLabel "acquisition view preserves native registration" $ Tes
     mutated <- tryIOError (verifyUsageFiles directory retained)
     assertBool "modified original header is rejected, not granted a new cache key"
       (case mutated of Left _ -> True; Right _ -> False)
+    -- A target source can change after configuredRecipe's initial source-hash
+    -- check but before the first cache snapshot. Repeating the retained source
+    -- association must reject it even if the new bytes then remain stable.
+    let source = directory </> "Original.hs"
+    writeFile source "module Original where\nvalue = 1\n"
+    sourceDigest <- show <$> getFileHash source
+    let sourceProof = [(source, sourceDigest)]
+    _ <- verifyUsageFiles directory sourceProof
+    writeFile source "module Original where\nvalue = 2\n"
+    sourceMutated <- tryIOError (verifyUsageFiles directory sourceProof)
+    assertBool "stable source change after initial matching cannot become a new valid cache snapshot"
+      (case sourceMutated of Left _ -> True; Right _ -> False)
   where
     temporary = do
       (path, handle) <- openTempFile (scratch env) "foreign-view-"
