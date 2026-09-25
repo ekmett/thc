@@ -61,16 +61,16 @@ class LibdwUnavailableTest {
         assertEquals(0, handoff.arguments.retainedReferences()); assertEquals(0, handoff.results.retainedReferences())
     }
 
-    private fun originalPoolLabel(): List<Any?> {
+    private fun originalLabel(symbol: String): List<Any?> {
         val root = File(System.getProperty("thc.projectRoot"))
         val source = Json.parse(File(root, "build/libdw-unavailable/foreign-labels.json").readText())
         fun find(value: Any?): List<Any?>? = when (value) {
-            is List<*> -> if (value.take(3) == listOf("lit", "function-addr", "libdwPoolRelease"))
+            is List<*> -> if (value.take(3) == listOf("lit", "function-addr", symbol))
                 value as List<Any?> else value.firstNotNullOfOrNull(::find)
             is Map<*, *> -> value.values.firstNotNullOfOrNull(::find)
             else -> null
         }
-        return find(source) ?: error("Missing genuine GHC libdwPoolRelease label")
+        return find(source) ?: error("Missing genuine GHC $symbol label")
     }
 
     private fun cFinalizerConsumer(label: List<Any?>): Map<String, Any?> {
@@ -104,7 +104,7 @@ class LibdwUnavailableTest {
     }
 
     @Test fun actualGhcFunctionLabelAndTypedWeakRegistrationCompileOnBothBackends() {
-        val module = cFinalizerConsumer(originalPoolLabel())
+        val module = cFinalizerConsumer(originalLabel("libdwPoolRelease"))
         for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").allowNativeAccess(true)
             .allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
             .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build().use { context ->
@@ -121,6 +121,55 @@ class LibdwUnavailableTest {
                         assertEquals(0L, Language.currentState().weaks.finalize(weak).flag)
                         released(language)
                         return added
+                    }
+                    repeat(3) { call() }
+                    target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                    valid(target)
+                    val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                    assertEquals(1L, call())
+                    assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                    valid(target)
+                } finally { context.leave() }
+            }
+    }
+
+    @Test fun originalFreeLabelFinalizesOnlyOwnedMallocBasesOnBothBackends() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("os.name") == "Linux" &&
+            System.getProperty("os.arch") in setOf("amd64", "x86_64"))
+        val module = cFinalizerConsumer(originalLabel("free"))
+        val proof = CoreRepresentation(CoreKind.ADDRESS, evaluated = true, present = true, primReps = listOf("AddrRep"))
+        for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").allowNativeAccess(true)
+            .allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
+            .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build().use { context ->
+                context.initialize("thc"); context.enter()
+                try {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val program = load(language, backend, module)
+                    val target = program.entryTarget("attach")
+                    val state = Language.currentState()
+                    val function = CFinalizerLabels.fromCore("free", proof)
+                    assertTrue(function.sameLocation(CFinalizerLabels.fromCore("free", proof)))
+                    assertThrows(RuntimeFault::class.java) { function.toNativeBits() }
+                    fun call(): Long {
+                        val base = state.nativeAllocations.malloc(16)
+                        val weak = state.weaks.make(Any(), Any(), null)
+                        assertThrows(RuntimeFault::class.java) { state.weaks.addCFinalizer(function,
+                            base.plus(1), 0, weak, state.cbits()) }
+                        assertThrows(RuntimeFault::class.java) { state.weaks.addCFinalizer(function,
+                            ManagedAddress.fromAllocation(ManagedAllocation.mutable(16, 8)), 0, weak, state.cbits()) }
+                        val borrow = base.nativeAllocation()!!.borrow()
+                        try {
+                            assertThrows(RuntimeFault::class.java) { state.weaks.addCFinalizer(function,
+                                base, 0, weak, state.cbits()) }
+                        } finally { borrow.close() }
+                        assertEquals(1L, Calls.target(target, arrayOf(0L, base, weak)) as Long)
+                        assertEquals(1, state.nativeAllocations.liveCount())
+                        assertEquals(0L, state.weaks.finalize(weak).flag)
+                        assertEquals(0, state.nativeAllocations.liveCount())
+                        assertThrows(RuntimeFault::class.java) { base.readWord8(0) }
+                        assertEquals(0L, state.weaks.finalize(weak).flag)
+                        released(language)
+                        return 1L
                     }
                     repeat(3) { call() }
                     target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
@@ -233,7 +282,7 @@ class LibdwUnavailableTest {
         val oracle = Json.parse(File(root, "$prefix/oracle.json").readText()) as Map<String, Any?>
         assertEquals(false, oracle["useLibdw"])
         assertEquals(List(8) { true }, oracle["observations"])
-        assertEquals(List(14) { true }, oracle["cFinalizerObservations"])
+        assertEquals(List(18) { true }, oracle["cFinalizerObservations"])
         val labels = ArrayList<Pair<String, String>>()
         fun walk(value: Any?) {
             when (value) {
@@ -251,7 +300,8 @@ class LibdwUnavailableTest {
         }
         walk(Json.parse(File(root, "$prefix/foreign-labels.json").readText()))
         assertEquals(listOf("data-addr" to "enabled_capabilities", "function-addr" to "backtraceFree",
-            "function-addr" to "libdwPoolRelease"), labels.distinct().sortedWith(compareBy({ it.first }, { it.second })))
+            "function-addr" to "free", "function-addr" to "libdwPoolRelease"),
+            labels.distinct().sortedWith(compareBy({ it.first }, { it.second })))
     }
 
     @Test fun declarationAndStoredOperandProofsCannotBeForged() {

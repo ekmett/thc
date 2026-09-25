@@ -2415,12 +2415,12 @@ class ExplicitWeakContractTest(unittest.TestCase):
                 self.assertIn('primitive-representation', {issue['code'] for issue in report['issues']})
 
     def test_only_source_certified_function_labels_are_admitted(self):
-        for symbol in ('libdwPoolRelease', 'backtraceFree', 'enabled_capabilities', 'notACallback'):
+        for symbol in ('libdwPoolRelease', 'backtraceFree', 'free', 'enabled_capabilities', 'notACallback'):
             module = self.fixture('addCFinalizerToWeak#')
             self.call(module)[2][0] = ['lit', 'function-addr', symbol,
                 dict(rep=dict(kind='address', primReps=['AddrRep'], evaluated=True))]
             report = run_tuple(module)
-            self.assertEqual(symbol in ('libdwPoolRelease', 'backtraceFree'), report['accepted'], (symbol, report))
+            self.assertEqual(symbol in ('libdwPoolRelease', 'backtraceFree', 'free'), report['accepted'], (symbol, report))
         module = self.fixture('addCFinalizerToWeak#')
         self.call(module)[2][0] = ['lit', 'data-addr', 'enabled_capabilities',
             dict(rep=dict(kind='address', primReps=['AddrRep'], evaluated=True))]
