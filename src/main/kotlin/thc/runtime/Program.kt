@@ -208,13 +208,20 @@ internal class Metrics(val enabled: Boolean) {
 internal abstract class Expr : Node() {
     // Assigned during lowering, before adoption. Evaluatedness describes our stored value.
     @CompilationFinal var representation: CoreRepresentation = CoreRepresentation.UNKNOWN
+        set(value) {
+            field = value
+            vectorLayout = if (value.isVector) VectorLayout(value) else null
+        }
+    @CompilationFinal private var vectorLayout: VectorLayout? = null
+    protected val typedVectorLayout: VectorLayout? get() = vectorLayout
     @CompilationFinal var coreSourceLocation: CoreSourceLocation? = null
     fun located(location: CoreSourceLocation?): Expr { coreSourceLocation = location; return this }
     override fun getSourceSection(): SourceSection? = coreSourceLocation?.section ?: parent?.encapsulatingSourceSection
     fun proven(proof: CoreRepresentation): Expr { representation = proof; return this }
     open fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int = 0): Any? {
-        if (representation.isVector) {
-            VectorLayout(representation).write(frame, slots, offset, execute(frame))
+        val layout = vectorLayout
+        if (layout != null) {
+            layout.write(frame, slots, offset, execute(frame))
             return null
         }
         fault("Expression does not produce a tuple")

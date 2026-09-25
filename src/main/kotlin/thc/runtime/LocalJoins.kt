@@ -29,6 +29,8 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
     init { representation = target.result.copy(evaluated = true) }
     @field:CompilationFinal(dimensions = 1)
     private val referenceKinds = target.proofs.map { if (it.evaluated) it.kind else CoreKind.UNKNOWN }.toTypedArray()
+    @field:CompilationFinal(dimensions = 1)
+    private val vectorLayouts = target.proofs.map { if (it.isVector) VectorLayout(it) else null }.toTypedArray()
     // The logical component list is a regular immutable-by-contract List, not a PE constant.
     // Decide emptiness while lowering, so invalid scalar paths for slot -1 never enter the graph.
     @field:CompilationFinal(dimensions = 1) private val emptyInputs = target.proofs.map { it.isEmptyTuple }.toBooleanArray()
@@ -37,7 +39,7 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
         // All operands are read before any formal is overwritten, including recursive swaps.
         for (i in arguments.indices) {
             if (emptyInputs[i]) arguments[i].executeTuple(frame, emptySlots, 0)
-            else if (target.proofs[i].isVector) arguments[i].executeTuple(frame,
+            else if (vectorLayouts[i] != null) arguments[i].executeTuple(frame,
                 vectorTemporaries[i] ?: fault("Missing vector join temporaries"), 0)
             else if (target.proofs[i].isLong) FrameAccess.writeLong(frame, temporaries[i], arguments[i].executeRequiredLong(frame))
             else if (target.proofs[i].isFloat) FrameAccess.writeFloat(frame, temporaries[i], arguments[i].executeRequiredFloat(frame))
@@ -49,7 +51,8 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
         }
         for (i in arguments.indices) {
             if (!emptyInputs[i]) {
-                if (target.proofs[i].isVector) VectorLayout(target.proofs[i]).copy(frame,
+                val vectorLayout = vectorLayouts[i]
+                if (vectorLayout != null) vectorLayout.copy(frame,
                     vectorTemporaries[i] ?: fault("Missing vector join temporaries"), 0,
                     target.vectorSlots[i] ?: fault("Missing vector join formals"), 0)
                 else if (target.proofs[i].isLong) FrameAccess.writeLong(frame, target.slots[i], frame.getLong(temporaries[i]))
@@ -148,9 +151,11 @@ internal class LocalJoinRegion(group: Any, private val selector: Int, private va
             loop!!.execute(frame)
         }
     }
-    private fun resultValue(frame: VirtualFrame): Any? =
-        if (representation.isVector) VectorLayout(representation).read(frame, tupleSlots, 0)
+    private fun resultValue(frame: VirtualFrame): Any? {
+        val layout = typedVectorLayout
+        return if (layout != null) layout.read(frame, tupleSlots, 0)
         else if (representation.isEvaluatedReference) frame.getObject(result) else FrameAccess.read(frame, result)
+    }
     override fun execute(frame: VirtualFrame): Any? { run(frame); return resultValue(frame) }
     override fun executeLong(frame: VirtualFrame): Long {
         run(frame)
