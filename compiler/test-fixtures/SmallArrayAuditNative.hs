@@ -5,10 +5,11 @@
 module Main where
 
 import GHC.Exts (Int(I#))
-import SmallArrayAudit (smallComposite)
+import SmallArrayAudit (smallComposite, safeSliceComposite)
 
 main :: IO ()
 main = getContents >>= mapM_ emit . lines
   where
     emit text = case read text of
-      I# input -> putStrLn (text ++ "\t" ++ show (I# (smallComposite input)))
+      I# input -> putStrLn (text ++ "\t" ++ show (I# (smallComposite input)) ++
+        "\t" ++ show (I# (safeSliceComposite input)))

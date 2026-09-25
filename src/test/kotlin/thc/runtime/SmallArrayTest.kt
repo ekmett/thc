@@ -34,9 +34,9 @@ class SmallArrayTest {
     }
     private fun valid(target: RootCallTarget) =
         assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
-    private fun call(program: ExecutableProgram, input: Long): Long =
+    private fun call(program: ExecutableProgram, entry: String, input: Long): Long =
         Calls.target(program.hostEntryTarget(1),
-            arrayOf(program.entryValue("smallComposite"), arrayOf(input))) as Long
+            arrayOf(program.entryValue(entry), arrayOf(input))) as Long
 
     private fun applications(value: Any?): List<List<Any?>> = when (value) {
         is List<*> -> (if (value.firstOrNull() == "app") listOf(value as List<Any?>) else emptyList()) +
@@ -57,18 +57,27 @@ class SmallArrayTest {
         val rows = File(root, "build/small-arrays/oracle.tsv").readLines().map { it.split('\t') }
         assertEquals((manifest["nativeRows"] as Number).toInt(), rows.size)
         val cases = rows.map { row ->
-            assertEquals(2, row.size)
-            row[0].toLong() to row[1].toLong()
+            assertEquals(3, row.size)
+            Triple(row[0].toLong(), row[1].toLong(), row[2].toLong())
         }
-        cases.forEach { (x, expected) -> assertEquals(68 * x + 702, expected, "native model $x") }
+        cases.forEach { (x, existing, safe) ->
+            assertEquals(68 * x + 702, existing, "native existing model $x")
+            assertEquals(17 * x + 224, safe, "native safe-slice model $x")
+        }
         val names = SmallArrayOp.entries.map { it.primitive }.toSet()
         for ((stage, path) in manifest["stages"] as Map<String, String>) {
             val auditPath = (manifest["audits"] as Map<String, String>).getValue(stage)
             assertEquals(true, (Json.parse(File(root, auditPath).readText()) as Map<*, *>)["accepted"])
-            val linked = CoreModules.reachable(module(path), "smallComposite")
-            val apps = applications(linked).filter { (it[1] as? List<*>)?.firstOrNull() == "prim" }
+            val entries = listOf("smallComposite", manifest["safeEntry"] as String)
+            val linked = entries.associateWith { CoreModules.reachable(module(path), it) }
+            val apps = linked.values.flatMap(::applications).filter { (it[1] as? List<*>)?.firstOrNull() == "prim" }
             val direct = apps.map { (it[1] as List<*>)[1] as String }
             assertTrue(direct.containsAll(names), "$stage missing SmallArray primitive")
+            val safeApps = applications(linked.getValue("safeSliceComposite"))
+                .filter { (it[1] as? List<*>)?.firstOrNull() == "prim" }
+                .map { (it[1] as List<*>)[1] as String }
+            assertTrue(safeApps.containsAll(listOf("freezeSmallArray#", "thawSmallArray#")),
+                "$stage safe-slice root lost its copying operations")
             for (app in apps.filter { (it[1] as List<*>)[1] in names }) {
                 val name = (app[1] as List<*>)[1] as String
                 val operation = SmallArrayOp.named(name)!!
@@ -85,18 +94,24 @@ class SmallArrayTest {
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                    val guest = program(language, linked, backend)
-                    for ((x, expected) in cases) assertEquals(expected, call(guest, x), "$stage/$backend/interpreted/$x")
-                    val target = guest.entryTarget("smallComposite")
-                    compile(target)
-                    for ((x, expected) in cases) {
-                        val before = (guest.diagnostics().getValue("compiledEntries") as Number).toLong()
-                        assertEquals(expected, call(guest, x), "$stage/$backend/compiled/$x")
-                        assertTrue((guest.diagnostics().getValue("compiledEntries") as Number).toLong() > before,
-                            "$stage/$backend/$x executed compiled guest code")
-                        valid(target)
+                    for (entry in entries) {
+                        val guest = program(language, linked.getValue(entry), backend)
+                        for ((x, existing, safe) in cases) {
+                            val expected = if (entry == "smallComposite") existing else safe
+                            assertEquals(expected, call(guest, entry, x), "$stage/$backend/$entry/interpreted/$x")
+                        }
+                        val target = guest.entryTarget(entry)
+                        compile(target)
+                        for ((x, existing, safe) in cases) {
+                            val expected = if (entry == "smallComposite") existing else safe
+                            val before = (guest.diagnostics().getValue("compiledEntries") as Number).toLong()
+                            assertEquals(expected, call(guest, entry, x), "$stage/$backend/$entry/compiled/$x")
+                            assertTrue((guest.diagnostics().getValue("compiledEntries") as Number).toLong() > before,
+                                "$stage/$backend/$entry/$x executed compiled guest code")
+                            valid(target)
+                        }
+                        assertEquals(0L, (guest.diagnostics().getValue("unsupportedTraps") as Number).toLong())
                     }
-                    assertEquals(0L, (guest.diagnostics().getValue("unsupportedTraps") as Number).toLong())
                     assertEquals(0, language.handoffState.get().results.depth)
                 } finally { context.leave() }
             }
@@ -168,5 +183,33 @@ class SmallArrayTest {
             assertEquals(listOf("source", "from", "destination", "to", "count", "state"), events)
             assertSame(original, ManagedSmallArray.read(destination, 0))
         }
+    }
+
+    @Test fun safeSlicesKeepLazyElementsButDoNotShareMutableStorage() {
+        var entered = 0
+        val bottom = Thunk(object : RootNode(null) {
+            override fun execute(frame: VirtualFrame): Any? {
+                entered++
+                throw RuntimeFault("Safe slice forced a lifted element")
+            }
+        }.callTarget, null)
+        val source = ManagedSmallArray.allocate(3, bottom)
+        val original = Any()
+        val changed = Any()
+        ManagedSmallArray.write(source, 1, original)
+        val frozen = ManagedSmallArray.slice(source, 1, 2)
+        assertNotSame(source, frozen)
+        assertSame(original, ManagedSmallArray.read(frozen, 0))
+        assertSame(bottom, ManagedSmallArray.read(frozen, 1))
+        ManagedSmallArray.write(source, 1, changed)
+        assertSame(original, ManagedSmallArray.read(frozen, 0))
+        val thawed = ManagedSmallArray.slice(frozen, 0, 2)
+        assertNotSame(frozen, thawed)
+        ManagedSmallArray.write(thawed, 0, changed)
+        assertSame(original, ManagedSmallArray.read(frozen, 0))
+        assertSame(changed, ManagedSmallArray.read(thawed, 0))
+        assertEquals(0L, ManagedSmallArray.size(ManagedSmallArray.slice(source, 0, 0)))
+        assertEquals(0L, ManagedSmallArray.size(ManagedSmallArray.slice(frozen, 2, 0)))
+        assertEquals(0, entered)
     }
 }

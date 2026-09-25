@@ -705,6 +705,8 @@
     "cloneSmallMutableArray#": 4,
     "copySmallArray#": 6,
     "copySmallMutableArray#": 6,
+    "freezeSmallArray#": 4,
+    "thawSmallArray#": 4,
     "unsafeThawSmallArray#": 2,
     "cloneArray#": 3,
     "freezeArray#": 4,
@@ -3335,6 +3337,14 @@
     "copySmallMutableArray#": {
       "arguments": ["array", "int", "array", "int", "int", "state"],
       "result": "state"
+    },
+    "freezeSmallArray#": {
+      "arguments": ["array", "int", "int", "state"],
+      "result": ["state", "array"]
+    },
+    "thawSmallArray#": {
+      "arguments": ["array", "int", "int", "state"],
+      "result": ["state", "array"]
     },
     "unsafeThawSmallArray#": {
       "arguments": ["array", "state"],
