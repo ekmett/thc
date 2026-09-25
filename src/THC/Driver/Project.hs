@@ -219,14 +219,25 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
     require (Map.notMember "ghc-internal" byId) "Cabal plan duplicates the wired ghc-internal unit"
     (:[]) <$> wiredGhcInternal context thcRoot
   let manifest = output </> "packages.json"
-      entry = unitId selected ++ ":Main.main"
+      -- Complete installed Core provides GHC's generated :Main wrapper and
+      -- original Handle shutdown. Pinned source remains the explicit limited
+      -- raw-IO provider used by the stock-GHC driver controls.
+      lifecycle = installedPolicy == "required"
+      entry = if lifecycle then "main::Main.main" else unitId selected ++ ":Main.main"
+      shutdown = "ghc-internal:GHC.Internal.TopHandler.flushStdHandles"
       audit = output </> "audit.json"
   atomicJson manifest (object ["format" .= ("thc-core-packages" :: String),
                                "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
                                "units" .= (described ++ wired)])
-  runCommand True "python3" [thcRoot </> "scripts/audit-core.py", "--package-manifest", manifest,
-                             "--entry", entry, "--io-main", "--output", audit] thcRoot
-  runCommand False runtime ["--run-io", '@' : manifest, entry] thcRoot
+  runCommand True "python3" ([thcRoot </> "scripts/audit-core.py", "--package-manifest", manifest,
+                              "--entry", entry] ++
+                             (if lifecycle then ["--entry", shutdown] else []) ++
+                             ["--io-main", "--output", audit]) thcRoot
+  -- Full-Core main and shutdown share one program and its Handle CAFs.
+  -- Execute relative paths from the Cabal project just as the native binary does.
+  runCommand False runtime (if lifecycle
+      then ["--run-executable", '@' : manifest, entry, shutdown]
+      else ["--run-io", '@' : manifest, entry]) project
 
 prepareInterfaceHelper :: ExportContext -> FilePath -> IO InstalledContext
 prepareInterfaceHelper context root = do
