@@ -453,18 +453,6 @@
       "junit": ["thc.runtime.SimdCallNativeTest"],
       "python": []
     },
-    "src/THC/Driver/Cache.hs": {
-      "junit": ["thc.runtime.OriginalStackDecoderTest"], "python": []
-    },
-    "src/THC/Driver/ForeignBitcode.hs": {
-      "junit": ["thc.runtime.OriginalStackDecoderTest"], "python": []
-    },
-    "src/THC/Driver/GhcProxy.hs": {
-      "junit": ["thc.runtime.OriginalStackDecoderTest"], "python": []
-    },
-    "src/THC/Driver/Zip.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackDecoderTest"], "python": []
-    },
     "compiler/test-fixtures/OriginalStackDecoder.hs": {
       "junit": ["thc.runtime.OriginalStackDecoderTest"], "python": []
     },
