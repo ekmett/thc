@@ -186,6 +186,13 @@ class DataLayout(
         return fields[index].read(value)
     }
 
+    /** The RTS selector in atomicModifyMutVar2# requires a lifted first field. */
+    internal fun readFirstLifted(value: DataValue): Any? {
+        if (fields.firstOrNull()?.isLifted != true)
+            fault("atomicModifyMutVar2# requires a lifted first record field")
+        return read(value, 0)
+    }
+
     fun isLong(index: Int): Boolean {
         if (index < 0 || index >= arity) fault("Invalid constructor field index")
         return fields[index].isLong()
@@ -235,6 +242,7 @@ class DataLayout(
     }
 
     private class Field(index: Int, representation: String, referenceType: Class<*>?) {
+        val isLifted = representation == "LiftedRep"
         private val kind = when (representation) {
             "IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep",
             "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep" -> LONG

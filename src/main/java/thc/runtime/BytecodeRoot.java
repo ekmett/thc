@@ -2079,6 +2079,28 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                     cell.exchange(replacement));
         }
     }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "oldDestination")
+    @ConstantOperand(type = LocalAccessor.class, name = "resultDestination")
+    @ConstantOperand(type = Language.class, name = "language")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    @ConstantOperand(type = boolean.class, name = "async")
+    public static final class ModifyMutVar2 {
+        protected static MutVarModifySite create(Language language, Metrics metrics, boolean async) {
+            return MutVarModifySite.create(language, metrics, async);
+        }
+        @Specialization public static void modify(VirtualFrame frame, LocalAccessor oldDestination,
+                LocalAccessor resultDestination, Language language, Metrics metrics, boolean async,
+                Object reference, Object function, Object state, @Bind("$node") Node node,
+                @Cached(value = "create(language, metrics, async)", neverDefault = true) MutVarModifySite site) {
+            ManagedMutVar cell = ManagedMutVar.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            ModifiedMutVar modified = cell.modify(function, site);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            oldDestination.setObject(bytecode, frame, modified.getOld());
+            resultDestination.setObject(bytecode, frame, modified.getResult());
+        }
+    }
     @Operation public static final class WriteMutVar {
         @Specialization public static Object write(Object reference, Object value, Object state) {
             ManagedMutVar cell = ManagedMutVar.require(reference);

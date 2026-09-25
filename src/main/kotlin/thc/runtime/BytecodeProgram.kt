@@ -1872,6 +1872,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         MutVarOp.NEW -> e.builder.beginNewMutVar(destination[0])
                         MutVarOp.READ -> e.builder.beginReadMutVar(destination[0])
                         MutVarOp.SWAP -> e.builder.beginSwapMutVar(destination[0])
+                        MutVarOp.MODIFY2 -> e.builder.beginModifyMutVar2(destination[0], destination[1],
+                            language, metrics, enableAsync)
                         else -> error("Not a tuple MutVar operation")
                     }
                     operands.forEach { it.emit(e) }
@@ -1879,6 +1881,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         MutVarOp.NEW -> e.builder.endNewMutVar()
                         MutVarOp.READ -> e.builder.endReadMutVar()
                         MutVarOp.SWAP -> e.builder.endSwapMutVar()
+                        MutVarOp.MODIFY2 -> e.builder.endModifyMutVar2()
                         else -> error("Not a tuple MutVar operation")
                     }
                 } else ProvenExpression(Expression { e ->

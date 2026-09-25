@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 330 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 852 | No declared lowering. |
+| Partial | 331 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 851 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -43,7 +43,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - shrinkMutableByteArray# changes the logical size of a THC-owned allocation in place, preserving frozen and pinned aliases while retaining backing capacity. Managed byte, scalar, vector, address and C-bitcode buffer accesses observe the shorter bound; partial truncation of a managed pointer cell is rejected. Host-injected raw byte arrays cannot be shrunk in place.
 - fetchAddIntArray# atomically returns the previous signed machine Int and writes the wrapped sum under the allocation monitor, with a full memory barrier. It requires a THC-owned mutable byte array and a contained machine-word element; raw host arrays and pointer-cell overlaps are rejected.
 - StablePtr# uses context-owned opaque AddrRep handles, with lazy referents and exact hs_free_stable_ptr. Live identity casts may be compared, but the handles have no byte storage, pointer arithmetic or ordering. Stable-pointer array and byte-memory index/read/write primops remain unsupported.
-- Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Aggregate captures, heap fields, ordinary let bindings and join captures remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums, vectors and unresolved leaves cannot appear in tuple inputs; exact evaluated AddrRep leaves use managed address references.
+- Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Local joins may read an enclosing tuple's existing typed frame slots; ordinary function captures, heap fields and ordinary let bindings remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums, vectors and unresolved leaves cannot appear in tuple inputs; exact evaluated AddrRep leaves use managed address references.
 - Binary unboxed sum results and immediate cases support exact machine Int/Word, Float, Double, known reference, void and tuple payloads. Nested sums, width-changing payload casts, vector/address or unknown leaves, sum inputs/captures/heap fields/local lets/joins/host results remain unsupported.
 
 ## Supported scalar forms
@@ -362,6 +362,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 
 - [ ] `addIntC#` — arity 2 — Exact tuple arithmetic
 - [ ] `addWordC#` — arity 2 — Exact tuple arithmetic
+- [ ] `atomicModifyMutVar2#` — arity 3 — Managed lazy reference cells
 - [ ] `atomicSwapMutVar#` — arity 3 — Managed lazy reference cells
 - [ ] `broadcastDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `broadcastDoubleX4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -715,7 +716,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `atomicCasWordAddr#` — arity 4
 - [ ] `atomicExchangeAddrAddr#` — arity 3
 - [ ] `atomicExchangeWordAddr#` — arity 3
-- [ ] `atomicModifyMutVar2#` — arity 3
 - [ ] `atomicModifyMutVar_#` — arity 3
 - [ ] `atomicReadIntArray#` — arity 3
 - [ ] `atomicReadWordAddr#` — arity 2

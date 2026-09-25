@@ -1234,6 +1234,10 @@ class Audit:
                             return kind == 'void' and reps == []
                         if role == 'mutvar':
                             return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
+                        if role == 'function':
+                            return kind == 'closure' and reps == ['BoxedRep (Just Lifted)']
+                        if role == 'lifted':
+                            return kind in ('object', 'data', 'closure') and reps == ['BoxedRep (Just Lifted)']
                         return kind in ('object', 'data', 'closure') and reps in (
                             ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)'])
                     actual = [self.expression_rep(argument) for argument in arguments]
@@ -1246,7 +1250,8 @@ class Audit:
                     if isinstance(result, list):
                         fields = proof.get('components') if isinstance(proof, dict) else None
                         valid = self.is_tuple(proof) and isinstance(fields, list) and len(fields) == len(result) and all(
-                            role_matches(rep, role) for rep, role in zip(fields, result)) and proof.get('primReps') == fields[1]['primReps']
+                            role_matches(rep, role) for rep, role in zip(fields, result)) and proof.get('primReps') == [
+                                item for field in fields[1:] for item in field.get('primReps', [])]
                     else:
                         valid = role_matches(proof, result)
                     if not valid:
