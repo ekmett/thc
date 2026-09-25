@@ -3358,6 +3358,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class GeneratedWord64X2Insert {
         @Specialization public static Word64X2 apply(Word64X2 vector, long value, long index) { return Word64X2.insert(vector, value, index); }
     }
+    @Operation public static final class GeneratedWord64X2Min {
+        @Specialization public static Word64X2 apply(Word64X2 left, Word64X2 right) { return Word64X2.min(left, right); }
+    }
+    @Operation public static final class GeneratedWord64X2Max {
+        @Specialization public static Word64X2 apply(Word64X2 left, Word64X2 right) { return Word64X2.max(left, right); }
+    }
     @Operation public static final class GeneratedWord32X8Pack {
         @Specialization public static Word32X8 apply(long lane0, long lane1, long lane2, long lane3, long lane4, long lane5, long lane6, long lane7) { return new Word32X8((int) lane0, (int) lane1, (int) lane2, (int) lane3, (int) lane4, (int) lane5, (int) lane6, (int) lane7); }
     }
@@ -3748,6 +3754,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class GeneratedWord64X4Insert {
         @Specialization public static Word64X4 apply(Word64X4 vector, long value, long index) { return Word64X4.insert(vector, value, index); }
     }
+    @Operation public static final class GeneratedWord64X4Min {
+        @Specialization public static Word64X4 apply(Word64X4 left, Word64X4 right) { return Word64X4.min(left, right); }
+    }
+    @Operation public static final class GeneratedWord64X4Max {
+        @Specialization public static Word64X4 apply(Word64X4 left, Word64X4 right) { return Word64X4.max(left, right); }
+    }
     @Operation public static final class GeneratedWord64X8Pack {
         @Specialization public static Word64X8 apply(long lane0, long lane1, long lane2, long lane3, long lane4, long lane5, long lane6, long lane7) { return new Word64X8(lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7); }
     }
@@ -3787,6 +3799,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class GeneratedWord64X8Insert {
         @Specialization public static Word64X8 apply(Word64X8 vector, long value, long index) { return Word64X8.insert(vector, value, index); }
+    }
+    @Operation public static final class GeneratedWord64X8Min {
+        @Specialization public static Word64X8 apply(Word64X8 left, Word64X8 right) { return Word64X8.min(left, right); }
+    }
+    @Operation public static final class GeneratedWord64X8Max {
+        @Specialization public static Word64X8 apply(Word64X8 left, Word64X8 right) { return Word64X8.max(left, right); }
     }
     @Operation public static final class GeneratedWord32X16Pack {
         @Specialization public static Word32X16 apply(long lane0, long lane1, long lane2, long lane3, long lane4, long lane5, long lane6, long lane7, long lane8, long lane9, long lane10, long lane11, long lane12, long lane13, long lane14, long lane15) { return new Word32X16((int) lane0, (int) lane1, (int) lane2, (int) lane3, (int) lane4, (int) lane5, (int) lane6, (int) lane7, (int) lane8, (int) lane9, (int) lane10, (int) lane11, (int) lane12, (int) lane13, (int) lane14, (int) lane15); }
