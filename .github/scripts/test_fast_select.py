@@ -733,7 +733,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
         self.assertEqual({"AddressIdentity", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArrays", "ManagedMutVars", "ManagedNativeAllocations", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
-                          "IntegerVectorPrimitives", "FloatingVectorPrimitives"},
+                          "IntegerVectorPrimitives", "FloatingVectorPrimitives", "CoreDataLabels"},
                          {Path(path).stem for path in self.families})
         for path, group in self.families.items():
             with self.subTest(path=path):

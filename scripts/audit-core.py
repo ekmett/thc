@@ -268,6 +268,8 @@ class Audit:
             return
         if kind == 'function-addr' and value not in self.cap.get('functionLabels', []):
             self.issue('unsupported-literal', owner, path, f'uncertified C function label {value}')
+        if kind == 'data-addr' and value not in self.cap.get('dataLabels', []):
+            self.issue('unsupported-literal', owner, path, f'unsupported C data label {value}')
         if kind == 'bignat':
             if not isinstance(value, str) or not value or any(c not in '0123456789' for c in value) or len(value) > 1 and value[0] == '0':
                 self.issue('invalid-literal-value', owner, path, 'bignat requires canonical nonnegative decimal')
@@ -463,7 +465,7 @@ class Audit:
                 return dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
             if expr[1] in narrow:
                 return dict(kind='long', primReps=[narrow[expr[1]]], evaluated=True)
-            if expr[1] in ('null-addr', 'function-addr'):
+            if expr[1] in ('null-addr', 'function-addr', 'data-addr'):
                 return dict(kind='address', primReps=['AddrRep'], evaluated=True)
             kind = {'float': 'float', 'double': 'double', 'string-bytes': 'address',
                     **dict.fromkeys(('int', 'word', 'char', 'int8', 'int16', 'int32', 'int64',
@@ -1017,12 +1019,15 @@ class Audit:
                     if (not isinstance(proof, dict) or proof.get('kind') != 'object' or
                             proof.get('primReps') != ['BoxedRep (Just Unlifted)'] or 'aggregate' in proof or is_vector(proof)):
                         self.issue('scalar-representation', owner, path + '/rep', 'BigNat literal requires exact unlifted ByteArray# identity')
-                if expr[1] == 'function-addr':
+                if expr[1] in ('function-addr', 'data-addr'):
                     raw = expr[3].get('rep') if len(expr) > 3 and isinstance(expr[3], dict) else None
                     if (not isinstance(raw, dict) or raw.get('kind') != 'address' or
                             raw.get('primReps') != ['AddrRep'] or 'aggregate' in raw or is_vector(raw)):
                         self.issue('scalar-representation', owner, path + '/rep',
-                                   'Original C function label requires explicit exact AddrRep proof')
+                                   'Original C label requires explicit exact AddrRep proof')
+                    if expr[1] == 'data-addr' and (not isinstance(raw, dict) or raw.get('evaluated') is not True):
+                        self.issue('scalar-representation', owner, path + '/rep',
+                                   'RTS data label requires evaluated AddrRep proof')
             elif tag == 'void':
                 self.compare_shapes(self.expression_rep(expr), self.literal_rep(expr), owner, path + '/rep')
             elif tag == 'lam':
@@ -1363,6 +1368,10 @@ class Audit:
                             ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)'])
                     actual = [self.expression_rep(argument) for argument in arguments]
                     expected = weak['arguments']
+                    if (function[1] == 'addCFinalizerToWeak#' and arguments and
+                            arguments[0][0] == 'lit' and arguments[0][1] != 'function-addr'):
+                        self.issue('primitive-representation', owner, path,
+                                   'addCFinalizerToWeak#: data addresses cannot denote a C finalizer')
                     expected_flags = [isinstance(rep, dict) and rep.get('primReps') == ['BoxedRep (Just Lifted)'] for rep in actual]
                     if (len(actual) != len(expected) or not isinstance(flags, list) or
                             any(type(flag) is not bool for flag in flags) or flags != expected_flags or
@@ -1726,9 +1735,9 @@ class Audit:
                         self.literal(value[0], value[1], owner, altpath + '/literal')
                         if value[0] == 'bignat':
                             self.issue('alternative-kind', owner, altpath, 'BigNat literal alternatives are invalid GHC Core')
-                        if value[0] in ('float', 'double', 'function-addr'):
+                        if value[0] in ('float', 'double', 'function-addr', 'data-addr'):
                             self.issue('alternative-kind', owner, altpath,
-                                       'Floating and C function literal alternatives are invalid GHC Core')
+                                       'Floating and C label literal alternatives are invalid GHC Core')
                     elif kind != 'default':
                         self.issue('alternative-kind', owner, altpath, kind)
                     if self.is_tuple(binder_proof) and (kind not in ('data', 'default') or kind == 'default' and ids):

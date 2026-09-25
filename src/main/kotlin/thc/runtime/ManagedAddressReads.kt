@@ -13,6 +13,12 @@ internal enum class ManagedAddressRead(val width: Int, val payload: String) {
     WORD64(8, "Word64Rep"), INT64(8, "Int64Rep");
 
     fun read(address: ManagedAddress, elementOffset: Long): Long = address.withNativeBorrow {
+        // A live RTS Word32 cell is read once under the thread registry lock;
+        // composing four byte reads could observe a torn capability count.
+        address.readCapabilitiesWord32(elementOffset, width)?.let {
+            if (this != WORD32) fault("enabled_capabilities requires readWord32OffAddr#")
+            return@withNativeBorrow it
+        }
         if (elementOffset < Long.MIN_VALUE / width || elementOffset > Long.MAX_VALUE / width)
             fault("Managed Addr# element offset overflow")
         val displacement = elementOffset * width

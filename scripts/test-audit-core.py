@@ -2425,5 +2425,26 @@ class ExplicitWeakContractTest(unittest.TestCase):
             self.assertIn('scalar-representation', {issue['code'] for issue in report['issues']})
 
 
+class RTSDataLabelTest(unittest.TestCase):
+    def test_only_enabled_capabilities_with_evaluated_address_proof_is_admitted(self):
+        label = ['lit', 'data-addr', 'enabled_capabilities',
+                 dict(rep=dict(kind='address', primReps=['AddrRep'], evaluated=True))]
+        self.assertTrue(run(label)['accepted'])
+        self.assertFalse(run(label, cap=dict(CAP, dataLabels=[]))['accepted'])
+        for symbol in ('other', 'enabled_capabilities_extra', 'n_capabilities'):
+            wrong = copy.deepcopy(label); wrong[2] = symbol
+            self.assertFalse(run(wrong)['accepted'])
+        for mutation in ('missing', 'kind', 'width', 'evaluated', 'aggregate'):
+            wrong = copy.deepcopy(label)
+            if mutation == 'missing': wrong.pop()
+            elif mutation == 'kind': wrong[3]['rep']['kind'] = 'long'
+            elif mutation == 'width': wrong[3]['rep']['primReps'] = ['WordRep']
+            elif mutation == 'evaluated': wrong[3]['rep']['evaluated'] = False
+            else: wrong[3]['rep']['aggregate'] = 'unboxed-tuple'
+            report = run(wrong)
+            self.assertFalse(report['accepted'], (mutation, report))
+            self.assertIn('scalar-representation', {issue['code'] for issue in report['issues']})
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -85,7 +85,10 @@ internal class GuestThreads internal constructor(
     // key or a numeric Java-thread snapshot. Signal delivery is not admitted yet.
     private var mainThreadWeak: MainThreadWeakKey? = null
     private var allocatedCapabilities = 0L
-    @Synchronized internal fun capabilityCount(): Long = allocatedCapabilities
+    @TruffleBoundary @Synchronized internal fun capabilityCount(): Long {
+        if (closed) fault("Guest context has closed")
+        return allocatedCapabilities
+    }
     @Synchronized fun registerMainThread(key: MainThreadWeakKey) {
         check(!closed) { "Guest context has closed" }
         mainThreadWeak = key
