@@ -39,7 +39,10 @@ site :: FilePath
 site = "build/site"
 
 mascotAssets :: [FilePath]
-mascotAssets = ["turbo-haskell-bot-flipped-light.png", "turbo-haskell-bot-flipped-dark.png"]
+mascotAssets =
+  [ "turbo-haskell-bot-flipped-light.png", "turbo-haskell-bot-flipped-dark.png"
+  , "turbo-haskell-bot-blocks.webm", "mascot.js"
+  ]
 
 -- Dokka fetches this fragment into its sidebar. Adding document chrome here
 -- would duplicate navigation inside every API page.
@@ -312,9 +315,9 @@ checkSite revision = do
     pure (path, (anchors, urls))
   let failures = concat [checkURL inventory pages page url | (page, (_,urls)) <- Map.toList pages, url <- urls]
       required = ["index.html", "home.html", "assets/site.js", "assets/theme.js",
-        "assets/turbo-haskell-bot-light.png", "assets/turbo-haskell-bot-dark.png",
         "api/jvm/index.html", "api/haskell/index.html",
-        "api/haskell/THC-Plugin.html", "api/haskell/THC-Interface.html"] ++ map guidePath guides
+        "api/haskell/THC-Plugin.html", "api/haskell/THC-Interface.html"] ++
+        map ("assets" </>) mascotAssets ++ map guidePath guides
       excluded = [path | path <- Set.toList inventory, any (`isSuffixOf` path) [".bgv", ".log", ".zip", ".tar.xz"]]
       missing = [path | path <- required, Set.notMember path inventory]
   unless (null (failures ++ missing ++ excluded)) $

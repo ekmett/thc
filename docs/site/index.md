@@ -117,6 +117,9 @@ The [source repository](../../README.md) includes the full
 
 ## Contact Information
 
+<div class="thc-contact">
+<div class="thc-contact-copy">
+
 Contributions and bug reports are welcome!
 
 Please feel free to contact me through [GitHub](https://github.com/ekmett/thc)
@@ -124,3 +127,11 @@ or on the [##thc](https://web.libera.chat/##thc) IRC channel on
 `irc.libera.chat` (Libera Chat).
 
 -Edward Kmett
+
+</div>
+<aside class="thc-contact-bot" aria-label="Turbo Haskell bot">
+<video src="turbo-haskell-bot-blocks.webm" width="1280" height="720" autoplay loop muted playsinline aria-label="The Turbo Haskell robot playing with blocks."></video>
+<button type="button" class="thc-animation-toggle" hidden>Pause animation</button>
+</aside>
+</div>
+<script src="mascot.js"></script>
