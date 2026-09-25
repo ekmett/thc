@@ -13,36 +13,39 @@ internal class GmpForeignExpression(private val operation: GmpForeignOp,
         val first = operands[0].execute(frame)
         // Primitive counts/words stay long locals; object/primitive interleaving
         // follows the original FCallId argument order exactly.
-        val result = when (operation.form) {
-            GmpForm.BINARY -> {
+        // Direct enum comparisons fold during partial evaluation; Kotlin's
+        // synthetic enum-switch array otherwise retains unrelated operand
+        // accesses and non-inlineable VirtualFrame calls in the graph.
+        val result = when {
+            operation.form == GmpForm.BINARY -> {
                 val second = operands[1].execute(frame); val a = operands[2].executeRequiredLong(frame)
                 val third = operands[3].execute(frame); val b = operands[4].executeRequiredLong(frame)
                 requireVoidCarrier(operands[5].execute(frame))
                 ManagedGmp.invoke(this, operation, first, second, third, null, a, b, 0)
             }
-            GmpForm.WORD -> {
+            operation.form == GmpForm.WORD -> {
                 val second = operands[1].execute(frame); val a = operands[2].executeRequiredLong(frame)
                 val b = operands[3].executeRequiredLong(frame)
                 requireVoidCarrier(operands[4].execute(frame))
                 ManagedGmp.invoke(this, operation, first, second, null, null, a, b, 0)
             }
-            GmpForm.COMPARE -> {
+            operation.form == GmpForm.COMPARE -> {
                 val second = operands[1].execute(frame); val a = operands[2].executeRequiredLong(frame)
                 requireVoidCarrier(operands[3].execute(frame))
                 ManagedGmp.invoke(this, operation, first, second, null, null, a, 0, 0)
             }
-            GmpForm.DIVIDE_WORD -> {
+            operation.form == GmpForm.DIVIDE_WORD -> {
                 val a = operands[1].executeRequiredLong(frame); val second = operands[2].execute(frame)
                 val b = operands[3].executeRequiredLong(frame); val c = operands[4].executeRequiredLong(frame)
                 requireVoidCarrier(operands[5].execute(frame))
                 ManagedGmp.invoke(this, operation, first, second, null, null, a, b, c)
             }
-            GmpForm.MODULO_WORD -> {
+            operation.form == GmpForm.MODULO_WORD -> {
                 val a = operands[1].executeRequiredLong(frame); val b = operands[2].executeRequiredLong(frame)
                 requireVoidCarrier(operands[3].execute(frame))
                 ManagedGmp.invoke(this, operation, first, null, null, null, a, b, 0)
             }
-            GmpForm.DIVIDE -> {
+            else -> { // GmpForm.DIVIDE
                 val second = operands[1].execute(frame); val a = operands[2].executeRequiredLong(frame)
                 val third = operands[3].execute(frame); val b = operands[4].executeRequiredLong(frame)
                 val fourth = operands[5].execute(frame); val c = operands[6].executeRequiredLong(frame)

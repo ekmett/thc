@@ -22,7 +22,12 @@ internal object ManagedGmp {
             }
             GmpForeignOp.ADD_WORD -> provider.addWord(LimbRegion.write(first, a), LimbRegion.read(second, a), b)
             GmpForeignOp.MULTIPLY_WORD -> provider.multiplyWord(LimbRegion.write(first, a), LimbRegion.read(second, a), b)
-            GmpForeignOp.COMPARE -> provider.compare(LimbRegion.read(first, a), LimbRegion.read(second, a))
+            // GHC's original import declares Int# for GMP's C int return. On
+            // the supported x86_64 ABI its raw negative result is zero-extended
+            // (native oracle: -1 becomes 4294967295). The original bignat_compare
+            // caller applies narrowCInt# itself. Keep that real call boundary
+            // separate from the provider's signed comparison contract.
+            GmpForeignOp.COMPARE -> provider.compare(LimbRegion.read(first, a), LimbRegion.read(second, a)) and 0xffff_ffffL
             GmpForeignOp.DIVIDE_WORD -> {
                 val input = LimbRegion.read(second, b, true)
                 if (a < 0 || a > Int.MAX_VALUE.toLong() / 8) fault("Invalid fractional limb count")
