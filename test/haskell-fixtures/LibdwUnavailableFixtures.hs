@@ -84,7 +84,7 @@ exportLabels libdir source = do
     setTargets [target]
     graph <- depanal [] False
     summary <- case mgModSummaries graph of
-      [entry] -> pure entry
+      [selectedModule] -> pure selectedModule
       _ -> liftIO (die "Unexpected foreign-label fixture graph")
     parsed <- parseModule summary
     typed <- typecheckModule parsed
