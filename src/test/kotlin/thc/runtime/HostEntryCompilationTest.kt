@@ -5,6 +5,7 @@ package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.bytecode.BytecodeTier
 import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.NodeUtil
 import org.junit.jupiter.api.Assertions.*
@@ -41,7 +42,11 @@ class HostEntryCompilationTest {
             assertFalse(host.rootNode.isCloningAllowed, "The host dispatch tree must remain stable")
             val function = context.asValue(EntryValue(program, "entry", 1))
             fun check(input: Long) = assertEquals(input + 1L, function.execute(input).asLong(), "$backend input $input")
-            repeat(20) { check(it.toLong()) }
+            check(0L)
+            if (backend == "bytecode") assertEquals(BytecodeTier.CACHED,
+                (original.rootNode as BytecodeRoot).bytecodeNode.tier,
+                "The first guest call must execute in the cached interpreter")
+            (1 until 20).forEach { check(it.toLong()) }
 
             val calls = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
                 .filter { it.callTarget === original }
