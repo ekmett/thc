@@ -358,6 +358,7 @@ class Language : TruffleLanguage<Language.State>() {
     internal val handoffLayouts: thc.runtime.HandoffLayouts get() = currentState(null).handoffLayouts
     internal val handoffState = locals.createContextThreadLocal { _, _ -> thc.runtime.HandoffState() }
     class State(val env: Env, language: Language) {
+        internal val shutdown = java.util.concurrent.atomic.AtomicReference<thc.runtime.GuestShutdown>()
         internal val managedExports = ManagedExportRegistry(this, language)
         internal val foreignRoots = ManagedForeignRoots(this)
         internal val handoffLayouts = thc.runtime.HandoffLayouts(language)
@@ -446,6 +447,11 @@ class Language : TruffleLanguage<Language.State>() {
     override fun createContext(env: Env): State = State(env, this)
     override fun getScope(context: State): Any = context.managedExports.scope
     override fun isThreadAccessAllowed(thread: Thread, singleThreaded: Boolean): Boolean = true
+    override fun exitContext(context: State, exitMode: ExitMode, exitCode: Int) {
+        // LLVM calls are still permitted during exit notification, before hard
+        // exit starts unwinding all contexts. dispose() is idempotent.
+        context.iconv.dispose()
+    }
     override fun finalizeContext(context: State) { context.iconv.dispose() }
     override fun disposeContext(context: State) {
         context.managedExports.close()

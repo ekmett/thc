@@ -2547,6 +2547,15 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, 0L);
         }
     }
+    @Operation
+    @ConstantOperand(type = RtsShutdownOp.class, name = "operation")
+    public static final class ShutdownRuntime {
+        @Specialization public static void shutdown(RtsShutdownOp operation, long code, long fast, Object state,
+                @Bind("$node") Node node) {
+            CoreRtsShutdown.shutdown(node, operation, code, fast, state);
+        }
+    }
+
     @Operation public static final class RegisterMainThread {
         @Specialization public static void register(Object weak, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
