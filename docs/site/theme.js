@@ -4,7 +4,9 @@
   "use strict";
   const key = "thc-docs-appearance";
   const media = matchMedia("(prefers-color-scheme: dark)");
+  let inMemoryChoice = null;
   function choice() {
+    if (inMemoryChoice) return inMemoryChoice;
     try {
       const saved = localStorage.getItem(key);
       if (saved === "light" || saved === "dark") return saved;
@@ -22,14 +24,23 @@
   }
   function set(selected) {
     if (!["system", "light", "dark"].includes(selected)) return;
+    inMemoryChoice = selected;
     try {
       if (selected === "system") localStorage.removeItem(key);
       else localStorage.setItem(key, selected);
-    } catch (_) { /* Current page still follows the selected system mode. */ }
+    } catch (_) { /* Keep the explicit choice in this page's memory. */ }
     apply();
   }
   window.thcTheme = { apply, set };
-  window.addEventListener("storage", event => { if (event.key === key) apply(); });
+  window.addEventListener("storage", event => {
+    if (event.key === key) { inMemoryChoice = null; apply(); }
+  });
   media.addEventListener("change", apply);
+  // Dokka initializes its own theme after this head script. Reconcile only
+  // the theme class, without changing its search or navigation settings.
+  new MutationObserver(apply).observe(document.documentElement,
+    { attributes: true, attributeFilter: ["class"] });
+  document.addEventListener("DOMContentLoaded", apply);
+  window.addEventListener("load", apply);
   apply();
 })();
