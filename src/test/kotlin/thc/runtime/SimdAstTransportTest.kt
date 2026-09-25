@@ -114,6 +114,43 @@ class SimdAstTransportTest {
                 binding("captured", lam(listOf(formal("x")), captured)),
                 binding("thunk", lam(listOf(formal("x")), thunk))))
     }
+    @Test fun publicLoadRejectsContradictoryVectorConstructorMetadata() {
+        val source = heapModule()
+        val constructors = source["constructors"] as List<Map<String, Any?>>
+        val heap = constructors.single { it["id"] == "Heap" }
+        val wrongKind = vector + ("kind" to "long")
+        val wrongRep = vector + mapOf("primReps" to listOf("VecRep 8 Word16ElemRep"),
+            "vector" to mapOf("lanes" to 8L, "element" to "Word16ElemRep"))
+        val malformed = listOf(
+            "missing types" to ((heap - "fieldTypes") to "Vector constructor field requires exact logical metadata"),
+            "short types" to ((heap + ("fieldTypes" to listOf(vector))) to "Constructor field type count mismatch"),
+            "missing levity" to ((heap - "fieldLifted") to "Missing constructor representation metadata"),
+            "short levity" to ((heap + ("fieldLifted" to listOf(false))) to "Constructor field type count mismatch"),
+            "lifted vector" to ((heap + ("fieldLifted" to listOf(true, false))) to "Constructor field levity disagrees"),
+            "missing strictness" to ((heap - "strictFields") to "Missing constructor strictness metadata"),
+            "invalid strictness" to ((heap + ("strictFields" to listOf("false", false))) to "Unknown constructor field strictness"),
+            "unevaluated vector" to ((heap + ("fieldTypes" to listOf(vector + ("evaluated" to false), int))) to
+                "Constructor field evaluatedness lacks a worker obligation"),
+            "wrong kind" to ((heap + ("fieldTypes" to listOf(wrongKind, int))) to
+                "Vector representation lacks exact vector metadata"),
+            "wrong representation" to ((heap + ("fieldTypes" to listOf(wrongRep, int))) to
+                "Constructor field type disagrees with its primitive representation"))
+        for (backend in listOf("ast", "bytecode")) {
+            Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
+                val request = Json.stringify(mapOf("entry" to "heapDirect", "backend" to backend,
+                    "modules" to listOf(source)))
+                assertEquals(14L, context.eval("thc", request).execute(1).asLong(), "$backend valid metadata")
+            }
+            for ((label, mutation) in malformed) Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
+                val (changed, reason) = mutation
+                val module = source + ("constructors" to constructors.map { if (it["id"] == "Heap") changed else it })
+                val request = Json.stringify(mapOf("entry" to "heapDirect", "backend" to backend,
+                    "modules" to listOf(module)))
+                val failure = assertThrows(PolyglotException::class.java) { context.eval("thc", request) }
+                assertTrue(failure.message.orEmpty().contains(reason), "$backend/$label: ${failure.message}")
+            }
+        }
+    }
     @Test fun publicHostStillRejectsVectorIngressAndResult() {
         for (backend in listOf("ast", "bytecode")) for ((entry, boundary) in
             listOf("identity" to "host argument", "returnVector" to "host result"))
