@@ -25,7 +25,7 @@ AUDIT_SPEC.loader.exec_module(AUDIT)
 
 
 class SimdFamiliesTest(unittest.TestCase):
-    def test_canonical_local_capability_keeps_vector_formals_excluded(self):
+    def test_canonical_capability_keeps_public_host_vector_arguments_excluded(self):
         capability = json.loads((ROOT / 'scripts/core-capabilities.json').read_text())
         contracts = GEN.contracts(GEN.families())
         self.assertEqual({name: proof['arity'] for name, proof in contracts.items()},
@@ -47,7 +47,8 @@ class SimdFamiliesTest(unittest.TestCase):
                            dict(rep=closure, resultRep=scalar)])])
             report = AUDIT.Audit([('simd-formal', source)], capability).run(['root'])
             self.assertFalse(report['accepted'], family['name'])
-            self.assertIn(('vector-boundary', 'vector formal argument'),
+            detail = 'vector host argument' if 'arguments' in capability.get('vectorTransport', []) else 'vector formal argument'
+            self.assertIn(('vector-boundary', detail),
                           {(issue['code'], issue['detail']) for issue in report['issues']}, family['name'])
 
     def test_independent_ieee_model_signed_zeros_subnormals_and_ties(self):

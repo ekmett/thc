@@ -20,7 +20,7 @@ audit = importlib.util.module_from_spec(spec); spec.loader.exec_module(audit)
 CAP = json.loads((ROOT / 'core-capabilities.json').read_text())
 CLOSURE = dict(kind='closure', primReps=['BoxedRep (Just Lifted)'], evaluated=True)
 LONG = dict(kind='long', primReps=['IntRep'], evaluated=True)
-def run(module, entry='root'): return audit.Audit([('simd', module)], CAP).run([entry])
+def run(module, entry='root', capability=CAP): return audit.Audit([('simd', module)], capability).run([entry])
 def fixture():
     operand = ['lit', 'int64', '17', dict(rep=LANE_REP)]
     vector = ['app', ['prim', 'broadcastInt64X2#', dict(rep=CLOSURE)], [operand], [False], False, True, dict(rep=copy.deepcopy(VECTOR_REP))]
@@ -57,7 +57,7 @@ class VectorAuditTest(unittest.TestCase):
         for pap in (False, True):
             module = self.transport_fixture(pap)
             self.assertTrue(self.transport(module)['accepted'], self.transport(module)['issues'])
-            self.assertFalse(run(module)['accepted'])
+            self.assertFalse(run(module, capability=dict(CAP, vectorTransport=[]))['accepted'])
             for wrong in (VECTOR32_REP, VECTOR_WORD32_REP, TUPLE_REP):
                 changed = copy.deepcopy(module)
                 changed['bindings'][1]['expr'][1][0]['rep'] = copy.deepcopy(wrong)
@@ -450,12 +450,14 @@ class VectorAuditTest(unittest.TestCase):
     def test_vector_boundary_rejected(self):
         m=fixture(); m['bindings'][0]['expr'][3]['resultRep']=copy.deepcopy(VECTOR_REP)
         self.assertIn('vector-boundary',{i['code'] for i in run(m)['issues']})
-    def test_real_core_two_local_entries_and_join_frontier(self):
+    def test_real_core_local_entries_and_vector_join_capability(self):
         path=ROOT.parent/'build/simd/pre-core/SimdInt64X2.json'
         if not path.exists(): self.skipTest('SIMD Core export not generated')
         m=json.loads(path.read_text())
         for name in ('vectorCase','subtractCase'): self.assertTrue(run(m,name)['accepted'],name)
-        self.assertFalse(run(m,'branchCase')['accepted'])
+        report = run(m, 'branchCase')
+        self.assertEqual({'join-arguments', 'join-captures', 'join-results'} <= set(CAP.get('vectorTransport', [])),
+                         report['accepted'], report['issues'])
     def test_int32_exact_local_shape_and_cross_width_rejection(self):
         m=fixture(); body=m['bindings'][0]['expr'][2]
         body[1][1][1]='broadcastInt32X4#'
@@ -466,10 +468,12 @@ class VectorAuditTest(unittest.TestCase):
         self.assertTrue(run(m)['accepted'])
         body[1][6]['rep']=copy.deepcopy(VECTOR_REP)
         self.assertFalse(run(m)['accepted'])
-    def test_real_int32_core_local_entries_and_join_frontier(self):
+    def test_real_int32_core_local_entries_and_vector_join_capability(self):
         path=ROOT.parent/'build/simd-int32x4/pre-core/SimdInt32X4.json'
         if not path.exists(): self.skipTest('Int32 SIMD Core export not generated')
         m=json.loads(path.read_text())
         for name in ('vectorCase','subtractCase'): self.assertTrue(run(m,name)['accepted'],name)
-        self.assertFalse(run(m,'branchCase')['accepted'])
+        report = run(m, 'branchCase')
+        self.assertEqual({'join-arguments', 'join-captures', 'join-results'} <= set(CAP.get('vectorTransport', [])),
+                         report['accepted'], report['issues'])
 if __name__=='__main__':unittest.main()
