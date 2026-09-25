@@ -1036,7 +1036,8 @@ private const val LITERAL_ALTERNATIVE = 2
 
 private class Alternative(val kind: Int, val value: Any?,
                           @field:CompilationFinal(dimensions = 1) val fields: IntArray,
-                          @field:Child var body: Expr) : Node() {
+                          @field:Child var body: Expr,
+                          @field:CompilationFinal(dimensions = 2) val vectorFields: Array<IntArray?> = emptyArray()) : Node() {
     private val matchProfile = CountingConditionProfile.create()
     fun matchesData(value: DataValue): Boolean = matchProfile.profile((this.value as DataLayout).matches(value))
     fun matchesLong(value: Long): Boolean = matchProfile.profile(value == this.value as Long)
@@ -1181,7 +1182,11 @@ private open class Case(scrutinee: Expr, protected val binderSlot: Int,
         if (alt.kind == DATA_ALTERNATIVE) {
             val data = frame.getObject(binderSlot) as? DataValue ?: fault("Invalid constructor case")
             val layout = alt.value as? DataLayout ?: fault("Invalid constructor alternative")
-            for (i in alt.fields.indices) layout.restore(data, i, frame, alt.fields[i])
+            for (i in alt.fields.indices) {
+                val lanes = alt.vectorFields.getOrNull(i)
+                if (lanes == null) layout.restore(data, i, frame, alt.fields[i])
+                else layout.restoreVector(data, i, frame, lanes, 0)
+            }
         }
     }
 }
@@ -1207,13 +1212,19 @@ private class DefaultCase(scrutinee: Expr, binder: Int, alternatives: Array<Alte
     override fun executeAddress(frame: VirtualFrame): ManagedAddress { prepare(frame); return alternatives.last().body.executeAddress(frame) }
 }
 private class Construct(private val layout: DataLayout,
-                        @field:Children private var fields: Array<Expr>) : Expr() {
+                        @field:Children private var fields: Array<Expr>,
+                        @field:CompilationFinal(dimensions = 2) private val vectorSlots: Array<IntArray?> = emptyArray()) : Expr() {
     init { representation = CoreRepresentation(CoreKind.DATA, evaluated = true) }
     @ExplodeLoop override fun execute(frame: VirtualFrame): DataValue {
         if (layout.hasBoxedValueCache) return layout.createLong(fields[0].executeRequiredLong(frame))
         val value = layout.allocate()
         for (i in fields.indices) {
-            if (layout.isLong(i)) layout.initializeLong(value, i, fields[i].executeRequiredLong(frame))
+            if (layout.isVector(i)) {
+                val lanes = vectorSlots[i] ?: fault("Missing vector constructor lane slots")
+                fields[i].executeTuple(frame, lanes, 0)
+                layout.initializeVector(value, i, frame, lanes, 0)
+                for (slot in lanes) frame.clear(slot)
+            } else if (layout.isLong(i)) layout.initializeLong(value, i, fields[i].executeRequiredLong(frame))
             else if (layout.isFloat(i)) layout.initializeFloat(value, i, fields[i].executeRequiredFloat(frame))
             else if (layout.isDouble(i)) layout.initializeDouble(value, i, fields[i].executeRequiredDouble(frame))
             else layout.initialize(value, i, fields[i].execute(frame))
@@ -1466,7 +1477,8 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                             tuple: TupleShape? = null,
                             tupleSlots: IntArray = intArrayOf(),
                             inputLayout: ArgumentLayout? = null,
-                            private val enableAsync: Boolean = false) : GuestRoot(language, descriptor) {
+                            private val enableAsync: Boolean = false,
+                            @field:CompilationFinal(dimensions = 2) private val environmentVectorSlots: Array<IntArray?> = emptyArray()) : GuestRoot(language, descriptor) {
     init { configureEntry(entryStrict, captureLayout != null); configureInput(inputLayout); configureTupleResult(tuple) }
     @field:CompilationFinal(dimensions = 1)
     private val argumentReferences = argumentProofs.map { it.referenceCarrier() }.toTypedArray()
@@ -1491,7 +1503,15 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         }
         if (captureLayout != null) {
             val environment = arguments[1] as? CapturedFrame ?: fault("Invalid captured frame")
-            for (i in environmentSlots.indices) captureLayout.restore(environment, i, frame, environmentSlots[i])
+            restoreCaptured(frame, environment)
+        }
+    }
+    @ExplodeLoop private fun restoreCaptured(frame: VirtualFrame, environment: CapturedFrame) {
+        val layout = captureLayout ?: fault("Missing capture layout")
+        for (i in environmentSlots.indices) {
+            val lanes = environmentVectorSlots.getOrNull(i)
+            if (lanes == null) layout.restore(environment, i, frame, environmentSlots[i])
+            else layout.restoreVector(environment, i, frame, lanes, 0)
         }
     }
     fun handoffDestination(frame: VirtualFrame): Int = handoff?.destination(frame) ?: -1
@@ -1536,7 +1556,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             }
             if (captureLayout != null) {
                 val environment = entry.packet.getObject(input, 1) as? CapturedFrame ?: fault("Invalid captured frame")
-                for (i in environmentSlots.indices) captureLayout.restore(environment, i, frame, environmentSlots[i])
+                restoreCaptured(frame, environment)
             }
         } finally { entry.releaseChecked(input) }
     }
@@ -1563,7 +1583,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             }
             if (captureLayout != null) {
                 val environment = entry.arguments.getObject(input, 1) as? CapturedFrame ?: fault("Invalid captured frame")
-                for (i in environmentSlots.indices) captureLayout.restore(environment, i, frame, environmentSlots[i])
+                restoreCaptured(frame, environment)
             }
         } finally { entry.state().arguments.release(input, entry.arguments) }
     }
@@ -1793,12 +1813,30 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         freeLocals.filter { outer.locals.getValue(it).let { local -> local.slot < 0 && local.proof.kind == CoreKind.VOID } }
             .forEach { scope.bindVoid(it, outer.locals.getValue(it).proof) }
         val captured = freeLocals.filter { outer.locals.getValue(it).let { local -> local.slot >= 0 || local.proof.kind != CoreKind.VOID } }
-        captured.forEach { CoreRepresentations.requireScalar(outer.locals.getValue(it).proof, "capture") }
-        val captureSources = captured.map { outer.locals.getValue(it).slot }.toIntArray()
-        val captureKinds = captured.map { outer.locals.getValue(it).primitive }.toBooleanArray()
-        val environmentSlots = captured.map { id ->
+        captured.forEach { id ->
             val local = outer.locals.getValue(id)
-            scope.bind(id, local.primitive, local.proof, local.cell, local.entry, local.arityCertificate).slot
+            if (local.proof.isVector) {
+                CoreRepresentations.requireInput(local.proof)
+                if (local.cell || local.tupleSlots?.size != local.proof.vector!!.lanes)
+                    throw UnsupportedCore("Vector capture requires primitive lane locals")
+            } else CoreRepresentations.requireScalar(local.proof, "capture")
+        }
+        val captureSources = captured.flatMap { id ->
+            val local = outer.locals.getValue(id)
+            if (local.proof.isVector) local.tupleSlots!!.toList() else listOf(local.slot)
+        }.toIntArray()
+        val captureKinds = captured.map { id ->
+            val local = outer.locals.getValue(id)
+            !local.proof.isVector && local.primitive
+        }.toBooleanArray()
+        val environmentVectorSlots = arrayOfNulls<IntArray>(captured.size)
+        val environmentSlots = captured.mapIndexed { index, id ->
+            val local = outer.locals.getValue(id)
+            if (local.proof.isVector) {
+                val lanes = IntArray(local.proof.vector!!.lanes) { lane -> scope.layout.bind("$id captured vector lane $lane") }
+                environmentVectorSlots[index] = lanes
+                scope.bindTuple(id, local.proof, lanes).slot
+            } else scope.bind(id, local.primitive, local.proof, local.cell, local.entry, local.arityCertificate).slot
         }.toIntArray()
         val argumentSlots = arrayListOf<Int>(); val argumentIndices = arrayListOf<Int>()
         val argumentProofs = arrayListOf<CoreRepresentation>()
@@ -1820,7 +1858,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 argumentSlots += scope.bind(arg["id"] as String, !lifted && arg["coercion"] != true, proof).slot
             }
         }
-        val captures = if (captured.isEmpty()) null else CaptureLayout(requireNotNull(language), captureKinds,
+        val captures = if (captured.isEmpty()) null else CaptureLayout.withVectors(requireNotNull(language),
+            captured.map { id -> outer.locals.getValue(id).proof.takeIf { it.isVector } }.toTypedArray(), captureKinds,
             captured.map { outer.locals.getValue(it).let { local -> !local.cell && local.proof.isLong && local.proof.evaluated } }.toBooleanArray(),
             captured.map { outer.locals.getValue(it).let { local -> if (local.cell) null else local.proof.referenceCarrier() } }.toTypedArray(),
             captured.map { outer.locals.getValue(it).let { local -> !local.cell && local.proof.isFloat && local.proof.evaluated } }.toBooleanArray(),
@@ -1833,7 +1872,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 allArgumentProofs[index] = local.proof
             }
         }
-        scope.self = AstSelfLayout(captures, environmentSlots, allArgumentSlots, allArgumentProofs, entryStrict.copyOf(), inputLayout)
+        scope.self = AstSelfLayout(captures, environmentSlots, allArgumentSlots, allArgumentProofs,
+            entryStrict.copyOf(), inputLayout, environmentVectorSlots)
         val body = compile(expression, scope, true)
         // Async AST has no caller capture around a typed handoff loan yet.
         // Keep admitted roots on the ordinary scalar call ABI.
@@ -1846,7 +1886,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val tupleSlots = IntArray(tuple?.width ?: 0) { scope.layout.bind("<typed return $it>") }
         val root = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
             argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics, argumentProofs.toTypedArray(), resultProof,
-            rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync)
+            rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync, environmentVectorSlots)
         if (language is thc.Language) root.configureTypedInput(TypedInputLayout.create(language, inputLayout, captures != null))
         if (body is Case && inputLayout == null) root.configureLeadingCaseReturn(LeadingCaseReturn.discover(args, expression,
             resultProof, root.entryArgumentOffset, free.intersect(argumentIds), captures != null,
@@ -2294,7 +2334,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     ScalarPrimitiveSignatures.validate(fn[1] as String, nodes.map { it.representation }, tupleProof)
                     primitive(fn[1] as String, nodes)
                 }
-                constructorStrictFields != null -> Construct(dataLayout(fn[1] as String), nodes)
+                constructorStrictFields != null -> {
+                    val layout = dataLayout(fn[1] as String)
+                    Construct(layout, nodes, constructorVectorSlots(layout, scope.layout))
+                }
                 else -> {
                     val function = compile(fn, scope, false)
                     if (ArgumentLayout.fromProofs(nodes.map { it.representation })?.requiresTyped == true)
@@ -2387,12 +2430,19 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 if (layout != null && layout.arity != ids.size) throw RuntimeFault("Constructor field/binder mismatch")
                 val metadata = CoreRepresentations.alternativeBinders(alt)
                 val strict = if (kind == "data") strictConstructorFields(alt[1] as String, ids.size) else null
+                val vectorFields = arrayOfNulls<IntArray>(ids.size)
                 val slots = ids.mapIndexed { index, id ->
                     val raw = metadata.getOrNull(index)?.let(CoreRepresentations::binder) ?: CoreRepresentation.UNKNOWN
-                    val proof = if (layout?.isLong(index) == true) raw.refine(CoreRepresentation(CoreKind.LONG, true))
+                    val vector = layout?.vectorProof(index)
+                    val proof = if (vector != null) raw.refine(vector)
+                        else if (layout?.isLong(index) == true) raw.refine(CoreRepresentation(CoreKind.LONG, true))
                         else raw.copy(evaluated = strict?.get(index) == true ||
                             ((constructors[alt[1] as? String]?.get("fieldLifted") as? List<*>)?.getOrNull(index) == false))
-                    child.bind(id, layout?.isLong(index) == true, proof).slot
+                    if (vector != null) {
+                        val lanes = IntArray(vector.vector!!.lanes) { lane -> child.layout.bind("$id constructor vector lane $lane") }
+                        vectorFields[index] = lanes
+                        child.bindTuple(id, proof, lanes).slot
+                    } else child.bind(id, layout?.isLong(index) == true, proof).slot
                 }.toIntArray()
                 val tag = when (kind) {
                     "default" -> DEFAULT_ALTERNATIVE
@@ -2400,7 +2450,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     "lit" -> LITERAL_ALTERNATIVE
                     else -> throw RuntimeFault("Invalid Core alternative kind $kind")
                 }
-                Alternative(tag, value, slots, compile(alt[3] as List<Any?>, child, tail))
+                Alternative(tag, value, slots, compile(alt[3] as List<Any?>, child, tail), vectorFields)
             }.toTypedArray()
             if (!CoreRepresentations.expression(expr).isAggregate && alternatives.any { it.body.representation.isAggregate } &&
                 alternatives.any { !it.body.representation.isAggregate })
@@ -2424,11 +2474,44 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val proof = CoreRepresentations.expression(expr)
                 if (proof.components?.size != 0) throw RuntimeFault("Empty tuple constructor has nonempty logical components")
                 TupleConstruct(TupleShape(proof, language as thc.Language), emptyArray())
-            } else if (arity == 0) construct(id, emptyArray()) else {
-                val layout = FrameLayout(); val slots = IntArray(arity) { layout.bind("field$it") }
-                val body = construct(id, Array(arity) { LocalRead(slots[it], cell = false) })
-                val target = FunctionRoot(language, layout.build(), "constructor $id", null, intArrayOf(), slots, IntArray(arity) { it }, body, metrics,
-                    coreSourceLocation = rootSource(body)).callTarget
+            } else if (arity == 0) construct(id, emptyArray(), scope.layout) else {
+                val layout = FrameLayout()
+                val constructor = dataLayout(id)
+                // CoreFields has already validated every fieldType against its
+                // registered primitive representation. A typed constructor PAP
+                // must retain the scalar proofs beside its vector lanes too.
+                val fieldTypes = constructors.getValue(id)["fieldTypes"] as? List<*>
+                val proofs = List(arity) { index ->
+                    fieldTypes?.get(index)?.let(CoreRepresentations::parse) ?: CoreRepresentation.UNKNOWN
+                }
+                val inputLayout = ArgumentLayout.fromProofs(proofs)
+                val argumentSlots = arrayListOf<Int>()
+                val argumentIndices = arrayListOf<Int>()
+                val argumentProofs = arrayListOf<CoreRepresentation>()
+                val fields = Array<Expr>(arity) { index ->
+                    val vector = constructor.vectorProof(index)
+                    if (vector == null) {
+                        val slot = layout.bind("field$index")
+                        argumentSlots += slot
+                        argumentIndices += ArgumentLayout.offset(inputLayout, index)
+                        argumentProofs += proofs[index]
+                        LocalRead(slot, cell = false).proven(proofs[index])
+                    } else {
+                        val lanes = IntArray(vector.vector!!.lanes) { lane -> layout.bind("field$index vector lane $lane") }
+                        TupleShape.flatten(vector).forEachIndexed { lane, proof ->
+                            argumentSlots += lanes[lane]
+                            argumentIndices += ArgumentLayout.offset(inputLayout, index) + lane
+                            argumentProofs += proof
+                        }
+                        VectorLocalRead(TupleShape(vector, language as thc.Language), lanes)
+                    }
+                }
+                val body = construct(id, fields, layout)
+                val root = FunctionRoot(language, layout.build(), "constructor $id", null, intArrayOf(),
+                    argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics,
+                    argumentProofs.toTypedArray(), coreSourceLocation = rootSource(body), inputLayout = inputLayout)
+                if (language is thc.Language) root.configureTypedInput(TypedInputLayout.create(language, inputLayout, false))
+                val target = root.callTarget
                 MakeClosure(target, arity, null, intArrayOf())
             }
         }
@@ -2633,7 +2716,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private fun dataLayout(id: String): DataLayout = dataLayouts.getOrPut(id) {
         val info = constructors[id] ?: throw RuntimeFault("Missing constructor metadata $id")
         val fields = CoreFields(info)
-        DataLayout(language ?: throw RuntimeFault("Constructor layout requires a guest language"), id, info["name"] as String, fields.storage, fields.referenceTypes)
+        DataLayout.fromFields(language ?: throw RuntimeFault("Constructor layout requires a guest language"),
+            id, info["name"] as String, fields)
     }
     private fun primitive(name: String, args: Array<Expr>): Expr = floatingPrimitive(name, args) ?: when (name) {
         "reallyUnsafePtrEquality#" -> {
@@ -2686,7 +2770,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 ?: throw UnsupportedCore("Unknown strict constructor field levity: $id field $i"))
         }
     }
-    private fun construct(id: String, args: Array<Expr>): Expr {
+    private fun constructorVectorSlots(layout: DataLayout, frame: FrameLayout): Array<IntArray?> =
+        Array(layout.arity) { index ->
+            if (layout.isVector(index)) IntArray(layout.fieldWidth(index)) { lane ->
+                frame.bind("<constructor ${layout.id} field $index lane $lane>")
+            } else null
+        }
+    private fun construct(id: String, args: Array<Expr>, frame: FrameLayout): Expr {
         val strict = strictConstructorFields(id, args.size)
         val fields = Array(args.size) { i ->
             // Constructor workers carry CBV obligations independently of argument
@@ -2694,7 +2784,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             // only at saturation, including entry through a constructor closure/PAP.
             if (strict[i]) Evaluate(args[i], metrics) else args[i]
         }
-        return Construct(dataLayout(id), fields)
+        val layout = dataLayout(id)
+        return Construct(layout, fields, constructorVectorSlots(layout, frame))
     }
 }
 

@@ -74,6 +74,46 @@ class SimdAstTransportTest {
                     call("score", listOf(broadcast(variable("x"))), closure), listOf(literal(13)), int))),
                 binding("nested", lam(listOf(formal("x")), nestedCase))))
     }
+    private fun heapModule(): Map<String, Any?> {
+        val boxed = mapOf("kind" to "data", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)
+        val heap = mapOf("id" to "Heap", "name" to "Heap", "kind" to "boxed", "arity" to 2,
+            "fieldReps" to listOf(listOf("VecRep 8 Int16ElemRep"), listOf("IntRep")),
+            "fieldTypes" to listOf(vector, int), "fieldLifted" to listOf(false, false),
+            "strictFields" to listOf(false, false))
+        val boxedInt = mapOf("id" to "BoxedInt", "name" to "BoxedInt", "kind" to "boxed", "arity" to 1,
+            "fieldReps" to listOf(listOf("IntRep")), "fieldTypes" to listOf(int),
+            "fieldLifted" to listOf(false), "strictFields" to listOf(false))
+        fun saved() = variable("saved", vector)
+        fun scoreSaved() = call("score", listOf(saved(), literal(13)))
+        fun vectorLet(body: List<Any?>): List<Any?> = listOf("let", false,
+            listOf(mapOf("id" to "saved", "name" to "saved", "lifted" to false,
+                "rep" to vector, "expr" to broadcast(variable("x")))), body, mapOf("rep" to int))
+        fun selectHeap(value: List<Any?>): List<Any?> = listOf("case", value, "whole",
+            listOf(listOf("data", "Heap", listOf("v", "bias"),
+                call("score", listOf(variable("v", vector), variable("bias"))),
+                mapOf("binders" to listOf(formal("v", vector), formal("bias"))))),
+            mapOf("rep" to int, "binder" to formal("whole", boxed)))
+        val heapDirect = app(listOf("con", "Heap", 2), listOf(broadcast(variable("x")), literal(13)), boxed)
+        val heapPap = app(app(listOf("con", "Heap", 2), listOf(broadcast(variable("x"))), closure),
+            listOf(literal(13)), boxed)
+        val captured = vectorLet(app(lam(listOf(formal("bias")),
+            call("score", listOf(saved(), variable("bias")))), listOf(literal(13)), int))
+        val thunk = vectorLet(listOf("let", false,
+            listOf(mapOf("id" to "suspended", "name" to "suspended", "lifted" to true,
+                "rep" to (boxed + ("evaluated" to false)),
+                "expr" to app(listOf("con", "BoxedInt", 1), listOf(scoreSaved()), boxed))),
+            listOf("case", variable("suspended", boxed + ("evaluated" to false)), "whole",
+                listOf(listOf("data", "BoxedInt", listOf("answer"), variable("answer"),
+                    mapOf("binders" to listOf(formal("answer"))))),
+                mapOf("rep" to int, "binder" to formal("whole", boxed))), mapOf("rep" to int)))
+        val base = module()
+        return base + mapOf("constructors" to (base["constructors"] as List<*>) + listOf(heap, boxedInt),
+            "bindings" to (base["bindings"] as List<*>) + listOf(
+                binding("heapDirect", lam(listOf(formal("x")), selectHeap(heapDirect))),
+                binding("heapPap", lam(listOf(formal("x")), selectHeap(heapPap))),
+                binding("captured", lam(listOf(formal("x")), captured)),
+                binding("thunk", lam(listOf(formal("x")), thunk))))
+    }
     @Test fun publicHostStillRejectsVectorIngressAndResult() {
         for (backend in listOf("ast", "bytecode")) for ((entry, boundary) in
             listOf("identity" to "host argument", "returnVector" to "host result"))
@@ -95,6 +135,33 @@ class SimdAstTransportTest {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                     val program = Program(language, module())
                     for (entry in listOf("direct", "pap", "nested")) {
+                        val function = context.asValue(EntryValue(program, entry, 1))
+                        for (x in listOf(-32768L, -1L, 0L, 32767L))
+                            assertEquals(x.toShort().toLong() + 13L, function.execute(x).asLong(), "$entry/$x interpreted")
+                        assertTrue(function.invokeMember("compile").asBoolean(), "$entry first installed compilation")
+                        val target = program.entryTarget(entry)
+                        for (x in listOf(32767L, 0L, -1L, -32768L)) {
+                            val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                            assertEquals(x.toShort().toLong() + 13L, function.execute(x).asLong(), "$entry/$x compiled")
+                            assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() > before)
+                            assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                            assertEquals(0, language.handoffState.get().arguments.depth)
+                            assertEquals(0, language.handoffState.get().results.depth)
+                        }
+                    }
+                } finally { context.leave() }
+            }
+    }
+
+    @Test fun astHeapVectorsOwnLanesAcrossClosureThunkConstructorAndPap() {
+        Context.newBuilder("thc").allowExperimentalOptions(true)
+            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+            .option("engine.CompilationFailureAction", "Throw").build().use { context ->
+                context.initialize("thc"); context.enter()
+                try {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val program = Program(language, heapModule())
+                    for (entry in listOf("heapDirect", "heapPap", "captured", "thunk")) {
                         val function = context.asValue(EntryValue(program, entry, 1))
                         for (x in listOf(-32768L, -1L, 0L, 32767L))
                             assertEquals(x.toShort().toLong() + 13L, function.execute(x).asLong(), "$entry/$x interpreted")
