@@ -10,18 +10,29 @@ import org.graalvm.polyglot.io.IOAccess
 /** One preference order for the command line, module requests and direct Core requests. */
 fun defaultBackend(): String = System.getProperty("thc.backend", System.getenv("THC_BACKEND") ?: "bytecode")
 
-fun executionContext(fileIO: Boolean = false): Context = Context.newBuilder("thc").allowNativeAccess(true)
-    .allowCreateThread(true)
-    .allowIO(if (fileIO) IOAccess.ALL else IOAccess.NONE)
-    .allowExperimentalOptions(true)
-    .option("engine.BackgroundCompilation", "false")
-    .option("engine.TraceCompilation", System.getProperty("thc.traceCompilation", "false"))
-    .option("engine.MultiTier", "false")
-    .option("engine.SingleTierCompilationThreshold", "10000")
-    .option("engine.CompilationFailureAction", "Throw")
-    .option("compiler.CompilationTimeout", "30")
-    .option("compiler.MaximumGraalGraphSize", "100000")
-    .build()
+/** Fixed settings only; IO authority is chosen by the context factory. */
+internal enum class ContextProfile { NATIVE, SYNCHRONOUS_TEST, LAUNCHER }
+
+internal fun Context.Builder.withContextProfile(profile: ContextProfile): Context.Builder {
+    allowCreateThread(true)
+    if (profile == ContextProfile.NATIVE) return this
+    allowExperimentalOptions(true)
+        .option("engine.BackgroundCompilation", "false")
+        .option("engine.MultiTier", "false")
+        .option("engine.CompilationFailureAction", "Throw")
+    if (profile == ContextProfile.SYNCHRONOUS_TEST) return this
+    return option("engine.TraceCompilation", System.getProperty("thc.traceCompilation", "false"))
+        .option("engine.SingleTierCompilationThreshold", "10000")
+        .option("compiler.CompilationTimeout", "30")
+        .option("compiler.MaximumGraalGraphSize", "100000")
+}
+
+fun executionContext(fileIO: Boolean = false): Context {
+    if (fileIO && NativeIO.supportedHost()) return NativeIO.commandLineContext()
+    return Context.newBuilder("thc").allowNativeAccess(true)
+        .allowIO(if (fileIO) IOAccess.ALL else IOAccess.NONE)
+        .withContextProfile(ContextProfile.LAUNCHER).build()
+}
 
 @JvmOverloads
 fun loadEntry(context: Context, modules: List<String>, entry: String, instrument: Boolean = true,
