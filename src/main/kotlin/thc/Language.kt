@@ -45,7 +45,13 @@ import java.util.concurrent.atomic.AtomicReference
  */
 object CoreModules {
     @Suppress("UNCHECKED_CAST")
-    fun merge(modules: List<Map<String, Any?>>): Map<String, Any?> {
+    fun merge(modules: List<Map<String, Any?>>): Map<String, Any?> = merge(modules, emptyList())
+
+    internal fun mergeManagedExports(modules: List<Map<String, Any?>>, admissions: List<ManagedExportAdmission>): Map<String, Any?> =
+        merge(modules, admissions)
+
+    @Suppress("UNCHECKED_CAST")
+    private fun merge(modules: List<Map<String, Any?>>, admissions: List<ManagedExportAdmission>): Map<String, Any?> {
         require(modules.isNotEmpty()) { "No Core modules supplied" }
         val bindings = linkedMapOf<String, Map<String, Any?>>()
         val constructors = linkedMapOf<String, Map<String, Any?>>()
@@ -59,7 +65,8 @@ object CoreModules {
             CoreForeignArtifacts.validateArchive(module)
             val link = CoreForeignArtifacts.linked(module)
             val archiveOnly = module["schema"] == 2L || module["schema"] == 2
-            if (archiveOnly && link == null && CoreForeignArtifacts.hasRegistrationObligations(module))
+            val managedExport = admissions.any { it.module === module }
+            if (archiveOnly && link == null && !managedExport && CoreForeignArtifacts.hasRegistrationObligations(module))
                 CoreForeignArtifacts.requireExecutable(module)
             link?.let {
                 require(foreignLinks.putIfAbsent(link.unit to link.module, link) == null) {
@@ -88,7 +95,7 @@ object CoreModules {
             for (b in module["bindings"] as List<Map<String, Any?>>) {
                 val id = b["id"] as String
                 require(bindings.putIfAbsent(id, b) == null) { "Duplicate binding: $id" }
-                if (archiveOnly && link == null)
+                if (archiveOnly && link == null && !managedExport)
                     archiveBindings[id] = "${module["unit"]}:${module["module"]}"
                 // The merged bundle has no single unit/module. Preserve the exact
                 // exporting module for globally named bindings; synthetic entries
@@ -223,6 +230,15 @@ object CoreModules {
         if (manifest != null) settings["strictLink"] = true
         if (ioMain) settings["ioMain"] = true
         if (shutdownEntry != null) settings["shutdownEntry"] = shutdownEntry
+        return requestDocument(paths, settings)
+    }
+
+    internal fun managedExportRequest(paths: List<String>, backend: String, instrument: Boolean): String =
+        requestDocument(paths, mapOf("mode" to "managed-exports", "backend" to backend,
+            "instrument" to instrument, "strictLink" to true))
+
+    private fun requestDocument(paths: List<String>, settings: Map<String, Any>): String {
+        val manifest = paths.singleOrNull()?.takeIf { it.startsWith("@") }?.drop(1)
         val options = StringBuilder().also { Json.appendObjectDocument(it,
             Json.stringify(settings)) }
         return buildString {
@@ -255,6 +271,7 @@ class Language : TruffleLanguage<Language.State>() {
     internal val handoffLayouts: thc.runtime.HandoffLayouts get() = currentState(null).handoffLayouts
     internal val handoffState = locals.createContextThreadLocal { _, _ -> thc.runtime.HandoffState() }
     class State(val env: Env, language: Language) {
+        internal val managedExports = ManagedExportRegistry(this, language)
         internal val handoffLayouts = thc.runtime.HandoffLayouts(language)
         internal val javaScriptImports = thc.runtime.JavaScriptImports()
         internal val maskingState = ThreadLocal.withInitial { thc.runtime.MaskingState.UNMASKED }
@@ -336,9 +353,11 @@ class Language : TruffleLanguage<Language.State>() {
         }
     }
     override fun createContext(env: Env): State = State(env, this)
+    override fun getScope(context: State): Any = context.managedExports.scope
     override fun isThreadAccessAllowed(thread: Thread, singleThreaded: Boolean): Boolean = true
     override fun finalizeContext(context: State) { context.iconv.dispose() }
     override fun disposeContext(context: State) {
+        context.managedExports.close()
         try {
             try { context.threads.close() } finally {
                 try { context.capturedAsyncRequests.close() } finally {
@@ -364,6 +383,13 @@ class Language : TruffleLanguage<Language.State>() {
     @Suppress("UNCHECKED_CAST")
     override fun parse(request: ParsingRequest): CallTarget {
         val input = Json.parse(request.source.characters.toString()) as Map<String, Any?>
+        if (input["mode"] == "managed-exports") {
+            val plan = ManagedExportPlan.read(input)
+            return object : RootNode(this) {
+                override fun execute(frame: VirtualFrame): Any = currentState(this).managedExports.load(plan)
+                override fun getName() = "THC load managed exports"
+            }.callTarget
+        }
         val modules = input["modules"] as? List<Map<String, Any?>> ?: error("Expected modules array")
         val entry = input["entry"] as? String ?: error("Expected entry name")
         val shutdownEntry = input["shutdownEntry"] as? String
