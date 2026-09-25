@@ -93,7 +93,7 @@ jobs:
       - name: Resolve Cabal driver dependencies
         run: cabal build exe:thc
       - name: Build and test from source
-        run: scripts/try.sh
+        run: scripts/try.sh --fail-fast
       - name: Check Haskell calls into JavaScript
         run: |
           python3 scripts/test-polyglot-audit.py
