@@ -21,9 +21,12 @@ class OriginalMemmoveTest {
         as Map<String, Any?>
 
     private fun module(declaration: Map<String, Any?> = descriptor): Map<String, Any?> {
-        val tuple = declaration.getValue("resultRep") as Map<String, Any?>
+        // Build the caller from the genuine shape even when a negative control
+        // mutates only the declaration under test.
+        val canonical = descriptor
+        val tuple = canonical.getValue("resultRep") as Map<String, Any?>
         val fields = tuple.getValue("components") as List<Map<String, Any?>>
-        val formals = (declaration.getValue("argumentReps") as List<Map<String, Any?>>).mapIndexed { index, rep ->
+        val formals = (canonical.getValue("argumentReps") as List<Map<String, Any?>>).mapIndexed { index, rep ->
             mapOf("id" to "arg$index", "lifted" to false, "rep" to (rep + ("evaluated" to true)))
         }
         val call = listOf("app", listOf("var", "original-memmove-id", mapOf("rep" to closure)),
@@ -86,17 +89,17 @@ class OriginalMemmoveTest {
                 assertThrows(RuntimeFault::class.java) { move(ManagedAddress.fromHex("0000000000000000"), base, 8) }
                 assertEquals(before, contents(base))
             }
-            val managed = ManagedAddress.fromAllocation(ManagedAllocation.mutable(24, 8))
+            val managed = ManagedAddress.fromAllocation(ManagedAllocation.mutable(16, 8))
             run(managed, errors = true)
-            repeat(2) { run(ManagedAddress.fromByteArray(ByteArray(24))) }
+            repeat(2) { run(ManagedAddress.fromByteArray(ByteArray(16))) }
             target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
             valid(target)
             val before = (guest.diagnostics().getValue("compiledEntries") as Number).toLong()
-            run(ManagedAddress.fromAllocation(ManagedAllocation.mutable(24, 8)))
+            run(ManagedAddress.fromAllocation(ManagedAllocation.mutable(16, 8)))
             assertEquals(before + 3, (guest.diagnostics().getValue("compiledEntries") as Number).toLong())
             valid(target)
             if (System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in setOf("amd64", "x86_64")) {
-                val native = Language.currentState().nativeAllocations.malloc(24)
+                val native = Language.currentState().nativeAllocations.malloc(16)
                 run(native)
                 val alias = native.plus(4)
                 Language.currentState().nativeAllocations.free(native)
