@@ -53,10 +53,39 @@ class OriginalHandleReadinessNativeTest {
         return result
     }
 
+    @Suppress("UNCHECKED_CAST")
+    private fun checkedRows(): List<Map<String, Number>> {
+        val manifest = json("build/original-handle-readiness/manifest.json")
+        assertEquals(1L, manifest["schema"])
+        assertEquals(3L, manifest["nativeRows"])
+        val inputs = manifest["inputHashes"] as Map<String, String>
+        OriginalStdioChecks.hashes(root, inputs, setOf(
+            "compiler/test-fixtures/OriginalHandleReadinessAudit.hs",
+            "compiler/test-fixtures/OriginalHandleReadinessNative.hs",
+            "test/haskell-fixtures/OriginalHandleReadinessFixtures.hs", "scripts/core_original_foreign.py"))
+        val artifacts = manifest["artifactHashes"] as Map<String, String>
+        OriginalStdioChecks.hashes(root, artifacts, setOf(
+            "build/original-handle-readiness/oracle.json",
+            "build/original-handle-readiness/pre/core/OriginalHandleReadinessAudit.json",
+            "build/original-handle-readiness/post/core/OriginalHandleReadinessAudit.json"),
+            "build/original-handle-readiness/")
+        val rows = Json.parse(File(directory, "oracle.json").readText()) as List<Map<String, Number>>
+        assertEquals(listOf(-1, 1, 2), rows.map { it.getValue("fd").toInt() })
+        val abi = StdioHostAbi.load()
+        for (row in rows) {
+            assertEquals(0, row.getValue("result").toInt())
+            assertEquals(if (row.getValue("fd").toInt() < 0) abi.error(4) else abi.notTerminal(),
+                row.getValue("errno").toLong())
+        }
+        return rows
+    }
+
     @Test @EnabledOnOs(OS.LINUX)
     @EnabledIfSystemProperty(named = "os.arch", matches = "amd64|x86_64")
     fun privatePtyUsesOriginalIsattyOnItsOwnedNativeDescriptorAfterCompilation() {
+        checkedRows()
         val oracle = ProcessBuilder(File(directory, "native/oracle").absolutePath, "--hold-pty").start()
+        var completed = false
         try {
             val announced = CompletableFuture.supplyAsync { oracle.inputStream.bufferedReader().readLine() }
                 .get(15, TimeUnit.SECONDS)?.split('\t') ?: fail("PTY oracle ended before announcing its path")
@@ -105,40 +134,26 @@ class OriginalHandleReadinessNativeTest {
                     }
                 }
             }
+            completed = true
         } finally {
-            oracle.outputStream.write('\n'.code)
-            oracle.outputStream.flush()
-            if (!oracle.waitFor(5, TimeUnit.SECONDS)) {
+            if (!completed) {
                 oracle.destroyForcibly()
-                assertTrue(oracle.waitFor(5, TimeUnit.SECONDS), "PTY oracle did not terminate")
+                runCatching { oracle.waitFor(5, TimeUnit.SECONDS) }
+            } else {
+                // The child may have already failed; still reap it and report
+                // its exit status instead of masking the outcome with a broken pipe.
+                runCatching { oracle.outputStream.write('\n'.code); oracle.outputStream.flush() }
+                if (!oracle.waitFor(5, TimeUnit.SECONDS)) {
+                    oracle.destroyForcibly()
+                    assertTrue(oracle.waitFor(5, TimeUnit.SECONDS), "PTY oracle did not terminate")
+                }
+                assertEquals(0, oracle.exitValue(), oracle.errorStream.bufferedReader().readText())
             }
-            assertEquals(0, oracle.exitValue(), oracle.errorStream.bufferedReader().readText())
         }
     }
 
     @Test fun originalIsattyAndErrnoMatchNativeBeforeAndAfterExplicitCompilation() {
-        val manifest = json("build/original-handle-readiness/manifest.json")
-        assertEquals(1L, manifest["schema"])
-        assertEquals(3L, manifest["nativeRows"])
-        val inputs = manifest["inputHashes"] as Map<String, String>
-        OriginalStdioChecks.hashes(root, inputs, setOf(
-            "compiler/test-fixtures/OriginalHandleReadinessAudit.hs",
-            "compiler/test-fixtures/OriginalHandleReadinessNative.hs",
-            "test/haskell-fixtures/OriginalHandleReadinessFixtures.hs", "scripts/core_original_foreign.py"))
-        val artifacts = manifest["artifactHashes"] as Map<String, String>
-        OriginalStdioChecks.hashes(root, artifacts, setOf(
-            "build/original-handle-readiness/oracle.json",
-            "build/original-handle-readiness/pre/core/OriginalHandleReadinessAudit.json",
-            "build/original-handle-readiness/post/core/OriginalHandleReadinessAudit.json"),
-            "build/original-handle-readiness/")
-        val rows = Json.parse(File(directory, "oracle.json").readText()) as List<Map<String, Number>>
-        assertEquals(listOf(-1, 1, 2), rows.map { it.getValue("fd").toInt() })
-        val abi = StdioHostAbi.load()
-        for (row in rows) {
-            assertEquals(0, row.getValue("result").toInt())
-            assertEquals(if (row.getValue("fd").toInt() < 0) abi.error(4) else abi.notTerminal(),
-                row.getValue("errno").toLong())
-        }
+        val rows = checkedRows()
         for (stage in listOf("pre", "post")) {
             val prefix = "build/original-handle-readiness/$stage"
             val module = CoreModules.merge(listOf("OriginalHandleReadinessAudit", "THC.InterfaceClosure")
