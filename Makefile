@@ -8,12 +8,16 @@ RUN_GHC ?= runghc
 GRADLE_FLAGS ?=
 CABAL_FLAGS ?=
 CORE_PACKAGES ?= ghc-internal base
+PANDOC ?= pandoc
+DOCS_REVISION ?= $(shell git rev-parse HEAD)
+DOCS_CABAL_FLAGS = $(CABAL_FLAGS) --with-compiler='$(GHC)' --builddir=build/docs/cabal -j2
 export GRADLE_USER_HOME ?= $(CURDIR)/.gradle-user-home
 export JAVA_HOME
 
 CORE_PREFLIGHT = GHC='$(GHC)' GHC_PKG='$(GHC_PKG)' $(RUN_GHC) -f "$$(command -v '$(GHC)')" --ghc-arg=-package --ghc-arg=ghc --ghc-arg=-package --ghc-arg=Cabal scripts/check-ghc-core.hs
 
 .PHONY: all runtime haskell run jar fixtures test jit-test probe clean distclean check-java check-ghc-core
+.PHONY: docs docs-haskell docs-jvm docs-check check-pandoc
 
 all: runtime haskell
 
@@ -30,6 +34,32 @@ run: all
 
 check-ghc-core:
 	@$(CORE_PREFLIGHT) check $(CORE_PACKAGES)
+
+# These deliberately have no fixture, test, native library, or installDist dependency.
+# Run sequentially even when the caller uses make -j; both compilers are bounded.
+docs: check-pandoc
+	$(MAKE) docs-haskell
+	$(MAKE) docs-jvm
+	$(CABAL) run exe:thc-docs $(DOCS_CABAL_FLAGS) -- build '$(DOCS_REVISION)' '$(PANDOC)'
+
+docs-haskell:
+	$(CABAL) haddock lib:thc $(DOCS_CABAL_FLAGS) --haddock-html --haddock-quickjump \
+	  --haddock-output-dir='$(CURDIR)/build/docs/haskell' \
+	  --haddock-html-location='https://hackage.haskell.org/package/$$pkg-$$version/docs' \
+	  --haddock-option='--source-base=https://github.com/ekmett/thc/tree/$(DOCS_REVISION)/compiler' \
+	  --haddock-option='--source-module=https://github.com/ekmett/thc/blob/$(DOCS_REVISION)/compiler/%{MODULE/.//}.hs' \
+	  --haddock-option='--source-entity=https://github.com/ekmett/thc/blob/$(DOCS_REVISION)/compiler/%{MODULE/.//}.hs#L%L'
+	@printf '%s\n' '$(DOCS_REVISION)' > build/docs/haskell.revision
+
+docs-jvm: check-java
+	./gradlew dokkaGeneratePublicationHtml $(GRADLE_FLAGS) --max-workers=2 -Pthc.docsRevision='$(DOCS_REVISION)'
+	@printf '%s\n' '$(DOCS_REVISION)' > build/docs/jvm.revision
+
+docs-check:
+	$(CABAL) run exe:thc-docs $(DOCS_CABAL_FLAGS) -- check '$(DOCS_REVISION)'
+
+check-pandoc:
+	@command -v '$(PANDOC)' >/dev/null || { printf '%s\n' 'Install Pandoc 3.x (or set PANDOC) to render the documentation guides.' >&2; exit 1; }
 
 jar: check-java
 	./gradlew jar $(GRADLE_FLAGS)

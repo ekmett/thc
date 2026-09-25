@@ -37,6 +37,12 @@ import java.util.concurrent.ExecutionException
 import java.util.concurrent.FutureTask
 import java.util.concurrent.atomic.AtomicReference
 
+/**
+ * Internal Core assembly and request serialization shared by the launcher and tests.
+ * Original unit identities, foreign obligations and strict reachable references
+ * remain subject to validation. These map-based structures are not a stable host ABI;
+ * embedding callers should normally use [loadEntry].
+ */
 object CoreModules {
     @Suppress("UNCHECKED_CAST")
     fun merge(modules: List<Map<String, Any?>>): Map<String, Any?> {
@@ -198,6 +204,11 @@ object CoreModules {
         return (module - "archiveBindings") + ("bindings" to bindings.filter { it["id"] in reachable })
     }
 
+    /**
+     * Serialize one load request from Core files or a singleton `@manifest` path.
+     * Manifest loading validates its archive and selects strict linking. This step
+     * does not execute the entry or bypass the backend's support audit.
+     */
     fun request(paths: List<String>, entry: String, instrument: Boolean = true, diagnosticUnsupported: Boolean = false,
                 backend: String = defaultBackend(), sourceNotesEnabled: Boolean = true, ioMain: Boolean = false,
                 shutdownEntry: String? = null): String {
@@ -260,6 +271,8 @@ class Language : TruffleLanguage<Language.State>() {
         internal val stackSnapshots = thc.runtime.ManagedStackRegistry()
         internal val capturedAsyncRequests = thc.runtime.CapturedAsyncRequests()
         internal val stablePointers = thc.runtime.StablePointers()
+        internal val nativeAddresses = thc.runtime.NativeAddresses(env)
+        internal val weaks = thc.runtime.ManagedWeaks()
         // A future SHARED policy may keep the lockless thunk path while this is valid.
         // The transition is one-way and belongs to this context, not to Language.
         internal val singleThreadedAssumption = Truffle.getRuntime().createAssumption("THC single-threaded context")
@@ -336,7 +349,11 @@ class Language : TruffleLanguage<Language.State>() {
                     }
                 }
             }
-        } finally { context.stablePointers.close() }
+        } finally {
+            try { context.weaks.close() } finally {
+                try { context.stablePointers.close() } finally { context.nativeAddresses.close() }
+            }
+        }
     }
     override fun initializeThread(context: State, thread: Thread) = context.noteThread(thread)
     override fun initializeMultiThreading(context: State) = context.markMultithreaded()

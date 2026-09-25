@@ -15,6 +15,7 @@ are different claims; each report identifies which it establishes.
 | Integer and Natural | [BigNat literals and original conversion workers](bignat-literals.md); this does not imply general large-integer arithmetic |
 | Mutable references | [ST/STRef with lazy lifted storage](mutvars.md) |
 | MVars | [Managed cells, lazy payloads and blocking handoff](managed-mvars.md); a Handle IO foundation, not complete Handle support |
+| Weak pointers | [Retained registrations and explicit finalization](weak-explicit.md); partial, no GC/ephemerons or C callbacks |
 | Locale and iconv | [Original native glibc/Sulong imports](original-iconv.md); explicit full-Core proof group, not complete Handle/IO |
 | Native file ownership | [Opened-resource provider and original fstat](native-file-provider.md); Linux x86_64 `--run-io` uses it, RTS locking remains separate |
 | Threads | [Asynchronous exceptions and resumable thunk evaluation](async-exceptions.md); Java thread identities, masking and interruptible MVar waits |

@@ -11,6 +11,7 @@
     "thc.GuestExceptionsTest",
     "thc.runtime.ManagedDescriptorDupTest",
     "thc.runtime.CoreGmpForeignTest",
+    "thc.runtime.CoreMainThreadForeignTest",
     "thc.runtime.SulongLimbProviderTest",
     "thc.runtime.AstContinuationTest",
     "thc.runtime.GuestThreadsTest",
@@ -41,8 +42,10 @@
     "libdw-unavailable": {
       "junit": ["thc.runtime.LibdwUnavailableTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "libdw-unavailable"]}],
-      "outputs": ["build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json"],
-      "sources": ["compiler/test-fixtures/LibdwUnavailableNative.hs", "test/haskell-fixtures/LibdwUnavailableFixtures.hs",
+      "outputs": ["build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json", "build/libdw-unavailable/foreign-labels.json"],
+      "sources": ["compiler/test-fixtures/LibdwUnavailableNative.hs", "compiler/test-fixtures/CFinalizerNative.hs",
+        "compiler/test-fixtures/ForeignLabelAudit.hs", "test/haskell-fixtures/LibdwUnavailableFixtures.hs",
+        "compiler/THC/Plugin.hs", "compiler/THC/CBV.hs", "compiler/THC/Demands.hs", "compiler/THC/Sources.hs", "compiler/THC/Wired.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-termios": {
@@ -52,6 +55,13 @@
       "sources": ["compiler/test-fixtures/OriginalTermiosAudit.hs", "compiler/test-fixtures/OriginalTermiosNative.hs",
         "test/haskell-fixtures/OriginalTermiosFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
+    "native-addresses": {
+      "junit": ["thc.runtime.NativeAddressTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "native-addresses"]}],
+      "outputs": ["build/native-addresses/manifest.json", "build/native-addresses/oracle.json"],
+      "sources": ["compiler/test-fixtures/NativeAddressNative.hs", "test/haskell-fixtures/NativeAddressFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-open": {
       "junit": ["thc.runtime.OriginalOpenTest"],
@@ -179,6 +189,18 @@
       "sources": [
         "compiler/test-fixtures/MutVarAudit.hs",
         "test/haskell-fixtures/MutVarFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal"
+      ]
+    },
+    "weak-explicit": {
+      "junit": ["thc.runtime.ManagedWeakTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "weak-explicit"]}],
+      "outputs": ["build/weak-explicit"],
+      "sources": [
+        "compiler/test-fixtures/WeakAudit.hs",
+        "test/haskell-fixtures/WeakFixtures.hs",
         "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs",
         "thc.cabal"

@@ -113,11 +113,32 @@ class LibdwUnavailableTest {
         val manifest = Json.parse(File(root, "$prefix/manifest.json").readText()) as Map<String, Any?>
         assertEquals("9.14.1", manifest["ghc"])
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf(
-            "compiler/test-fixtures/LibdwUnavailableNative.hs", "test/haskell-fixtures/LibdwUnavailableFixtures.hs"))
-        OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf("$prefix/oracle.json"), "$prefix/")
+            "compiler/test-fixtures/LibdwUnavailableNative.hs", "compiler/test-fixtures/CFinalizerNative.hs",
+            "compiler/test-fixtures/ForeignLabelAudit.hs", "compiler/THC/Plugin.hs",
+            "test/haskell-fixtures/LibdwUnavailableFixtures.hs"))
+        OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf("$prefix/oracle.json", "$prefix/foreign-labels.json"), "$prefix/")
         val oracle = Json.parse(File(root, "$prefix/oracle.json").readText()) as Map<String, Any?>
         assertEquals(false, oracle["useLibdw"])
         assertEquals(List(8) { true }, oracle["observations"])
+        assertEquals(List(14) { true }, oracle["cFinalizerObservations"])
+        val labels = ArrayList<Pair<String, String>>()
+        fun walk(value: Any?) {
+            when (value) {
+                is Map<*, *> -> value.values.forEach(::walk)
+                is List<*> -> {
+                    if (value.firstOrNull() == "lit" && value.getOrNull(1) in setOf("function-addr", "data-addr")) {
+                        val proof = (value[3] as Map<*, *>)["rep"] as Map<*, *>
+                        assertEquals("address", proof["kind"])
+                        assertEquals(listOf("AddrRep"), proof["primReps"])
+                        labels.add(value[1] as String to value[2] as String)
+                    }
+                    value.forEach(::walk)
+                }
+            }
+        }
+        walk(Json.parse(File(root, "$prefix/foreign-labels.json").readText()))
+        assertEquals(listOf("data-addr" to "enabled_capabilities", "function-addr" to "backtraceFree",
+            "function-addr" to "libdwPoolRelease"), labels.sortedWith(compareBy({ it.first }, { it.second })))
     }
 
     @Test fun declarationAndStoredOperandProofsCannotBeForged() {

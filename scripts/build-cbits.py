@@ -16,6 +16,15 @@ ROOT = Path(__file__).resolve().parent.parent
 PINNED = {"md5.c": "4fa83bda7aacc8a1656d7e2d78251bbe70a04b56",
           "md5.h": "a87296687a2f3dc6748264ff2a8a0c919518db55"}
 STRERROR_SHA256 = "bf3a2129e508a108611b734864b63b234fae319c544c1cc500a53a2b7a91953b"
+LIBDW_SHA256 = {
+    "BeginPrivate.h": "9523f652d274067f5a89ca3ce9ad156f212c88941affbcdf23711f33f684055e",
+    "EndPrivate.h": "636273ae8e7d978ab90ea1c51b2b05aeb624392b2f04c25894622acf84f1726e",
+    "Libdw.c": "97f4914dc6dcee490531f6415d5c654e06fc7233d8ef616f4fa3bdbcac1aecec",
+    "Libdw.h": "018610912b2f4cba487b887c7b1ad5a617fb282ad7b555583dfe649be680971a",
+    "LibdwPool.c": "7e007421ec6a4a8cb6f5d5a70743558c0cd5efbc66194b4ad3dce89350bb23ea",
+    "LibdwPool.h": "db0ca71e54f18b15bd8afbb66ba69b13675ec10b974bfcb838ddb1234127612c",
+    "RtsUtils.h": "6257c9fb28c80ad62c5084b771ce71fd2b2afceaf428633a10e37dc5eb309649",
+}
 
 
 def compiler_target(clang, system, arch):
@@ -72,11 +81,16 @@ def main():
     strerror = ROOT / "compiler/pinned-ghc-internal/cbits/strerror.c"
     if hashlib.sha256(strerror.read_bytes()).hexdigest() != STRERROR_SHA256:
         raise SystemExit("Original GHC 9.14.1 strerror.c changed")
+    libdw = ROOT / "compiler/pinned-ghc-rts"
+    for name, expected in LIBDW_SHA256.items():
+        if hashlib.sha256((libdw / name).read_bytes()).hexdigest() != expected:
+            raise SystemExit(f"Original GHC 9.14.1 {name} changed")
     output = args.output.resolve() / "thc/cbits"
     output.mkdir(parents=True, exist_ok=True)
     commands = []
     sources = {"md5": ROOT / "src/main/c/md5-api.c", "strerror": strerror,
-               "strerror-locale": ROOT / "src/main/c/strerror-locale.c"}
+               "strerror-locale": ROOT / "src/main/c/strerror-locale.c",
+               "libdw-unavailable": ROOT / "src/main/c/libdw-unavailable.c"}
     if system == "Linux":
         sources["iconv"] = ROOT / "src/main/c/iconv-api.c"
     for name, source in sources.items():
@@ -87,7 +101,7 @@ def main():
                    "-o", str(output / (name + ".bc"))]
         subprocess.run(command, cwd=ROOT, check=True)
         commands.append(command)
-    source_files = [reference / n for n in PINNED] + list(sources.values())
+    source_files = [reference / n for n in PINNED] + [libdw / n for n in LIBDW_SHA256] + list(sources.values())
     artifacts = [output / (name + ".bc") for name in sources]
     # The first native limb provider is intentionally Linux x86_64 only. Keep
     # the embedded LLVM container's DT_NEEDED entry: GMP receives real native

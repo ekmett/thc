@@ -8,15 +8,17 @@ import com.oracle.truffle.api.interop.InteropLibrary
 import com.oracle.truffle.api.source.Source
 import org.graalvm.polyglot.io.ByteSequence
 import java.lang.ref.WeakReference
+import java.lang.ref.Reference
 import java.util.WeakHashMap
 import java.util.function.LongSupplier
+import java.util.function.Supplier
 import java.util.concurrent.FutureTask
 import java.util.concurrent.ExecutionException
 import com.oracle.truffle.api.TruffleSafepoint
 import java.util.concurrent.ConcurrentHashMap
 import thc.ForeignBitcode
 
-/** Context-owned original C code and allocation views. No process addresses escape. */
+/** Context-owned original C code and checked managed/native allocation views. */
 internal class SulongCbits(private val env: TruffleLanguage.Env) {
     internal data class CapiResult(val value: Long, val errno: Long)
     private val interop = InteropLibrary.getUncached()
@@ -144,19 +146,31 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
     @Synchronized internal fun buffer(address: ManagedAddress): CbitsBuffer {
         val bytes = address.cbitsBacking()
         val owner = address.cbitsOwner()
-        val key = owner ?: bytes
-        return buffers[key]?.get() ?: (if (owner == null) CbitsBuffer(bytes, address.cbitsWritable())
-            else CbitsBuffer(bytes, address.cbitsWritable(), LongSupplier { address.cbitsSize() })).also {
-            buffers[key] = WeakReference(it)
-        }
+        val key = address.nativeImageKey() ?: owner ?: bytes
+        return buffers[key]?.get() ?: CbitsBuffer(bytes, address.cbitsWritable(),
+            LongSupplier { address.cbitsSize() }, 0,
+            if (address.nativeImageKey() == null) null else Supplier {
+                val registry = NativeAddresses.current(null)
+                registry.project(address)
+                registry.transport(address) ?: fault("Missing immutable native image")
+            }).also { buffers[key] = WeakReference(it) }
     }
+    private fun executeWithOwners(function: Any, vararg arguments: Any): Any? = try {
+        interop.execute(function, *arguments)
+    } finally {
+        // Sulong may discard a managed pointer wrapper after extracting its bits.
+        // Retain every owner until the complete native call has returned.
+        arguments.forEach { Reference.reachabilityFence(it) }
+    }
+    private fun transport(address: ManagedAddress): Any =
+        NativeAddresses.current(null).transport(address) ?: buffer(address)
     fun init(context: ManagedAddress) {
-        interop.execute(init, buffer(context), context.cbitsOffset())
+        executeWithOwners(init, transport(context), context.cbitsOffset())
     }
     fun update(context: ManagedAddress, input: ManagedAddress, length: Int) {
-        interop.execute(update, buffer(context), context.cbitsOffset(), buffer(input), input.cbitsOffset(), length)
+        executeWithOwners(update, transport(context), context.cbitsOffset(), transport(input), input.cbitsOffset(), length)
     }
     fun finish(output: ManagedAddress, context: ManagedAddress) {
-        interop.execute(finish, buffer(output), output.cbitsOffset(), buffer(context), context.cbitsOffset())
+        executeWithOwners(finish, transport(output), output.cbitsOffset(), transport(context), context.cbitsOffset())
     }
 }

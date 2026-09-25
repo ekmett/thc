@@ -28,10 +28,12 @@ internal class ManagedAllocation private constructor(
     val isWritable: Boolean get() = writable
     internal fun ownsStorage(candidate: ByteArray): Boolean = bytes === candidate
 
-    /** A raw alias is permitted only before pointer cells are installed; once
-     * returned it permanently rules out later pointer installation. */
+    /** A mutable raw alias is permitted only before pointer cells are installed;
+     * once returned it permanently rules out later pointer installation.
+     * Immutable images never expose their writable JVM backing array. */
     @Synchronized fun rawBytesIfPointerFree(): ByteArray {
         if (pointerCapable) fault("Pointer-bearing pinned array cannot be accessed as raw bytes")
+        if (!writable) return bytes.copyOf()
         exposedAsRawBytes = true
         return bytes
     }
@@ -39,6 +41,7 @@ internal class ManagedAllocation private constructor(
     /** Sulong holds a raw ByteBuffer view; it cannot track managed references. */
     @Synchronized fun exposeToNative(): ByteArray {
         if (pointerCapable) fault("Pointer-bearing pinned array cannot be passed to native bitcode")
+        if (!writable) return bytes.copyOf()
         exposedToNative = true
         return bytes
     }
@@ -48,6 +51,7 @@ internal class ManagedAllocation private constructor(
     @Synchronized fun wholeBytesForPrimitive(): ByteArray {
         if (pointerCapable || logicalSize != bytes.size)
             fault("Raw byte-array primitive cannot access a pointer-bearing or shrunk allocation")
+        if (!writable) return bytes.copyOf()
         exposedAsRawBytes = true
         return bytes
     }

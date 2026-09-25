@@ -2,6 +2,12 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE PatternSynonyms #-}
+-- | Recover complete installed Core with the selected GHC 9.14.1 session.
+--
+-- Call 'loadInterfaceCore' with an exact resolved unit/module and interface
+-- path, then 'interfaceCoreJSON' to use THC's post-Tidy serialization. Missing
+-- complete Core is distinct from an invalid interface. Loading and archival
+-- serialization do not link native foreign products or authorize execution.
 module THC.Interface
   ( InterfaceCore, interfaceModule, interfaceDetails, interfaceBindings, interfaceForeign
   , InterfaceError(..), loadInterfaceCore, interfaceCoreJSON
@@ -29,15 +35,17 @@ import THC.Plugin (serializePostTidyCore)
 -- metadata. Loading is archival: accompanying foreign build products are
 -- retained, not linked or registered with a runtime.
 data InterfaceCore = InterfaceCore
-  { interfaceModule :: Module
-  , interfaceDetails :: ModDetails
-  , interfaceBindings :: CoreProgram
-  , interfaceForeign :: IfaceForeign
+  { interfaceModule :: Module -- ^ Original unit and module identity.
+  , interfaceDetails :: ModDetails -- ^ Hydrated declarations from this interface.
+  , interfaceBindings :: CoreProgram -- ^ Original groups plus missing local boxed-data wrappers.
+  , interfaceForeign :: IfaceForeign -- ^ Foreign source and lifecycle metadata, retained without linking.
   , interfaceFlags :: DynFlags
   }
 
+-- | Identity failure detected before Core hydration. Other malformed-interface
+-- and way/version failures retain GHC's own diagnostics.
 data InterfaceError
-  = InterfaceModuleMismatch Module Module
+  = InterfaceModuleMismatch Module Module -- ^ Expected module, then actual interface owner.
 
 instance Show InterfaceError where
   show (InterfaceModuleMismatch expected actual) =
