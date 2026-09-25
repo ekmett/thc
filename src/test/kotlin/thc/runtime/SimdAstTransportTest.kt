@@ -60,7 +60,7 @@ class SimdAstTransportTest {
             call("score", listOf(variable("v", vector), variable("z"))),
             mapOf("binders" to listOf(formal("v", vector), formal("z"))))),
             mapOf("rep" to int, "binder" to formal("pair", nested)))
-        return mapOf("instrument" to true,
+        return mapOf("schema" to 1, "ghc" to "9.14.1", "instrument" to true,
             "constructors" to listOf(mapOf("id" to "T8", "name" to "T8", "kind" to "unboxed-tuple", "arity" to 8),
                 mapOf("id" to "T2", "name" to "T2", "kind" to "unboxed-tuple", "arity" to 2)),
             "bindings" to listOf(
