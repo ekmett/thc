@@ -239,6 +239,81 @@ class NativeMallocTest {
         }
     }
 
+    @Test fun termiosTransferCopiesBackWholeImagesOnSuccessAndNativeError() = inside { _ ->
+        val registry = Language.currentState().nativeAllocations
+        val size = TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.nullAddress(), 0).toInt()
+        val base = registry.malloc(size.toLong() + 16)
+        val address = base.plus(8)
+        try {
+            for (copyBack in listOf(false, true)) for (fails in listOf(false, true)) {
+                for (i in 0 until size + 16) base.writeWord8(i.toLong(), 77)
+                val failure = NativeFileException("tcgetattr test", 5)
+                fun invoke() = TermiosImage.transfer(address, copyBack) { bytes ->
+                    assertArrayEquals(ByteArray(size) { 77 }, bytes)
+                    // Same-thread release must reject rather than deadlock.
+                    assertThrows(RuntimeFault::class.java) { registry.free(base) }
+                    bytes.indices.forEach { bytes[it] = (it * 17).toByte() }
+                    if (fails) throw failure
+                    37L
+                }
+                if (fails) assertSame(failure, assertThrows(NativeFileException::class.java) { invoke() })
+                else assertEquals(37L, invoke())
+                val expected = ByteArray(size + 16) { 77 }
+                if (copyBack) for (i in 0 until size) expected[i + 8] = (i * 17).toByte()
+                assertArrayEquals(expected, ByteArray(size + 16) { base.readWord8(it.toLong()).toByte() })
+            }
+            assertThrows(RuntimeFault::class.java) {
+                TermiosImage.transfer(base.plus(17), true) { fail<Any>("Short image reached native operation") }
+            }
+        } finally { registry.free(base) }
+    }
+
+    @Test fun tcgetattrTransferHoldsNativeOwnerUntilErrorOrSuccessCopybackCompletes() {
+        supported()
+        context(false).use { context ->
+            val executor = Executors.newSingleThreadExecutor()
+            context.initialize("thc"); context.enter()
+            try {
+                val registry = Language.currentState().nativeAllocations
+                val size = TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.nullAddress(), 0)
+                for (fails in listOf(false, true)) {
+                    val base = registry.malloc(size)
+                    for (i in 0 until size) base.writeWord8(i, 19)
+                    val startFree = CountDownLatch(1)
+                    val freeingStarted = CountDownLatch(1)
+                    val freeing = executor.submit {
+                        context.enter()
+                        try {
+                            assertTrue(startFree.await(5, TimeUnit.SECONDS))
+                            freeingStarted.countDown()
+                            registry.free(base)
+                        } finally { context.leave() }
+                    }
+                    val failure = NativeFileException("tcgetattr test", 5)
+                    fun invoke() = TermiosImage.transfer(base, copyBack = true) { bytes ->
+                        // Queue release while the same staging callback used by
+                        // ManagedFiles.tcgetattr owns the complete native extent.
+                        startFree.countDown()
+                        assertTrue(freeingStarted.await(5, TimeUnit.SECONDS))
+                        assertThrows(TimeoutException::class.java) { freeing.get(100, TimeUnit.MILLISECONDS) }
+                        bytes.fill(73)
+                        if (fails) throw failure
+                        37L
+                    }
+                    try {
+                        if (fails) assertSame(failure, assertThrows(NativeFileException::class.java) { invoke() })
+                        else assertEquals(37L, invoke())
+                        // Copyback's checked accesses would fail if the queued
+                        // release won before the finally block completed.
+                        freeing.get(5, TimeUnit.SECONDS)
+                        assertThrows(RuntimeFault::class.java) { base.readWord8(0) }
+                        assertEquals(0, registry.liveCount())
+                    } finally { startFree.countDown() }
+                }
+            } finally { context.leave(); executor.shutdownNow() }
+        }
+    }
+
     @Test fun crossContextNativePermissionAndForgedDeclarationsFailClosed() {
         supported()
         context(false).use { first -> context(false).use { second ->
