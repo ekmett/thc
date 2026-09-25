@@ -50,8 +50,10 @@ class Audit:
         self.chains = {}
         self.queue = deque()
         for source, module in modules:
-            if module.get('schema') != 1 or module.get('ghc') != '9.14.1':
-                self.issue('module-format', None, source, 'Requires schema 1 / GHC 9.14.1')
+            if type(module.get('schema')) is not int or module['schema'] != 1 or module.get('ghc') != '9.14.1' or 'foreign' in module:
+                self.issue('module-format', None, source,
+                           core_package_manifest.foreign_execution_issue(module) or
+                           'Requires executable Core schema 1 / GHC 9.14.1 without foreign artifacts')
             for binding in module.get('bindings', []):
                 key = binding.get('id')
                 if not isinstance(key, str):

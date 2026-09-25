@@ -18,6 +18,19 @@ BOUNDARY = 'optimized-Core-after-Tidy-before-CorePrep'
 SHA256 = re.compile(r'[0-9a-f]{64}\Z')
 
 
+def foreign_execution_issue(module):
+    """Explain a valid archive-only foreign marker without admitting it as Core."""
+    foreign = module.get('foreign')
+    if (type(module.get('schema')) is int and module['schema'] == 2 and
+            isinstance(foreign, dict) and set(foreign) == {'schema', 'execution', 'stubs', 'files'} and
+            type(foreign['schema']) is int and foreign['schema'] == 1 and
+            foreign['execution'] == 'not-linked'):
+        return (f"Unsupported foreign execution for {module.get('unit')}:{module.get('module')}: "
+                'Core schema 2 is archive-only (execution=not-linked); typed foreign registration, '
+                'native stubs, initializers/finalizers, and callback support are required')
+    return None
+
+
 def strict_json(data):
     def object_pairs(pairs):
         result = {}
@@ -154,10 +167,14 @@ def load(path):
             if hashlib.sha256(data).hexdigest() != expected:
                 raise ValueError(f'{path}: content hash mismatch: {relative!r}')
             module = strict_json(data.decode('utf-8'))
-            if (not isinstance(module, dict) or type(module.get('schema')) is not int or module['schema'] != 1 or
-                    module.get('ghc') != '9.14.1' or module.get('unit') != unit_id or
+            if (not isinstance(module, dict) or module.get('unit') != unit_id or
                     module.get('module') != name or module.get('boundary') != boundary):
                 raise ValueError(f'{path}: unit/module/boundary mismatch: {relative!r}')
+            if module.get('ghc') != '9.14.1':
+                raise ValueError(f'{path}: GHC version mismatch: {relative!r}')
+            if type(module.get('schema')) is not int or module['schema'] != 1 or 'foreign' in module:
+                detail = foreign_execution_issue(module)
+                raise ValueError(f'{path}: {detail or "unsupported Core module schema/foreign metadata"}: {relative!r}')
             bindings = module.get('bindings')
             if not isinstance(bindings, list):
                 raise ValueError(f'{path}: missing bindings: {relative!r}')
