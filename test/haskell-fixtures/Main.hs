@@ -36,6 +36,7 @@ import OriginalHandleReadinessFixtures (prepareOriginalHandleReadiness)
 import OriginalPosixStatFixtures (prepareOriginalPosixStat)
 import LibdwUnavailableFixtures (prepareLibdwUnavailable)
 import NativeAddressFixtures (prepareNativeAddress)
+import ProcessSignalFixtures (prepareProcessSignals)
 import OriginalGmpFixtures (prepareOriginalGmp)
 import OriginalFdReadyFixtures (prepareOriginalFdReady)
 import FileWaitFixtures (prepareFileWait)
@@ -895,6 +896,7 @@ main = do
     ["original-sigprocmask"] -> prepareOriginalSigprocmask root
     ["original-sigset"] -> prepareOriginalSigset root
     ["native-addresses"] -> prepareNativeAddress root
+    ["process-signals"] -> prepareProcessSignals root
     ["original-gmp"] -> prepareOriginalGmp root False
     ["original-gmp", "--require-supported"] -> prepareOriginalGmp root True
     ["original-fd-ready"] -> prepareOriginalFdReady root

@@ -2556,6 +2556,20 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class InstallProcessSignal {
+        @Specialization public static void install(VirtualFrame frame, LocalAccessor destination,
+                long signal, long action, ManagedAddress mask, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = ManagedSignals.install(node, signal, action, mask);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+        @Fallback public static void invalid(VirtualFrame frame, LocalAccessor destination,
+                Object signal, Object action, Object mask, Object state) {
+            throw fail("Expected exact CInt/CInt/Addr#/State# signal operands");
+        }
+    }
     @Operation public static final class RegisterMainThread {
         @Specialization public static void register(Object weak, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);

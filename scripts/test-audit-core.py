@@ -1583,6 +1583,28 @@ class LibdwUnavailableAuditTest(unittest.TestCase):
             self.assertEqual([], result['foreignCalls'])
 
 
+class OriginalSignalDeclarationTest(unittest.TestCase):
+    def test_exact_call_requires_capability_and_implicit_original_dispatcher(self):
+        resource = ROOT.parent / 'src/test/resources/core/original-signal-install-descriptor.json'
+        declaration = json.loads(resource.read_text())
+        fixture = LibdwUnavailableAuditTest()
+        module = fixture.fixture(declaration)
+        enabled = dict(CAP, managedForeignCalls=[*CAP['managedForeignCalls'], 'stg_sig_install'])
+        missing = fixture.audit(module, enabled)
+        self.assertFalse(missing['accepted'])
+        dispatcher = 'ghc-internal:GHC.Internal.Conc.Signal.runHandlersPtr'
+        self.assertTrue(any(item['id'] == dispatcher for item in missing['missingGlobals']), missing)
+        # A synthetic dispatcher is only a linkage control, not original delivery evidence.
+        module['bindings'].append(bind(dispatcher, lit(0)))
+        self.assertTrue(fixture.audit(module, enabled)['accepted'])
+        disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != 'stg_sig_install'])
+        self.assertFalse(fixture.audit(module, disabled)['accepted'])
+        for index in range(4):
+            wrong = copy.deepcopy(module)
+            wrong['bindings'][0]['expr'][1][index]['rep'] = LONG
+            self.assertFalse(fixture.audit(wrong, enabled)['accepted'])
+
+
 class NativeMallocDeclarationTest(unittest.TestCase):
     """Original descriptors for the bounded, owned native allocation protocol."""
     def test_two_exact_declarations_and_capability_gate(self):

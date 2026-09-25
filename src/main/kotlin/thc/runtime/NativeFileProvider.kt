@@ -46,6 +46,7 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
                     val provider = NativeFileProvider(state.env, state.threads)
                     state.files.installNative(provider, endpoints)
                     state.nativeFiles = provider
+                    if (profile == ContextProfile.LAUNCHER) state.signals.authorizeLauncher()
                 } finally { context.leave() }
                 return context
             } catch (failure: Throwable) {
