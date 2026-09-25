@@ -44,14 +44,17 @@ class StablePointerTest {
         assertEquals(entries.toSet(), rows.keys)
         assertEquals((manifest["nativeRows"] as Number).toInt(), rows.values.sumOf { it.size })
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) {
-            val merged = CoreModules.merge(paths.map { json(File(root, it)) })
+            val genuine = CoreModules.merge(paths.map { json(File(root, it)) })
+            val sharedPaths = (manifest["sharedStages"] as Map<String, List<String>>).getValue(stage)
+            val synthetic = CoreModules.merge(sharedPaths.map { json(File(root, it)) })
             for (name in entries) {
+                val shared = name.startsWith("shared")
+                val merged = if (shared) synthetic else genuine
                 val audit = json(File(directory, "$stage/$name.audit.json"))
                 assertEquals(true, audit["accepted"], "$stage/$name")
                 assertEquals(emptyList<Any>(), audit["issues"])
                 assertEquals(emptyList<Any>(), audit["missingGlobals"])
                 val primitives = (audit["primitives"] as List<Map<String, Any?>>).map { it["name"] }.toSet()
-                val shared = name.startsWith("shared")
                 assertTrue(primitives.containsAll(if (shared) setOf("makeStablePtr#") else
                     setOf("makeStablePtr#", "deRefStablePtr#") +
                         if (name == "stableComposite") setOf("eqStablePtr#") else setOf("touch#")))
@@ -218,7 +221,8 @@ class StablePointerTest {
             val output = CoreRepresentations.expression(make)
             operation.validate(input, make[3] as List<*>, output)
             assertThrows(RuntimeFault::class.java) { operation.validate(input, listOf(false, false), output) }
-            val shared = applications.filter { app ->
+            val synthetic = json(File(directory, "$stage/synthetic/SharedCAFNative.json"))
+            val shared = nodes(synthetic["bindings"]).filter { app ->
                 val call = (app.getOrNull(6) as? Map<*, *>)?.get("foreignCall") as? Map<*, *>
                 SharedCAFStore.named((call?.get("target") as? Map<*, *>)?.get("symbol")) != null
             }

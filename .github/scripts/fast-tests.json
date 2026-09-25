@@ -1092,6 +1092,14 @@
       "junit": ["thc.runtime.StablePointerTest"],
       "python": []
     },
+    "compiler/test-fixtures/SharedCAFNative.hs": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/SharedCAFOriginalCalls.json": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
     "compiler/test-fixtures/ShrinkMutableByteArrayAudit.hs": {
       "junit": ["thc.runtime.ShrinkByteArrayTest"],
       "python": []

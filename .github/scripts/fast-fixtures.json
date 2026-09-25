@@ -172,6 +172,8 @@
       "outputs": ["build/stable-pointers"],
       "sources": [
         "compiler/test-fixtures/StablePointerAudit.hs",
+        "compiler/test-fixtures/SharedCAFNative.hs",
+        "compiler/test-fixtures/SharedCAFOriginalCalls.json",
         "test/haskell-fixtures/StablePointerFixtures.hs",
         "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs",
