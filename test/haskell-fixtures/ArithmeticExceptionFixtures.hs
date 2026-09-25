@@ -9,7 +9,7 @@ import Data.Aeson (object, (.=))
 import qualified Data.ByteString.Char8 as BS
 import Data.List (sort)
 import qualified Data.Map.Strict as Map
-import FixtureSupport (CommandResult(..), hashFile, hashes, runLogged, writeJson)
+import FixtureSupport (CommandResult(..), hashes, runLogged, writeJson)
 import qualified THC.Driver.Installed as Installed
 import InstalledCoreFixtures (InstalledFixture(..), prepareInstalledCore, field, readJson)
 import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
