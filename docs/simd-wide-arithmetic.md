@@ -5,9 +5,10 @@ Word32X16, FloatX16 and DoubleX8. Each shape has pack, unpack, broadcast, plus,
 minus and times; signed and floating shapes also have negate, and floating
 shapes have divide. The table also includes Int16X16 and Word16X16, with pack, unpack, broadcast, plus,
 minus, times, insertion and signed negate. Signed min/max use the existing
-Int8X16, Int16X8, Int32X4, Int32X8 and Int64X2 carriers; unsigned min/max use Word8X16,
-Word16X8 and Word32X4. The table contains 124 arithmetic names and 24 `insert`
-operations, for 148 names. These remain partial entries
+Int8X16, Int16X8, Int32X4, Int32X8, Int64X2, Int64X4 and Int64X8 carriers;
+unsigned min/max use Word8X16,
+Word16X8 and Word32X4. The table contains 128 arithmetic names and 24 `insert`
+operations, for 152 names. These remain partial entries
 in the primop checklist.
 
 The shared generator emits Kotlin carriers with final primitive lane fields,
@@ -27,9 +28,9 @@ legacy integer fields and FloatX4/DoubleX2 `pack`/`lane` APIs, preserving each
 carrier representation. Indices outside the shape's lane range raise a runtime fault before any narrowing. Insertion covers
 all currently represented vector shapes.
 
-The capability smoke uses twelve operation/lane drivers containing all 148
+The capability smoke uses thirteen operation/lane drivers containing all 152
 generated operations. Each driver contains whole arithmetic families, with at
-most 112 lane-operation pairs to bound compiled code size. It checks 4,798
+most 112 lane-operation pairs to bound compiled code size. It checks 4,854
 cases interpreted and after explicit compilation on both backends, observes
 every lane, includes integer
 sign/overflow edges, and checks retained compiled targets and released handoff
@@ -39,9 +40,9 @@ warmup loops. Native expectations come from Haskell
 scalar primops; the default oracle requires no SIMD instruction set. Optional
 native vector comparison requires a host capable of the selected 512-bit ISA.
 
-All 148 names and 4,798 cases have passed GHC signature checks, native scalar
+All 152 names and 4,854 cases have passed GHC signature checks, native scalar
 comparisons, strict Core audits, and interpreted/compiled AST and bytecode checks
-in both handoff modes. Int32X8 min/max add 32 cases; the previous 4,766
+in both handoff modes. Wide Int64 min/max add 56 cases; the previous 4,798
 expectations are unchanged. The optional native vector comparison has not
 been run for these wide shapes, and these checks make no hardware SIMD or
 performance claim.

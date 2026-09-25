@@ -4008,6 +4008,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedInt64X4Insert(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X4Insert()
         }, GeneratedVectors.proofInt64X4)
+        "minInt64X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X4Min(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X4Min()
+        }, GeneratedVectors.proofInt64X4)
+        "maxInt64X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X4Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X4Max()
+        }, GeneratedVectors.proofInt64X4)
         "packInt64X8#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
@@ -4044,6 +4052,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         "insertInt64X8#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedInt64X8Insert(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X8Insert()
+        }, GeneratedVectors.proofInt64X8)
+        "minInt64X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X8Min(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X8Min()
+        }, GeneratedVectors.proofInt64X8)
+        "maxInt64X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X8Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X8Max()
         }, GeneratedVectors.proofInt64X8)
         "packWord64X4#" -> ProvenExpression(Expression { e ->
             val b = e.builder
