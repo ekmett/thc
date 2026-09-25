@@ -92,29 +92,22 @@ def verify_ghc(fs):
 
 def carrier(f):
     n = f['name']; count = f['lanes']; scalar, _, vector, _ = LANES[f['laneRep']]
-    fields = ', '.join(f'{scalar} lane{i}' for i in range(count))
-    init = '\n'.join(f'        this.lane{i} = lane{i};' for i in range(count))
-    vec = f'{vector}.broadcast({vector}.SPECIES_{f["bits"]}, lane0)' + ''.join(f'.withLane({i}, lane{i})' for i in range(1,count))
-    declarations = '\n'.join(f'    public final {scalar} lane{i};' for i in range(count))
-    body = f'''package thc.runtime;
-import jdk.incubator.vector.{vector};
-/** Exact durable primitive lanes; transient Vector API storage never escapes here. */
-public final class {n} {{
-{declarations}
-    public {n}({fields}) {{
-{init}
-    }}
-    private {vector} vector() {{ return {vec}; }}
-    private static {n} lanes({vector} v) {{ return new {n}({', '.join(f'v.lane({i})' for i in range(count))}); }}
-    public static {n} broadcast({scalar} x) {{ return new {n}({', '.join('x' for _ in range(count))}); }}
-'''
+    primitive = scalar.capitalize()
+    fields = ', '.join(f'@JvmField val lane{i}: {primitive}' for i in range(count))
+    vec = f'{vector}.broadcast({vector}.SPECIES_{f["bits"]}, lane0)' + ''.join(f'.withLane({i}, lane{i})' for i in range(1, count))
+    lines = [HEADER, 'package thc.runtime', f'import jdk.incubator.vector.{vector}',
+             '/** Exact durable primitive lanes; transient Vector API storage never escapes here. */',
+             f'class {n}({fields}) {{', f'    private fun vector(): {vector} = {vec}',
+             '    companion object {',
+             f'        private fun lanes(v: {vector}): {n} = {n}('+', '.join(f'v.lane({i})' for i in range(count))+')',
+             f'        @JvmStatic fun broadcast(x: {primitive}): {n} = {n}('+', '.join('x' for _ in range(count))+')']
     for op in f['operations']:
         if op in BINARY:
             method = BINARY[op]
-            body += f'    public static {n} {method}({n} a, {n} b) {{ return lanes(a.vector().{VECTOR_METHOD[method]}(b.vector())); }}\n'
+            lines.append(f'        @JvmStatic fun {method}(a: {n}, b: {n}): {n} = lanes(a.vector().{VECTOR_METHOD[method]}(b.vector()))')
         elif op == 'negate':
-            body += f'    public static {n} negate({n} a) {{ return lanes(a.vector().neg()); }}\n'
-    return HEADER + body + '}\n'
+            lines.append(f'        @JvmStatic fun negate(a: {n}): {n} = lanes(a.vector().neg())')
+    return '\n'.join(lines + ['    }', '}']) + '\n'
 
 
 def proof_code(fs):
@@ -265,7 +258,8 @@ def fixture_sources(fs):
                 left = f'pack{n}# (# ' + ', '.join(convert[rep](f'a +# {i * 104729}#') for i in range(count)) + ' #)'
                 right = f'pack{n}# (# ' + ', '.join(convert[rep](f'b -# {i * 7919}#') for i in range(count)) + ' #)'
                 vector = f'{op}{n}# ({left})' + (f' ({right})' if op in BINARY else '')
-            value = f'word2Int# (word64ToWord# p{lane})' if rep == 'Word64Rep' else f'{observe[rep]} p{lane}'
+            value = (f'word2Int# (word64ToWord# p{lane})' if rep == 'Word64Rep' else
+                     f'word2Int# (word32ToWord# p{lane})' if rep == 'Word32Rep' else f'{observe[rep]} p{lane}')
             return f'case unpack{n}# ({vector}) of {{ (# '+', '.join(f'p{i}' for i in range(count))+f' #) -> {value} }}'
         if family.get('composite'):
             name = n[0].lower() + n[1:] + 'Composite'; worker = name + 'Worker'; names.append(name)
@@ -310,6 +304,76 @@ def fixture_sources(fs):
             'fixtures/GeneratedSimdFamiliesNative.hs': '\n'.join(native)+'\n'}
 
 
+def smoke_entries(fs):
+    return [(f, op) for f in fs for op in f['operations'] if op not in ('pack', 'unpack')]
+
+
+def smoke_sources(fs):
+    """One dynamic operation/lane driver; the native scalar oracle needs no SIMD ISA."""
+    convert = {
+        'Int32Rep': lambda x: f'intToInt32# ({x})',
+        'Word32Rep': lambda x: f'wordToWord32# (int2Word# ({x}))',
+        'Int64Rep': lambda x: f'intToInt64# ({x})',
+        'Word64Rep': lambda x: f'wordToWord64# (int2Word# ({x}))',
+        'FloatRep': lambda x: f'castWord32ToFloat# (wordToWord32# (int2Word# ({x})))',
+        'DoubleRep': lambda x: f'castWord64ToDouble# (wordToWord64# (int2Word# ({x})))',
+    }
+    def observe(rep, value):
+        if rep.startswith('Word'):
+            return f'word2Int# (word{rep[4:-3]}ToWord# ({value}))'
+        if rep.startswith('Int'):
+            return f'int{rep[3:-3]}ToInt# ({value})'
+        if rep == 'FloatRep':
+            return f'case {value} of v -> case neFloat# v v of {{ 1# -> 2143289344#; _ -> word2Int# (word32ToWord# (castFloatToWord32# v)) }}'
+        return f'case {value} of v -> case v /=## v of {{ 1# -> 9221120237041090560#; _ -> word2Int# (word64ToWord# (castDoubleToWord64# v)) }}'
+    def module(name, entry):
+        return [*HASKELL_HEADER, '{-# LANGUAGE MagicHash, UnboxedTuples #-}', f'module {name} where',
+                'import GHC.Exts', '', f'{entry} :: Int# -> Int# -> Int# -> Int#',
+                f'{entry} selector a b = case quotInt# selector 16# of']
+    vector = module('GeneratedSimdSmoke', 'simdSmoke')
+    scalar = module('GeneratedSimdSmokeScalar', 'scalarSmoke')
+    for index, (f, op) in enumerate(smoke_entries(fs)):
+        n, count, rep = f['name'], f['lanes'], f['laneRep']
+        lane = 'remInt# selector 16#'
+        left = f'pack{n}# (# ' + ', '.join(convert[rep](f'a +# {i * 104729}#') for i in range(count)) + ' #)'
+        right = f'pack{n}# (# ' + ', '.join(convert[rep](f'b -# {i * 7919}#') for i in range(count)) + ' #)'
+        value = (f'broadcast{n}# ({convert[rep]("a")})' if op == 'broadcast' else
+                 f'{op}{n}# ({left})' + (f' ({right})' if op in BINARY else ''))
+        vector += [f'  {index}# -> case unpack{n}# ({value}) of',
+                   '    (# ' + ', '.join(f'p{i}' for i in range(count)) + f' #) -> case {lane} of']
+        vector += [f'      {str(i) + "#" if i < count - 1 else "_"} -> {observe(rep, f"p{i}")}' for i in range(count)]
+        left = convert[rep]('a' if op == 'broadcast' else f'a +# (({lane}) *# 104729#)')
+        right = convert[rep](f'b -# (({lane}) *# 7919#)')
+        stem = rep.removesuffix('Rep')
+        primitive = (dict(plus='(+##)', minus='(-##)', times='(*##)', divide='(/##)', negate='negateDouble#').get(op)
+                     if rep == 'DoubleRep' else
+                     ('sub' if op == 'minus' and rep not in ('FloatRep', 'DoubleRep') else op) + stem + '#')
+        value = left if op == 'broadcast' else f'{primitive} ({left})' + (f' ({right})' if op in BINARY else '')
+        scalar.append(f'  {index}# -> {observe(rep, value)}')
+    vector += ['  _ -> 0#']; scalar += ['  _ -> 0#']
+    outputs = {'fixtures/GeneratedSimdSmoke.hs': '\n'.join(vector) + '\n',
+               'fixtures/GeneratedSimdSmokeScalar.hs': '\n'.join(scalar) + '\n'}
+    for compare_vector in (False, True):
+        main = [*HASKELL_HEADER, '{-# LANGUAGE MagicHash #-}', 'module Main where',
+                'import GHC.Exts', 'import Data.Bits (finiteBitSize)', 'import GeneratedSimdSmokeScalar']
+        if compare_vector:
+            main += ['import GeneratedSimdSmoke']
+        main += ['emit :: [String] -> IO ()', 'emit [selector, left, right] =',
+                 '  case (read selector, read left, read right) of',
+                 '    (I# k, I# a, I# b) -> case I# (scalarSmoke k a b) of answer ->']
+        prefix = ''
+        if compare_vector:
+            main += ['      if answer /= I# (simdSmoke k a b) then error "Native SIMD/scalar mismatch" else']
+            prefix = '  '
+        main += [prefix + '      putStrLn ("simdSmoke\\t" ++ selector ++ "\\t" ++ left ++ "\\t" ++ right ++ "\\t" ++ show answer)',
+                 'emit _ = error "Invalid SIMD smoke input"', 'main :: IO ()',
+                 'main = if finiteBitSize (0 :: Int) /= 64 then error "Requires 64-bit Int"',
+                 '       else getContents >>= mapM_ (emit . words) . lines']
+        suffix = 'Vector' if compare_vector else 'Scalar'
+        outputs[f'fixtures/GeneratedSimdSmoke{suffix}Native.hs'] = '\n'.join(main) + '\n'
+    return outputs
+
+
 def region(path, content, write):
     begin='    // BEGIN GENERATED SIMD FAMILIES\n';end='    // END GENERATED SIMD FAMILIES\n'
     source=path.read_text()
@@ -329,8 +393,12 @@ def main():
     region(ROOT/'src/main/java/thc/runtime/BytecodeRoot.java',bytecode_nodes(fs),args.write)
     region(ROOT/'src/main/kotlin/thc/runtime/BytecodeProgram.kt',bytecode_emitter(fs),args.write)
     outputs={'kotlin/thc/runtime/GeneratedVectorProofs.kt':proof_code(fs),'kotlin/thc/runtime/GeneratedVectorExpressions.kt':ast_code(fs)}
-    outputs.update({f'java/thc/runtime/{f["name"]}.java':carrier(f) for f in fs if f['newCarrier']})
+    outputs.update({f'kotlin/thc/runtime/{f["name"]}.kt':carrier(f) for f in fs if f['newCarrier']})
     outputs.update(fixture_sources(fs))
+    outputs.update(smoke_sources(fs))
+    # Remove only the former generated carrier files when switching an existing build.
+    for f in fs:
+        (args.output / f'java/thc/runtime/{f["name"]}.java').unlink(missing_ok=True)
     for name,body in outputs.items():
         p=args.output/name;p.parent.mkdir(parents=True,exist_ok=True)
         if not p.exists() or p.read_text()!=body:p.write_text(body)

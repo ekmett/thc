@@ -51,21 +51,22 @@ class SimdCapabilitySmokeTest {
     @Test fun finiteLocalVectorsCompileOnAstAndBytecode() {
         val manifest = Json.parse(File(directory, "manifest.json").readText()) as Map<String, Any?>
         assertEquals("9.14.1", manifest["ghcVersion"])
-        assertEquals(48L, (manifest["rows"] as Number).toLong())
+        assertEquals(1002L, (manifest["rows"] as Number).toLong())
+        assertTrue(manifest["nativeOracle"] in listOf("scalar", "scalar-and-vector"))
         for (item in (manifest["inputs"] as List<Map<String, String>>) +
                 (manifest["artifacts"] as List<Map<String, String>>)) {
             val file = File(root, item.getValue("path"))
             val digest = MessageDigest.getInstance("SHA-256").digest(file.readBytes()).joinToString("") { "%02x".format(it) }
             assertEquals(item["sha256"], digest, "Stale SIMD smoke input/artifact: ${item["path"]}")
         }
-        val module = Json.parse(File(directory, "pre-core/GeneratedSimdFamilies.json").readText()) as Map<String, Any?>
-        val structure = manifest["structure"] as Map<String, Any?>
-        assertEquals(47, (structure["retainedPrimitives"] as Map<String, Any?>).size)
-        val guestCalls = structure["expectedGuestCalls"] as Map<String, Number>
+        val module = Json.parse(File(directory, "pre-core/GeneratedSimdSmoke.json").readText()) as Map<String, Any?>
+        assertEquals(GeneratedVectors.operations, (manifest["operations"] as List<String>).toSet())
         val rows = File(directory, "cases.tsv").readLines().filter(String::isNotEmpty).map { line ->
             line.split('\t').also { assertEquals(5, it.size) }
         }.groupBy { it[0] }
+        assertEquals(listOf("simdSmoke"), manifest["names"])
         assertEquals(manifest["names"], rows.keys.toList())
+        assertEquals((manifest["rows"] as Number).toInt(), rows.values.sumOf { it.size })
         for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").allowExperimentalOptions(true)
             .option("compiler.Inlining", "false").option("engine.BackgroundCompilation", "false")
             .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build().use { context ->
@@ -86,7 +87,7 @@ class SimdCapabilitySmokeTest {
                         }
                         cases.forEach(::check)
                         val active = targets(host)
-                        assertEquals(guestCalls.getValue(name).toInt() + 1, active.size, "$backend/$name target graph")
+                        assertEquals(2, active.size, "$backend/$name target graph")
                         (active + entry).distinct().filter { it !== host }.forEach { target ->
                             target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
                             assertTrue(compiled(target), "$backend/$name guest installation")
@@ -95,7 +96,7 @@ class SimdCapabilitySmokeTest {
                         for (row in cases) {
                             val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                             check(row)
-                            assertEquals(before + guestCalls.getValue(name).toLong(),
+                            assertEquals(before + 1,
                                 (program.diagnostics().getValue("compiledEntries") as Number).toLong(),
                                 "$backend/$name exact compiled guest entries")
                             assertEquals(active, targets(host), "$backend/$name active target identity")
