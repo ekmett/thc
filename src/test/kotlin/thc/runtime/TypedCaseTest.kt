@@ -119,6 +119,36 @@ class TypedCaseTest {
         } else assertEquals(enabled, "MatchDataValue" in (p as BytecodeProgram).bytecodeDump())
     }
 
+    @Test fun declaredCaseResultsRejectKnownColdContradictionsAndKeepUnknownFallback() {
+        executionContext().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                for (backend in listOf("ast", "bytecode")) {
+                    fun load(body: CaseCore, input: Map<String, Any>? = null): ExecutableProgram {
+                        val module = mapOf("bindings" to listOf(binding("select",
+                            lambda(listOf(param("input", input)), body, result = null))))
+                        return if (backend == "ast") Program(language, module) else BytecodeProgram(language, module)
+                    }
+                    // This arm is never selected, but a known Long cannot inhabit
+                    // the declared boxed result even beside a compatible arm.
+                    val contradictory = case(number(0), "scrutinee", long,
+                        listOf(arm(0, variable("input")), otherwise(number(1))), result = data)
+                    assertThrows(RuntimeFault::class.java, { load(contradictory, data) }, backend)
+
+                    // Missing result/formal metadata retains generic transport;
+                    // the known Long sibling must not refine the unknown arm.
+                    val unknown = case(number(0), "scrutinee", long,
+                        listOf(arm(0, variable("input")), otherwise(number(1))), result = null)
+                    val program = load(unknown)
+                    val sentinel = Any()
+                    assertSame(sentinel, call(program, "select", sentinel), backend)
+                    assertEquals(42L, call(program, "select", 42L), backend)
+                }
+            } finally { context.leave() }
+        }
+    }
+
     @Test fun defaultOnlyCasesForwardConcreteReferencesAndForceSharedScrutineeOnce() = each { _, _, p ->
         val value = call(p, "make", Long.MIN_VALUE)
         val function = p.entryValue("plus")

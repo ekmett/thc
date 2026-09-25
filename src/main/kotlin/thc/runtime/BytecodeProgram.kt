@@ -711,7 +711,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val fn = function(label, emptyList(), expr, scope)
         (fn.target.rootNode as GuestRoot).tupleResult?.let { CoreRepresentations.requireScalar(it.proof, "thunk") }
         val template = BytecodeRoot.ClosureTemplate(fn.target, 0, fn.captureLayout)
-        return sourced(Expression { e ->
+        // Preserve the denoted value's proof without treating its thunk as WHNF.
+        return sourced(ProvenExpression(Expression { e ->
             if (fn.hasVectorCaptures) {
                 e.builder.emitMakeVectorCapture(BytecodeRoot.VectorCaptureSource(template,
                     fn.captures.map { LocalAccessor.constantOf(e.locals.getValue(it.id)) }.toTypedArray(), true))
@@ -720,7 +721,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 fn.captures.forEach { read(it, false).emit(e) }
                 e.builder.endMakeThunk()
             }
-        }, sources.expression(expr, scope.source))
+        }, CoreRepresentations.expression(expr).copy(evaluated = false)), sources.expression(expr, scope.source))
     }
     private fun closure(fn: FunctionSpec, arity: Int): Expression {
         val template = BytecodeRoot.ClosureTemplate(fn.target, arity, fn.captureLayout)
@@ -2815,6 +2816,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "default" -> 0; "data" -> 1; else -> 2
             } }, alternatives.all { it.kind != "lit" || it.value is Long })
             val resultProof = CoreRepresentations.expression(expr)
+            CoreRepresentations.validateDeclaredCaseResult(resultProof, alternatives.map { it.body.proof })
             CoreRepresentations.validateAggregateCaseResult(resultProof, alternatives.map { it.body.proof })
             CoreRepresentations.validateFloatingCaseResult(resultProof, alternatives.map { it.body.proof })
             // A missing outer case record must not erase an exact aggregate

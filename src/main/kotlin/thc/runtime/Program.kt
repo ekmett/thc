@@ -2484,6 +2484,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             if (!CoreRepresentations.expression(expr).isAggregate && alternatives.any { it.body.representation.isAggregate } &&
                 alternatives.any { !it.body.representation.isAggregate })
                 throw RuntimeFault("Missing exact aggregate case result proof")
+            CoreRepresentations.validateDeclaredCaseResult(CoreRepresentations.expression(expr), alternatives.map { it.body.representation })
             CoreRepresentations.validateAggregateCaseResult(CoreRepresentations.expression(expr), alternatives.map { it.body.representation })
             CoreRepresentations.validateFloatingCaseResult(CoreRepresentations.expression(expr),
                 alternatives.map { it.body.representation })
