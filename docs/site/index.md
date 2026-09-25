@@ -90,7 +90,7 @@ mutable references. Tests compare native GHC results with interpreted and
 compiled guest execution. That does not yet amount to general Cabal package
 support.
 
-With complete installed Core and matching configured GHC sources, the bytecode
+On Linux x86_64, with complete installed Core and matching configured GHC sources, the bytecode
 backend now runs ordinary `putStrLn`, including GHC's original startup and Handle
 shutdown. The [driver guide](../driver.md) covers the current Linux configuration
 and `--installed-core required --ghc-source DIR` options. The default provider

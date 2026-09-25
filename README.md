@@ -79,7 +79,7 @@ Cabal builds the native dependencies needed for the helper, and THC runs the
 executable's accepted Core. The driver uses Cabal's resolved unit IDs and
 per-component build information for the export.
 
-With complete installed Core and matching configured GHC sources, the bytecode
+On Linux x86_64, with complete installed Core and matching configured GHC sources, the bytecode
 backend now runs ordinary `putStrLn`, including GHC's original startup and Handle
 shutdown. Select `--installed-core required --ghc-source /path/to/ghc-source`
 on the project-directory path; the [driver guide](docs/driver.md) describes the

@@ -157,7 +157,7 @@ cache; no installed compiler, native library or existing ZIP is changed.
 Source/interface mismatches and present but invalid provenance fail explicitly.
 See [the producer and cache contract](interface-foreign.md#typed-annotations-and-ordinary-acquisition).
 
-This path has run an ordinary `putStrLn` executable through both cold preparation
+On Linux x86_64, this path has run an ordinary `putStrLn` executable through cold preparation
 and warm cache reuse, matching native GHC output with a clean strict audit.
 The bytecode backend executes GHC's generated `main::Main.main` and then its
 original `flushStdHandles` after successful completion, sharing one program's
