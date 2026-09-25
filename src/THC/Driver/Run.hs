@@ -30,12 +30,15 @@ data RunOptions = RunOptions
   , runThcRoot :: FilePath
   , runRuntime :: Maybe FilePath
   , runInstalledCore :: String
+  , runGhcSource :: Maybe FilePath
   }
 
 -- This first run slice uses the package configuration that Cabal itself
 -- elaborated. Native build output is never executed; the exported GHC Core is.
 runPackage :: RunOptions -> FilePath -> IO ()
 runPackage opts target = do
+  unless (runGhcSource opts == Nothing) $
+    fail "--ghc-source requires --installed-core required and a cabal.project directory"
   unless (not (null (runExecutable opts))) $ fail "run requires --exe NAME"
   unless (not (null (runThcRoot opts))) $ fail "run requires --thc-root DIR"
   unless (runInstalledCore opts == "pinned") $
