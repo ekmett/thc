@@ -16,6 +16,7 @@ import Int32ByteOffsetFixtures (prepareInt32ByteOffset)
 import Explicit64ArrayFixtures (prepareExplicit64Array)
 import FusedFloatingFixtures (prepareFusedFloating)
 import SimdCallFixtures (prepareSimdCalls)
+import SimdFloatFmaFixtures (prepareSimdFloatFma)
 import SqrtFixtures (prepareSqrt)
 import ContinuationFixtures (prepareCoreContinuation)
 import LiveAsyncFixtures (prepareLiveAsync)
@@ -868,6 +869,7 @@ main = do
     ["explicit64-arrays"] -> prepareExplicit64Array root
     ["fused-floating"] -> prepareFusedFloating root
     ["simd-calls"] -> prepareSimdCalls root
+    ["simd-floatx4-fma"] -> prepareSimdFloatFma root
     ["sqrt"] -> prepareSqrt root
     "original-stdio":options -> prepareOriginalStdio root options
     ["original-stdio-close"] -> prepareOriginalStdioClose root

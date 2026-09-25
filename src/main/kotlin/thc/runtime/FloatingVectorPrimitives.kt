@@ -30,6 +30,7 @@ internal class VectorFloatUnpack(@field:Child private var argument: Expr) : Expr
 internal class VectorFloatOperation(name: String, @field:Children private var arguments: Array<Expr>) : Expr() {
     private val operation = when (name) {
         "broadcastFloatX4#" -> 0; "plusFloatX4#" -> 1; "minusFloatX4#" -> 2; "timesFloatX4#" -> 3
+        in CoreVectors.fusedFloat -> 4 + CoreVectors.fusedFloat.indexOf(name)
         else -> throw RuntimeFault("Invalid FloatX4 operation")
     }
     init { representation = CoreVectors.proofFloat }
@@ -38,6 +39,7 @@ internal class VectorFloatOperation(name: String, @field:Children private var ar
         1 -> FloatX4.add(vector(frame, 0), vector(frame, 1))
         2 -> FloatX4.subtract(vector(frame, 0), vector(frame, 1))
         3 -> FloatX4.multiply(vector(frame, 0), vector(frame, 1))
+        in 4..7 -> FloatX4.fused(operation - 4, vector(frame, 0), vector(frame, 1), vector(frame, 2))
         else -> fault("Invalid FloatX4 operation")
     }
     private fun vector(frame: VirtualFrame, index: Int): FloatX4 = arguments[index].execute(frame) as? FloatX4 ?: fault("Expected FloatX4#")
