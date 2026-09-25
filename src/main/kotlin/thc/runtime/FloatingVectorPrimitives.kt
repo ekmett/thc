@@ -6,6 +6,7 @@ package thc.runtime
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.frame.VirtualFrame
 import jdk.incubator.vector.FloatVector
+import jdk.incubator.vector.DoubleVector
 
 internal class VectorFloatPack(@field:Child private var argument: Expr,
     @field:CompilationFinal(dimensions = 1) private val slots: IntArray) : Expr() {
@@ -106,4 +107,28 @@ internal class VectorFloat8Fused(name: String, @field:Children private var argum
         FloatX8Fused.apply(operation, vector(frame, 0), vector(frame, 1), vector(frame, 2))
     private fun vector(frame: VirtualFrame, index: Int): FloatX8 =
         arguments[index].execute(frame) as? FloatX8 ?: fault("Expected FloatX8#")
+}
+
+/** Four owned primitive lanes, with only transient Vector API values. */
+internal object DoubleX4Fused {
+    private fun vector(a: DoubleX4): DoubleVector = DoubleVector.broadcast(DoubleVector.SPECIES_256, a.lane0)
+        .withLane(1, a.lane1).withLane(2, a.lane2).withLane(3, a.lane3)
+
+    @JvmStatic fun apply(operation: Int, a: DoubleX4, b: DoubleX4, c: DoubleX4): DoubleX4 {
+        if (operation !in 0..3) fault("Invalid DoubleX4 fused operation")
+        // Negation precedes the single rounding, including signed-zero cases.
+        val left = vector(a).let { if (operation >= 2) it.neg() else it }
+        val addend = vector(c).let { if (operation and 1 != 0) it.neg() else it }
+        val result = left.fma(vector(b), addend)
+        return DoubleX4(result.lane(0), result.lane(1), result.lane(2), result.lane(3))
+    }
+}
+
+internal class VectorDouble4Fused(name: String, @field:Children private var arguments: Array<Expr>) : Expr() {
+    private val operation = CoreVectors.fusedDouble4.indexOf(name)
+    init { representation = GeneratedVectors.proofDoubleX4 }
+    override fun execute(frame: VirtualFrame): DoubleX4 =
+        DoubleX4Fused.apply(operation, vector(frame, 0), vector(frame, 1), vector(frame, 2))
+    private fun vector(frame: VirtualFrame, index: Int): DoubleX4 =
+        arguments[index].execute(frame) as? DoubleX4 ?: fault("Expected DoubleX4#")
 }

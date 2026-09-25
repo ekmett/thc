@@ -2209,6 +2209,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     "unpackFloatX4#" -> VectorFloatUnpack(operands[0])
                     in CoreVectors.operationsFloat -> VectorFloatOperation(name, operands)
                     in CoreVectors.fusedFloat8 -> VectorFloat8Fused(name, operands)
+                    in CoreVectors.fusedDouble4 -> VectorDouble4Fused(name, operands)
                     in CoreVectors.operations32 -> Vector32Operation(name, operands)
                     "packInt16X8#" -> Vector16Pack(operands[0], IntArray(8) { scope.layout.bind("<int16 vector lane $it>") })
                     "unpackInt16X8#" -> Vector16Unpack(operands[0])

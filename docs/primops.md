@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 479 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 703 | No declared lowering. |
+| Partial | 483 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 699 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -435,15 +435,19 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `fetchAddIntArray#` — arity 4 — Managed byte storage
 - [ ] `finalizeWeak#` — arity 2 — Retained registrations and explicit Haskell/C finalization; restricted C labels, no GC or ephemerons
 - [ ] `fmaddDoubleX2#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `fmaddDoubleX4#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `fmaddFloatX4#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `fmaddFloatX8#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `fmsubDoubleX2#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `fmsubDoubleX4#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `fmsubFloatX4#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `fmsubFloatX8#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `fnmaddDoubleX2#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `fnmaddDoubleX4#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `fnmaddFloatX4#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `fnmaddFloatX8#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `fnmsubDoubleX2#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `fnmsubDoubleX4#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `fnmsubFloatX4#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `fnmsubFloatX8#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `fork#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -932,16 +936,12 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `fetchSubWordAddr#` — arity 3
 - [ ] `fetchXorIntArray#` — arity 4
 - [ ] `fetchXorWordAddr#` — arity 3
-- [ ] `fmaddDoubleX4#` — arity 3
 - [ ] `fmaddDoubleX8#` — arity 3
 - [ ] `fmaddFloatX16#` — arity 3
-- [ ] `fmsubDoubleX4#` — arity 3
 - [ ] `fmsubDoubleX8#` — arity 3
 - [ ] `fmsubFloatX16#` — arity 3
-- [ ] `fnmaddDoubleX4#` — arity 3
 - [ ] `fnmaddDoubleX8#` — arity 3
 - [ ] `fnmaddFloatX16#` — arity 3
-- [ ] `fnmsubDoubleX4#` — arity 3
 - [ ] `fnmsubDoubleX8#` — arity 3
 - [ ] `fnmsubFloatX16#` — arity 3
 - [ ] `forkOn#` — arity 3

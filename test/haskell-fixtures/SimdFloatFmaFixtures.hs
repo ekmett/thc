@@ -23,6 +23,9 @@ wideEntries = ["wideAddCase", "wideSubCase", "wideNegAddCase", "wideNegSubCase"]
 doubleEntries :: [String]
 doubleEntries = ["doubleAddCase", "doubleSubCase", "doubleNegAddCase", "doubleNegSubCase"]
 
+doubleWideEntries :: [String]
+doubleWideEntries = ["doubleWideAddCase", "doubleWideSubCase", "doubleWideNegAddCase", "doubleWideNegSubCase"]
+
 inputs :: [[Integer]]
 inputs = [[0x3f800001 `xor` sx, 0x3f7ffffe `xor` sy, 0xbf800000 `xor` sz] |
   sx <- signs, sy <- signs, sz <- signs] ++
@@ -76,11 +79,12 @@ prepareSimdFloatFma root = do
     _ <- runLogged 120 root (directory </> "logs") (stage ++ "-double-audit") [] "python3"
       (["scripts/audit-core.py", directory </> stage ++ "-core/SimdFloatFma.json",
         "--output", directory </> stage ++ "-double-audit.json"] ++
-       concatMap (\entry -> ["--entry",entry]) doubleEntries)
+       concatMap (\entry -> ["--entry",entry]) (doubleEntries ++ doubleWideEntries))
     pure ()
   let requests = [[entry] ++ map show values ++ [show lane] | entry <- entries, values <- inputs, lane <- [0..3 :: Int]] ++
         [[entry] ++ map show values ++ [show lane] | entry <- wideEntries, values <- inputs, lane <- [0..7 :: Int]] ++
-        [[entry] ++ map show values ++ [show lane] | entry <- doubleEntries, values <- doubleInputs, lane <- [0..1 :: Int]]
+        [[entry] ++ map show values ++ [show lane] | entry <- doubleEntries, values <- doubleInputs, lane <- [0..1 :: Int]] ++
+        [[entry] ++ map show values ++ [show lane] | entry <- doubleWideEntries, values <- doubleInputs, lane <- [0..3 :: Int]]
       binary = output </> "native/oracle"
   rows <- if exportOnly then pure [] else do
     createDirectoryIfMissing True (output </> "native")
@@ -97,12 +101,12 @@ prepareSimdFloatFma root = do
   writeJson manifest $ object ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),
     "entries" .= entries,"wideEntries" .= wideEntries,"inputs" .= inputs,"stages" .= stages,"nativeFlags" .= nativeFlags,
     -- Decimal strings preserve unsigned Word64 bits through the JVM JSON reader.
-    "doubleEntries" .= doubleEntries,"doubleInputs" .= map (map show) doubleInputs,
+    "doubleEntries" .= doubleEntries,"doubleWideEntries" .= doubleWideEntries,"doubleInputs" .= map (map show) doubleInputs,
     "nativeRows" .= (if exportOnly then Nothing else Just (length rows)),
     "inputHashes" .= inputHashes,"artifactHashes" .= artifactHashes]
-  putStrLn ("simd-floatx4-fma: " ++ show (length rows) ++ " shared native rows; FloatX4, FloatX8 and DoubleX2 admitted")
+  putStrLn ("simd-floatx4-fma: " ++ show (length rows) ++ " shared native rows; FloatX4, FloatX8, DoubleX2 and DoubleX4 admitted")
   where
     valid row = case words row of
       [entry,_,_,_,_,result] -> maybe False (\n -> n >= 0 && n <=
-        (if entry `elem` doubleEntries then 0xffffffffffffffff else 0xffffffff)) (readMaybe result :: Maybe Integer)
+        (if entry `elem` (doubleEntries ++ doubleWideEntries) then 0xffffffffffffffff else 0xffffffff)) (readMaybe result :: Maybe Integer)
       _ -> False
