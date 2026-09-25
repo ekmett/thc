@@ -117,6 +117,6 @@ matched header-off run. Keep graph capture separate from timed measurements.
 
 [The driver guide](driver.md) covers the current bounded Cabal build/run path,
 including the optional complete-Core executable provider. Standalone `thc build`
-and GHCi-based `thc repl` commands are not implemented. The separate
+and `thc repl` commands are not implemented. The separate
 [managed export API](site/embedding.md) exposes declared scalar and IO actions
 to polyglot callers.
