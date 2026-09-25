@@ -23,6 +23,7 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
     @field:Children private var arguments: Array<Expr>,
     @field:CompilationFinal(dimensions = 1) private val temporaries: IntArray,
     private val metrics: Metrics,
+    @field:CompilationFinal(dimensions = 2)
     private val vectorTemporaries: Array<IntArray?> = arrayOfNulls(target.proofs.size)) : Expr() {
     // This node never returns a value. It must not weaken the WHNF proof
     // contributed by the region's actual returning branches.

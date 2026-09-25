@@ -26,7 +26,7 @@ internal class GuestThreadId(val javaId: Long, val owner: GuestThreads, val capa
 
 /** GHC 9.14.1 Constants.h why_blocked codes and PrimOps.cmm terminal overrides. */
 internal enum class GuestThreadStatus(val code: Long) {
-    RUNNING(0), MVAR(1), BLACK_HOLE(2), FOREIGN(10), THROW_TO(12), MVAR_READ(14),
+    RUNNING(0), MVAR(1), BLACK_HOLE(2), READ(3), WRITE(4), FOREIGN(10), THROW_TO(12), MVAR_READ(14),
     FINISHED(16), DIED(17), RUNTIME_FAILURE(-1);
 
     val terminal: Boolean get() = this == FINISHED || this == DIED || this == RUNTIME_FAILURE

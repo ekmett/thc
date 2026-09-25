@@ -256,8 +256,17 @@ class DoubleVectorMemoryProofTest(unittest.TestCase):
         for site in ('producer', 'binder', 'pattern'):
             module, app, body = fixture()
             metadata = app[6]['rep'] if site == 'producer' else body[4]['binder']['rep'] if site == 'binder' else body[3][0][4]
-            metadata['nested'] = dict(resultRep=result(True))
-            self.assertFalse(check(module)['accepted'], site)
+            nested = result(True)
+            metadata['nested'] = dict(resultRep=nested)
+            # Exact vector tuple results are now admitted. Corrupt only the
+            # nested annotation, leaving the locally checked memory proof valid.
+            self.assertTrue(check(module)['accepted'], site)
+            nested['components'][1]['vector']['lanes'] += 1
+            report = check(module)
+            self.assertFalse(report['accepted'], site)
+            self.assertTrue(any(issue['code'] == 'vector-representation' and
+                                issue['path'].endswith('/nested/resultRep/components/1')
+                                for issue in report['issues']), (site, report['issues']))
 
     def test_read_is_not_a_first_class_or_transportable_tuple_producer(self):
         module, app, _ = fixture()

@@ -22,18 +22,24 @@ internal class ManagedAddress private constructor(
     private val offset: Long,
     private val owner: ManagedAllocation? = null,
     private val stable: StablePointers.Handle? = null,
-    private val numeric: Long? = null
+    private val numeric: Long? = null,
+    private val finalizer: CFinalizerFunction? = null
 ) {
     internal fun stableHandle(): StablePointers.Handle? = stable
+    internal fun finalizerFunction(): CFinalizerFunction? = finalizer
     private fun requireBytes() {
         if (stable != null) fault("Opaque StablePtr# is not byte-addressable")
+        if (finalizer != null) fault("Opaque C function label is not byte-addressable")
         if (numeric != null) fault("Unowned numeric Addr# is not byte-addressable")
     }
     /** Only immutable storage can be materialized without breaking existing aliases. */
     internal fun nativeImageKey(): Any? = literalBytes ?: owner?.takeIf { !it.isWritable }
     internal fun nativeImageBytes(): ByteArray = owner?.takeIf { !it.isWritable }?.let { it.copyBytesOut(0, it.size) }
         ?: literalBytes?.copyOf() ?: fault("Native image requires immutable byte storage")
-    fun toNativeBits(): Long = if (this === NULL) 0L else numeric ?: NativeAddresses.current(null).project(this)
+    fun toNativeBits(): Long {
+        if (finalizer != null) fault("Opaque C function label has no numeric guest address")
+        return if (this === NULL) 0L else numeric ?: NativeAddresses.current(null).project(this)
+    }
     // Mutable views preserve aliases. Immutable sources return snapshots so a
     // writable JVM array cannot escape and diverge from their native image.
     internal fun rawBacking(): ByteArray { requireBytes(); return owner?.rawBytesIfPointerFree()
@@ -58,7 +64,12 @@ internal class ManagedAddress private constructor(
 
     /** GHC pointer equality compares allocation identity and byte offset. */
     fun sameLocation(other: ManagedAddress): Boolean =
-        if (stable != null) {
+        if (finalizer != null || other.finalizer != null) {
+            val provider = thc.Language.currentState(null).cbits()
+            finalizer?.requireOwner(provider)
+            other.finalizer?.requireOwner(provider)
+            finalizer != null && finalizer === other.finalizer
+        } else if (stable != null) {
             val registry = StablePointers.current(null)
             registry.validate(this)
             if (other.stable != null) registry.equal(this, other) else false
@@ -109,6 +120,7 @@ internal class ManagedAddress private constructor(
     /** Only offsets within one allocation have a portable managed ordering.
      * Comparing unrelated native pointer values would invent host addresses. */
     fun compareWithinAllocation(other: ManagedAddress): Int {
+        if (finalizer != null || other.finalizer != null) fault("Opaque C function label has no address ordering")
         if (stable != null || other.stable != null) fault("Opaque StablePtr# has no address ordering")
         if (numeric != null || other.numeric != null)
             return java.lang.Long.compareUnsigned(toNativeBits(), other.toNativeBits())
@@ -313,6 +325,8 @@ internal class ManagedAddress private constructor(
         }
         internal fun fromStableHandle(handle: StablePointers.Handle): ManagedAddress =
             ManagedAddress(null, null, 0L, stable = handle)
+        internal fun fromCFinalizer(function: CFinalizerFunction): ManagedAddress =
+            ManagedAddress(null, null, 0L, finalizer = function)
 
         /** Logical pinning means stable managed backing and a strong lifetime,
          * not physical pinning or a process address. Do not copy: views must alias. */

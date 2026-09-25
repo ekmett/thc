@@ -3,6 +3,7 @@
   "fixtureFreeJunit": [
     "thc.runtime.TermiosAbiTest",
     "thc.runtime.NativeFileProviderTest",
+    "thc.runtime.NativeFdWaitTest",
     "thc.runtime.ManagedFileCallTest",
     "thc.runtime.ManagedFilesTest",
     "thc.runtime.ManagedStdioTest",

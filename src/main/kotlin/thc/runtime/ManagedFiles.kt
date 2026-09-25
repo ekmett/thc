@@ -6,11 +6,13 @@ package thc.runtime
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.TruffleFile
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.nodes.Node
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.nio.channels.SeekableByteChannel
+import java.nio.channels.ClosedChannelException
 import java.nio.file.AccessDeniedException
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.InvalidPathException
@@ -18,15 +20,18 @@ import java.nio.file.NoSuchFileException
 import java.nio.file.NotDirectoryException
 import java.nio.file.StandardOpenOption
 import java.util.concurrent.CountDownLatch
+import thc.Language
 import thc.NativeIO.StandardEndpoint
 
 /** Explicit thc_io_v1 service, not a POSIX ABI. Descriptors and reader/writer
  * claims belong to one THC context. Regular files and the embedding's streams
  * are supported, with native resources only in an explicit NativeIO context.
- * Calls are synchronous: this is not a scheduler,
- * general readiness service, or an implementation of interruptible foreign calls. */
+ * Transfers are synchronous. Native readiness has a separate cancellable wait
+ * capability; this is not a scheduler or interruptible foreign byte transport. */
 internal class ManagedFiles(private val env: TruffleLanguage.Env, private val threads: GuestThreads,
-    private val descriptorLimit: Long = Int.MAX_VALUE.toLong() + 1) {
+    private val descriptorLimit: Long = Int.MAX_VALUE.toLong() + 1,
+    // Internal protocol-test seam; the production notifier is only eventfd IO.
+    private val signalReadinessClose: (NativeFdWait) -> Unit = { it.descriptorClosed() }) {
     private enum class Readiness { REGULAR_FILE, UNAVAILABLE, NATIVE_UNCLASSIFIED }
     private data class FileIdentity(val device: Long, val inode: Long)
     private class OpenClaim(var identity: FileIdentity?, val writable: Boolean, val reserved: Long? = null) {
@@ -53,6 +58,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     private class Descriptor(val owner: OpenDescription) {
         // Protected by the registry, independently of the shared IO lifetime.
         var closed = false
+        val readinessWaits = linkedSetOf<NativeFdWait>()
     }
     private data class Failure(val kind: Long, val message: String, val nativeErrno: Long = 0)
     private class FileFailure(val kind: Long, message: String) : IOException(message)
@@ -84,6 +90,24 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     private fun fail(kind: Long, message: String): Nothing = throw FileFailure(kind, message)
     private fun descriptor(fd: Long): Descriptor = synchronized(this) {
         descriptors[fd] ?: fail(4, "Closed or unknown THC file descriptor: $fd")
+    }
+
+    // Registry held. Wake the original descriptor's waiters before retiring its
+    // owner or publishing a reused number; aliases have distinct wait sets.
+    private fun invalidate(entry: Descriptor): Throwable? {
+        entry.closed = true
+        var failure: Throwable? = null
+        for (request in entry.readinessWaits) try { signalReadinessClose(request) }
+            catch (error: Throwable) { failure = combineFailures(failure, error) }
+        // A wake failure must not interrupt registry/refcount mutation or skip
+        // other waiters. Callers finish retirement before surfacing this error.
+        return failure
+    }
+
+    private fun combineFailures(first: Throwable?, next: Throwable?): Throwable? {
+        if (first == null) return next
+        if (next != null && next !== first) first.addSuppressed(next)
+        return first
     }
 
     private inline fun <T> withDescriptor(fd: Long, action: (OpenDescription) -> T): T {
@@ -460,27 +484,75 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         } }
     }
 
+    /** Stable logical identity for a future resumable wait primop. The token
+     * holds no native fd between attempts: async unwinding unregisters and closes
+     * the current native request. Retrying this token never resolves fd again.
+     * Original blockedOnBadFD payload linkage is a separate admission obligation;
+     * this internal substrate does not substitute a synthetic Haskell exception. */
+    internal inner class WaitToken internal constructor(private val fd: Long, private val writing: Boolean) {
+        private val entry = descriptor(fd)
+
+        @TruffleBoundary internal fun await(node: Node, async: Boolean) {
+            if (Language.currentState(node).env !== env) fault("Descriptor wait belongs to another context")
+            val outcome = awaitReady(entry, fd, writing, -1, node) {
+                if (async) threads.poll(node, interruptible = true)?.let { throw AsyncBlocked(it, node) }
+            }
+            if (outcome == -2) throw ClosedChannelException()
+        }
+    }
+
+    @TruffleBoundary internal fun waitToken(fd: Long, writing: Boolean): WaitToken {
+        if (fd != fd.toInt().toLong()) fault("Descriptor wait requires a signed CInt descriptor")
+        return WaitToken(fd, writing)
+    }
+
+    private fun awaitReady(entry: Descriptor, fd: Long, writing: Boolean, milliseconds: Long,
+                           node: Node?, beforeBlock: (() -> Unit)? = null): Int {
+        val native = synchronized(this) {
+            if (disposed || entry.closed || descriptors[fd] !== entry) return -2
+            if (entry.owner.readiness == Readiness.REGULAR_FILE) return 1
+            entry.owner.native ?: fail(7, "THC stream has no readiness contract: $fd")
+        }
+        val request = try { native.readinessWait() }
+            catch (_: ClosedChannelException) { return -2 }
+        try {
+            synchronized(this) {
+                if (disposed || entry.closed || descriptors[fd] !== entry) return -2
+                entry.readinessWaits.add(request)
+            }
+            // Original safe/unsafe fdReady remains an opaque foreign extent.
+            // Only the explicit managed wait token reports RTS read/write wait.
+            if (beforeBlock == null) return request.await(node, writing, milliseconds)
+            return GuestThreads.blocking(if (writing) GuestThreadStatus.WRITE else GuestThreadStatus.READ)
+                .use { request.await(node, writing, milliseconds, beforeBlock) }
+        } finally {
+            // Unregister before freeing eventfd: close/dup2/dispose signal under
+            // this same registry lock, and Truffle has restored its blocked state.
+            synchronized(this) { entry.readinessWaits.remove(request) }
+            request.close()
+        }
+    }
+
+    /** Test observer only; guest execution does not wait by polling this count. */
+    @Synchronized internal fun pendingReadiness(fd: Long): Int = descriptors[fd]?.readinessWaits?.size ?: 0
+
     /** The pinned POSIX fdReady reports any poll event, including POLLNVAL,
      * as ready. Regular files are ready in either direction, even at EOF or
      * with an incompatible open mode: the following transfer reports errors.
      * Do not acquire a descriptor's IO monitor to make this nonblocking probe.
      * Opaque embedding streams have no readiness contract and are not process
      * fd0/fd1/fd2. Negative descriptors are ignored by poll; only their zero
-     * timeout probe is supported until a real cancellable wait service exists. */
-    @TruffleBoundary fun ready(fd: Long, milliseconds: Long): Long {
+     * timeout probe is currently admitted. Native waits observe the opened
+     * resource, with a separate cancellation wake; opaque streams stay denied. */
+    @TruffleBoundary fun ready(fd: Long, milliseconds: Long, writing: Boolean = false, node: Node? = null): Long {
         if (fd < 0L) {
             if (milliseconds != 0L) fault("Original fdReady cannot wait on an ignored negative descriptor")
             return 0L
         }
         return result {
-            val readiness = synchronized(this) { descriptors[fd]?.owner?.readiness }
-            when (readiness) {
-                null, Readiness.REGULAR_FILE -> 1L
-                Readiness.UNAVAILABLE -> fail(7, "THC stream has no readiness contract: $fd")
-                Readiness.NATIVE_UNCLASSIFIED -> withDescriptor(fd) {
-                    if (regular(it)) 1L else fail(7, "THC stream has no readiness contract: $fd")
-                }
-            }
+            val entry = synchronized(this) { descriptors[fd] } ?: return@result 1L
+            val ready = awaitReady(entry, fd, writing, milliseconds, node)
+            if (ready == -2) 1L else ready.toLong()
         }
     }
 
@@ -503,17 +575,20 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
      * callers must not retry it. Embedding streams are flushed, never closed. */
     @TruffleBoundary fun close(fd: Long): Long = result {
         val entry = descriptor(fd)
-        synchronized(entry.owner) {
-            val last = synchronized(this) {
-                if (descriptors[fd] !== entry || entry.closed)
-                    fail(4, "Closed or unknown THC file descriptor: $fd")
-                descriptors.remove(fd)
-                entry.closed = true
-                --entry.owner.references == 0L
-            }
-            if (last) retire(entry.owner)
-            0L
+        var failure: Throwable? = null
+        val last = synchronized(this) {
+            if (descriptors[fd] !== entry || entry.closed)
+                fail(4, "Closed or unknown THC file descriptor: $fd")
+            descriptors.remove(fd)
+            failure = invalidate(entry)
+            --entry.owner.references == 0L
         }
+        // A blocked byte transfer may delay physical retirement, but must not
+        // prevent waiters from observing logical close and releasing their pins.
+        if (last) try { retire(entry.owner) }
+            catch (error: Throwable) { failure = combineFailures(failure, error) }
+        failure?.let { throw it }
+        0L
     }
 
     /** Independent descriptor lifetime, shared offset/status and IO monitor.
@@ -530,6 +605,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
      * IOException cannot undo replacement or change the successful result. */
     @TruffleBoundary fun duplicateTo(fd: Long, target: Long): Long {
         var retired: OpenDescription? = null
+        var wakeFailure: Throwable? = null
         val installed = result {
             retired = synchronized(this) {
                 val source = descriptors[fd] ?: fail(4, "Closed or unknown THC file descriptor: $fd")
@@ -539,7 +615,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
                 source.owner.references++
                 val old = descriptors.put(target, Descriptor(source.owner))
                 if (old != null) {
-                    old.closed = true
+                    wakeFailure = invalidate(old)
                     if (--old.owner.references == 0L) old.owner else null
                 } else null
             }
@@ -553,8 +629,13 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
             val previous = threads.enterForeign()
             try { retire(owner) } catch (_: IOException) {
                 // Like native dup2, target-close IO failures are unobservable.
+            } catch (error: Throwable) {
+                wakeFailure = combineFailures(wakeFailure, error)
             } finally { threads.leaveForeign(previous) }
         }
+        // Outside result: a post-commit wake/provider failure cannot masquerade
+        // as -1/errno meaning that the target descriptor was left unchanged.
+        wakeFailure?.let { throw it }
         return installed
     }
 
@@ -619,18 +700,18 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     /** Final disposal cannot run Haskell finalizers or flush GHC's own buffers.
      * Release every owned channel even if one close fails. */
     @TruffleBoundary fun dispose() {
+        var failed: Throwable? = null
         val (entries, pending) = synchronized(this) {
             if (disposed) return
             disposed = true
             val pending = opening.toList()
             opening.clear()
             val entries = owners.toList()
-            descriptors.values.forEach { it.closed = true }
+            descriptors.values.forEach { failed = combineFailures(failed, invalidate(it)) }
             entries.forEach { it.references = 0L }
             descriptors.clear()
             entries to pending
         }
-        var failed: Throwable? = null
         // Context teardown may invoke an embedding stream after this context's
         // guest registry has closed. A callback into another context remains
         // under an opaque Java frame and must retain that async origin.
@@ -639,7 +720,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
             for (entry in entries) try {
                 retire(entry)
             } catch (error: Throwable) {
-                if (failed == null) failed = error else if (failed !== error) failed.addSuppressed(error)
+                failed = combineFailures(failed, error)
             }
             // A provider may still be returning a newly acquired channel. Its
             // open observes disposed and closes it before signaling completion.
@@ -654,8 +735,9 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
             if (interrupted) Thread.currentThread().interrupt()
         } finally { threads.leaveForeign(previous) }
         failure.remove()
-        if (failed is IOException)
-            throw RuntimeFault("THC file disposal failed: ${failed.message}").also { it.initCause(failed) }
-        if (failed != null) throw failed
+        val disposalFailure = failed
+        if (disposalFailure is IOException)
+            throw RuntimeFault("THC file disposal failed: ${disposalFailure.message}").also { it.initCause(disposalFailure) }
+        if (disposalFailure != null) throw disposalFailure
     }
 }

@@ -96,6 +96,26 @@ class ManagedWeakTest {
         } finally { start.countDown(); workers.shutdownNow(); registry.close() }
     }
 
+    @Test fun explicitCallbacksRunNewestFirstAfterDeathOutsideTheRegistryLock() {
+        val registry = ManagedWeaks()
+        val weak = registry.make(Any(), Any(), null)
+        val observed = ArrayList<Int>()
+        val worker = Executors.newSingleThreadExecutor()
+        try {
+            assertEquals(1L, registry.addCallback(weak) { observed.add(1) })
+            assertEquals(1L, registry.addCallback(weak) {
+                assertEquals(0L, worker.submit<Long> { registry.dereference(weak).flag }.get(3, TimeUnit.SECONDS))
+                observed.add(2)
+            })
+            assertEquals(0L, registry.finalize(weak).flag)
+            assertEquals(listOf(2, 1), observed)
+            assertEquals(0L, registry.addCallback(weak) { observed.add(3) })
+            assertEquals(0L, registry.finalize(weak).flag)
+            registry.close()
+            assertEquals(listOf(2, 1), observed)
+        } finally { worker.shutdownNow(); registry.close() }
+    }
+
     @Test fun actualContextCloseInvalidatesHandlesWithoutRunningHaskellActions() {
         val first = context()
         first.initialize("thc"); first.enter()
@@ -221,23 +241,26 @@ class ManagedWeakTest {
     private val lifted = CoreRepresentation(CoreKind.DATA, present = true, primReps = listOf("BoxedRep (Just Lifted)"))
     private val action = lifted.copy(kind = CoreKind.CLOSURE)
     private val flag = CoreRepresentation(CoreKind.LONG, present = true, primReps = listOf("IntRep"))
+    private val address = CoreRepresentation(CoreKind.ADDRESS, present = true, primReps = listOf("AddrRep"))
+    private val originalOps = listOf(WeakOp.MAKE, WeakOp.MAKE_PLAIN, WeakOp.DEREFERENCE, WeakOp.FINALIZE)
     private fun tuple(vararg fields: CoreRepresentation) = CoreRepresentation(CoreKind.UNKNOWN, present = true,
         components = fields.toList(), primReps = fields.flatMap { it.primReps!! })
     private fun inputs(op: WeakOp, value: CoreRepresentation) = when (op) {
         WeakOp.MAKE -> listOf(weak, value, action, state)
         WeakOp.MAKE_PLAIN -> listOf(weak, value, state)
+        WeakOp.ADD_C_FINALIZER -> listOf(address, address, flag, address, weak, state)
         else -> listOf(weak, state)
     }
     private fun output(op: WeakOp, value: CoreRepresentation) = when (op) {
         WeakOp.MAKE, WeakOp.MAKE_PLAIN -> tuple(state, weak)
+        WeakOp.ADD_C_FINALIZER -> tuple(state, flag)
         WeakOp.DEREFERENCE -> tuple(state, flag, value)
         WeakOp.FINALIZE -> tuple(state, flag, action)
     }
     private fun flags(args: List<CoreRepresentation>) = args.map { it.primReps == listOf("BoxedRep (Just Lifted)") }
 
-    @Test fun exactFourContractsRejectCFinalizersAndForgedStateRepresentationOrBinding() {
-        assertEquals(4, WeakOp.entries.size)
-        assertNull(WeakOp.named("addCFinalizerToWeak#"))
+    @Test fun exactWeakContractsRejectForgedStateRepresentationOrBinding() {
+        assertEquals(5, WeakOp.entries.size)
         for (op in WeakOp.entries) for (value in listOf(lifted, action, weak)) {
             val args = inputs(op, value)
             val result = output(op, value)
@@ -249,7 +272,7 @@ class ManagedWeakTest {
                 val wrongFlags = flags(args).toMutableList().also { it[index] = !it[index] }
                 assertThrows(RuntimeFault::class.java) { op.validate(args, wrongFlags, result) }
                 val stored = args.map { it as CoreRepresentation? }.toMutableList().also {
-                    it[index] = CoreRepresentation(CoreKind.ADDRESS, present = true, primReps = listOf("AddrRep"))
+                    it[index] = flag.copy(primReps = listOf("WordRep"))
                 }
                 assertThrows(RuntimeFault::class.java) { op.validateBindings(args, stored) }
             }
@@ -303,7 +326,7 @@ class ManagedWeakTest {
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                    for (op in WeakOp.entries) for (mutation in 0..2) {
+                    for (op in originalOps) for (mutation in 0..2) {
                         val module = Json.parse(Json.stringify(original)) as Map<String, Any?>
                         val app = applications(module).first { (it[1] as? List<*>)?.take(2) == listOf("prim", op.primitive) }
                         val args = app[2] as MutableList<Any?>
@@ -345,7 +368,7 @@ class ManagedWeakTest {
             assertEquals(emptyList<Any>(), audit["issues"])
             assertEquals(emptyList<Any>(), audit["missingGlobals"])
             val primitives = (audit["primitives"] as List<Map<String, Any?>>).map { it["name"] }.toSet()
-            assertTrue(primitives.containsAll(WeakOp.entries.map { it.primitive }))
+            assertTrue(primitives.containsAll(originalOps.map { it.primitive }))
             assertFalse("addCFinalizerToWeak#" in primitives)
             val merged = CoreModules.merge(paths.map { json(File(root, it)) })
             for (backend in listOf("ast", "bytecode")) context().use { context ->

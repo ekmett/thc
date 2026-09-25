@@ -27,9 +27,18 @@ class CoverageCorpusTest {
                 .joinToString("") { "%02x".format(it) }
             assertEquals(expectedHash, actualHash, "Stale native corpus input/artifact: $path; run scripts/prepare-tests.sh")
         }
-        val entries = corpus["entries"] as List<*>
-        assertTrue(entries.isNotEmpty(), "Coverage corpus must not be empty")
-        return listOf("ast", "bytecode").flatMap { backend -> entries.map { raw ->
+        val allEntries = corpus["entries"] as List<*>
+        assertTrue(allEntries.isNotEmpty(), "Coverage corpus must not be empty")
+        // Optional exact diagnostic selection; provenance and each selected test's
+        // native, warm/cold and first-installed checks remain unchanged.
+        val selectedEntry = System.getProperty("thc.corpusEntry")
+        val selectedBackend = System.getProperty("thc.corpusBackend")
+        val entries = if (selectedEntry == null) allEntries else allEntries.filter {
+            (it as Map<*, *>)["id"] == selectedEntry
+        }.also { assertEquals(1, it.size, "Unknown or duplicate corpus entry: $selectedEntry") }
+        val backends = listOf("ast", "bytecode")
+        assertTrue(selectedBackend == null || selectedBackend in backends, "Unknown corpus backend: $selectedBackend")
+        return backends.filter { selectedBackend == null || it == selectedBackend }.flatMap { backend -> entries.map { raw ->
             val entry = raw as Map<*, *>
             val id = entry["id"] as String
             val modules = (entry["modules"] as List<*>).map { File(root, it as String).path }

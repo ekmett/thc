@@ -236,6 +236,13 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
      * aliases. Closing is idempotent and never re-enters the LLVM context. */
     private inner class NativeResource(private val lease: NativeFileLease,
         private val readable: Boolean, private val writable: Boolean) : NativeFileResource {
+        override fun readinessWait(): NativeFdWait {
+            current()
+            synchronized(this@NativeFileProvider) { if (disposed) throw ClosedChannelException() }
+            // Do not take the lease's IO monitor: another read may be blocked.
+            // The short native lifetime lock protects only duplication/close.
+            return NativeFdWait.acquire(lease)
+        }
         private inline fun <T> live(action: () -> T): T = synchronized(lease) {
             current(); lease.requireOpen(); action()
         }

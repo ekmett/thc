@@ -9,7 +9,7 @@ import Data.Aeson (Value(..), decodeStrict', object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Char8 as BS
 import Data.Foldable (toList)
-import Data.List (sort)
+import Data.List (nub, sort)
 import FixtureSupport (commandStdout, commandStderr, hashes, runLogged, writeJson)
 import GHC
 import GHC.Driver.Main (hscSimplify)
@@ -100,9 +100,14 @@ exportLabels libdir source = do
       labels (Object fields) = concatMap labels (toList fields)
       labels _ = []
       found = labels value
+      hasFinalizer (Array xs) = case toList xs of
+        String "prim" : String "addCFinalizerToWeak#" : _ -> True
+        elements -> any hasFinalizer elements
+      hasFinalizer (Object fields) = any hasFinalizer (toList fields)
+      hasFinalizer _ = False
       proof = Just (object ["kind" .= ("address" :: String), "primReps" .= ["AddrRep" :: String], "evaluated" .= True])
-  unless (sort [(kind, symbol) | (kind, symbol, _) <- found] ==
+  unless (sort (nub [(kind, symbol) | (kind, symbol, _) <- found]) ==
     [("data-addr", "enabled_capabilities"), ("function-addr", "backtraceFree"), ("function-addr", "libdwPoolRelease")] &&
-    all (\(_, _, representation) -> representation == proof) found)
+    all (\(_, _, representation) -> representation == proof) found && hasFinalizer value)
     (die "GHC function/data labels or AddrRep certificates changed")
   pure value
