@@ -120,11 +120,13 @@ class ManagedWeakTest {
         val state = Language.currentState()
         val owner = state.weaks
         val threads = state.threads
-        val key = GuestThreadId(123L, threads)
-        val otherValue = GuestThreadId(456L, threads)
+        threads.enterCurrent()
+        val key = threads.currentIdentity()
+        threads.leaveCurrent()
+        val otherValue = Any()
         val weak = owner.make(key, otherValue, null)
         val capability = owner.mainThreadKey(weak, threads)
-        assertEquals(123L, capability.liveJavaId(), "Native main-thread projection reads KEY, not value")
+        assertEquals(key.javaId, capability.liveJavaId(), "Native main-thread projection reads KEY, not value")
         val closing = owner.mainThreadKey(owner.make(key, Any(), null), threads)
         val wrongKey = owner.make(Any(), key, null)
         assertThrows(RuntimeFault::class.java) { owner.mainThreadKey(wrongKey, threads) }
@@ -136,7 +138,10 @@ class ManagedWeakTest {
                     val foreign = Language.currentState()
                     assertThrows(RuntimeFault::class.java) { foreign.weaks.mainThreadKey(weak, foreign.threads) }
                     assertThrows(RuntimeFault::class.java) { owner.mainThreadKey(weak, foreign.threads) }
-                    val foreignKey = owner.make(GuestThreadId(789L, foreign.threads), Any(), null)
+                    foreign.threads.enterCurrent()
+                    val foreignIdentity = try { foreign.threads.currentIdentity() }
+                        finally { foreign.threads.leaveCurrent() }
+                    val foreignKey = owner.make(foreignIdentity, Any(), null)
                     assertThrows(RuntimeFault::class.java) { owner.mainThreadKey(foreignKey, threads) }
                 } finally { second.leave() }
             }
