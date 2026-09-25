@@ -2,18 +2,20 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 module TestSupport
-  ( Env(..), Result(..), setup, withFixture, withFixtureNamed, copyTree, run, runExe, checked, json, readJson
+  ( Env(..), Result(..), setup, withFixture, withFixtureNamed, copyTree, run, runExe, checked, json, readJson, readCore
   , field, array, string, strings, bool, number, objects, named
   , assertContains, assertSuccess, assertFailure, assertNoStdout
   , writeText, readText, replaceText, findFiles, requireFile
   ) where
 
+import Codec.Archive.Zip (findEntryByPath, fromEntry, toArchiveOrFail)
 import Control.Exception (bracket)
 import Control.Monad (forM)
-import Data.Aeson (Value(..), eitherDecodeStrict')
+import Data.Aeson (Value(..), eitherDecode', eitherDecodeStrict')
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
 import qualified Data.Vector as Vector
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -122,6 +124,14 @@ readJson :: FilePath -> IO Value
 readJson path = BS.readFile path >>= \bytes -> case eitherDecodeStrict' bytes of
   Right value -> pure value
   Left problem -> HUnit.assertFailure ("invalid JSON in " ++ path ++ ": " ++ problem) >> fail "unreachable"
+
+readCore :: FilePath -> FilePath -> IO Value
+readCore bundle member = do
+  bytes <- BL.readFile bundle
+  archive <- either fail pure (toArchiveOrFail bytes)
+  entry <- maybe (fail ("missing ZIP member " ++ member)) pure
+           (findEntryByPath member archive)
+  either fail pure (eitherDecode' $ fromEntry entry)
 
 field :: Value -> String -> Value
 field (Object object) name = maybe Null id (KeyMap.lookup (Key.fromString name) object)

@@ -480,7 +480,8 @@ wiredGhcInternal context thcRoot = do
                          "pluginHash" .= pluginHash,
                          "driverHash" .= contextDriverHash context,
                          "options" .= (["ghc-internal-source-closure-v2", "post-tidy",
-                                        "source-notes", "hsc2hs", "-g", "-dynamic", "-dcore-lint",
+                                        "source-notes", "foreign-import-provenance",
+                                        "hsc2hs", "-g", "-dynamic", "-dcore-lint",
                                         "-XNoPolyKinds"] :: [String])]
       exportKey = shaHex (BL.toStrict (encode ("thc-wired-ghc-internal-v2" :: String,
                                              buildKey, exporter)))
@@ -639,6 +640,7 @@ exporterIdentity context = do
                  "pluginHash" .= pluginHash,
                  "driverHash" .= contextDriverHash context,
                  "options" .= (["post-tidy", "unit-qualified", "source-notes",
+                                "foreign-import-provenance",
                                 "-g", "-dynamic", "-dcore-lint"] :: [String])]
 
 prepareGlobalBundles :: ExportContext -> FilePath -> [Unit] -> IO (Map.Map String Bundle)
@@ -825,6 +827,7 @@ exportUnit context keys unit = do
                          "pluginHash" .= pluginHash,
                          "driverHash" .= contextDriverHash context,
                          "options" .= (["post-tidy", "unit-qualified", "source-notes",
+                                         "foreign-import-provenance",
                                          "-g", "-dynamic", "-dcore-lint"] :: [String])]
       exportKey = shaHex (BL.toStrict (encode ("thc-core-export-v1" :: String, buildKey, exporter)))
       buildInputs = object (inputFields ++ ["buildKey" .= buildKey,
@@ -865,7 +868,9 @@ freshExport context component unit buildKey exportKey buildInputs expected desti
            "-package-db", contextPluginDb context, "-plugin-package-id", contextPluginUnit context,
            "-fplugin=THC.Plugin", "-fplugin-opt=THC.Plugin:" ++ core,
            "-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:unit-qualified",
-           "-fplugin-opt=THC.Plugin:source-notes", "-g", "-dynamic", "-fforce-recomp", "-dcore-lint"] ++
+           "-fplugin-opt=THC.Plugin:source-notes",
+           "-fplugin-opt=THC.Plugin:foreign-import-provenance",
+           "-g", "-dynamic", "-fforce-recomp", "-dcore-lint"] ++
           map snd (componentSources component)
     sourceDir <- field (componentValue component) "src-dir"
     runCommand True (componentCompiler component) arguments sourceDir
