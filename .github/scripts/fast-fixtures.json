@@ -88,6 +88,18 @@
         "thc.cabal"
       ]
     },
+    "stable-pointers": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "stable-pointers"]}],
+      "outputs": ["build/stable-pointers"],
+      "sources": [
+        "compiler/test-fixtures/StablePointerAudit.hs",
+        "test/haskell-fixtures/StablePointerFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal"
+      ]
+    },
     "interface-core": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "interface-core"]}],

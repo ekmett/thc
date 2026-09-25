@@ -91,6 +91,7 @@ tasks.withType<Test>().configureEach {
             "tuple-arithmetic/manifest.json", "tuple-arithmetic/oracle.tsv", "tuple-arithmetic/call-oracle.tsv",
             "integer-primops/core/**/*.json", "integer-primops/manifest.json", "integer-primops/oracle.tsv",
             "mutvar/**/*.json", "mutvar/oracle.tsv", "mutvar/NativeMutVar.hs",
+            "stable-pointers/**/*.json", "stable-pointers/oracle.tsv", "stable-pointers/NativeStablePointer.hs",
             "managed-mvars/**/*.json", "managed-mvars/*.tsv", "managed-mvars/native/**",
             "synchronous-exceptions/**/*.json", "synchronous-exceptions/*.tsv", "synchronous-exceptions/native/**",
             "core-continuation/**/*.json", "core-continuation/native-output.txt",

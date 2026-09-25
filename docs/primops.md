@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 323 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 859 | No declared lowering. |
+| Partial | 326 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 856 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -40,6 +40,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 ## Current aggregate and address limits
 
 - Address operations support managed literal or byte-array backing with checked offsets; no raw pointers. Char# byte-memory operations read an unsigned byte and write the low eight bits of WordRep. Ordered Addr# comparisons are limited to offsets in the same backing allocation or null compared with itself; unrelated addresses have no synthetic order. Only the exact GHC MD5 C foreign calls admit managed addresses through Sulong.
+- StablePtr# uses context-owned opaque AddrRep handles, with lazy referents and exact hs_free_stable_ptr. Live identity casts may be compared, but the handles have no byte storage, pointer arithmetic or ordering. Stable-pointer array and byte-memory index/read/write primops remain unsupported.
 - Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Aggregate captures, heap fields, ordinary let bindings and join captures remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums, vectors and unresolved leaves cannot appear in tuple inputs; exact evaluated AddrRep leaves use managed address references.
 - Binary unboxed sum results and immediate cases support exact machine Int/Word, Float, Double, known reference, void and tuple payloads. Nested sums, width-changing payload casts, vector/address or unknown leaves, sum inputs/captures/heap fields/local lets/joins/host results remain unsupported.
 
@@ -391,11 +392,13 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `copySmallMutableArray#` — arity 6 — Managed lifted arrays
 - [ ] `dataToTagLarge#` — arity 1 — concrete-algebraic-family-64
 - [ ] `dataToTagSmall#` — arity 1 — concrete-algebraic-family-64
+- [ ] `deRefStablePtr#` — arity 2 — Context-owned opaque stable handles; no pointer memory access
 - [ ] `divideDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `divideDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `divideFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `divideFloatX8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `eqAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
+- [ ] `eqStablePtr#` — arity 2 — Context-owned opaque stable handles; no pointer memory access
 - [ ] `fork#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `freezeArray#` — arity 4 — Managed lifted arrays
 - [ ] `freezeSmallArray#` — arity 4 — Managed lifted arrays
@@ -455,6 +458,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `killThread#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `leAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `ltAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
+- [ ] `makeStablePtr#` — arity 2 — Context-owned opaque stable handles; no pointer memory access
 - [ ] `maskAsyncExceptions#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `maskUninterruptible#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -756,7 +760,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `copyAddrToByteArray#` — arity 5
 - [ ] `copyByteArrayToAddr#` — arity 5
 - [ ] `copyMutableByteArrayToAddr#` — arity 5
-- [ ] `deRefStablePtr#` — arity 2
 - [ ] `deRefWeak#` — arity 2
 - [ ] `decodeDouble_2Int#` — arity 1
 - [ ] `decodeDouble_Int64#` — arity 1
@@ -764,7 +767,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `delay#` — arity 2
 - [ ] `divideDoubleX8#` — arity 2
 - [ ] `divideFloatX16#` — arity 2
-- [ ] `eqStablePtr#` — arity 2
 - [ ] `fetchAddIntArray#` — arity 4
 - [ ] `fetchAddWordAddr#` — arity 3
 - [ ] `fetchAndIntArray#` — arity 4
@@ -982,7 +984,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `labelThread#` — arity 3
 - [ ] `listThreads#` — arity 1
 - [ ] `makeStableName#` — arity 2
-- [ ] `makeStablePtr#` — arity 2
 - [ ] `maxDouble#` — arity 2
 - [ ] `maxDoubleX2#` — arity 2
 - [ ] `maxDoubleX4#` — arity 2

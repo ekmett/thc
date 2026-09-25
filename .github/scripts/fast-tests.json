@@ -16,6 +16,14 @@
       "junit": ["thc.runtime.MutVarTest"],
       "python": []
     },
+    "src/main/kotlin/thc/runtime/StablePointers.kt": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "src/main/kotlin/thc/runtime/CoreStablePointers.kt": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
     "src/main/kotlin/thc/runtime/FloatingAddresses.kt": {
       "junit": ["thc.runtime.FloatingAddressTest"],
       "python": []
@@ -886,6 +894,7 @@
         "thc.runtime.OriginalStdioTruncateNativeTest",
         "thc.runtime.OriginalHandleReadinessNativeTest",
         "thc.runtime.MutVarTest",
+        "thc.runtime.StablePointerTest",
         "thc.runtime.OriginalStackConsumerProofTest",
         "thc.runtime.BoxedArrayExtensionsTest",
         "thc.runtime.BitPrimopsTest",
@@ -919,6 +928,14 @@
     },
     "test/haskell-fixtures/MutVarFixtures.hs": {
       "junit": ["thc.runtime.MutVarTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/StablePointerFixtures.hs": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/StablePointerAudit.hs": {
+      "junit": ["thc.runtime.StablePointerTest"],
       "python": []
     },
     "compiler/test-fixtures/MutVarAudit.hs": {

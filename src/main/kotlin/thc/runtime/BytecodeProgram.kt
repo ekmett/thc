@@ -171,6 +171,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         CoreStackForeign.validateHeads(bindings)
         CoreStackInfoForeign.validateHeads(bindings)
         CoreOriginalStdio.validateHeads(bindings)
+        CoreStablePointers.validateHeads(bindings)
         CoreManagedFiles.validateHeads(bindings)
         CoreMd5Foreign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
@@ -1300,12 +1301,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val originalStdio = CoreOriginalStdio.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val stableFree = CoreStablePointers.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val managedFile = CoreManagedFiles.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val javascript = if (!stackClone && stackInfo == null && originalStdio == null && managedFile == null) CoreJavaScript.validate(expr, defined) else null
             val md5 = if (javascript == null) CoreMd5Foreign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
-            val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
+            val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && !stableFree && managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val state = args.single()
@@ -1394,6 +1397,15 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (originalStdio == OriginalStdioOp.SEEK) b.endFileSeek()
                     else if (originalStdio == OriginalStdioOp.TRUNCATE) b.endFileSetSize()
                     else if (status) b.endOriginalStdioStatus() else b.endOriginalStdioTransfer()
+                }
+            } else if (stableFree) {
+                CoreStablePointers.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val operands = args.map { compile(it, scope, false) }
+                tupleExpression(tupleProof) { e, destination ->
+                    if (destination.isNotEmpty()) throw RuntimeFault("StablePtr free has no result field")
+                    e.builder.beginFreeStablePointer()
+                    operands.forEach { it.emit(e) }
+                    e.builder.endFreeStablePointer()
                 }
             } else if (managedFile != null) {
                 CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -1834,6 +1846,19 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     }
                 } else ProvenExpression(Expression { e ->
                     e.builder.beginWriteMutVar(); operands.forEach { it.emit(e) }; e.builder.endWriteMutVar()
+                }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && StablePointerOp.named(fn[1] as String) != null) {
+                val operation = StablePointerOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginStablePointerTuple(destination.single(), operation)
+                    operands.forEach { it.emit(e) }
+                    e.builder.endStablePointerTuple()
+                } else ProvenExpression(Expression { e ->
+                    e.builder.beginEqualStablePointers()
+                    operands.forEach { it.emit(e) }
+                    e.builder.endEqualStablePointers()
                 }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && ArrayOp.named(fn[1] as String) != null) {
                 val operation = ArrayOp.named(fn[1] as String)!!

@@ -2064,6 +2064,36 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = StablePointerOp.class, name = "operation")
+    public static final class StablePointerTuple {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                StablePointerOp operation, Object value, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            Object result;
+            if (operation == StablePointerOp.MAKE) result = StablePointers.current(node).make(value);
+            else if (operation == StablePointerOp.DEREFERENCE) {
+                if (!(value instanceof ManagedAddress address)) throw fail("Expected opaque StablePtr#");
+                result = StablePointers.current(node).dereference(address);
+            } else throw fail("Invalid StablePtr# tuple operation");
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation public static final class FreeStablePointer {
+        @Specialization public static void free(ManagedAddress address, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            StablePointers.current(node).free(address);
+        }
+        @Fallback public static void invalid(Object address, Object state) { throw fail("Expected opaque StablePtr#"); }
+    }
+    @Operation public static final class EqualStablePointers {
+        @Specialization public static long equal(ManagedAddress left, ManagedAddress right, @Bind("$node") Node node) {
+            return StablePointers.current(node).equal(left, right) ? 1L : 0L;
+        }
+        @Fallback public static long invalid(Object left, Object right) { throw fail("Expected opaque StablePtr# operands"); }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class NewArray {
         @Specialization public static void create(VirtualFrame frame, LocalAccessor destination,
                 long size, Object initial, Object state, @Bind("$node") Node node) {
