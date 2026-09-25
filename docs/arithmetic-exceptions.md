@@ -24,7 +24,9 @@ for the original exception, dictionary, Typeable and context definitions.
 Separate thin interface exports check discovery of the implicit dependencies.
 Kotlin checks compare native results with an independent arithmetic model,
 withhold the throwing input until the actual guest call graph is compiled,
-and test lazy payload identity plus failure memoization in both backends.
+also require a separately profiled exception path to remain installed after its
+first compiled throw without recompilation, and test lazy payload identity plus
+failure memoization in both backends.
 
 ## Source checkpoint validation
 

@@ -74,7 +74,8 @@ class ArithmeticExceptionsNativeTest {
                 (closure["missingDefinitions"] as List<*>).map { (it as Map<*, *>)["id"] }
             for (name in listOf("raiseDivZero#", "raiseOverflow#", "raiseUnderflow#"))
                 assertTrue(CoreArithmeticExceptions.payload(name) in discovered, "$stage discovers the original implicit $name payload")
-            for (backend in listOf("ast", "bytecode")) for (entry in entries) context().use { context ->
+            for (backend in listOf("ast", "bytecode")) for (entry in entries)
+                for (cold in listOf(false, true)) context().use { context ->
                 val selected = rows.getValue(entry).map { it[1].toLong() to it[2].toLong() }
                 assertEquals(listOf(Long.MIN_VALUE, -17L, -1L, 0L, 1L, 17L, Long.MAX_VALUE), selected.map { it.first })
                 val audit = Json.parse(File(directory, "$stage/$entry-audit.json").readText()) as Map<*, *>
@@ -90,11 +91,14 @@ class ArithmeticExceptionsNativeTest {
                     val linked = CoreModules.reachable(module, entry, true) + ("instrument" to true)
                     val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
                     val function = context.asValue(EntryValue(program, entry, 1))
-                    val label = "$stage/$backend/$entry"
-                    // No arithmetic exception or its handler has run before this
-                    // installation. The first invocation of installed leaf code
-                    // raises through the original SomeException -> ArithException.
-                    repeat(40) { assertEquals(model(entry, 17), function.execute(17L).asLong(), label) }
+                    val label = "$stage/$backend/$entry/${if (cold) "cold" else "profiled"}"
+                    // The cold scenario first encounters exceptions in installed
+                    // guest code. The separate profiled scenario must preserve
+                    // that code on the first compiled throw, without recompiling.
+                    repeat(5) {
+                        val warm = if (cold) selected.filter { it.first != 0L } else selected
+                        for ((input, expected) in warm) assertEquals(expected, function.execute(input).asLong(), label)
+                    }
                     val body = program.entryTarget(entry + "Body")
                     val active = targets(program.entryTarget(entry))
                     assertTrue(active.any { it === body || it.rootNode.name.contains(entry + "Body") },
@@ -104,8 +108,11 @@ class ArithmeticExceptionsNativeTest {
                     active.forEach { assertTrue(valid(it), "$label remains installed before its first raise") }
                     val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                     assertEquals(model(entry, 0), function.execute(0L).asLong(), "$label first installed raise")
-                    assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() > before,
-                        "$label entered compiled guest code")
+                    assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() - before >= 2,
+                        "$label entered the retained compiled guest call chain")
+                    if (!cold) active.forEach {
+                        assertTrue(valid(it), "$label first installed throw retains compiled ${it.rootNode.name}")
+                    }
                     for ((input, expected) in selected) assertEquals(expected, function.execute(input).asLong(), "$label/$input")
                     assertEquals(0L, program.diagnostics()["unsupportedTraps"], label)
                     assertEquals(0L, program.diagnostics()["blackholes"], label)
