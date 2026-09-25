@@ -3438,6 +3438,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class GeneratedInt32X8Insert {
         @Specialization public static Int32X8 apply(Int32X8 vector, long value, long index) { return Int32X8.insert(vector, (int) value, index); }
     }
+    @Operation public static final class GeneratedInt32X8Min {
+        @Specialization public static Int32X8 apply(Int32X8 left, Int32X8 right) { return Int32X8.min(left, right); }
+    }
+    @Operation public static final class GeneratedInt32X8Max {
+        @Specialization public static Int32X8 apply(Int32X8 left, Int32X8 right) { return Int32X8.max(left, right); }
+    }
     @Operation public static final class GeneratedInt32X16Pack {
         @Specialization public static Int32X16 apply(long lane0, long lane1, long lane2, long lane3, long lane4, long lane5, long lane6, long lane7, long lane8, long lane9, long lane10, long lane11, long lane12, long lane13, long lane14, long lane15) { return new Int32X16((int) lane0, (int) lane1, (int) lane2, (int) lane3, (int) lane4, (int) lane5, (int) lane6, (int) lane7, (int) lane8, (int) lane9, (int) lane10, (int) lane11, (int) lane12, (int) lane13, (int) lane14, (int) lane15); }
     }
