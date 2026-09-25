@@ -304,6 +304,23 @@ class CoreZipBundleTest {
         }
     }
 
+    @Test fun producerOrderedAndReorderedArchivesPreserveTheSameVerifiedModules() {
+        val original = unit("pkg-a", layout = targetLayout())
+        val path = manifest(listOf(original))
+        val ordered = Json.parse(CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry"))
+        val archive = temporary.resolve("pkg-a.zip")
+        val reorderedBytes = zipped(unzip(Files.readAllBytes(archive)).reversed())
+        Files.write(archive, reorderedBytes)
+        @Suppress("UNCHECKED_CAST")
+        val reference = original["bundle"] as Map<String, Any?>
+        manifest(listOf(original + ("bundle" to (reference + ("sha256" to hash(reorderedBytes))))))
+        val reordered = CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry")
+        assertEquals(ordered, Json.parse(reordered))
+        Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
+            assertEquals(51L, context.eval("thc", reordered).execute().asLong())
+        }
+    }
+
     @Test fun largePackageRequestStreamsVerifiedModulesAndBindsItsManifestIdentity() {
         val other = "pkg-b:Shared.entry"
         @Suppress("UNCHECKED_CAST")
