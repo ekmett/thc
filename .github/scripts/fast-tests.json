@@ -181,6 +181,16 @@
     }
   },
   "primopFamilies": {
+    "simd-generated-primops": {
+      "junit": [
+        "thc.runtime.SimdCapabilitySmokeTest",
+        "thc.runtime.SimdFamiliesTest"
+      ],
+      "python": [
+        "scripts/test-primop-coverage.py",
+        "scripts/test-simd-families.py"
+      ]
+    },
     "explicit64-primops": {
       "junit": [
         "thc.runtime.Explicit64PrimopsTest"

@@ -45,7 +45,8 @@ class FastSelectionTest(unittest.TestCase):
                                    "scripts/prepare-family.py": affected,
                                    "src/test/kotlin/example/SharedContext.kt": affected},
                            primopFamilies={name: affected for name in
-                                           ("bit-primops", "integer-primops", "signed-narrow-primops", "explicit64-primops")},
+                                           ("bit-primops", "integer-primops", "signed-narrow-primops", "explicit64-primops",
+                                            "simd-generated-primops")},
                            automation={name: dict(junit=[], python=["scripts/test-other.py"]) for name in
                                        (select.SCRIPT, select.POLICY, ".github/scripts/test_fast_select.py",
                                         ".github/workflows/fast.yml", ".github/scripts/fast_ci.py")})
@@ -317,6 +318,62 @@ private val text = "class FakeString { @Test }"
         self.write(path, after.replace('"PopulationCountWidth"\n    else', '"NewUnreviewedOperation"\n    else'))
         self.commit()
         self.full("shared-primop-registry-change")
+
+    def test_exact_generated_simd_extrema_addition_selects_family_checks(self):
+        self.policy["primopFamilies"]["simd-generated-primops"] = dict(
+            junit=["example.OtherTest"], python=["scripts/test-other.py"])
+        self.write(select.POLICY, json.dumps(self.policy))
+        spec = dict(schema=1, families=[dict(name="Word32X8", laneRep="Word32Rep", operations=["insert"])])
+        capabilities = dict(primitives={"insertWord32X8#": 3})
+        root = ("class BytecodeRoot {\n    // BEGIN GENERATED SIMD FAMILIES\n"
+                "    // existing operation\n    // END GENERATED SIMD FAMILIES\n}\n")
+        program = ("class BytecodeProgram {\n    // BEGIN GENERATED SIMD FAMILIES\n"
+                   "    // existing operation\n    // END GENERATED SIMD FAMILIES\n}\n")
+        original = {select.SIMD_SPEC: json.dumps(spec), select.CAPABILITIES: json.dumps(capabilities),
+                    select.BYTECODE_ROOT: root, select.BYTECODE_PROGRAM: program}
+        for path, body in original.items():
+            self.write(path, body)
+        self.base = self.commit()
+        spec["families"][0]["operations"] += ["min", "max"]
+        capabilities["primitives"].update({"minWord32X8#": 2, "maxWord32X8#": 2})
+        blocks = {}
+        for op in ("min", "max"):
+            node = "GeneratedWord32X8" + op.capitalize()
+            blocks[node] = (
+                f"    @Operation public static final class {node} {{\n"
+                f"        @Specialization public static Word32X8 apply(Word32X8 left, Word32X8 right) {{ return Word32X8.{op}(left, right); }}\n"
+                "    }\n",
+                f'        "{op}Word32X8#" -> ProvenExpression(Expression {{ e ->\n'
+                "            val b = e.builder\n"
+                f"            b.begin{node}(); operands.forEach {{ it.emit(e) }}; b.end{node}()\n"
+                "        }, GeneratedVectors.proofWord32X8)\n")
+        updated = {select.SIMD_SPEC: json.dumps(spec), select.CAPABILITIES: json.dumps(capabilities),
+                   select.BYTECODE_ROOT: root.replace("    // END GENERATED", "".join(pair[0] for pair in blocks.values()) + "    // END GENERATED"),
+                   select.BYTECODE_PROGRAM: program.replace("    // END GENERATED", "".join(pair[1] for pair in blocks.values()) + "    // END GENERATED")}
+        for path, body in updated.items():
+            self.write(path, body)
+        self.commit()
+        result = self.plan()
+        self.assertEqual("narrow", result["mode"], result)
+        self.assertEqual(["example.OtherTest"], result["affected"]["junit"])
+        self.assertEqual(["scripts/test-other.py"], result["affected"]["python"])
+        self.assertEqual([], result["haskell"]["suites"])
+        self.assertFalse(result["polyglot"]["required"])
+
+        for path, body, reason in (
+                (select.BYTECODE_ROOT, updated[select.BYTECODE_ROOT].replace("class BytecodeRoot", "class OtherRoot"), "unverified-simd-generated-code"),
+                (select.BYTECODE_PROGRAM, updated[select.BYTECODE_PROGRAM].replace("// existing operation", "// changed operation"), "unverified-simd-generated-code"),
+                (select.CAPABILITIES, json.dumps(dict(primitives={**capabilities["primitives"], "plusInt#": 2})), "shared-primop-registry-change"),
+                (select.SIMD_SPEC, json.dumps(dict(schema=1, families=[dict(name="Word32X8", laneRep="Word32Rep", operations=["min", "max"])])), "unverified-simd-generation-change")):
+            with self.subTest(path=path):
+                self.write(path, body)
+                self.commit()
+                self.full(reason)
+                self.write(path, updated[path])
+                self.commit()
+        self.write(select.SIMD_GENERATOR, "# changed generator semantics\n")
+        self.commit()
+        self.full("unverified-simd-generation-change")
 
     def test_unknown_production_configuration_resources_and_compiler_widen(self):
         for path in ("src/main/kotlin/Critical.kt", "src/main/kotlin/ArgumentLayout.kt", "compiler/THC/Plugin.hs",
