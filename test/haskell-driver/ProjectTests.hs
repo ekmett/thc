@@ -293,7 +293,12 @@ forBackends env invoke output project entryOf unit bundleRef modulePath = go Not
       assertEqual "entry Core" ["Main"] (moduleNames $ unit manifest entryId)
       audit <- readJson (output </> "audit.json")
       assertBool "accepted" (bool $ field audit "accepted")
+      assertEqual "GHC executable IO root" [entryId ++ "::Main.main"]
+        (strings $ field audit "roots")
       assertEqual "no missing globals" [] (array $ field audit "missingGlobals")
+      assertBool "original TopHandler startup reachable" $ any
+        ((== "ghc-internal:GHC.Internal.TopHandler.runMainIO1") . string . (`field` "id"))
+        (objects audit "reachableBindings")
       assertBool "imported thunk reachable" $ any
         ((== depId ++ ":Answer.answerValue") . string . (`field` "id"))
         (objects audit "reachableBindings")
@@ -309,6 +314,9 @@ forBackends env invoke output project entryOf unit bundleRef modulePath = go Not
           assertEqual "Core cache reused" before bundles
           assertEqual "cached ZIP files were not rewritten" beforeTimes times
       core <- readCore (fst $ bundleRef manifest entryId) (modulePath manifest entryId)
+      assertBool "GHC-generated wrapper exported" $ any
+        ((== entryId ++ "::Main.main") . string . (`field` "id"))
+        (objects core "bindings")
       expected <- canonicalizePath (project </> "app-run/app/Main.hs")
       assertBool "source path and content" =<< anyM
         (\file -> do

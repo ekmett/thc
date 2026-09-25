@@ -31,7 +31,11 @@ tests env = TestLabel "single-package native versus THC run" $ TestCase $
       assertEqual "unsupported traps" 0 (number $ field diagnostics "unsupportedTraps")
       audit <- readJson (exported output </> "audit.json")
       assertBool "strict Core accepted" (bool $ field audit "accepted")
-      assertEqual "IO root" ["main:Main.main"] (strings $ field audit "roots")
+      assertEqual "GHC executable IO root" ["main::Main.main"] (strings $ field audit "roots")
+      mainCore <- readJson (exported output </> "core/Main.json")
+      assertBool "GHC-generated wrapper exported" $ any
+        ((== "main::Main.main") . string . (`field` "id"))
+        (objects mainCore "bindings")
       let primitives = map (string . (`field` "name")) (objects audit "primitives")
       forM_ ["newMutVar#", "writeMutVar#", "readMutVar#", "raise#"] $ \primitive ->
         assertBool ("missing " ++ primitive) (primitive `elem` primitives)

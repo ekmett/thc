@@ -201,7 +201,10 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
     require (Map.notMember "ghc-internal" byId) "Cabal plan duplicates the wired ghc-internal unit"
     (:[]) <$> wiredGhcInternal context thcRoot
   let manifest = output </> "packages.json"
-      entry = unitId selected ++ ":Main.main"
+      -- GHC synthesizes :Main.main for the executable. It wraps the user's
+      -- Main.main in GHC.Internal.TopHandler.runMainIO; selecting the user's
+      -- action directly skips GHC's main-thread and top-level exception path.
+      entry = unitId selected ++ "::Main.main"
       audit = output </> "audit.json"
   atomicJson manifest (object ["format" .= ("thc-core-packages" :: String),
                                "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
