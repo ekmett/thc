@@ -364,8 +364,11 @@ class NativeFileProviderTest {
     @Test fun explicitEndpointCapabilitiesPreserveUngrantAndNonregularBoundaries() {
         nativeContext(setOf(StandardEndpoint.OUTPUT)).use { context -> entered(context) {
             val state = Language.currentState(); val files = state.files; val stdio = state.stdio
-            for (fd in listOf(0L, 2L))
+            for (fd in listOf(0L, 2L)) {
                 assertThrows(UnsupportedOperationException::class.java) { files.statImage(fd) }
+                assertEquals(-1L, stdio.ready(fd, 0, 0, 0))
+                assertEquals(StdioHostAbi.load().error(7), stdio.errno())
+            }
             val image = files.statImage(1)
             val regular = PosixStat.execute(OriginalStdioOp.IS_REG, ManagedAddress.nullAddress(),
                 field(image, OriginalStdioOp.ST_MODE)) == 1L
@@ -375,7 +378,15 @@ class NativeFileProviderTest {
                 assertEquals(-1L, files.setSize(1, field(image, OriginalStdioOp.ST_SIZE) + 1))
                 assertEquals(7L, files.errorKind(), "Inherited append status is not guessed for endpoint extension")
             } else {
-                assertEquals(-1L, files.ready(1, 0)); assertEquals(7L, files.errorKind())
+                // Granted native streams now have an actual poll capability.
+                // Host stdout's changing readiness is not a fixture: either
+                // observation is valid, but ENOTSUP is not. Exact read/write
+                // transitions are checked with private FIFOs in NativeFdWaitTest.
+                assertEquals(-1L, stdio.close(-1)); val error = stdio.errno()
+                for (writing in listOf(0L, 1L)) {
+                    assertTrue(stdio.ready(1, writing, 0, 0) in 0L..1L)
+                    assertEquals(error, stdio.errno())
+                }
                 assertEquals(0L, stdio.isTerminal(1)); assertEquals(StdioHostAbi.load().error(7), stdio.errno())
                 assertEquals(-1L, files.size(1)); assertEquals(7L, files.errorKind())
                 assertEquals(-1L, files.setSize(1, 0)); assertEquals(7L, files.errorKind())
