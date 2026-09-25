@@ -24,6 +24,10 @@
       "junit": ["thc.runtime.CoreBoundThreadForeignTest"],
       "python": ["scripts/test-audit-core.py"]
     },
+    "src/main/kotlin/thc/runtime/FileWaitPrimitives.kt": {
+      "junit": ["thc.runtime.FileWaitPrimitiveTest"],
+      "python": ["scripts/test-audit-core.py"]
+    },
     "src/main/kotlin/thc/runtime/ManagedMutVars.kt": {
       "junit": ["thc.runtime.MutVarTest"],
       "python": []
@@ -348,7 +352,7 @@
       "junit": ["thc.runtime.OriginalOpenTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest"], "python": []
     },
     "src/main/kotlin/thc/runtime/ManagedFiles.kt": {
-      "junit": ["thc.runtime.OriginalOpenTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedFilesTest", "thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest"],
+      "junit": ["thc.runtime.FileWaitPrimitiveTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedFilesTest", "thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/ManagedStdio.kt": {
