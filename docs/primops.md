@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 326 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 856 | No declared lowering. |
+| Partial | 327 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 855 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -40,6 +40,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 ## Current aggregate and address limits
 
 - Address operations support managed literal or byte-array backing with checked offsets; no raw pointers. Char# byte-memory operations read an unsigned byte and write the low eight bits of WordRep. Ordered Addr# comparisons are limited to offsets in the same backing allocation or null compared with itself; unrelated addresses have no synthetic order. Only the exact GHC MD5 C foreign calls admit managed addresses through Sulong.
+- shrinkMutableByteArray# changes the logical size of a THC-owned allocation in place, preserving frozen and pinned aliases while retaining backing capacity. Managed byte, scalar, vector, address and C-bitcode buffer accesses observe the shorter bound; partial truncation of a managed pointer cell is rejected. Host-injected raw byte arrays cannot be shrunk in place.
 - StablePtr# uses context-owned opaque AddrRep handles, with lazy referents and exact hs_free_stable_ptr. Live identity casts may be compared, but the handles have no byte storage, pointer arithmetic or ordering. Stable-pointer array and byte-memory index/read/write primops remain unsupported.
 - Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Aggregate captures, heap fields, ordinary let bindings and join captures remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums, vectors and unresolved leaves cannot appear in tuple inputs; exact evaluated AddrRep leaves use managed address references.
 - Binary unboxed sum results and immediate cases support exact machine Int/Word, Float, Double, known reference, void and tuple payloads. Nested sums, width-changing payload casts, vector/address or unknown leaves, sum inputs/captures/heap fields/local lets/joins/host results remain unsupported.
@@ -584,6 +585,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `reallyUnsafePtrEquality#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `resizeMutableByteArray#` — arity 3 — Managed byte storage
 - [ ] `setByteArray#` — arity 5 — Managed byte storage
+- [ ] `shrinkMutableByteArray#` — arity 3 — Managed byte storage
 - [ ] `sizeofArray#` — arity 1 — Managed lifted arrays
 - [ ] `sizeofByteArray#` — arity 1 — Managed byte storage
 - [ ] `sizeofMutableArray#` — arity 1 — Managed lifted arrays
@@ -1330,7 +1332,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `setAddrRange#` — arity 4
 - [ ] `setOtherThreadAllocationCounter#` — arity 3
 - [ ] `setThreadAllocationCounter#` — arity 2
-- [ ] `shrinkMutableByteArray#` — arity 3
 - [ ] `shrinkSmallMutableArray#` — arity 3
 - [ ] `shuffleDoubleX2#` — arity 3
 - [ ] `shuffleDoubleX4#` — arity 3

@@ -9,6 +9,7 @@ import com.oracle.truffle.api.source.Source
 import org.graalvm.polyglot.io.ByteSequence
 import java.lang.ref.WeakReference
 import java.util.WeakHashMap
+import java.util.function.LongSupplier
 
 /** Context-owned original C code and allocation views. No process addresses escape. */
 internal class SulongCbits(env: TruffleLanguage.Env) {
@@ -37,12 +38,15 @@ internal class SulongCbits(env: TruffleLanguage.Env) {
     private val finish = interop.readMember(library, "thc_md5_final")
     // Arrays have identity equality. Both sides are weak: a cached view must not
     // keep its weak key alive. A live LLVM pointer strongly retains its view.
-    private val buffers = WeakHashMap<ByteArray, WeakReference<CbitsBuffer>>()
+    private val buffers = WeakHashMap<Any, WeakReference<CbitsBuffer>>()
 
     @Synchronized internal fun buffer(address: ManagedAddress): CbitsBuffer {
         val bytes = address.cbitsBacking()
-        return buffers[bytes]?.get() ?: CbitsBuffer(bytes, address.cbitsWritable()).also {
-            buffers[bytes] = WeakReference(it)
+        val owner = address.cbitsOwner()
+        val key = owner ?: bytes
+        return buffers[key]?.get() ?: (if (owner == null) CbitsBuffer(bytes, address.cbitsWritable())
+            else CbitsBuffer(bytes, address.cbitsWritable(), LongSupplier { address.cbitsSize() })).also {
+            buffers[key] = WeakReference(it)
         }
     }
     fun init(context: ManagedAddress) {

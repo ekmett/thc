@@ -55,6 +55,7 @@ python3 scripts/prepare-address-fields.py
 python3 scripts/prepare-data-to-tag.py
 "$fixture_bin" mutvar
 "$fixture_bin" stable-pointers
+"$fixture_bin" shrink-bytearrays
 python3 scripts/prepare-managed-mvars.py --refresh
 rm -rf -- build/synchronous-exceptions
 python3 scripts/prepare-synchronous-exceptions.py

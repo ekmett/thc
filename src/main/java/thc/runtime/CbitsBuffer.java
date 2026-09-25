@@ -11,6 +11,7 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.function.LongSupplier;
 
 /** Byte-addressed interop over the guest's original allocation, never a native address. */
 @ExportLibrary(InteropLibrary.class)
@@ -18,17 +19,22 @@ public final class CbitsBuffer implements TruffleObject {
     private final ByteBuffer little;
     private final ByteBuffer big;
     private final boolean writable;
+    private final LongSupplier logicalSize;
 
     public CbitsBuffer(byte[] bytes, boolean writable) {
+        this(bytes, writable, () -> bytes.length);
+    }
+    public CbitsBuffer(byte[] bytes, boolean writable, LongSupplier logicalSize) {
         this.little = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
         this.big = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN);
         this.writable = writable;
+        this.logicalSize = logicalSize;
     }
     @ExportMessage boolean hasBufferElements() { return true; }
     @ExportMessage boolean isBufferWritable() { return writable; }
-    @ExportMessage long getBufferSize() { return little.capacity(); }
+    @ExportMessage long getBufferSize() { return logicalSize.getAsLong(); }
     private int index(long offset, int width) throws InvalidBufferOffsetException {
-        if (offset < 0 || offset > (long) little.capacity() - width)
+        if (offset < 0 || offset > logicalSize.getAsLong() - width)
             throw InvalidBufferOffsetException.create(offset, width);
         return (int) offset;
     }
