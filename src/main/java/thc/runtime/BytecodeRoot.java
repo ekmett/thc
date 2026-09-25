@@ -3451,17 +3451,26 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class GeneratedInt64X2Times {
         @Specialization public static Int64X2 apply(Int64X2 left, Int64X2 right) { return Int64X2.multiply(left, right); }
     }
+    @Operation public static final class GeneratedInt64X2Insert {
+        @Specialization public static Int64X2 apply(Int64X2 vector, long value, long index) { return GeneratedVectorInsert.insert(vector, value, index); }
+    }
     @Operation public static final class GeneratedFloatX4Negate {
         @Specialization public static FloatX4 apply(FloatX4 value) { return FloatX4.negate(value); }
     }
     @Operation public static final class GeneratedFloatX4Divide {
         @Specialization public static FloatX4 apply(FloatX4 left, FloatX4 right) { return FloatX4.divide(left, right); }
     }
+    @Operation public static final class GeneratedFloatX4Insert {
+        @Specialization public static FloatX4 apply(FloatX4 vector, float value, long index) { return GeneratedVectorInsert.insert(vector, value, index); }
+    }
     @Operation public static final class GeneratedDoubleX2Negate {
         @Specialization public static DoubleX2 apply(DoubleX2 value) { return DoubleX2.negate(value); }
     }
     @Operation public static final class GeneratedDoubleX2Divide {
         @Specialization public static DoubleX2 apply(DoubleX2 left, DoubleX2 right) { return DoubleX2.divide(left, right); }
+    }
+    @Operation public static final class GeneratedDoubleX2Insert {
+        @Specialization public static DoubleX2 apply(DoubleX2 vector, double value, long index) { return GeneratedVectorInsert.insert(vector, value, index); }
     }
     @Operation public static final class GeneratedFloatX8Pack {
         @Specialization public static FloatX8 apply(float lane0, float lane1, float lane2, float lane3, float lane4, float lane5, float lane6, float lane7) { return new FloatX8(lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7); }
@@ -3860,6 +3869,24 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class GeneratedDoubleX8Insert {
         @Specialization public static DoubleX8 apply(DoubleX8 vector, double value, long index) { return DoubleX8.insert(vector, value, index); }
+    }
+    @Operation public static final class GeneratedInt8X16Insert {
+        @Specialization public static Int8X16 apply(Int8X16 vector, long value, long index) { return GeneratedVectorInsert.insert(vector, (byte) value, index); }
+    }
+    @Operation public static final class GeneratedInt16X8Insert {
+        @Specialization public static Int16X8 apply(Int16X8 vector, long value, long index) { return GeneratedVectorInsert.insert(vector, (short) value, index); }
+    }
+    @Operation public static final class GeneratedInt32X4Insert {
+        @Specialization public static Int32X4 apply(Int32X4 vector, long value, long index) { return GeneratedVectorInsert.insert(vector, (int) value, index); }
+    }
+    @Operation public static final class GeneratedWord8X16Insert {
+        @Specialization public static Word8X16 apply(Word8X16 vector, long value, long index) { return GeneratedVectorInsert.insert(vector, (byte) value, index); }
+    }
+    @Operation public static final class GeneratedWord16X8Insert {
+        @Specialization public static Word16X8 apply(Word16X8 vector, long value, long index) { return GeneratedVectorInsert.insert(vector, (short) value, index); }
+    }
+    @Operation public static final class GeneratedWord32X4Insert {
+        @Specialization public static Word32X4 apply(Word32X4 vector, long value, long index) { return GeneratedVectorInsert.insert(vector, (int) value, index); }
     }
     // END GENERATED SIMD FAMILIES
 }

@@ -118,7 +118,7 @@ def result(family, operation, lane, a, b):
         value = {'broadcast': lambda: a, 'insert': lambda: b, 'negate': lambda: -left,
                  'plus': lambda: left + right, 'minus': lambda: left - right,
                  'times': lambda: left * right}[operation]()
-        value = value & ((1 << width) - 1) if family['laneRep'] == 'Word32Rep' else signed(value, width)
+        value = value & ((1 << width) - 1) if family['laneRep'].startswith('Word') else signed(value, width)
     # Public wrappers retain an OPAQUE scalar worker and a post-call addition.
     return signed(value + 17)
 

@@ -73,7 +73,7 @@ class SimdFamiliesTest {
     }
 
     @Test fun exactLaneSignWidthLogicalTupleAndCallingProofsRemainRequired() {
-        assertEquals(108, GeneratedVectors.operations.size)
+        assertEquals(117, GeneratedVectors.operations.size)
         for ((name, tuple, vector) in listOf(
             Triple("Word64X2", GeneratedVectors.unpackedWord64X2, GeneratedVectors.proofWord64X2),
             Triple("Word32X8", GeneratedVectors.unpackedWord32X8, GeneratedVectors.proofWord32X8),
@@ -87,7 +87,16 @@ class SimdFamiliesTest {
             Triple("Word64X8", GeneratedVectors.unpackedWord64X8, GeneratedVectors.proofWord64X8),
             Triple("Word32X16", GeneratedVectors.unpackedWord32X16, GeneratedVectors.proofWord32X16),
             Triple("FloatX16", GeneratedVectors.unpackedFloatX16, GeneratedVectors.proofFloatX16),
-            Triple("DoubleX8", GeneratedVectors.unpackedDoubleX8, GeneratedVectors.proofDoubleX8))) {
+            Triple("DoubleX8", GeneratedVectors.unpackedDoubleX8, GeneratedVectors.proofDoubleX8),
+            Triple("Int8X16", CoreVectors.unpacked8, CoreVectors.proof8),
+            Triple("Word8X16", CoreVectors.unpackedWord8, CoreVectors.proofWord8),
+            Triple("Int16X8", CoreVectors.unpacked16, CoreVectors.proof16),
+            Triple("Word16X8", CoreVectors.unpackedWord16, CoreVectors.proofWord16),
+            Triple("Int32X4", CoreVectors.unpacked32, CoreVectors.proof32),
+            Triple("Word32X4", CoreVectors.unpackedWord32, CoreVectors.proofWord32),
+            Triple("Int64X2", CoreVectors.unpacked, CoreVectors.proof),
+            Triple("FloatX4", CoreVectors.unpackedFloat, CoreVectors.proofFloat),
+            Triple("DoubleX2", CoreVectors.unpackedDouble, CoreVectors.proofDouble))) {
             CoreVectors.validate("pack$name#", listOf(tuple), vector)
             CoreVectors.validate("times$name#", listOf(vector, vector), vector)
             CoreVectors.validate("unpack$name#", listOf(vector), tuple)
@@ -105,7 +114,8 @@ class SimdFamiliesTest {
                     if (i == index) proof.copy(primReps = listOf("WordRep")) else proof })
                 assertThrows(RuntimeFault::class.java) { CoreVectors.validate("pack$name#", listOf(wrong), vector) }
             }
-            for (wrong in listOf(CoreVectors.proof32, CoreVectors.proof16, CoreVectors.proofFloat, tuple)) {
+            for (wrong in listOf(CoreVectors.proof32, CoreVectors.proof16, CoreVectors.proofFloat, tuple)
+                .filter { it.vector != vector.vector }) {
                 assertThrows(RuntimeFault::class.java) { CoreVectors.validate("times$name#", listOf(vector, wrong), vector) }
                 assertThrows(RuntimeFault::class.java) { CoreVectors.validate("times$name#", listOf(vector, vector), wrong) }
             }
@@ -123,6 +133,10 @@ class SimdFamiliesTest {
         val original = Word64X2(1L, 2L)
         for (index in listOf(-1L, 2L, Long.MIN_VALUE, Long.MAX_VALUE, 0x1_0000_0000L)) {
             assertThrows(RuntimeFault::class.java) { Word64X2.insert(original, -1L, index) }
+            assertThrows(RuntimeFault::class.java) { GeneratedVectorInsert.insert(DoubleX2.broadcast(1.0), 2.0, index) }
+        }
+        for (index in listOf(-1L, 16L, Long.MAX_VALUE, 0x1_0000_0000L)) {
+            assertThrows(RuntimeFault::class.java) { GeneratedVectorInsert.insert(Word8X16.broadcast(1), 2, index) }
         }
     }
 

@@ -3790,6 +3790,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedInt64X2Times(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X2Times()
         }, GeneratedVectors.proofInt64X2)
+        "insertInt64X2#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X2Insert(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X2Insert()
+        }, GeneratedVectors.proofInt64X2)
         "negateFloatX4#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedFloatX4Negate(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX4Negate()
@@ -3798,6 +3802,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedFloatX4Divide(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX4Divide()
         }, GeneratedVectors.proofFloatX4)
+        "insertFloatX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX4Insert(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX4Insert()
+        }, GeneratedVectors.proofFloatX4)
         "negateDoubleX2#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedDoubleX2Negate(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX2Negate()
@@ -3805,6 +3813,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         "divideDoubleX2#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedDoubleX2Divide(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX2Divide()
+        }, GeneratedVectors.proofDoubleX2)
+        "insertDoubleX2#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX2Insert(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX2Insert()
         }, GeneratedVectors.proofDoubleX2)
         "packFloatX8#" -> ProvenExpression(Expression { e ->
             val b = e.builder
@@ -4143,6 +4155,30 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedDoubleX8Insert(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX8Insert()
         }, GeneratedVectors.proofDoubleX8)
+        "insertInt8X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X16Insert(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X16Insert()
+        }, GeneratedVectors.proofInt8X16)
+        "insertInt16X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X8Insert(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X8Insert()
+        }, GeneratedVectors.proofInt16X8)
+        "insertInt32X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X4Insert(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X4Insert()
+        }, GeneratedVectors.proofInt32X4)
+        "insertWord8X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord8X16Insert(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X16Insert()
+        }, GeneratedVectors.proofWord8X16)
+        "insertWord16X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X8Insert(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X8Insert()
+        }, GeneratedVectors.proofWord16X8)
+        "insertWord32X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X4Insert(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X4Insert()
+        }, GeneratedVectors.proofWord32X4)
         else -> throw UnsupportedCore("Unsupported generated vector primitive $name")
     }
     // END GENERATED SIMD FAMILIES

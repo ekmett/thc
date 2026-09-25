@@ -18,6 +18,10 @@ ROOT = Path(__file__).resolve().parent.parent
 SPEC = ROOT / 'scripts/simd-families.json'
 # primitive scalar type, bit width, Java Vector type, Kotlin carrier accessor
 LANES = {
+    'Int8Rep': ('byte', 8, 'ByteVector', 'Long'),
+    'Word8Rep': ('byte', 8, 'ByteVector', 'Long'),
+    'Int16Rep': ('short', 16, 'ShortVector', 'Long'),
+    'Word16Rep': ('short', 16, 'ShortVector', 'Long'),
     'Int32Rep': ('int', 32, 'IntVector', 'Long'),
     'Word32Rep': ('int', 32, 'IntVector', 'Long'),
     'Word64Rep': ('long', 64, 'LongVector', 'Long'),
@@ -27,6 +31,7 @@ LANES = {
 }
 BINARY = {'plus': 'add', 'minus': 'subtract', 'times': 'multiply', 'divide': 'divide'}
 VECTOR_METHOD = {'add': 'add', 'subtract': 'sub', 'multiply': 'mul', 'divide': 'div'}
+LEGACY_INSERT = {'Int8X16', 'Word8X16', 'Int16X8', 'Word16X8', 'Int32X4', 'Word32X4', 'Int64X2', 'FloatX4', 'DoubleX2'}
 OPS = {'pack', 'unpack', 'broadcast', 'negate', 'insert'} | BINARY.keys()
 HEADER = ('// SPDX-FileCopyrightText: 2026 Edward Kmett\n'
           '// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause\n\n'
@@ -58,8 +63,8 @@ def families():
             raise ValueError('Integer vector division is a separate semantic family')
         if 'negate' in f['operations'] and f['laneRep'].startswith('Word'):
             raise ValueError('No unsigned vector negation primop')
-        if 'insert' in f['operations'] and not f['newCarrier']:
-            raise ValueError('Insert requires a generated concrete lane carrier')
+        if 'insert' in f['operations'] and not f['newCarrier'] and f['name'] not in LEGACY_INSERT:
+            raise ValueError('Insert requires a known concrete lane carrier')
         names.add(f['name'])
     return data['families']
 
@@ -149,10 +154,30 @@ def proof_code(fs):
     return '\n'.join(lines)+'\n'
 
 
+def legacy_insert_code(fs):
+    fields = 'first second third fourth fifth sixth seventh eighth ninth tenth eleventh twelfth thirteenth fourteenth fifteenth sixteenth'.split()
+    lines = [HEADER, 'package thc.runtime', '',
+             '/** Replace one lane without changing the existing carrier representation. */',
+             'internal object GeneratedVectorInsert {']
+    for f in fs:
+        if f['newCarrier'] or 'insert' not in f['operations']:
+            continue
+        n, count = f['name'], f['lanes']
+        primitive = LANES[f['laneRep']][0].capitalize()
+        vector_backed = n in ('FloatX4', 'DoubleX2')
+        constructor = n + '.pack' if vector_backed else n
+        lanes = [f'a.lane({i})' if vector_backed else f'a.{fields[i]}' for i in range(count)]
+        lines += [f'    @JvmStatic fun insert(a: {n}, value: {primitive}, index: Long): {n} {{',
+                  f'        if (index < 0L || index >= {count}L) fault("Invalid {n} lane index")',
+                  f'        return {constructor}(' + ', '.join(f'if (index == {i}L) value else {lane}' for i, lane in enumerate(lanes)) + ')',
+                  '    }']
+    return '\n'.join(lines + ['}']) + '\n'
+
+
 def ast_code(fs):
     lines=[HEADER,'package thc.runtime\n','import com.oracle.truffle.api.CompilerDirectives.CompilationFinal','import com.oracle.truffle.api.frame.VirtualFrame\n']
     for f in fs:
-        n=f['name'];count=f['lanes'];_,_,_,access=LANES[f['laneRep']]; cast='.toInt()' if f['laneRep'] in ('Int32Rep', 'Word32Rep') else ''
+        n=f['name'];count=f['lanes'];scalar,_,_,access=LANES[f['laneRep']]; cast=f'.to{scalar.capitalize()}()' if scalar in ('byte', 'short', 'int') else ''
         if 'pack' in f['operations']:
             lines += [f'internal class Generated{n}Pack(@field:Child private var argument: Expr,',
                       '    @field:CompilationFinal(dimensions = 1) private val slots: IntArray) : Expr() {',
@@ -178,7 +203,7 @@ def ast_code(fs):
                   f'    init {{ representation = GeneratedVectors.proof{n} }}',
                   f'    override fun execute(frame: VirtualFrame): {n} = when (operation) {{']
         for i,op in enumerate(ops):
-            expr=f'{n}.broadcast(arguments[0].executeRequired{access}(frame){cast})' if op=='broadcast' else f'{n}.negate(vector(frame, 0))' if op=='negate' else f'{n}.insert(vector(frame, 0), arguments[1].executeRequired{access}(frame){cast}, arguments[2].executeRequiredLong(frame))' if op=='insert' else f'{n}.{BINARY[op]}(vector(frame, 0), vector(frame, 1))'
+            expr=f'{n}.broadcast(arguments[0].executeRequired{access}(frame){cast})' if op=='broadcast' else f'{n}.negate(vector(frame, 0))' if op=='negate' else f'{n if f["newCarrier"] else "GeneratedVectorInsert"}.insert(vector(frame, 0), arguments[1].executeRequired{access}(frame){cast}, arguments[2].executeRequiredLong(frame))' if op=='insert' else f'{n}.{BINARY[op]}(vector(frame, 0), vector(frame, 1))'
             lines.append(f'        {i} -> {expr}')
         lines += [f'        else -> fault("Invalid {n} operation")','    }',
                   f'    private fun vector(frame: VirtualFrame, index: Int): {n} = arguments[index].execute(frame) as? {n} ?: fault("Expected {n}#")','}\n']
@@ -188,7 +213,7 @@ def ast_code(fs):
 def bytecode_nodes(fs):
     lines=[]
     for f in fs:
-        n=f['name'];count=f['lanes'];scalar,_,_,access=LANES[f['laneRep']];prim=access.lower(); cast='(int) ' if scalar=='int' else ''
+        n=f['name'];count=f['lanes'];scalar,_,_,access=LANES[f['laneRep']];prim=access.lower(); cast=f'({scalar}) ' if scalar in ('byte', 'short', 'int') else ''
         for op in f['operations']:
             title=op.capitalize(); node=f'Generated{n}{title}'
             if op=='unpack':
@@ -205,7 +230,7 @@ def bytecode_nodes(fs):
                     params=', '.join(f'{prim} lane{i}' for i in range(count)); expr=f'new {n}('+', '.join(cast+f'lane{i}' for i in range(count))+')'
                 elif op=='broadcast':params=f'{prim} value';expr=f'{n}.broadcast({cast}value)'
                 elif op=='negate':params=f'{n} value';expr=f'{n}.negate(value)'
-                elif op=='insert':params=f'{n} vector, {prim} value, long index';expr=f'{n}.insert(vector, {cast}value, index)'
+                elif op=='insert':params=f'{n} vector, {prim} value, long index';expr=f'{n if f["newCarrier"] else "GeneratedVectorInsert"}.insert(vector, {cast}value, index)'
                 else:params=f'{n} left, {n} right';expr=f'{n}.{BINARY[op]}(left, right)'
                 lines += [f'    @Operation public static final class {node} {{',f'        @Specialization public static {n} apply({params}) {{ return {expr}; }}','    }']
     return '\n'.join(lines)+'\n'
@@ -247,6 +272,10 @@ def fixture_sources(fs):
               '  1# -> 9221120237041090560#',
               '  _ -> word2Int# (word64ToWord# (castDoubleToWord64# value))', '']
     convert = {
+        'Int8Rep': lambda x: f'intToInt8# ({x})',
+        'Word8Rep': lambda x: f'wordToWord8# (int2Word# ({x}))',
+        'Int16Rep': lambda x: f'intToInt16# ({x})',
+        'Word16Rep': lambda x: f'wordToWord16# (int2Word# ({x}))',
         'Int32Rep': lambda x: f'intToInt32# ({x})',
         'Word32Rep': lambda x: f'wordToWord32# (int2Word# ({x}))',
         'Int64Rep': lambda x: f'intToInt64# ({x})',
@@ -254,12 +283,14 @@ def fixture_sources(fs):
         'FloatRep': lambda x: f'castWord32ToFloat# (wordToWord32# (int2Word# ({x})))',
         'DoubleRep': lambda x: f'castWord64ToDouble# (wordToWord64# (int2Word# ({x})))',
     }
-    observe = {'Int32Rep': 'int32ToInt#', 'Int64Rep': 'int64ToInt#',
+    observe = {'Int8Rep': 'int8ToInt#', 'Int16Rep': 'int16ToInt#', 'Int32Rep': 'int32ToInt#', 'Int64Rep': 'int64ToInt#',
                'Word64Rep': 'word2Int# . word64ToWord#', 'FloatRep': 'bitsFloat', 'DoubleRep': 'bitsDouble'}
     names = []
     for family in fs:
         n = family['name']; count = family['lanes']; rep = family['laneRep']
         operations = [op for op in family['operations'] if op not in ('pack', 'unpack')]
+        def observe_lane(i):
+            return (f'word2Int# (word{rep[4:-3]}ToWord# p{i})' if rep.startswith('Word') else f'{observe[rep]} p{i}')
         def selected_lane(op, lane):
             if op == 'broadcast':
                 vector = f'broadcast{n}# ({convert[rep]("a")})'
@@ -269,8 +300,7 @@ def fixture_sources(fs):
                 vector = f'{op}{n}# ({left})' + (f' ({right})' if op in BINARY else '')
                 if op == 'insert':
                     vector += f' ({convert[rep]("b")}) {lane}#'
-            value = (f'word2Int# (word64ToWord# p{lane})' if rep == 'Word64Rep' else
-                     f'word2Int# (word32ToWord# p{lane})' if rep == 'Word32Rep' else f'{observe[rep]} p{lane}')
+            value = observe_lane(lane)
             return f'case unpack{n}# ({vector}) of {{ (# '+', '.join(f'p{i}' for i in range(count))+f' #) -> {value} }}'
         if family.get('composite'):
             name = n[0].lower() + n[1:] + 'Composite'; worker = name + 'Worker'; names.append(name)
@@ -297,9 +327,7 @@ def fixture_sources(fs):
             source += [f'  case unpack{n}# ({vector}) of',
                        '    (# ' + ', '.join(f'p{i}' for i in range(count)) + ' #) -> case lane of']
             for i in range(count):
-                value = (f'word2Int# (word64ToWord# p{i})' if rep == 'Word64Rep'
-                         else f'word2Int# (word32ToWord# p{i})' if rep == 'Word32Rep'
-                         else f'{observe[rep]} p{i}')
+                value = observe_lane(i)
                 source.append(f'      {str(i)+"#" if i < count-1 else "_"} -> {value}')
             source += [f'{name} :: Int# -> Int# -> Int# -> Int#',
                        f'{name} lane a b = case {worker} lane a b of value -> value +# 17#', '']
@@ -324,22 +352,33 @@ def smoke_entries(fs):
 def smoke_groups(fs):
     """Bound compiled size by lane work, retaining whole arithmetic families."""
     groups = [[]]
+    legacy = []
     cost = index = 0
     for family in fs:
-        count = len([op for op in family['operations'] if op not in ('pack', 'unpack')])
-        lanes = family['lanes'] * count
+        indices = []
+        for operation in family['operations']:
+            if operation in ('pack', 'unpack'):
+                continue
+            (legacy if operation == 'insert' and not family['newCarrier'] else indices).append(index)
+            index += 1
+        lanes = family['lanes'] * len(indices)
         if groups[-1] and cost + lanes > 112:
             groups.append([])
             cost = 0
-        groups[-1].extend(range(index, index + count))
+        groups[-1].extend(indices)
         cost += lanes
-        index += count
+    if legacy:
+        groups.append(legacy)
     return {f'simdSmoke{i}': indices for i, indices in enumerate(groups)}
 
 
 def smoke_sources(fs):
     """Bounded composite drivers; the native scalar oracle needs no SIMD ISA."""
     convert = {
+        'Int8Rep': lambda x: f'intToInt8# ({x})',
+        'Word8Rep': lambda x: f'wordToWord8# (int2Word# ({x}))',
+        'Int16Rep': lambda x: f'intToInt16# ({x})',
+        'Word16Rep': lambda x: f'wordToWord16# (int2Word# ({x}))',
         'Int32Rep': lambda x: f'intToInt32# ({x})',
         'Word32Rep': lambda x: f'wordToWord32# (int2Word# ({x}))',
         'Int64Rep': lambda x: f'intToInt64# ({x})',
@@ -445,6 +484,7 @@ def main():
     region(ROOT/'src/main/kotlin/thc/runtime/BytecodeProgram.kt',bytecode_emitter(fs),args.write)
     outputs={'kotlin/thc/runtime/GeneratedVectorProofs.kt':proof_code(fs),'kotlin/thc/runtime/GeneratedVectorExpressions.kt':ast_code(fs)}
     outputs.update({f'kotlin/thc/runtime/{f["name"]}.kt':carrier(f) for f in fs if f['newCarrier']})
+    outputs['kotlin/thc/runtime/GeneratedVectorInsert.kt'] = legacy_insert_code(fs)
     outputs.update(fixture_sources(fs))
     outputs.update(smoke_sources(fs))
     # Remove only the former generated carrier files when switching an existing build.

@@ -35,9 +35,12 @@ def record(path):
 def inputs(generator):
     def signed(value):
         return (value + (1 << 63)) % (1 << 64) - (1 << 63)
-    owners = {index: name for name, indices in generator.smoke_groups(generator.families()).items()
+    groups = generator.smoke_groups(generator.families())
+    owners = {index: name for name, indices in groups.items()
               for index in indices}
-    for index, (family, operation) in enumerate(generator.smoke_entries(generator.families())):
+    entries = generator.smoke_entries(generator.families())
+    for index in (index for indices in groups.values() for index in indices):
+        family, operation = entries[index]
         rep = family['laneRep']
         if rep in ('FloatRep', 'DoubleRep'):
             one, two, sign = ((0x3f800000, 0x40000000, 1 << 31) if rep == 'FloatRep'
