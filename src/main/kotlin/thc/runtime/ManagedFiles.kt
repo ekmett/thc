@@ -266,7 +266,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     @TruffleBoundary fun truncateOriginal(fd: Long, length: Long): Long = resize(fd, length, true)
 
     private fun resize(fd: Long, length: Long, original: Boolean): Long = result { withDescriptor(fd) { entry ->
-        val channel = entry.channel ?: fail(7, "Cannot resize a THC stream: $fd")
+        val channel = entry.channel ?: fail(if (original) 5 else 7, "Cannot resize a THC stream: $fd")
         if (!entry.writable) fail(if (original) 5 else 4, "THC file descriptor is not writable: $fd")
         if (length < 0) fail(5, "Negative THC file size")
         val oldSize = channel.size()

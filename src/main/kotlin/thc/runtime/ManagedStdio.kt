@@ -63,11 +63,7 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         if (fd != fd.toInt().toLong())
             throw RuntimeFault("Original truncate requires a canonical signed CInt descriptor")
         val result = files.truncateOriginal(fd, length)
-        if (result < 0) {
-            val kind = files.errorKind()
-            // Streams have no channel; POSIX ftruncate reports EINVAL here.
-            lastError.set(abi.error(if (kind == 7L) 5 else kind))
-        }
+        if (result < 0) lastError.set(abi.error(files.errorKind()))
         return result
     }
 

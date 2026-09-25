@@ -66,6 +66,51 @@ class ManagedStdioTest {
         assertEquals("abcdef", Files.readString(path))
     }
 
+    @Test fun truncateSeparatesKnownStreamsFromUnsupportedProviders() {
+        val path = directory.resolve("unsupported-size.bin")
+        Files.writeString(path, "abcdef")
+        val backing = FileSystem.newDefaultFileSystem()
+        val fs = object : FileSystem by backing {
+            override fun newByteChannel(path: Path, options: Set<OpenOption>,
+                vararg attributes: FileAttribute<*>): SeekableByteChannel {
+                val channel = backing.newByteChannel(path, options, *attributes)
+                return object : SeekableByteChannel by channel {
+                    override fun size(): Long = throw UnsupportedOperationException("provider cannot resize")
+                }
+            }
+        }
+        Context.newBuilder("thc").allowIO(IOAccess.newBuilder().fileSystem(fs).build()).build().use { context ->
+            entered(context) { stdio ->
+                val files = Language.currentState().files
+                val abi = StdioHostAbi.load()
+                // A known embedding stream is EINVAL in the original C ABI,
+                // while its managed service category remains Unsupported.
+                assertEquals(-1L, files.setSize(1L, 3L)); assertEquals(7L, files.errorKind())
+                assertEquals(-1L, stdio.truncate(1L, 3L)); assertEquals(abi.error(5), stdio.errno())
+                val fd = files.open(ManagedAddress.fromByteArray((path.toString() + "\u0000").toByteArray()), 3L)
+                assertTrue(fd >= 3L)
+                assertEquals(-1L, stdio.truncate(fd, 3L)); assertEquals(abi.error(7), stdio.errno())
+                assertEquals(7L, files.errorKind())
+                assertEquals(0L, files.close(fd))
+            }
+        }
+        assertEquals("abcdef", Files.readString(path))
+    }
+
+    @Test fun extendingAppendModeRemainsExplicitlyUnsupported() {
+        val path = directory.resolve("append-size.bin")
+        Files.writeString(path, "abcdef")
+        Context.newBuilder("thc").allowIO(IOAccess.ALL).build().use { context -> entered(context) { stdio ->
+            val files = Language.currentState().files
+            val fd = files.open(ManagedAddress.fromByteArray((path.toString() + "\u0000").toByteArray()), 2L)
+            assertTrue(fd >= 3L)
+            assertEquals(-1L, stdio.truncate(fd, 9L))
+            assertEquals(StdioHostAbi.load().error(7), stdio.errno())
+            assertEquals(0L, files.close(fd))
+        } }
+        assertEquals("abcdef", Files.readString(path))
+    }
+
     @Test fun originalWritesUseContextStreamsBinaryRangesAndActualStickyErrno() {
         val output = ByteArrayOutputStream(); val errors = ByteArrayOutputStream()
         val badDescriptor = StdioHostAbi.load().error(4)
