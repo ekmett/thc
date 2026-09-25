@@ -92,15 +92,21 @@ class OriginalMemmoveTest {
             val managed = ManagedAddress.fromAllocation(ManagedAllocation.mutable(16, 8))
             run(managed, errors = true)
             repeat(2) { run(ManagedAddress.fromByteArray(ByteArray(16))) }
+            val native = if (System.getProperty("os.name") == "Linux" &&
+                System.getProperty("os.arch") in setOf("amd64", "x86_64"))
+                Language.currentState().nativeAllocations.malloc(16) else null
+            native?.let { run(it) }
             target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
             valid(target)
             val before = (guest.diagnostics().getValue("compiledEntries") as Number).toLong()
             run(ManagedAddress.fromAllocation(ManagedAllocation.mutable(16, 8)))
             assertEquals(before + 3, (guest.diagnostics().getValue("compiledEntries") as Number).toLong())
             valid(target)
-            if (System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in setOf("amd64", "x86_64")) {
-                val native = Language.currentState().nativeAllocations.malloc(16)
+            if (native != null) {
+                val beforeNative = (guest.diagnostics().getValue("compiledEntries") as Number).toLong()
                 run(native)
+                assertEquals(beforeNative + 3, (guest.diagnostics().getValue("compiledEntries") as Number).toLong())
+                valid(target)
                 val alias = native.plus(4)
                 Language.currentState().nativeAllocations.free(native)
                 assertThrows(RuntimeFault::class.java) { move(alias, alias, 0) }
