@@ -139,7 +139,7 @@ class SimdAstTransportTest {
             Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
                 val request = Json.stringify(mapOf("entry" to "heapDirect", "backend" to backend,
                     "modules" to listOf(source)))
-                assertEquals(14L, context.eval("thc", request).execute(1).asLong(), "$backend valid metadata")
+                assertEquals(14L, context.eval("thc", request).execute(1L).asLong(), "$backend valid metadata")
             }
             for ((label, mutation) in malformed) Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
                 val (changed, reason) = mutation
