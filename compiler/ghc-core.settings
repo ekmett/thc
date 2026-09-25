@@ -1,0 +1,1 @@
+*.*.ghc.hs.opts += -fwrite-if-simplified-core
