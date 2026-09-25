@@ -4,6 +4,9 @@ Pull requests run `automation` and `fast-check`. The automation job tests the CI
 scripts with normal Python and `-O`, then lints the workflows. A PR from this
 repository runs `fast-check` on the persistent Linux runner, reusing its toolchain,
 Gradle dependencies, build outputs and daemon. Fork PRs use a GitHub-hosted runner.
+Closing or merging a PR cancels its pending or running Fast check through that
+PR's concurrency group; the closed event runs no test jobs. Checks queued before
+this group change retain their old group and may need one-time manual cancellation.
 The event is checked before selecting the persistent runner and checked again on
 that runner before checkout. The pinned Graal/JDK and GHC versions are verified;
 the input identity does not hash the installed GHC library tree.
@@ -45,6 +48,5 @@ stability workflow is advisory and separately records compiled-code behavior.
 Neither the smoke selection nor a warm local run is a claim about hosted PR
 latency; use the workflow's phase timings and elapsed time to assess that.
 
-For automatic merging, the repository owner applies `auto-merge`. The bot
-checks and merges one PR at a time against current main. A completed failing
-main `Build` pauses automatic merges; a pending main `Build` does not.
+The merge workflow is disabled. Reviewed PRs are integrated into main manually,
+one at a time.
