@@ -245,6 +245,68 @@ class PackageManifestTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unsupported Core module schema/foreign metadata'):
             core_package_manifest.load(self.bundled(unit))
 
+    def test_audit_only_foreign_bundle_never_accepts_and_still_checks_reachable_core(self):
+        def archive(expression, foreign=None):
+            unit = self.unit('first')
+            source = self.root / 'first.json'
+            module = json.loads(source.read_text())
+            module['schema'] = 2
+            module['foreign'] = foreign if foreign is not None else dict(
+                schema=1, execution='not-linked',
+                stubs=dict(header='', source='foreign stub', initializers=[], finalizers=[]), files=[])
+            module['bindings'] = [dict(id='first:Shared.entry', name='entry', lifted=True,
+                                       arity=0, expr=expression)]
+            source.write_text(json.dumps(module))
+            unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
+            return self.bundled(unit)
+
+        def audit(path):
+            output = self.root / 'audit.json'
+            result = subprocess.run(['python3', str(Path(__file__).with_name('audit-core.py')),
+                                     '--package-manifest', str(path), '--entry', 'first:Shared.entry',
+                                     '--output', str(output)], text=True, capture_output=True)
+            self.assertEqual(1, result.returncode, result.stderr)
+            return json.loads(output.read_text())
+
+        safe = archive(['lit', 'int', '42'])
+        with self.assertRaisesRegex(ValueError, 'Unsupported foreign execution'):
+            core_package_manifest.load(safe)  # The normal loader remains strict.
+        report = audit(safe)
+        self.assertFalse(report['accepted'])
+        self.assertEqual(['first:Shared.entry'], [item['id'] for item in report['reachableBindings']])
+        self.assertEqual({'module-format'}, {issue['code'] for issue in report['issues']})
+        self.assertIn('execution=not-linked', report['issues'][0]['detail'])
+
+        unsupported = archive(['app', ['prim', 'unsupported#'], [['lit', 'int', '1']], [False]])
+        report = audit(unsupported)
+        self.assertFalse(report['accepted'])
+        self.assertLessEqual({'module-format', 'unsupported-primitive'},
+                             {issue['code'] for issue in report['issues']})
+        self.assertEqual(['first:Shared.entry'], [item['id'] for item in report['reachableBindings']])
+
+        malformed = dict(schema=1, execution='not-linked',
+                         stubs=dict(header='', source='', initializers=[], finalizers=[]), files=[])
+        with self.assertRaisesRegex(ValueError, 'malformed foreign archive'):
+            core_package_manifest.load_for_audit(archive(['lit', 'int', '42'], malformed))
+
+        for bad in (
+                dict(schema=True, execution='not-linked', stubs=None,
+                     files=[dict(language='c', source='int f;', extension='c')]),
+                dict(schema=1, execution='not-linked', stubs=None,
+                     files=[dict(language='', source='int f;', extension='c')]),
+                dict(schema=1, execution='not-linked',
+                     stubs=dict(header='', source='', initializers=[dict(
+                         isInitializer=False, unit='first', module='Shared', name='init')],
+                         finalizers=[]), files=[])):
+            with self.subTest(foreign=bad), self.assertRaises(ValueError):
+                core_package_manifest.load_for_audit(archive(['lit', 'int', '42'], bad))
+
+        valid = archive(['lit', 'int', '42'])
+        unit = json.loads(valid.read_text())['units'][0]
+        unit['bundle']['sha256'] = '0' * 64
+        with self.assertRaisesRegex(ValueError, 'bundle hash mismatch'):
+            core_package_manifest.load_for_audit(self.manifest([unit]))
+
     def test_audit_keeps_strict_missing_global_closure_for_bundle(self):
         unit = self.unit('first')
         source = self.root / 'first.json'

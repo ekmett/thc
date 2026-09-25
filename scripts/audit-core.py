@@ -1580,7 +1580,7 @@ def main():
                     files.append(path if path.is_absolute() else manifest.parent / path)
         if not files and not args.package_manifest:
             parser.error('Supply modules or --module-list')
-        modules = (core_package_manifest.load(args.package_manifest) if args.package_manifest else
+        modules = (core_package_manifest.load_for_audit(args.package_manifest) if args.package_manifest else
                    [(str(path), json.loads(path.read_text())) for path in dict.fromkeys(files)])
         report = Audit(modules, json.loads(args.capabilities.read_text())).run(args.entry, io_main=args.io_main)
     except (OSError, ValueError, TypeError) as error:

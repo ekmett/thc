@@ -31,6 +31,45 @@ def foreign_execution_issue(module):
     return None
 
 
+def validate_archive_only_foreign(module):
+    """Mirror the JVM's schema-2 archive shape; this never registers code."""
+    foreign = module['foreign']
+    def record(value, keys):
+        if not isinstance(value, dict) or set(value) != keys:
+            raise ValueError('invalid Core foreign artifact record')
+        return value
+    def text(value, nonempty=False):
+        if not isinstance(value, str) or (nonempty and not value):
+            raise ValueError('invalid Core foreign artifact text')
+        return value
+    def labels(value, initializer):
+        if not isinstance(value, list):
+            raise ValueError('invalid Core foreign artifact labels')
+        for entry in value:
+            label = record(entry, {'isInitializer', 'unit', 'module', 'name'})
+            if type(label['isInitializer']) is not bool or label['isInitializer'] != initializer:
+                raise ValueError('invalid Core foreign initializer/finalizer kind')
+            for key in ('unit', 'module', 'name'):
+                text(label[key], nonempty=True)
+        return bool(value)
+    nonempty = False
+    if foreign['stubs'] is not None:
+        stubs = record(foreign['stubs'], {'header', 'source', 'initializers', 'finalizers'})
+        nonempty = bool(text(stubs['header']) or text(stubs['source']))
+        nonempty = labels(stubs['initializers'], True) or nonempty
+        nonempty = labels(stubs['finalizers'], False) or nonempty
+    if not isinstance(foreign['files'], list):
+        raise ValueError('invalid Core foreign artifact files')
+    for entry in foreign['files']:
+        file = record(entry, {'language', 'source', 'extension'})
+        text(file['language'], nonempty=True)
+        text(file['source'])
+        text(file['extension'])
+        nonempty = True
+    if not nonempty:
+        raise ValueError('Core schema 2 requires foreign artifacts')
+
+
 def strict_json(data):
     def object_pairs(pairs):
         result = {}
@@ -111,6 +150,15 @@ def bundle_modules(path, unit, records):
 
 
 def load(path):
+    return _load(path, audit_archives=False)
+
+
+def load_for_audit(path):
+    """Read verified archive-only foreign Core for diagnostics, never execution."""
+    return _load(path, audit_archives=True)
+
+
+def _load(path, audit_archives):
     path = Path(path)
     root = path.resolve().parent
     manifest = strict_json(path.read_text())
@@ -174,7 +222,13 @@ def load(path):
                 raise ValueError(f'{path}: GHC version mismatch: {relative!r}')
             if type(module.get('schema')) is not int or module['schema'] != 1 or 'foreign' in module:
                 detail = foreign_execution_issue(module)
-                raise ValueError(f'{path}: {detail or "unsupported Core module schema/foreign metadata"}: {relative!r}')
+                if audit_archives and detail:
+                    try:
+                        validate_archive_only_foreign(module)
+                    except ValueError as error:
+                        raise ValueError(f'{path}: malformed foreign archive in {unit_id}:{name}: {error}') from error
+                else:
+                    raise ValueError(f'{path}: {detail or "unsupported Core module schema/foreign metadata"}: {relative!r}')
             bindings = module.get('bindings')
             if not isinstance(bindings, list):
                 raise ValueError(f'{path}: missing bindings: {relative!r}')
