@@ -86,8 +86,16 @@ static int own_signal(void) {
     action.sa_sigaction = interrupt_open;
     action.sa_flags = SA_SIGINFO;
     sigemptyset(&action.sa_mask);
-    if (sigaction(signal, &action, NULL) < 0 || sigaction(signal, NULL, &claimed_action) < 0) error = errno;
-    else claimed_signal = signal;
+    if (sigaction(signal, &action, NULL) < 0) error = errno;
+    else {
+      // Installation has already changed process state. Track the claim even
+      // if readback fails; do not forget it or blindly restore over a host's
+      // possible later change. A failed readback starts no worker and leaves
+      // subsequent exact ownership checks conservative.
+      claimed_signal = signal;
+      claimed_action = action;
+      if (sigaction(signal, NULL, &claimed_action) < 0) error = errno;
+    }
   }
   pthread_mutex_unlock(&signal_lock);
   return error;
