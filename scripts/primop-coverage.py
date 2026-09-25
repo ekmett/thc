@@ -82,6 +82,7 @@ def classify(data, capability, scalars):
                                ('managedByteArrayPrimitives', 'Managed byte storage'),
                                ('managedArrayPrimitives', 'Managed lifted arrays'),
                                ('managedMutVarPrimitives', 'Managed lazy reference cells'),
+                               ('managedStablePtrPrimitives', 'Context-owned opaque stable handles; no pointer memory access'),
                                ('managedMVarPrimitives', 'Managed blocking cells; no guest scheduler or async exceptions')):
                 if name in capability.get(key, {}):
                     scope = label

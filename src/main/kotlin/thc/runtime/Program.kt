@@ -1692,6 +1692,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         CoreStackForeign.validateHeads(bindings)
         CoreStackInfoForeign.validateHeads(bindings)
         CoreOriginalStdio.validateHeads(bindings)
+        CoreStablePointers.validateHeads(bindings)
         CoreManagedFiles.validateHeads(bindings)
         CoreMd5Foreign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
@@ -1941,12 +1942,14 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val originalStdio = CoreOriginalStdio.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val stableFree = CoreStablePointers.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val managedFile = CoreManagedFiles.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val javascript = if (!stackClone && stackInfo == null && originalStdio == null && managedFile == null) CoreJavaScript.validate(expr, defined) else null
             val md5 = if (javascript == null) CoreMd5Foreign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
-            val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
+            val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && !stableFree && managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val state = args.single()
@@ -1968,6 +1971,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (originalStdio != null) {
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 OriginalStdioExpression(originalStdio, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
+            } else if (stableFree) {
+                CoreStablePointers.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                FreeStablePointer(compile(args[0], scope, false), compile(args[1], scope, false))
+                    .proven(tupleProof.copy(evaluated = true))
             } else if (managedFile != null) {
                 CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 ManagedFileExpression(managedFile, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
@@ -2062,6 +2069,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 mutVarExpression(operation, tupleProof,
                     args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }.toTypedArray())
+            } else if (fn[0] == "prim" && StablePointerOp.named(fn[1] as String) != null) {
+                val operation = StablePointerOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                (when (operation) {
+                    StablePointerOp.MAKE -> MakeStablePointer(operands[0], operands[1])
+                    StablePointerOp.DEREFERENCE -> DereferenceStablePointer(operands[0], operands[1])
+                    StablePointerOp.EQUAL -> EqualStablePointers(operands[0], operands[1])
+                }).proven(tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && ArrayOp.named(fn[1] as String) != null) {
                 val operation = ArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

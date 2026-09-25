@@ -1186,6 +1186,34 @@ class Audit:
                     if not exact(proof, bytearray_primitive['result']):
                         self.issue('primitive-representation', owner, path, function[1] + ': exact ByteArray result required')
                 mutvar = self.cap.get('managedMutVarPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
+                stable_ptr = self.cap.get('managedStablePtrPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
+                if stable_ptr is not None:
+                    def stable_role(rep, role):
+                        if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):
+                            return False
+                        kind, reps = rep.get('kind'), rep.get('primReps')
+                        if role == 'state':
+                            return kind == 'void' and reps == []
+                        if role == 'address':
+                            return kind == 'address' and reps == ['AddrRep']
+                        if role == 'int':
+                            return kind == 'long' and reps == ['IntRep']
+                        return role == 'lifted' and kind in ('object', 'data', 'closure') and reps == ['BoxedRep (Just Lifted)']
+                    actual = [self.expression_rep(argument) for argument in arguments]
+                    expected = stable_ptr['arguments']
+                    expected_flags = [role == 'lifted' for role in expected]
+                    if len(actual) != len(expected) or flags != expected_flags or any(
+                            not stable_role(rep, role) for rep, role in zip(actual, expected)):
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact StablePtr# arguments required')
+                    output = stable_ptr['result']
+                    if isinstance(output, list):
+                        fields = proof.get('components') if isinstance(proof, dict) else None
+                        valid = self.is_tuple(proof) and isinstance(fields, list) and len(fields) == 2 and all(
+                            stable_role(rep, role) for rep, role in zip(fields, output)) and proof.get('primReps') == fields[1]['primReps']
+                    else:
+                        valid = stable_role(proof, output)
+                    if not valid:
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact StablePtr# result required')
                 if mutvar is not None:
                     def role_matches(rep, role):
                         if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):

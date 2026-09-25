@@ -19,22 +19,35 @@ internal class ManagedAddress private constructor(
     @field:CompilationFinal(dimensions = 1) private val literalBytes: ByteArray?,
     private val mutableBytes: ByteArray?,
     private val offset: Long,
-    private val owner: ManagedAllocation? = null
+    private val owner: ManagedAllocation? = null,
+    private val stable: StablePointers.Handle? = null
 ) {
+    internal fun stableHandle(): StablePointers.Handle? = stable
+    private fun requireBytes() { if (stable != null) fault("Opaque StablePtr# is not byte-addressable") }
     // Package-internal views for original C bitcode; callers never obtain a
     // process pointer and the byte storage is not copied or replaced.
-    internal fun rawBacking(): ByteArray = owner?.rawBytesIfPointerFree()
+    internal fun rawBacking(): ByteArray { requireBytes(); return owner?.rawBytesIfPointerFree()
         ?: literalBytes ?: mutableBytes ?: fault("Null Addr# has no backing storage")
-    internal fun cbitsBacking(): ByteArray = owner?.exposeToNative() ?: rawBacking()
-    internal fun cbitsWritable(): Boolean = owner?.isWritable ?: (mutableBytes != null)
+    }
+    internal fun cbitsBacking(): ByteArray { requireBytes(); return owner?.exposeToNative() ?: rawBacking() }
+    internal fun cbitsWritable(): Boolean { requireBytes(); return owner?.isWritable ?: (mutableBytes != null) }
     internal fun cbitsOffset(): Long { size(); return offset }
 
-    private fun size(): Long = owner?.size ?: (literalBytes ?: mutableBytes)?.size?.toLong()
+    private fun size(): Long { requireBytes(); return owner?.size ?: (literalBytes ?: mutableBytes)?.size?.toLong()
         ?: fault("Null Addr# has no backing storage")
+    }
 
     /** GHC pointer equality compares allocation identity and byte offset. */
     fun sameLocation(other: ManagedAddress): Boolean =
-        offset == other.offset && when {
+        if (stable != null) {
+            val registry = StablePointers.current(null)
+            registry.validate(this)
+            if (other.stable != null) registry.equal(this, other) else false
+        } else if (other.stable != null) {
+            StablePointers.current(null).validate(other)
+            false
+        }
+        else offset == other.offset && when {
             this === NULL || other === NULL -> this === other
             owner != null -> owner === other.owner
             literalBytes != null -> literalBytes === other.literalBytes
@@ -76,6 +89,7 @@ internal class ManagedAddress private constructor(
     /** Only offsets within one allocation have a portable managed ordering.
      * Comparing unrelated native pointer values would invent host addresses. */
     fun compareWithinAllocation(other: ManagedAddress): Int {
+        if (stable != null || other.stable != null) fault("Opaque StablePtr# has no address ordering")
         if (this === NULL || other === NULL) {
             if (this === other) return 0
             fault("Ordered Addr# comparison requires the same managed allocation")
@@ -91,6 +105,7 @@ internal class ManagedAddress private constructor(
 
     /** Like pointer arithmetic within this allocation, including its one-past address. */
     fun plus(displacement: Long): ManagedAddress {
+        requireBytes()
         if (this === NULL) {
             if (displacement == 0L) return this
             fault("Cannot offset null Addr#")
@@ -197,7 +212,7 @@ internal class ManagedAddress private constructor(
     }
 
     @TruffleBoundary
-    override fun toString(): String = if (this === NULL) "Addr#(null)"
+    override fun toString(): String = if (stable != null) "Addr#(opaque StablePtr)" else if (this === NULL) "Addr#(null)"
         else "Addr#(${if (literalBytes != null) "literal" else "managed"}+$offset)"
 
     /** Pointer cells contain references, not process address bits. */
@@ -232,6 +247,8 @@ internal class ManagedAddress private constructor(
     companion object {
         private val NULL = ManagedAddress(null, null, 0L)
         fun nullAddress(): ManagedAddress = NULL
+        internal fun fromStableHandle(handle: StablePointers.Handle): ManagedAddress =
+            ManagedAddress(null, null, 0L, stable = handle)
 
         /** Logical pinning means stable managed backing and a strong lifetime,
          * not physical pinning or a process address. Do not copy: views must alias. */

@@ -267,6 +267,7 @@ executable thc-fixtures
     OriginalStdioTruncateFixtures
     OriginalHandleReadinessFixtures
     MutVarFixtures
+    StablePointerFixtures
     SmallArrayFixtures
     StackFixtures
     THC.Driver.Wired
