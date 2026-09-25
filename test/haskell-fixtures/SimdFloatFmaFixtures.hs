@@ -50,8 +50,9 @@ prepareSimdFloatFma root = do
       manifest = output </> "manifest.json"
       exportOnly = arch == "aarch64"
       stages = if exportOnly then ["pre"] else ["pre","post"]
-      -- GHC requires AVX2 when lowering the shared FloatX8 256-bit workers.
-      nativeFlags = ["-mavx2","-mfma"]
+      -- GHC requires AVX2 for 256-bit workers; its NCG cannot insert FloatX8
+      -- lanes, so both genuine Core export and the oracle use the LLVM backend.
+      nativeFlags = ["-fllvm","-mavx2","-mfma"]
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
   when present (removeFile manifest)

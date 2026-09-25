@@ -136,7 +136,7 @@ class SimdFloatFmaTest {
         val exportOnly = System.getProperty("os.arch") in listOf("aarch64", "arm64")
         assertEquals(if (exportOnly) listOf("pre") else listOf("pre", "post"), manifest["stages"])
         assertEquals(if (exportOnly) null else 1232L, manifest["nativeRows"], "Native preparation cannot silently downgrade")
-        assertEquals(listOf("-mavx2", "-mfma"), manifest["nativeFlags"])
+        assertEquals(listOf("-fllvm", "-mavx2", "-mfma"), manifest["nativeFlags"])
         for ((path, want) in ((manifest["inputHashes"] as Map<String, String>) +
                 (manifest["artifactHashes"] as Map<String, String>))) {
             val hash = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
