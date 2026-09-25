@@ -25,10 +25,10 @@ import com.oracle.truffle.api.nodes.Node;
 import thc.Language;
 
 /** Concrete Core instructions sharing the AST backend's heap and application ABI. */
-// An explicit compile request must work after the first ordinary invocation, even
-// when Core proofs eliminate every operation that otherwise forces the cached tier.
-@GenerateBytecode(languageClass = Language.class, enableYield = true, enableUncachedInterpreter = true,
-        defaultUncachedThreshold = "0", boxingEliminationTypes = {long.class, float.class, double.class, boolean.class})
+// Start in the cached interpreter. The former uncached threshold of zero
+// transitioned before executing even the first guest instruction.
+@GenerateBytecode(languageClass = Language.class, enableYield = true,
+        boxingEliminationTypes = {long.class, float.class, double.class, boolean.class})
 public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode {
     private String label = "bytecode";
     @CompilerDirectives.CompilationFinal private boolean asyncEnabled;

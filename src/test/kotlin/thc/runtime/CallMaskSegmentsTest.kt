@@ -6,6 +6,7 @@ package thc.runtime
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.BytecodeConfig
+import com.oracle.truffle.api.bytecode.BytecodeTier
 import com.oracle.truffle.api.bytecode.ContinuationResult
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.RootNode
@@ -197,6 +198,8 @@ class CallMaskSegmentsTest {
                 val a = maskedCaller(language, b, MaskingState.MASKED_INTERRUPTIBLE)
                 Chain(Thunk(a, null), a, b, c)
             }
+            assertEquals(BytecodeTier.CACHED, (cTarget.rootNode as BytecodeRoot).bytecodeNode.tier,
+                "The first yielded instruction must use the cached interpreter")
             entered(context) {
                 assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
                 assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(driver))
