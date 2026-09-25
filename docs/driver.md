@@ -146,6 +146,17 @@ project runs can select `--installed-core required`. The default
 these are separate choices, not an implicit fallback after an interface error.
 The explicit `.cabal` path does not yet support the installed provider.
 
+An optional `--ghc-source DIR` supplies the matching configured GHC 9.14.1
+source tree when original `Conc.Bound` or `System.Posix.Internals` interfaces lack
+THC's typed foreign annotations. It requires `--installed-core required` and
+currently supports native x86_64/aarch64 Linux with the original
+`_build/stage1/libraries/ghc-internal/setup-config`, built interfaces and generated
+headers intact. The selected compiler remains the native compiler. Only missing
+annotations trigger genuine two-module compilation into an acquisition-only
+cache; no installed compiler, native library or existing ZIP is changed.
+Source/interface mismatches and present but invalid provenance fail explicitly.
+See [the producer and cache contract](interface-foreign.md#typed-annotations-and-ordinary-acquisition).
+
 The driver builds the selected-compiler `thc-interface` helper, discovers exact
 pre-existing registrations in the selected global package database, and reads
 each declared owned module's dynamic interface. Hidden modules are included;
@@ -154,7 +165,9 @@ Reexports must have concrete providers in their dependency closure. Store-source
 and local component exports retain their existing paths. Missing complete Core
 reports the exact registration/module; wrong identity/way, malformed responses
 and process failures remain errors. Foreign stubs/files are retained in
-[archive-only schema 2](interface-foreign.md), not linked or registered for execution.
+[schema 2](interface-foreign.md), without executing their native C. Supported
+managed execution additionally requires verified typed producer evidence;
+ordinary unannotated interfaces remain archival.
 Nothing substitutes ordinary
 unfoldings or adds a second pinned provider beside a wired interface owner.
 

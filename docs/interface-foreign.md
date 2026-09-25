@@ -22,7 +22,9 @@ Schema 2 records foreign artifacts; it does not by itself authorize execution.
 Older schema-1 readers reject it. The checked ZIP reader verifies the archive
 and module hashes, schema and foreign metadata for **every** supplied module.
 Modules with a verified native link have their declared foreign calls checked
-against that link. An unlinked module with initializers, finalizers or extra
+against that link. Verified typed export registration or static-import provenance
+can instead establish the existing bounded managed execution path; the original
+C remains `not-linked`. Without such evidence, an unlinked module with initializers, finalizers or extra
 foreign files is rejected even when none of its Core bindings is reachable:
 those artifacts may have startup or shutdown effects independent of a Core
 entry. For other unlinked modules, the linker checks the complete reachable
@@ -49,11 +51,50 @@ bound-thread scheduling. Compiling the original C to LLVM would still leave
 those obligations. Linking it to a host GHC RTS would invoke native Haskell,
 not the THC closures, and is not a supported substitution.
 
-A future executable route needs an explicit callback/registration ABI and
+A native C callback route still needs an explicit callback/registration ABI and
 context lifetime model, with verified guest closure re-entry, roots, exception
 and thread behavior. Whether that uses adapted Sulong stubs or a different
-bridge requires a separate implemented slice. This archive work neither drops
-initializers nor claims `forkOS` support.
+bridge requires a separate implemented slice. The current managed registration
+path retains and checks initializer obligations without executing GHC's C stubs.
+It does not provide a native GHC closure ABI.
+
+## Typed annotations and ordinary acquisition
+
+THC's implemented producer records typed declarations in GHC module annotations:
+`foreign-export-associations` plus `foreign-export-registration` for static
+exports, and `foreign-import-provenance` for supported static imports. The
+selected interface reader consumes `md_anns`, resolves actual Core binders and
+checks the complete retained foreign products against the stock-emitter proof.
+An absent annotation is unknown, never a known-empty inventory. Existing
+unclassified or rejected annotations do not become valid through regeneration.
+See the [managed export contract](site/embedding.md).
+
+For an ordinary full-Core installation lacking these annotations, project runs
+can explicitly supply `--installed-core required --ghc-source DIR`. This bounded
+producer accepts a matching configured GHC 9.14.1 native Linux stage1 tree. It
+recompiles only `GHC.Internal.Conc.Bound` and
+`GHC.Internal.System.Posix.Internals`, and only when their required annotation
+is absent. Cabal's saved configuration supplies CPP flags, language settings and
+the original dependency IDs. The selected compiler performs real code generation
+with `-fwrite-if-simplified-core`; the `-fno-code` interface path loses annotations
+and is not used here.
+
+The tree's dynamic interfaces must match the selected installation byte for
+byte, and each target source must match its retained GHC self-recompilation
+source fingerprint. Regenerated interfaces must retain the same complete raw
+foreign products. A private acquisition view changes only ghc-internal's
+interface search directory; native libraries, ABI fields and dependency IDs
+remain unchanged. The project's native compiler and helper build continue to use
+the original selected compiler. No installed files, JSON modules or ZIP members
+are patched.
+
+THC caches genuine outputs using source/configuration/header/interface contents,
+the plugin and helper hashes, selected compiler information, and registrations.
+Input observations are repeated before returning a view. Output hashes and
+symlink inventories are checked on cache hits; publication is locked and atomic.
+This is not support for an arbitrary source tarball, cross compiler, thin
+interface installation, or unavailable generated configuration. Missing inputs
+fail explicitly. Runtime capability admission remains a separate audit.
 
 ## Controls
 
@@ -68,7 +109,7 @@ The original 21-row opaque/private/CBV fixture remains executable schema 1.
 
 ## What survives an installed interface
 
-The unmodified GHC 9.14.1 writer does **not** persist the typed association between a foreign-exported
+Without THC's producer annotations, the unmodified GHC 9.14.1 writer does **not** persist the typed association between a foreign-exported
 C symbol and its Core binder. Hydration cannot recover an association that the
 writer discarded. It does retain the binder's original external `Name`, type,
 Core body and representation information, plus the separate raw foreign stub.
@@ -114,7 +155,7 @@ Neither `$fstable` spelling, `mi_exports`, an ordinary global binding, nor an
 FFI reimport proves which C entry exports it. Searching raw C for a name does
 not account for the rest of a module's initializer behavior.
 
-## Proposed smallest compiler metadata patch
+## Alternative GHC writer metadata patch (unimplemented)
 
 This is a design, **not implemented acquisition or runtime support**. Prefer
 persisting data at the actual GHC emitter over reconstructing C semantics.

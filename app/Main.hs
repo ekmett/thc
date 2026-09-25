@@ -35,7 +35,7 @@ main = topHandler $ do
       (_, _, errors) -> die (concat errors ++ usage)
     "run" : rest -> case getOpt Permute runOptions rest of
       (updates, targets, []) | length targets <= 1 -> do
-        let opts = foldl (flip ($)) (RunOptions defaultPlanOptions "" "" Nothing "pinned") updates
+        let opts = foldl (flip ($)) (RunOptions defaultPlanOptions "" "" Nothing "pinned" Nothing) updates
             target = case targets of [] -> "."; [file] -> file; _ -> error "checked above"
         project <- doesFileExist (target </> "cabal.project")
         if project then runProject opts target else runPackage opts target
@@ -64,6 +64,7 @@ runOptions =
   , Option [] ["thc-root"] (ReqArg (\path r -> r {runThcRoot = path}) "DIR") "THC source/build root"
   , Option [] ["runtime"] (ReqArg (\path r -> r {runRuntime = Just path}) "PATH") "Installed THC JVM launcher"
   , Option [] ["installed-core"] (ReqArg (\policy r -> r {runInstalledCore = policy}) "required|pinned") "Project boot-library provider (default: limited pinned sources); required never silently falls back"
+  , Option [] ["ghc-source"] (ReqArg (\path r -> r {runGhcSource = Just path}) "DIR") "Matching configured GHC 9.14.1 source tree for missing installed foreign annotations (required provider only)"
   ] ++ map liftPlanOption options
 
 liftPlanOption :: OptDescr (PlanOptions -> PlanOptions) -> OptDescr (RunOptions -> RunOptions)

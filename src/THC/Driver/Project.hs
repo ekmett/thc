@@ -41,6 +41,7 @@ import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.ForeignBitcode (linkClockGetTime)
 import THC.Driver.Installed
+import THC.Driver.InstalledForeign
 import THC.Driver.Run (RunOptions(..))
 import THC.Driver.Zip (decodeZip, encodeZip)
 import THC.Driver.Wired (WiredArtifacts(..), moduleSources, sourceHashes,
@@ -88,6 +89,8 @@ runProject opts target = do
   require (not (null (runThcRoot opts))) "run requires --thc-root DIR"
   require (runInstalledCore opts `elem` ["required", "pinned"])
     "--installed-core must be required or pinned"
+  require (runGhcSource opts == Nothing || runInstalledCore opts == "required")
+    "--ghc-source requires --installed-core required"
   let flags = runPlan opts
   require (null (selectedFlags flags) && not (enableTests flags) && not (enableBenchmarks flags))
     "project flags, tests and benchmarks belong in cabal.project"
@@ -112,6 +115,7 @@ runProject opts target = do
   pluginDb <- field plugin "packageDb"
   pluginUnit <- field plugin "unitId"
   pluginLibrary <- field plugin "sharedLibrary"
+  registeredLibrary <- field plugin "cabalSharedLibrary"
   requireFile pluginLibrary
   requireDirectory pluginDb
   let requested = distDirectory flags
@@ -127,15 +131,17 @@ runProject opts target = do
     Just path -> canonicalizePath path
     Nothing -> findExecutable "ghc" >>= maybe (fail "GHC compiler not found") canonicalizePath
   packageTool <- traverse canonicalizePath (ghcPkgPath flags)
+  source <- traverse canonicalizePath (runGhcSource opts)
   withProjectLock output $
     runBuiltProject project thcRoot runtime output native executable cabalArgs
                     pluginDb pluginUnit pluginLibrary compiler packageTool (runInstalledCore opts)
+                    source registeredLibrary
 
 runBuiltProject :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath ->
                    String -> [String] -> FilePath -> String -> FilePath -> FilePath ->
-                   Maybe FilePath -> String -> IO ()
+                   Maybe FilePath -> String -> Maybe FilePath -> FilePath -> IO ()
 runBuiltProject project thcRoot runtime output native executable cabalArgs
-                pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy = do
+                pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary = do
   runCommand True "cabal" cabalArgs project
   plan <- readJson (native </> "cache/plan.json")
   cabalVersion <- field plan "cabal-version"
@@ -162,10 +168,16 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   let globals = [unit | unit <- ordered, not (unitLocal unit),
                        jsonField (unitValue unit) "type" == Just ("configured" :: String)]
   installed <- if installedPolicy == "pinned" then pure Map.empty else do
-    helperContext <- prepareInterfaceHelper context thcRoot
-    registrations <- mapM (discoverInstalled helperContext . unitId)
-      [unit | unit <- ordered,
+    originalContext <- prepareInterfaceHelper context thcRoot
+    let installedUnits = [unit | unit <- ordered,
               jsonField (unitValue unit) "type" == Just ("pre-existing" :: String)]
+    originalRegistrations <- mapM (discoverInstalled originalContext . unitId) installedUnits
+    helperContext <- case ghcSource of
+      Nothing -> pure originalContext
+      Just source -> prepareForeignInterfaces
+        (ForeignCompiler ghc pluginDb pluginUnit pluginLibrary registeredLibrary driverHash)
+        cacheRoot source originalContext originalRegistrations
+    registrations <- mapM (discoverInstalled helperContext . unitId) installedUnits
     validateReexports registrations
     bundles <- forM registrations $ \registrationUnit -> do
       planned <- maybe (fail "installed registration not in Cabal plan") pure
