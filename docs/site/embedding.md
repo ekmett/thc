@@ -3,7 +3,7 @@
 THC's current host boundary is a GraalVM polyglot `Context` and its returned
 `Value`s. `thc.executionContext` and `thc.loadEntry` are the small experimental
 entrypoints used by the JVM launcher. Their signatures and Kotlin/Java source
-links are in the **JVM reference** navigation above.
+links are in the **Runtime** reference navigation.
 
 Use the repository's pinned GraalVM and JVM dependencies. There is no published,
 version-stable embedding SDK yet. Public classes in `thc.runtime` exist for

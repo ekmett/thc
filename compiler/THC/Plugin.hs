@@ -9,7 +9,7 @@
 -- @source-notes@ to retain source-location metadata. The direct serializers
 -- consume genuine GHC Core and do not establish runtime support or link native
 -- foreign products. This library is tied to the selected GHC API version.
-module THC.Plugin (plugin, serializeOptimizedCore, serializePostTidyCore) where
+module THC.Plugin (plugin, serializeOptimizedCore, serializePostTidyCore, serializePostTidyCoreWithAnnotations) where
 
 import GHC.Plugins
 import GHC.Hs (HsParsedModule(..), HsModule(..), HsDecl(..), GhcPs)
@@ -29,6 +29,7 @@ import GHC.Tc.Types (TcGblEnv(..))
 import qualified THC.Sources as Sources
 import qualified THC.CBV as CBV
 import qualified THC.Demands as Demands
+import qualified THC.ForeignExports as Exports
 import THC.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid)
 import GHC.Types.Tickish (CoreTickish, tickishFloatable)
 import GHC.Types.Literal
@@ -64,7 +65,8 @@ import System.FilePath ((</>), takeDirectory)
 plugin :: Plugin
 plugin = defaultPlugin
   { parsedResultAction = rewriteJavaScriptImports
-  , typeCheckResultAction = validateJavaScriptTypes
+  , typeCheckResultAction = \options summary environment ->
+      validateJavaScriptTypes options summary environment >>= Exports.recordStaticExports options
   , installCoreToDos = \opts passes -> pure (if "post-tidy" `elem` opts then passes else passes ++ [CoreDoPluginPass "THC rich Core export" (exportModule opts)])
   , latePlugin = exportLate
   , pluginRecompile = \_ -> pure ForceRecompile
@@ -811,6 +813,7 @@ serializeOptimizedCore flags opts guts = do
 optimizedModule :: DynFlags -> [CommandLineOption] -> ModGuts -> IO (Ctx,J)
 optimizedModule flags opts guts = do
   sources <- loadSources ("source-notes" `elem` opts) (concatMap flattenBind (mg_binds guts))
+  exports <- staticExportFields (mg_module guts) (mg_anns guts) (mg_binds guts)
   let unit = unitString (moduleUnit (mg_module guts))
       d = Ctx flags (unit ++ ":" ++ moduleNameString (moduleName (mg_module guts))) (if "unit-qualified" `elem` opts then Just unit else Nothing) emptyVarSet emptyVarSet True True sources []
       modName = moduleNameString (moduleName (mg_module guts))
@@ -825,7 +828,7 @@ optimizedModule flags opts guts = do
         , ("groups",A [O [("recursive",B (case b of Rec{} -> True; _ -> False)),("ids",A [S (varKey d v) | (v,_) <- flattenBind b])] | b <- mg_binds guts])
         , ("rules",S (pretty d (mg_rules guts)))
         , ("lowering",O [("typeArguments",S "erased"),("coercionArguments",S "void-value"),("casts",S "erased"),("ticks",S (if "source-notes" `elem` opts then "source-notes-metadata" else "erased"))])
-        ] ++ sourceTableFields d
+        ] ++ sourceTableFields d ++ exports
   pure (d,result)
 
 -- Package rebuilding needs identities that agree with the newly emitted
@@ -855,9 +858,44 @@ exportLate hsc opts pair@(guts,_)
 -- Foreign products are archival metadata, not executable registration. The
 -- schema bump prevents older runtimes/auditors from silently ignoring them.
 serializePostTidyCore :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> IO String
-serializePostTidyCore flags opts m tycons program foreignArtifacts = do
+serializePostTidyCore flags opts m tycons program foreignArtifacts =
+  serializePostTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts []
+
+-- | The installed-interface path retains typed module annotations. CgGuts in
+-- the late source plugin does not: use the emitted interface to recover this
+-- optional inventory, never a process-local table or a previous export file.
+serializePostTidyCoreWithAnnotations :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO String
+serializePostTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations = do
   (_,result) <- postTidyModule flags opts m tycons program
-  pure (json (withForeignArtifacts foreignArtifacts result) ++ "\n")
+  exports <- staticExportFields m annotations program
+  let annotated = case result of O fields -> O (fields ++ exports); _ -> result
+  pure (json (withForeignArtifacts foreignArtifacts annotated) ++ "\n")
+
+staticExportFields :: Module -> [Annotation] -> CoreProgram -> IO [(String,J)]
+staticExportFields owner annotations bindings = do
+  record <- either (ioError . userError . ("THC: " ++)) pure
+    (Exports.readStaticExports owner annotations bindings)
+  pure $ case record of
+    Nothing -> []
+    Just (Exports.StaticExports version unit modName exports) -> [("staticForeignExports",O
+      [("schema",num version),("producer",S "THC.Plugin/typeCheckResultAction"),
+       ("scope",S "static-export-associations"),("execution",S "not-linked"),
+       ("unit",S unit),("module",S modName),("exports",A (map entry exports))])]
+  where
+    identity (Exports.ExportName unit modName occurrence namespace) = O
+      [("unit",S unit),("module",S modName),("occurrence",S occurrence),("namespace",S namespace)]
+    ty (Exports.ExportTyCon name arguments) = O
+      [("kind",S "tycon"),("name",identity name),("arguments",A (map ty arguments))]
+    ty (Exports.ExportApp function argument) = O
+      [("kind",S "application"),("function",ty function),("argument",ty argument)]
+    ty (Exports.ExportArrow multiplicity argument result) = O
+      [("kind",S "function"),("multiplicity",ty multiplicity),("argument",ty argument),("result",ty result)]
+    entry value = O
+      [("binder",identity (Exports.exportBinder value)),("symbol",S (Exports.exportSymbol value)),
+       ("convention",S (Exports.exportConvention value)),("declaredType",ty (Exports.exportDeclared value)),
+       ("normalizedType",ty (Exports.exportNormalized value)),("normalizationRole",S "representational"),
+       ("arguments",A (map ty (Exports.exportArguments value))),("result",ty (Exports.exportResult value)),
+       ("effect",S (if Exports.exportIO value then "io" else "pure"))]
 
 withForeignArtifacts :: ForeignCore.IfaceForeign -> J -> J
 withForeignArtifacts (ForeignCore.IfaceForeign Nothing []) result = result

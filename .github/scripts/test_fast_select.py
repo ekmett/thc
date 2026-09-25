@@ -732,7 +732,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         return self.families["src/main/kotlin/thc/runtime/" + name + ".kt"]
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
-        self.assertEqual({"AddressIdentity", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArrays", "ManagedMutVars", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign",
+        self.assertEqual({"AddressIdentity", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArrays", "ManagedMutVars", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
                           "IntegerVectorPrimitives", "FloatingVectorPrimitives"},
                          {Path(path).stem for path in self.families})
         for path, group in self.families.items():
@@ -746,6 +746,11 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                 for test in group["python"]:
                     self.assertTrue((self.root / test).is_file(), test)
                     self.assertTrue(select.python_test(test), test)
+
+    def test_bound_thread_query_leaf_keeps_structural_and_foreign_audit_controls(self):
+        self.assertEqual({"junit": ["thc.runtime.CoreBoundThreadForeignTest"],
+                          "python": ["scripts/test-audit-core.py"]},
+                         self.family("CoreBoundThreadForeign"))
 
     def test_fixture_owners_match_the_preparation_manifest(self):
         fixture = json.loads(Path(__file__).with_name("fast-fixtures.json").read_text())

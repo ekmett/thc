@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 452 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 730 | No declared lowering. |
+| Partial | 456 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 726 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -424,6 +424,10 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `eqStablePtr#` — arity 2 — Context-owned opaque stable handles; no pointer memory access
 - [ ] `fetchAddIntArray#` — arity 4 — Managed byte storage
 - [ ] `finalizeWeak#` — arity 2 — PARTIAL: retained registrations and explicit Haskell finalization; no GC, ephemerons or C finalizers
+- [ ] `fmaddFloatX4#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `fmsubFloatX4#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `fnmaddFloatX4#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `fnmsubFloatX4#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `fork#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `freezeArray#` — arity 4 — Managed lifted arrays
 - [ ] `freezeSmallArray#` — arity 4 — Managed lifted arrays
@@ -899,25 +903,21 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `fmaddDoubleX4#` — arity 3
 - [ ] `fmaddDoubleX8#` — arity 3
 - [ ] `fmaddFloatX16#` — arity 3
-- [ ] `fmaddFloatX4#` — arity 3
 - [ ] `fmaddFloatX8#` — arity 3
 - [ ] `fmsubDoubleX2#` — arity 3
 - [ ] `fmsubDoubleX4#` — arity 3
 - [ ] `fmsubDoubleX8#` — arity 3
 - [ ] `fmsubFloatX16#` — arity 3
-- [ ] `fmsubFloatX4#` — arity 3
 - [ ] `fmsubFloatX8#` — arity 3
 - [ ] `fnmaddDoubleX2#` — arity 3
 - [ ] `fnmaddDoubleX4#` — arity 3
 - [ ] `fnmaddDoubleX8#` — arity 3
 - [ ] `fnmaddFloatX16#` — arity 3
-- [ ] `fnmaddFloatX4#` — arity 3
 - [ ] `fnmaddFloatX8#` — arity 3
 - [ ] `fnmsubDoubleX2#` — arity 3
 - [ ] `fnmsubDoubleX4#` — arity 3
 - [ ] `fnmsubDoubleX8#` — arity 3
 - [ ] `fnmsubFloatX16#` — arity 3
-- [ ] `fnmsubFloatX4#` — arity 3
 - [ ] `fnmsubFloatX8#` — arity 3
 - [ ] `forkOn#` — arity 3
 - [ ] `getApStackVal#` — arity 2

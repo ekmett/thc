@@ -214,7 +214,10 @@ are provided under these same terms.
 
 ## Contact Information
 
-Contributions and bug reports are welcome! Please feel free to contact me through
-GitHub.
+Contributions and bug reports are welcome!
+
+Please feel free to contact me through [GitHub](https://github.com/ekmett/thc)
+or on the [##thc](https://web.libera.chat/##thc) IRC channel on
+`irc.libera.chat` (Libera Chat).
 
 -Edward Kmett
