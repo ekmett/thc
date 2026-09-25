@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 473 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 709 | No declared lowering. |
+| Partial | 475 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 707 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -46,6 +46,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - addr2Int#/int2Addr# preserve real machine address bits. Null and arbitrary integer bit patterns roundtrip; unowned numeric addresses cannot be dereferenced or passed to native code. Immutable literals and pointer-free immutable images acquire one owned native allocation per backing in the current native-enabled context; live registered ranges recover their original managed aliases. Integer values do not root allocations. Mutable managed storage and opaque StablePtr numeric projection remain unsupported; no JVM identity hashes or borrowed scratch pointers are exposed.
 - Original sigprocmask is partial: Linux x86_64 glibc, explicit native authority, Java platform threads only. NULL-set queries ignore how; effective updates may change SIGTTOU alone relative to the current native mask in the same native extent. Other-bit updates reject before effect. Original callers own restoration on the same thread; this is not generic bound-thread or virtual-thread signal-mask support.
 - Original malloc/free use owned libc allocations on native-enabled Linux x86_64 contexts. Live aliases share the allocation until explicit free, explicit weak finalization through &free, or context disposal; free waits for outstanding borrows. Only the owned base may be freed, and free(NULL) succeeds. Sizes above signed Long, calloc/realloc, recovery from unregistered numeric pointers, array-only cbits transports, and automatic GC finalization remain unsupported.
+- labelThread#/threadLabel# retain and observe the exact UTF-8 ByteArray# on context-owned Java thread identities, including finished threads; empty labels are present and host Java thread names are unchanged. Labels are released with their identities or context disposal. No RTS eventlog emission is claimed.
 - threadStatus# returns the exact State#/Int#/Int#/Int# tuple for context-owned Java thread identities. Logical capabilities are monotonically allocated per Java carrier, not physical CPU numbers; forkOn/count/affinity APIs remain unsupported. Registered MVar, black-hole, throwTo and foreign boundaries report their actual managed states. Forked threads retain normal/uncaught-guest completion; a live host carrier outside guest entry remains foreign and keeps its identity on re-entry. Existing throwTo mailboxes are scoped to active guest invocations and do not queue across separate host calls.
 - The public AST killThread# path preserves exact asynchronous self-delivery through catch# and Haskell masks. It rejects an external target before enqueueing because ordinary AST callers have no saved sender continuation. Only the restricted, explicitly admitted captured AST route can suspend and resume an external send; bytecode remains the general thread-primitive backend.
 - The enabled_capabilities RTS data label is a context-owned, live Word32 cell containing at least one logical Java carrier. Only readWord32OffAddr# at offset zero is supported; writes, other widths, offsets and native projection reject. This does not provide physical GHC -N semantics, capability resizing, event-manager reconfiguration or arbitrary RTS data symbols.
@@ -522,6 +523,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `isEmptyMVar#` — arity 2 — Managed blocking cells; backend and continuation limits apply
 - [ ] `keepAlive#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `killThread#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `labelThread#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `leAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `ltAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `makeStablePtr#` — arity 2 — Context-owned opaque stable handles; no pointer memory access
@@ -736,6 +738,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `takeMVar#` — arity 2 — Managed blocking cells; backend and continuation limits apply
 - [ ] `thawArray#` — arity 4 — Managed lifted arrays
 - [ ] `thawSmallArray#` — arity 4 — Managed lifted arrays
+- [ ] `threadLabel#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `threadStatus#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -1092,7 +1095,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `isCurrentThreadBound#` — arity 1
 - [ ] `isMutableByteArrayPinned#` — arity 1
 - [ ] `isMutableByteArrayWeaklyPinned#` — arity 1
-- [ ] `labelThread#` — arity 3
 - [ ] `listThreads#` — arity 1
 - [ ] `makeStableName#` — arity 2
 - [ ] `maxDouble#` — arity 2
@@ -1401,7 +1403,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `shuffleWord8X64#` — arity 3
 - [ ] `spark#` — arity 2
 - [ ] `stableNameToInt#` — arity 1
-- [ ] `threadLabel#` — arity 2
 - [ ] `timesInt16X32#` — arity 2
 - [ ] `timesInt8X32#` — arity 2
 - [ ] `timesInt8X64#` — arity 2

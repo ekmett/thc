@@ -2100,6 +2100,23 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     state.emit(e)
                     e.builder.endGetCurrentCCS()
                 }
+            } else if (fn[0] == "prim" && fn[1] in listOf("labelThread#", "threadLabel#")) {
+                val name = fn[1] as String
+                CoreGuestThreads.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.map { argument(it, scope, false) }
+                CoreGuestThreads.validate(name, operands.map { it.proof }, flags, tupleProof)
+                if (name == "threadLabel#") tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginThreadLabel(destination[0], destination[1])
+                    operands.forEach { it.emit(e) }
+                    e.builder.endThreadLabel()
+                } else ProvenExpression(Expression { e ->
+                    e.builder.beginBlock()
+                    e.builder.beginLabelThread()
+                    operands.forEach { it.emit(e) }
+                    e.builder.endLabelThread()
+                    e.builder.emitLoadConstant(Unit)
+                    e.builder.endBlock()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && fn[1] == "threadStatus#") {
                 CoreGuestThreads.validate("threadStatus#", args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.map { argument(it, scope, false) }
