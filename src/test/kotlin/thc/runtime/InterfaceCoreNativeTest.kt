@@ -64,7 +64,9 @@ class InterfaceCoreNativeTest {
         oracle()
         val direct = Json.parse(File(directory, "InterfaceForeign.json").readText()) as Map<String, Any?>
         val modules = StringBuilder("[")
-        assertNull(CorePackageManifest.appendModules(modules, File(directory, "foreign-packages.json").absolutePath))
+        val layout = CorePackageManifest.appendModules(modules, File(directory, "foreign-packages.json").absolutePath)
+        assertNotNull(layout, "archiving foreign code preserves the selected target layout")
+        assertEquals("fixture", layout!!.compilerAbi)
         modules.append(']')
         val archived = (Json.parse(modules.toString()) as List<Map<String, Any?>>).single()
         assertEquals(2L, archived["schema"])
