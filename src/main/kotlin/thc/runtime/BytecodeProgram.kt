@@ -4756,6 +4756,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedInt16X16Insert(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X16Insert()
         }, GeneratedVectors.proofInt16X16)
+        "minInt16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X16Min(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X16Min()
+        }, GeneratedVectors.proofInt16X16)
+        "maxInt16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X16Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X16Max()
+        }, GeneratedVectors.proofInt16X16)
         "packWord16X16#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
@@ -4788,6 +4796,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         "insertWord16X16#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedWord16X16Insert(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X16Insert()
+        }, GeneratedVectors.proofWord16X16)
+        "minWord16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X16Min(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X16Min()
+        }, GeneratedVectors.proofWord16X16)
+        "maxWord16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X16Max(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X16Max()
         }, GeneratedVectors.proofWord16X16)
         else -> throw UnsupportedCore("Unsupported generated vector primitive $name")
     }

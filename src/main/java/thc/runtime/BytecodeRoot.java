@@ -4384,6 +4384,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class GeneratedInt16X16Insert {
         @Specialization public static Int16X16 apply(Int16X16 vector, long value, long index) { return Int16X16.insert(vector, (short) value, index); }
     }
+    @Operation public static final class GeneratedInt16X16Min {
+        @Specialization public static Int16X16 apply(Int16X16 left, Int16X16 right) { return Int16X16.min(left, right); }
+    }
+    @Operation public static final class GeneratedInt16X16Max {
+        @Specialization public static Int16X16 apply(Int16X16 left, Int16X16 right) { return Int16X16.max(left, right); }
+    }
     @Operation public static final class GeneratedWord16X16Pack {
         @Specialization public static Word16X16 apply(long lane0, long lane1, long lane2, long lane3, long lane4, long lane5, long lane6, long lane7, long lane8, long lane9, long lane10, long lane11, long lane12, long lane13, long lane14, long lane15) { return new Word16X16((short) lane0, (short) lane1, (short) lane2, (short) lane3, (short) lane4, (short) lane5, (short) lane6, (short) lane7, (short) lane8, (short) lane9, (short) lane10, (short) lane11, (short) lane12, (short) lane13, (short) lane14, (short) lane15); }
     }
@@ -4439,6 +4445,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class GeneratedWord16X16Insert {
         @Specialization public static Word16X16 apply(Word16X16 vector, long value, long index) { return Word16X16.insert(vector, (short) value, index); }
+    }
+    @Operation public static final class GeneratedWord16X16Min {
+        @Specialization public static Word16X16 apply(Word16X16 left, Word16X16 right) { return Word16X16.min(left, right); }
+    }
+    @Operation public static final class GeneratedWord16X16Max {
+        @Specialization public static Word16X16 apply(Word16X16 left, Word16X16 right) { return Word16X16.max(left, right); }
     }
     // END GENERATED SIMD FAMILIES
 }
