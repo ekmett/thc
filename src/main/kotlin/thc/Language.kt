@@ -57,7 +57,7 @@ object CoreModules {
         val mac = Mac.getInstance("HmacSHA256")
         mac.init(SecretKeySpec(packageKey, "HmacSHA256"))
         return Base64.getUrlEncoder().withoutPadding().encodeToString(
-            mac.doFinal((path.length.toString() + ":" + path + sha256).toByteArray(Charsets.UTF_8)))
+            mac.doFinal((path.length.toString() + ":" + path + ":" + sha256).toByteArray(Charsets.UTF_8)))
     }
 
     private fun admission(module: Map<String, Any?>): ManagedExportAdmission? =
@@ -247,6 +247,8 @@ object CoreModules {
      * Serialize one load request from Core files or a singleton `@manifest` path.
      * Manifest loading validates its archive and selects strict linking. This step
      * does not execute the entry or bypass the backend's support audit.
+     * Large manifest requests are process-local capabilities; replay revalidates
+     * the unchanged manifest and every referenced artifact in this JVM.
      */
     fun request(paths: List<String>, entry: String, instrument: Boolean = true, diagnosticUnsupported: Boolean = false,
                 backend: String = defaultBackend(), sourceNotesEnabled: Boolean = true, ioMain: Boolean = false,
