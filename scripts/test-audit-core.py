@@ -910,6 +910,27 @@ class AuditTest(unittest.TestCase):
         self.assertEqual({i['code'] for i in report['issues']}, {'primitive-arity', 'unsupported-literal', 'unsupported-primitive'})
         self.assertEqual([p['name'] for p in report['primitives']], ['+#', 'unsupported#'])
 
+    def test_arithmetic_raises_require_empty_tuple_and_link_original_implicit_payloads(self):
+        empty = tuple_rep()
+        constructor = dict(id='Empty', kind='unboxed-tuple', arity=0,
+                           fieldReps=[], strictFields=[], fieldLifted=[])
+        for name, payload in audit_core.ARITHMETIC_EXCEPTIONS.items():
+            good = ['app', ['prim', name], [['con', 'Empty', 0, dict(rep=empty)]],
+                    [False], False, False, dict(rep=REFERENCE)]
+            with self.subTest(name=name):
+                missing = run(good, constructors=[constructor])
+                self.assertEqual([payload], [item['id'] for item in missing['missingGlobals']])
+                supplied = run(good, [bind(payload, var('coldPayloadDependency'))], [constructor])
+                self.assertEqual(['coldPayloadDependency'], [item['id'] for item in supplied['missingGlobals']])
+                self.assertIn(payload, [item['id'] for item in supplied['reachableBindings']])
+                self.assertNotIn('aggregate-boundary', {i['code'] for i in supplied['issues']})
+                for argument, flags in [(['void', dict(rep=dict(kind='void', primReps=[], evaluated=True))], [False]),
+                                        (good[2][0], [True]),
+                                        ([*lit(0), dict(rep=LONG)], [False])]:
+                    bad = copy.deepcopy(good)
+                    bad[2], bad[3] = [argument], flags
+                    self.assertIn('primitive-representation', {i['code'] for i in run(bad, constructors=[constructor])['issues']})
+
     def test_synchronous_exception_primops_require_exact_boxed_state_tuple_contract(self):
         state = dict(kind='void', primReps=[], evaluated=True)
         result = tuple_rep(state, REFERENCE)

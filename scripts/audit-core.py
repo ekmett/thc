@@ -33,6 +33,12 @@ POLYGLOT_ABI = json.loads((Path(__file__).resolve().parent.parent /
     'src/main/resources/thc/polyglot-abi.json').read_text())
 
 
+# Original implicit RTS dependencies, not host exceptions or fabricated dictionaries.
+ARITHMETIC_EXCEPTIONS = {name: 'ghc-internal:GHC.Internal.Exception.Type.' + payload for name, payload in (
+    ('raiseDivZero#', 'divZeroException'), ('raiseOverflow#', 'overflowException'),
+    ('raiseUnderflow#', 'underflowException'))}
+
+
 class Audit:
     def __init__(self, modules, capabilities):
         self.cap = capabilities
@@ -1074,6 +1080,14 @@ class Audit:
                 enum_application = function[0] == 'prim' and function[1] == 'tagToEnum#'
                 if enum_application:
                     self.tag_to_enum(expr, bound, owner, path)
+                arithmetic_exception = function[0] == 'prim' and function[1] in ARITHMETIC_EXCEPTIONS
+                if arithmetic_exception:
+                    if (len(arguments) != 1 or flags != [False] or
+                            not self.is_empty_tuple(self.expression_rep(arguments[0]))):
+                        self.issue('primitive-representation', owner, path,
+                                   function[1] + ': expected one exact unlifted empty tuple argument')
+                    if contains_sum(proof):
+                        self.issue('aggregate-boundary', owner, path, 'arithmetic exception sum result')
                 if function[0] == 'prim':
                     self.scalar_primitive(function[1], arguments, proof, bound, owner, path)
                 tuple_primitive = self.cap.get('tuplePrimitives', {}).get(function[1]) if function[0] == 'prim' else None
@@ -1532,7 +1546,8 @@ class Audit:
                             join = isinstance(target, dict) and '_join_arity' in target
                             ordinary = function[0] not in ('prim', 'con') and not join
                             supported = self.supported_empty_join_input(argument_rep) if join else (
-                                ordinary and self.supported_tuple_input(argument_rep))
+                                ordinary and self.supported_tuple_input(argument_rep) or
+                                arithmetic_exception and self.is_empty_tuple(argument_rep))
                             if not supported:
                                 self.issue('aggregate-boundary', owner, f'{path}/arguments/{index}', 'unboxed-tuple argument')
                             if (self.is_tuple(argument_rep) and isinstance(flags, list) and
@@ -1673,6 +1688,8 @@ class Audit:
             elif tag == 'prim':
                 name = expr[1]
                 self.primitives.setdefault(name, []).append(dict(self.location(owner, path), arity=primitive_arity))
+                if name in ARITHMETIC_EXCEPTIONS:
+                    self.reference(ARITHMETIC_EXCEPTIONS[name], owner, path + '/implicit-exception')
                 expected = self.cap['primitives'].get(name)
                 if expected is None:
                     self.issue('unsupported-primitive', owner, path, name)

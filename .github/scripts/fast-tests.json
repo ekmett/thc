@@ -481,7 +481,7 @@
       "python": []
     },
     "test/haskell-fixtures/StackFixtures.hs": {
-      "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackFormatterTest"],
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackFormatterTest", "thc.runtime.ArithmeticExceptionsNativeTest"],
       "python": []
     },
     "src/test/kotlin/thc/runtime/ManagedStackInfoImageTest.kt": {
@@ -1183,6 +1183,15 @@
     "compiler/test-fixtures/LazyIOCallbackNative.hs": {
       "junit": ["thc.runtime.CoreContinuationNativeTest"],
       "python": []
+    },
+    "test/haskell-fixtures/ArithmeticExceptionFixtures.hs": {
+      "junit": ["thc.runtime.ArithmeticExceptionsNativeTest"], "python": []
+    },
+    "compiler/test-fixtures/ArithmeticExceptionsAudit.hs": {
+      "junit": ["thc.runtime.ArithmeticExceptionsNativeTest"], "python": []
+    },
+    "compiler/test-fixtures/ArithmeticExceptionsNative.hs": {
+      "junit": ["thc.runtime.ArithmeticExceptionsNativeTest"], "python": []
     },
     "test/haskell-fixtures/MaskFunctionFixtures.hs": {
       "junit": ["thc.runtime.MaskFunctionNativeTest"],

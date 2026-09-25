@@ -19,6 +19,7 @@ import SimdCallFixtures (prepareSimdCalls)
 import SimdFloatFmaFixtures (prepareSimdFloatFma)
 import SqrtFixtures (prepareSqrt)
 import ContinuationFixtures (prepareCoreContinuation)
+import ArithmeticExceptionFixtures (prepareArithmeticExceptions)
 import LiveAsyncFixtures (prepareLiveAsync)
 import ThreadStatusFixtures (prepareThreadStatus)
 import ThreadAsyncFixtures (prepareThreadAsync)
@@ -907,6 +908,7 @@ main = do
     ["explicit64"] -> prepare root Explicit64
     ["pinned-pointer-cells"] -> preparePinnedPointers root
     ["core-continuation"] -> prepareCoreContinuation root
+    ["arithmetic-exceptions"] -> prepareArithmeticExceptions root
     ["live-async"] -> prepareLiveAsync root
     ["thread-status"] -> prepareThreadStatus root
     ["thread-async"] -> prepareThreadAsync root
@@ -915,4 +917,4 @@ main = do
     ["interface-core"] -> prepareInterfaceCore root
     ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (interface-core|core-continuation|mask-functions|live-async|thread-async|thread-status|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|original-stdio-read|original-handle-readiness|original-stdio-close|original-posix-dup|original-stdio-seek|original-stdio-truncate|original-strerror|original-fd-ready|original-gmp [--require-supported]|original-rts-locks [--require-supported]|mutvar|stable-pointers|weak-explicit|shrink-bytearrays|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|simd-floatx4-fma|sqrt|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|managed-address-reads|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (interface-core|core-continuation|arithmetic-exceptions|mask-functions|live-async|thread-async|thread-status|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|original-stdio-read|original-handle-readiness|original-stdio-close|original-posix-dup|original-stdio-seek|original-stdio-truncate|original-strerror|original-fd-ready|original-gmp [--require-supported]|original-rts-locks [--require-supported]|mutvar|stable-pointers|weak-explicit|shrink-bytearrays|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|simd-floatx4-fma|sqrt|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|managed-address-reads|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

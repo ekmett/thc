@@ -2142,6 +2142,14 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     in CoreVectors.operationsWord32 -> VectorWord32Operation(name, operands)
                     else -> VectorOperation(name, operands)
                 }
+            } else if (fn[0] == "prim" && CoreArithmeticExceptions.payload(fn[1] as String) != null) {
+                val name = fn[1] as String
+                CoreArithmeticExceptions.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operand = argument(args.single(), scope, false, allowEmpty = true)
+                CoreArithmeticExceptions.validate(name, listOf(operand.representation), flags, tupleProof)
+                val id = CoreArithmeticExceptions.payload(name)!!
+                val payload = globals[id] ?: throw UnsupportedCore("Unresolved implicit exception binding $id")
+                RaiseArithmeticException(operand, RaiseException(GlobalRead(payload)))
             } else if (fn[0] == "prim" && fn[1] in setOf("raiseIO#", "catch#", "getMaskingState#",
                     "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#")) {
                 val name = fn[1] as String

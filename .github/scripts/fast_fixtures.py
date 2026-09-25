@@ -30,10 +30,17 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
     "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/thread-status", "build/uncaught-self", "build/small-arrays", "build/floating-address",
     "build/floating-byte-offset", "build/narrow-byte-offset", "build/int32-byte-offset",
-    "build/explicit64-arrays", "build/mask-functions", "build/interface-core",
+    "build/arithmetic-exceptions", "build/explicit64-arrays", "build/mask-functions", "build/interface-core",
     "build/original-fd-ready", "build/simd-calls",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    "build/arithmetic-exceptions/manifest.json",
+    "build/arithmetic-exceptions/pre/core/ArithmeticExceptionsAudit.json",
+    "build/arithmetic-exceptions/post/core/ArithmeticExceptionsAudit.json",
+    "build/arithmetic-exceptions/pre/core/THC.InterfaceClosure.json",
+    "build/arithmetic-exceptions/post/core/THC.InterfaceClosure.json",
+    "build/arithmetic-exceptions/logs/native-oracle.stdout",
+    "build/arithmetic-exceptions/native/oracle",
     "build/simd-calls/manifest.json", "build/simd-calls/pre-core/SimdCallAudit.json",
     "build/simd-calls/pre-audit.json",
     "build/simd-floatx4-fma/manifest.json", "build/simd-floatx4-fma/pre-core/SimdFloatFma.json",
