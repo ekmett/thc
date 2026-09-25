@@ -7,6 +7,7 @@ package thc.runtime
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.frame.FrameDescriptor
 import com.oracle.truffle.api.frame.FrameSlotKind
 import com.oracle.truffle.api.frame.VirtualFrame
@@ -21,6 +22,7 @@ import java.io.File
 import java.math.BigInteger
 import java.security.MessageDigest
 import java.util.IdentityHashMap
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -371,6 +373,93 @@ class MutVarTest {
                 }
                 assertEquals(1, calls.get())
             } finally { context.leave() }
+        }
+    }
+
+    @Test fun atomicModifyResumesModifierCallAndSelectedFieldWithoutRepeatingTheSwap() {
+        executionContext().use { context ->
+            context.initialize("thc"); context.enter()
+            val cell: ManagedMutVar
+            val selected: Thunk
+            val modified: ModifiedMutVar
+            val force: RootCallTarget
+            val replacement = Any()
+            val counts = Array(3) { java.util.concurrent.atomic.AtomicInteger() }
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val metrics = Metrics(false)
+                val old = Any()
+                val layout = DataLayout(language, "main:PausedModifyPair", "PausedModifyPair",
+                    arrayOf("LiftedRep", "IntRep"))
+                fun leaf(value: Any?) = Thunk(object : GuestRoot(language, FrameDescriptor.newBuilder().build()) {
+                    override fun bloom(frame: VirtualFrame): Long = frame.arguments[0] as Long
+                    override fun execute(frame: VirtualFrame): Any? = value
+                }.callTarget, null)
+                fun pausing(child: Thunk, counter: java.util.concurrent.atomic.AtomicInteger,
+                            expected: Any? = null) = object : GuestRoot(language, FrameDescriptor.newBuilder().build()) {
+                    override fun bloom(frame: VirtualFrame): Long = frame.arguments[0] as Long
+                    override fun execute(frame: VirtualFrame): Any? {
+                        if (expected != null) assertSame(expected, frame.arguments[1])
+                        counter.incrementAndGet()
+                        CompilerDirectives.transferToInterpreter()
+                        return AstCapture(ThunkSuspended(child), SynchronousMasking.current(this))
+                            .append(object : AstResumeStep {
+                                override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                                    val answer = input as? ChildResume ?: fault("Missing child resume")
+                                    answer.failure?.let { throw it }
+                                    return answer.value
+                                }
+                            }).freeze(this, frame.materialize())
+                    }
+                }
+                val field = Thunk(pausing(leaf(replacement), counts[2]).callTarget, null)
+                val record = layout.create(arrayOf(field, 7L))
+                val body = pausing(leaf(record), counts[1], old)
+                val closure = Closure(null, arity = 1, target = body.callTarget)
+                val modifier = Thunk(pausing(leaf(closure), counts[0]).callTarget, null)
+                cell = ManagedMutVar(old)
+                modified = cell.modify(modifier, MutVarModifySite(language, metrics, true))
+                selected = cell.value as Thunk
+                assertSame(old, modified.old)
+                assertEquals(listOf(0, 0, 0), counts.map { it.get() })
+                force = object : RootNode(language, FrameDescriptor.newBuilder().build()) {
+                    @Child private var evaluator = Force(metrics, true)
+                    override fun execute(frame: VirtualFrame): Any? = evaluator.execute(frame, frame.arguments[0])
+                }.callTarget
+            } finally { context.leave() }
+
+            // Each cut changes the Java carrier thread. The selector remains the
+            // sole published MutVar value while all three continuations resume.
+            fun step(): Any? {
+                val answer = CompletableFuture<Any?>()
+                val thread = Thread {
+                    context.enter()
+                    try { answer.complete(Calls.target(force, arrayOf(selected))) }
+                    catch (suspension: ThunkSuspended) { answer.complete(suspension) }
+                    catch (failure: Throwable) { answer.completeExceptionally(failure) }
+                    finally { context.leave() }
+                }
+                thread.start()
+                try { return answer.get(10, TimeUnit.SECONDS) }
+                finally { thread.join(5000); assertFalse(thread.isAlive) }
+            }
+            for (round in 0..2) {
+                val suspension = step() as? ThunkSuspended
+                    ?: throw AssertionError("Expected owned selector cut $round")
+                assertSame(selected, suspension.thunk)
+                assertSame(selected, cell.value, "CAS must not replay while the selector is suspended")
+                assertEquals((0..2).map { if (it <= round) 1 else 0 }, counts.map { it.get() })
+            }
+            assertSame(replacement, step())
+            assertSame(selected, cell.value)
+            assertEquals(listOf(1, 1, 1), counts.map { it.get() })
+            context.enter()
+            try {
+                val record = Calls.target(force, arrayOf(modified.result)) as DataValue
+                assertSame(replacement, Calls.target(force,
+                    arrayOf(record.layout.readFirstLifted(record))))
+            }
+            finally { context.leave() }
         }
     }
 
