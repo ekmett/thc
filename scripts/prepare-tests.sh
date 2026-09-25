@@ -83,6 +83,7 @@ esac
 "$fixture_bin" original-posix-dup
 "$fixture_bin" original-open
 "$fixture_bin" original-termios
+"$fixture_bin" original-sigset
 "$fixture_bin" original-rts-locks --require-supported
 "$fixture_bin" original-stdio-seek
 "$fixture_bin" libdw-unavailable

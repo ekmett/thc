@@ -53,6 +53,8 @@
     "__hscore_sigttou",
     "__hscore_sig_block",
     "__hscore_sig_setmask",
+    "ghczuwrapperZC13ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigemptyset",
+    "ghczuwrapperZC12ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigaddset",
     "__hscore_sizeof_stat",
     "__hscore_fstat",
     "__hscore_open",

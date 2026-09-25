@@ -2097,21 +2097,25 @@ class OriginalDupAuditTest(unittest.TestCase):
         **{f'__hscore_{name}': ((None,), 'Int32Rep')
            for name in ('echo', 'icanon', 'vmin', 'vtime', 'tcsanow', 'sigttou', 'sig_block', 'sig_setmask')},
     }
-    symbols = ('dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile', *termios)
+    sigset = {
+        'ghczuwrapperZC13ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigemptyset': (('AddrRep', None), 'Int32Rep'),
+        'ghczuwrapperZC12ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigaddset': (('AddrRep', 'Int32Rep', None), 'Int32Rep'),
+    }
+    symbols = ('dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile', *termios, *sigset)
     def fixture(self, symbol):
         arguments = (('Word64Rep', 'Word64Rep', 'Word64Rep', 'Int32Rep', None) if symbol == 'lockFile' else
                      ('Word64Rep', None) if symbol == 'unlockFile' else
                      ('Int32Rep', 'AddrRep', None) if symbol == '__hscore_fstat' else
                      ('AddrRep', 'Int32Rep', 'Word32Rep', None) if symbol == '__hscore_open' else
                      ('Int32Rep', None) if symbol == 'dup' else ('Int32Rep', 'Int32Rep', None))
-        arguments, output = self.termios.get(symbol, (arguments, 'Int32Rep'))
+        arguments, output = (self.termios | self.sigset).get(symbol, (arguments, 'Int32Rep'))
         scalar = lambda rep, evaluated: dict(kind='void' if rep is None else 'address' if rep == 'AddrRep' else 'long',
             primReps=[] if rep is None else [rep], evaluated=evaluated)
         parameters = [dict(id=f'a{i}', lifted=False, rep=scalar(p, True)) for i, p in enumerate(arguments)]
         result = tuple_rep(*(scalar(rep, True) for rep in ((None,) if output is None else (None, output))))
         result['evaluated'] = False
         descriptor = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='ghc-internal', isFunction=True),
-            convention='ccall', safety='unsafe', arity=len(arguments), suppliedArity=len(arguments),
+            convention='capi' if symbol in self.sigset else 'ccall', safety='unsafe', arity=len(arguments), suppliedArity=len(arguments),
             argumentReps=[scalar(p, False) for p in arguments], resultRep=copy.deepcopy(result))
         call = ['app', ['var', 'original-foreign', dict(rep=CLOSURE)],
             [['var', p['id'], dict(rep=copy.deepcopy(p['rep']))] for p in parameters],
@@ -2142,7 +2146,7 @@ class OriginalDupAuditTest(unittest.TestCase):
     def test_descriptor_flags_head_and_raw_representation_forgery_reject(self):
         for symbol in self.symbols:
             mutations = [(key, value) for key in ('schema', 'arity', 'suppliedArity')
-                for value in (None, True, 2.0, '2', 0, 1 << 32)] + [('convention', 'capi'), ('safety', 'safe'), ('safety', 'interruptible'), ('extra', None)]
+                for value in (None, True, 2.0, '2', 0, 1 << 32)] + [('convention', 'ccall' if symbol in self.sigset else 'capi'), ('safety', 'safe'), ('safety', 'interruptible'), ('extra', None)]
             for key, value in mutations:
                 module = self.fixture(symbol); self.call(module)[6]['foreignCall'][key] = value
                 self.assertFalse(self.audit(module)['accepted'], (symbol, key, value))
@@ -2173,8 +2177,8 @@ class OriginalDupAuditTest(unittest.TestCase):
 
     def test_termios_state_only_result_and_excluded_terminal_calls(self):
         self.assertEqual(set(self.termios), core_original_foreign.TERMIOS_SYMBOLS)
-        for symbol in self.termios:
-            output = self.termios[symbol][1]
+        self.assertEqual(set(self.sigset), set(core_original_foreign.SIGSET_OPERATIONS))
+        for symbol, (_, output) in (self.termios | self.sigset).items():
             if output is not None:
                 # A mutually consistent descriptor/call-site forgery still
                 # cannot change the original declaration's result width.
@@ -2197,7 +2201,9 @@ class OriginalDupAuditTest(unittest.TestCase):
                     if mutation == 'sum': result['aggregate'] = 'unboxed-sum'
                     self.assertFalse(self.audit(module)['accepted'])
         for symbol in ('prefix__hscore_lflag', 'tcgetattr', 'tcsetattr', 'sigprocmask', 'sigemptyset', 'sigaddset',
-                       'prefix__hscore_sigttou', 'prefix__hscore_sizeof_sigset_t', '__hscore_get_saved_termios', '__hscore_set_saved_termios'):
+                       'prefix__hscore_sigttou', 'prefix__hscore_sizeof_sigset_t', '__hscore_get_saved_termios', '__hscore_set_saved_termios',
+                       'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask',
+                       *('prefix' + name for name in self.sigset)):
             self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
             module = self.fixture('__hscore_lflag')
             self.call(module)[6]['foreignCall']['target']['symbol'] = symbol
