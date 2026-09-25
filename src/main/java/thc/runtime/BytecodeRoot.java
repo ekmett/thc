@@ -758,11 +758,18 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
-    public static final class WriteAddrOffAddr {
+    public static final class AddressWrite {
         @Specialization public static Object write(ManagedAddress address, long offset,
                 ManagedAddress value, Object state) {
             ManagedByteArray.requireState(state);
             address.writeAddressElementIndex(offset, value);
+            return kotlin.Unit.INSTANCE;
+        }
+        // Distinct typed operands share this address-mutation operation.
+        @Specialization public static Object copy(ManagedAddress source, ManagedAddress destination,
+                long count, Object state) {
+            ManagedByteArray.requireState(state);
+            source.copyNonOverlappingTo(destination, count);
             return kotlin.Unit.INSTANCE;
         }
     }

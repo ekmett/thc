@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 327 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 855 | No declared lowering. |
+| Partial | 328 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 854 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -384,6 +384,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `cloneSmallArray#` — arity 3 — Managed lifted arrays
 - [ ] `cloneSmallMutableArray#` — arity 4 — Managed lifted arrays
 - [ ] `compareByteArrays#` — arity 5 — Managed byte storage
+- [ ] `copyAddrToAddrNonOverlapping#` — arity 4 — Managed byte storage
 - [ ] `copyArray#` — arity 6 — Managed lifted arrays
 - [ ] `copyByteArray#` — arity 6 — Managed byte storage
 - [ ] `copyMutableArray#` — arity 6 — Managed lifted arrays
@@ -758,7 +759,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `compactSize#` — arity 2
 - [ ] `control0#` — arity 3
 - [ ] `copyAddrToAddr#` — arity 4
-- [ ] `copyAddrToAddrNonOverlapping#` — arity 4
 - [ ] `copyAddrToByteArray#` — arity 5
 - [ ] `copyByteArrayToAddr#` — arity 5
 - [ ] `copyMutableByteArrayToAddr#` — arity 5

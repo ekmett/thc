@@ -30,6 +30,27 @@ mutableContentsRoundtrip raw = runRW# (\s0 ->
       +# word2Int# (word8ToWord# fromAddress)
   } } } } } } } } })
 
+-- Copy a pointer cell and a neighboring byte to a disjoint region of the
+-- same allocation. Replacing the original pointer afterwards proves that
+-- the copied pointer retains its own value, not the source cell's slot.
+{-# OPAQUE nonOverlappingCopy #-}
+nonOverlappingCopy :: Int# -> Int#
+nonOverlappingCopy raw = runRW# (\s0 ->
+  case newPinnedByteArray# 48# s0 of { (# s1, bytes #) ->
+  case mutableByteArrayContents# bytes of { base ->
+  case writeWord8OffAddr# base 16# (wordToWord8# (int2Word# raw)) s1 of { s2 ->
+  case writeAddrOffAddr# base 1# (plusAddr# base 16#) s2 of { s3 ->
+  case copyAddrToAddrNonOverlapping# (plusAddr# base 8#) (plusAddr# base 24#) 16# s3 of { s4 ->
+  case writeAddrOffAddr# base 1# (plusAddr# base 40#) s4 of { s5 ->
+  case readAddrOffAddr# base 3# s5 of { (# s6, copiedPointer #) ->
+  case readWord8OffAddr# copiedPointer 0# s6 of { (# s7, throughPointer #) ->
+  case readWord8OffAddr# base 32# s7 of { (# s8, copiedByte #) ->
+  case touch# bytes s8 of { _ ->
+    eqAddr# copiedPointer (plusAddr# base 16#) *# 1000000#
+      +# word2Int# (word8ToWord# throughPointer) *# 256#
+      +# word2Int# (word8ToWord# copiedByte)
+  } } } } } } } } } })
+
 -- A lifted bottom must remain unevaluated by touch#. A wrong strictness
 -- implementation raises immediately instead of hanging the native oracle.
 {-# OPAQUE opaqueBottom #-}

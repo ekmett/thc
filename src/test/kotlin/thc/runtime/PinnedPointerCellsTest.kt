@@ -26,7 +26,7 @@ class PinnedPointerCellsTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private data class Row(val input: Long, val pointer: Long, val array: Long, val order: Long,
         val char8: Long, val byte8: Long, val halfwordRead: Long, val halfwordWrite: Long,
-        val mutableContents: Long, val touchLazy: Long,
+        val mutableContents: Long, val touchLazy: Long, val nonOverlappingCopy: Long,
         val wideBytes: List<Long>, val wideReads: List<Long>)
     private fun context() = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
@@ -68,11 +68,11 @@ class PinnedPointerCellsTest {
     private fun rows(): List<Row> {
         val rows = File(root, "build/pinned-pointer-cells/oracle.tsv").readLines().map { line ->
             val fields = line.split('\t')
-            assertEquals(12, fields.size)
-            val scalars = fields.take(10).map(String::toLong)
+            assertEquals(13, fields.size)
+            val scalars = fields.take(11).map(String::toLong)
             Row(scalars[0], scalars[1], scalars[2], scalars[3], scalars[4], scalars[5],
-                scalars[6], scalars[7], scalars[8], scalars[9],
-                fields[10].split(',').map(String::toLong), fields[11].split(',').map(String::toLong))
+                scalars[6], scalars[7], scalars[8], scalars[9], scalars[10],
+                fields[11].split(',').map(String::toLong), fields[12].split(',').map(String::toLong))
         }
         assertEquals(listOf(0L, 1L, 17L, 127L, 255L, 256L, 32767L, 32768L, 65535L,
             4294967297L, 81985529216486895L, -1L, -32768L),
@@ -81,6 +81,7 @@ class PinnedPointerCellsTest {
             val byte = row.input and 255L
             assertEquals(1000000L + byte * 256L + (byte xor 90L), row.mutableContents)
             assertEquals(row.input + 37L, row.touchLazy)
+            assertEquals(1000000L + 257L * (row.input and 255L), row.nonOverlappingCopy)
         }
         return rows
     }
@@ -180,7 +181,11 @@ class PinnedPointerCellsTest {
         provenance()
         for (stage in listOf("pre", "post")) {
             val source = module(stage)
-            val calls = primitiveCalls(source)
+            // The copy root also uses mutable contents and touch. Keep these
+            // original ABI controls scoped to their two original entry roots.
+            val mutable = CoreModules.reachable(source, "mutableContentsRoundtrip")
+            val lazy = CoreModules.reachable(source, "touchLazyPayload")
+            val calls = primitiveCalls(mutable) + primitiveCalls(lazy)
             val contents = calls.single { (it[1] as List<*>)[1] == "mutableByteArrayContents#" }
             val touches = calls.filter { (it[1] as List<*>)[1] == "touch#" }
             assertEquals(2, touches.size)
@@ -198,15 +203,13 @@ class PinnedPointerCellsTest {
                 assertEquals(proof("void", emptyList(), false), rep(touch)) // Not (# State# #).
             }
             assertEquals(setOf(listOf(true, false), listOf(false, false)), touches.map { it[3] }.toSet())
-            val mutable = CoreModules.reachable(source, "mutableContentsRoundtrip")
             assertFalse(primitiveCalls(mutable).any { (it[1] as List<*>)[1] == "unsafeFreezeByteArray#" })
-            val lazy = CoreModules.reachable(source, "touchLazyPayload")
             assertEquals(1, primitiveCalls(lazy).count { (it[1] as List<*>)[1] == "raise#" })
             val audit = Json.parse(File(root, "build/pinned-pointer-cells/$stage/audit.json").readText()) as Map<String, Any?>
             assertEquals(true, audit["accepted"]); assertEquals(emptyList<Any>(), audit["missingGlobals"])
             val primitives = (audit["primitives"] as List<Map<String, Any?>>).associateBy { it["name"] }
-            for ((name, owners) in mapOf("mutableByteArrayContents#" to setOf("mutableContentsAt"),
-                "touch#" to setOf("mutableContentsRoundtrip", "touchLazyPayload"))) {
+            for ((name, owners) in mapOf("mutableByteArrayContents#" to setOf("mutableContentsAt", "nonOverlappingCopy"),
+                "touch#" to setOf("mutableContentsRoundtrip", "touchLazyPayload", "nonOverlappingCopy"))) {
                 val uses = primitives.getValue(name)["uses"] as List<Map<String, Any?>>
                 assertEquals(owners.map { "main:PinnedPointerCellsAudit.$it" }.toSet(), uses.map { it["owner"] }.toSet())
             }
@@ -423,6 +426,111 @@ class PinnedPointerCellsTest {
         bytes.putShort(16, (input + 32768).toShort())
         return (1L shl 32) + (16..17).plus(24..25).fold(0L) { packed, offset ->
             (packed shl 8) or (bytes.get(offset).toLong() and 255L)
+        }
+    }
+
+    @Test fun nonOverlappingAddressCopyPreservesPointerCellsAndRejectsInvalidRegions() {
+        val base = ManagedAddress.fromAllocation(PinnedMemory.allocate(48, 1))
+        val target = base.plus(16)
+        base.writeWord8(16, 203)
+        base.writeAddressElementIndex(1, target)
+        base.plus(8).copyNonOverlappingTo(base.plus(24), 16)
+        base.writeAddressElementIndex(1, base.plus(40))
+        assertSame(target, base.readAddressElementIndex(3))
+        assertEquals(203L, base.readWord8(32))
+        val intact = base.readWord8(32)
+        for ((source, destination, length) in listOf(
+            Triple(base.plus(8), base.plus(16), 16L), // overlapping regions
+            Triple(base.plus(25), base.plus(40), 7L), // partial source pointer cell
+            Triple(base.plus(40), base.plus(25), 7L), // partial destination pointer cell
+            Triple(base.plus(8), base.plus(24), -1L),
+            Triple(base.plus(8), base.plus(40), Long.MAX_VALUE))) {
+            assertThrows(RuntimeFault::class.java) { source.copyNonOverlappingTo(destination, length) }
+            assertSame(target, base.readAddressElementIndex(3))
+            assertEquals(intact, base.readWord8(32))
+        }
+        assertThrows(RuntimeFault::class.java) {
+            base.plus(24).copyNonOverlappingTo(ManagedAddress.fromByteArray(ByteArray(8)), 8)
+        }
+        assertThrows(RuntimeFault::class.java) {
+            base.plus(32).copyNonOverlappingTo(ManagedAddress.fromHex("0000000000000000"), 8)
+        }
+        base.plus(48).copyNonOverlappingTo(base.plus(48), 0)
+
+        // An exposed raw alias still names the same allocation. Never infer
+        // disjointness merely from the distinct managed carrier classes.
+        val rawOwner = PinnedMemory.allocate(32, 1)
+        val owned = ManagedAddress.fromAllocation(rawOwner)
+        val rawAlias = ManagedAddress.fromByteArray(rawOwner.rawBytesIfPointerFree())
+        assertThrows(RuntimeFault::class.java) {
+            owned.plus(8).copyNonOverlappingTo(rawAlias.plus(12), 8)
+        }
+        owned.plus(8).copyNonOverlappingTo(rawAlias.plus(16), 8)
+    }
+
+    @Test fun genuineNonOverlappingCopyMatchesNativeAndCompilesForEveryInput() {
+        provenance()
+        val rows = rows()
+        for (stage in listOf("pre", "post")) {
+            val directory = File(root, "build/pinned-pointer-cells/$stage")
+            val audit = Json.parse(File(directory, "audit.json").readText()) as Map<String, Any?>
+            assertEquals(true, audit["accepted"])
+            assertEquals(emptyList<Any>(), audit["missingGlobals"])
+            val uses = ((audit["primitives"] as List<Map<String, Any?>>)
+                .single { it["name"] == "copyAddrToAddrNonOverlapping#" }["uses"] as List<Map<String, Any?>>)
+            assertEquals(setOf("main:PinnedPointerCellsAudit.nonOverlappingCopy"), uses.map { it["owner"] }.toSet())
+            val source = CoreModules.reachable(module(stage), "nonOverlappingCopy") + ("instrument" to true)
+            val calls = primitiveCalls(source).filter { (it[1] as List<*>)[1] == "copyAddrToAddrNonOverlapping#" }
+            assertEquals(1, calls.size)
+            val arguments = (calls.single()[2] as List<List<Any?>>).map(CoreRepresentations::expression)
+            val flags = calls.single()[3] as List<*>
+            val result = CoreRepresentations.expression(calls.single())
+            val operation = PinnedMemoryOp.COPY_ADDR_NON_OVERLAPPING
+            operation.validate(arguments, flags, result)
+            assertThrows(RuntimeFault::class.java) { operation.validate(arguments,
+                listOf(true, false, false, false), result) }
+            assertThrows(RuntimeFault::class.java) { operation.validate(
+                arguments.toMutableList().also { it[2] = it[2].copy(primReps = listOf("WordRep")) },
+                flags, result) }
+            assertThrows(RuntimeFault::class.java) { operation.validate(arguments, flags,
+                result.copy(kind = CoreKind.LONG, primReps = listOf("IntRep"))) }
+            for (backend in listOf("ast", "bytecode")) strictContext(true).use { context ->
+                context.initialize("thc"); context.enter()
+                try {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val program = program(language, source, backend)
+                    val function = context.asValue(EntryValue(program, "nonOverlappingCopy", 1))
+                    val host = program.hostEntryTarget(1)
+                    val original = program.entryTarget("nonOverlappingCopy")
+                    fun publicTargets(): List<RootCallTarget> {
+                        // EntryValue.compile installs the selected entry's active
+                        // direct target (possibly split) and the host bridge. It
+                        // does not promise installation of every nested helper.
+                        val entries = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
+                            .filter { it.callTarget === original }
+                            .map { it.currentCallTarget as RootCallTarget }.distinct()
+                            .ifEmpty { listOf(original) }
+                        return entries + host
+                    }
+                    fun check(row: Row) = assertEquals(row.nonOverlappingCopy,
+                        function.execute(row.input).asLong(), "$stage/$backend/${row.input}")
+                    rows.forEach(::check)
+                    assertTrue(function.invokeMember("compile").asBoolean(), "$stage/$backend compile")
+                    val targets = publicTargets()
+                    targets.forEach { valid(it, "$stage/$backend/${it.rootNode.name} installed target") }
+                    for (row in rows.asReversed()) {
+                        val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                        check(row)
+                        assertEquals(before + 1,
+                            (program.diagnostics().getValue("compiledEntries") as Number).toLong(),
+                            "$stage/$backend/${row.input} compiled entry")
+                        assertEquals(targets, publicTargets(), "$stage/$backend active targets")
+                        targets.forEach { valid(it, "$stage/$backend/${it.rootNode.name} retained target") }
+                    }
+                    assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong())
+                    released(language)
+                } finally { context.leave() }
+            }
         }
     }
 

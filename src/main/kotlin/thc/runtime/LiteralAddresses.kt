@@ -206,13 +206,44 @@ internal class ManagedAddress private constructor(
         requireRange(displacement, count)
         other.requireRange(otherDisplacement, otherCount)
         if (count == 0L || otherCount == 0L) return false
-        val shared = if (owner != null) owner === other.owner
-            else if (literalBytes != null) literalBytes === other.literalBytes
-            else mutableBytes === other.mutableBytes
+        val shared = when {
+            owner != null && other.owner != null -> owner === other.owner
+            owner != null -> other.mutableBytes?.let(owner::ownsStorage) == true
+            other.owner != null -> mutableBytes?.let(other.owner::ownsStorage) == true
+            literalBytes != null -> literalBytes === other.literalBytes || literalBytes === other.mutableBytes
+            else -> mutableBytes != null && (mutableBytes === other.mutableBytes || mutableBytes === other.literalBytes)
+        }
         if (!shared) return false
         val start = offset + displacement
         val otherStart = other.offset + otherDisplacement
         return start < otherStart + otherCount && otherStart < start + count
+    }
+
+    /** copyAddrToAddrNonOverlapping# counts bytes. Validate both complete
+     * regions and aliasing before changing storage; owner-to-owner copies keep
+     * managed pointer references instead of fabricating their byte values. */
+    fun copyNonOverlappingTo(destination: ManagedAddress, count: Long) {
+        requireRange(0, count)
+        destination.requireRange(0, count, writable = true)
+        if (overlaps(0, count, destination, 0, count))
+            fault("copyAddrToAddrNonOverlapping# requires disjoint regions")
+        if (count == 0L) return
+        val sourceOwner = owner
+        val destinationOwner = destination.owner
+        when {
+            sourceOwner != null && destinationOwner != null ->
+                destinationOwner.copyFrom(sourceOwner, offset, destination.offset, count)
+            sourceOwner != null -> {
+                val source = sourceOwner.copyBytesOut(offset, count)
+                System.arraycopy(source, 0, destination.mutableBytes!!, destination.offset.toInt(), count.toInt())
+            }
+            destinationOwner != null -> destinationOwner.copyBytesIn(
+                literalBytes ?: mutableBytes ?: fault("Null Addr# has no backing storage"),
+                offset.toInt(), destination.offset, count)
+            else -> System.arraycopy(
+                literalBytes ?: mutableBytes ?: fault("Null Addr# has no backing storage"), offset.toInt(),
+                destination.mutableBytes!!, destination.offset.toInt(), count.toInt())
+        }
     }
 
     @TruffleBoundary

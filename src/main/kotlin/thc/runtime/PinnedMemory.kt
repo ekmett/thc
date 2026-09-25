@@ -80,7 +80,9 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
     WRITE_CHAR("writeCharOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), listOf("WordRep"), emptyList()), false),
     WRITE_ADDR("writeAddrOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), listOf("AddrRep"), emptyList()), false),
     WRITE_ADDR_ARRAY("writeAddrArray#", listOf(listOf("BoxedRep (Just Unlifted)"), listOf("IntRep"),
-        listOf("AddrRep"), emptyList()), false);
+        listOf("AddrRep"), emptyList()), false),
+    COPY_ADDR_NON_OVERLAPPING("copyAddrToAddrNonOverlapping#",
+        listOf(listOf("AddrRep"), listOf("AddrRep"), listOf("IntRep"), emptyList()), false);
 
     fun validate(actual: List<CoreRepresentation>, flags: List<*>, result: CoreRepresentation) {
         fun exact(proof: CoreRepresentation, reps: List<String>): Boolean = !proof.isAggregate && !proof.isVector &&
@@ -213,6 +215,14 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
             val value = operands[2].executeRequiredAddress(frame)
             ManagedByteArray.requireState(operands[3].execute(frame))
             address.writeAddressElementIndex(offset, value)
+            Unit
+        }
+        operation == PinnedMemoryOp.COPY_ADDR_NON_OVERLAPPING -> {
+            val source = operands[0].executeRequiredAddress(frame)
+            val destination = operands[1].executeRequiredAddress(frame)
+            val count = operands[2].executeRequiredLong(frame)
+            ManagedByteArray.requireState(operands[3].execute(frame))
+            source.copyNonOverlappingTo(destination, count)
             Unit
         }
         else -> fault("Pinned memory tuple operation requires a destination")
