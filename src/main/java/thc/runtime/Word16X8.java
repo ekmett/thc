@@ -4,6 +4,7 @@
 package thc.runtime;
 
 import jdk.incubator.vector.ShortVector;
+import jdk.incubator.vector.VectorOperators;
 
 /** Eight unsigned lanes stored as raw shorts; unpack zero-extends to Long. */
 public final class Word16X8 {
@@ -36,4 +37,6 @@ public final class Word16X8 {
     public static Word16X8 add(Word16X8 a, Word16X8 b) { return lanes(a.vector().add(b.vector())); }
     public static Word16X8 subtract(Word16X8 a, Word16X8 b) { return lanes(a.vector().sub(b.vector())); }
     public static Word16X8 multiply(Word16X8 a, Word16X8 b) { return lanes(a.vector().mul(b.vector())); }
+    public static Word16X8 min(Word16X8 a, Word16X8 b) { return lanes(a.vector().lanewise(VectorOperators.UMIN, b.vector())); }
+    public static Word16X8 max(Word16X8 a, Word16X8 b) { return lanes(a.vector().lanewise(VectorOperators.UMAX, b.vector())); }
 }

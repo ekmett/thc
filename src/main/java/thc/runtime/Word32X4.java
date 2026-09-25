@@ -56,4 +56,6 @@ public final class Word32X4 {
     public static Word32X4 add(Word32X4 a, Word32X4 b) { return lanes(a.vector().add(b.vector())); }
     public static Word32X4 subtract(Word32X4 a, Word32X4 b) { return lanes(a.vector().sub(b.vector())); }
     public static Word32X4 multiply(Word32X4 a, Word32X4 b) { return lanes(a.vector().mul(b.vector())); }
+    public static Word32X4 min(Word32X4 a, Word32X4 b) { return lanes(a.vector().lanewise(VectorOperators.UMIN, b.vector())); }
+    public static Word32X4 max(Word32X4 a, Word32X4 b) { return lanes(a.vector().lanewise(VectorOperators.UMAX, b.vector())); }
 }
