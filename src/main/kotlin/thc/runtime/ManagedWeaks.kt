@@ -34,16 +34,18 @@ internal class ManagedWeaks {
     fun dereference(value: Any?): WeakResult = live[handle(value)]?.let { WeakResult(1L, it.value) } ?: dead
 
     /** One-address C callbacks use a zero environment flag. */
-    @TruffleBoundary
+    @Synchronized @TruffleBoundary
     fun addCFinalizer(function: ManagedAddress, address: ManagedAddress, flag: Long,
         weak: Any?, provider: SulongCbits): Long {
         val callback = function.finalizerFunction() ?: fault("Expected an original C function label")
         callback.requireOwner(provider)
         if (flag != 0L) fault("Original C finalizer requires a one-address ABI")
+        val payload = live[handle(weak)] ?: return 0L
         // The zero-flag RTS form ignores environment; lowering checks its Addr# carrier.
         if (callback.symbol == "free") Language.currentState(null).nativeAllocations.requireFreeTarget(address)
         else if (address !== ManagedAddress.nullAddress()) address.requireByteRegion(0)
-        return addCallback(weak) { callback.invoke(address) }
+        payload.callbacks.add(0) { callback.invoke(address) }
+        return 1L
     }
 
     @Synchronized @TruffleBoundary

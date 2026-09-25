@@ -168,6 +168,11 @@ class LibdwUnavailableTest {
                         assertEquals(0, state.nativeAllocations.liveCount())
                         assertThrows(RuntimeFault::class.java) { base.readWord8(0) }
                         assertEquals(0L, state.weaks.finalize(weak).flag)
+                        assertEquals(0L, Calls.target(target, arrayOf(0L, base, weak)) as Long,
+                            "A finalized Weak# rejects registration before inspecting its freed base")
+                        assertThrows(RuntimeFault::class.java) {
+                            state.weaks.addCFinalizer(function, base, 1, weak, state.cbits())
+                        }
                         released(language)
                         return 1L
                     }
@@ -176,7 +181,7 @@ class LibdwUnavailableTest {
                     valid(target)
                     val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                     assertEquals(1L, call())
-                    assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                    assertEquals(before + 2, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
                     valid(target)
                 } finally { context.leave() }
             }
