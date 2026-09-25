@@ -2550,7 +2550,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     e.builder.endBlock()
                 }
             } else {
-            val strict = if (fn[0] == "con" && (fn[2] as Number).toInt() == args.size) strictConstructorFields(fn[1] as String, args.size) else null
+            val constructor = if (fn[0] == "con") dataLayout(fn[1] as String) else null
+            if (constructor != null && args.size > constructor.arity)
+                throw RuntimeFault("Constructor arity mismatch: ${fn[1]}")
+            val strict = if (constructor != null && (fn[2] as Number).toInt() == args.size)
+                strictConstructorFields(fn[1] as String, args.size) else null
             val entryStrict = when (fn[0]) {
                 "lam" -> CoreEntries.lambda(fn)
                 "var" -> (fn[1] as String).let { id ->
@@ -2560,8 +2564,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             }?.takeIf { args.size >= it.size }
             val operands = args.mapIndexed { index, arg ->
                 val lifted = flags[index] as? Boolean ?: throw UnsupportedCore("Unknown argument levity")
+                val vectorField = constructor?.vectorProof(index)
                 argument(arg, scope, lifted && !callStrict[index] && strict?.get(index) != true && entryStrict?.getOrNull(index) != true,
-                    allowEmpty = fn[0] != "prim" && fn[0] != "con", declaredLifted = lifted)
+                    allowEmpty = vectorField != null || fn[0] != "prim" && fn[0] != "con", declaredLifted = lifted).also { operand ->
+                    if (vectorField != null) {
+                        if (!operand.proof.isVector) throw RuntimeFault("Constructor vector field requires an exact vector operand")
+                        TupleShape.requireCompatible(vectorField, operand.proof)
+                    }
+                }
             }
             when {
                 fn[0] == "var" && fn[1] in scope.joins -> joinCall(scope.joins.getValue(fn[1] as String), operands)
