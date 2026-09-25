@@ -231,6 +231,57 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** Capture source descriptors are replay-local metadata, never payload arrays. */
+    public static final class VectorCaptureSource {
+        public final ClosureTemplate template;
+        public final boolean thunk;
+        @CompilerDirectives.CompilationFinal(dimensions = 1)
+        public final LocalAccessor[] lanes;
+        public VectorCaptureSource(ClosureTemplate template, LocalAccessor[] lanes, boolean thunk) {
+            this.template = template;
+            this.lanes = lanes;
+            this.thunk = thunk;
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = VectorCaptureSource.class, name = "source")
+    public static final class MakeVectorCapture {
+        @Specialization public static Object create(VirtualFrame frame, VectorCaptureSource source,
+                @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            CapturedFrame environment = source.template.captureLayout.captureLocals(bytecode, frame, source.lanes);
+            if (source.thunk) return new Thunk(source.template.target, environment);
+            return new Closure(environment, ApplicationKt.getNO_PAP_ARGUMENTS(), source.template.arity,
+                    source.template.target);
+        }
+    }
+
+    /** One logical vector field restores directly to primitive bytecode locals. */
+    public static final class VectorCaptureSlots {
+        public final CaptureLayout layout;
+        public final int index;
+        @CompilerDirectives.CompilationFinal(dimensions = 1)
+        public final LocalAccessor[] lanes;
+        public VectorCaptureSlots(CaptureLayout layout, int index, LocalAccessor[] lanes) {
+            this.layout = layout;
+            this.index = index;
+            this.lanes = lanes;
+        }
+        public void restore(VirtualFrame frame, BytecodeNode bytecode, CapturedFrame environment) {
+            layout.restoreVector(environment, index, bytecode, frame, lanes, 0);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = VectorCaptureSlots.class, name = "slots")
+    public static final class CaptureReadVector {
+        @Specialization public static void read(VirtualFrame frame, VectorCaptureSlots slots,
+                CapturedFrame environment, @Bind("$node") Node node) {
+            slots.restore(frame, ((BytecodeRoot) node.getRootNode()).getBytecodeNode(), environment);
+        }
+    }
+
 
     @Operation
     @ConstantOperand(type = CaptureLayout.class, name = "layout")
