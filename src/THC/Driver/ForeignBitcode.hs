@@ -126,7 +126,8 @@ capiAbi unit call = do
   Object fields <- Just call
   Object target <- KeyMap.lookup "target" fields
   String symbol <- KeyMap.lookup "symbol" target
-  let expected kind = object
+  let expected :: String -> Value
+      expected kind = object
         ["schema" .= (1 :: Int),
          "target" .= object ["kind" .= ("static" :: String), "symbol" .= symbol,
                               "unit" .= unit, "isFunction" .= True],
