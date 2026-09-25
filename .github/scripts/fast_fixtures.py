@@ -34,7 +34,8 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
     "build/original-fd-ready", "build/simd-calls",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
-    "build/simd-calls/manifest.json", "build/simd-calls/pre-core/SimdCallAudit.json",
+    "build/simd-calls/manifest.json", "build/simd-calls/proposed-capabilities.json",
+    "build/simd-calls/pre-core/SimdCallAudit.json",
     "build/simd-calls/pre-audit.json",
     *([] if platform.machine().lower() in ("arm64", "aarch64") else
       ["build/simd-calls/oracle.tsv", "build/simd-calls/post-core/SimdCallAudit.json",

@@ -5,7 +5,7 @@
 module SimdCallFixtures (prepareSimdCalls) where
 
 import Control.Monad (forM_, unless, when)
-import Data.Aeson (Value (..), decodeStrict', object, (.=))
+import Data.Aeson (Value (..), decodeStrict', object, toJSON, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
 import FixtureSupport (hashes, run, splitTab, writeJson)
@@ -34,6 +34,16 @@ prepareSimdCalls root = do
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   version <- run root [] ghc ["--numeric-version"] ""
   unless (lines version == ["9.14.1"]) (die "SIMD call fixture requires GHC 9.14.1")
+  -- Keep the canonical capability off until native/Core and compiled JVM proof
+  -- passes; this local profile exercises only the proposed guest transport.
+  capabilitySource <- BS.readFile (root </> "scripts/core-capabilities.json")
+  let capabilityPath = directory </> "proposed-capabilities.json"
+      transport = ["arguments", "results", "tuple-fields", "let-bindings",
+        "join-arguments", "join-results", "join-captures"] :: [String]
+  case decodeStrict' capabilitySource of
+    Just (Object fields) -> writeJson (root </> capabilityPath)
+      (Object (KeyMap.insert "vectorTransport" (toJSON transport) fields))
+    _ -> die "Malformed canonical Core capabilities"
   -- GHC's AArch64 NCG cannot emit SIMD instructions without LLVM. Match the
   -- existing SIMD fixture split: source/Core proof here, native oracle on x86.
   let exportOnly = arch == "aarch64"
@@ -45,7 +55,8 @@ prepareSimdCalls root = do
         ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source]) ""
     let core = directory </> stage ++ "-core/SimdCallAudit.json"
         audit = directory </> stage ++ "-audit.json"
-    _ <- run root [] "python3" (["scripts/audit-core.py", core, "--output", audit] ++
+    _ <- run root [] "python3" (["scripts/audit-core.py", core,
+      "--capabilities", capabilityPath, "--output", audit] ++
       concatMap (\entry -> ["--entry", entry]) entries) ""
     report <- BS.readFile (root </> audit)
     case decodeStrict' report of
@@ -77,12 +88,12 @@ prepareSimdCalls root = do
   let sources = [source,driver,"test/haskell-fixtures/SimdCallFixtures.hs",
         "test/haskell-fixtures/Main.hs","test/haskell-fixtures/FixtureSupport.hs",
         "scripts/audit-core.py","scripts/core-capabilities.json","compiler/export.sh","compiler/build.sh"]
-      artifacts = [directory </> "oracle.tsv" | not exportOnly] ++ [directory </> stage ++ suffix |
+      artifacts = [capabilityPath] ++ [directory </> "oracle.tsv" | not exportOnly] ++ [directory </> stage ++ suffix |
         stage <- stages, suffix <- ["-core/SimdCallAudit.json","-audit.json"]]
   inputHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
-    "entries" .= entries, "inputs" .= inputs, "stages" .= stages,
+    "capabilities" .= capabilityPath, "entries" .= entries, "inputs" .= inputs, "stages" .= stages,
     "nativeRows" .= (if exportOnly then Nothing else Just (length rows)),
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]
   putStrLn ("simd-calls: " ++ show (length rows) ++ " native rows, strict " ++ show stages ++ " Core")
