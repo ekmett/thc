@@ -138,12 +138,15 @@ class InterfaceCoreNativeTest {
         val call = listOf("app", listOf("var", "foreign-clock-time", mapOf("rep" to scalar("BoxedRep (Just Lifted)"))),
             reps.indices.map { index -> listOf("var", "p$index", mapOf("rep" to scalar(reps[index]))) },
             listOf(false, false, false), false, false, mapOf("rep" to tuple(), "foreignCall" to descriptor))
-        val body = listOf("case", call, "pair", listOf(listOf("data", "T2", listOf("s", "value"),
+        val binders = listOf(
+            mapOf("id" to "s", "lifted" to false, "rep" to scalar(null)),
+            mapOf("id" to "value", "lifted" to false, "rep" to scalar("Int32Rep")))
+        val alternative = listOf("data", "T2", listOf("s", "value"),
             listOf("var", "value", mapOf("rep" to scalar("Int32Rep"))),
-            mapOf("binders" to listOf(mapOf("id" to "s", "lifted" to false, "rep" to scalar(null)),
-                mapOf("id" to "value", "lifted" to false, "rep" to scalar("Int32Rep"))))))),
-            mapOf("rep" to scalar("Int32Rep"), "binder" to mapOf("id" to "pair", "lifted" to false,
-                "rep" to tuple())))
+            mapOf("binders" to binders))
+        val body = listOf("case", call, "pair", listOf(alternative),
+            mapOf("rep" to scalar("Int32Rep"),
+                "binder" to mapOf("id" to "pair", "lifted" to false, "rep" to tuple())))
         val module = mapOf("instrument" to true, "foreignLinks" to listOf(link),
             "constructors" to listOf(mapOf("id" to "T2", "kind" to "unboxed-tuple", "arity" to 2, "tag" to 1)),
             "bindings" to listOf(mapOf("id" to "clock", "name" to "clock", "arity" to 3, "lifted" to true,

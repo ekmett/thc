@@ -36,15 +36,18 @@ class CoreForeignArtifactsTest {
             "foreign" to archive, "foreignLink" to link, "bindings" to calls)
         assertEquals(symbols.toSet(), CoreForeignArtifacts.linked(linked)!!.symbols)
         CoreForeignArtifacts.requireExecutable(linked)
+        val originalStubs = archive["stubs"] as Map<String, Any?>
+        val initializer = mapOf("isInitializer" to true, "unit" to unit,
+            "module" to name, "name" to "boot")
+        val withInitializer = linked + ("foreign" to
+            (archive + ("stubs" to (originalStubs + ("initializers" to listOf(initializer))))))
         for (bad in listOf(
             linked + ("foreignLink" to (link + ("bitcodeSha256" to "0".repeat(64)))),
             linked + ("foreignLink" to (link + ("target" to 17L))),
             linked + ("foreignLink" to (link + ("target" to "riscv64-unknown-linux-gnu"))),
             linked + ("foreignLink" to (link + ("symbols" to symbols.take(2)))),
             linked + ("foreignLink" to (link + ("sourceSha256" to "0".repeat(64)))),
-            linked + ("foreign" to (archive + ("stubs" to ((archive["stubs"] as Map<*, *>) +
-                ("initializers" to listOf(mapOf("isInitializer" to true, "unit" to unit,
-                    "module" to name, "name" to "boot"))))))))
+            withInitializer))
             assertThrows(IllegalArgumentException::class.java) { CoreForeignArtifacts.requireExecutable(bad) }
     }
     private val label = mapOf("isInitializer" to false, "unit" to "pkg", "module" to "M", "name" to "exit")
