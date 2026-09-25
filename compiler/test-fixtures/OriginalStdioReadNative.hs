@@ -5,6 +5,7 @@
 module Main where
 
 import Control.Exception (evaluate)
+import Control.Monad (when)
 import Data.Word (Word8)
 import Foreign.Marshal.Array (withArray, peekArray)
 import GHC.Exts (Int(I#), Word(W#), Ptr(Ptr))
@@ -24,7 +25,8 @@ main = do
   input <- openFd inputPath ReadOnly defaultFileFlags
   _ <- fdSeek input AbsoluteSeek (read positionText)
   _ <- dupTo input stdInput
-  closeFd input
+  -- With a closed child stdin, openFd may return 0; dupTo 0 0 is a no-op.
+  when (input /= stdInput) (closeFd input)
   withArray (replicate 16 0xa5 :: [Word8]) $ \address -> do
     result <- evaluate $ case (read fdText, read offsetText, read countText) of
       (I# fd, I# offset, W# count) -> case entry of
