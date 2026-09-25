@@ -192,6 +192,7 @@ library
     THC.CBV
     THC.Demands
     THC.ForeignExports
+    THC.ForeignExportProvenance
     THC.Sources
     THC.Wired
   build-depends:

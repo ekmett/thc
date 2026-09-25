@@ -238,7 +238,8 @@ prepareInterfaceCore root = do
          directory </> "installed-bound-facts.json", directory </> "installed-wrapper-facts.json", directory </> "foreign-alias/a.json",
          directory </> "foreign-alias/b.json", directory </> "source/InterfaceForeignAlias.hs.saved"] ++
         [directory </> "typed-foreign-exports.json"] ++
-        [directory </> "typed-foreign-exports" </> variant ++ ".json" | variant <- ["a", "b", "signatures"]] ++
+        [directory </> "typed-foreign-exports" </> variant ++ ".json" |
+          variant <- ["a", "b", "signatures", "static-signatures", "foreign-file", "instrumented"]] ++
         [directory </> entry ++ "-audit.json" | entry <- entries]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
@@ -248,7 +249,7 @@ prepareInterfaceCore root = do
      "controls" .= (["opaque-body", "private-worker", "recursive-groups", "thin-unavailable",
        "no-source-target", "wrong-module", "wrong-unit", "wrong-way", "foreign-archived", "private-flags", "repeat-load",
        "helper-protocol", "installed-cbv-worker", "installed-wired-unit", "foreign-association-absence",
-       "foreign-linked-clock", "typed-foreign-export-associations"] :: [String]),
+       "foreign-linked-clock", "typed-foreign-export-associations", "retained-export-registration"] :: [String]),
      "commands" .= map commandRecord commands, "runtimeVerified" .= False]
   putStrLn "Prepared complete interface Core: 21 native rows; full/thin/no-source/identity/way/foreign controls passed"
 
