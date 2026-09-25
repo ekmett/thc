@@ -22,6 +22,7 @@ fixture environment = TestLabel "original System.IO executable lifecycle" $ Test
   withFixtureNamed environment "test/fixtures/run-file-lifecycle" "file lifecycle" $ \project -> do
     installedGhc <- lookupEnv "THC_INSTALLED_CORE_GHC"
     installedPkg <- lookupEnv "THC_INSTALLED_CORE_GHC_PKG"
+    ghcSource <- lookupEnv "THC_INSTALLED_CORE_GHC_SOURCE"
     let output = takeDirectory project </> "output"
         path = project </> "lifecycle.txt"
         missing = project </> "missing.txt"
@@ -33,7 +34,8 @@ fixture environment = TestLabel "original System.IO executable lifecycle" $ Test
            "--thc-root", thcRoot environment,
            "--runtime", runtime environment, "--dist-dir", output] ++
           maybe [] (\compilerPath -> ["--with-ghc", compilerPath]) installedGhc ++
-          maybe [] (\packagePath -> ["--with-ghc-pkg", packagePath]) installedPkg
+          maybe [] (\packagePath -> ["--with-ghc-pkg", packagePath]) installedPkg ++
+          maybe [] (\sourcePath -> ["--ghc-source", sourcePath]) ghcSource
         planEntry plan = case filter (\component ->
           string (field component "pkg-name") == "run-file-lifecycle" &&
           string (field component "component-name") == "exe:lifecycle")
