@@ -114,6 +114,7 @@ tasks.withType<Test>().configureEach {
             "original-posix-stat/**/*.json", "original-posix-stat/native/oracle",
             "original-posix-stat/logs/*.stdout", "original-posix-stat/logs/*.stderr",
             "libdw-unavailable/manifest.json", "libdw-unavailable/oracle.json",
+            "native-addresses/manifest.json", "native-addresses/oracle.json",
             "original-gmp/**/*.json", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
             "original-gmp/logs/*.stdout", "original-gmp/logs/*.stderr",
             "original-stdio-close/**/*.json", "original-stdio-close/results/*.txt", "original-stdio-close/results/*.private",

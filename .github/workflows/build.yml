@@ -371,6 +371,9 @@ jobs:
             build/libdw-unavailable/oracle.json
             build/libdw-unavailable/logs/
             build/original-termios/
+            build/native-addresses/manifest.json
+            build/native-addresses/oracle.json
+            build/native-addresses/logs/
             build/original-gmp/
             build/address-fields/
             build/data-to-tag/

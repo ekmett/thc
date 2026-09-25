@@ -12,8 +12,9 @@ import com.oracle.truffle.api.library.ExportMessage;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.function.LongSupplier;
+import java.util.function.Supplier;
 
-/** Byte-addressed interop over the guest's original allocation, never a native address. */
+/** Byte interop over the original allocation; immutable views may acquire an owned native image. */
 @ExportLibrary(InteropLibrary.class)
 public final class CbitsBuffer implements TruffleObject {
     private final ByteBuffer little;
@@ -21,6 +22,8 @@ public final class CbitsBuffer implements TruffleObject {
     private final boolean writable;
     private final LongSupplier logicalSize;
     private final long baseOffset;
+    private final Supplier<NativeReadOnlyPointer> nativeImage;
+    private NativeReadOnlyPointer pointer;
 
     public CbitsBuffer(byte[] bytes, boolean writable) {
         this(bytes, writable, () -> bytes.length);
@@ -29,6 +32,12 @@ public final class CbitsBuffer implements TruffleObject {
         this(bytes, writable, logicalSize, 0);
     }
     public CbitsBuffer(byte[] bytes, boolean writable, LongSupplier logicalSize, long baseOffset) {
+        this(bytes, writable, logicalSize, baseOffset, null);
+    }
+    public CbitsBuffer(byte[] bytes, boolean writable, LongSupplier logicalSize, long baseOffset,
+                       Supplier<NativeReadOnlyPointer> nativeImage) {
+        if (writable && nativeImage != null)
+            throw new IllegalArgumentException("Mutable C buffers cannot use immutable native images");
         if (baseOffset < 0 || baseOffset > logicalSize.getAsLong())
             throw new IllegalArgumentException("C buffer address exceeds its allocation");
         this.little = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
@@ -36,6 +45,15 @@ public final class CbitsBuffer implements TruffleObject {
         this.writable = writable;
         this.logicalSize = logicalSize;
         this.baseOffset = baseOffset;
+        this.nativeImage = nativeImage;
+    }
+    @ExportMessage synchronized boolean isPointer() { return pointer != null && pointer.isPointer(); }
+    @ExportMessage synchronized void toNative() {
+        if (nativeImage != null && pointer == null) pointer = nativeImage.get();
+    }
+    @ExportMessage synchronized long asPointer() throws UnsupportedMessageException {
+        if (!isPointer()) throw UnsupportedMessageException.create();
+        return pointer.asPointer() + baseOffset;
     }
     @ExportMessage boolean hasBufferElements() { return true; }
     @ExportMessage boolean isBufferWritable() { return writable; }

@@ -32,6 +32,7 @@ import OriginalStdioTruncateFixtures (prepareOriginalStdioTruncate)
 import OriginalHandleReadinessFixtures (prepareOriginalHandleReadiness)
 import OriginalPosixStatFixtures (prepareOriginalPosixStat)
 import LibdwUnavailableFixtures (prepareLibdwUnavailable)
+import NativeAddressFixtures (prepareNativeAddress)
 import OriginalGmpFixtures (prepareOriginalGmp)
 import OriginalFdReadyFixtures (prepareOriginalFdReady)
 import OriginalRtsLocksFixtures (prepareOriginalRtsLocks)
@@ -877,6 +878,7 @@ main = do
     ["original-open"] -> prepareOriginalOpen root
     ["libdw-unavailable"] -> prepareLibdwUnavailable root
     ["original-termios"] -> prepareOriginalTermios root
+    ["native-addresses"] -> prepareNativeAddress root
     ["original-gmp"] -> prepareOriginalGmp root False
     ["original-gmp", "--require-supported"] -> prepareOriginalGmp root True
     ["original-fd-ready"] -> prepareOriginalFdReady root

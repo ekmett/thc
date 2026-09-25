@@ -2055,6 +2055,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation public static final class AddressToInt {
+        @Specialization public static long convert(ManagedAddress address) { return address.toNativeBits(); }
+        @Fallback public static long invalid(Object address) { throw fail("Expected an Addr# carrier"); }
+    }
+    @Operation public static final class IntToAddress {
+        @Specialization public static ManagedAddress convert(long bits) { return NativeAddresses.current(null).recover(bits); }
+        @Fallback public static ManagedAddress invalid(Object bits) { throw fail("Expected primitive Long"); }
+    }
     @Operation public static final class AddressPlus {
         @Specialization public static ManagedAddress plus(ManagedAddress address, long displacement) { return address.plus(displacement); }
         @Fallback public static ManagedAddress invalid(Object address, Object displacement) {
@@ -3373,7 +3381,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class DoubleToFloat { @Specialization public static float apply(double x) { return (float) x; } }
     @Operation public static final class ToFloat { @Specialization public static float apply(float x) { return x; } }
     @Operation public static final class ToDouble { @Specialization public static double apply(double x) { return x; } }
-    @Operation public static final class ToLong { @Specialization public static long apply(long x) { return x; } }
+    @Operation public static final class ToLong {
+        @Specialization public static long apply(long x) { return x; }
+        @Fallback public static long invalid(Object x) { throw fail("Expected primitive Long"); }
+    }
 
     private static RuntimeFault fail(String message) {
         CompilerDirectives.transferToInterpreterAndInvalidate();

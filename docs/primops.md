@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 445 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 737 | No declared lowering. |
+| Partial | 447 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 735 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -39,9 +39,10 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 
 ## Current aggregate and address limits
 
+- addr2Int#/int2Addr# preserve real machine address bits. Null and arbitrary integer bit patterns roundtrip; unowned numeric addresses cannot be dereferenced or passed to native code. Immutable literals and pointer-free immutable images acquire one owned native allocation per backing in the current native-enabled context; live registered ranges recover their original managed aliases. Integer values do not root allocations. Mutable managed storage and opaque StablePtr numeric projection remain unsupported; no JVM identity hashes or borrowed scratch pointers are exposed.
 - threadStatus# returns the exact State#/Int#/Int#/Int# tuple for context-owned Java thread identities. Logical capabilities are monotonically allocated per Java carrier, not physical CPU numbers; forkOn/count/affinity APIs remain unsupported. Registered MVar, black-hole, throwTo and foreign boundaries report their actual managed states. Forked threads retain normal/uncaught-guest completion; a live host carrier outside guest entry remains foreign and keeps its identity on re-entry. Existing throwTo mailboxes are scoped to active guest invocations and do not queue across separate host calls.
 - The native DWARF backend is unavailable, matching GHC 9.14.1 RTS USE_LIBDW=0: original libdwPoolTake/libdwGetBacktrace return null, libdwLookupLocation returns failure 1 without touching Location, and libdwPoolClear is a no-op. Managed IPE snapshots are separate. Native DWARF frames and libdw finalizer function addresses are not provided.
-- Address operations support managed literal or byte-array backing with checked offsets; no raw pointers. Char# byte-memory operations read an unsigned byte and write the low eight bits of WordRep. Ordered Addr# comparisons are limited to offsets in the same backing allocation or null compared with itself; unrelated addresses have no synthetic order. Exact GHC MD5 calls use checked Sulong buffer views. Original localeEncoding/hs_iconv_open/hs_iconv_close/hs_iconv use Linux GNU LP64 native iconv with context-owned opaque handles, explicit native-buffer copies, checked disjoint pointer/count/byte regions, cursor writeback and captured errno; Original base_strerror_r uses the pinned GHC wrapper, a checked writable guest buffer, and a short-lived native scratch copy with thread-local C message locale and complete buffer writeback. No general native-pointer FFI is admitted.
+- Address operations support managed literal or byte-array backing with checked offsets, with the separately bounded immutable native projection described above. Unowned numeric addresses have no byte access. Char# byte-memory operations read an unsigned byte and write the low eight bits of WordRep. Ordered Addr# comparisons are limited to offsets in the same backing allocation or null compared with itself; unrelated addresses have no synthetic order. Exact GHC MD5 calls use checked Sulong buffer views. Original localeEncoding/hs_iconv_open/hs_iconv_close/hs_iconv use Linux GNU LP64 native iconv with context-owned opaque handles, explicit native-buffer copies, checked disjoint pointer/count/byte regions, cursor writeback and captured errno; Original base_strerror_r uses the pinned GHC wrapper, a checked writable guest buffer, and a short-lived native scratch copy with thread-local C message locale and complete buffer writeback. No general native-pointer FFI is admitted.
 - shrinkMutableByteArray# changes the logical size of a THC-owned allocation in place, preserving frozen and pinned aliases while retaining backing capacity. Managed byte, scalar, vector, address and C-bitcode buffer accesses observe the shorter bound; partial truncation of a managed pointer cell is rejected. Host-injected raw byte arrays cannot be shrunk in place.
 - fetchAddIntArray# atomically returns the previous signed machine Int and writes the wrapped sum under the allocation monitor, with a full memory barrier. It requires a THC-owned mutable byte array and a contained machine-word element; raw host arrays and pointer-cell overlaps are rejected.
 - StablePtr# uses context-owned opaque AddrRep handles, with lazy referents and exact hs_free_stable_ptr. The two original RTS shared-CAF getOrSet calls atomically retain their first live handle per context until disposal; null queries leave empty slots unchanged. Live identity casts may be compared, but the handles have no byte storage, pointer arithmetic or ordering. Stable-pointer array and byte-memory index/read/write primops remain unsupported.
@@ -364,6 +365,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 
 - [ ] `addIntC#` — arity 2 — Exact tuple arithmetic
 - [ ] `addWordC#` — arity 2 — Exact tuple arithmetic
+- [ ] `addr2Int#` — arity 1 — Managed addresses with operation-specific storage restrictions
 - [ ] `atomicModifyMutVar2#` — arity 3 — Managed lazy reference cells
 - [ ] `atomicSwapMutVar#` — arity 3 — Managed lazy reference cells
 - [ ] `broadcastDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -495,6 +497,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `insertWord64X4#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `insertWord64X8#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `insertWord8X16#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `int2Addr#` — arity 1 — Managed addresses with operation-specific storage restrictions
 - [ ] `isEmptyMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `keepAlive#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `killThread#` — arity 3 — Specialized lowering; see capability and coverage limits
@@ -816,7 +819,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `acoshDouble#` — arity 1
 - [ ] `acoshFloat#` — arity 1
 - [ ] `addCFinalizerToWeak#` — arity 6
-- [ ] `addr2Int#` — arity 1
 - [ ] `addrToAny#` — arity 1
 - [ ] `annotateStack#` — arity 3
 - [ ] `anyToAddr#` — arity 2
@@ -1060,7 +1062,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `insertWord16X32#` — arity 3
 - [ ] `insertWord8X32#` — arity 3
 - [ ] `insertWord8X64#` — arity 3
-- [ ] `int2Addr#` — arity 1
 - [ ] `isByteArrayPinned#` — arity 1
 - [ ] `isByteArrayWeaklyPinned#` — arity 1
 - [ ] `isCurrentThreadBound#` — arity 1

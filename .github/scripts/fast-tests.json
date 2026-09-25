@@ -37,7 +37,7 @@
       "python": []
     },
     "src/main/kotlin/thc/runtime/AddressIdentity.kt": {
-      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest"],
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/BitPrimitives.kt": {
@@ -986,6 +986,7 @@
         "thc.runtime.OriginalPosixDupNativeTest",
         "thc.runtime.OriginalGmpTest",
         "thc.runtime.LibdwUnavailableTest",
+        "thc.runtime.NativeAddressTest",
         "thc.runtime.OriginalFdReadyNativeTest",
         "thc.runtime.ManagedAddressReadTest",
         "thc.runtime.ThreadAsyncNativeTest",
@@ -1041,6 +1042,9 @@
     "src/main/kotlin/thc/runtime/CoreLibdwForeign.kt": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/kotlin/thc/runtime/OriginalLibdwExpression.kt": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
     "src/test/resources/core/original-libdw-descriptors.json": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
+    "test/haskell-fixtures/NativeAddressFixtures.hs": {"junit": ["thc.runtime.NativeAddressTest"], "python": []},
+    "compiler/test-fixtures/NativeAddressNative.hs": {"junit": ["thc.runtime.NativeAddressTest"], "python": []},
+    "src/main/kotlin/thc/runtime/NativeAddresses.kt": {"junit": ["thc.runtime.NativeAddressTest"], "python": []},
     "test/haskell-fixtures/OriginalGmpFixtures.hs": {
       "junit": ["thc.runtime.OriginalGmpTest"], "python": []
     },

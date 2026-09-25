@@ -287,6 +287,25 @@ class AuditTest(unittest.TestCase):
                 self.assertTrue(any(issue['code'] in ('primitive-representation', 'primitive-arity')
                                     for issue in report['issues']), report['issues'])
 
+    def test_native_address_casts_retain_exact_scalar_registers(self):
+        address = dict(kind='address', primReps=['AddrRep'], evaluated=True)
+        for primitive, argument, result in [('addr2Int#', address, LONG), ('int2Addr#', LONG, address)]:
+            body = ['app', ['prim', primitive], [['var', 'x', dict(rep=argument)]],
+                    [False], False, False, dict(rep=result)]
+            expression = ['lam', [dict(id='x', lifted=False, rep=argument)], body,
+                          dict(rep=CLOSURE, resultRep=result)]
+            self.assertTrue(run(expression)['accepted'], primitive)
+            for mode in ('argument', 'result', 'hidden'):
+                bad = copy.deepcopy(expression)
+                if mode == 'result':
+                    bad[2][6]['rep'] = argument
+                    bad[3]['resultRep'] = argument
+                else:
+                    bad[1][0]['rep'] = result
+                    if mode == 'hidden': bad[2][2][0].pop()
+                    else: bad[2][2][0][2]['rep'] = result
+                self.assertFalse(run(bad)['accepted'], (primitive, mode))
+
     def test_scalar_primitive_signatures_reject_consistent_forgery_and_hidden_binder_proofs(self):
         for primitive, expected, result in [('plusInt64#', 'Int64Rep', 'Int64Rep'),
                 ('ltWord64#', 'Word64Rep', 'IntRep'), ('int64ToWord64#', 'Int64Rep', 'Word64Rep')]:

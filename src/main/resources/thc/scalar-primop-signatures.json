@@ -156,6 +156,12 @@
       ],
       "result": "FloatRep"
     },
+    "addr2Int#": {
+      "arguments": [
+        "AddrRep"
+      ],
+      "result": "IntRep"
+    },
     "and#": {
       "arguments": [
         "WordRep",
@@ -889,6 +895,12 @@
         "Int16Rep"
       ],
       "result": "Word16Rep"
+    },
+    "int2Addr#": {
+      "arguments": [
+        "IntRep"
+      ],
+      "result": "AddrRep"
     },
     "int2Double#": {
       "arguments": [
