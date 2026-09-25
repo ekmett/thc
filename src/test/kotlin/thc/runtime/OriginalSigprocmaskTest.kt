@@ -197,6 +197,50 @@ class OriginalSigprocmaskTest {
         } }
     }
 
+    @Test fun ownedNativeImagesQueryCopyBackAndRejectBeforeMaskEffects() = platform {
+        context().use { context -> entered(context) {
+            val state = Language.currentState()
+            val service = state.signalMask
+            val registry = state.nativeAllocations
+            val count = size()
+            val inputBase = registry.malloc(count.toLong() + 16)
+            val outputBase = registry.malloc(count.toLong() + 16)
+            val input = inputBase.plus(8)
+            val output = outputBase.plus(8)
+            fun bytes(base: ManagedAddress) = ByteArray(count + 16) { base.readWord8(it.toLong()).toByte() }
+            fun seed(base: ManagedAddress) = (0 until count + 16).forEach { base.writeWord8(it.toLong(), 90) }
+            val baseline = snapshot(service)
+            try {
+                seed(inputBase); seed(outputBase)
+                val expected = ByteArray(count + 16) { 90 }
+                assertEquals(-1L, state.stdio.close(-1)); val sticky = state.stdio.errno()
+                assertEquals(0L, service.call(-1, nil, address(expected).plus(8)))
+                assertEquals(0L, service.call(-1, nil, output))
+                assertArrayEquals(expected, bytes(outputBase), "native query preserves padding and canaries")
+                assertEquals(sticky, state.stdio.errno())
+                address(baseline).copyNonOverlappingTo(input, count.toLong())
+                seed(outputBase)
+                // Exercise two distinct owned native allocations without
+                // changing the mask: restore its exact current image.
+                assertEquals(0L, service.call(constant(OriginalStdioOp.SIG_SETMASK), input, output))
+                assertArrayEquals(expected, bytes(outputBase))
+                assertArrayEquals(baseline, snapshot(service))
+                seed(outputBase)
+                val before = bytes(outputBase)
+                assertThrows(RuntimeFault::class.java) { service.call(0, input, input) }
+                assertThrows(RuntimeFault::class.java) { service.call(0, nil, outputBase.plus(17)) }
+                val unsupported = baseline.copyOf().also { toggle(it, token(10)) } // SIGUSR1.
+                address(unsupported).copyNonOverlappingTo(input, count.toLong())
+                assertThrows(RuntimeFault::class.java) {
+                    service.call(constant(OriginalStdioOp.SIG_SETMASK), input, output)
+                }
+                assertArrayEquals(before, bytes(outputBase), "rejection preserves the entire output image")
+                assertArrayEquals(baseline, snapshot(service))
+                assertEquals(sticky, state.stdio.errno())
+            } finally { registry.free(inputBase); registry.free(outputBase) }
+        } }
+    }
+
     @Test fun nativeAuthorityPlatformThreadAndContextOwnershipAreMandatory() {
         Context.create("thc").use { context -> entered(context) {
             val failure = assertThrows(RuntimeFault::class.java) { Language.currentState().signalMask.call(0, nil, nil) }

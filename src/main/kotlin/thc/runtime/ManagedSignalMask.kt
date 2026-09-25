@@ -60,45 +60,54 @@ internal class ManagedSignalMask(private val owner: Language.State) {
         authority() // Before native loading, buffer access, or mask effects.
         if (how != how.toInt().toLong()) fault("Original sigprocmask requires a canonical signed CInt")
         val size = imageSize()
-        val input = if (set === ManagedAddress.nullAddress()) null else {
-            val snapshot = {
-                set.requireByteRegion(size)
-                ByteArray(size.toInt()) { set.readWord8(it.toLong()).toByte() }
-            }
-            val allocation = set.cbitsOwner()
-            if (allocation == null) snapshot() else synchronized(allocation) { snapshot() }
-        }
-        if (input != null && oldset !== ManagedAddress.nullAddress() && set.overlaps(0, size, oldset, 0, size))
-            fault("Original sigprocmask requires disjoint restrict-qualified input/output images")
+        if (set !== ManagedAddress.nullAddress()) set.requireByteRegion(size)
         if (oldset !== ManagedAddress.nullAddress()) oldset.requireByteRegion(size, writable = true)
+        if (set !== ManagedAddress.nullAddress() && oldset !== ManagedAddress.nullAddress() &&
+            set.overlaps(0, size, oldset, 0, size))
+            fault("Original sigprocmask requires disjoint restrict-qualified input/output images")
+        // Resolve LLVM before borrowing caller storage. Both owners then remain
+        // live from the input snapshot through the native effect and copyback.
         val function = interop.readMember(library(), "thc_signal_mask")
-        val invoke = {
-            if (oldset !== ManagedAddress.nullAddress()) oldset.requireByteRegion(size, writable = true)
-            NativeLimbScope().use { scope ->
-                val output = if (oldset === ManagedAddress.nullAddress()) null else ByteArray(size.toInt()) { oldset.readWord8(it.toLong()).toByte() }
-                val nativeInput: Any = input?.let { scope.snapshot(it, 0, it.size) } ?: scope.allocate(0)
-                val nativeOutput: Any = output?.let { scope.snapshot(it, 0, it.size) } ?: scope.allocate(0)
-                val error = scope.allocate(8)
-                val previous = owner.threads.enterForeign()
-                try {
-                    val result = interop.asLong(interop.execute(function, how.toInt(), nativeInput, nativeOutput, if (input == null) 0 else 1, if (output == null) 0 else 1, error))
-                    val errno = error.readWord(0)
-                    if (result == -2L && errno == 0L) fault("Original sigprocmask supports only effective SIGTTOU mask changes")
-                    if (result !in -1L..0L || (result == -1L && errno !in 1L..Int.MAX_VALUE.toLong()) ||
-                        (result == 0L && errno != 0L)) fault("Invalid native signal-mask result")
-                    if (output != null) {
-                        (nativeOutput as NativeLimbScope.Pointer).copyTo(output, 0, output.size)
-                        for (i in output.indices) oldset.writeWord8(i.toLong(), output[i].toLong())
-                    }
-                    if (result == -1L) owner.stdio.nativeError(errno)
-                    result
-                } finally { owner.threads.leaveForeign(previous) }
+        return set.withNativeBorrows(oldset) {
+            val input = if (set === ManagedAddress.nullAddress()) null else {
+                val snapshot = {
+                    set.requireByteRegion(size)
+                    ByteArray(size.toInt()) { set.readWord8(it.toLong()).toByte() }
+                }
+                val allocation = set.cbitsOwner()
+                if (allocation == null) snapshot() else synchronized(allocation) { snapshot() }
             }
+            if (input != null && oldset !== ManagedAddress.nullAddress() && set.overlaps(0, size, oldset, 0, size))
+                fault("Original sigprocmask requires disjoint restrict-qualified input/output images")
+            if (oldset !== ManagedAddress.nullAddress()) oldset.requireByteRegion(size, writable = true)
+            val invoke = {
+                if (oldset !== ManagedAddress.nullAddress()) oldset.requireByteRegion(size, writable = true)
+                NativeLimbScope().use { scope ->
+                    val output = if (oldset === ManagedAddress.nullAddress()) null else ByteArray(size.toInt()) { oldset.readWord8(it.toLong()).toByte() }
+                    val nativeInput: Any = input?.let { scope.snapshot(it, 0, it.size) } ?: scope.allocate(0)
+                    val nativeOutput: Any = output?.let { scope.snapshot(it, 0, it.size) } ?: scope.allocate(0)
+                    val error = scope.allocate(8)
+                    val previous = owner.threads.enterForeign()
+                    try {
+                        val result = interop.asLong(interop.execute(function, how.toInt(), nativeInput, nativeOutput, if (input == null) 0 else 1, if (output == null) 0 else 1, error))
+                        val errno = error.readWord(0)
+                        if (result == -2L && errno == 0L) fault("Original sigprocmask supports only effective SIGTTOU mask changes")
+                        if (result !in -1L..0L || (result == -1L && errno !in 1L..Int.MAX_VALUE.toLong()) ||
+                            (result == 0L && errno != 0L)) fault("Invalid native signal-mask result")
+                        if (output != null) {
+                            (nativeOutput as NativeLimbScope.Pointer).copyTo(output, 0, output.size)
+                            for (i in output.indices) oldset.writeWord8(i.toLong(), output[i].toLong())
+                        }
+                        if (result == -1L) owner.stdio.nativeError(errno)
+                        result
+                    } finally { owner.threads.leaveForeign(previous) }
+                }
+            }
+            // Snapshot input before locking output: no inverse two-allocation lock
+            // order, and shrink/pointer-cell installation cannot invalidate copyback.
+            val allocation = oldset.cbitsOwner()
+            if (allocation == null) invoke() else synchronized(allocation) { invoke() }
         }
-        // Snapshot input before locking output: no inverse two-allocation lock
-        // order, and shrink/pointer-cell installation cannot invalidate copyback.
-        val allocation = oldset.cbitsOwner()
-        return if (allocation == null) invoke() else synchronized(allocation) { invoke() }
     }
 
     companion object {
