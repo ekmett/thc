@@ -7,6 +7,7 @@ GHC_PKG ?=
 RUN_GHC ?= runghc
 GRADLE_FLAGS ?=
 CABAL_FLAGS ?=
+CORE_PACKAGES ?= ghc-internal base
 export GRADLE_USER_HOME ?= $(CURDIR)/.gradle-user-home
 export JAVA_HOME
 
@@ -20,15 +21,15 @@ runtime: check-java
 	./gradlew installDist $(GRADLE_FLAGS)
 
 haskell:
-	@set -e; pkg=$$($(CORE_PREFLIGHT) advisory); \
+	@set -e; pkg=$$($(CORE_PREFLIGHT) advisory $(CORE_PACKAGES)); \
 	  $(CABAL) build $(CABAL_FLAGS) --with-compiler='$(GHC)' --with-hc-pkg="$$pkg"
 
 run: all
-	@set -e; pkg=$$($(CORE_PREFLIGHT) advisory); \
+	@set -e; pkg=$$($(CORE_PREFLIGHT) advisory $(CORE_PACKAGES)); \
 	  $(CABAL) run thc $(CABAL_FLAGS) --with-compiler='$(GHC)' --with-hc-pkg="$$pkg" -- $(ARGS)
 
 check-ghc-core:
-	@$(CORE_PREFLIGHT) check
+	@$(CORE_PREFLIGHT) check $(CORE_PACKAGES)
 
 jar: check-java
 	./gradlew jar $(GRADLE_FLAGS)
