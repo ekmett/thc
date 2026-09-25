@@ -290,6 +290,7 @@ executable thc-fixtures
     OriginalHandleReadinessFixtures
     OriginalPosixStatFixtures
     OriginalGmpFixtures
+    LibdwUnavailableFixtures
     OriginalFdReadyFixtures
     OriginalRtsLocksFixtures
     OriginalOpenFixtures

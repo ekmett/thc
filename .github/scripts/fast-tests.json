@@ -973,6 +973,7 @@
         "thc.runtime.OriginalRtsLocksTest",
         "thc.runtime.OriginalPosixDupNativeTest",
         "thc.runtime.OriginalGmpTest",
+        "thc.runtime.LibdwUnavailableTest",
         "thc.runtime.OriginalFdReadyNativeTest",
         "thc.runtime.ManagedAddressReadTest",
         "thc.runtime.ThreadAsyncNativeTest",
@@ -1024,6 +1025,11 @@
       ],
       "python": []
     },
+    "test/haskell-fixtures/LibdwUnavailableFixtures.hs": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
+    "compiler/test-fixtures/LibdwUnavailableNative.hs": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
+    "src/main/kotlin/thc/runtime/CoreLibdwForeign.kt": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/kotlin/thc/runtime/OriginalLibdwExpression.kt": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
+    "src/test/resources/core/original-libdw-descriptors.json": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
     "test/haskell-fixtures/OriginalGmpFixtures.hs": {
       "junit": ["thc.runtime.OriginalGmpTest"], "python": []
     },

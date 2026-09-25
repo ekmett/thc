@@ -96,6 +96,43 @@ class CoreForeignArtifactsTest {
         }
     }
 
+    @Test fun onlyReachableForeignArchivesAreRequiredButRegistrationsAlwaysAre() {
+        val entry = mapOf("schema" to 1L, "ghc" to "9.14.1", "unit" to "main", "module" to "Entry",
+            "bindings" to listOf(mapOf("id" to "main:Entry.main", "name" to "main",
+                "expr" to listOf("lit", "int", "7")),
+                mapOf("id" to "main:Entry.other", "name" to "other",
+                    "expr" to listOf("lit", "int", "8"))),
+            "constructors" to emptyList<Any>())
+        val inactiveStubs = stubs + ("source" to "int foreign_stub(void) { return 1; }") +
+            ("finalizers" to emptyList<Any>())
+        val archive = module + ("foreign" to (foreign + ("stubs" to inactiveStubs))) +
+            ("bindings" to listOf(mapOf("id" to "pkg:M.cold", "name" to "cold",
+                "expr" to listOf("lit", "int", "9"))))
+        val merged = CoreModules.merge(listOf(entry, archive))
+        assertThrows(IllegalArgumentException::class.java) {
+            CoreForeignArtifacts.requireExecutableInput(merged)
+        }
+        val live = CoreModules.reachable(merged, listOf("main:Entry.main", "main:Entry.other"), true)
+        assertEquals(listOf("main:Entry.main", "main:Entry.other"),
+            (live["bindings"] as List<Map<*, *>>).map { it["id"] })
+        val needed = entry + ("bindings" to listOf(mapOf("id" to "main:Entry.main", "name" to "main",
+            "expr" to listOf("var", "pkg:M.cold"))))
+        val failure = assertThrows(IllegalArgumentException::class.java) {
+            CoreModules.reachable(CoreModules.merge(listOf(needed, archive)), "main:Entry.main", true)
+        }
+        assertTrue(failure.message!!.contains("Core schema 2 is archive-only"))
+        val registration = mapOf("isInitializer" to true, "unit" to "pkg", "module" to "M", "name" to "start")
+        val withInitializer = archive + ("foreign" to (foreign + ("stubs" to
+            (inactiveStubs + ("initializers" to listOf(registration))))))
+        val startup = assertThrows(IllegalArgumentException::class.java) {
+            CoreModules.merge(listOf(entry, withInitializer))
+        }
+        assertTrue(startup.message!!.contains("Core schema 2 is archive-only"))
+        assertThrows(IllegalArgumentException::class.java) {
+            CoreModules.reachable(merged, listOf("main:Entry.main", "missing:entry"), true)
+        }
+    }
+
     @Test fun malformedOrDowngradedForeignArtifactsFailClosed() {
         val variants = listOf(
             module + ("schema" to 1L), module - "foreign", module + ("schema" to 2.5),

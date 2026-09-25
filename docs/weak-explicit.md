@@ -30,11 +30,19 @@ Host cancellation is not claimed to guarantee execution of a returned action.
 For the separate `rts_setMainThread` consumer, `ManagedWeaks.mainThreadKey(weak,
 threads)` validates a live, same-context `ThreadId#` **key**, not the boxed value.
 Its `MainThreadWeakKey.liveJavaId()` capability rereads the registration and
-returns null after explicit finalization or context close. The capability keeps
+delegates to `GuestThreads.liveJavaId(identity)`. It returns null after explicit
+finalization or either registry's close, for a missing/dead original Java carrier,
+terminal guest status, or a noncanonical identity. The thread service compares
+the actual identity and carrier by reference, not numeric ThreadId equality.
+A live host carrier in FOREIGN status remains observable between guest entries.
+This query neither creates a guest lifetime nor finalizes its weak registration.
+The capability keeps
 only the registry, opaque weak handle and expected thread registry; it does not
 keep another key/value/action reference. Consumers must retain the capability,
-not a permanent key or ID snapshot, and independently check thread execution
-liveness. This accessor does not implement or admit the foreign RTS call.
+not a permanent key or ID snapshot. This is a liveness snapshot, not a dispatch
+permission: an eventual signal action must atomically recheck the exact identity
+when enqueuing its request. The existing numeric send path is not that guard.
+This accessor does not implement or admit the foreign RTS call or signals.
 
 `addCFinalizerToWeak#` remains unsupported. There is no ignored C callback,
 automatic GC finalizer thread, Java Cleaner/WeakReference approximation, heap

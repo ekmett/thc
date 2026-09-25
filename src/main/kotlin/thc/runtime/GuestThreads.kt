@@ -181,6 +181,18 @@ internal class GuestThreads internal constructor(
         }
     }
 
+    /** Snapshot only: eventual dispatch must check the same identity atomically with enqueue. */
+    @TruffleBoundary @Synchronized internal fun liveJavaId(identity: GuestThreadId): Long? {
+        if (identity.owner !== this) fault("ThreadId# belongs to another guest context")
+        if (closed || identity.status.terminal) return null
+        val carrier = identity.carrier.get() ?: return null
+        if (!carrier.isAlive || carrier.threadId() != identity.javaId || identities[carrier] !== identity) return null
+        val active = threads[identity.javaId]
+        if (active != null && (active.identity !== identity || active.thread !== carrier)) return null
+        // A live host carrier can be FOREIGN between guest entries; no new lifetime is registered.
+        return identity.javaId
+    }
+
     @TruffleBoundary fun send(identity: GuestThreadId, payload: Any?): AsyncRequest {
         if (identity.owner !== this) fault("ThreadId# belongs to another guest context")
         return send(identity.javaId, payload)
