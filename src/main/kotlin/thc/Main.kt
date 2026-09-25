@@ -102,7 +102,8 @@ private fun launch(args: Array<String>) {
         executionContext(fileIO = true).use { context ->
             val action = loadEntry(context, args[1].split(','), args[2], ioMain = true, shutdownEntry = args[3])
             check(action.invokeMember("runIO").asBoolean()) { "Executable IO did not complete" }
-            System.err.println(action.getMember("diagnostics").asString())
+            if (java.lang.Boolean.getBoolean("thc.diagnostics"))
+                System.err.println(action.getMember("diagnostics").asString())
         }
         return
     }
@@ -112,7 +113,8 @@ private fun launch(args: Array<String>) {
         executionContext(fileIO = true).use { context ->
             val action = loadEntry(context, modules, args[2], ioMain = true)
             check(action.invokeMember("runIO").asBoolean()) { "IO main did not complete" }
-            System.err.println(action.getMember("diagnostics").asString())
+            if (java.lang.Boolean.getBoolean("thc.diagnostics"))
+                System.err.println(action.getMember("diagnostics").asString())
         }
         return
     }

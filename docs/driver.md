@@ -15,6 +15,13 @@ through the strict audit, then invoke the THC JVM runtime. The native Cabal
 executable is never run by `thc run`. The standalone `build` and `repl` commands
 remain absent.
 
+IO launchers (`--run-io` and `--run-executable`) do not append runtime metrics to
+stderr by default. Guest output and failure reports are unchanged. To append the runtime metrics JSON after a successful action, set
+`JAVA_OPTS="${JAVA_OPTS:-} -Dthc.diagnostics=true"` when invoking `thc run`.
+Embedded callers can still read the `diagnostics` member directly. This output
+setting does not change instrumentation, strict admission, or shutdown behavior.
+The low-level integer-kernel launcher retains its diagnostic report.
+
 ## Build and exercise
 
 Use GHC 9.14.1 with its bundled Cabal/Cabal-syntax 3.16. The API bounds are narrow
