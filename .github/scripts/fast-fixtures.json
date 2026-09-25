@@ -32,6 +32,7 @@
     "thc.runtime.SimdFamiliesTest",
     "thc.ScalarPrimopModelTest",
     "thc.runtime.IoMainBoundaryTest",
+    "thc.runtime.ExecutableLifecycleTest",
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
