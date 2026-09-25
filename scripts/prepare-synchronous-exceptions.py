@@ -16,12 +16,13 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = 'compiler/test-fixtures/SynchronousExceptionsAudit.hs'
 NATIVE = 'compiler/test-fixtures/SynchronousExceptionsNative.hs'
-ENTRIES = ['preciseCatch', 'actionHeadCatch', 'ignoredBottomPayload', 'nestedRethrow',
+ENTRIES = ['preciseCatch', 'erasedNestedCatch', 'actionHeadCatch', 'ignoredBottomPayload', 'nestedRethrow',
            'unusedHandler', 'lazyResultBoundary', 'restoreAndRethrow', 'handlerMaskState',
            'maskNested', 'maskRethrowRestore', 'noDuplicateProbe']
 FRONTIER = set()
 REQUIRED = {
     'preciseCatch': {'catch#', 'raiseIO#'},
+    'erasedNestedCatch': {'catch#', 'raiseIO#'},
     'actionHeadCatch': {'catch#', 'raise#'},
     'ignoredBottomPayload': {'catch#', 'raiseIO#'},
     'nestedRethrow': {'catch#', 'raiseIO#'},
@@ -73,6 +74,8 @@ def hash_files(paths, root=ROOT):
 def mathematical(name, value):
     if name == 'preciseCatch':
         result = value + 17
+    elif name == 'erasedNestedCatch':
+        result = value + 43
     elif name == 'actionHeadCatch':
         result = value + 19
     elif name == 'ignoredBottomPayload':
@@ -120,6 +123,18 @@ def applications(value):
     elif isinstance(value, dict):
         for child in value.values():
             yield from applications(child)
+
+
+def nested_erased_actions(value):
+    if isinstance(value, list):
+        if len(value) >= 7 and value[0] == 'app' and isinstance(value[1], list) and value[1][:1] == ['lam']:
+            if any(app[1][1] == 'raiseIO#' for app in applications(value[1])):
+                yield value
+        for child in value:
+            yield from nested_erased_actions(child)
+    elif isinstance(value, dict):
+        for child in value.values():
+            yield from nested_erased_actions(child)
 
 
 def representation(expression):
@@ -302,6 +317,12 @@ def main():
             for binding in report['reachableBindings']:
                 observed += [dict(owner=binding['id'], **validate_contract(app))
                              for app in applications(bindings[binding['id']]['expr'])]
+            if stage == 'post' and name == 'erasedNestedCatch':
+                expression = bindings['main:SynchronousExceptionsAudit.erasedNestedCatch']['expr']
+                require(any(representation(app) == {'kind': 'data', 'primReps': ['BoxedRep (Just Lifted)'],
+                                                    'evaluated': False}
+                            for app in nested_erased_actions(expression)),
+                        'noinline erasure lost its exact root or nested raiseIO# certificate')
             contracts[stage + '/' + name] = observed
 
     native = build / 'native'

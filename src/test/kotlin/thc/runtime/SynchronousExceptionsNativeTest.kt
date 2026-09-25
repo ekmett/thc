@@ -15,7 +15,7 @@ import java.security.MessageDigest
 class SynchronousExceptionsNativeTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = File(root, "build/synchronous-exceptions")
-    private val supported = listOf("preciseCatch", "actionHeadCatch", "ignoredBottomPayload", "nestedRethrow",
+    private val supported = listOf("preciseCatch", "erasedNestedCatch", "actionHeadCatch", "ignoredBottomPayload", "nestedRethrow",
         "unusedHandler", "lazyResultBoundary", "restoreAndRethrow", "handlerMaskState",
         "maskNested", "maskRethrowRestore", "noDuplicateProbe")
 

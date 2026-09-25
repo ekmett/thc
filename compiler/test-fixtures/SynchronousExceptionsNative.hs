@@ -15,6 +15,7 @@ emit name action value@(I# input) =
 dispatch :: [String] -> IO ()
 dispatch [name, value] = case name of
   "preciseCatch" -> emit name P.preciseCatch input
+  "erasedNestedCatch" -> emit name P.erasedNestedCatch input
   "actionHeadCatch" -> emit name P.actionHeadCatch input
   "ignoredBottomPayload" -> emit name P.ignoredBottomPayload input
   "nestedRethrow" -> emit name P.nestedRethrow input
