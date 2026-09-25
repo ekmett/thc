@@ -868,7 +868,7 @@ class FixturePreparationTest(unittest.TestCase):
         policy = json.loads((project / ".github/scripts/fast-tests.json").read_text())
         classes = policy["leafSources"]["src/main/kotlin/thc/runtime/FloatingPrimitives.kt"]["junit"]
         expected = sorted({owners[name] for name in classes if owners[name] is not None})
-        self.assertEqual(25, len(classes))
+        self.assertEqual(26, len(classes))
         self.manifest = {"schema": 1, "fixtureFreeJunit": manifest["fixtureFreeJunit"],
                          "groups": {name: manifest["groups"][name] for name in expected}}
         (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
@@ -903,7 +903,7 @@ class FixturePreparationTest(unittest.TestCase):
                 path = self.root / source
                 path.write_bytes(path.read_bytes() + b"\n# changed\n")
                 self.assertEqual([group_id], prepare()["rebuilt"])
-        for group_id in ("sum-results", "floating-tuples", "sqrt", "scalar-bitcasts", "simd-floatx4",
+        for group_id in ("sum-results", "floating-tuples", "sqrt", "scalar-bitcasts", "simd-floatx4", "simd-floatx4-fma",
                          "simd-doublex2", "simd-floatx4-bytearray", "simd-doublex2-bytearray"):
             for change in ("bytes", "missing"):
                 with self.subTest(group=group_id, change=change):
