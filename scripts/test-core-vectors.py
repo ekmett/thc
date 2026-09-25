@@ -178,6 +178,26 @@ class VectorAuditTest(unittest.TestCase):
         heap_case[3][0][4]['binders'][0]['lifted'] = True
         self.assertIn('application-levity', [i['code'] for i in run(lifted_pattern,
             capability=dict(CAP, vectorTransport=capabilities))['issues']])
+        for mutation in ('missing-pattern', 'truncated-pattern'):
+            changed = copy.deepcopy(module)
+            pattern = changed['bindings'][0]['expr'][2][3][0][3][3][3][0]
+            if mutation == 'missing-pattern': pattern.pop(4)
+            else: pattern[4]['binders'].pop()
+            self.assertIn('alternative-binder-metadata', [i['code'] for i in run(changed,
+                capability=dict(CAP, vectorTransport=capabilities))['issues']], mutation)
+        for partial in (False, True):
+            changed = copy.deepcopy(module)
+            thunk = changed['bindings'][0]['expr'][2][3][0][3][2][0]
+            constructor = thunk['expr']
+            if partial:
+                first = ['app', constructor[1], [constructor[2][0]], [False], False, False, dict(rep=CLOSURE)]
+                thunk['expr'] = ['app', first, [constructor[2][1]], [False], False, False,
+                                 dict(rep=constructor[6]['rep'])]
+            self.assertTrue(run(changed, capability=dict(CAP, vectorTransport=capabilities))['accepted'], partial)
+            argument = thunk['expr'][1][2][0] if partial else thunk['expr'][2][0]
+            argument[2]['rep'] = copy.deepcopy(VECTOR32_REP)
+            issues = run(changed, capability=dict(CAP, vectorTransport=capabilities))['issues']
+            self.assertTrue(any(i['path'].endswith('/arguments/0/formal') for i in issues), (partial, issues))
         for mutation in ('missing-type', 'wrong-rep', 'lifted', 'unevaluated'):
             changed = copy.deepcopy(module)
             field = changed['constructors'][0]
