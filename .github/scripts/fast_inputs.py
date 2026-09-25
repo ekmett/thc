@@ -38,7 +38,7 @@ MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar
-narrow-literal-proofs original-stack original-stack-formatter original-stdio resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+narrow-literal-proofs original-stack original-stack-formatter original-stdio original-stdio-read original-handle-readiness resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops synchronous-exceptions tuple-arithmetic word-floating""".split()
 PROVENANCE_DIRS = """aggregate-layout empty-join-input empty-tuple-input
 floating-tuple state-tuple sum-layout sum-result tag-to-enum tuple-input
@@ -80,6 +80,8 @@ MAX_MANIFEST_BYTES = 16 * 1024 * 1024
 MAX_JSON_BYTES = 384 * 1024 * 1024
 NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate",
     "build/original-stdio/native/original-stdio-oracle",
+    "build/original-stdio-read/native/original-stdio-read-oracle",
+    "build/original-handle-readiness/native/oracle",
     *(f"build/{name}/native/{name}" for name in
       ("state-tuple", "tuple-input", "tuple-return", "empty-tuple-input"))})
 # The original stdio manifest fingerprints its commands, raw streams and numeric
@@ -98,6 +100,34 @@ ORIGINAL_STDIO_OUTPUTS = frozenset("build/original-stdio/" + name for name in (
       for name in ("core/OriginalStdioAudit.json", "core/THC.InterfaceClosure.json",
                    "originalWrite.audit.json", "originalSafeWrite.audit.json",
                    "originalWriteErrno.audit.json", "originalSafeWriteErrno.audit.json")),
+))
+ORIGINAL_STDIO_READ_OUTPUTS = frozenset("build/original-stdio-read/" + name for name in (
+    "manifest.json", "oracle.json", "input.bin", "native/original-stdio-read-oracle",
+    *(f"results/{index}.txt" for index in range(40)),
+    *(f"logs/{label}.{suffix}"
+      for label in ("ghc-version", "native-build", "pre-export", "post-export",
+                    *(f"native-{index:03}" for index in range(40)),
+                    *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in
+                      ("originalRead", "originalSafeRead", "originalReadErrno", "originalSafeReadErrno")))
+      for suffix in ("stdout", "stderr", "command.json")),
+    *(f"{stage}/{name}" for stage in ("pre", "post")
+      for name in ("core/OriginalStdioReadAudit.json", "core/THC.InterfaceClosure.json",
+                   "originalRead.audit.json", "originalSafeRead.audit.json",
+                   "originalReadErrno.audit.json", "originalSafeReadErrno.audit.json")),
+))
+
+ORIGINAL_HANDLE_READINESS_LOGS = (
+    "ghc-version", "ghc-info", "native-build", "native--1", "native-1", "native-2",
+    "pre-export", "post-export",
+) + tuple(f"{stage}-audit-{entry}" for stage in ("pre", "post")
+          for entry in ("originalIsTerminal", "originalIsTerminalErrno"))
+ORIGINAL_HANDLE_READINESS_OUTPUTS = frozenset("build/original-handle-readiness/" + name for name in (
+    "manifest.json", "oracle.json", "native/oracle",
+    *(f"logs/{label}.{suffix}" for label in ORIGINAL_HANDLE_READINESS_LOGS
+      for suffix in ("stdout", "stderr", "command.json")),
+    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
+        "core/OriginalHandleReadinessAudit.json", "core/THC.InterfaceClosure.json",
+        "originalIsTerminal.audit.json", "originalIsTerminalErrno.audit.json")),
 ))
 
 # Each attempt retains its logs without admitting arbitrary files from a build
@@ -377,6 +407,10 @@ def allowed_payload(name, pins):
             bool(re.fullmatch(r"libHSthc-[\w.-]+\.(so|dylib)", parts[2])))
     if parts[1] == "original-stdio":
         return name in ORIGINAL_STDIO_OUTPUTS
+    if parts[1] == "original-stdio-read":
+        return name in ORIGINAL_STDIO_READ_OUTPUTS
+    if parts[1] == "original-handle-readiness":
+        return name in ORIGINAL_HANDLE_READINESS_OUTPUTS
     if parts[1] == "original-stack":
         return name == "build/original-stack/manifest.json" or original_stack_artifact(name)
     if parts[1] == "original-stack-formatter":

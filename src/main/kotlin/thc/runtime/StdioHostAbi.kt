@@ -5,6 +5,7 @@ package thc.runtime
 
 /** Actual C errno constants from the build host, not the private service categories. */
 internal class StdioHostAbi private constructor(private val errors: Map<String, Long>) {
+    fun notTerminal(): Long = errors.getValue("ENOTTY")
     fun error(kind: Long): Long = errors.getValue(when (kind) {
         1L -> "ENOENT"
         2L -> "EACCES"
@@ -19,7 +20,7 @@ internal class StdioHostAbi private constructor(private val errors: Map<String, 
 
     companion object {
         private val widths = mapOf("charBits" to 8L, "pointer" to 8L, "int" to 4L, "size" to 8L, "ssize" to 8L)
-        private val errorNames = setOf("ENOENT", "EACCES", "EEXIST", "EBADF", "EINVAL", "EIO", "ENOTSUP", "EBUSY", "EISDIR")
+        private val errorNames = setOf("ENOENT", "EACCES", "EEXIST", "EBADF", "EINVAL", "EIO", "ENOTSUP", "EBUSY", "EISDIR", "ENOTTY")
         private fun exactInteger(value: Any?): Long? = if (value is Int || value is Long) (value as Number).toLong() else null
         private fun architecture(value: String): String = when (value.lowercase()) {
             "arm64" -> "aarch64"

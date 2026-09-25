@@ -9,11 +9,16 @@ import thc.Language
 /** Exact pinned GHC declarations, not aliases for arbitrary POSIX imports. */
 internal enum class OriginalStdioOp(val symbol: String, val convention: String, val safety: String,
     val arguments: List<String?>, val result: String) {
+    READ_SAFE("ghczuwrapperZC22ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread", "capi", "safe",
+        listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep"),
+    READ_UNSAFE("ghczuwrapperZC23ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread", "capi", "unsafe",
+        listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep"),
     WRITE_SAFE("ghczuwrapperZC20ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite", "capi", "safe",
         listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep"),
     WRITE_UNSAFE("ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite", "capi", "unsafe",
         listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep"),
-    ERRNO("__hscore_get_errno", "ccall", "unsafe", listOf(null), "Int32Rep");
+    ERRNO("__hscore_get_errno", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    ISATTY("isatty", "ccall", "unsafe", listOf("Int32Rep", null), "Int32Rep");
 }
 
 internal object CoreOriginalStdio {

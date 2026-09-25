@@ -873,24 +873,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    // Both directions have the same typed operands. Keep one instruction family
+    // below the BytecodeDSL partition limit; the direction is constant during PE.
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    public static final class OriginalStdioWrite {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+    @ConstantOperand(type = boolean.class, name = "reading")
+    public static final class OriginalStdioTransfer {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination, boolean reading,
                 long fd, ManagedAddress address, long count, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            long result = CoreOriginalStdio.current(node).write(fd, address, count);
+            ManagedStdio stdio = CoreOriginalStdio.current(node);
+            long result = reading ? stdio.read(fd, address, count) : stdio.write(fd, address, count);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    public static final class OriginalStdioErrno {
+    @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
+    public static final class OriginalStdioStatus {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
-                Object state, @Bind("$node") Node node) {
+                OriginalStdioOp operation, long fd, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            long result = CoreOriginalStdio.current(node).errno();
+            // One typed instruction avoids another generated-interpreter partition;
+            // the exact operation is compile-time metadata, not a guest operand.
+            long result;
+            if (operation == OriginalStdioOp.ERRNO) result = CoreOriginalStdio.current(node).errno();
+            else if (operation == OriginalStdioOp.ISATTY) result = CoreOriginalStdio.current(node).isTerminal(fd);
+            else throw new RuntimeFault("Invalid original stdio status operation");
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }

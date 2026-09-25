@@ -1364,11 +1364,15 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
                     val result = destination.single()
-                    if (originalStdio == OriginalStdioOp.ERRNO) b.beginOriginalStdioErrno(result)
-                    else b.beginOriginalStdioWrite(result)
+                    val status = originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY
+                    if (status) b.beginOriginalStdioStatus(result, originalStdio)
+                    else b.beginOriginalStdioTransfer(result,
+                        originalStdio == OriginalStdioOp.READ_SAFE || originalStdio == OriginalStdioOp.READ_UNSAFE)
+                    // errno's original ABI has only State#. This internal zero
+                    // fills the shared instruction's unused typed descriptor lane.
+                    if (originalStdio == OriginalStdioOp.ERRNO) b.emitLoadConstant(0L)
                     operands.forEach { it.emit(e) }
-                    if (originalStdio == OriginalStdioOp.ERRNO) b.endOriginalStdioErrno()
-                    else b.endOriginalStdioWrite()
+                    if (status) b.endOriginalStdioStatus() else b.endOriginalStdioTransfer()
                 }
             } else if (managedFile != null) {
                 CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
