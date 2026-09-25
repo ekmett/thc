@@ -21,6 +21,8 @@ extra-source-files:
   compiler/test-fixtures/InterfaceForeignAlias.hs
   compiler/test-fixtures/ForeignExportSignatures.hs
   compiler/test-fixtures/ForeignExportManaged.hs
+  compiler/test-fixtures/ForeignExportRegistration.hs
+  compiler/test-fixtures/RegistrationNative.hs
   compiler/test-fixtures/ManagedExportNative.hs
   scripts/check-ghc-core.hs
   test/check-ghc-core.sh

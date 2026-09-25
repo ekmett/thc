@@ -51,6 +51,9 @@ internal class ManagedExportRegistry(private val owner: Language.State, private 
             }
             synchronized(this) {
                 checkOwner()
+                @Suppress("UNCHECKED_CAST")
+                owner.foreignRoots.retain(program,
+                    plan.linked["managedRegistrations"] as List<ManagedExportAdmission>)
                 units = namespace
                 loaded = true
             }

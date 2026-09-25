@@ -25,7 +25,7 @@ import qualified GHC.Unit.Module.WholeCoreBindings as ForeignCore
 import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist, renameFile)
 import System.Exit (die)
 import System.FilePath ((</>), takeDirectory)
-import FixtureSupport (CommandResult, runLogged, writeJson)
+import FixtureSupport (CommandResult(..), runLogged, writeJson)
 import THC.Interface
 import THC.Plugin (serializePostTidyCoreWithAnnotations)
 
@@ -143,11 +143,12 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
                   ("static-signatures", "ForeignExportSignatures", "unused"),
                   ("foreign-file", "InterfaceForeign", "unused"),
                   ("instrumented", "InterfaceForeignAlias", "thc_interface_instrumented"),
-                  ("managed", "ForeignExportManaged", "unused")]
+                  ("managed", "ForeignExportManaged", "unused"),
+                  ("registration", "ForeignExportRegistration", "unused")]
       sourceFor name = directory </> "typed-export-source" </> name ++ ".hs"
   createDirectoryIfMissing True (root </> directory </> "typed-export-source")
   mapM_ (\name -> copyFile (root </> "compiler/test-fixtures" </> name ++ ".hs") (root </> sourceFor name))
-    ["InterfaceForeignAlias", "ForeignExportSignatures", "InterfaceForeign", "ForeignExportManaged"]
+    ["InterfaceForeignAlias", "ForeignExportSignatures", "InterfaceForeign", "ForeignExportManaged", "ForeignExportRegistration"]
   commands <- forM variants $ \(variant, name, symbol) -> do
     let output = directory </> "typed-foreign-exports" </> variant
     createDirectoryIfMissing True (root </> output)
@@ -179,8 +180,16 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
      "-odir", managed, "-hidir", managed, "compiler/test-fixtures/ManagedExportNative.hs",
      managed </> "ForeignExportManaged.o", "-o", managed </> "oracle"]
   nativeResult <- nativeRun "native-oracle" (root </> managed </> "oracle") []
+  let registration = directory </> "typed-foreign-exports/registration"
+  registrationBuild <- nativeRun "registration-native-build" ghc
+    ["--make", "-O2", "-fforce-recomp", "-i", "-package-db", registration </> "package.conf.d", "-package-id", unitName,
+     "-odir", registration, "-hidir", registration, "compiler/test-fixtures/RegistrationNative.hs",
+     registration </> "ForeignExportRegistration.o", "-o", registration </> "oracle"]
+  registrationResult <- nativeRun "registration-native-oracle" (root </> registration </> "oracle") []
+  check (BSC.words (commandStdout registrationResult) == [BSC.pack "7"])
+    "Original registered native StablePtr callback did not run its action"
   mapM_ (\name -> renameFile (root </> sourceFor name) (root </> sourceFor name ++ ".saved"))
-    ["InterfaceForeignAlias", "ForeignExportSignatures", "InterfaceForeign", "ForeignExportManaged"]
+    ["InterfaceForeignAlias", "ForeignExportSignatures", "InterfaceForeign", "ForeignExportManaged", "ForeignExportRegistration"]
   records <- forM variants $ \(variant, name, _) -> runGhc (Just libdir) $ do
     initial <- getSessionDynFlags
     initialEnv <- getSession
@@ -217,6 +226,10 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
         (field "expectedForeign" provenance == field "foreign" value && field "expectedExports" provenance == metadata &&
          field "wordBits" provenance == Number 64)
         "Verified registration lost its exact retained product or native word width"
+      if variant /= "registration" then pure () else check
+        (field "profile" provenance == String "ghc-9.14.1-thc-only-native-static-ccall-imports-v2" &&
+         length (entries metadata) == 2)
+        "Direct-import registration lost its distinct verified profile or export roots"
       if variant /= "static-signatures" then pure () else do
         let constructorIds = case field "constructors" value of
               Array values -> map (field "id") (toList values)
@@ -247,7 +260,7 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
       writeJson (root </> directory </> "typed-foreign-exports" </> variant ++ ".json") value
       pure (metadata, provenance)
   case records of
-    [(first, _), (second, _), (signatures, _), (staticSignatures, _), _, _, (managedSignatures, _)] -> do
+    [(first, _), (second, _), (signatures, _), (staticSignatures, _), _, _, (managedSignatures, _), _] -> do
       let a = singleExport first
           b = singleExport second
           allSignatures = entries signatures
@@ -286,7 +299,7 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
          "retainedRegistrationControls" .= map snd records,
          "changedProductControls" .= (["header", "body", "initializer", "finalizer"] :: [String])])
     _ -> die "Expected typed alias and signature controls"
-  pure (concat commands ++ [nativeBuild, nativeResult])
+  pure (concat commands ++ [nativeBuild, nativeResult, registrationBuild, registrationResult])
   where
     field key (Object fields) = maybe Null id (KeyMap.lookup key fields)
     field _ _ = Null

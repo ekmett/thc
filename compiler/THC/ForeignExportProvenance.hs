@@ -16,7 +16,7 @@ import GHC.Plugins
 import GHC.Cmm.CLabel (CStubLabel(..))
 import GHC.Data.OrdList (fromOL)
 import GHC.Driver.Hooks
-import GHC.Hs (ForeignDecl(..), ForeignExport(..))
+import GHC.Hs (ForeignDecl(..), ForeignExport(..), ForeignImport(..), CImportSpec(..))
 import GHC.HsToCore.Foreign.Decl (dsForeigns)
 import GHC.HsToCore.Monad (initDsTc)
 import GHC.Platform (Arch(..), platformArch)
@@ -24,7 +24,7 @@ import GHC.Platform.Profile (profileIsProfiling)
 import GHC.Tc.Types (TcGblEnv(..), TcM)
 import GHC.Tc.Utils.Monad (getTopEnv, setGblEnv, updTopEnv)
 import GHC.Types.Error (isEmptyMessages)
-import GHC.Types.ForeignCall (CExportSpec(..), CCallConv(..))
+import GHC.Types.ForeignCall (CExportSpec(..), CCallConv(..), CCallTarget(..))
 import qualified GHC.Unit.Module.WholeCoreBindings as Foreign
 import THC.ForeignExports (ExportName(..))
 
@@ -38,7 +38,7 @@ data RegistrationProof = RegistrationProof Int String String Evidence deriving D
 data Provenance
   = UnknownProvenance String
   | RejectedProvenance String
-  | VerifiedRetainedRegistration [ExportName]
+  | VerifiedRetainedRegistration Int [ExportName]
 
 productOf :: Foreign.IfaceForeign -> Product
 productOf (Foreign.IfaceForeign stubs files) = Product (fmap stub stubs) (map file files)
@@ -81,7 +81,10 @@ recordProvenance options environment
       pendingPlugins <- liftIO (readIORef (tcg_th_coreplugins environment))
       let flags = hsc_dflags top
           native = platformArch (targetPlatform flags) `elem` [ArchX86_64, ArchAArch64]
-          roots = traverse staticRoot (tcg_fords environment)
+          declarations = tcg_fords environment
+          exports = [declaration | declaration@(L _ ForeignExport {}) <- declarations]
+          roots = if all classified declarations then traverse staticRoot exports else Nothing
+          version = if length exports == length declarations then 1 else 2
           allowed = native && not (profileIsProfiling (targetProfile flags)) &&
             not (gopt Opt_Hpc flags) && not (gopt Opt_InfoTableMap flags)
       evidence <- if "foreign-export-associations" `notElem` options
@@ -94,11 +97,13 @@ recordProvenance options environment
             Just orderedRoots -> setGblEnv environment $ do
               before <- liftIO (readIORef (tcg_th_foreign_files environment))
               -- The exported entry delegates to GHC's private stock emitter
-              -- when this one hook is locally absent. Static ccall exports do
-              -- not allocate wrapper uniques or produce extra Core bindings.
+              -- when this one hook is locally absent. Probe only exports:
+              -- direct ccall imports have no C products but allocate Core
+              -- worker uniques. The entire real product must still equal this
+              -- export-only product when the interface is recovered.
               (messages, result) <- initDsTc $ updTopEnv
                 (\hsc -> hsc { hsc_hooks = (hsc_hooks hsc) { dsForeignsHook = Nothing } })
-                (dsForeigns (tcg_fords environment))
+                (dsForeigns exports)
               after <- liftIO (readIORef (tcg_th_foreign_files environment))
               unless (before == after) (liftIO (ioError (userError "THC stock foreign-export probe changed foreign files")))
               case result of
@@ -107,7 +112,7 @@ recordProvenance options environment
                   pure (StockProduct orderedRoots (productOf original))
                 _ -> pure (Unclassified "stock-export-emitter-did-not-complete-cleanly")
       let owner = tcg_mod environment
-          proof = RegistrationProof 1 (unitString (moduleUnit owner)) (moduleNameString (moduleName owner)) evidence
+          proof = RegistrationProof version (unitString (moduleUnit owner)) (moduleNameString (moduleName owner)) evidence
       pure environment { tcg_anns = tcg_anns environment ++
         [Annotation (ModuleTarget owner) (toSerialized serializeWithData proof)] }
   where
@@ -117,6 +122,10 @@ recordProvenance options environment
       pure (ExportName (unitString (moduleUnit owner)) (moduleNameString (moduleName owner))
         (occNameString (nameOccName (varName binder))) "value")
     staticRoot _ = Nothing
+    classified (L _ ForeignExport {}) = True
+    classified (L _ ForeignImport { fd_fi = CImport _ (L _ CCallConv) _ Nothing
+        (CFunction (StaticTarget _ _ _ True)) }) = True
+    classified _ = False
 
 -- Compare the entire archived product, including the exact ordered lifecycle
 -- labels and all foreign files. A prefix, matching symbol or matching label is
@@ -126,7 +135,7 @@ inspectProvenance :: Module -> [Annotation] -> Maybe [ExportName] -> Foreign.Ifa
 inspectProvenance owner annotations roots original = case proofs of
   [] -> Right (UnknownProvenance "missing-registration-provenance")
   [RegistrationProof version unit modName evidence]
-    | version /= 1 || unit /= unitString (moduleUnit owner) || modName /= moduleNameString (moduleName owner) ->
+    | version `notElem` [1,2] || unit /= unitString (moduleUnit owner) || modName /= moduleNameString (moduleName owner) ->
         Left "foreign-export registration proof version/owner mismatch"
     | otherwise -> Right $ case evidence of
         Unclassified reason -> UnknownProvenance reason
@@ -134,7 +143,7 @@ inspectProvenance owner annotations roots original = case proofs of
           | roots /= Just orderedRoots -> RejectedProvenance "typed-export-roots-differ"
           | Product _ files <- productOf original, not (null files) -> RejectedProvenance "additional-foreign-files"
           | productOf original /= expected -> RejectedProvenance "retained-foreign-product-differs"
-          | otherwise -> VerifiedRetainedRegistration orderedRoots
+          | otherwise -> VerifiedRetainedRegistration version orderedRoots
   _ -> Left "duplicate foreign-export registration proofs"
   where
     proofs = [proof | Annotation (ModuleTarget target) serialized <- annotations, target == owner,

@@ -46,7 +46,10 @@ import java.util.concurrent.atomic.AtomicReference
  */
 object CoreModules {
     @Suppress("UNCHECKED_CAST")
-    fun merge(modules: List<Map<String, Any?>>): Map<String, Any?> = merge(modules, emptyList())
+    fun merge(modules: List<Map<String, Any?>>): Map<String, Any?> = merge(modules, modules.mapNotNull {
+        if ((it["schema"] == 2L || it["schema"] == 2) && it.containsKey("staticForeignExportRegistration") &&
+            CoreForeignArtifacts.hasRegistrationObligations(it)) ManagedExportAdmission.read(it) else null
+    })
 
     internal fun mergeManagedExports(modules: List<Map<String, Any?>>, admissions: List<ManagedExportAdmission>): Map<String, Any?> =
         merge(modules, admissions)
@@ -118,6 +121,7 @@ object CoreModules {
             "bindings" to bindings.values.toList(), "constructors" to constructors.values.toList(),
             "bindingOrigins" to bindingOrigins,
             "archiveBindings" to archiveBindings,
+            "managedRegistrations" to admissions,
             "foreignLinks" to foreignLinks.values.toList(),
             "sourceFiles" to sourceFiles.values.toList(), "sourceSpans" to sourceSpans.values.toList())
     }
@@ -188,11 +192,15 @@ object CoreModules {
                 "con" -> constructor(expr[1] as String)
             }
         }
-        for (entry in entries) {
+        // Constructing a retained closure still requires a supported body. This
+        // validates its dependencies; registration never invokes it.
+        val registrations = module["managedRegistrations"] as? List<ManagedExportAdmission> ?: emptyList()
+        val roots = (entries + registrations.flatMap { it.exports }.map { it.binder }).distinct()
+        for (entry in roots) {
             val exact = byId[entry]
-            val roots = if (exact != null) listOf(exact) else bindings.filter { it["name"] == entry }
-            require(roots.size == 1) { "Missing or ambiguous entry: $entry" }
-            val root = roots.single()["id"] as String
+            val matches = if (exact != null) listOf(exact) else bindings.filter { it["name"] == entry }
+            require(matches.size == 1) { "Missing or ambiguous entry: $entry" }
+            val root = matches.single()["id"] as String
             if (reachable.add(root)) pending.addLast(root)
         }
         while (pending.isNotEmpty()) {
@@ -274,6 +282,7 @@ class Language : TruffleLanguage<Language.State>() {
     internal val handoffState = locals.createContextThreadLocal { _, _ -> thc.runtime.HandoffState() }
     class State(val env: Env, language: Language) {
         internal val managedExports = ManagedExportRegistry(this, language)
+        internal val foreignRoots = ManagedForeignRoots(this)
         internal val handoffLayouts = thc.runtime.HandoffLayouts(language)
         internal val javaScriptImports = thc.runtime.JavaScriptImports()
         internal val maskingState = ThreadLocal.withInitial { thc.runtime.MaskingState.UNMASKED }
@@ -360,6 +369,7 @@ class Language : TruffleLanguage<Language.State>() {
     override fun finalizeContext(context: State) { context.iconv.dispose() }
     override fun disposeContext(context: State) {
         context.managedExports.close()
+        context.foreignRoots.close()
         try {
             try { context.threads.close() } finally {
                 try { context.capturedAsyncRequests.close() } finally {
@@ -409,7 +419,6 @@ class Language : TruffleLanguage<Language.State>() {
             "diagnosticUnsupported" to (input["diagnosticUnsupported"] == true),
             "sourceNotesEnabled" to (input["sourceNotesEnabled"] != false)) +
             (if (layout == null) emptyMap() else mapOf("targetLayout" to layout))
-        (linked["foreignLinks"] as List<ForeignBitcode>).forEach { currentState(null).cbits().link(it) }
         val bindings = linked["bindings"] as List<Map<String, Any?>>
         val selected = bindings.singleOrNull { it["id"] == entry } ?: bindings.single { it["name"] == entry }
         val selectedExpression = selected["expr"] as List<Any?>
@@ -435,15 +444,22 @@ class Language : TruffleLanguage<Language.State>() {
             if (input["diagnosticUnsupported"] != true) throw gap
             gap.message
         }
-        val program = when (val backend = input["backend"] ?: defaultBackend()) {
-            "ast" -> Program(this, linked)
-            "bytecode" -> BytecodeProgram(this, linked, true)
-            else -> throw IllegalArgumentException("Unknown THC backend: $backend")
-        }
-        val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), hostResultFault, ioResult, this,
-            shutdownEntry, shutdownResult)
+        val backend = input["backend"] ?: defaultBackend()
+        require(backend == "ast" || backend == "bytecode") { "Unknown THC backend: $backend" }
+        val registrations = linked["managedRegistrations"] as List<ManagedExportAdmission>
         return object : RootNode(this) {
-            override fun execute(frame: VirtualFrame): Any = value
+            override fun execute(frame: VirtualFrame): Any {
+                // Parsed roots can be shared by an Engine. Programs, CAFs and
+                // registration roots belong to the Context executing the load.
+                val owner = currentState(this)
+                (linked["foreignLinks"] as List<ForeignBitcode>).forEach { owner.cbits().link(it) }
+                val program = if (backend == "ast") Program(this@Language, linked)
+                    else BytecodeProgram(this@Language, linked, true)
+                val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), hostResultFault,
+                    ioResult, this@Language, shutdownEntry, shutdownResult)
+                owner.foreignRoots.retain(program, registrations)
+                return value
+            }
             override fun getName(): String = "THC load $entry"
         }.callTarget
     }
