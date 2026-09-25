@@ -3767,6 +3767,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedWord32X8Insert(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X8Insert()
         }, GeneratedVectors.proofWord32X8)
+        "minWord32X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X8Min(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X8Min()
+        }, GeneratedVectors.proofWord32X8)
+        "maxWord32X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X8Max(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X8Max()
+        }, GeneratedVectors.proofWord32X8)
         "packInt32X8#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()

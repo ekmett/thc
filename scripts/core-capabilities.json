@@ -801,6 +801,8 @@
     "plusWord32X8#": 2,
     "minusWord32X8#": 2,
     "timesWord32X8#": 2,
+    "minWord32X8#": 2,
+    "maxWord32X8#": 2,
     "packInt32X8#": 1,
     "unpackInt32X8#": 1,
     "broadcastInt32X8#": 1,

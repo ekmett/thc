@@ -121,7 +121,7 @@ class SimdFamiliesTest(unittest.TestCase):
 
     def test_exact_machine_contracts_and_recursive_lanes(self):
         families = GEN.families()
-        self.assertEqual(152, len(GEN.contracts(families)))
+        self.assertEqual(154, len(GEN.contracts(families)))
         for family in families:
             for operation in family['operations']:
                 name = operation + family['name'] + '#'
@@ -181,7 +181,7 @@ class SimdFamiliesTest(unittest.TestCase):
                 self.assertEqual(signed(high + 17), result(family, 'max', lane, a, b))
 
     def test_unsigned_min_max_select_high_bit_lanes(self):
-        for name in ('Word8X16', 'Word16X8', 'Word32X4'):
+        for name in ('Word8X16', 'Word16X8', 'Word32X4', 'Word32X8'):
             family = next(f for f in GEN.families() if f['name'] == name)
             width = family['bits'] // family['lanes']
             high = (1 << width) - 1
@@ -192,6 +192,10 @@ class SimdFamiliesTest(unittest.TestCase):
                 a, b = (1 << (width - 1)) - lane * 104729, (high >> 1) + lane * 7919
                 self.assertEqual((high >> 1) + 17, result(family, 'min', lane, a, b))
                 self.assertEqual((1 << (width - 1)) + 17, result(family, 'max', lane, a, b))
+            if name == 'Word32X8':
+                source = GEN.carrier(family)
+                self.assertIn('VectorOperators.UMIN', source)
+                self.assertIn('VectorOperators.UMAX', source)
 
     def test_smoke_composites_bound_compilation_work_and_cover_every_selector(self):
         families = GEN.families()
