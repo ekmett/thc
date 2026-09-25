@@ -7,6 +7,7 @@ package thc.runtime
 internal class CoreFields(info: Map<String, Any?>) {
     val storage: Array<String>
     val referenceTypes: Array<Class<*>?>
+    val vectorProofs: Array<CoreRepresentation?>
 
     init {
         val id = info["id"]
@@ -33,6 +34,9 @@ internal class CoreFields(info: Map<String, Any?>) {
         // AddrRep has one managed carrier even in older exports lacking fieldTypes.
         // It must never become a generic reference property or a native pointer.
         referenceTypes = Array(arity) { if (storage[it] == "AddrRep") ManagedAddress::class.java else null }
+        vectorProofs = arrayOfNulls(arity)
+        if (storage.any { it.startsWith("VecRep ") } && !info.containsKey("fieldTypes"))
+            throw UnsupportedCore("Vector constructor field requires exact logical metadata: $id")
         for (index in storage.indices) if (storage[index] == "AddrRep") {
             if (info.containsKey("fieldLifted")) {
                 val lifted = info["fieldLifted"] as? List<*>
@@ -49,7 +53,10 @@ internal class CoreFields(info: Map<String, Any?>) {
                 throw RuntimeFault("Constructor field type count mismatch: $id")
             for (index in types.indices) {
                 val proof = CoreRepresentations.parse(types[index])
-                CoreRepresentations.requireScalar(proof, "constructor field")
+                if (proof.isVector) {
+                    VectorLayout.validate(proof)
+                    vectorProofs[index] = proof
+                } else CoreRepresentations.requireScalar(proof, "constructor field")
                 if (!proof.present || proof.primReps != reps[index])
                     throw RuntimeFault("Constructor field type disagrees with its primitive representation: $id field $index")
                 if (storage[index] == "AddrRep" && proof.kind != CoreKind.ADDRESS)
