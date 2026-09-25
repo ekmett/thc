@@ -83,6 +83,9 @@ object CoreModules {
         private val moduleKeys = hashSetOf<Pair<String, String>>()
         @Suppress("UNCHECKED_CAST")
         fun add(module: Map<String, Any?>, admission: ManagedExportAdmission? = CoreModules.admission(module)) {
+            require(admission == null || admission.module === module) {
+                "Managed export admission belongs to a different Core module"
+            }
             count++
             if (admission != null) admissions.add(admission)
             CoreForeignArtifacts.validateArchive(module)

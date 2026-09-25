@@ -89,6 +89,12 @@ class ManagedExportsNativeTest {
     @Test fun exactArchiveAdmissionAndScalarHostProtocolsStaySeparate() {
         val source = original()
         ManagedExportPlan.read(request(source))
+        val ticket = ManagedExportAdmission.read(source)
+        val equivalent = LinkedHashMap(source)
+        assertNotSame(source, equivalent)
+        assertThrows(IllegalArgumentException::class.java) {
+            CoreModules.Merger().add(equivalent, ticket)
+        }
         val registered = CoreModules.merge(listOf(source))
         assertEquals(1, (registered["managedRegistrations"] as List<*>).size)
         fun reject(changed: Map<String, Any?>) {
