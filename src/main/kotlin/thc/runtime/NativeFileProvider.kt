@@ -128,7 +128,52 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
             3 -> setOf(StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.CREATE)
             else -> throw IllegalArgumentException("Invalid native open mode")
         }
-        return opened(path, NativeOpenRequest(null, options) { acquireFile(it!!, mode) }, options)
+        return opened(path, NativeOpenRequest(null, options) { acquireFile(it!!.toString(), mode) }, options)
+    }
+
+    /** The public path is only the fixed provider's dispatch/CWD anchor. Guest
+     * pathname bytes never pass through String or a charset decoder. */
+    fun openRaw(path: ByteArray, flags: Int, mode: Long): OpenedNativeFile {
+        val abi = StdioHostAbi.load()
+        val readable = abi.openReadable(flags.toLong())
+        val writable = abi.openWritable(flags.toLong())
+        val options: Set<OpenOption> = emptySet()
+        return opened(".", NativeOpenRequest(null, options) { anchor ->
+            val bytes = absoluteRawPath(anchor!!, path)
+            acquire(readable, writable) { lease -> NativeLimbScope().use { scope ->
+                val name = scope.allocate((bytes.size.toLong() + 7) and -8L)
+                name.copyFrom(bytes, 0, bytes.size)
+                result("open_raw", lease, name, flags, mode.toInt())
+            } }
+        }, options)
+    }
+
+    private fun absoluteRawPath(anchor: java.nio.file.Path, path: ByteArray): ByteArray {
+        check(path.isNotEmpty() && path.last() == 0.toByte() && path.dropLast(1).none { it == 0.toByte() })
+        // Empty names must remain empty (native ENOENT), not become the anchor.
+        if (path.size == 1 || path[0] == '/'.code.toByte()) return path
+        val uri = anchor.toUri()
+        check(uri.scheme == "file" && uri.rawAuthority.isNullOrEmpty() && uri.rawQuery == null && uri.rawFragment == null)
+        // The Linux default Path's public URI percent-encodes its underlying
+        // bytes, including invalid UTF-8. Do not normalize guest ./.. segments.
+        val raw = uri.rawPath
+        val bytes = java.io.ByteArrayOutputStream()
+        var i = 0
+        while (i < raw.length) {
+            val c = raw[i++]
+            if (c == '%') {
+                check(i + 1 < raw.length)
+                val high = raw[i++].digitToIntOrNull(16) ?: fault("Invalid native path URI")
+                val low = raw[i++].digitToIntOrNull(16) ?: fault("Invalid native path URI")
+                bytes.write((high shl 4) or low)
+            } else {
+                check(c.code in 1..127)
+                bytes.write(c.code)
+            }
+        }
+        val base = bytes.toByteArray()
+        check(base.isNotEmpty() && base[0] == '/'.code.toByte() && base.none { it == 0.toByte() })
+        return base + (if (base.last() == '/'.code.toByte()) byteArrayOf() else byteArrayOf('/'.code.toByte())) + path
     }
 
     /** Explicit endpoint grants duplicate process endpoints into owned resources.

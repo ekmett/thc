@@ -205,6 +205,46 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertTrue(fast_fixtures.fast_inputs.ORIGINAL_RTS_LOCK_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         self.assertIn('"original-rts-locks/**/*.json"', (project / 'build.gradle.kts').read_text())
 
+    def test_original_open_exact_registration_and_closed_manifest(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['original-open']
+        self.assertEqual('original-open', owners['thc.runtime.OriginalOpenTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-open']}], group['commands'])
+        self.assertEqual(['build/original-open'], group['outputs'])
+        self.assertTrue(all((project / name).is_file() for name in group['sources']))
+        self.assertIn('"$fixture_bin" original-open', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/original-open', fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertIn('"original-open/**/*.json"', (project / 'build.gradle.kts').read_text())
+        name = 'build/original-open/manifest.json'
+        artifacts = {}
+        for artifact in fast_fixtures.fast_inputs.ORIGINAL_OPEN_OUTPUTS - {name}:
+            path = self.root / artifact; path.parent.mkdir(parents=True, exist_ok=True); path.write_text('{}\n')
+            artifacts[artifact] = fast_fixtures._digest(path)
+        receipt = dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
+                       installedArtifactsHashed=False, nativeRows=13, artifactHashes=artifacts)
+        path = self.root / name
+        with mock.patch.object(fast_fixtures.fast_inputs, 'GMP_NATIVE_HOST', True):
+            path.write_text(json.dumps(receipt))
+            self.assertEqual(fast_fixtures.fast_inputs.ORIGINAL_OPEN_OUTPUTS,
+                             fast_fixtures._output_hashes(self.root, group).keys())
+            for key, value in (('schema', True), ('supported', False), ('strictAccepted', False),
+                               ('runtimeVerified', True), ('installedArtifactsHashed', True), ('nativeRows', True), ('nativeRows', 12)):
+                path.write_text(json.dumps(dict(receipt, **{key: value})))
+                with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+            for change in ('unknown', 'missing', 'changed', 'symlink'):
+                path.write_text(json.dumps(receipt))
+                artifact = self.root / 'build/original-open/pre/core/OriginalOpenAudit.json'
+                if artifact.is_symlink(): artifact.unlink()
+                artifact.write_text('{}\n')
+                if change == 'unknown':
+                    path.write_text(json.dumps(dict(receipt, artifactHashes=dict(artifacts, **{'build/original-open/extra.json': '0'*64}))))
+                elif change == 'missing': artifact.unlink()
+                elif change == 'changed': artifact.write_text('changed')
+                else: artifact.unlink(); artifact.symlink_to(path)
+                with self.assertRaises((RuntimeError, FileNotFoundError)): fast_fixtures._output_hashes(self.root, group)
+
     def test_rts_lock_selected_receipt_requires_complete_strict_unchanged_artifacts(self):
         project = Path(__file__).resolve().parents[2]
         group = fast_fixtures._manifest(project)[0]['groups']['original-rts-locks']

@@ -125,6 +125,7 @@ tasks.withType<Test>().configureEach {
             "original-stdio-truncate/native/**", "original-stdio-truncate/logs/*.stdout", "original-stdio-truncate/logs/*.stderr",
             "original-fd-ready/**/*.json", "original-fd-ready/native/oracle", "original-fd-ready/native/private-file",
             "original-rts-locks/**/*.json", "original-rts-locks/logs/*.stdout", "original-rts-locks/logs/*.stderr",
+            "original-open/**/*.json", "original-open/logs/*.stdout", "original-open/logs/*.stderr", "original-open/native/oracle",
             "original-fd-ready/logs/*.stdout", "original-fd-ready/logs/*.stderr",
             "original-iconv/**/*.json", "original-iconv/native/oracle",
             "original-iconv/logs/*.stdout", "original-iconv/logs/*.stderr",
@@ -379,14 +380,14 @@ val generateStdioAbi by tasks.registering {
         val executable = temporaryDir.resolve("stdio-abi-probe")
         run(command + listOf("-std=c11", source.path, "-o", executable.path))
         val probe = JsonSlurper().parseText(run(listOf(executable.path))) as Map<*, *>
-        require(probe.keys == setOf("widths", "errno", "seek")) { "Malformed native stdio ABI probe" }
+        require(probe.keys == setOf("widths", "errno", "seek", "open")) { "Malformed native stdio ABI probe" }
         // The C probe asserts widths; runtime Kotlin validates all exact fields and errno values.
         val manifest = linkedMapOf<String, Any?>("schema" to 1, "system" to system,
             "architecture" to arch, "target" to target, "compilerDefaultTarget" to defaultTarget,
             "compilerVersion" to run(listOf(compiler, "--version")),
             "sourceSha256" to MessageDigest.getInstance("SHA-256").digest(source.readBytes())
                 .joinToString("") { "%02x".format(it) },
-            "widths" to probe["widths"], "errno" to probe["errno"], "seek" to probe["seek"])
+            "widths" to probe["widths"], "errno" to probe["errno"], "seek" to probe["seek"], "open" to probe["open"])
         val destination = output.get().asFile.resolve("thc/native/stdio-host-abi.json")
         destination.parentFile.mkdirs()
         destination.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n")

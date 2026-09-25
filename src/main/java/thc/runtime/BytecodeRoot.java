@@ -884,13 +884,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     // below the BytecodeDSL partition limit; the direction is constant during PE.
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    @ConstantOperand(type = boolean.class, name = "reading")
+    @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
     public static final class OriginalStdioTransfer {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination, boolean reading,
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination, OriginalStdioOp operation,
                 long fd, ManagedAddress address, long count, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             ManagedStdio stdio = CoreOriginalStdio.current(node);
-            long result = reading ? stdio.read(fd, address, count) : stdio.write(fd, address, count);
+            long result;
+            if (operation == OriginalStdioOp.OPEN) result = stdio.open(address, fd, count);
+            else if (operation == OriginalStdioOp.READ_SAFE || operation == OriginalStdioOp.READ_UNSAFE)
+                result = stdio.read(fd, address, count);
+            else result = stdio.write(fd, address, count);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }

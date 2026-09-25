@@ -13,10 +13,19 @@
 // The fd slot belongs to a host lease allocated before acquisition. Once stored,
 // host cleanup can close it without re-entering LLVM. Cancellation between libc
 // acquisition and the slot store has not been proved safe by this checkpoint.
-_Static_assert(sizeof(int) == 4 && sizeof(off_t) == 8 && sizeof(size_t) == 8,
+_Static_assert(sizeof(int) == 4 && sizeof(off_t) == 8 && sizeof(size_t) == 8 && sizeof(mode_t) == 4,
                "native files require the Linux LP64 ABI");
 
 int64_t thc_file_stat_size(void) { return sizeof(struct stat); }
+
+// Original unsafe open transport: no added flags, path decoding, type filter,
+// retry, truncation deferral or RTS locking. The caller reserved its guest fd.
+int64_t thc_file_open_raw(int *lease, const char *path, int flags, uint32_t mode, int64_t *error) {
+  int fd = open(path, flags, (mode_t)mode);
+  *error = fd < 0 ? errno : 0;
+  if (fd >= 0) *lease = fd;
+  return fd < 0 ? -1 : 0;
+}
 
 int64_t thc_file_open(int *lease, const char *path, int mode, int64_t *error) {
   int flags;
