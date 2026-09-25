@@ -996,7 +996,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             TupleResultsKt.requireVoidCarrier(state);
             ManagedStdio stdio = CoreOriginalStdio.current(node);
             long result;
-            if (operation == OriginalStdioOp.OPEN) result = stdio.open(address, fd, count);
+            if (operation.getOpening()) result = stdio.open(address, fd, count, operation, node);
             else if (operation == OriginalStdioOp.TCSETATTR) result = stdio.tcsetattr(fd, count, address);
             else if (operation == OriginalStdioOp.READ_SAFE || operation == OriginalStdioOp.READ_UNSAFE)
                 result = stdio.read(fd, address, count);

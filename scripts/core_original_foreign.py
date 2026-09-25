@@ -93,7 +93,7 @@ OPERATIONS = {
        for symbol, (arguments, output) in GMP_OPERATIONS.items()},
     '__hscore_sizeof_stat': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
     '__hscore_fstat': ('ccall', 'unsafe', ('Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),
-    '__hscore_open': ('ccall', 'unsafe', ('AddrRep', 'Int32Rep', 'Word32Rep', None), (None, 'Int32Rep')),
+    '__hscore_open': ('ccall', ('unsafe', 'safe', 'interruptible'), ('AddrRep', 'Int32Rep', 'Word32Rep', None), (None, 'Int32Rep')),
     'lockFile': ('ccall', 'unsafe', ('Word64Rep', 'Word64Rep', 'Word64Rep', 'Int32Rep', None), (None, 'Int32Rep')),
     'unlockFile': ('ccall', 'unsafe', ('Word64Rep', None), (None, 'Int32Rep')),
     '__hscore_st_dev': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Word64Rep')),

@@ -532,14 +532,16 @@ class FixturePreparationTest(unittest.TestCase):
             path = self.root / artifact; path.parent.mkdir(parents=True, exist_ok=True); path.write_text('{}\n')
             artifacts[artifact] = fast_fixtures._digest(path)
         receipt = dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
-                       installedArtifactsHashed=False, nativeRows=13, artifactHashes=artifacts)
+                       installedArtifactsHashed=False, nativeRows=13, nativeVariants=["unsafe", "safe", "interruptible"],
+                       ownedRequestControls=True, artifactHashes=artifacts)
         path = self.root / name
         with mock.patch.object(fast_fixtures.fast_inputs, 'GMP_NATIVE_HOST', True):
             path.write_text(json.dumps(receipt))
             self.assertEqual(fast_fixtures.fast_inputs.ORIGINAL_OPEN_OUTPUTS,
                              fast_fixtures._output_hashes(self.root, group).keys())
             for key, value in (('schema', True), ('supported', False), ('strictAccepted', False),
-                               ('runtimeVerified', True), ('installedArtifactsHashed', True), ('nativeRows', True), ('nativeRows', 12)):
+                               ('runtimeVerified', True), ('installedArtifactsHashed', True), ('nativeRows', True), ('nativeRows', 12),
+                               ('nativeVariants', ['unsafe']), ('ownedRequestControls', False)):
                 path.write_text(json.dumps(dict(receipt, **{key: value})))
                 with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
             for change in ('unknown', 'missing', 'changed', 'symlink'):

@@ -1507,7 +1507,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio == OriginalStdioOp.OPEN ||
+                        if (originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio.opening ||
                             originalStdio.iconv || originalStdio.strerror || originalStdio.duplication || originalStdio.locking)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
@@ -1521,7 +1521,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     // OPEN declares Addr#, CInt, Word32, State. Preserve that
                     // evaluation order while sharing the transfer instruction's
                     // long/address/long lanes (no extra BytecodeDSL family).
-                    val openPath = if (originalStdio == OriginalStdioOp.OPEN)
+                    val openPath = if (originalStdio.opening)
                         b.createLocal("original open path", "object").also {
                             b.beginStoreLocal(it); operands[0].emit(e); b.endStoreLocal()
                         } else null
@@ -1552,7 +1552,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     else b.beginOriginalStdioTransfer(result, originalStdio)
                     // errno and seek constants have only State#. This internal zero
                     // fills the shared instruction's unused typed descriptor lane.
-                    if (originalStdio == OriginalStdioOp.OPEN) {
+                    if (originalStdio.opening) {
                         operands[1].emit(e); b.emitLoadLocal(openPath!!)
                         operands[2].emit(e); operands[3].emit(e)
                     } else if (originalStdio == OriginalStdioOp.TCSETATTR) {

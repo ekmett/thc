@@ -111,13 +111,25 @@ admission claims **nor** original RTS locks. Subsequent private opens continue
 their separate policy; original `lockFile`/`unlockFile` calls govern only the
 independent RTS table. Raw close and dup2 never implicitly release RTS entries.
 
-Guest throwTo delivery is deferred within the synchronous foreign scope and the
-completed descriptor result is saved before the next guest cut. The FIFO tests
-cover pending reservation, a queued request, and completion before a manual
-guest poll, not compiled interrupted-continuation replay. Forced host cancellation
-between libc open and its lease store remains unproved; safe/interruptible
-acquisition is not inferred from rollback. Nonregular raw descriptors do not gain
-a general readiness or terminal service.
+Guest throwTo delivery is deferred within the foreign scope and the completed
+descriptor result is saved before the next guest cut. Safe and interruptible
+opens use an owned native worker; only waiting for its completion can be retried.
+Safe calls leave guest requests queued. Interruptible calls can cancel a blocked
+open unless the guest is masked uninterruptibly, returning `EINTR` without
+claiming the exception. The original GHC wrapper chooses the subsequent delivery
+cut after failure. A successful syscall always retains its fd, even if
+cancellation races publication. Hard context cancellation cancels and joins the
+worker and closes any untransferred fd before releasing its lease.
+
+This request mechanism is Linux x86_64 only. It claims an unused `SIGRTMIN`
+disposition and targets only its native workers, never JVM/Sulong threads. Setup
+rejects a pre-existing owner or a later host replacement; it does not overwrite
+host handlers. The embedding host must not concurrently mutate that owned
+disposition. The handler and machine library remain installed until process exit
+and never refer to request memory. Unsafe acquisition retains its existing
+synchronous LLVM path; cancellation between its syscall and lease store remains
+unproved. Nonregular raw descriptors do not gain a general readiness or terminal
+service.
 
 Forwarding raw flags is not a claim that every subsequent descriptor operation
 already implements every Linux flag combination. In particular, O_PATH and
@@ -130,7 +142,7 @@ rejected or rewritten by open.
 
 `OriginalOpenTest` consumes genuine installed pre/post FCallIds and native GHC
 observations, checks exact first-installed entry/runRW targets on both backends,
-and rejects malformed carriers, stored proofs, safety variants and managed
+and rejects malformed carriers, stored proofs, unknown safety labels and managed
 path memory before effects. Native mode observations use umask022; JVM creation
 checks account for its read-only observed process umask without changing it.
 Directory type is compared, not filesystem-dependent directory size/permissions.

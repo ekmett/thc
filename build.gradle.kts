@@ -449,6 +449,28 @@ val compileNativeFiles by tasks.registering {
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-files")) }
 tasks.processResources { dependsOn(compileNativeFiles) }
 
+// Owned native workers and asynchronous syscall guard must run as machine code.
+val compileNativeOpenRequests by tasks.registering {
+    dependsOn("generateStdioAbi")
+    val source = layout.projectDirectory.file("src/main/c/native-open-request.c")
+    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    val output = layout.buildDirectory.dir("generated/native-open-requests")
+    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output)
+    doLast {
+        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
+            val destination = output.get().asFile.resolve("thc/native/native-open-request.so")
+            destination.parentFile.mkdirs()
+            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-pthread", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+        }
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-open-requests")) }
+tasks.processResources { dependsOn(compileNativeOpenRequests) }
+
 // Partial original sigprocmask, loaded only with explicit native authority.
 val compileNativeSignals by tasks.registering {
     dependsOn("generateStdioAbi")

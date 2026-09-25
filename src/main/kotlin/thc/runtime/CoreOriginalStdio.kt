@@ -48,6 +48,8 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     SEEK_END("ghczuwrapperZC0ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuEND", "capi", "unsafe", listOf(null), "Int32Rep"),
     CLOSE("close", "ccall", "unsafe", listOf("Int32Rep", null), "Int32Rep"),
     OPEN("__hscore_open", "ccall", "unsafe", listOf("AddrRep", "Int32Rep", "Word32Rep", null), "Int32Rep"),
+    OPEN_SAFE("__hscore_open", "ccall", "safe", listOf("AddrRep", "Int32Rep", "Word32Rep", null), "Int32Rep"),
+    OPEN_INTERRUPTIBLE("__hscore_open", "ccall", "interruptible", listOf("AddrRep", "Int32Rep", "Word32Rep", null), "Int32Rep"),
     DUP("dup", "ccall", "unsafe", listOf("Int32Rep", null), "Int32Rep"),
     DUP2("dup2", "ccall", "unsafe", listOf("Int32Rep", "Int32Rep", null), "Int32Rep"),
     SEEK("ghczuwrapperZC19ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZClseek", "capi", "unsafe",
@@ -92,6 +94,7 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     val termiosAddress: Boolean get() = this == LFLAG || this == POKE_LFLAG || this == PTR_C_CC
     val sigset: Boolean get() = this == SIGEMPTYSET || this == SIGADDSET
     val savedTermios: Boolean get() = this == GET_SAVED_TERMIOS || this == SET_SAVED_TERMIOS
+    val opening: Boolean get() = this == OPEN || this == OPEN_SAFE || this == OPEN_INTERRUPTIBLE
 }
 
 internal object CoreOriginalStdio {
@@ -113,7 +116,7 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation == OriginalStdioOp.TCSETATTR || operation == OriginalStdioOp.OPEN || operation.iconv || operation.strerror || operation.duplication || operation.locking,
+        requireProof(operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation == OriginalStdioOp.TCSETATTR || operation.opening || operation.iconv || operation.strerror || operation.duplication || operation.locking,
             "strict operand operation")
         val primitive = operation.arguments[index]
         val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }

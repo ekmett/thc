@@ -588,7 +588,9 @@ def original_open_artifact_hashes(manifest):
         return {}
     require(manifest.get("supported") is True and manifest.get("strictAccepted") is True and
             manifest.get("runtimeVerified") is False and manifest.get("installedArtifactsHashed") is False and
-            type(manifest.get("nativeRows")) is int and manifest.get("nativeRows") == 13,
+            type(manifest.get("nativeRows")) is int and manifest.get("nativeRows") == 13 and
+            manifest.get("nativeVariants") == ["unsafe", "safe", "interruptible"] and
+            manifest.get("ownedRequestControls") is True,
             "Invalid original open proof")
     artifacts = manifest.get("artifactHashes")
     require(isinstance(artifacts, dict) and set(artifacts) == ORIGINAL_OPEN_OUTPUTS - {"build/original-open/manifest.json"},

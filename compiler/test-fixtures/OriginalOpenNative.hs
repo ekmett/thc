@@ -17,6 +17,7 @@ import GHC.Ptr (Ptr(..))
 import GHC.Internal.Foreign.C.Error (Errno(..), getErrno)
 import qualified GHC.Internal.System.Posix.Internals as P
 import OriginalOpenAudit
+import OriginalOpenRequestNative (checkOpenRequests)
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory, createDirectoryLink)
 import System.Environment (getArgs)
 import System.Posix.Files (setFileCreationMask)
@@ -26,9 +27,10 @@ main = do
   [directory] <- getArgs
   createDirectoryIfMissing True (directory ++ "/sub/child")
   createDirectoryLink (directory ++ "/sub/child") (directory ++ "/link")
+  checkOpenRequests directory
   old <- getCurrentDirectory
   mask <- setFileCreationMask 0o022
-  rows <- bracket_ (setCurrentDirectory directory) (setCurrentDirectory old >> void (setFileCreationMask mask)) $ do
+  variants <- forM [originalOpen, originalOpenSafe, originalOpenInterruptible] $ \openCall -> bracket_ (setCurrentDirectory directory >> void (setFileCreationMask 0o022)) (setCurrentDirectory old >> void (setFileCreationMask mask)) $ do
     let specs = [("read", [102], P.o_RDONLY, 0, True, False),
                  ("rw", [102], P.o_RDWR, 0, True, True),
                  ("truncate", [102], P.o_WRONLY .|. P.o_TRUNC, 0, True, True),
@@ -51,7 +53,7 @@ main = do
       withArray0 0 bytes $ \pointer -> do
         void (P.c_close (-1))
         result <- evaluate (case (castPtr pointer, fromIntegral flags :: Int, mode :: Word) of
-          (Ptr path, I# raw, W# permissions) -> I# (originalOpen path raw permissions))
+          (Ptr path, I# raw, W# permissions) -> I# (openCall path raw permissions))
         Errno errno <- getErrno -- Capture before fstat, printing or any other IO.
         values <- if result < 0 then pure [] else do
           when writing $ allocaBytes 1 $ \buffer -> do
@@ -78,4 +80,6 @@ main = do
         when (label /= "directory" && not (null bytes)) $ void (P.c_unlink (castPtr pointer))
         pure (label, suffix, relative, fromIntegral flags :: Int, mode,
           if result < 0 then -1 else 0 :: Int, fromIntegral errno :: Int, values :: [Int], contents, writing)
-  print rows
+  case variants of
+    rows : others | all (== rows) others -> print rows
+    _ -> fail "Original unsafe/safe/interruptible open observations disagree"
