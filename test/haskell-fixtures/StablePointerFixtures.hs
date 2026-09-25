@@ -37,7 +37,7 @@ field key (Object fields) = maybe (error ("Missing shared-CAF certificate field 
 field key _ = error ("Expected shared-CAF certificate object for " ++ key)
 
 items :: Value -> [Value]
-items (Array values) = toList values
+items (Array elements) = toList elements
 items _ = error "Expected shared-CAF certificate array"
 
 sharedCall :: Value -> Maybe (String, String)
@@ -65,7 +65,7 @@ sharedSymbols = ["getOrSetSystemEventThreadEventManagerStore",
 -- remain synthetic; no original GHC body is claimed here.
 adaptShared :: Map.Map String Value -> Value -> Value
 adaptShared originals value = case value of
-  Array values -> case toList values of
+  Array elements -> case toList elements of
     app@[String "app", _, arguments, flags, tailCall, joinCall, metadata]
       | Just symbol <- foreignSymbol (toJSON app), Just original <- Map.lookup symbol originals ->
           case items original of
@@ -91,13 +91,13 @@ adaptShared originals value = case value of
                  else toJSON [String "app", headId, adaptShared originals arguments, flags,
                    tailCall, joinCall, originalMetadata]
             _ -> error "Malformed selected original shared-CAF application"
-    _ -> toJSON (map (adaptShared originals) (toList values))
+    _ -> toJSON (map (adaptShared originals) (toList elements))
   Object fields -> Object (KeyMap.map (adaptShared originals) fields)
   _ -> value
 
 sharedCalls :: Value -> [(String, String)]
 sharedCalls value = case value of
-  Array values -> maybe id (:) (sharedCall value) (concatMap sharedCalls (toList values))
+  Array elements -> maybe id (:) (sharedCall value) (concatMap sharedCalls (toList elements))
   Object fields -> concatMap sharedCalls (KeyMap.elems fields)
   _ -> []
 
