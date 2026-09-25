@@ -3,7 +3,8 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
-module THC.Driver.Project (runProject) where
+module THC.Driver.Project
+  (runProject, Bundle(..), InstalledBundle(..), prepareInstalledBundle, installedRecords) where
 
 import Control.Exception (bracket, finally)
 import Control.Monad (filterM, forM, forM_, unless, when)
@@ -26,14 +27,16 @@ import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMis
                          renameFile, setPermissions)
 import qualified System.Directory as Directory
 import System.Exit (ExitCode(..))
-import System.Environment (getEnvironment, getExecutablePath)
+import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
 import System.FilePath ((</>), isAbsolute, makeRelative, normalise, splitDirectories,
                         takeDirectory, takeExtension, takeFileName, joinPath, replaceExtension)
 import System.IO (SeekMode(AbsoluteSeek), hClose, openTempFile, stderr)
 import qualified System.Posix.IO as Posix
-import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, waitForProcess)
+import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, waitForProcess,
+                       readCreateProcessWithExitCode)
 import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
+import THC.Driver.Installed
 import THC.Driver.Run (RunOptions(..))
 import THC.Driver.Zip (decodeZip, encodeZip)
 import THC.Driver.Wired (WiredArtifacts(..), moduleSources, sourceHashes, exportPinnedCore)
@@ -58,6 +61,9 @@ data Component = Component
 data Bundle = Bundle { bundlePath :: FilePath, bundleHash :: String
                      , bundleModules :: [Value], bundleBuildKey :: String }
 
+data InstalledBundle = InstalledBundle
+  { installedOwner :: String, installedBundle :: Bundle }
+
 data ExportContext = ExportContext
   { contextCompiler :: String, contextAbi :: String, contextPlatform :: String
   , contextPluginDb :: FilePath, contextPluginUnit :: String
@@ -73,6 +79,8 @@ runProject :: RunOptions -> FilePath -> IO ()
 runProject opts target = do
   require (not (null (runExecutable opts))) "run requires --exe NAME"
   require (not (null (runThcRoot opts))) "run requires --thc-root DIR"
+  require (runInstalledCore opts `elem` ["required", "pinned"])
+    "--installed-core must be required or pinned"
   let flags = runPlan opts
   require (null (selectedFlags flags) && not (enableTests flags) && not (enableBenchmarks flags))
     "project flags, tests and benchmarks belong in cabal.project"
@@ -114,13 +122,13 @@ runProject opts target = do
   packageTool <- traverse canonicalizePath (ghcPkgPath flags)
   withProjectLock output $
     runBuiltProject project thcRoot runtime output native executable cabalArgs
-                    pluginDb pluginUnit pluginLibrary compiler packageTool
+                    pluginDb pluginUnit pluginLibrary compiler packageTool (runInstalledCore opts)
 
 runBuiltProject :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath ->
                    String -> [String] -> FilePath -> String -> FilePath -> FilePath ->
-                   Maybe FilePath -> IO ()
+                   Maybe FilePath -> String -> IO ()
 runBuiltProject project thcRoot runtime output native executable cabalArgs
-                pluginDb pluginUnit pluginLibrary ghc ghcPkg = do
+                pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy = do
   runCommand True "cabal" cabalArgs project
   plan <- readJson (native </> "cache/plan.json")
   cabalVersion <- field plan "cabal-version"
@@ -144,6 +152,30 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   let ordered = nubBy (\a b -> unitId a == unitId b) (concat closures)
       globals = [unit | unit <- ordered, not (unitLocal unit),
                        jsonField (unitValue unit) "type" == Just ("configured" :: String)]
+  installed <- if installedPolicy == "pinned" then pure Map.empty else do
+    helperContext <- prepareInterfaceHelper context thcRoot
+    registrations <- mapM (discoverInstalled helperContext . unitId)
+      [unit | unit <- ordered,
+              jsonField (unitValue unit) "type" == Just ("pre-existing" :: String)]
+    validateReexports registrations
+    bundles <- forM registrations $ \registrationUnit -> do
+      planned <- maybe (fail "installed registration not in Cabal plan") pure
+        (Map.lookup (registeredId registrationUnit) byId)
+      require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
+        ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
+      result <- prepareInstalledBundle cacheRoot driverHash helperContext registrationUnit
+      bundle <- either (\missing -> fail
+        ("complete-interface-core unavailable for " ++ missingUnit missing ++ ":" ++ missingModule missing ++
+         " (dynamic interface " ++ missingInterface missing ++ "). Select a full-Core GHC; " ++
+         "--installed-core pinned explicitly selects the limited legacy source provider.")) pure result
+      pure (registeredId registrationUnit, (registrationUnit, bundle))
+    let owners = map (installedOwner . snd . snd) bundles
+        registered = map fst bundles
+    require (length owners == length (nub owners)) "multiple installed registrations claim one Core owner"
+    require (all (\(identifier, (_, item)) -> installedOwner item == identifier ||
+                  installedOwner item `notElem` registered && Map.notMember (installedOwner item) byId) bundles)
+      "installed Core owner collides with another Cabal unit"
+    pure (Map.fromList bundles)
   globalBundles <- prepareGlobalBundles context project globals
   (_, described) <- foldlM (\(keys, acc) unit -> do
     kind <- optionalField (unitValue unit) "type" ("" :: String)
@@ -153,24 +185,104 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
         if kind == "configured" then Just <$> maybe
           (fail ("Core bundle missing for Cabal store component " ++ unitId unit)) pure
           (Map.lookup (unitId unit) globalBundles)
-        else pure Nothing
+        else pure (installedBundle . snd <$> Map.lookup (unitId unit) installed)
     let modules = maybe [] bundleModules bundle
         fields = ["id" .= unitId unit, "depends" .= unitDepends unit, "modules" .= modules] ++
                  maybe [] (\item -> ["bundle" .= object ["path" .= bundlePath item,
                                                    "sha256" .= bundleHash item]]) bundle
         keys' = maybe keys (\item -> Map.insert (unitId unit) (bundleBuildKey item) keys) bundle
-    pure (keys', acc ++ [object fields])) (Map.empty, []) ordered
-  require (Map.notMember "ghc-internal" byId) "Cabal plan duplicates the wired ghc-internal unit"
-  wired <- wiredGhcInternal context thcRoot
+        recordsForUnit = maybe [object fields] (uncurry installedRecords) (Map.lookup (unitId unit) installed)
+    pure (keys', acc ++ recordsForUnit)) (Map.empty, []) ordered
+  wired <- if installedPolicy == "required" then pure [] else do
+    require (Map.notMember "ghc-internal" byId) "Cabal plan duplicates the wired ghc-internal unit"
+    (:[]) <$> wiredGhcInternal context thcRoot
   let manifest = output </> "packages.json"
       entry = unitId selected ++ ":Main.main"
       audit = output </> "audit.json"
   atomicJson manifest (object ["format" .= ("thc-core-packages" :: String),
                                "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
-                               "units" .= (described ++ [wired])])
+                               "units" .= (described ++ wired)])
   runCommand True "python3" [thcRoot </> "scripts/audit-core.py", "--package-manifest", manifest,
                              "--entry", entry, "--io-main", "--output", audit] thcRoot
   runCommand False runtime ["--run-io", '@' : manifest, entry] thcRoot
+
+prepareInterfaceHelper :: ExportContext -> FilePath -> IO InstalledContext
+prepareInterfaceHelper context root = do
+  cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
+  let ghc = contextGhc context
+      pkg = maybe (takeDirectory ghc </> "ghc-pkg") id (contextGhcPkg context)
+      selection = ["exe:thc-interface", "--offline", "--with-compiler=" ++ ghc, "--with-hc-pkg=" ++ pkg]
+  runCommand True cabal ("build" : selection) root
+  (status, output, diagnostic) <- readCreateProcessWithExitCode
+    (proc cabal ("list-bin" : selection)) {cwd = Just root} ""
+  require (status == ExitSuccess) ("cannot locate selected thc-interface: " ++ diagnostic)
+  helper <- case lines output of
+    [path] -> canonicalizePath path
+    _ -> fail "cabal list-bin did not return one thc-interface executable"
+  requireFile helper
+  -- First slice is deliberately limited to pre-existing global registrations.
+  -- A store/source component continues to use its existing Cabal build path.
+  installedContext ghc pkg helper [] (object
+    ["id" .= contextCompiler context, "abi" .= contextAbi context,
+     "platform" .= contextPlatform context, "way" .= ("dynamic-nonprofiling" :: String)])
+
+-- Rehydrate before cache lookup: registration/ABI/mtime is not an executable
+-- payload fingerprint. Only generated JSON and THC-owned exporter code are
+-- hashed; no installed GHC binary, interface or library is read for hashing.
+prepareInstalledBundle :: FilePath -> String -> InstalledContext -> InstalledUnit ->
+                          IO (Either MissingCore InstalledBundle)
+prepareInstalledBundle cache driverHash context registrationUnit = do
+  acquired <- acquireInstalled context registrationUnit
+  case acquired of
+    Left missing -> pure (Left missing)
+    Right core -> do
+      helperHash <- digestFile (installedHelper context)
+      let unit = coreOwner core
+          modules = sortOn fst (coreModules core)
+          inputFields = ["format" .= ("thc-core-build-inputs" :: String), "schema" .= (1 :: Int),
+            "unit" .= unit, "compiler" .= installedCompiler context,
+            "component" .= object ["kind" .= ("installed-interface" :: String),
+                                   "registration" .= installedProvenance context registrationUnit],
+            "nativeArtifacts" .= ([] :: [Value]),
+            "generatedCore" .= [object ["module" .= name, "sha256" .= shaHex bytes] | (name, bytes) <- modules],
+            "dependencies" .= installedDepends registrationUnit]
+          buildKey = shaHex (BL.toStrict (encode (object inputFields)))
+          exporter = object ["helperHash" .= helperHash, "driverHash" .= driverHash,
+                             "options" .= (["post-tidy", "unit-qualified", "source-notes", "dynamic"] :: [String])]
+          exportKey = shaHex (BL.toStrict (encode ("thc-installed-interface-v1" :: String, buildKey, exporter)))
+          inputs = object (inputFields ++ ["buildKey" .= buildKey, "exportKey" .= exportKey, "exporter" .= exporter])
+          directory = cache </> "core-bundles/v1/installed" </> exportKey
+          destination = directory </> (shaHex (BL.toStrict (encode (registeredId registrationUnit))) ++ ".zip")
+          members = [("core/" ++ show index ++ ".json", bytes) | (index, (_, bytes)) <- zip [0 :: Int ..] modules]
+          refs = [object ["name" .= name, "boundary" .= boundary, "path" .= member, "sha256" .= shaHex bytes]
+                 | ((name, bytes), (member, _)) <- zip modules members]
+          inputBytes = BL.toStrict (encode inputs)
+          inner = object ["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
+            "unit" .= unit, "buildKey" .= buildKey, "exportKey" .= exportKey, "modules" .= refs,
+            "buildInputs" .= object ["path" .= ("inplace-manifest.json" :: String), "sha256" .= shaHex inputBytes]]
+      createDirectoryIfMissing True directory
+      bundle <- withLock (destination ++ ".lock") $ do
+        present <- doesFileExist destination
+        cached <- if present then readBundle False destination unit buildKey exportKey inputs (map fst modules)
+                  else pure Nothing
+        case cached of
+          Just hit -> pure hit
+          Nothing -> do
+            archive <- either fail pure (encodeZip
+              (("manifest.json", BL.toStrict (encode inner)) : ("inplace-manifest.json", inputBytes) : members))
+            -- Keep an existing file intact until the complete replacement is ready.
+            atomicBytes destination (BL.toStrict archive)
+            pure (Bundle destination (shaHex (BL.toStrict archive)) refs buildKey)
+      pure (Right (InstalledBundle unit bundle))
+
+installedRecords :: InstalledUnit -> InstalledBundle -> [Value]
+installedRecords registrationUnit artifact =
+  [object ["id" .= registeredId registrationUnit, "depends" .= installedDepends registrationUnit,
+           "modules" .= ([] :: [Value])] | installedOwner artifact /= registeredId registrationUnit] ++
+  [object ["id" .= installedOwner artifact, "depends" .= installedDepends registrationUnit,
+           "modules" .= bundleModules bundle,
+           "bundle" .= object ["path" .= bundlePath bundle, "sha256" .= bundleHash bundle]]]
+  where bundle = installedBundle artifact
 
 -- Installed ghc-internal interfaces omit executable unfoldings needed by
 -- ordinary fail/catch, Typeable, and CString. Re-export original pinned source

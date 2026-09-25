@@ -131,6 +131,42 @@ sources, including `Heap/InfoTable/Types.hsc`, with unique paths and well-formed
 SHA-256 values. The index and hashed build-input receipts must agree; the old
 six-source inventory, missing or additional paths, and duplicates are rejected.
 
+### Installed complete-Core provider
+
+For a GHC 9.14.1 installation whose libraries carry full simplified Core,
+project runs can select `--installed-core required`. The default
+`--installed-core pinned` retains the limited source provider described above;
+these are separate choices, not an implicit fallback after an interface error.
+The explicit `.cabal` path does not yet support the installed provider.
+
+The driver builds the selected-compiler `thc-interface` helper, discovers exact
+pre-existing registrations in the selected global package database, and reads
+each declared owned module's dynamic interface. Hidden modules are included;
+native-only and reexport-only registrations do not acquire invented bodies.
+Reexports must have concrete providers in their dependency closure. Store-source
+and local component exports retain their existing paths. Missing complete Core
+reports the exact registration/module; wrong identity/way, malformed responses,
+foreign stubs and process failures remain errors. Nothing substitutes ordinary
+unfoldings or adds a second pinned provider beside a wired interface owner.
+
+Generated Core preserves original unit identities, private workers, recursive
+groups and CBV evidence. Cabal registration IDs remain dependency/cache keys;
+the receipt records their mapping to original wired Core owners. Checked ZIPs
+use the existing schema and atomic publication, with registration/DB/compiler/
+way/inventory provenance and hashes of generated Core plus THC-owned exporter
+code. Installed GHC binaries, interfaces and libraries are not hashed. The
+driver rehydrates interfaces before looking up a content-addressed ZIP: unchanged
+output reuses it, but this is not a command-free cache or an ABI-only freshness
+claim. Failed refreshes leave prior complete bundles intact.
+
+This provider does not yet attach target-layout receipts: it cannot truthfully
+claim the pinned provider's seven HSC preprocessing products. Stack/IPE paths
+requiring that layout still fail explicitly. Complete interfaces also do not
+establish foreign-export/RTS support or make ordinary Handle programs runnable.
+The existing source-deleted opaque/private/CBV fixture exercises discovery,
+process acquisition, cache reuse and strict ZIP admission, followed by native
+comparisons in first-installed AST and bytecode targets.
+
 `driver-tests` is an ordinary Cabal HUnit test suite. Cabal builds the driver
 first, then the tests copy fixtures into isolated temporary directories outside
 this repository's `cabal.project`. Set `THC_TEST_RUNTIME` and

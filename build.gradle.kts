@@ -99,6 +99,7 @@ tasks.withType<Test>().configureEach {
             "mask-functions/native/oracle",
             "interface-core/**/*.json", "interface-core/logs/*.stdout", "interface-core/logs/*.stderr",
             "interface-core/**/*.hi", "interface-core/**/*.dyn_hi", "interface-core/native/oracle",
+            "interface-core/**/*.zip",
             "interface-core/source/*.saved",
             "original-stdio/**/*.json", "original-stdio/results/*.txt", "original-stdio/native/**",
             "original-stdio/logs/*.stdout", "original-stdio/logs/*.stderr",
