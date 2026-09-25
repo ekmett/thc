@@ -22,6 +22,12 @@ or unmapped dependencies run the full test inventory. A changed test is never
 dropped to meet a time budget. The ownership rules are in
 `.github/scripts/fast-tests.json`.
 
+Generated SIMD min/max additions use the shared SIMD smoke and family checks
+when layouts and the generator are unchanged and the capability entries and
+generated Java/Kotlin blocks match exactly. Changes to existing operations,
+other registry entries, or the generator still select the full suite. This
+bounded rule avoids unrelated native fixtures and driver tests for those additions.
+
 For a narrow selection, `.github/scripts/fast-fixtures.json` names each required
 native/Core preparation group. Local stamps include the declared source bytes,
 toolchain identity and every output byte. Missing, changed or linked inputs or

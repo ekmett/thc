@@ -24,6 +24,10 @@ POLICY = ".github/scripts/fast-tests.json"
 CAPABILITIES = "scripts/core-capabilities.json"
 PROGRAM = "src/main/kotlin/thc/runtime/Program.kt"
 BYTECODE_PROGRAM = "src/main/kotlin/thc/runtime/BytecodeProgram.kt"
+BYTECODE_ROOT = "src/main/java/thc/runtime/BytecodeRoot.java"
+SIMD_SPEC = "scripts/simd-families.json"
+SIMD_GENERATOR = "scripts/generate-simd-families.py"
+SIMD_ADDITIVE = {CAPABILITIES, BYTECODE_PROGRAM, BYTECODE_ROOT, SIMD_SPEC}
 POLYGLOT_TEST_ROOT = "src/polyglotTest/"
 HASKELL_TESTS = {"driver-tests": "test/haskell-driver/Main.hs"}
 POLYGLOT_EXACT_INPUTS = {
@@ -436,6 +440,86 @@ def additive_bytecode_families(before, after):
     return families
 
 
+def generated_simd_region(before, after, blocks):
+    """Require exact new operation blocks within the marked generated region."""
+    begin, end = "    // BEGIN GENERATED SIMD FAMILIES\n", "    // END GENERATED SIMD FAMILIES\n"
+    if any(source.count(begin) != 1 or source.count(end) != 1 for source in (before, after)):
+        return False
+    old_prefix, old_tail = before.split(begin)
+    new_prefix, new_tail = after.split(begin)
+    old_body, old_suffix = old_tail.split(end)
+    new_body, new_suffix = new_tail.split(end)
+    if (old_prefix, old_suffix) != (new_prefix, new_suffix):
+        return False
+    for block in blocks:
+        if new_body.count(block) != 1 or block in old_body:
+            return False
+        new_body = new_body.replace(block, "", 1)
+    return new_body == old_body
+
+
+def additive_simd_primops(old_spec, new_spec, old_cap, new_cap,
+                          old_root, new_root, old_program, new_program):
+    """Recognize only added min/max on existing layouts with exact generated code."""
+    old, new = json.loads(old_spec), json.loads(new_spec)
+    if (not isinstance(old, dict) or not isinstance(new, dict)
+            or not isinstance(old.get("families"), list) or not isinstance(new.get("families"), list)
+            or len(old["families"]) != len(new["families"])):
+        return None
+    additions = []
+    reduced = dict(new)
+    reduced["families"] = []
+    for previous, current in zip(old["families"], new["families"]):
+        if not isinstance(previous, dict) or not isinstance(current, dict):
+            return None
+        name, prior, operations = current.get("name"), previous.get("operations"), current.get("operations")
+        if (not isinstance(name, str) or not re.fullmatch(r"(?:Int|Word)(?:8|16|32|64)X(?:2|4|8|16)|(?:Float|Double)X(?:2|4|8|16)", name)
+                or not isinstance(prior, list) or not isinstance(operations, list)
+                or any(not isinstance(op, str) for op in prior + operations)
+                or len(prior) != len(set(prior)) or len(operations) != len(set(operations))
+                or [op for op in operations if op in prior] != prior):
+            return None
+        added = [op for op in operations if op not in prior]
+        if added and (not name.startswith(("Int", "Word")) or any(op not in ("min", "max") for op in added)):
+            return None
+        additions.extend((name, op) for op in added)
+        restored = dict(current)
+        restored["operations"] = prior
+        reduced["families"].append(restored)
+    if not additions or reduced != old:
+        return None
+    before, after = json.loads(old_cap), json.loads(new_cap)
+    if not isinstance(before, dict) or not isinstance(after, dict):
+        return None
+    prior, current = before.get("primitives"), after.get("primitives")
+    if not isinstance(prior, dict) or not isinstance(current, dict):
+        return None
+    names = {op + name + "#" for name, op in additions}
+    if current.keys() - prior.keys() != names or any(type(current[name]) is not int or current[name] != 2 for name in names):
+        return None
+    restored = dict(after)
+    restored["primitives"] = {name: value for name, value in current.items() if name not in names}
+    if restored != before:
+        return None
+    root_blocks, program_blocks = [], []
+    for name, op in additions:
+        title = op.capitalize()
+        node = f"Generated{name}{title}"
+        root_blocks.append(
+            f"    @Operation public static final class {node} {{\n"
+            f"        @Specialization public static {name} apply({name} left, {name} right) {{ return {name}.{op}(left, right); }}\n"
+            "    }\n")
+        program_blocks.append(
+            f'        "{op}{name}#" -> ProvenExpression(Expression {{ e ->\n'
+            "            val b = e.builder\n"
+            f"            b.begin{node}(); operands.forEach {{ it.emit(e) }}; b.end{node}()\n"
+            f"        }}, GeneratedVectors.proof{name})\n")
+    if (not generated_simd_region(old_root, new_root, root_blocks)
+            or not generated_simd_region(old_program, new_program, program_blocks)):
+        return None
+    return names
+
+
 def select(repo, base_ref, head_ref):
     repo = Path(repo).resolve()
     reasons = []
@@ -545,7 +629,7 @@ def select(repo, base_ref, head_ref):
         if any(not isinstance(path, str) or not path or path.startswith("/") or ".." in PurePosixPath(path).parts
                or path in policy["leafSources"] for path in policy["owners"]):
             raise SelectionError("invalid owner path")
-        if set(policy["primopFamilies"]) != {"bit-primops", "integer-primops", "signed-narrow-primops", "explicit64-primops"}:
+        if set(policy["primopFamilies"]) != {"bit-primops", "integer-primops", "signed-narrow-primops", "explicit64-primops", "simd-generated-primops"}:
             raise SelectionError("incomplete primop families")
         if any(not isinstance(path, str) or not path.startswith(".github/") for path in policy["automation"]):
             raise SelectionError("invalid automation path")
@@ -565,6 +649,17 @@ def select(repo, base_ref, head_ref):
     selected_haskell = set(policy["smoke"].get("haskell", []) if policy else [])
     affected_junit, affected_python, affected_haskell = set(), set(), set()
     additive_primop_paths = set()
+    changed = {path for record in records for path in record["paths"]}
+    simd_additions = None
+    if (policy and base and head and SIMD_ADDITIVE <= changed and SIMD_GENERATOR not in changed
+            and all(record["status"] == "M" for record in records if record["paths"][0] in SIMD_ADDITIVE)):
+        try:
+            old = {path: git(repo, "show", base + ":" + path).decode("utf-8") for path in SIMD_ADDITIVE}
+            simd_additions = additive_simd_primops(
+                old[SIMD_SPEC], text(SIMD_SPEC), old[CAPABILITIES], text(CAPABILITIES),
+                old[BYTECODE_ROOT], text(BYTECODE_ROOT), old[BYTECODE_PROGRAM], text(BYTECODE_PROGRAM))
+        except (SelectionError, UnicodeError, ValueError, TypeError, KeyError):
+            pass
     for record in records:
         if record["status"] not in ("A", "M"):
             for path in record["paths"]:
@@ -575,7 +670,17 @@ def select(repo, base_ref, head_ref):
             mode, kind, _ = files[path]
             if mode not in ("100644", "100755") or kind != "blob":
                 widen("nonregular-changed-path", path)
-            if policy and path in policy["automation"]:
+            if policy and simd_additions and path in SIMD_ADDITIVE:
+                group = policy["primopFamilies"]["simd-generated-primops"]
+                affected_junit.update(group["junit"])
+                affected_python.update(group["python"])
+                affected_haskell.update(group.get("haskell", []))
+                additive_primop_paths.add(path)
+            elif policy and path in (SIMD_SPEC, SIMD_GENERATOR):
+                widen("unverified-simd-generation-change", path)
+            elif policy and path in (BYTECODE_ROOT, BYTECODE_PROGRAM) and path in changed and SIMD_SPEC in changed:
+                widen("unverified-simd-generated-code", path)
+            elif policy and path in policy["automation"]:
                 group = policy["automation"][path]
                 affected_junit.update(group["junit"])
                 affected_python.update(group["python"])
