@@ -48,7 +48,7 @@ object CoreModules {
         val bindingOrigins = linkedMapOf<String, Map<String, String>>()
         val moduleKeys = hashSetOf<Pair<String, String>>()
         for (module in modules) {
-            require((module["schema"] as? Number)?.toInt() == 1) { "Unsupported Core schema: ${module["schema"]}" }
+            CoreForeignArtifacts.requireExecutable(module)
             require(module["ghc"] == "9.14.1") { "This adapter requires GHC 9.14.1 exports" }
             val unit = module["unit"] as? String
             val name = module["module"] as? String
@@ -95,6 +95,7 @@ object CoreModules {
 
     @Suppress("UNCHECKED_CAST")
     fun reachable(module: Map<String, Any?>, entry: String, strictLink: Boolean = false): Map<String, Any?> {
+        CoreForeignArtifacts.requireExecutableInput(module)
         val bindings = module["bindings"] as List<Map<String, Any?>>
         val byId = bindings.associateBy { it["id"] as String }
         val constructorIds = (module["constructors"] as? List<Map<String, Any?>>)

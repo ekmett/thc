@@ -21,6 +21,7 @@ import thc.Language
 class BytecodeProgram internal constructor(private val language: Language, moduleData: Map<String, Any?>,
                                            private val checkpoint: BytecodeCheckpoint?,
                                            private val enableAsync: Boolean) : ExecutableProgram {
+    init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
     constructor(language: Language, moduleData: Map<String, Any?>) : this(language, moduleData, null, false)
     constructor(language: Language, moduleData: Map<String, Any?>, enableAsync: Boolean) :
         this(language, moduleData, null, enableAsync)

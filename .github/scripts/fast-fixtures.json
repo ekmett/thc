@@ -15,6 +15,7 @@
     "thc.runtime.CallMaskSegmentsTest",
     "thc.CoreZipBundleTest",
     "thc.CoreLinkerTest",
+    "thc.CoreForeignArtifactsTest",
     "thc.runtime.HandoffTest",
     "thc.runtime.HostEntryCompilationTest",
     "thc.runtime.SimdFamiliesTest",

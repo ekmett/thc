@@ -163,8 +163,13 @@ acquireInstalled context unit = go [] (installedInterfaces unit)
         (ExitSuccess, Just "loaded") -> do
           core <- required response "core"
           owner <- required core "unit"
+          let schema = valueAt core "schema" :: Maybe Int
+              foreignArtifacts = valueAt core "foreign" :: Maybe Value
+              archival = schema == Just 2 && maybe False (\value ->
+                valueAt value "schema" == Just (1 :: Int) &&
+                valueAt value "execution" == Just ("not-linked" :: String)) foreignArtifacts
           unless (not (null owner) && valueAt core "module" == Just name &&
-                  valueAt core "schema" == Just (1 :: Int) &&
+                  ((schema == Just 1 && isNothing foreignArtifacts) || archival) &&
                   valueAt core "ghc" == Just ("9.14.1" :: String) &&
                   valueAt core "boundary" == Just ("optimized-Core-after-Tidy-before-CorePrep" :: String))
             (fail "thc-interface returned inconsistent Core identity/boundary")

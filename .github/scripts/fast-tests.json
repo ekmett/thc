@@ -483,8 +483,14 @@
       "python": []
     },
     "src/main/kotlin/thc/CorePackageManifest.kt": {
-      "junit": ["thc.CoreZipBundleTest", "thc.CoreLinkerTest"],
+      "junit": ["thc.CoreZipBundleTest", "thc.CoreLinkerTest", "thc.runtime.InterfaceCoreNativeTest"],
       "python": []
+    },
+    "src/main/kotlin/thc/CoreForeignArtifacts.kt": {
+      "junit": ["thc.CoreForeignArtifactsTest", "thc.runtime.InterfaceCoreNativeTest"], "python": []
+    },
+    "src/test/kotlin/thc/CoreForeignArtifactsTest.kt": {
+      "junit": ["thc.CoreForeignArtifactsTest"], "python": []
     },
     "src/test/kotlin/thc/CoreZipBundleTest.kt": {
       "junit": ["thc.CoreZipBundleTest"],
