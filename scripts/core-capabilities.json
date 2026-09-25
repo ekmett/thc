@@ -31,6 +31,8 @@
     "getSmallBitmapzh",
     "advanceStackFrameLocationzh",
     "getStackFieldszh",
+    "getWordzh", "getStackClosurezh", "getLargeBitmapzh", "getBCOLargeBitmapzh",
+    "getRetFunLargeBitmapzh", "getRetFunSmallBitmapzh", "isArgGenBigRetFunTypezh", "getUnderflowFrameNextChunkzh",
     "lookupIPE",
     "libdwPoolTake", "libdwGetBacktrace", "libdwLookupLocation", "libdwPoolClear",
     "ghczuwrapperZC22ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread",
@@ -948,6 +950,7 @@
     "subWordC#": 2
   },
   "limitations": [
+    "Original Stack.Decode getters consume only context-owned immutable managed snapshots: a nonempty, zero-slack sequence of one-word, zero-payload RET_SMALL frames with authentic detached guest provenance. getWordzh reads the real owned native bits of each header's info-table key and requires native access. Payload, RET_BIG, BCO, RET_FUN and UNDERFLOW getters reject incompatible frame kinds, bad offsets and foreign/expired snapshots; none of those frame kinds can be produced by this snapshot constructor. Descriptor admission permits the unchanged decoder over this closed managed domain, not native RTS stack memory or resumable continuations.",
     "addr2Int#/int2Addr# preserve real machine address bits. Null and arbitrary integer bit patterns roundtrip; unowned numeric addresses cannot be dereferenced or passed to native code. Immutable literals and pointer-free immutable images acquire one owned native allocation per backing in the current native-enabled context; live registered ranges recover their original managed aliases. Integer values do not root allocations. Mutable managed storage and opaque StablePtr numeric projection remain unsupported; no JVM identity hashes or borrowed scratch pointers are exposed.",
     "threadStatus# returns the exact State#/Int#/Int#/Int# tuple for context-owned Java thread identities. Logical capabilities are monotonically allocated per Java carrier, not physical CPU numbers; forkOn/count/affinity APIs remain unsupported. Registered MVar, black-hole, throwTo and foreign boundaries report their actual managed states. Forked threads retain normal/uncaught-guest completion; a live host carrier outside guest entry remains foreign and keeps its identity on re-entry. Existing throwTo mailboxes are scoped to active guest invocations and do not queue across separate host calls.",
     "The native DWARF backend is unavailable, matching GHC 9.14.1 RTS USE_LIBDW=0: original libdwPoolTake/libdwGetBacktrace return null, libdwLookupLocation returns failure 1 without touching Location, and libdwPoolClear is a no-op. Managed IPE snapshots are separate. Native DWARF frames remain unavailable; only source-certified USE_LIBDW=0 finalizer labels are supported.",

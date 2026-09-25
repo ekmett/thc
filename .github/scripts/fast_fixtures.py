@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "ce3156c0fb04b56b9a09c48be65e592c8ecbf1d74ea0c8be768819041514434e"
+FULL_PREPARATION_PLAN = "4dfdeaff17e188e0fbad3a748c12f9d89be7f549f22d24a37401709257262f0a"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -268,6 +268,17 @@ def cache_key(root, group_id, group, toolchain):
 
 
 def _output_hashes(root, group):
+    if group["outputs"] == ["build/original-stack-decoder"]:
+        name = "build/original-stack-decoder/manifest.json"
+        manifest = json.loads(fast_inputs.file_path(root, name).read_text())
+        expected = manifest["artifactHashes"]
+        required = fast_inputs.STACK_DECODER_FILES - {name}
+        if not (manifest.get("format") == "thc-original-stack-decoder-fixture" and
+                manifest.get("schema") == 1 and required <= expected.keys() and
+                all(fast_inputs.stack_decoder_artifact(path) for path in expected) and
+                any(path.endswith(".zip") for path in expected)):
+            raise RuntimeError("Invalid complete-Core stack decoder fixture inventory")
+        return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/original-stack-formatter"]:
         return _formatter_output_hashes(root)
     if group["outputs"] == ["build/original-gmp"]:

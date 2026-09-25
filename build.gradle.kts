@@ -165,6 +165,8 @@ tasks.withType<Test>().configureEach {
             "original-iconv/logs/*.stdout", "original-iconv/logs/*.stderr",
             "managed-md5-native/**",
             "original-stack/manifest.json", "original-stack/run-*/**",
+            "original-stack-decoder/**/*.json", "original-stack-decoder/installed/bundles/*.zip",
+            "original-stack-decoder/logs/*.stdout", "original-stack-decoder/logs/*.stderr", "original-stack-decoder/native/oracle",
             "original-stack-formatter/manifest.json", "original-stack-formatter/run-*/logs/*",
             "original-stack-formatter/run-*/pre-core/*.json", "original-stack-formatter/run-*/post-core/*.json",
             "original-stack-formatter/run-*/*-audit.json", "original-stack-formatter/run-*/native/formatter",

@@ -1654,8 +1654,9 @@ class OriginalStackInfoAuditTest(unittest.TestCase):
                 self.assertFalse(disabled['accepted']); self.assertEqual([], disabled['foreignCalls'])
                 self.assertTrue(any('capability disabled' in str(i['detail']) for i in disabled['issues']))
 
-    def test_production_admits_only_proven_diagnostic_getters(self):
-        hot = set(self.info_symbols) | {'getSmallBitmapzh', 'getStackFieldszh', 'advanceStackFrameLocationzh'}
+    def test_production_admits_exact_getters_for_closed_managed_snapshot_domain(self):
+        hot = set(self.symbols)
+        self.assertTrue(any('context-owned immutable managed snapshots' in text for text in CAP['limitations']))
         self.assertEqual(hot, set(self.symbols) & set(CAP['managedForeignCalls']))
         for symbol in self.symbols:
             with self.subTest(symbol=symbol):

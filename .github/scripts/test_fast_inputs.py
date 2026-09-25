@@ -21,6 +21,17 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def test_stack_decoder_bundle_scope_and_internal_member_paths(self):
+        path = 'build/original-stack-decoder/installed/bundles/ghc-internal-9.1401.0-inplace.zip'
+        package = dict(format='thc-core-packages', units=[dict(bundle=dict(path=path, sha256='a'*64),
+            modules=[dict(path='core/221.json', sha256='b'*64)])])
+        self.assertEqual([(path, 'a'*64)], list(cache.hashes_in(package, {})))
+        self.assertTrue(cache.allowed_payload(path, {}))
+        for bad in ('native/other.zip', 'installed/staging/temp.zip', 'installed/bundles/../bad.zip',
+                    'logs/unknown.stdout', 'pre/core/ReplacedDecoder.json'):
+            self.assertFalse(cache.stack_decoder_artifact('build/original-stack-decoder/' + bad), bad)
+        with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
+
     def test_termios_exact_image_fixture_inventory(self):
         self.assertEqual(97, len(cache.ORIGINAL_TERMIOS_OUTPUTS))
         self.assertIn('build/original-termios/manifest.json', DECLARED_REQUIRED)

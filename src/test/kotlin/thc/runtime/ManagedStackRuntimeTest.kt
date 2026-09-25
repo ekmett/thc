@@ -70,7 +70,8 @@ class ManagedStackRuntimeTest {
         }
         return Calls.target(caller.callTarget, arrayOf(0L)) as ManagedStackSnapshot
     }
-    private fun <T> context(block: (Language) -> T): T = Context.newBuilder("thc").build().use { context ->
+    private fun <T> context(native: Boolean = false, block: (Language) -> T): T = Context.newBuilder("thc")
+        .allowNativeAccess(native).build().use { context ->
         context.initialize("thc"); context.enter()
         try { block(TruffleLanguage.LanguageReference.create(Language::class.java).get(null)) }
         finally { context.leave() }
@@ -231,7 +232,7 @@ class ManagedStackRuntimeTest {
 
     @Test fun nativePayloadAndOtherFrameKindGettersNeverInventDiagnosticContents() = context { language ->
         val snapshot = capture(language); val layout = layout()
-        val operations = listOf(OriginalStackInfoOp.WORD, OriginalStackInfoOp.CLOSURE,
+        val operations = listOf(OriginalStackInfoOp.CLOSURE,
             OriginalStackInfoOp.LARGE_BITMAP, OriginalStackInfoOp.BCO_LARGE_BITMAP,
             OriginalStackInfoOp.RET_FUN_LARGE_BITMAP, OriginalStackInfoOp.RET_FUN_SMALL_BITMAP,
             OriginalStackInfoOp.RET_FUN_BIG, OriginalStackInfoOp.UNDERFLOW)
@@ -242,6 +243,45 @@ class ManagedStackRuntimeTest {
             assertTrue(error.message.orEmpty().contains(operation.symbol))
             assertTrue(error.message.orEmpty().contains("managed diagnostic RET_SMALL"))
             assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.incompatibleGetter(operation, snapshot, -1, layout) }
+        }
+    }
+
+    @Test fun headerWordsUseOwnedInfoPointerBitsAndEnforceSnapshotDomain() {
+        lateinit var snapshot: ManagedStackSnapshot
+        val layout = layout()
+        context(native = true) { language ->
+            snapshot = capture(language)
+            val words = snapshot.frames.indices.map { offset ->
+                val (standard, key) = ManagedStackRuntime.frameInfo(snapshot, offset.toLong(), layout)
+                val word = ManagedStackRuntime.word(snapshot, offset.toLong(), layout)
+                assertNotEquals(0L, word)
+                assertEquals(key.toNativeBits(), word)
+                assertEquals(standard.toNativeBits() + layout.offset("infoTableBytes"), word)
+                assertTrue(key.sameLocation(NativeAddresses.current(null).recover(word)))
+                assertEquals(word, ManagedStackRuntime.word(snapshot, offset.toLong(), layout))
+                word
+            }
+            assertEquals(words.size, words.toSet().size)
+            for (offset in listOf(-1L, words.size.toLong(), Long.MIN_VALUE, Long.MAX_VALUE))
+                assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.word(snapshot, offset, layout) }
+            for (forged in listOf(null, 0L, "snapshot", snapshot.frames))
+                assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.word(forged, 0, layout) }
+            assertThrows(RuntimeFault::class.java) {
+                ManagedStackRuntime.word(snapshot, 0, layout(abi = "different-image"))
+            }
+            for (geometry in listOf(mapOf("stackClosurePayloadBytes" to 16),
+                    mapOf("stackHeaderBytes" to 16, "stackClosurePayloadBytes" to 16))) {
+                val incompatible = layout(geometry, abi = "different-header")
+                assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.stackInfo(snapshot, incompatible) }
+                assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.frameInfo(snapshot, 0, incompatible) }
+                assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.word(snapshot, 0, incompatible) }
+            }
+        }
+        context(native = true) {
+            assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.word(snapshot, 0, layout) }
+        }
+        context { language ->
+            assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.word(capture(language), 0, layout) }
         }
     }
 

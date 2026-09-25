@@ -39,7 +39,7 @@ MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 thread-status boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array
-narrow-literal-proofs native-addresses libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-termios original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+narrow-literal-proofs native-addresses libdw-unavailable original-stack original-stack-formatter original-stack-decoder original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-termios original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls synchronous-exceptions tuple-arithmetic word-floating""".split()
 SIMD_SMOKE_SOURCES = frozenset("build/generated/simd/fixtures/" + name for name in (
     "GeneratedSimdSmoke.hs", "GeneratedSimdSmokeScalar.hs",
@@ -311,6 +311,24 @@ ORIGINAL_STACK_FILES = frozenset((
 def original_stack_artifact(name):
     match = re.fullmatch(r"build/original-stack/run-[1-9][0-9]*/(.+)", name)
     return match is not None and match.group(1) in ORIGINAL_STACK_FILES
+
+
+STACK_DECODER_ENTRIES = ("captureNamed", "observeSnapshot")
+STACK_DECODER_FILES = frozenset("build/original-stack-decoder/" + path for path in (
+    "manifest.json", "installed/packages.json", "native/oracle",
+    *(f"{stage}/core/OriginalStackDecoder.json" for stage in ("pre", "post")),
+    *(f"{stage}/{entry}-audit.json" for stage in ("pre", "post") for entry in STACK_DECODER_ENTRIES),
+    *(f"logs/{label}.{suffix}" for label in (
+        "ghc-version", "helper-build", "helper-location", "ghc-internal-unit", "plugin-build",
+        "pre-export", "post-export", "native-compile", "native-invariants",
+        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in STACK_DECODER_ENTRIES))
+      for suffix in ("stdout", "stderr", "command.json")),
+))
+
+
+def stack_decoder_artifact(name):
+    return name in STACK_DECODER_FILES or bool(re.fullmatch(
+        r"build/original-stack-decoder/installed/bundles/[A-Za-z0-9][A-Za-z0-9_.+-]*\.zip", name))
 
 
 def native_executable(name):
@@ -671,6 +689,8 @@ def allowed_payload(name, pins):
         return name == "build/original-stack/manifest.json" or original_stack_artifact(name)
     if parts[1] == "original-stack-formatter":
         return name == "build/original-stack-formatter/manifest.json" or original_stack_formatter_artifact(name)
+    if parts[1] == "original-stack-decoder":
+        return stack_decoder_artifact(name)
     if parts[1] == "boxed-array-extensions":
         return name == "build/boxed-array-extensions/manifest.json" or boxed_array_extension_artifact(name)
     if parts[1] not in BUILD_DIRS or any(p in ("test-results", "reports", "classes", ".gradle") for p in parts):
@@ -685,6 +705,15 @@ def allowed_payload(name, pins):
 def hashes_in(value, tc):
     """All fingerprint spellings used by current original preparation manifests."""
     if isinstance(value, dict):
+        if value.get("format") == "thc-core-packages":
+            # Module members are inside the independently hashed ZIP, not paths
+            # relative to the checkout. Production readers validate the members.
+            for unit in value.get("units", []):
+                if "bundle" in unit:
+                    yield from hashes_in(unit["bundle"], tc)
+                else:
+                    yield from hashes_in(unit.get("modules", []), tc)
+            return
         if "path" in value and "sha256" in value:
             yield value["path"], value["sha256"]
         for stem in ("ghcBinary", "ghcLauncher"):

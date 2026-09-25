@@ -28,6 +28,10 @@ internal object ManagedStackRuntime {
         Language.currentState().stackSnapshots.smallBitmap(snapshot, wordOffset, layout)
 
     @JvmStatic @TruffleBoundary
+    fun word(snapshot: Any?, wordOffset: Long, layout: TargetLayout): Long =
+        Language.currentState().stackSnapshots.word(snapshot, wordOffset, layout)
+
+    @JvmStatic @TruffleBoundary
     fun advance(snapshot: Any?, wordOffset: Long, layout: TargetLayout): ManagedStackAdvance =
         Language.currentState().stackSnapshots.advance(snapshot, wordOffset, layout)
 
@@ -65,6 +69,13 @@ internal class ManagedStackRegistry {
         entries.size // Reap dead allocation registrations even on a cached getter.
         if (layout in layouts) return
         try {
+            // The only constructible managed snapshot is a nonempty sequence of
+            // one-word RET_SMALL headers. Every getter shares this closed domain;
+            // no payload, alternative frame kind or underflow chunk is hidden in it.
+            require(layout.offset("stackHeaderBytes") == layout.wordBytes &&
+                layout.offset("stackClosurePayloadBytes") == layout.wordBytes) {
+                "Managed diagnostic frames require a one-word nonprofiling header"
+            }
             ManagedStackInfoImage.stack(layout)
             ManagedStackInfoImage.frame(layout)
             require(layout.offset("infoProvDescBytes") == 4) { "InfoProv closure_desc must be Word32" }
@@ -115,13 +126,7 @@ internal class ManagedStackRegistry {
     }
 
     private fun diagnosticFrames(snapshot: Any?, layout: TargetLayout): Images {
-        val images = images(snapshot, layout)
-        // These images are zero-slack, one-word RET_SMALL records. They do not
-        // expose native stack allocation capacity, heap payloads or chunk links.
-        if (layout.offset("stackHeaderBytes") != layout.wordBytes ||
-            layout.offset("stackClosurePayloadBytes") != layout.wordBytes)
-            fault("Managed diagnostic frames require a one-word nonprofiling header")
-        return images
+        return images(snapshot, layout)
     }
 
     private fun diagnosticFrame(snapshot: Any?, wordOffset: Long, layout: TargetLayout): Images {
@@ -140,6 +145,15 @@ internal class ManagedStackRegistry {
         return emptyBitmap
     }
 
+    /** Stack.cmm reads the word itself, including an info-pointer header. Our
+     * zero-payload format has exactly one such word per frame. Materialize the
+     * same owned immutable info image used by addr2Int#, never a numeric token.
+     * The snapshot keeps its image alive; a returned integer alone does not. */
+    @Synchronized fun word(snapshot: Any?, wordOffset: Long, layout: TargetLayout): Long {
+        val images = diagnosticFrame(snapshot, wordOffset, layout)
+        return images.frames[wordOffset.toInt()].key.toNativeBits()
+    }
+
     @Synchronized fun advance(snapshot: Any?, wordOffset: Long, layout: TargetLayout): ManagedStackAdvance {
         val images = diagnosticFrame(snapshot, wordOffset, layout)
         val next = wordOffset + 1
@@ -152,6 +166,9 @@ internal class ManagedStackRegistry {
     @Synchronized fun incompatibleGetter(operation: OriginalStackInfoOp, snapshot: Any?, wordOffset: Long,
         layout: TargetLayout): Nothing {
         diagnosticFrame(snapshot, wordOffset, layout)
+        require(operation in setOf(OriginalStackInfoOp.CLOSURE, OriginalStackInfoOp.LARGE_BITMAP,
+            OriginalStackInfoOp.BCO_LARGE_BITMAP, OriginalStackInfoOp.RET_FUN_LARGE_BITMAP,
+            OriginalStackInfoOp.RET_FUN_SMALL_BITMAP, OriginalStackInfoOp.RET_FUN_BIG, OriginalStackInfoOp.UNDERFLOW))
         fault("${operation.symbol} cannot read a payload, bitmap kind or chunk absent from a managed diagnostic RET_SMALL frame")
     }
 

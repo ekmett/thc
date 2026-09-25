@@ -404,6 +404,15 @@
         "thc.cabal"
       ]
     },
+    "original-stack-decoder": {
+      "junit": ["thc.runtime.OriginalStackDecoderTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack-decoder"]}],
+      "outputs": ["build/original-stack-decoder"],
+      "sources": ["compiler/test-fixtures/OriginalStackDecoder.hs", "compiler/test-fixtures/OriginalStackDecoderNative.hs",
+        "test/haskell-fixtures/StackDecoderFixtures.hs", "test/haskell-fixtures/InstalledCoreFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal",
+        "src/THC/Driver/Cabal.hs", "src/THC/Driver/Cache.hs", "src/THC/Driver/ForeignBitcode.hs", "src/THC/Driver/GhcProxy.hs", "src/THC/Driver/Installed.hs", "src/THC/Driver/Json.hs", "src/THC/Driver/Project.hs", "src/THC/Driver/Run.hs", "src/THC/Driver/Wired.hs", "src/THC/Driver/Zip.hs", "compiler/interface/Main.hs", "compiler/target-layout.c"]
+    },
     "original-stack-formatter": {
       "junit": ["thc.runtime.OriginalStackFormatterTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack-formatter"]}],
