@@ -23,6 +23,19 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "original-stdio-truncate": {
+      "junit": ["thc.runtime.OriginalStdioTruncateNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stdio-truncate"]}],
+      "outputs": ["build/original-stdio-truncate"],
+      "sources": [
+        "compiler/test-fixtures/OriginalStdioTruncateAudit.hs",
+        "compiler/test-fixtures/OriginalStdioTruncateAuditNative.hs",
+        "test/haskell-fixtures/OriginalStdioTruncateFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal"
+      ]
+    },
     "original-stdio-seek": {
       "junit": ["thc.runtime.OriginalStdioSeekNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stdio-seek"]}],

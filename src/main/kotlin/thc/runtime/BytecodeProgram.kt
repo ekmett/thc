@@ -1367,6 +1367,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     val status = originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
                         originalStdio == OriginalStdioOp.CLOSE
                     if (originalStdio == OriginalStdioOp.SEEK) b.beginFileSeek(result)
+                    else if (originalStdio == OriginalStdioOp.TRUNCATE) b.beginFileSetSize(result)
                     else if (status) b.beginOriginalStdioStatus(result, originalStdio)
                     else b.beginOriginalStdioTransfer(result,
                         originalStdio == OriginalStdioOp.READ_SAFE || originalStdio == OriginalStdioOp.READ_UNSAFE)
@@ -1382,8 +1383,15 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.beginRequireIOState(); operands[3].emit(e); b.endRequireIOState()
                         b.emitLoadConstant(OriginalStdioOp.SEEK)
                         b.endBlock()
+                    } else if (originalStdio == OriginalStdioOp.TRUNCATE) {
+                        operands.take(2).forEach { it.emit(e) }
+                        b.beginBlock()
+                        b.beginRequireIOState(); operands[2].emit(e); b.endRequireIOState()
+                        b.emitLoadConstant(OriginalStdioOp.TRUNCATE)
+                        b.endBlock()
                     } else operands.forEach { it.emit(e) }
                     if (originalStdio == OriginalStdioOp.SEEK) b.endFileSeek()
+                    else if (originalStdio == OriginalStdioOp.TRUNCATE) b.endFileSetSize()
                     else if (status) b.endOriginalStdioStatus() else b.endOriginalStdioTransfer()
                 }
             } else if (managedFile != null) {

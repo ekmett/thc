@@ -25,13 +25,13 @@ import java.nio.file.Path
 import java.util.Collections
 import java.util.IdentityHashMap
 
-/** Installed GHC c_lseek metadata and private-file positions, including ESPIPE. */
-class OriginalStdioSeekNativeTest {
+/** Installed GHC c_ftruncate metadata and private-file sizes and bytes. */
+class OriginalStdioTruncateNativeTest {
     @TempDir lateinit var directory: Path
     private val root = File(System.getProperty("thc.projectRoot"))
-    private val fixture = File(root, "build/original-stdio-seek")
-    private val names = listOf("originalSeek", "originalSeekErrno")
-    private val scenarios = listOf("set", "cur", "end", "beyond", "wide", "negative", "bad-whence", "invalid", "pipe")
+    private val fixture = File(root, "build/original-stdio-truncate")
+    private val names = listOf("originalTruncate", "originalTruncateErrno")
+    private val scenarios = listOf("shrink", "same", "extend", "negative", "readonly", "invalid", "pipe")
     private fun json(path: File) = Json.parse(path.readText()) as Map<String, Any?>
     private fun valid(target: RootCallTarget) = assertEquals(true,
         target.javaClass.getMethod("isValidLastTier").invoke(target))
@@ -54,42 +54,43 @@ class OriginalStdioSeekNativeTest {
         return found
     }
 
-    @Test fun originalSeekMatchesNativeAndCompiledTargets() {
+    @Test fun originalTruncateMatchesNativeAndCompiledTargets() {
         val manifest = json(File(fixture, "manifest.json"))
         assertEquals(1L, manifest["schema"]); assertEquals("9.14.1", manifest["ghc"])
-        assertEquals(names, manifest["entries"]); assertEquals(18L, manifest["nativeRows"])
+        assertEquals(names, manifest["entries"]); assertEquals(14L, manifest["nativeRows"])
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf(
-            "compiler/test-fixtures/OriginalStdioSeekAudit.hs",
-            "compiler/test-fixtures/OriginalStdioSeekAuditNative.hs",
-            "test/haskell-fixtures/OriginalStdioSeekFixtures.hs", "scripts/core_original_foreign.py"))
+            "compiler/test-fixtures/OriginalStdioTruncateAudit.hs",
+            "compiler/test-fixtures/OriginalStdioTruncateAuditNative.hs",
+            "test/haskell-fixtures/OriginalStdioTruncateFixtures.hs", "scripts/core_original_foreign.py"))
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf(
-            "build/original-stdio-seek/oracle.json",
-            "build/original-stdio-seek/pre/core/OriginalStdioSeekAudit.json",
-            "build/original-stdio-seek/post/core/OriginalStdioSeekAudit.json"), "build/original-stdio-seek/")
+            "build/original-stdio-truncate/oracle.json",
+            "build/original-stdio-truncate/pre/core/OriginalStdioTruncateAudit.json",
+            "build/original-stdio-truncate/post/core/OriginalStdioTruncateAudit.json"), "build/original-stdio-truncate/")
         val oracle = Json.parse(File(fixture, "oracle.json").readText()) as List<Map<String, Any?>>
         assertEquals(names.flatMap { name -> scenarios.map { name to it } },
             oracle.map { it["entry"] to it["scenario"] })
         val abi = StdioHostAbi.load()
-        val expectedPosition = mapOf("set" to 2L, "cur" to 5L, "end" to 4L, "beyond" to 10L,
-            "wide" to 8589934597L)
+        val expectedSize = mapOf("shrink" to 3L, "same" to 6L, "extend" to 9L,
+            "negative" to 6L, "readonly" to 6L, "invalid" to -1L, "pipe" to -1L)
         for (row in oracle) {
             val scenario = row["scenario"] as String
-            val expected = if (row["entry"] == "originalSeek") expectedPosition[scenario] ?: -1L
+            val expected = if (row["entry"] == "originalTruncate")
+                if (scenario in listOf("shrink", "same", "extend")) 0L else -1L
                 else when (scenario) {
-                    "negative", "bad-whence" -> abi.error(5)
+                    "negative", "readonly", "pipe" -> abi.error(5)
                     "invalid" -> abi.error(4)
-                    "pipe" -> abi.notSeekable()
                     else -> -2L
                 }
             assertEquals(expected, row["result"], "$row")
+            assertEquals(expectedSize[scenario], row["size"], "$row")
             assertEquals("", row["stdoutHex"]); assertEquals("", row["stderrHex"])
         }
         for (stage in listOf("pre", "post")) {
-            val module = CoreModules.merge(listOf("OriginalStdioSeekAudit", "THC.InterfaceClosure")
+            val module = CoreModules.merge(listOf("OriginalStdioTruncateAudit", "THC.InterfaceClosure")
                 .map { json(File(fixture, "$stage/core/$it.json")) })
             val bindings = module["bindings"] as List<Map<String, Any?>>
             for (name in names) {
-                val owner = "main:OriginalStdioSeekAudit.$name"
+                val owner = "main:OriginalStdioTruncateAudit.$name"
                 val binding = bindings.single { it["id"] == owner }
                 val calls = OriginalStdioChecks.foreignCalls(binding["expr"])
                 assertEquals(if (name.endsWith("Errno")) 2 else 1, calls.size)
@@ -99,7 +100,7 @@ class OriginalStdioSeekNativeTest {
                     val reps = (app[2] as List<*>).map { ((it as List<*>).last() as Map<*, *>)["rep"] }
                     CoreOriginalStdio.validate(app[6], reps, app[3] as List<*>, (app[6] as Map<*, *>)["rep"])!!.symbol
                 }
-                assertEquals(listOf(OriginalStdioOp.SEEK.symbol) +
+                assertEquals(listOf(OriginalStdioOp.TRUNCATE.symbol) +
                     if (name.endsWith("Errno")) listOf("__hscore_get_errno") else emptyList(), symbols)
                 OriginalStdioChecks.audit(json(File(fixture, "$stage/$name.audit.json")), owner, symbols)
             }
@@ -125,17 +126,22 @@ class OriginalStdioSeekNativeTest {
                                         val files = Language.currentState().files
                                         val fd = when (scenario) {
                                             "invalid" -> -1L
-                                            "pipe" -> 0L // The embedding input is also nonseekable.
-                                            else -> files.open(ManagedAddress.fromByteArray(privateFile.toString().toByteArray() + byteArrayOf(0)), 0L)
+                                            "pipe" -> 0L // The embedding input is nonseekable.
+                                            else -> files.open(ManagedAddress.fromByteArray(privateFile.toString().toByteArray() + byteArrayOf(0)),
+                                                if (scenario == "readonly") 0L else 3L)
                                                 .also { assertTrue(it >= 3L) }
                                         }
-                                        if (scenario == "cur") assertEquals(3L, files.seek(fd, 3L, 0L))
                                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
-                                        assertEquals(row["result"], Calls.target(entry, arrayOf(0L, fd, row["displacement"], row["whence"])),
+                                        assertEquals(row["result"], Calls.target(entry, arrayOf(0L, fd, row["length"])),
                                             "$stage/$backend/$name/$scenario")
                                         if (fd >= 3L) {
-                                            assertEquals(6L, files.size(fd))
-                                            assertEquals("abcdef", Files.readString(privateFile))
+                                            assertEquals(expectedSize[scenario], files.size(fd))
+                                            val expectedBytes = when (scenario) {
+                                                "shrink" -> "abc".toByteArray()
+                                                "extend" -> "abcdef".toByteArray() + byteArrayOf(0, 0, 0)
+                                                else -> "abcdef".toByteArray()
+                                            }
+                                            assertArrayEquals(expectedBytes, Files.readAllBytes(privateFile))
                                             assertEquals(0L, files.close(fd))
                                         }
                                         if (compiled) assertEquals(before + 2,

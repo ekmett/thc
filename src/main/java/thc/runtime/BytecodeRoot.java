@@ -1015,8 +1015,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class FileSetSize {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 long fd, long length, Object state, @Bind("$node") Node node) {
-            TupleResultsKt.requireVoidCarrier(state);
-            long result = CoreManagedFiles.current(node).setSize(fd, length);
+            long result;
+            if (state == OriginalStdioOp.TRUNCATE) result = CoreOriginalStdio.current(node).truncate(fd, length);
+            else {
+                TupleResultsKt.requireVoidCarrier(state);
+                result = CoreManagedFiles.current(node).setSize(fd, length);
+            }
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
