@@ -8,4 +8,4 @@ import CBVCoercionAudit (coercionEntry)
 main :: IO ()
 main = mapM_ row [-10..10]
   where row value@(I# n) = putStrLn $ unwords
-          [show value, show (I# (opaqueEntry n)), show (I# (inlineEntry n)), show (I# (recursiveEntry n)), show (I# (coercionEntry n))]
+          [show value, show (I# (opaqueEntry n)), show (I# (inlineEntry n)), show (I# (recursiveEntry n)), show (I# (coercionEntry n)), show (I# (wrapperEntry n))]

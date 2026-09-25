@@ -10,13 +10,14 @@ module THC.Interface
 import Control.Exception (Exception, throwIO)
 import Control.Monad (unless)
 import Data.IORef (newIORef, writeIORef)
+import Data.List (sortOn)
 import GHC.Plugins
 import GHC.Driver.Env (hscSetFlags)
 import GHC.Driver.Env.KnotVars (KnotVars(..), lookupKnotVars)
 import GHC.Iface.Binary (readBinIface, CheckHiWay(..), TraceBinIFace(..))
 import GHC.IfaceToCore (typecheckIface, typecheckWholeCoreBindings)
 import GHC.Tc.Utils.Monad (initIfaceCheck)
-import GHC.Types.TypeEnv (emptyTypeEnv, typeEnvTyCons)
+import GHC.Types.TypeEnv (emptyTypeEnv, typeEnvIds, typeEnvTyCons)
 import GHC.Unit.Module.Location (pattern ModLocation)
 import GHC.Unit.Module.ModDetails (ModDetails(..))
 import GHC.Unit.Module.ModIface
@@ -92,7 +93,21 @@ loadInterfaceCore environment expected path = do
       writeIORef types (md_types details)
       bindings <- initIfaceCheck (text "THC complete interface Core") tied
         (typecheckWholeCoreBindings types whole)
-      pure (Just (InterfaceCore m details bindings (mi_sc_foreign simplified) flags))
+      -- GHC writes simplified Core before AddImplicitBinds injects constructor
+      -- wrappers. Their genuine Ids/unfoldings are reconstructed by interface
+      -- declaration hydration, not present in mi_sc_extra_decls. Recover only
+      -- local boxed-data wrappers with those exact bodies; constructor workers
+      -- are already represented by THC constructor metadata. No ordinary thin
+      -- interface fallback or name-based replacement is involved.
+      let supplied = mkVarSet (bindersOfBinds bindings)
+          wrappers = [NonRec v rhs
+            | v <- sortOn getOccString (typeEnvIds (md_types details))
+            , nameModule_maybe (varName v) == Just m
+            , not (v `elemVarSet` supplied)
+            , Just con <- [isDataConWrapId_maybe v]
+            , isBoxedDataTyCon (dataConTyCon con)
+            , Just rhs <- [dataConWrapUnfolding_maybe v]]
+      pure (Just (InterfaceCore m details (wrappers ++ bindings) (mi_sc_foreign simplified) flags))
 
 -- | Use the same serializer as the post-Tidy plugin, without another compile
 -- or a source target. Source-note paths survive even if source text is absent.

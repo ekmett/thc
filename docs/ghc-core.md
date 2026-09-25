@@ -84,6 +84,17 @@ existing knot lookups for other modules. Use a fresh session retaining pragmas f
 loading; the loader does not repair previously discarded dependency unfoldings.
 Cross-module home-package/hs-boot cycles are not yet an integration-tested use.
 
+GHC 9.14.1 writes this payload before `AddImplicitBinds` injects constructor
+wrappers. The loader therefore also supplies missing, locally owned boxed-data
+wrappers from the hydrated declarations' genuine `DataConWrapId` unfoldings,
+with their original names, types and coercions. Existing binding groups remain
+unchanged; wrappers are separate nonrecursive groups. This is not a fallback to
+ordinary function unfoldings when complete Core is absent. Constructor workers
+remain represented by constructor metadata, and newtypes are not injected.
+An unpacked GADT wrapper is native-checked through both execution backends;
+complete boot interfaces additionally check the original `$WTrType` and
+`$WUnsafeRefl` bodies and strict audits.
+
 Serialization shares `THC.Plugin.serializePostTidyCore` with the late plugin,
 including exact recursive groups, representations, existing CBV proofs and
 optional `source-notes`/`unit-qualified` metadata. No source target is required;

@@ -20,7 +20,7 @@ import java.util.IdentityHashMap
 class InterfaceCoreNativeTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = File(root, "build/interface-core")
-    private val entries = listOf("opaqueEntry", "inlineEntry", "recursiveEntry", "coercionEntry")
+    private val entries = listOf("opaqueEntry", "inlineEntry", "recursiveEntry", "coercionEntry", "wrapperEntry")
     private fun source(entry: String = "opaqueEntry"): Map<String, Any?> {
         val modules = StringBuilder("[")
         assertNull(CorePackageManifest.appendModules(modules, File(directory, "packages.json").absolutePath))
@@ -54,7 +54,7 @@ class InterfaceCoreNativeTest {
         }
         assertEquals((-10L..10L).toList(), rows.map { it[0] })
         rows.forEach { row -> assertEquals(listOf(row[0], row[0] * 7 + 11, row[0] + 3,
-            maxOf(0L, row[0]) * 7 + 11, row[0] + 7), row) }
+            maxOf(0L, row[0]) * 7 + 11, row[0] + 7, row[0]), row) }
         return rows
     }
 
@@ -218,6 +218,9 @@ class InterfaceCoreNativeTest {
                             }.toSet())
                         } else assertEquals(active, perCall)
                         if (entry == "opaqueEntry") assertTrue(active.size >= 2, "Keep the opaque private call")
+                        if (entry == "wrapperEntry") assertTrue(active.any {
+                            (it.rootNode as GuestRoot).coreIdentity?.occurrence == "\$WToken"
+                        }, "Compile and enter the recovered original constructor wrapper")
                         active.forEach {
                             it.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(it, true)
                             valid(it)
