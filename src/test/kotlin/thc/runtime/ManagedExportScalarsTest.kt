@@ -145,11 +145,11 @@ class ManagedExportScalarsTest {
         val type = normalized("GHC.Internal.Int", "Int8")
         assertThrows(RuntimeFault::class.java) {
             ManagedExportScalar.fromNormalizedType(type + ("arguments" to listOf(type)),
-                ManagedExportScalar.Role.ARGUMENT, 64, layouts::getValue)
+                ManagedExportScalar.Role.ARGUMENT, 64) { layouts.getValue(it) }
         }
         assertThrows(RuntimeFault::class.java) {
             ManagedExportScalar.fromNormalizedType(normalized("GHC.Internal.Word", "Int8"),
-                ManagedExportScalar.Role.ARGUMENT, 64, layouts::getValue)
+                ManagedExportScalar.Role.ARGUMENT, 64) { layouts.getValue(it) }
         }
         val wrong = layouts + ("ghc-internal:GHC.Internal.Int.I8#" to
             DataLayout(language, "ghc-internal:GHC.Internal.Int.I8#", "I8#", arrayOf("Word8Rep")))
