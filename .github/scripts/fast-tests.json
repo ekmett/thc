@@ -24,6 +24,10 @@
       "junit": ["thc.runtime.StablePointerTest"],
       "python": []
     },
+    "src/main/kotlin/thc/runtime/CoreSharedCAFStores.kt": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
     "src/main/kotlin/thc/runtime/FloatingAddresses.kt": {
       "junit": ["thc.runtime.FloatingAddressTest"],
       "python": []
@@ -1107,6 +1111,14 @@
       "python": []
     },
     "compiler/test-fixtures/StablePointerAudit.hs": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/SharedCAFNative.hs": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/SharedCAFOriginalCalls.json": {
       "junit": ["thc.runtime.StablePointerTest"],
       "python": []
     },

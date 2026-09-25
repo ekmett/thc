@@ -2267,6 +2267,21 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
         @Fallback public static void invalid(Object address, Object state) { throw fail("Expected opaque StablePtr#"); }
     }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = SharedCAFStore.class, name = "store")
+    public static final class RtsSharedCAFStore {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                thc.runtime.SharedCAFStore store, ManagedAddress candidate, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedAddress result = StablePointers.current(node).getOrSetSharedCAF(store, candidate);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+        @Fallback public static void invalid(VirtualFrame frame, LocalAccessor destination,
+                thc.runtime.SharedCAFStore store, Object candidate, Object state) {
+            throw fail("Expected managed Addr# for RTS shared CAF store");
+        }
+    }
     @Operation public static final class EqualStablePointers {
         @Specialization public static long equal(ManagedAddress left, ManagedAddress right, @Bind("$node") Node node) {
             return StablePointers.current(node).equal(left, right) ? 1L : 0L;

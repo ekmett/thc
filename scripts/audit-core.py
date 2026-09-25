@@ -611,6 +611,8 @@ class Audit:
                         or symbol in core_original_foreign.GMP_SYMBOLS
                         or symbol in core_original_foreign.LIBDW_UNAVAILABLE
                         or symbol in core_original_foreign.TERMIOS_SYMBOLS
+                        or symbol in ('getOrSetSystemEventThreadEventManagerStore',
+                                      'getOrSetGHCConcSignalSignalHandlerStore')
                         or symbol in ('lockFile', 'unlockFile', '__hscore_fstat', '__hscore_open', 'dup', 'dup2', 'fdReady', 'localeEncoding', 'hs_iconv_open', 'hs_iconv_close', 'hs_iconv',
                                       'base_strerror_r')):
                     for index, (argument, primitive) in enumerate(zip(arguments, core_original_foreign.OPERATIONS[symbol][2])):
