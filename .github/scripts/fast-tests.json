@@ -20,6 +20,10 @@
       "junit": ["thc.runtime.CoreMainThreadForeignTest"],
       "python": []
     },
+    "src/main/kotlin/thc/runtime/CoreBoundThreadForeign.kt": {
+      "junit": ["thc.runtime.CoreBoundThreadForeignTest"],
+      "python": ["scripts/test-audit-core.py"]
+    },
     "src/main/kotlin/thc/runtime/ManagedMutVars.kt": {
       "junit": ["thc.runtime.MutVarTest"],
       "python": []

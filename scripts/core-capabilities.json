@@ -76,6 +76,7 @@
     "getOrSetSystemEventThreadEventManagerStore",
     "getOrSetGHCConcSignalSignalHandlerStore",
     "rts_setMainThread",
+    "rtsSupportsBoundThreads",
     "__hsbase_MD5Init", "__hsbase_MD5Update", "__hsbase_MD5Final",
     "thc_io_v1_open", "thc_io_v1_read", "thc_io_v1_write", "thc_io_v1_close",
     "thc_io_v1_error_kind", "thc_io_v1_error_message", "thc_io_v1_seek",

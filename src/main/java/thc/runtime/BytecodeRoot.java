@@ -2358,6 +2358,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             throw fail("Expected managed Addr# for RTS shared CAF store");
         }
     }
+    /** Capability query only. HsBool is StgInt; THC has no bound-thread/TLS ABI. */
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class BoundThreadSupport {
+        @Specialization public static void query(VirtualFrame frame, LocalAccessor destination,
+                Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, 0L);
+        }
+    }
     @Operation public static final class RegisterMainThread {
         @Specialization public static void register(Object weak, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
