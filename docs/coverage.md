@@ -63,7 +63,11 @@ The [SIMD slice](simd.md) supports six local operations each for `Int64X2#` and
 `Int32X4#`. Exact vector metadata keeps these values distinct from each other and
 from unboxed tuples. The Int64 controls include actual Core graph evidence of
 packed arithmetic with temporary carriers eliminated on AArch64 and x86. Vector
-calling conventions and other shapes remain work.
+guest-to-guest calling conventions now support 24 exact `VecRep` shapes across
+arguments, results, PAPs, joins, tuple fields and owned heap fields; see the
+[current SIMD transport contract](simd-families.md). Public host vector
+arguments/results, other shapes and unimplemented operations remain outside
+that contract. The slice descriptions below retain their original scopes.
 The [FloatX4 foundation](floatx4.md) adds another six local vector primops and
 2,196 native/model rows, including signed zeros, NaNs, exact subnormal ties and
 separate multiply/add rounding. The [DoubleX2 foundation](doublex2.md) adds the
