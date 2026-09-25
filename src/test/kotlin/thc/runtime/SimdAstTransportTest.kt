@@ -133,7 +133,7 @@ class SimdAstTransportTest {
             "unevaluated vector" to ((heap + ("fieldTypes" to listOf(vector + ("evaluated" to false), int))) to
                 "Constructor field evaluatedness lacks a worker obligation"),
             "wrong kind" to ((heap + ("fieldTypes" to listOf(wrongKind, int))) to
-                "Vector representation lacks exact vector metadata"),
+                "Core Long proof lacks a supported primitive representation"),
             "wrong representation" to ((heap + ("fieldTypes" to listOf(wrongRep, int))) to
                 "Constructor field type disagrees with its primitive representation"))
         assertEquals(CoreRepresentations.parse(vector), CoreFields(heap).vectorProofs[0])
