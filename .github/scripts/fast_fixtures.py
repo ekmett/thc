@@ -23,15 +23,22 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "85c5addb0c817149fed49773f82fc4ae820ee6181b399df5891f06115f4c589b"
+FULL_PREPARATION_PLAN = "eecf8bb40078b2c6f56fc5d8f61911817a60f5609880c5ffc00da2c9f6880708"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
     "build/original-stdio", "build/core-continuation", "build/live-async", "build/thread-async", "build/uncaught-self", "build/small-arrays", "build/floating-address",
     "build/floating-byte-offset", "build/narrow-byte-offset", "build/int32-byte-offset",
-    "build/explicit64-arrays", "build/mask-functions",
+    "build/explicit64-arrays", "build/mask-functions", "build/interface-core",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    "build/interface-core/manifest.json", "build/interface-core/InterfaceLibrary.json",
+    "build/interface-core/logs/native-oracle.stdout", "build/interface-core/native/oracle",
+    "build/interface-core/full/InterfaceLibrary.hi", "build/interface-core/thin/InterfaceLibrary.hi",
+    "build/interface-core/full/InterfaceLibrary.dyn_hi", "build/interface-core/full/InterfaceForeign.hi",
+    "build/interface-core/source/InterfaceLibrary.saved",
+    "build/interface-core/opaqueEntry-audit.json", "build/interface-core/inlineEntry-audit.json",
+    "build/interface-core/recursiveEntry-audit.json",
     "build/addr-identity/oracle.txt", "build/addr-identity/pre.audit.json", "build/addr-identity/post.audit.json",
     "build/core-continuation/core/CoreContinuationAudit.json", "build/core-continuation/audit.json",
     "build/core-continuation/application-audit.json",

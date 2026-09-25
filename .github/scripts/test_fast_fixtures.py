@@ -19,6 +19,27 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_interface_core_fixture_registration(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['interface-core']
+        self.assertEqual('interface-core', owners['thc.runtime.InterfaceCoreNativeTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
+                                   'interface-core']}], group['commands'])
+        self.assertEqual(['build/interface-core'], group['outputs'])
+        self.assertTrue(all((project / name).is_file() for name in group['sources']))
+        self.assertIn('"$fixture_bin" interface-core',
+                      (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/interface-core', fast_fixtures.FULL_OUTPUT_ROOTS)
+        for name in ('manifest.json', 'InterfaceLibrary.json', 'logs/native-oracle.stdout',
+                     'full/InterfaceLibrary.hi', 'thin/InterfaceLibrary.hi',
+                     'full/InterfaceLibrary.dyn_hi', 'full/InterfaceForeign.hi',
+                     'source/InterfaceLibrary.saved', 'opaqueEntry-audit.json',
+                     'inlineEntry-audit.json', 'recursiveEntry-audit.json'):
+            self.assertIn('build/interface-core/' + name, fast_fixtures.FULL_REQUIRED)
+        self.assertIn('"interface-core/**/*.json"', (project / 'build.gradle.kts').read_text())
+
     def test_formatter_focused_full_gradle_and_upload_registration(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

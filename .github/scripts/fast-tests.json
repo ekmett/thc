@@ -195,6 +195,18 @@
     }
   },
   "owners": {
+    "test/haskell-fixtures/InterfaceFixtures.hs": {
+      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
+    },
+    "compiler/test-fixtures/InterfaceLibrary.hs": {
+      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
+    },
+    "compiler/test-fixtures/InterfaceNative.hs": {
+      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
+    },
+    "compiler/test-fixtures/InterfaceForeign.hs": {
+      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
+    },
     "compiler/test-fixtures/LiveAsyncAudit.hs": {
       "junit": ["thc.runtime.LiveAsyncNativeTest", "thc.runtime.AsyncStrictEntryNativeTest"],
       "python": []
@@ -776,6 +788,7 @@
         "thc.runtime.CoreContinuationNativeTest",
         "thc.runtime.AsyncStrictEntryNativeTest",
         "thc.runtime.MaskFunctionNativeTest",
+        "thc.runtime.InterfaceCoreNativeTest",
         "thc.runtime.SmallArrayTest",
         "thc.runtime.PinnedPointerCellsTest",
         "thc.runtime.WideCharAddressTest",
