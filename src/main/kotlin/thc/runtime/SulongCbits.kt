@@ -10,6 +10,8 @@ import org.graalvm.polyglot.io.ByteSequence
 import java.lang.ref.WeakReference
 import java.util.WeakHashMap
 import java.util.function.LongSupplier
+import java.util.concurrent.ConcurrentHashMap
+import thc.ForeignBitcode
 
 /** Context-owned original C code and allocation views. No process addresses escape. */
 internal class SulongCbits(env: TruffleLanguage.Env) {
@@ -39,6 +41,65 @@ internal class SulongCbits(env: TruffleLanguage.Env) {
     // Arrays have identity equality. Both sides are weak: a cached view must not
     // keep its weak key alive. A live LLVM pointer strongly retains its view.
     private val buffers = WeakHashMap<Any, WeakReference<CbitsBuffer>>()
+    private val foreign = ConcurrentHashMap<Pair<String, String>, Any>()
+    @Volatile private var foreignErrno: Any? = null
+    @Volatile private var foreignWordAddress: Any? = null
+    @Volatile private var linkedForeign: ForeignBitcode? = null
+
+    private fun sameLink(first: ForeignBitcode, second: ForeignBitcode) =
+        first.unit == second.unit && first.module == second.module && first.target == second.target &&
+            first.symbols == second.symbols && first.bytes.contentEquals(second.bytes)
+
+    /** Parse and resolve every declared CAPI symbol before a guest entry runs. */
+    fun link(record: ForeignBitcode) {
+        linkedForeign?.let { require(sameLink(it, record)) { "Conflicting CAPI library identity" }; return }
+        val library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(record.bytes),
+            "${record.unit}-${record.module}.bc").build()).call()
+        val resolved = record.symbols.associateWith { symbol ->
+            require(interop.isMemberReadable(library, symbol)) { "Missing compiled original CAPI symbol: $symbol" }
+            interop.readMember(library, symbol)
+        }
+        require(interop.isMemberReadable(library, "thc_capi_errno")) { "CAPI library lacks errno bridge" }
+        require(interop.isMemberReadable(library, "thc_capi_word_address")) { "CAPI library lacks native pointer bridge" }
+        val errno = interop.readMember(library, "thc_capi_errno")
+        val wordAddress = interop.readMember(library, "thc_capi_word_address")
+        synchronized(this) {
+            linkedForeign?.let { require(sameLink(it, record)) { "Conflicting CAPI library identity" }; return }
+            foreignErrno = errno
+            foreignWordAddress = wordAddress
+            for ((symbol, function) in resolved) foreign[record.unit to symbol] = function
+            linkedForeign = record
+        }
+    }
+
+    private fun foreignFunction(unit: String, symbol: String): Any = foreign[unit to symbol]
+        ?: fault("Unlinked original CAPI target: $unit:$symbol")
+
+    fun capiZero(unit: String, symbol: String): Long {
+        val value = interop.execute(foreignFunction(unit, symbol))
+        if (!interop.fitsInLong(value)) fault("CAPI result is not a machine word: $symbol")
+        return interop.asLong(value)
+    }
+
+    fun capiWordAddress(unit: String, symbol: String, word: Long, address: ManagedAddress): Long {
+        // The foreign pointer is an offset view of the same guest allocation.
+        // Validate the complete timespec before C can write either of its words.
+        // ManagedAddress rejects pointer-bearing aliases before native exposure.
+        address.requireRange(0, 16, writable = true)
+        val pointer = CbitsBuffer(address.cbitsBacking(), address.cbitsWritable(),
+            LongSupplier { address.cbitsSize() }, address.cbitsOffset())
+        val bridge = foreignWordAddress ?: fault("No linked CAPI native pointer bridge")
+        val value = interop.execute(bridge, foreignFunction(unit, symbol), word, pointer)
+        if (!interop.fitsInInt(value)) fault("CAPI result is not a CInt: $symbol")
+        return interop.asInt(value).toLong()
+    }
+
+    fun capiErrno(): Long {
+        val function = foreignErrno ?: fault("No linked CAPI errno domain")
+        val value = interop.execute(function)
+        if (!interop.fitsInInt(value)) fault("CAPI errno is not a CInt")
+        return interop.asInt(value).toLong()
+    }
 
     @Synchronized internal fun buffer(address: ManagedAddress): CbitsBuffer {
         val bytes = address.cbitsBacking()

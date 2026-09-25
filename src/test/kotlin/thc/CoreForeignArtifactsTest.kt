@@ -8,8 +8,43 @@ import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Context
 import thc.runtime.Program
 import thc.runtime.BytecodeProgram
+import java.security.MessageDigest
 
 class CoreForeignArtifactsTest {
+    private fun sha(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes)
+        .joinToString("") { "%02x".format(it) }
+
+    @Test fun linkedCapiNeedsExactArchivedSourceSymbolsAndNoCallbacks() {
+        val unit = "base-test-unit"
+        val name = "System.CPUTime.Posix.ClockGetTime"
+        val symbols = (0..2).map { "exact_generated_wrapper_$it" }
+        val source = "/* original C source */\n"
+        val bytecode = byteArrayOf(0x42, 0x43)
+        val calls = symbols.map { symbol -> mapOf("foreignCall" to mapOf(
+            "target" to mapOf("kind" to "static", "isFunction" to true,
+                "unit" to unit, "symbol" to symbol), "convention" to "capi", "safety" to "unsafe")) }
+        val archive = mapOf("schema" to 1L, "execution" to "not-linked", "stubs" to
+            mapOf("header" to "", "source" to source, "initializers" to emptyList<Any>(),
+                "finalizers" to emptyList<Any>()), "files" to emptyList<Any>())
+        val link = mapOf("schema" to 1L, "format" to "llvm-bitcode", "unit" to unit,
+            "module" to name, "target" to if (System.getProperty("os.name").startsWith("Mac"))
+                "${if (System.getProperty("os.arch") == "aarch64") "arm64" else "x86_64"}-apple-darwin"
+                else "${if (System.getProperty("os.arch") == "amd64") "x86_64" else "aarch64"}-unknown-linux-gnu",
+            "symbols" to symbols, "sourceSha256" to sha(source.toByteArray()),
+            "bitcodeSha256" to sha(bytecode), "bitcodeHex" to "4243")
+        val linked = mapOf("schema" to 2L, "unit" to unit, "module" to name,
+            "foreign" to archive, "foreignLink" to link, "bindings" to calls)
+        assertEquals(symbols.toSet(), CoreForeignArtifacts.linked(linked)!!.symbols)
+        CoreForeignArtifacts.requireExecutable(linked)
+        for (bad in listOf(
+            linked + ("foreignLink" to (link + ("bitcodeSha256" to "0".repeat(64)))),
+            linked + ("foreignLink" to (link + ("symbols" to symbols.take(2)))),
+            linked + ("foreignLink" to (link + ("sourceSha256" to "0".repeat(64)))),
+            linked + ("foreign" to (archive + ("stubs" to ((archive["stubs"] as Map<*, *>) +
+                ("initializers" to listOf(mapOf("isInitializer" to true, "unit" to unit,
+                    "module" to name, "name" to "boot"))))))))
+            assertThrows(IllegalArgumentException::class.java) { CoreForeignArtifacts.requireExecutable(bad) }
+    }
     private val label = mapOf("isInitializer" to false, "unit" to "pkg", "module" to "M", "name" to "exit")
     private val stubs = mapOf("header" to "", "source" to "", "initializers" to emptyList<Any>(),
         "finalizers" to listOf(label))

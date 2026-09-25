@@ -1660,6 +1660,7 @@ private data class FunctionSpec(val target: RootCallTarget, val captureLayout: C
 class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>,
               private val enableAsync: Boolean = false) : ExecutableProgram {
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
+    private val foreignLinks = moduleData["foreignLinks"] as? List<thc.ForeignBitcode> ?: emptyList()
     private val stackTargetLayout = moduleData["targetLayout"]
     private val callDemandsEnabled = java.lang.Boolean.getBoolean(CALL_DEMANDS_PROPERTY)
     private val metrics = Metrics(moduleData["instrument"] != false)
@@ -1947,6 +1948,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val originalStdio = CoreOriginalStdio.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val capi = CoreCapiForeign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
+                CoreRepresentations.metadata(expr)?.get("rep"), foreignLinks)
             val stableFree = CoreStablePointers.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val managedFile = CoreManagedFiles.validate(CoreRepresentations.metadata(expr),
@@ -1983,6 +1987,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     }
                 }
                 OriginalStdioExpression(originalStdio, operands.toTypedArray(), tupleProof)
+            } else if (capi != null) {
+                CoreCapiForeign.validateHead(fn, defined)
+                CapiExpression(capi, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
             } else if (stableFree) {
                 CoreStablePointers.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 FreeStablePointer(compile(args[0], scope, false), compile(args[1], scope, false))

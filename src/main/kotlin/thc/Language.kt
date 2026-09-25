@@ -46,9 +46,15 @@ object CoreModules {
         val sourceFiles = linkedMapOf<String, Map<String, Any?>>()
         val sourceSpans = linkedMapOf<String, Map<String, Any?>>()
         val bindingOrigins = linkedMapOf<String, Map<String, String>>()
+        val foreignLinks = linkedMapOf<Pair<String, String>, ForeignBitcode>()
         val moduleKeys = hashSetOf<Pair<String, String>>()
         for (module in modules) {
             CoreForeignArtifacts.requireExecutable(module)
+            CoreForeignArtifacts.linked(module)?.let { link ->
+                require(foreignLinks.putIfAbsent(link.unit to link.module, link) == null) {
+                    "Duplicate linked foreign module: ${link.unit}:${link.module}"
+                }
+            }
             require(module["ghc"] == "9.14.1") { "This adapter requires GHC 9.14.1 exports" }
             val unit = module["unit"] as? String
             val name = module["module"] as? String
@@ -90,6 +96,7 @@ object CoreModules {
         return mapOf("schema" to 1L, "ghc" to "9.14.1", "module" to "THC.Bundle",
             "bindings" to bindings.values.toList(), "constructors" to constructors.values.toList(),
             "bindingOrigins" to bindingOrigins,
+            "foreignLinks" to foreignLinks.values.toList(),
             "sourceFiles" to sourceFiles.values.toList(), "sourceSpans" to sourceSpans.values.toList())
     }
 
@@ -290,6 +297,7 @@ class Language : TruffleLanguage<Language.State>() {
             "diagnosticUnsupported" to (input["diagnosticUnsupported"] == true),
             "sourceNotesEnabled" to (input["sourceNotesEnabled"] != false)) +
             (if (layout == null) emptyMap() else mapOf("targetLayout" to layout))
+        (linked["foreignLinks"] as List<ForeignBitcode>).forEach { currentState(null).cbits().link(it) }
         val bindings = linked["bindings"] as List<Map<String, Any?>>
         val selected = bindings.singleOrNull { it["id"] == entry } ?: bindings.single { it["name"] == entry }
         val selectedExpression = selected["expr"] as List<Any?>

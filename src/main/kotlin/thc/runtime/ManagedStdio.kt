@@ -12,6 +12,9 @@ internal class ManagedStdio(private val files: ManagedFiles) {
     private val hostAbi by lazy { StdioHostAbi.load() }
     private val lastError = ThreadLocal.withInitial { 0L }
 
+    /** The same original get_errno declaration observes a linked CAPI failure. */
+    internal fun captureForeignErrno(errno: Long) { lastError.set(errno) }
+
     @TruffleBoundary fun read(fd: Long, address: ManagedAddress, count: Long): Long {
         val abi = hostAbi
         if (fd != fd.toInt().toLong()) throw RuntimeFault("Original read requires a canonical signed CInt descriptor")

@@ -36,6 +36,7 @@ import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, wa
                        readCreateProcessWithExitCode)
 import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
+import THC.Driver.ForeignBitcode (linkClockGetTime)
 import THC.Driver.Installed
 import THC.Driver.Run (RunOptions(..))
 import THC.Driver.Zip (decodeZip, encodeZip)
@@ -165,7 +166,8 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
         (Map.lookup (registeredId registrationUnit) byId)
       require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
         ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
-      result <- prepareInstalledBundle cacheRoot driverHash helperContext registrationUnit
+      result <- prepareInstalledBundle cacheRoot (native </> "cache/thc/staging")
+        driverHash helperContext registrationUnit
       bundle <- either (\missing -> fail
         ("complete-interface-core unavailable for " ++ missingUnit missing ++ ":" ++ missingModule missing ++
          " (dynamic interface " ++ missingInterface missing ++ "). Select a full-Core GHC; " ++
@@ -231,9 +233,9 @@ prepareInterfaceHelper context root = do
 -- Rehydrate before cache lookup: registration/ABI/mtime is not an executable
 -- payload fingerprint. Only generated JSON and THC-owned exporter code are
 -- hashed; no installed GHC binary, interface or library is read for hashing.
-prepareInstalledBundle :: FilePath -> String -> InstalledContext -> InstalledUnit ->
+prepareInstalledBundle :: FilePath -> FilePath -> String -> InstalledContext -> InstalledUnit ->
                           IO (Either MissingCore InstalledBundle)
-prepareInstalledBundle cache driverHash context registrationUnit = do
+prepareInstalledBundle cache staging driverHash context registrationUnit = do
   acquired <- acquireInstalled context registrationUnit
   case acquired of
     Left missing -> pure (Left missing)
@@ -257,20 +259,16 @@ prepareInstalledBundle cache driverHash context registrationUnit = do
             "generatedCore" .= [object ["module" .= name, "sha256" .= shaHex bytes] | (name, bytes) <- modules],
             "dependencies" .= installedDepends registrationUnit]
           buildKey = shaHex (BL.toStrict (encode (object inputFields)))
-          exporter = object ["helperHash" .= helperHash, "driverHash" .= driverHash,
-                             "options" .= (["post-tidy", "unit-qualified", "source-notes", "dynamic"] :: [String])]
+          exporter = object (["helperHash" .= helperHash, "driverHash" .= driverHash,
+                             "options" .= (["post-tidy", "unit-qualified", "source-notes", "dynamic"] :: [String])] ++
+                             ["foreignLinkRecipe" .= ("original-capi-llvm-v1" :: String)
+                             | any ((== "System.CPUTime.Posix.ClockGetTime") . fst) modules])
           exportKey = shaHex (BL.toStrict (encode ("thc-installed-interface-v1" :: String, buildKey, exporter)))
           inputs = object (inputFields ++ ["buildKey" .= buildKey, "exportKey" .= exportKey, "exporter" .= exporter])
           directory = cache </> "core-bundles/v1" </>
             (compilerId ++ "-" ++ compilerAbi ++ "-" ++ compilerPlatform) </> exportKey
           destination = directory </> (registered ++ ".zip")
-          members = [("core/" ++ show index ++ ".json", bytes) | (index, (_, bytes)) <- zip [0 :: Int ..] modules]
-          refs = [object ["name" .= name, "boundary" .= boundary, "path" .= member, "sha256" .= shaHex bytes]
-                 | ((name, bytes), (member, _)) <- zip modules members]
           inputBytes = BL.toStrict (encode inputs)
-          inner = object ["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
-            "unit" .= unit, "buildKey" .= buildKey, "exportKey" .= exportKey, "modules" .= refs,
-            "buildInputs" .= object ["path" .= ("inplace-manifest.json" :: String), "sha256" .= shaHex inputBytes]]
       createDirectoryIfMissing True directory
       bundle <- withLock (destination ++ ".lock") $ do
         present <- doesFileExist destination
@@ -279,6 +277,19 @@ prepareInstalledBundle cache driverHash context registrationUnit = do
         case cached of
           Just hit -> pure hit
           Nothing -> do
+            linked <- forM modules $ \(name, bytes) -> do
+              result <- linkClockGetTime (installedLibdir context) staging
+                compilerPlatform unit name bytes
+              pure (name, result)
+            let members = [("core/" ++ show index ++ ".json", bytes)
+                          | (index, (_, bytes)) <- zip [0 :: Int ..] linked]
+                refs = [object ["name" .= name, "boundary" .= boundary,
+                                "path" .= member, "sha256" .= shaHex bytes]
+                       | ((name, bytes), (member, _)) <- zip linked members]
+                inner = object ["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
+                  "unit" .= unit, "buildKey" .= buildKey, "exportKey" .= exportKey, "modules" .= refs,
+                  "buildInputs" .= object ["path" .= ("inplace-manifest.json" :: String),
+                                           "sha256" .= shaHex inputBytes]]
             archive <- either fail pure (encodeZip
               (("manifest.json", BL.toStrict (encode inner)) : ("inplace-manifest.json", inputBytes) : members))
             -- Keep an existing file intact until the complete replacement is ready.

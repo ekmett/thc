@@ -22,6 +22,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                            private val checkpoint: BytecodeCheckpoint?,
                                            private val enableAsync: Boolean) : ExecutableProgram {
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
+    private val foreignLinks = moduleData["foreignLinks"] as? List<thc.ForeignBitcode> ?: emptyList()
     constructor(language: Language, moduleData: Map<String, Any?>) : this(language, moduleData, null, false)
     constructor(language: Language, moduleData: Map<String, Any?>, enableAsync: Boolean) :
         this(language, moduleData, null, enableAsync)
@@ -1319,6 +1320,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val originalStdio = CoreOriginalStdio.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val capi = CoreCapiForeign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
+                CoreRepresentations.metadata(expr)?.get("rep"), foreignLinks)
             val stableFree = CoreStablePointers.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val managedFile = CoreManagedFiles.validate(CoreRepresentations.metadata(expr),
@@ -1423,6 +1427,16 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     else if (originalStdio == OriginalStdioOp.SEEK) b.endFileSeek()
                     else if (originalStdio == OriginalStdioOp.TRUNCATE) b.endFileSetSize()
                     else if (status) b.endOriginalStdioStatus() else b.endOriginalStdioTransfer()
+                }
+            } else if (capi != null) {
+                CoreCapiForeign.validateHead(fn, defined)
+                val operands = args.map { compile(it, scope, false) }
+                tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    if (capi.zeroArgument) b.beginLinkedCapiZero(destination.single(), capi)
+                    else b.beginLinkedCapiWordAddress(destination.single(), capi)
+                    operands.forEach { it.emit(e) }
+                    if (capi.zeroArgument) b.endLinkedCapiZero() else b.endLinkedCapiWordAddress()
                 }
             } else if (stableFree) {
                 CoreStablePointers.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)

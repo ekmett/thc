@@ -49,8 +49,19 @@ class Audit:
         self.reachable = []
         self.chains = {}
         self.queue = deque()
+        self.linked_foreign = {}
         for source, module in modules:
-            if type(module.get('schema')) is not int or module['schema'] != 1 or module.get('ghc') != '9.14.1' or 'foreign' in module:
+            linked = (type(module.get('schema')) is int and module['schema'] == 2 and
+                      'foreignLink' in module and core_package_manifest.linked_foreign(module))
+            if linked:
+                for symbol in module['foreignLink']['symbols']:
+                    key = (module['foreignLink']['unit'], symbol)
+                    if key in self.linked_foreign:
+                        self.issue('module-format', None, source, 'Duplicate linked CAPI symbol ' + symbol)
+                    self.linked_foreign[key] = module['foreignLink']
+            if (type(module.get('schema')) is not int or
+                    (module['schema'] != 1 and not linked) or
+                    module.get('ghc') != '9.14.1' or ('foreign' in module and not linked)):
                 self.issue('module-format', None, source,
                            core_package_manifest.foreign_execution_issue(module) or
                            'Requires executable Core schema 1 / GHC 9.14.1 without foreign artifacts')
@@ -626,6 +637,44 @@ class Audit:
                     raise ValueError('Managed MD5 foreign-call capability disabled')
                 self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path))
             except ValueError as error:
+                self.issue('foreign-call', owner, path, str(error))
+            return True
+
+        link = self.linked_foreign.get((target.get('unit'), symbol)) if isinstance(target, dict) else None
+        if isinstance(link, dict) and symbol in link['symbols']:
+            try:
+                if (function[0] != 'var' or function[1] in bound or function[1] in self.bindings or
+                        not isinstance(call, dict) or set(call) != {'schema', 'target', 'convention',
+                            'safety', 'arity', 'suppliedArity', 'argumentReps', 'resultRep'} or
+                        call['schema'] != 1 or target != {'kind': 'static', 'symbol': symbol,
+                            'unit': link['unit'], 'isFunction': True} or
+                        call['convention'] != 'capi' or call['safety'] != 'unsafe'):
+                    raise ValueError('Linked CAPI call lacks its exact original FCallId')
+                declared = call['argumentReps']
+                zero = isinstance(declared, list) and len(declared) == 1
+                wanted = [None] if zero else ['Word64Rep', 'AddrRep', None]
+                output = 'Word64Rep' if zero else 'Int32Rep'
+                def exact(rep, primitive):
+                    kind = 'void' if primitive is None else 'address' if primitive == 'AddrRep' else 'long'
+                    return (isinstance(rep, dict) and set(rep) == {'kind', 'primReps', 'evaluated'} and
+                            rep['kind'] == kind and rep['primReps'] == ([] if primitive is None else [primitive]) and
+                            type(rep['evaluated']) is bool)
+                def tuple_rep(rep):
+                    parts = rep.get('components') if isinstance(rep, dict) else None
+                    return (isinstance(parts, list) and len(parts) == 2 and
+                            rep.get('aggregate') == 'unboxed-tuple' and rep.get('kind') == 'unknown' and
+                            rep.get('primReps') == [output] and exact(parts[0], None) and
+                            exact(parts[1], output))
+                if (call['arity'] != len(wanted) or call['suppliedArity'] != len(wanted) or
+                        len(arguments) != len(wanted) or not isinstance(declared, list) or
+                        len(declared) != len(wanted) or expr[3] != [False] * len(wanted) or
+                        any(not exact(proof, primitive) or not exact(self.expression_rep(argument), primitive)
+                            for proof, argument, primitive in zip(declared, arguments, wanted)) or
+                        not tuple_rep(call['resultRep']) or not tuple_rep(self.expression_rep(expr))):
+                    raise ValueError('Linked CAPI call has wrong actual or declared primitive ABI')
+                self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path,
+                                               linkedModule=link['module']))
+            except (TypeError, KeyError, ValueError) as error:
                 self.issue('foreign-call', owner, path, str(error))
             return True
 

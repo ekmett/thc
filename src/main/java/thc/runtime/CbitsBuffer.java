@@ -20,23 +20,30 @@ public final class CbitsBuffer implements TruffleObject {
     private final ByteBuffer big;
     private final boolean writable;
     private final LongSupplier logicalSize;
+    private final long baseOffset;
 
     public CbitsBuffer(byte[] bytes, boolean writable) {
         this(bytes, writable, () -> bytes.length);
     }
     public CbitsBuffer(byte[] bytes, boolean writable, LongSupplier logicalSize) {
+        this(bytes, writable, logicalSize, 0);
+    }
+    public CbitsBuffer(byte[] bytes, boolean writable, LongSupplier logicalSize, long baseOffset) {
+        if (baseOffset < 0 || baseOffset > logicalSize.getAsLong())
+            throw new IllegalArgumentException("C buffer address exceeds its allocation");
         this.little = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
         this.big = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN);
         this.writable = writable;
         this.logicalSize = logicalSize;
+        this.baseOffset = baseOffset;
     }
     @ExportMessage boolean hasBufferElements() { return true; }
     @ExportMessage boolean isBufferWritable() { return writable; }
-    @ExportMessage long getBufferSize() { return logicalSize.getAsLong(); }
+    @ExportMessage long getBufferSize() { return logicalSize.getAsLong() - baseOffset; }
     private int index(long offset, int width) throws InvalidBufferOffsetException {
-        if (offset < 0 || offset > logicalSize.getAsLong() - width)
+        if (offset < 0 || offset > logicalSize.getAsLong() - baseOffset - width)
             throw InvalidBufferOffsetException.create(offset, width);
-        return (int) offset;
+        return Math.toIntExact(baseOffset + offset);
     }
     private void requireWritable() throws UnsupportedMessageException {
         if (!writable) throw UnsupportedMessageException.create();
