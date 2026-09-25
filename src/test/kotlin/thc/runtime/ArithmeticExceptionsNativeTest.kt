@@ -29,7 +29,7 @@ class ArithmeticExceptionsNativeTest {
         val kind = when { entry.endsWith("DivZero") -> 1; entry.endsWith("Overflow") -> 2; else -> 3 }
         return if (x == 0L) 100L + kind else x + (if (entry.startsWith("scalar")) 10L else 20L) + kind
     }
-    private fun context(): Context = Context.newBuilder("thc").allowExperimentalOptions(true)
+    private fun context(): Context = Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
         .option("compiler.Inlining", "false")
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
         .option("engine.SingleTierCompilationThreshold", "10000000")
@@ -54,7 +54,9 @@ class ArithmeticExceptionsNativeTest {
 
     @Test fun originalSomeExceptionsMatchNativeIncludingFirstCompiledColdRaise() {
         val manifest = Json.parse(File(directory, "manifest.json").readText()) as Map<*, *>
-        for (key in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[key] as Map<*, *>) {
+        val hashes = listOf(manifest["inputHashes"], manifest["artifactHashes"],
+            (manifest["native"] as Map<*, *>)["artifactHashes"])
+        for (record in hashes) for ((path, expected) in record as Map<*, *>) {
             val hash = MessageDigest.getInstance("SHA-256").digest(File(root, path as String).readBytes())
                 .joinToString("") { "%02x".format(it.toInt() and 255) }
             assertEquals(expected, hash, "Stale arithmetic exception fixture: $path")
@@ -63,12 +65,18 @@ class ArithmeticExceptionsNativeTest {
         val rows = File(root, manifest["oracle"] as String).readLines().map { it.split('\t') }.groupBy { it[0] }
         assertEquals(42, rows.values.sumOf { it.size })
         @Suppress("UNCHECKED_CAST")
-        val stages = manifest["stages"] as Map<String, List<String>>
-        for ((stage, paths) in stages) {
+        val stages = manifest["stages"] as Map<String, String>
+        val installedText = StringBuilder()
+        val targetLayout = CorePackageManifest.appendModules(installedText,
+            File(root, manifest["packageManifest"] as String).path)
+        assertNotNull(targetLayout, "Original installed RTS target layout is required")
+        val originals = Json.parse("[$installedText]") as List<Map<String, Any?>>
+        for ((stage, path) in stages) {
             @Suppress("UNCHECKED_CAST")
-            val module = CoreModules.merge(paths.map { Json.parse(File(root, it).readText()) as Map<String, Any?> })
+            val module = CoreModules.merge(originals +
+                listOf(Json.parse(File(root, path).readText()) as Map<String, Any?>)) + ("targetLayout" to targetLayout!!)
             // The plugin also discovers RTS-only dependencies in thin interface
-            // closures. Actual source exports supply any missing executable bodies.
+            // closures. Complete installed Core supplies the executable bodies.
             val closure = Json.parse(File(directory, "$stage/core/THC.InterfaceClosure.json").readText()) as Map<*, *>
             val discovered = (closure["bindings"] as List<*>).map { (it as Map<*, *>)["id"] } +
                 (closure["missingDefinitions"] as List<*>).map { (it as Map<*, *>)["id"] }

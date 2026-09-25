@@ -131,6 +131,7 @@ tasks.withType<Test>().configureEach {
             "uncaught-self/**/*.json", "uncaught-self/native/oracle",
             "arithmetic-exceptions/**/*.json", "arithmetic-exceptions/logs/*.stdout", "arithmetic-exceptions/logs/*.stderr",
             "arithmetic-exceptions/native/oracle",
+            "arithmetic-exceptions/installed/bundles/*.zip",
             "mask-functions/**/*.json", "mask-functions/logs/*.stdout", "mask-functions/logs/*.stderr",
             "mask-functions/native/oracle",
             "interface-core/**/*.json", "interface-core/logs/*.stdout", "interface-core/logs/*.stderr",

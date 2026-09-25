@@ -35,6 +35,8 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/arithmetic-exceptions/manifest.json",
+    "build/arithmetic-exceptions/core-manifest.json", "build/arithmetic-exceptions/installed/packages.json",
+    "build/arithmetic-exceptions/native/receipt.json",
     "build/arithmetic-exceptions/pre/core/ArithmeticExceptionsAudit.json",
     "build/arithmetic-exceptions/post/core/ArithmeticExceptionsAudit.json",
     "build/arithmetic-exceptions/pre/core/THC.InterfaceClosure.json",

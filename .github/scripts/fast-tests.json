@@ -392,7 +392,7 @@
       "python": []
     },
     "compiler/interface/Main.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.ArithmeticExceptionsNativeTest"], "python": []
     },
     "test/haskell-fixtures/InterfaceFixtures.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
@@ -481,7 +481,7 @@
       "python": []
     },
     "test/haskell-fixtures/StackFixtures.hs": {
-      "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackFormatterTest", "thc.runtime.ArithmeticExceptionsNativeTest"],
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackFormatterTest"],
       "python": []
     },
     "src/test/kotlin/thc/runtime/ManagedStackInfoImageTest.kt": {
@@ -1271,12 +1271,12 @@
       ]
     },
     "src/THC/Driver/Project.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest"],
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.ArithmeticExceptionsNativeTest"],
       "python": [],
       "haskell": ["driver-tests"]
     },
     "src/THC/Driver/Installed.hs": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": [],
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.ArithmeticExceptionsNativeTest"], "python": [],
       "haskell": ["driver-tests"]
     },
     "src/main/kotlin/thc/runtime/TargetLayout.kt": {
@@ -1288,7 +1288,7 @@
       "haskell": ["driver-tests"]
     },
     "compiler/target-layout.c": {
-      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"], "python": [],
+      "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest", "thc.runtime.ArithmeticExceptionsNativeTest"], "python": [],
       "haskell": ["driver-tests"]
     },
     "test/fixtures/run-pure/run-pure.cabal": {
