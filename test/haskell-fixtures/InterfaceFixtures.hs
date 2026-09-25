@@ -18,6 +18,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import FixtureSupport (CommandResult(..), hashes, runLogged, runLoggedExpect, writeJson)
 import InterfaceForeignFacts (prepareForeignAssociation, prepareTypedForeignAssociation, prepareImportStubs, inspectInstalledBound)
+import InstalledCacheFixtures (checkInstalledCache)
 import GHC hiding (exprType, entry)
 import GHC.Plugins
 import GHC.Core.TyCo.Compare (eqType)
@@ -206,6 +207,7 @@ prepareInterfaceCore root = do
           String pathText <- [valueAt key row], let path = Text.unpack pathText]
         _ -> []
   checkDriver root directory ghc ghcPkg helper baseUnit
+  (cacheCommands, cacheArtifacts) <- checkInstalledCache root directory ghc ghcPkg helper libdir baseUnit
   audits <- forM entries $ \entry -> run ("audit-" ++ entry) "python3"
     ["scripts/audit-core.py", "--entry", unitName ++ ":" ++
       (if entry == "coercionEntry" then "CBVCoercionAudit." else "InterfaceLibrary.") ++ entry,
@@ -221,6 +223,8 @@ prepareInterfaceCore root = do
         "compiler/test-fixtures/RegistrationNative.hs",
         "compiler/test-fixtures/ForeignImportStubs.hs", "compiler/test-fixtures/ImportStubsNative.hs",
         "compiler/test-fixtures/CBVCoercionAudit.hs", "compiler/interface/Main.hs",
+        "compiler/test-fixtures/InterfaceCacheRoot.hs", "compiler/test-fixtures/InterfaceCacheDependency.hs",
+        "test/haskell-fixtures/InstalledCacheFixtures.hs",
         "src/THC/Driver/Installed.hs", "src/THC/Driver/Project.hs", "src/THC/Driver/Wired.hs",
         "src/THC/Driver/ForeignBitcode.hs", "compiler/target-layout.c",
         "src/THC/Driver/Zip.hs",
@@ -230,8 +234,8 @@ prepareInterfaceCore root = do
         ["scripts" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
       commands = [helperBuild, helperLocation, pluginBuild, version, libdirResult, baseResult, wiredResult] ++
         concat builds ++ [foreignBuild] ++ foreignInit ++ [foreignRegistered, nativeBuild, oracle] ++
-        helperCommands ++ associationCommands ++ typedAssociationCommands ++ importCommands ++ wiredCommands ++ audits
-      artifacts = concatMap commandArtifacts commands ++ wrapperArtifacts ++
+        helperCommands ++ associationCommands ++ typedAssociationCommands ++ importCommands ++ wiredCommands ++ cacheCommands ++ audits
+      artifacts = concatMap commandArtifacts commands ++ wrapperArtifacts ++ cacheArtifacts ++
         [directory </> name | name <- ["InterfaceLibrary.json", "full/InterfaceLibrary.hi", "thin/InterfaceLibrary.hi",
           "full/InterfaceLibrary.dyn_hi", "full/InterfaceForeign.hi", "native/oracle", "source/InterfaceLibrary.saved"]] ++
         [directory </> name | name <- ["CBVCoercionAudit.json", "direct/CBVCoercionAudit.json",
@@ -260,7 +264,8 @@ prepareInterfaceCore root = do
      "controls" .= (["opaque-body", "private-worker", "recursive-groups", "thin-unavailable",
        "no-source-target", "wrong-module", "wrong-unit", "wrong-way", "foreign-archived", "private-flags", "repeat-load",
        "helper-protocol", "installed-cbv-worker", "installed-wired-unit", "foreign-association-absence",
-       "foreign-linked-clock", "typed-foreign-export-associations", "retained-export-registration", "managed-export-original"] :: [String]),
+       "foreign-linked-clock", "typed-foreign-export-associations", "retained-export-registration", "managed-export-original",
+       "installed-payload-cache"] :: [String]),
      "commands" .= map commandRecord commands, "runtimeVerified" .= False]
   putStrLn "Prepared complete interface Core: 21 native rows; full/thin/no-source/identity/way/foreign controls passed"
 
@@ -392,7 +397,8 @@ checkDriver root directory ghc ghcPkg helper baseUnit = do
     ["sourceDeleted" .= True, "bundle" .= Project.bundlePath artifact,
      "sha256" .= Project.bundleHash artifact, "unchangedReuse" .= True,
      "thinMissing" .= True, "identityFailure" .= True, "wrongWayFailure" .= True, "foreignArtifactsArchived" .= True,
-     "failedRefreshPreservedBundle" .= True, "installedArtifactsHashed" .= False]
+     "failedRefreshPreservedBundle" .= True, "installedArtifactsHashed" .= True,
+     "compilerBinariesHashed" .= False, "interfaceFingerprint" .= ("ghc-retained-binary-v1" :: String)]
 
 valueAt :: Key -> Value -> Value
 valueAt key (Object fields) = maybe Null id (KeyMap.lookup key fields)

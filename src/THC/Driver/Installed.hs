@@ -7,16 +7,16 @@
 module THC.Driver.Installed
   ( InstalledContext(..), InstalledUnit(..), InstalledCore(..), MissingCore(..)
   , installedContext, discoverInstalled, validateReexports, acquireInstalled
-  , installedProvenance, installedLayoutHeaders, helperCommand
+  , installedProvenance, installedLayoutHeaders, helperCommand, probeInstalled
   ) where
 
-import Control.Monad (filterM, forM, forM_, unless)
+import Control.Monad (filterM, foldM, forM, forM_, unless)
 import Data.Aeson (Value(..), FromJSON, eitherDecodeStrict', encode, fromJSON, Result(..), object, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
-import Data.Char (isAlphaNum)
+import Data.Char (isAlphaNum, isHexDigit)
 import Data.List (nub, sort)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (isNothing)
@@ -176,6 +176,55 @@ helperCommand context unit (name, path) =
    "--module", name, "--interface", path, "--way", "dynamic", "--source-notes"] ++
   concatMap (\db -> ["--package-db", db]) (installedDatabases context)
 
+-- Exact registered dependency closure, including mutable boot/-inplace units.
+-- This is an acceleration hint, never a substitute for ordinary acquisition:
+-- callers discard it on any discovery, protocol, identity or read failure.
+-- Thin dependency interfaces are valid hydration inputs; the requested unit
+-- itself must retain complete Core in every owned module.
+probeInstalled :: InstalledContext -> InstalledUnit -> IO Value
+probeInstalled context requested = do
+  units <- Map.elems <$> visit Set.empty Map.empty (registeredId requested)
+  unless (lookup (registeredId requested) [(registeredId unit, unit) | unit <- units] == Just requested)
+    (fail "installed registration changed before interface probe")
+  validateReexports units
+  let entries = [(registeredId unit, name, path) | unit <- units,
+                   (name, path) <- installedInterfaces unit]
+      request = object ["units" .= map registeredId units,
+        "interfaces" .= [object ["unit" .= identifier, "module" .= name, "interface" .= path]
+                         | (identifier, name, path) <- entries]]
+      arguments = ["--libdir", installedLibdir context, "--unit", registeredId requested,
+                   "--way", "dynamic", "--probe-inventory"] ++
+        concatMap (\db -> ["--package-db", db]) (installedDatabases context)
+  (status, output, diagnostic) <- boundedProcessInput (installedHelper context) arguments
+    (Text.unpack (Text.decodeUtf8 (BL.toStrict (encode request))))
+  response <- either (fail . ("invalid interface probe: " ++)) pure
+    (eitherDecodeStrict' (Text.encodeUtf8 (Text.pack output)))
+  unless (status == ExitSuccess && valueAt response "schema" == Just (1 :: Int) &&
+          valueAt response "status" == Just ("probed" :: String))
+    (fail ("interface probe unavailable: " ++ take 2000 output ++ take 2000 diagnostic))
+  rows <- required response "interfaces" :: IO [Value]
+  unless (length rows == length entries) (fail "incomplete interface probe inventory")
+  forM_ (zip entries rows) $ \((identifier, name, path), row) -> do
+    owner <- required row "owner" :: IO String
+    digest <- required row "fingerprint" :: IO String
+    complete <- required row "completeCore" :: IO Bool
+    unless (valueAt row "unit" == Just identifier && valueAt row "module" == Just name &&
+            valueAt row "interface" == Just path && not (null owner) &&
+            length digest == 32 && all isHexDigit digest &&
+            (identifier /= registeredId requested || complete))
+      (fail "inconsistent interface probe identity/payload")
+  current <- mapM (discoverInstalled context . registeredId) units
+  unless (current == units) (fail "installed registration changed during interface probe")
+  pure (object ["registrations" .= map (installedProvenance context) units, "interfaces" .= rows])
+  where
+    visit active found identifier
+      | identifier `Set.member` active = fail "installed dependency cycle"
+      | Map.member identifier found = pure found
+      | otherwise = do
+          unit <- discoverInstalled context identifier
+          foldM (visit (Set.insert identifier active)) (Map.insert identifier unit found)
+            (sort (installedDepends unit))
+
 acquireInstalled :: InstalledContext -> InstalledUnit -> IO (Either MissingCore InstalledCore)
 acquireInstalled context unit = go [] (installedInterfaces unit)
   where
@@ -232,11 +281,14 @@ required value name = maybe (fail ("missing/invalid helper field " ++ name)) pur
 -- readCreateProcessWithExitCode cleans up its child on exceptions, including
 -- timeout/cancellation. Neither is classified as a missing capability.
 boundedProcess :: FilePath -> [String] -> IO (ExitCode, String, String)
-boundedProcess executable arguments = do
+boundedProcess executable arguments = boundedProcessInput executable arguments ""
+
+boundedProcessInput :: FilePath -> [String] -> String -> IO (ExitCode, String, String)
+boundedProcessInput executable arguments input = do
   inherited <- getEnvironment
   let clean = filter (\(key, _) -> key `notElem` ["GHC_PACKAGE_PATH", "GHC_ENVIRONMENT"]) inherited
   result <- timeout (180 * 1000000) (readCreateProcessWithExitCode
-    (proc executable arguments) {env = Just clean} "")
+    (proc executable arguments) {env = Just clean} input)
   maybe (fail ("installed-Core subprocess timed out: " ++ executable)) pure result
 
 command :: FilePath -> [String] -> IO String

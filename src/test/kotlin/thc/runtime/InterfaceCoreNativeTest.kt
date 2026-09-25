@@ -36,14 +36,16 @@ class InterfaceCoreNativeTest {
         assertEquals(entries, manifest["entries"])
         assertEquals("thc-interface-fixture-0.1", manifest["unit"])
         val controls = Json.parse(File(directory, "driver-controls.json").readText()) as Map<String, Any?>
-        assertEquals(false, controls["installedArtifactsHashed"])
+        assertEquals(true, controls["installedArtifactsHashed"])
+        assertEquals(false, controls["compilerBinariesHashed"])
+        assertEquals("ghc-retained-binary-v1", controls["interfaceFingerprint"])
         for (name in listOf("sourceDeleted", "unchangedReuse", "thinMissing", "identityFailure",
             "wrongWayFailure", "foreignArtifactsArchived", "failedRefreshPreservedBundle")) assertEquals(true, controls[name], name)
         assertEquals(listOf("opaque-body", "private-worker", "recursive-groups", "thin-unavailable",
             "no-source-target", "wrong-module", "wrong-unit", "wrong-way", "foreign-archived",
             "private-flags", "repeat-load", "helper-protocol", "installed-cbv-worker", "installed-wired-unit",
             "foreign-association-absence", "foreign-linked-clock", "typed-foreign-export-associations",
-            "retained-export-registration", "managed-export-original"), manifest["controls"])
+            "retained-export-registration", "managed-export-original", "installed-payload-cache"), manifest["controls"])
         for (kind in listOf("inputHashes", "artifactHashes"))
             for ((path, expected) in manifest[kind] as Map<String, String>) {
                 val file = File(root, path)

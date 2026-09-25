@@ -17,6 +17,8 @@ extra-source-files:
   compiler/test-fixtures/NativeMallocNative.hs
   compiler/test-fixtures/CBVCoercionAudit.hs
   compiler/test-fixtures/InterfaceLibrary.hs
+  compiler/test-fixtures/InterfaceCacheRoot.hs
+  compiler/test-fixtures/InterfaceCacheDependency.hs
   compiler/test-fixtures/InterfaceNative.hs
   compiler/test-fixtures/InterfaceForeign.hs
   compiler/test-fixtures/InterfaceForeignAlias.hs
@@ -328,6 +330,7 @@ executable thc-fixtures
     ArithmeticExceptionFixtures
     MaskFunctionFixtures
     InterfaceFixtures
+    InstalledCacheFixtures
     InterfaceForeignFacts
     FixtureSupport
     WordFloatingFixtures
