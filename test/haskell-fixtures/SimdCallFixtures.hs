@@ -41,7 +41,7 @@ prepareSimdCalls root = do
   forM_ stages $ \stage -> do
     _ <- run root [("THC_CORE_OUT", output </> stage ++ "-core"),
                    ("THC_GHC_OUT", output </> stage ++ "-ghc")]
-      "compiler/export.sh" (["-fno-code", "-fwrite-if-simplified-core" | exportOnly] ++
+      "compiler/export.sh" ((if exportOnly then ["-fno-code", "-fwrite-if-simplified-core"] else []) ++
         ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source]) ""
     let core = directory </> stage ++ "-core/SimdCallAudit.json"
         audit = directory </> stage ++ "-audit.json"
