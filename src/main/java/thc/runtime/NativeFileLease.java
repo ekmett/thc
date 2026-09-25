@@ -32,6 +32,10 @@ public final class NativeFileLease implements AutoCloseable, TruffleObject {
         Linker.Option.captureCallState("errno"));
     private final Arena arena = Arena.ofShared();
     private final MemorySegment slot = arena.allocate(ValueLayout.JAVA_INT);
+    // IO holds this lease's monitor. Readiness acquisition must not wait for a
+    // potentially blocking read: only physical close and duplicate share this
+    // short lifetime lock. Acquisition publishes the slot before either is used.
+    private final Object lifetime = new Object();
     private boolean closed;
 
     NativeFileLease() { slot.set(ValueLayout.JAVA_INT, 0, -1); }
@@ -42,7 +46,35 @@ public final class NativeFileLease implements AutoCloseable, TruffleObject {
 
     synchronized boolean isOpen() { return !closed && slot.get(ValueLayout.JAVA_INT, 0) >= 0; }
 
+    private static final class WaitDuplicate {
+        static final MethodHandle FCNTL = Linker.nativeLinker().downcallHandle(
+            Linker.nativeLinker().defaultLookup().find("fcntl").orElseThrow(),
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT,
+                ValueLayout.JAVA_INT, ValueLayout.JAVA_INT),
+            Linker.Option.firstVariadicArg(2), Linker.Option.captureCallState("errno"));
+    }
+
+    /** Private Linux provider capability, never a guest-supplied host fd. */
+    int duplicateForWait() throws IOException {
+        synchronized (lifetime) {
+            if (closed || slot.get(ValueLayout.JAVA_INT, 0) < 0) throw new ClosedChannelException();
+            try (Arena call = Arena.ofConfined()) {
+                MemorySegment errors = call.allocate(CAPTURE);
+                int result = (int) WaitDuplicate.FCNTL.invokeExact(errors,
+                    slot.get(ValueLayout.JAVA_INT, 0), 1030, 0); // Linux F_DUPFD_CLOEXEC.
+                if (result < 0) throw new NativeFileException("duplicate readiness lease",
+                    errors.get(ValueLayout.JAVA_INT, ERRNO));
+                return result;
+            } catch (IOException | RuntimeException | Error failure) {
+                throw failure;
+            } catch (Throwable failure) {
+                throw new IOException("Native readiness duplication failed", failure);
+            }
+        }
+    }
+
     @Override public synchronized void close() throws IOException {
+      synchronized (lifetime) {
         if (closed) return;
         closed = true;
         try {
@@ -60,6 +92,7 @@ public final class NativeFileLease implements AutoCloseable, TruffleObject {
                 }
             }
         } finally { arena.close(); }
+      }
     }
 
     @ExportMessage synchronized boolean isPointer() { return !closed; }

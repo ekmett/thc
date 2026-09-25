@@ -981,7 +981,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             TupleResultsKt.requireVoidCarrier(state);
             long result;
             if (operation == OriginalStdioOp.LOCK) result = CoreOriginalStdio.locks(node).lock(fd, writing, milliseconds, socket);
-            else if (operation.getReadiness()) result = CoreOriginalStdio.current(node).ready(fd, writing, milliseconds, socket);
+            else if (operation.getReadiness()) result = CoreOriginalStdio.current(node).ready(fd, writing, milliseconds, socket, node);
             else throw new RuntimeFault("Invalid original four-scalar operation");
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
