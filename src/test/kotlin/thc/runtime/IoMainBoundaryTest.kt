@@ -76,7 +76,7 @@ class IoMainBoundaryTest {
 
     @Test fun executableShutdownKeepsBothIoRootsAndRunsOnlyOnce() {
         val original = fixture()
-        val shutdown = binding("shutdown", v("worker"))
+        val shutdown = binding("shutdown", app(v("worker"), listOf(n(2), n(3))))
         val module = original + ("bindings" to (bindings(original) + shutdown))
         for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
             val action = load(context, backend, module, shutdown = "shutdown")
