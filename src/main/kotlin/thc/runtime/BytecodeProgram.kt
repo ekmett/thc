@@ -2850,9 +2850,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 val context = FunctionContext(arity)
                 val constructorScope = Scope(context)
                 val records = constructors.getValue(id)["fieldTypes"] as? List<*>
-                    ?: throw UnsupportedCore("Missing constructor field type proofs: $id")
-                if (records.size != arity) throw RuntimeFault("Constructor field type count mismatch: $id")
-                val proofs = records.map(CoreRepresentations::parse)
+                if (records != null && records.size != arity) throw RuntimeFault("Constructor field type count mismatch: $id")
+                // Legacy scalar constructors may omit fieldTypes. CoreFields
+                // requires exact fieldTypes whenever a constructor owns vectors.
+                val proofs = records?.map(CoreRepresentations::parse) ?: List(arity) { CoreRepresentation.UNKNOWN }
                 context.inputLayout = ArgumentLayout.fromProofs(proofs)
                 context.typedInput = TypedInputLayout.create(language, context.inputLayout, false)
                 val physical = arrayListOf<Pair<Int, Local>>()
