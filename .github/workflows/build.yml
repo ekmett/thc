@@ -369,6 +369,7 @@ jobs:
             build/original-open/
             build/libdw-unavailable/manifest.json
             build/libdw-unavailable/oracle.json
+            build/libdw-unavailable/foreign-labels.json
             build/libdw-unavailable/logs/
             build/original-gmp/
             build/address-fields/

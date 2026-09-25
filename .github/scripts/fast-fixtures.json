@@ -39,8 +39,10 @@
     "libdw-unavailable": {
       "junit": ["thc.runtime.LibdwUnavailableTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "libdw-unavailable"]}],
-      "outputs": ["build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json"],
-      "sources": ["compiler/test-fixtures/LibdwUnavailableNative.hs", "test/haskell-fixtures/LibdwUnavailableFixtures.hs",
+      "outputs": ["build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json", "build/libdw-unavailable/foreign-labels.json"],
+      "sources": ["compiler/test-fixtures/LibdwUnavailableNative.hs", "compiler/test-fixtures/CFinalizerNative.hs",
+        "compiler/test-fixtures/ForeignLabelAudit.hs", "test/haskell-fixtures/LibdwUnavailableFixtures.hs",
+        "compiler/THC/Plugin.hs", "compiler/THC/CBV.hs", "compiler/THC/Demands.hs", "compiler/THC/Sources.hs", "compiler/THC/Wired.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-open": {

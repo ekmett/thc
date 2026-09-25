@@ -695,6 +695,11 @@ literal d = \case
   LitFloat f -> ("float",show (fromRational f :: Float))
   LitDouble f -> ("double",show (fromRational f :: Double))
   LitNullAddr -> ("null-addr","0")
+  -- A label has a symbol and an exact function/data distinction, but no
+  -- calling-convention or argument-type certificate. Preserve only those
+  -- facts; resolving a callable ABI is the foreign provider's obligation.
+  LitLabel symbol IsFunction -> ("function-addr",unpackFS symbol)
+  LitLabel symbol IsData -> ("data-addr",unpackFS symbol)
   other -> ("unsupported",pretty d other)
   where
     hex b = let h = showHex b "" in replicate (2-length h) '0' ++ h
