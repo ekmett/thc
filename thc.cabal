@@ -261,6 +261,7 @@ executable thc-fixtures
     FusedFloatingFixtures
     SqrtFixtures
     OriginalStdioFixtures
+    OriginalHandleReadinessFixtures
     MutVarFixtures
     SmallArrayFixtures
     StackFixtures

@@ -17,7 +17,8 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
         listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep"),
     WRITE_UNSAFE("ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite", "capi", "unsafe",
         listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep"),
-    ERRNO("__hscore_get_errno", "ccall", "unsafe", listOf(null), "Int32Rep");
+    ERRNO("__hscore_get_errno", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    ISATTY("isatty", "ccall", "unsafe", listOf("Int32Rep", null), "Int32Rep");
 }
 
 internal object CoreOriginalStdio {

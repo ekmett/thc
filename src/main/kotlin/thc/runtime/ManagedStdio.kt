@@ -5,7 +5,7 @@ package thc.runtime
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 
-/** Original LP64 write/get_errno protocol over context descriptors, never host fd1.
+/** Original LP64 write/isatty/get_errno protocol over context descriptors, never host fd1.
  * The current guest model runs each synchronous call on one host thread. This
  * error slot must migrate with guest-thread state before resumable scheduling. */
 internal class ManagedStdio(private val files: ManagedFiles) {
@@ -38,6 +38,18 @@ internal class ManagedStdio(private val files: ManagedFiles) {
     @TruffleBoundary fun errno(): Long {
         hostAbi
         return lastError.get()
+    }
+
+    @TruffleBoundary fun isTerminal(fd: Long): Long {
+        val abi = hostAbi
+        if (fd != fd.toInt().toLong()) throw RuntimeFault("Original isatty requires a canonical signed CInt descriptor")
+        val terminal = files.isTerminal(fd)
+        if (terminal < 0) {
+            lastError.set(abi.error(files.errorKind()))
+            return 0L // POSIX isatty reports zero, not -1, for an invalid descriptor.
+        }
+        if (terminal == 0L) lastError.set(abi.notTerminal())
+        return terminal
     }
 
     @TruffleBoundary fun dispose() { lastError.remove() }
