@@ -64,6 +64,7 @@ TCSETATTR_SYMBOL = 'ghczuwrapperZC9ZCghczminternalZCGHCziInternalziSystemziPosix
 TCGETATTR_SYMBOL = 'ghczuwrapperZC10ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCtcgetattr'
 
 OPERATIONS = {
+    'stg_sig_install': ('ccall', 'unsafe', ('Int32Rep', 'Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),
     TCSETATTR_SYMBOL:
         ('capi', 'unsafe', ('Int32Rep', 'Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),
     'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask':

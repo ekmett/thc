@@ -194,6 +194,8 @@ object CoreModules {
                 }
                 "app" -> {
                     val function = expr[1] as List<Any?>
+                    if (thc.runtime.CoreSignalForeign.named(CoreRepresentations.metadata(expr)))
+                        reference(thc.runtime.CoreSignalForeign.dispatcher, emptySet())
                     // FCallIds name foreign declarations, not Haskell globals.
                     // Lowering validates the complete ABI and rejects unsupported
                     // targets. Defined heads and all operands still participate
@@ -372,6 +374,7 @@ class Language : TruffleLanguage<Language.State>() {
         internal var nativeFiles: thc.runtime.NativeFileProvider? = null
         internal val stdio = thc.runtime.ManagedStdio(files)
         internal val signalMask = thc.runtime.ManagedSignalMask(this)
+        internal val signals = thc.runtime.ManagedSignals(this, language)
         internal val savedTermios = thc.runtime.SavedTermios(this)
         internal val iconv = thc.runtime.ManagedIconv({ cbits() }, stdio, threads)
         internal val strerror = thc.runtime.ManagedStrerror({ cbits() }, threads)
@@ -446,7 +449,9 @@ class Language : TruffleLanguage<Language.State>() {
     override fun createContext(env: Env): State = State(env, this)
     override fun getScope(context: State): Any = context.managedExports.scope
     override fun isThreadAccessAllowed(thread: Thread, singleThreaded: Boolean): Boolean = true
-    override fun finalizeContext(context: State) { context.iconv.dispose() }
+    override fun finalizeContext(context: State) {
+        try { context.signals.close() } finally { context.iconv.dispose() }
+    }
     override fun disposeContext(context: State) {
         context.managedExports.close()
         context.foreignRoots.close()
@@ -539,7 +544,8 @@ class Language : TruffleLanguage<Language.State>() {
                 val program = if (backend == "ast") Program(this@Language, linked)
                     else BytecodeProgram(this@Language, linked, true)
                 val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), hostResultFault,
-                    ioResult, this@Language, shutdownEntry, shutdownResult)
+                    ioResult, this@Language, shutdownEntry, shutdownResult,
+                    bindings.any { it["id"] == thc.runtime.CoreSignalForeign.dispatcher })
                 owner.foreignRoots.retain(program, registrations)
                 return value
             }
@@ -552,7 +558,7 @@ class Language : TruffleLanguage<Language.State>() {
 internal class EntryValue(private val program: ExecutableProgram, private val entry: String, private val argumentCount: Int,
                  private val hostResultFault: String? = null, ioResult: CoreRepresentation? = null,
                  language: Language? = null, shutdownEntry: String? = null,
-                 shutdownResult: CoreRepresentation? = null) : TruffleObject {
+                 shutdownResult: CoreRepresentation? = null, private val processSignals: Boolean = false) : TruffleObject {
     private val guestTarget = program.hostEntryTarget(argumentCount)
     private val guestEntry = program.entryValue(entry)
     private val ioTarget = ioResult?.let { IoMainRoot(language ?: error("Missing IO language"), it).callTarget }
@@ -624,6 +630,7 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
             threads.enterCurrent()
             var outcome = thc.runtime.GuestThreadStatus.FINISHED
             try {
+                if (processSignals) Language.currentState(dispatch).signals.bind(program)
                 try {
                     dispatch.execute(ioTarget, arrayOf(guestEntry))
                     // Run the original Handle action over this program's CAFs.
@@ -638,7 +645,10 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
             } catch (failure: Throwable) {
                 outcome = thc.runtime.GuestThreadStatus.uncaught(failure)
                 throw failure
-            } finally { threads.leaveCurrent(outcome) }
+            } finally {
+                try { if (processSignals) Language.currentState(dispatch).signals.close() }
+                finally { threads.leaveCurrent(outcome) }
+            }
             return true
         }
         if (member != "compile") throw UnknownIdentifierException.create(member)

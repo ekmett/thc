@@ -15,6 +15,7 @@ extra-source-files:
   compiler/pinned-ghc-internal/cbits/strerror.c
   compiler/test-fixtures/OriginalStrerrorNative.hs
   compiler/test-fixtures/NativeMallocNative.hs
+  compiler/test-fixtures/ProcessSignalsNative.hs
   compiler/test-fixtures/CBVCoercionAudit.hs
   compiler/test-fixtures/InterfaceLibrary.hs
   compiler/test-fixtures/InterfaceNative.hs
@@ -351,6 +352,7 @@ executable thc-fixtures
     OriginalGmpFixtures
     LibdwUnavailableFixtures
     NativeAddressFixtures
+    ProcessSignalFixtures
     FileWaitFixtures
     OriginalFdReadyFixtures
     OriginalRtsLocksFixtures

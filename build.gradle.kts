@@ -147,6 +147,7 @@ tasks.withType<Test>().configureEach {
             "libdw-unavailable/manifest.json", "libdw-unavailable/oracle.json", "libdw-unavailable/foreign-labels.json",
             "native-addresses/manifest.json", "native-addresses/oracle.json",
             "native-malloc/manifest.json", "native-malloc/oracle.txt",
+            "process-signals/manifest.json", "process-signals/oracle.txt", "process-signals/native-controls.txt",
             "original-gmp/**/*.json", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
             "original-gmp/logs/*.stdout", "original-gmp/logs/*.stderr",
             "original-stdio-close/**/*.json", "original-stdio-close/results/*.txt", "original-stdio-close/results/*.private",
@@ -464,6 +465,28 @@ val compileNativeSignals by tasks.registering {
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-signals")) }
 tasks.processResources { dependsOn(compileNativeSignals) }
+
+// POSIX asynchronous capture must execute machine code, never LLVM guest code.
+val compileNativeProcessSignals by tasks.registering {
+    dependsOn("generateStdioAbi")
+    val source = layout.projectDirectory.file("src/main/c/native-process-signal-api.c")
+    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    val output = layout.buildDirectory.dir("generated/native-process-signals")
+    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output)
+    doLast {
+        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
+            val destination = output.get().asFile.resolve("thc/native/native-process-signal-api.so")
+            destination.parentFile.mkdirs()
+            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+        }
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-process-signals")) }
+tasks.processResources { dependsOn(compileNativeProcessSignals) }
 
 // Original stdio FCalls use target C widths/errno, not JVM or private-ABI values.
 val generateStdioAbi by tasks.registering {

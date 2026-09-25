@@ -1748,6 +1748,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         CoreGmpForeign.validateHeads(bindings)
         CoreLibdwForeign.validateHeads(bindings)
         CoreNativeAllocationForeign.validateHeads(bindings)
+        CoreSignalForeign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(bindings, constructors)
             CoreInputCalls.validate(bindings, constructors)
@@ -2039,12 +2040,14 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
             val gmp = CoreGmpForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val processSignal = CoreSignalForeign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val nativeAllocation = CoreNativeAllocationForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && capi == null &&
-                !stableFree && !mainThreadForeign && !boundThreadForeign && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null)
+                !stableFree && !mainThreadForeign && !boundThreadForeign && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -2112,6 +2115,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (managedFile != null) {
                 CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 ManagedFileExpression(managedFile, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
+            } else if (processSignal != null) {
+                throw UnsupportedCore("Original process signal delivery requires the bytecode backend")
             } else if (nativeAllocation != null) {
                 CoreNativeAllocationForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
