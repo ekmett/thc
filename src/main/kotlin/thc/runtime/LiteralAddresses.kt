@@ -26,8 +26,20 @@ internal class ManagedAddress private constructor(
     private val stable: StablePointers.Handle? = null,
     private val numeric: Long? = null,
     private val finalizer: CFinalizerFunction? = null,
-    private val native: ManagedNativeAllocations.Owner? = null
+    private val native: ManagedNativeAllocations.Owner? = null,
+    private val capabilities: GuestThreads? = null
 ) {
+    /** This is an RTS data label, not a projection of a JVM or native pointer. */
+    internal fun readCapabilitiesWord32(elementOffset: Long, width: Int): Long? {
+        val threads = capabilities ?: return null
+        if (Language.currentState(null).threads !== threads)
+            fault("RTS data label belongs to another THC context")
+        if (width != 4 || elementOffset != 0L)
+            fault("enabled_capabilities permits only an aligned Word32 read at offset zero")
+        return maxOf(1L, threads.capabilityCount()).also {
+            if (it > 0xffff_ffffL) fault("enabled_capabilities exceeds Word32")
+        }
+    }
     internal fun nativeAllocation(): ManagedNativeAllocations.Owner? = native
     internal fun isNativeBase(): Boolean = native != null && offset == 0L
     /** Keep native storage alive across a complete operation, including calls
@@ -51,6 +63,7 @@ internal class ManagedAddress private constructor(
     internal fun stableHandle(): StablePointers.Handle? = stable
     internal fun finalizerFunction(): CFinalizerFunction? = finalizer
     private fun requireBytes() {
+        if (capabilities != null) fault("RTS data label is not byte-addressable")
         if (stable != null) fault("Opaque StablePtr# is not byte-addressable")
         if (finalizer != null) fault("Opaque C function label is not byte-addressable")
         if (numeric != null) fault("Unowned numeric Addr# is not byte-addressable")
@@ -60,6 +73,7 @@ internal class ManagedAddress private constructor(
     internal fun nativeImageBytes(): ByteArray = owner?.takeIf { !it.isWritable }?.let { it.copyBytesOut(0, it.size) }
         ?: literalBytes?.copyOf() ?: fault("Native image requires immutable byte storage")
     fun toNativeBits(): Long {
+        if (capabilities != null) fault("RTS data label has no numeric guest address")
         if (finalizer != null) fault("Opaque C function label has no numeric guest address")
         native?.let { return it.access { segment -> segment.address() + offset } }
         return if (this === NULL) 0L else numeric ?: NativeAddresses.current(null).project(this)
@@ -91,6 +105,13 @@ internal class ManagedAddress private constructor(
 
     /** GHC pointer equality compares allocation identity and byte offset. */
     fun sameLocation(other: ManagedAddress): Boolean {
+        if (capabilities != null || other.capabilities != null) {
+            (capabilities ?: other.capabilities)?.let {
+                if (Language.currentState(null).threads !== it)
+                    fault("RTS data label belongs to another THC context")
+            }
+            return capabilities != null && capabilities === other.capabilities
+        }
         native?.requireLive(); other.native?.requireLive()
         return if (finalizer != null || other.finalizer != null) {
             val provider = thc.Language.currentState(null).cbits()
@@ -150,6 +171,8 @@ internal class ManagedAddress private constructor(
     /** Only offsets within one allocation have a portable managed ordering.
      * Comparing unrelated native pointer values would invent host addresses. */
     fun compareWithinAllocation(other: ManagedAddress): Int {
+        if (capabilities != null || other.capabilities != null)
+            fault("RTS data label has no address ordering")
         native?.requireLive(); other.native?.requireLive()
         if (finalizer != null || other.finalizer != null) fault("Opaque C function label has no address ordering")
         if (stable != null || other.stable != null) fault("Opaque StablePtr# has no address ordering")
@@ -171,6 +194,11 @@ internal class ManagedAddress private constructor(
 
     /** Like pointer arithmetic within this allocation, including its one-past address. */
     fun plus(displacement: Long): ManagedAddress {
+        if (capabilities != null) {
+            readCapabilitiesWord32(0, 4)
+            if (displacement != 0L) fault("RTS data label cannot be offset")
+            return this
+        }
         if (numeric != null) return NativeAddresses.current(null).recover(numeric + displacement)
         requireBytes()
         if (this === NULL) {
@@ -343,6 +371,7 @@ internal class ManagedAddress private constructor(
 
     @TruffleBoundary
     override fun toString(): String = if (stable != null) "Addr#(opaque StablePtr)" else if (this === NULL) "Addr#(null)"
+        else if (capabilities != null) "Addr#(enabled_capabilities)"
         else if (numeric != null) "Addr#(unowned numeric address)"
         else "Addr#(${if (literalBytes != null) "literal" else "managed"}+$offset)"
 
@@ -392,6 +421,8 @@ internal class ManagedAddress private constructor(
             ManagedAddress(null, null, 0L, stable = handle)
         internal fun fromCFinalizer(function: CFinalizerFunction): ManagedAddress =
             ManagedAddress(null, null, 0L, finalizer = function)
+        internal fun enabledCapabilities(threads: GuestThreads): ManagedAddress =
+            ManagedAddress(null, null, 0L, capabilities = threads)
 
         /** Logical pinning means stable managed backing and a strong lifetime,
          * not physical pinning or a process address. Do not copy: views must alias. */

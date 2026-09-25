@@ -1954,6 +1954,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "string-bytes" -> ManagedAddress.fromHex(value)
         "null-addr" -> if (value == "0") ManagedAddress.nullAddress() else throw UnsupportedCore("Malformed null Addr# literal")
         "function-addr" -> CFinalizerLabels.fromCore(value, proof)
+        "data-addr" -> CoreDataLabels.fromCore(value, proof)
         "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
