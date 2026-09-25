@@ -15,8 +15,10 @@ int main(void) {
     printf("{\"widths\":{\"charBits\":%d,\"pointer\":%zu,\"int\":%zu,"
            "\"bool\":%zu,\"size\":%zu,\"ssize\":%zu},\"errno\":{\"ENOENT\":%d,"
            "\"EACCES\":%d,\"EEXIST\":%d,\"EBADF\":%d,\"EINVAL\":%d,"
-           "\"EIO\":%d,\"ENOTSUP\":%d,\"EBUSY\":%d,\"EISDIR\":%d,\"ENOTTY\":%d,\"ESPIPE\":%d}}\n",
+           "\"EIO\":%d,\"ENOTSUP\":%d,\"EBUSY\":%d,\"EISDIR\":%d,\"ENOTTY\":%d,\"ESPIPE\":%d},"
+           "\"seek\":{\"SEEK_SET\":%d,\"SEEK_CUR\":%d,\"SEEK_END\":%d}}\n",
            CHAR_BIT, sizeof(void *), sizeof(int), sizeof(bool), sizeof(size_t), sizeof(ssize_t),
-           ENOENT, EACCES, EEXIST, EBADF, EINVAL, EIO, ENOTSUP, EBUSY, EISDIR, ENOTTY, ESPIPE);
+           ENOENT, EACCES, EEXIST, EBADF, EINVAL, EIO, ENOTSUP, EBUSY, EISDIR, ENOTTY, ESPIPE,
+           SEEK_SET, SEEK_CUR, SEEK_END);
     return 0;
 }

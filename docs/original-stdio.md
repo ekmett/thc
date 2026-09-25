@@ -12,6 +12,9 @@ The initial contracts are the exact `ghc-internal` static function targets:
 | `ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite` | capi / unsafe | Int32Rep, AddrRep, Word64Rep | Int64Rep |
 | `__hscore_get_errno` | ccall / unsafe | none | Int32Rep |
 | `fdReady` | ccall / safe or unsafe | Int32Rep, Word8Rep, Int64Rep, Word8Rep | Int32Rep |
+| `ghczuwrapperZC1ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuSET` | capi / unsafe | none | Int32Rep |
+| `ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR` | capi / unsafe | none | Int32Rep |
+| `ghczuwrapperZC0ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuEND` | capi / unsafe | none | Int32Rep |
 
 Matching is independent of the consuming binding's name. These are exact pinned
 symbols, not a rule accepting arbitrary generated wrapper names. CInt, size_t,
@@ -27,7 +30,7 @@ A nonempty zero-progress transport result is reported as EIO, so the original
 Haskell write loop cannot spin indefinitely on an unsupported transport behavior.
 
 `generateStdioAbi` compiles and executes a small C probe using the selected host
-clang and C headers. It records actual errno values and checks byte, pointer,
+clang and C headers. It records actual errno/SEEK values and checks byte, pointer,
 CInt, CBool, size_t and ssize_t widths. The runtime checks the generated resource's
 platform and LP64 widths before foreign effects. This probe does not read or hash
 installed GHC files, mutate the process locale, or require native access when
@@ -37,6 +40,27 @@ and Darwin x86_64/aarch64 host targets; cross-target resources are rejected.
 The errno slot belongs to a context and Java thread, preserving the existing guest
 thread identity. Supporting safe/unsafe descriptors does not make these foreign
 operations asynchronously interruptible or establish migratable IO scheduling.
+
+## Original seek constants
+
+The three exact original capi wrappers consume State and return State/Int32;
+they are not raw numeric literals, symbol-pattern aliases, or arbitrary native
+constant imports. The C probe supplies SEEK_SET/CUR/END, each a distinct signed
+CInt. ManagedStdio translates these values to the separate private managed
+absolute/relative/end modes before lseek; it does not assume native constants
+are 0/1/2. Queries and successful seeks preserve sticky errno, and State is
+checked before either operation. The same typed bytecode status instruction is
+specialized for the constant operation; no generic boxed foreign dispatcher is
+introduced.
+
+The existing `original-stdio-seek` Haskell fixture imports the genuine installed
+sEEK_SET/CUR/END declarations and c_lseek directly. Its private mode selectors
+exercise those original wrappers with 24 native observations, including tell,
+EOF, closed/bad descriptors, wide/negative offsets and a nonseekable pipe.
+Kotlin compares both Core stages/backends, inlining modes and first installed
+compiled entries; synthetic ABI negatives remain separate from source proof.
+This does not establish original Handle execution, general native FFI, or
+foreign-stub linkage.
 
 ## Bounded original file readiness
 

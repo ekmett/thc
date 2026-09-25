@@ -320,14 +320,14 @@ val generateStdioAbi by tasks.registering {
         val executable = temporaryDir.resolve("stdio-abi-probe")
         run(command + listOf("-std=c11", source.path, "-o", executable.path))
         val probe = JsonSlurper().parseText(run(listOf(executable.path))) as Map<*, *>
-        require(probe.keys == setOf("widths", "errno")) { "Malformed native stdio ABI probe" }
+        require(probe.keys == setOf("widths", "errno", "seek")) { "Malformed native stdio ABI probe" }
         // The C probe asserts widths; runtime Kotlin validates all exact fields and errno values.
         val manifest = linkedMapOf<String, Any?>("schema" to 1, "system" to system,
             "architecture" to arch, "target" to target, "compilerDefaultTarget" to defaultTarget,
             "compilerVersion" to run(listOf(compiler, "--version")),
             "sourceSha256" to MessageDigest.getInstance("SHA-256").digest(source.readBytes())
                 .joinToString("") { "%02x".format(it) },
-            "widths" to probe["widths"], "errno" to probe["errno"])
+            "widths" to probe["widths"], "errno" to probe["errno"], "seek" to probe["seek"])
         val destination = output.get().asFile.resolve("thc/native/stdio-host-abi.json")
         destination.parentFile.mkdirs()
         destination.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n")

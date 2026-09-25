@@ -37,14 +37,16 @@ requests :: [(String, String)]
 requests = [(entry, scenario) | entry <- entries, scenario <- scenarios]
 
 scenarios, fileScenarios :: [String]
-scenarios = ["set", "cur", "end", "beyond", "wide", "negative", "bad-whence", "invalid", "pipe"]
-fileScenarios = take 7 scenarios
+scenarios = ["set", "cur", "end", "beyond", "wide", "negative", "bad-whence", "invalid", "pipe", "eof", "tell", "closed"]
+fileScenarios = filter (`notElem` ["invalid", "pipe"]) scenarios
 
 arguments :: String -> (Int, Int)
 arguments scenario = case scenario of
   "set" -> (2, 0)
   "cur" -> (2, 1)
   "end" -> (-2, 2)
+  "eof" -> (0, 2)
+  "tell" -> (0, 1)
   "beyond" -> (10, 0)
   "wide" -> (8589934597, 0)
   "negative" -> (-1, 0)
@@ -76,6 +78,9 @@ prepareOriginalStdioSeek root = do
   compiled <- execute "native-build" [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
     "-package", "ghc-internal", "-package", "unix", "-i" ++ (root </> "compiler/test-fixtures"),
     "-odir", root </> native, "-hidir", root </> native, driver, "-o", root </> binary]
+  constants <- execute "native-constants" [] (root </> binary) ["constants"]
+  (seekSet, seekCur, seekEnd) <- maybe (die "Malformed native seek constants") pure
+    (readMaybe (BSC.unpack (commandStdout constants)) :: Maybe (Int, Int, Int))
   rows <- forM (zip [0 :: Int ..] requests) $ \(index, (entry, scenario)) -> do
     let number = show index
         label = "native-" ++ number
@@ -121,7 +126,7 @@ prepareOriginalStdioSeek root = do
           exported : [command | (_, _, command) <- audits], modules ++ [path | (_, path, _) <- audits])
   plugin <- listDirectory (root </> "compiler/THC")
   scripts <- listDirectory (root </> "scripts")
-  let commands = [version, info, compiled] ++ [command | (_, command, _, _) <- rows] ++
+  let commands = [version, info, compiled, constants] ++ [command | (_, command, _, _) <- rows] ++
         concat [stageCommands | (_, _, _, stageCommands, _) <- exports]
       sources = sort $ [source, driver, "thc.cabal", "test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/OriginalStdioSeekFixtures.hs",
@@ -139,9 +144,10 @@ prepareOriginalStdioSeek root = do
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
      "ghcInfo" .= BSC.unpack (commandStdout info), "entries" .= entries,
      "nativeRows" .= length rows,
+     "nativeConstants" .= object ["SEEK_SET" .= seekSet, "SEEK_CUR" .= seekCur, "SEEK_END" .= seekEnd],
      "stages" .= Map.fromList [(stage, settings) | (stage, settings, _, _, _) <- exports],
      "audits" .= Map.fromList [(stage, audits) | (stage, _, audits, _, _) <- exports],
      "strictAccepted" .= True, "runtimeVerified" .= False,
      "commands" .= map commandRecord commands, "inputHashes" .= inputHashes,
      "artifactHashes" .= artifactHashes]
-  putStrLn "original-stdio-seek: 18 native observations, 2 Core stages"
+  putStrLn "original-stdio-seek: 24 native observations, 3 original seek constants, 2 Core stages"

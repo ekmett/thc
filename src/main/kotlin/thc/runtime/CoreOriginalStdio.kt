@@ -18,6 +18,9 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     WRITE_UNSAFE("ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite", "capi", "unsafe",
         listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep"),
     ERRNO("__hscore_get_errno", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    SEEK_SET("ghczuwrapperZC1ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuSET", "capi", "unsafe", listOf(null), "Int32Rep"),
+    SEEK_CUR("ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR", "capi", "unsafe", listOf(null), "Int32Rep"),
+    SEEK_END("ghczuwrapperZC0ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuEND", "capi", "unsafe", listOf(null), "Int32Rep"),
     CLOSE("close", "ccall", "unsafe", listOf("Int32Rep", null), "Int32Rep"),
     SEEK("ghczuwrapperZC19ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZClseek", "capi", "unsafe",
         listOf("Int32Rep", "Int64Rep", "Int32Rep", null), "Int64Rep"),
@@ -27,6 +30,7 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     READY_UNSAFE("fdReady", "ccall", "unsafe", listOf("Int32Rep", "Word8Rep", "Int64Rep", "Word8Rep", null), "Int32Rep");
 
     val readiness: Boolean get() = this == READY_SAFE || this == READY_UNSAFE
+    val seekConstant: Boolean get() = this == SEEK_SET || this == SEEK_CUR || this == SEEK_END
 }
 
 internal object CoreOriginalStdio {
@@ -42,18 +46,18 @@ internal object CoreOriginalStdio {
     private fun exactInteger(value: Any?, expected: Int): Boolean =
         (value is Int || value is Long) && (value as Number).toLong() == expected.toLong()
 
-    /** An occurrence certificate cannot relabel a stored readiness operand. */
-    fun validateReadyOperand(operation: OriginalStdioOp, index: Int,
+    /** An occurrence certificate cannot relabel a stored scalar/State operand. */
+    fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation.readiness, "readiness operand operation")
+        requireProof(operation.readiness || operation.seekConstant, "readiness/constant operand operation")
         val primitive = operation.arguments[index]
         val kind = if (primitive == null) CoreKind.VOID else CoreKind.LONG
         val reps = listOfNotNull(primitive)
         requireProof(lowered.present && !lowered.isAggregate && !lowered.isVector &&
-            lowered.kind == kind && lowered.primReps == reps, "lowered readiness operand $index")
+            lowered.kind == kind && lowered.primReps == reps, "lowered scalar operand $index")
         if (stored != null && stored.present)
             requireProof(!stored.isAggregate && !stored.isVector && stored.kind in setOf(kind, CoreKind.UNKNOWN) &&
-                (stored.primReps == null || stored.primReps == reps), "stored readiness operand $index")
+                (stored.primReps == null || stored.primReps == reps), "stored scalar operand $index")
     }
 
     fun validateHead(function: List<Any?>, defined: Boolean) {
