@@ -1774,13 +1774,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = DataLayout.class, name = "layout")
     @ConstantOperand(type = int.class, name = "index")
     public static final class InitializeDataScalar {
-        @Specialization public static void number(DataLayout layout, int index, DataValue value, long field) {
+        @Specialization(guards = "layout.isLong(index)")
+        public static void number(DataLayout layout, int index, DataValue value, long field) {
             layout.initializeLong(value, index, field);
         }
-        @Specialization public static void floating(DataLayout layout, int index, DataValue value, float field) {
+        @Specialization(guards = "layout.isFloat(index)")
+        public static void floating(DataLayout layout, int index, DataValue value, float field) {
             layout.initializeFloat(value, index, field);
         }
-        @Specialization public static void doubleValue(DataLayout layout, int index, DataValue value, double field) {
+        @Specialization(guards = "layout.isDouble(index)")
+        public static void doubleValue(DataLayout layout, int index, DataValue value, double field) {
             layout.initializeDouble(value, index, field);
         }
         @Specialization(replaces = {"number", "floating", "doubleValue"})

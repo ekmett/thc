@@ -208,6 +208,57 @@ class VectorHeapStorageTest {
         }
     }
 
+    @Test fun bytecodeGenericFieldsBesideVectorsPreserveBoxedNumericCarriers() {
+        for (strategy in listOf("field-based", "array-based")) inLanguage(strategy) { language ->
+            val proof = vectors().single { it.vector == CoreVector.INT8X16 }
+            val expected = Slots(16); fill(proof, expected)
+            val layout = DataLayout.fromFields(language, "VectorBox", "VectorBox", CoreFields(metadata(proof)))
+            val numbers: List<Any> = listOf(Long.MIN_VALUE, Float.fromBits(0x7fc01234),
+                Double.fromBits(0x7ff8000000001234L))
+            for (number in numbers) {
+                // Each carrier gets a fresh operation site: an earlier Object
+                // fallback must not hide a missing numeric storage guard.
+                val target = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+                    b.beginRoot()
+                    val lanes = List(16) { index ->
+                        b.createLocal("lane $index", "primitive").also { local ->
+                            b.beginStoreLocal(local)
+                            b.emitLoadConstant(expected.frame.getLong(expected.slots[index]))
+                            b.endStoreLocal()
+                        }
+                    }
+                    val value = b.createLocal("constructed vector box", "object")
+                    b.beginStoreLocal(value); b.emitAllocateData(layout); b.endStoreLocal()
+                    b.beginTransferDataVector(BytecodeRoot.DataVectorTransfer(layout, 0,
+                        lanes.map(LocalAccessor::constantOf).toTypedArray(), true))
+                    b.emitLoadLocal(value); b.endTransferDataVector()
+                    b.beginInitializeDataScalar(layout, 1)
+                    b.emitLoadLocal(value); b.emitLoadConstant(Long.MAX_VALUE)
+                    b.endInitializeDataScalar()
+                    b.beginInitializeDataScalar(layout, 2)
+                    b.emitLoadLocal(value); b.emitLoadArgument(1)
+                    b.endInitializeDataScalar()
+                    b.beginReturn(); b.emitLoadLocal(value); b.endReturn()
+                    b.endRoot()
+                }.getNode(0).callTarget
+                repeat(2) {
+                    val value = Calls.target(target, arrayOf(0L, number)) as DataValue
+                    val actual = layout.read(value, 2)
+                    assertEquals(number.javaClass, actual?.javaClass, strategy)
+                    when (number) {
+                        is Long -> assertEquals(number, actual)
+                        is Float -> assertEquals(number.toRawBits(), (actual as Float).toRawBits())
+                        is Double -> assertEquals(number.toRawBits(), (actual as Double).toRawBits())
+                    }
+                    assertEquals(Long.MAX_VALUE, layout.readLong(value, 1))
+                    val restored = Slots(16)
+                    layout.restoreVector(value, 0, restored.frame, restored.slots, 0)
+                    compare(proof, expected, restored)
+                }
+            }
+        }
+    }
+
     @Test fun vectorIdentityAndAllocationOwnershipRemainExact() {
         for (strategy in listOf("field-based", "array-based")) inLanguage(strategy) { language ->
             val signed = vectors().single { it.vector == CoreVector.INT8X16 }
