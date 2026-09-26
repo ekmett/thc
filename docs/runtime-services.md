@@ -180,7 +180,9 @@ match. They are not resident code size or the number of currently compiled
 targets. Fields are independently sampled. Counts saturate at `2^63 - 1`.
 Invalidations specifically count Truffle `onCompilationInvalidated` callbacks;
 they are not all machine-code retirement. A deoptimization can occur without
-that invalidation callback, and these are not exhaustive JVM-wide deopt counts.
+that invalidation callback; observed code retirement can occur with neither an
+invalidation nor deoptimization callback. These are not exhaustive JVM-wide
+deopt counts, and zero does not establish code liveness or absence of deopts.
 
 ## Native checks and ABI
 
@@ -195,6 +197,15 @@ ghc --make -XHaskell2010 -threaded -Wall -Werror -iruntime \
 The Safe Haskell check accepts imports of all stable modules and requires an
 actual unsafe-import rejection for `THC.Internal.JIT`. Native tests check honest
 fallbacks and mask/result/exception preservation, not pretend JVM measurements.
+
+The [multi-package smoke program](../test/fixtures/run-runtime-services/Main.hs)
+depends on the real `thc:runtime` library and checks runtime-specific invariants
+across all six modules, including explicit JIT opt-in and nested Unicode spans.
+It does not compare variable JVM counters against native-GHC zeroes. Its
+`cabal.project` uses relative paths; it can be passed to `thc run` with complete
+installed Core and the configured GHC source provider described in the
+[driver guide](driver.md). A successful native run alone does not establish
+that its entire original Core closure is accepted by THC.
 
 The private versioned ABI consists of three exact ordinary `ccall unsafe`
 declarations: `thc_runtime_v1_query`, `thc_runtime_v1_control` and

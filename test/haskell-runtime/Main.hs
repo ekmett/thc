@@ -1,12 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ForeignFunctionInterface, ScopedTypeVariables #-}
 module Main (main) where
 
 import Control.Exception
   ( AsyncException(ThreadKilled), Exception, MaskingState(..), getMaskingState
   , mask_, throwIO, try )
 import Control.Monad (unless)
+import Data.Word (Word8)
+import Foreign.C.Types (CInt(..), CLLong(..))
+import Foreign.Ptr (Ptr, nullPtr)
 import qualified THC
 import qualified THC.GC as GC
 import qualified THC.Internal.JIT as JIT
@@ -18,11 +21,24 @@ import qualified THC.Trace as Trace
 data ProbeFailure = ProbeFailure deriving (Eq, Show)
 instance Exception ProbeFailure
 
+-- Negative tests of the private native shim, not additional public APIs.
+foreign import ccall unsafe "thc_runtime_v1_query"
+  rawQuery :: CInt -> CLLong -> CLLong -> IO CLLong
+foreign import ccall unsafe "thc_runtime_v1_control"
+  rawControl :: CInt -> CLLong -> IO CLLong
+foreign import ccall unsafe "thc_runtime_v1_trace"
+  rawTrace :: CInt -> CLLong -> Ptr Word8 -> CLLong -> IO CLLong
+
 check :: Bool -> String -> IO ()
 check condition message = unless condition (fail message)
 
 main :: IO ()
 main = do
+  malformed <- sequence
+    [rawQuery 999 0 0, rawQuery 0 1 0, rawQuery 301 (-1) 0,
+     rawQuery 5 0 (-2), rawControl 400 2, rawControl 500 4,
+     rawTrace 4 0 nullPtr 0, rawTrace 0 0 nullPtr 1, rawTrace 2 0 nullPtr 0]
+  check (all (== -5) malformed) "malformed private native ABI is diagnostic, not an available value"
   info <- runtimeInfo
   check (runtimeKind info == Available NativeGHC) "native runtime identity"
   check (executingBackend info == Available NativeBackend) "native backend identity"

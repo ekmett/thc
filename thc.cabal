@@ -132,6 +132,9 @@ extra-source-files:
   test/haskell-runtime/SafeClient.hs
   test/haskell-runtime/UnsafeClient.hs
   test/haskell-runtime/check-safe-haskell.sh
+  test/fixtures/run-runtime-services/cabal.project
+  test/fixtures/run-runtime-services/runtime-services-smoke.cabal
+  test/fixtures/run-runtime-services/Main.hs
   docs/original-posix-dup.md
   docs/original-termios.md
   docs/original-sigset.md
