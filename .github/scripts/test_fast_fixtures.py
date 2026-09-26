@@ -46,6 +46,19 @@ class FixturePreparationTest(unittest.TestCase):
         (self.root / 'build/stable-names/commands/native-run.stdout').write_text('mutated')
         with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
 
+    def test_closure_inspection_fixture_ownership_and_closed_inventory(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        self.assertEqual('closure-inspection', owners['thc.runtime.ClosureInspectionTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'closure-inspection']}],
+                         manifest['groups']['closure-inspection']['commands'])
+        self.assertIn('"$fixture_bin" closure-inspection', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertEqual(11, len(fast_fixtures.fast_inputs.CLOSURE_INSPECTION_OUTPUTS))
+        self.assertTrue(fast_fixtures.fast_inputs.CLOSURE_INSPECTION_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
+        for name in fast_fixtures.fast_inputs.CLOSURE_INSPECTION_OUTPUTS:
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(name, {}), name)
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/closure-inspection/native/Other.o', {}))
+
     def test_hint_trace_has_native_fixture_and_complete_cache_scope(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

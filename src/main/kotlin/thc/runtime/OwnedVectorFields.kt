@@ -80,7 +80,7 @@ internal class OwnedVectorFields(val proof: CoreRepresentation, name: String) {
         }
     }
     @Suppress("UNCHECKED_CAST")
-    @ExplodeLoop private fun restoreRaw(owner: Any): Any {
+    @ExplodeLoop internal fun restoreRaw(owner: Any): Any {
         // Return each public carrier directly; a value-producing when joins at the inaccessible AbstractVector.
         when (lane) {
             "Int8Rep", "Word8Rep" -> {

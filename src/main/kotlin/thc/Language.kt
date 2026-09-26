@@ -402,6 +402,7 @@ class Language : TruffleLanguage<Language.State>() {
         internal val iconv = thc.runtime.ManagedIconv({ cbits() }, stdio, threads)
         internal val strerror = thc.runtime.ManagedStrerror({ cbits() }, threads)
         internal val stackSnapshots = thc.runtime.ManagedStackRegistry()
+        @JvmField internal val closureInfo = thc.runtime.ClosureInfoTables()
         internal val capturedAsyncRequests = thc.runtime.CapturedAsyncRequests()
         internal val stablePointers = thc.runtime.StablePointers()
         internal val stableNames = thc.runtime.StableNames()

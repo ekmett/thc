@@ -80,6 +80,7 @@ python3 scripts/prepare-synchronous-exceptions.py
 "$fixture_bin" delimited-continuations
 "$fixture_bin" thread-label
 "$fixture_bin" hint-trace
+"$fixture_bin" closure-inspection
 "$fixture_bin" uncaught-self
 "$fixture_bin" mask-functions
 "$fixture_bin" interface-core

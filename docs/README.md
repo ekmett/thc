@@ -37,6 +37,9 @@ explicit. Neither is counted as strict whole-library support.
 
 ## Representation and primitive coverage
 
+The [closure inspection guide](closure-inspection.md) describes lazy heap images,
+non-profiling cost centres, and absent closure provenance on the JVM target.
+
 The generated [primop checklist](primops.md) lists every primop from the pinned
 GHC 9.14.1 API. It distinguishes implemented and missing operations; concrete
 runtime limitations are documented separately. The [capability contract](../scripts/core-capabilities.json)

@@ -2659,6 +2659,44 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation public static final class ClosureSize {
+        @Specialization public static long inspect(Object value) { return ClosureInspection.size(value); }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "info")
+    @ConstantOperand(type = LocalAccessor.class, name = "bytes")
+    @ConstantOperand(type = LocalAccessor.class, name = "pointers")
+    public static final class UnpackClosure {
+        @Specialization public static void inspect(VirtualFrame frame, LocalAccessor info,
+                LocalAccessor bytes, LocalAccessor pointers, Object value, @Bind("$node") Node node) {
+            ClosureImage image = ClosureInspection.image(value);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            info.setObject(bytecode, frame, thc.Language.currentState(node).closureInfo.address(image.getDescriptor()));
+            bytes.setObject(bytecode, frame, image.getBytes());
+            pointers.setObject(bytecode, frame, image.getPointers());
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "flag")
+    @ConstantOperand(type = LocalAccessor.class, name = "value")
+    public static final class GetApStackVal {
+        @Specialization public static void inspect(VirtualFrame frame, LocalAccessor flag,
+                LocalAccessor value, Object closure, long offset, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            flag.setLong(bytecode, frame, 0);
+            value.setObject(bytecode, frame, closure);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class WhereFrom {
+        @Specialization public static void inspect(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress buffer, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, 0);
+        }
+    }
+
     /** Force already grants each suspended thunk one evaluator across guest threads. */
     @Operation public static final class NoDuplicate {
         @Specialization public static Object preserve(Object state) {

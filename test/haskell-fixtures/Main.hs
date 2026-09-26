@@ -76,6 +76,7 @@ import OriginalIconvFixtures (prepareOriginalIconv)
 import MutVarFixtures (prepareMutVar)
 import STMFixtures (prepareSTM)
 import HintTraceFixtures (prepareHintTrace)
+import ClosureInspectionFixtures (prepareClosureInspection)
 import WindowsSmokeFixtures (prepareWindowsSmoke, prepareWindowsDriver)
 import StablePointerFixtures (prepareStablePointers)
 import StableNameFixtures (prepareStableNames)
@@ -966,6 +967,7 @@ main = do
     ["mutvar"] -> prepareMutVar root
     ["stm"] -> prepareSTM root
     ["hint-trace"] -> prepareHintTrace root
+    ["closure-inspection"] -> prepareClosureInspection root
     ["stable-pointers"] -> prepareStablePointers root
     ["stable-names"] -> prepareStableNames root
     ["weak-explicit"] -> prepareWeaks root

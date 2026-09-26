@@ -582,6 +582,7 @@ executable thc-fixtures
     MutVarFixtures
     STMFixtures
     HintTraceFixtures
+    ClosureInspectionFixtures
     WindowsSmokeFixtures
     StablePointerFixtures
     StableNameFixtures
