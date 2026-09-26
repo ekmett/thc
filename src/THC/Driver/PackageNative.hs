@@ -430,8 +430,12 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
                 createDirectoryIfMissing True output
                 wrappers <- either fail pure (nativeWrapperSource
                   [(signature,entry,wrapperHeader symbol) | (signature@(symbol,_,_,_,_),entry) <- entries])
+                -- Direct ccall needs only the FFI scalar typedefs. Rts.h also
+                -- imports unrelated libc prototypes (FILE*, etc.), which can
+                -- conflict with GHC's otherwise valid opaque Addr# callers.
+                let preamble = ["#include <Rts.h>\n" | convention == "capi"] ++ ["#include <HsFFI.h>\n"]
                 (bitcode,target,inputs) <- compileC compiler root configured output
-                  (Just ("#include <Rts.h>\n#include <HsFFI.h>\n" ++ source ++ wrappers))
+                  (Just (concat preamble ++ source ++ wrappers))
                 headers <- headerInputs (output </> "wrappers.c") inputs
                 pure (bitcode,target,inputs,headers)
       createDirectoryIfMissing True nativeDirectory
