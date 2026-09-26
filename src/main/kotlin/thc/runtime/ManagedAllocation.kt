@@ -291,7 +291,10 @@ internal class ManagedAllocation private constructor(
             fault("Vector read overlaps a managed pointer cell")
     }
 
-    @Synchronized fun copyBytesOut(offset: Long, count: Long): ByteArray {
+    // Keep FFM's allocating bulk snapshot outside partial evaluation. Its
+    // cold bounds/error formatting paths can otherwise recursively inline
+    // Locale/Formatter metadata while compiling a valid byte-array comparison.
+    @Synchronized @TruffleBoundary fun copyBytesOut(offset: Long, count: Long): ByteArray {
         val start = range(offset, count)
         if (intersectsPointer(start, count.toInt()))
             fault("Raw copy overlaps a managed pointer cell")
