@@ -9,8 +9,9 @@ import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import thc.CoreModules
 import thc.EntryValue
 import thc.Json
@@ -43,7 +44,7 @@ class ThreadStatusNativeTest {
         return found
     }
 
-    @Test fun nativeStatusesMatchAndFirstInstalledObservationUsesTypedTupleInBothBackends() {
+    private fun checkReceipt() {
         val manifest = Json.parse(File(directory, "manifest.json").readText()) as Map<*, *>
         for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<*, *>) {
             val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path as String).readBytes())
@@ -51,6 +52,11 @@ class ThreadStatusNativeTest {
             assertEquals(expected, actual, "Stale thread status fixture: $path")
         }
         assertEquals(listOf("0", "0", "16", "17", "1", "14"), File(directory, "oracle.txt").readLines())
+    }
+
+    @ParameterizedTest @ValueSource(booleans = [false, true])
+    fun nativeStatusesMatchAndFirstInstalledObservationUsesTypedTupleInBothBackends(asyncExceptions: Boolean) {
+        checkReceipt()
         val cases = listOf(Triple("selfStatus", null, 0L), Triple("maskedStatus", null, 0L),
             Triple("finishedStatus", null, 16L), Triple("diedStatus", null, 17L),
             Triple("blockedStatus", 0L, 1L), Triple("blockedStatus", 1L, 14L))
@@ -67,11 +73,13 @@ class ThreadStatusNativeTest {
                         val module = Json.parse(File(directory, "$stage/core/ThreadStatusAudit.json").readText()) as Map<String, Any?>
                         val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                         val linked = CoreModules.reachable(module, entry) + ("instrument" to true)
-                        val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked, true)
+                        val program: ExecutableProgram = if (backend == "ast") Program(language, linked, asyncExceptions)
+                            else BytecodeProgram(language, linked, asyncExceptions)
                         val function = context.asValue(EntryValue(program, entry, if (reader == null) 1 else 2))
                         fun execute(token: Long) = if (reader == null) function.execute(token).asLong()
                             else function.execute(reader, token).asLong()
-                        repeat(3) { assertEquals(expected, execute(0L), "$stage/$backend/$entry") }
+                        val label = "$stage/$backend/async=$asyncExceptions/$entry"
+                        repeat(3) { assertEquals(expected, execute(0L), label) }
                         val active = targets(program.entryTarget(entry))
                         val observe = program.entryTarget("${module.getValue("unit")}:ThreadStatusAudit.observe")
                         val identity = (observe.rootNode as GuestRoot).coreIdentity
@@ -88,13 +96,42 @@ class ThreadStatusNativeTest {
                         }
                         assertTrue(function.invokeMember("compile").asBoolean())
                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
-                        assertEquals(expected + 1L, execute(1L), "$stage/$backend/$entry first installed observation")
+                        assertEquals(expected + 1L, execute(1L), "$label first installed observation")
                         assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() - before >= 2,
                             "Entry and retained threadStatus# body enter installed code")
                         for (target in observations)
                             assertTrue(valid(target), "First observation preserves its compiled primitive body")
                         assertEquals(0L, program.diagnostics()["unsupportedTraps"])
                     } finally { context.leave() }
+                }
+            }
+    }
+
+    @ParameterizedTest @ValueSource(booleans = [false, true])
+    fun publicForkCompletionAndGuestFailureStatusesRespectAsyncMode(asyncExceptions: Boolean) {
+        checkReceipt()
+        for (stage in listOf("pre", "post")) for (backend in listOf("ast", "bytecode"))
+            for ((entry, expected) in listOf("finishedStatus" to 16L, "diedStatus" to 17L)) {
+                val label = "$stage/$backend/async=$asyncExceptions/$entry"
+                Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true)
+                    .option("compiler.Inlining", "false")
+                    .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                    .option("engine.SingleTierCompilationThreshold", "10000000")
+                    .option("engine.CompilationFailureAction", "Throw").build().use { context ->
+                    val source = File(directory, "$stage/core/ThreadStatusAudit.json")
+                    val function = context.eval("thc", CoreModules.request(listOf(source.path), entry,
+                        backend = backend, asyncExceptions = asyncExceptions))
+                    repeat(3) { assertEquals(expected, function.execute(0L).asLong(), label) }
+                    assertTrue(function.invokeMember("compile").asBoolean(), label)
+                    val before = Json.parse(function.getMember("diagnostics").asString()) as Map<*, *>
+                    assertEquals(backend, before["backend"], label)
+                    assertEquals(asyncExceptions, before["asyncExceptions"], label)
+                    assertEquals(expected + 1L, function.execute(1L).asLong(), "$label first installed observation")
+                    val after = Json.parse(function.getMember("diagnostics").asString()) as Map<*, *>
+                    assertTrue((after["compiledEntries"] as Number).toLong() -
+                        (before["compiledEntries"] as Number).toLong() >= 2,
+                        "$label entry and retained threadStatus# body enter installed code")
+                    assertEquals(0L, after["unsupportedTraps"], label)
                 }
             }
     }
