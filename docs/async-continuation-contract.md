@@ -8,10 +8,10 @@ that a child evaluation will return normally: that child can unmask, wait
 interruptibly, or throw to itself. A masked caller still owes its unfinished
 work to a suspended callee.
 
-This contract separates those obligations. The bytecode implementation already
-checks ownership, masks and saved call boundaries. A restricted internal AST
-subset now checks admission; foreign execution and nested public guest entries
-have a separate delivery-permission gate.
+This contract separates those obligations. Both backends check ownership, masks
+and saved call boundaries when `asyncExceptions` is enabled. The public Boolean
+option defaults to off for AST and on for bytecode. Foreign execution and nested
+public guest entries have a separate delivery-permission gate.
 The existence of a resumable root alone does not establish either property.
 
 ## Delivery
@@ -54,11 +54,11 @@ the Haskell mask alone cannot establish that delivery is impossible.
 The actual mask belongs to the executing thread. Observing one mask while
 compiling does not make it a constant for other invocations or resuming threads.
 
-Bytecode lowering currently uses conservative continuation cuts and dynamic
-mask checks, not this abstract interpretation. The restricted AST gate
-classifies expressions as non-suspending, captured, or potentially suspending
-for the typed execution route requested by their parent. Unknown forms are
-rejected; this is not yet a general analysis of Core calls and handlers.
+Both backends currently use conservative continuation cuts and dynamic mask
+checks, not this abstract interpretation. AST lowering covers ordinary Core
+calls, cases, lets and local joins, with separate capture for typed results and
+arguments. Unknown forms and subsystems with unsupported continuation state
+remain rejected during construction.
 
 The conservative suspension effect is independent of that mask. Unknown calls,
 forcing a lazy value, and callbacks that may change masking can suspend.
@@ -78,15 +78,18 @@ of the tree. A caller's known mask cannot satisfy the check on its own.
 The obligation includes argument evaluation, strict entry forcing, result
 conversion and cleanup introduced by lowering. Forcing a strict argument in
 host code before entering the root's capture handler is not covered by that
-handler. Bytecode places this forcing in its resumable prologue; the first AST
-subset rejects strict entry marks until it has equivalent coverage.
+handler. Both backends place this forcing in the callee's resumable prologue,
+including strict arguments supplied by partial application.
 Admission must also match the execution route chosen by the parent. A saved
 `executeLong` suffix does not cover a generic or tuple-returning entry; the
 declared result convention must select the covered route before execution.
-Demanded MVar operands require an evaluated lexical carrier; an occurrence's
-claimed evaluatedness cannot conceal a force introduced by lowering. The
-restricted async AST entry also excludes aggregate formals and typed caller
-handoff loans until it can preserve their ownership across capture.
+AST lowering sequences primitive and constructor operands into frame locals
+before executing the operation. Calls preserve already evaluated arguments,
+pending strict forces and typed destinations. Typed argument loans are released
+after their values have entered the callee frame; saved tuple results use owned
+storage. `catch#`, masks, annotations and `keepAlive#` retain their lexical
+handler or cleanup scope around resumed child steps. Recursive local joins poll
+before executing the next selected body.
 
 ## Saved computation
 
@@ -97,8 +100,8 @@ must be copied into owned storage before their cleanup releases or clears them.
 
 Ordinary typed execution must allocate no continuation record. A capture must
 save every affected activation and assemble its remaining steps. Bytecode uses
-its DSL yield frame; AST unwind materializes only the explicitly covered roots
-and records their Java locals in resume steps. A true
+its DSL yield frame; AST unwind materializes affected roots and records their
+Java locals in resume steps. A true
 tail call contributes no caller suffix. The approach follows
 [A Technique for Implementing First-Class Continuations](https://web.archive.org/web/20070420042601/http://eval.apply.googlepages.com/stackhack4.html).
 
@@ -165,26 +168,29 @@ in ordinary and dense handoff modes. The callback target is synthetic; native GH
 and general safe-FFI resumption are not established. `CallMaskSegmentsTest`
 checks logical mask restoration across Java threads and rejects malformed
 mask restoration. `ResumableThunkProofTest` rejects uncaptured caller updates
-and unrelated continuation roots. `LiveAsyncNativeTest` checks compiled loops,
-blocking waits, blackhole ownership and repeated interruption; its source
-fixture also has a native GHC result oracle. `ThreadAsyncNativeTest` covers
-public fork/throw/catch and lazy action heads.
-Its nested uninterruptible-mask/unmask/self-throw case verifies that the original
+and unrelated continuation roots. `ThreadAsyncNativeTest` covers public
+fork/throw/catch and lazy action heads with async explicitly enabled on both
+backends. It and `AsyncStrictEntryNativeTest` pass in ordinary and dense handoff
+modes; strict-entry checks preserve demanded PAP arguments and the caller.
+The thread suite's nested uninterruptible-mask/unmask/self-throw case verifies that the original
 handler receives the exception and that the outer mask is restored, interpreted
 and compiled, before and after Tidy.
 
-`AstContinuationTest` exercises the internal admitted direct-MVar root after
+`AstContinuationTest` exercises a direct-MVar root after
 explicit compilation, checks that the blocked entry ran compiled, and resumes
 it on another Java thread. Its tuple is copied out of the producer's handoff
 pool. Separate owned-thunk tests interrupt twice without replaying the prefix,
 and keep an uninterruptibly masked caller's unfinished work when its child
-unmasks. Construction rejects unsupported parent expressions and strict-entry
-forcing. This is a small synthetic Core proof: public AST async entry remains
-disabled until calls, cases, masks and handlers have complete coverage. A tuple
-case around a direct MVar read is admitted only with a non-suspending Int#
-literal suffix and an exact Long entry convention. Its compiled test checks
-cross-thread resumption after the read; conflicting entry conventions and
-unsupported suffixes are rejected during construction.
+unmasks. Construction admits the ordinary caller and strict-entry routes while
+still rejecting conflicting representation proofs and unknown Core forms.
+`LiveAsyncNativeTest` extends coverage to running loops, blocking waits,
+blackhole ownership and repeated interruption using a native GHC result oracle.
+Its expanded AST compiled-retention checks are still under diagnosis; the
+public-thread and strict-entry passes do not establish the entire live suite.
+
+STM transaction frames, compact traversal, opaque foreign execution and mixed
+asynchronous/delimited capture retain separate lowering or continuation
+barriers. Ordinary Core capture does not remove those subsystem requirements.
 
 The callback permission gate is admitted only at a public guest entry whose
 guest body already satisfies its backend's capture obligations. It does not
