@@ -28,14 +28,19 @@ class CStringTest {
         assertEquals(255L, address.indexChar(0), "Offset arithmetic does not mutate the original address")
     }
 
-    @Test fun literalAddressBoundsRejectOverflowAndForeignMemoryAccess() {
+    @Test fun literalMemoryAccessChecksBoundsWhileAddressArithmeticRetainsItsOrigin() {
         val address = ManagedAddress.fromHex("41")
         for (offset in listOf(-1L, 2L, Long.MIN_VALUE, Long.MAX_VALUE)) {
             assertThrows(RuntimeFault::class.java) { address.indexChar(offset) }
         }
         for (offset in listOf(-1L, 3L, Long.MIN_VALUE, Long.MAX_VALUE)) {
-            assertThrows(RuntimeFault::class.java) { address.plus(offset) }
+            // GHC permits sentinels outside the allocation; dereferencing one
+            // remains invalid. This arithmetic does not manufacture raw memory.
+            val sentinel = address.plus(offset)
+            assertThrows(RuntimeFault::class.java) { sentinel.indexChar(0) }
         }
+        assertTrue(address.plus(-1).plus(1).sameLocation(address))
+        assertTrue(address.plus(3).plus(-3).sameLocation(address))
         val onePast = address.plus(2)
         assertEquals(0L, onePast.indexChar(-1))
         assertThrows(RuntimeFault::class.java) { onePast.indexChar(0) }

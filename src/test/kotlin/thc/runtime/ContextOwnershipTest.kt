@@ -38,13 +38,16 @@ class ContextOwnershipTest {
                 } finally { context.leave() }
             }
             val interop = InteropLibrary.getUncached()
-            fun live(roots: Roots) {
-                assertEquals(1, roots.state.weaks.retainedCount())
-                assertSame(roots.stable, roots.state.weaks.dereference(roots.weak).value)
-                assertSame(roots.address, roots.state.stablePointers.dereference(roots.stable))
-                assertTrue(interop.isPointer(roots.pointer))
-                assertEquals(roots.bits, interop.asPointer(roots.pointer))
-                assertEquals(97L, roots.state.nativeAddresses.recover(roots.bits).readWord8(0))
+            fun live(context: Context, roots: Roots) {
+                context.enter()
+                try {
+                    assertEquals(1, roots.state.weaks.retainedCount())
+                    assertSame(roots.stable, roots.state.weaks.dereference(roots.weak).value)
+                    assertSame(roots.address, roots.state.stablePointers.dereference(roots.stable))
+                    assertTrue(interop.isPointer(roots.pointer))
+                    assertEquals(roots.bits, interop.asPointer(roots.pointer))
+                    assertEquals(97L, roots.state.nativeAddresses.recover(roots.bits).readWord8(0))
+                } finally { context.leave() }
             }
             fun retired(roots: Roots) {
                 assertEquals(0, roots.state.weaks.retainedCount())
@@ -63,11 +66,11 @@ class ContextOwnershipTest {
                 Context.newBuilder("thc").engine(engine).allowNativeAccess(true).build().use { second ->
                     val firstRoots = capture(first)
                     val secondRoots = capture(second)
-                    live(firstRoots)
-                    live(secondRoots)
+                    live(first, firstRoots)
+                    live(second, secondRoots)
                     first.close()
                     retired(firstRoots)
-                    live(secondRoots)
+                    live(second, secondRoots)
                     second.close()
                     retired(secondRoots)
                     retired(firstRoots)
