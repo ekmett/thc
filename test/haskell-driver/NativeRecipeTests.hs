@@ -12,7 +12,7 @@ import System.Directory
 import System.FilePath
 import System.IO (hClose, openTempFile)
 import System.IO.Error (tryIOError)
-import Test.HUnit
+import Test.HUnit (Test(..), assertBool, assertEqual)
 import THC.Driver.NativeRecipe
 import THC.Driver.ScalarBitcode (withScalarBitcode)
 
