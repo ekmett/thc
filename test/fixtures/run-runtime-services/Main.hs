@@ -81,7 +81,10 @@ main = do
   value <- Trace.withSpan "public Haskell span" $ Trace.withSpan "nested" (pure (73 :: Int))
   check "span action result" (value == 73)
   _ <- Trace.setTraceSink (case previousSink of Available selected -> selected; _ -> Trace.TraceOff)
-  pure ()
+  -- The external runner must require the THC line for guest execution; a
+  -- mistaken native-shim dispatch must not pass by selecting native checks.
+  putStrLn (if guest then "THC runtime services smoke: all APIs passed"
+    else "Native runtime services smoke: compatibility passed")
   where
     hasName collector = case GC.collectorName collector of
       Available name -> not (null name)

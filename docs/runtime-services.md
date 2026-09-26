@@ -214,3 +214,23 @@ validate their real GHC descriptor shapes. Successful scalar results are
 nonnegative; `-1/-2/-3/-4` represent the four absence statuses. Text queries
 address Unicode codepoints. Raw selectors and trace pointers are deliberately
 not part of the stable Haskell interface.
+
+### Native compatibility shims in Cabal projects
+
+The runtime library explicitly declares `x-thc-runtime-shim: v1`. Its C files
+are native-GHC fallbacks, not providers to run through Sulong. The project driver
+retains Cabal's actual C compiler receipts, source hashes, object hashes and
+component/unit identity, then hydrates the real exported GHC interfaces. Every
+typed foreign declaration and actual Core foreign call must match one of the
+five exact reserved runtime/affinity signatures, including the trace pointer
+argument. Same-unit inlining may move a call between modules; it must still
+have its verified declaration in that component.
+
+This is not a package-name or symbol-prefix exemption. Non-runtime imports,
+wrong signatures/conventions/safety/owners, foreign data, dynamic calls,
+native export/stub obligations and unverified import provenance are rejected.
+The explicit profile says that these native products are compatibility
+fallbacks: they are recorded but not linked or initialized in the guest.
+It does not expand the separate generic scalar-C profile to arbitrary pointer
+FFI or admit unrelated Haskell foreign calls. Producers must not use this marker
+for required guest-side native initializers or other native behavior.
