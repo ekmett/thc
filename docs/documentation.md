@@ -92,6 +92,7 @@ empty source-line suffix from record-selector file links. All resulting links
 still pass the same checker; missing targets are not exempted.
 
 `.github/workflows/docs.yml` builds a cached, docs-only Pages artifact from
-`main`. Latest-only concurrency cancels obsolete runs. Deployment uses the
+`main`. An active publication finishes while a newer run may replace pending
+work; frequent main pushes do not continually cancel the active site build. Deployment uses the
 GitHub Pages artifact/environment mechanism; no `gh-pages` source branch is
 created. Repository Pages settings must use **GitHub Actions** as the source.
