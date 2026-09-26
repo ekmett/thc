@@ -1,7 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE CApiFFI, ForeignFunctionInterface, MagicHash, UnliftedFFITypes #-}
-module CapiMix (mixed, mixedProbe#, wideProbe#, staticPointerProbe#) where
+module CapiMix (mixed, mixedProbe#, wideProbe#, word16Probe#, staticPointerProbe#) where
 import Foreign.Marshal.Alloc (allocaBytes)
 import Foreign.Storable (poke)
 import GHC.Exts (Addr#, Int(I#), Int#, Word(W#), Word#, Word8#, Word32#, Word64#,
@@ -19,6 +19,8 @@ foreign import ccall unsafe "archive_header_mix"
   headerMix :: Addr# -> Word8# -> Word32# -> Word64#
 foreign import ccall unsafe "archive_header_mix_wide"
   headerMixWide :: Addr# -> Int# -> Int# -> Word64#
+foreign import ccall unsafe "archive_header_mix16"
+  word16Probe# :: Addr# -> Int# -> Int# -> Int#
 
 mixedProbe# :: Addr# -> Int# -> Int# -> Word#
 mixedProbe# state rounds keylen = plusWord# (word64ToWord# (stateBias state))
@@ -33,7 +35,8 @@ wideProbe# state rounds keylen = plusWord# (word64ToWord# (stateBias state))
 staticPointerProbe# :: Int# -> Int# -> Word#
 staticPointerProbe# rounds keylen = mixedProbe# (stateFor 0#) rounds keylen
 
-mixed :: Int -> Int -> IO (Word,Word)
+mixed :: Int -> Int -> IO (Word,Word,Int)
 mixed (I# rounds) (I# keylen) = allocaBytes 8 $ \pointer@(Ptr state) -> do
   poke pointer (7 :: Word64)
-  pure (W# (mixedProbe# state rounds keylen), W# (wideProbe# state rounds keylen))
+  pure (W# (mixedProbe# state rounds keylen), W# (wideProbe# state rounds keylen),
+    I# (word16Probe# state rounds keylen))

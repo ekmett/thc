@@ -8,14 +8,55 @@ import Data.Aeson (Value(..), object, toJSON, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import Data.Either (isLeft)
-import Data.List (isInfixOf)
+import Data.List (isInfixOf, isPrefixOf)
 import Test.HUnit
 import THC.Driver.PackageNative
 import THC.Driver.NativeLibrarySources (validateNativeMathIR, validateNativeEntropyIR, validateNativeWidthIR)
+import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
 
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
   [ TestCase $ do
+      let source = unlines ["define i64 @caller(ptr %0, i64 %1, i64 %2) {",
+            "  %3 = call i64 @callee(ptr %0, i64 %1, i64 %2)", "  ret i64 %3", "}",
+            "define i64 @callee(ptr nocapture readonly %0, i8 zeroext %1, i32 %2) {"]
+      case nativeArgumentBridge "x86_64-unknown-linux-gnu" "callee" "caller" source of
+        Nothing -> assertFailure "missing native integer argument bridge"
+        Just (declaration,body,witnesses) -> do
+          assertEqual "exact C definition declaration" "declare i64 @callee(ptr, i8 zeroext, i32)" declaration
+          assertBool "argument low bits become explicit" ("trunc i64 %a1 to i8" `isInfixOf` body && "trunc i64 %a2 to i32" `isInfixOf` body)
+          assertBool "return ABI does not change" ("ret i64 %r" `isInfixOf` body)
+          assertEqual "exact original signature witnesses" (filter ("define " `isPrefixOf`) (lines source)) witnesses
+      mapM_ (\target -> assertEqual "target-specific ABI lowering" Nothing
+        (nativeArgumentBridge target "callee" "caller" source)) ["aarch64-unknown-linux-gnu","x86_64-pc-windows-msvc"]
+  , TestCase $ do
+      let caller = "define i64 @caller(ptr %0, i64 %1) {\n  %2 = call i64 @callee(ptr %0, i64 %1)\n  ret i64 %2\n}\n"
+          bridge callee = nativeArgumentBridge "x86_64-unknown-linux-gnu" "callee" "caller" (caller ++ callee)
+      mapM_ (\callee -> assertEqual "unsupported ABI is never guessed" Nothing (bridge callee))
+        ["define i32 @callee(ptr %0, i8 %1) {", "define i64 @callee(i64 %0, i8 %1) {",
+         "define fastcc i64 @callee(ptr %0, i8 %1) {", "define i64 @callee(ptr %0, i8 %1, ...) {",
+         "define i64 @callee(ptr byval(i64) %0, i8 %1) {", "declare i64 @callee(ptr, i8)",
+         "define i64 @callee(ptr %0, float %1) {", "define i64 @callee(ptr %0, i64 %1) {"]
+  , TestCase $ do
+      let source = "define void @caller(i32 %0, i64 %1) {\n  call void @callee(i32 %0, i64 %1)\n  ret void\n}\ndefine void @callee(i16 signext %0, i16 zeroext %1) {"
+      case nativeArgumentBridge "x86_64-unknown-linux-gnu" "callee" "caller" source of
+        Nothing -> assertFailure "missing 16-bit native bridge"
+        Just (declaration,body,_) -> do
+          assertEqual "native extension attributes survive" "declare void @callee(i16 signext, i16 zeroext)" declaration
+          assertBool "32-bit argument truncates" ("trunc i32 %a0 to i16" `isInfixOf` body)
+          assertBool "64-bit argument truncates" ("trunc i64 %a1 to i16" `isInfixOf` body)
+          assertBool "void remains void" ("  ret void\n" `isInfixOf` body)
+  , TestCase $ do
+      let source = "define i64 @caller(ptr %0, i64 %1) {\n  %2 = call i64 @callee(ptr %0, i64 %1)\n  ret i64 %2\n}\ndefine i64 @callee(ptr dereferenceable(8) %0, i8 zeroext %1) {"
+      assertBool "nested ordinary attributes preserve parameter boundaries"
+        (case nativeArgumentBridge "x86_64-unknown-linux-gnu" "callee" "caller" source of Just _ -> True; _ -> False)
+      let candidate body = "define i64 @caller(i64 %0) {\n" ++ body ++
+            "}\ndefine i64 @callee(i8 zeroext %0) {"
+      mapM_ (\body -> assertEqual "do not replace unrelated or effectful adapter work" Nothing
+        (nativeArgumentBridge "x86_64-unknown-linux-gnu" "callee" "caller" (candidate body)))
+        ["  %1 = call i64 @different(i64 %0)\n  ret i64 %1\n",
+         "  store volatile i8 1, ptr @counter\n  %1 = call i64 @callee(i64 %0)\n  ret i64 %1\n"]
+  , TestCase $ do
       let validate = validateNativeWidthIR "x86_64-unknown-linux-gnu"
       mapM_ (assertEqual "exact signed wchar_t/int ABI" (Right ()) . validate)
         ["declare i32 @wcwidth(i32)","declare noundef i32 @wcwidth(i32 noundef) #0"]
