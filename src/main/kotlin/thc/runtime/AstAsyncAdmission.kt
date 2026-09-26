@@ -6,7 +6,8 @@ package thc.runtime
 /** Ordinary Core forms have captured child edges. Primitive operands are
  * sequenced into locals by lowering; higher-order primitives retain explicit
  * scope handlers. Subsystems with opaque continuation state keep their lowering
- * barriers (STM attempts, compact traversal and foreign execution). */
+ * barriers (compact traversal and foreign execution). STM uses abort/restart
+ * boundaries rather than preserving a transaction log in a continuation. */
 internal object AstAsyncAdmission {
     fun validate(bindings: List<Map<String, Any?>>) {
         for (binding in bindings) expression(binding["expr"] as? List<*>

@@ -489,7 +489,7 @@ for ((taskName, dense) in listOf("compactRegionsFullCoreDefault" to false, "comp
         }
     }
 }
-tasks.register<Test>("stmFullCoreTest") {
+for ((taskName, dense) in listOf("stmFullCoreTest" to false, "stmDenseFullCoreTest" to true)) tasks.register<Test>(taskName) {
     group = "verification"
     description = "Tests original STM transactions and nestedAtomically using explicitly prepared complete GHC Core."
     maxHeapSize = "4g"
@@ -500,6 +500,7 @@ tasks.register<Test>("stmFullCoreTest") {
     })
     useJUnitPlatform()
     filter { includeTestsMatching("thc.runtime.STMFullCoreTest") }
+    systemProperty("thc.handoffSlabs", dense.toString())
     outputs.upToDateWhen { false }
     outputs.doNotCacheIf("Original STM native/first-entry evidence requires a fresh process") { true }
     doFirst {

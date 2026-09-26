@@ -685,6 +685,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             if (failure instanceof DelimitedCut cut) return cut;
             if (failure instanceof CapturedCallSuspension captured) return new CallSegmentSuspended(captured.getSegment());
             if (failure instanceof AsyncBlocked blocked) return blocked.getRequest();
+            if (failure instanceof STMRestart restart) return restart.getRequest();
             throw failure;
         }
     }
@@ -2334,16 +2335,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = STMOp.class, name = "operation")
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = Metrics.class, name = "metrics")
+    @ConstantOperand(type = boolean.class, name = "async")
     public static final class InvokeSTM {
         @Specialization public static void run(VirtualFrame frame, STMOp operation,
-                BytecodeTupleSlots destination, Metrics metrics, Object action, Object alternative,
+                BytecodeTupleSlots destination, Metrics metrics, boolean async, Object action, Object alternative,
                 Object nested, Object state,
-                @Cached(value = "create(operation, destination, metrics)", neverDefault = true) STMCall call) {
+                @Cached(value = "create(operation, destination, metrics, async)", neverDefault = true) STMCall call) {
             TupleResultsKt.requireVoidCarrier(state);
             call.execute(frame, action, alternative, nested);
         }
-        public static STMCall create(STMOp operation, BytecodeTupleSlots destination, Metrics metrics) {
-            return new STMCall(operation, destination, metrics);
+        public static STMCall create(STMOp operation, BytecodeTupleSlots destination, Metrics metrics, boolean async) {
+            return new STMCall(operation, destination, metrics, async);
         }
     }
     @Operation

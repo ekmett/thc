@@ -7,7 +7,7 @@ The pinned GHC 9.14.1 family has eight primops: `atomically#`, `retry#`,
 `catchRetry#`, `catchSTM#`, `newTVar#`, `readTVar#`, `readTVarIO#` and
 `writeTVar#`. `sameTVar#` is a removed primop, not another supported entry.
 
-Both backends implement synchronous transactions with lazy boxed payloads at
+Both backends implement transactions with lazy boxed payloads at
 either known levity. A context owns its TVars and commit domain. A transaction
 buffers writes, validates read revisions on reads/writes and at commit, then
 publishes all changes under one short lock. Guest evaluation, forcing and
@@ -30,16 +30,38 @@ do not. Both branches' dependencies survive an `orElse` retry. An empty read
 set really waits. Context disposal releases waiters and payload references;
 foreign-context, disposed and wrong-carrier TVars fail before mutation.
 
+## Asynchronous interruption
+
+The public load request's `asyncExceptions` boolean selects synchronous or
+asynchronous execution on either backend. Omitting it preserves the existing
+defaults: synchronous AST and asynchronous bytecode.
+
+In asynchronous mode, an exception crossing `atomically#` aborts the entire
+attempt and cancels any retry registration before the enclosing IO handler runs.
+The request is acknowledged by that handler (or the uncaught IO boundary), not
+by transaction cleanup. Neither `catchSTM#` nor `catchRetry#` catches asynchronous
+delivery; their nested tentative writes are discarded during unwinding.
+
+A shared thunk enclosing `atomically#` saves a restart of the original action,
+not the interrupted action's continuation or transaction log. Another carrier
+can force that thunk: it preserves the outer already-executed prefix and starts
+a fresh transaction. An inner shared thunk may itself have an update continuation;
+the fresh action must demand it under the new attempt, rather than traversing it
+as the yielded child of the abandoned transaction. Logs remain carrier-local.
+No locks or unconditional masking are held across guest evaluation.
+
+Commit has no guest async delivery point between validation/publication and
+recording successful completion. A completed commit is not replayed by the
+restart boundary. Conflicts still restart synchronously, with no acknowledgement
+or conversion into a Haskell exception.
+
 ## Explicit limits
 
-This is partial STM support, not general asynchronous STM. Transaction operations
-reject bytecode async/checkpoint mode and the captured AST route at lowering.
-An interrupted transaction's log must travel with its saved frame, and an
-interrupted shared `atomically` thunk needs GHC's restart semantics. The existing
-continuation machinery does not yet provide those guarantees. No polling or
-masking is silently weakened to admit such a frame. Synchronous calls from
-multiple Java carriers in the same context do share transactions and retry
-wakeups correctly. `newTVar#` and `readTVarIO#` need no transaction frame.
+Explicit test-checkpoint and delimited-continuation capture across a transaction
+remain unsupported. Async abort/restart does not make an arbitrary STM log a
+multi-shot continuation. Synchronous calls from multiple Java carriers in the
+same context continue to share transactions and retry wakeups correctly.
+`newTVar#` and `readTVarIO#` need no transaction frame.
 
 THC does not implement GC-driven `BlockedIndefinitelyOnSTM` detection. An
 unreachable empty-read-set retry waits until embedding cancellation/disposal;
@@ -50,18 +72,23 @@ as in GHC; callers must not rely on how many times an invalid action reruns.
 
 ```sh
 cabal run exe:thc-fixtures --offline -- stm
-./gradlew --no-daemon test --tests thc.runtime.ManagedSTMTest stmFullCoreTest
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test \
-  --tests thc.runtime.ManagedSTMTest --rerun stmFullCoreTest --rerun
+./gradlew --no-daemon testDefault --tests thc.runtime.ManagedSTMTest \
+  testDense --tests thc.runtime.ManagedSTMTest stmFullCoreTest stmDenseFullCoreTest
 ```
 
 The Haskell producer exports pre/post-Tidy original Core, closes the implicit
 exception using complete installed GHC Core, performs strict audits and runs a
-45-row native oracle. Kotlin checks an independent arithmetic model, deterministic
+57-row native oracle. Kotlin checks an independent arithmetic model, deterministic
 conflicts and stale exceptions, real retry registration/wakeup, nested rollback,
 lazy and unlifted payloads, context boundaries and cleanup. Installed guest-entry
 checks inspect the first compiled call without settling or retries, with and
 without inlining and under both handoff modes.
+The public parser tests additionally interrupt retry and an inner transaction
+thunk through original `killThread#` and `catch#`, check sender acknowledgement,
+observe rollback before resumption, and force the abandoned enclosing thunk from
+another carrier. Repeated interruption must not replay the enclosing prefix or
+retain retry registrations. All native helpers execute afresh inside an opaque
+IO wrapper so the oracle does not accidentally memoize its own observations.
 The 336 compiled rows per handoff require exactly three guest roots for basic,
 lazy and unlifted payloads, or five for exception/alternative/nested-atomic rows:
 the public entry, `runRW#` lambda, atomic action, and (where present) protected

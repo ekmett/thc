@@ -19,6 +19,7 @@ import java.security.MessageDigest
 import java.util.Collections
 import java.util.IdentityHashMap
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipFile
@@ -36,7 +37,7 @@ class STMFullCoreTest {
         val manifest = Json.parse(File(root, "build/stm/manifest.json").readText()) as Map<String, Any?>
         assertEquals("9.14.1", manifest["ghc"])
         assertEquals(names, manifest["entries"])
-        assertEquals(45, (manifest["nativeRows"] as Number).toInt())
+        assertEquals(57, (manifest["nativeRows"] as Number).toInt())
         for (kind in listOf("inputHashes", "artifactHashes"))
             for ((path, expected) in manifest[kind] as Map<String, String>) {
                 val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
@@ -106,18 +107,20 @@ class STMFullCoreTest {
     private fun program(language: Language, module: Map<String, Any?>, backend: String): ExecutableProgram =
         if (backend == "ast") Program(language, module) else BytecodeProgram(language, module)
 
-    @Test fun originalCoreMatchesNativeWithInlining() = native(true)
-    @Test fun originalCoreMatchesNativeAcrossResidualCalls() = native(false)
-    private fun native(inlining: Boolean) {
+    @Test fun originalCoreMatchesNativeWithInlining() = native(true, "ast")
+    @Test fun originalCoreMatchesNativeAcrossResidualCalls() = native(false, "ast")
+    @Test fun originalBytecodeCoreMatchesNativeWithInlining() = native(true, "bytecode")
+    @Test fun originalBytecodeCoreMatchesNativeAcrossResidualCalls() = native(false, "bytecode")
+    private fun native(inlining: Boolean, backend: String) {
         val manifest = fixture()
         val rows = File(root, "build/stm/oracle.tsv").readLines().map { it.split('\t') }
-        assertEquals(45, rows.size)
-        assertEquals(45, rows.map { it.take(2) }.toSet().size)
+        assertEquals(57, rows.size)
+        assertEquals(57, rows.map { it.take(2) }.toSet().size)
         val originals = rows.filter { it[0] in names }.groupBy { it[0] }
         assertEquals(names.toSet(), originals.keys)
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) {
             val module = module(paths)
-            for (backend in listOf("ast", "bytecode")) for (name in names) context(inlining).use { context ->
+            for (name in names) context(inlining).use { context ->
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
@@ -174,7 +177,7 @@ class STMFullCoreTest {
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                    val names = manifest["contextEntries"] as List<String>
+                    val names = listOf("newCell", "readCell", "bumpCell", "awaitCell", "awaitEither")
                     val program = program(language, CoreModules.reachable(module(paths), names, strictLink = true), backend)
                     val stm = Language.currentState().stm
                     val cell = call(program, "newCell", 0L)
@@ -213,7 +216,7 @@ class STMFullCoreTest {
         }
     }
 
-    @Test fun allEightPinnedContractsAndExplicitAsyncLimits() {
+    @Test fun allEightPinnedContractsAndAsyncAdmission() {
         val manifest = fixture()
         val paths = (manifest["stages"] as Map<String, List<String>>).getValue("pre")
         val full = module(paths)
@@ -241,8 +244,122 @@ class STMFullCoreTest {
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 val linked = CoreModules.reachable(full, "basic")
-                assertThrows(UnsupportedCore::class.java) { BytecodeProgram(language, linked, true).entryTarget("basic") }
+                assertNotNull(BytecodeProgram(language, linked, true).entryTarget("basic"))
+                assertNotNull(Program(language, linked, true).entryTarget("basic"))
+                assertThrows(UnsupportedCore::class.java) {
+                    BytecodeProgram(language, linked, BytecodeCheckpoint()).entryTarget("basic")
+                }
             } finally { context.leave() }
+        }
+    }
+
+    /** Every call uses the public parser and the same original entry/CAF set. */
+    @Test fun publicAsyncRetryAbortsAndSharedThunksRestartLikeGhc() {
+        val manifest = fixture()
+        val native = File(root, "build/stm/oracle.tsv").readLines().map { it.split('\t') }
+            .associate { it[0] to it[2].toLong() }
+        for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) {
+            for (backend in listOf("ast", "bytecode")) context().use { context ->
+                val request = Json.parse(CoreModules.request(paths.map { File(root, it).path },
+                    "asyncEntry", backend = backend)) as Map<String, Any?>
+                val entry = context.eval("thc", Json.stringify(request + mapOf("asyncExceptions" to true,
+                    "strictLink" to true, "targetLayout" to targetLayout.document())))
+                fun call(operation: Long, token: Long = 0) = entry.execute(operation, token).asLong()
+                fun compiledEntries(): Long = ((Json.parse(entry.getMember("diagnostics").asString())
+                    as Map<String, Any?>).getValue("compiledEntries") as Number).toLong()
+                context.enter()
+                val state: Language.State
+                val language: Language
+                try {
+                    state = Language.currentState()
+                    language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                } finally { context.leave() }
+                assertEquals(0L, call(5))
+                assertEquals(0L, call(6))
+                assertTrue(entry.invokeMember("compile").asBoolean())
+                // No settling call between compilation and this real observation.
+                val firstCompiled = compiledEntries()
+                assertEquals(0L, call(5))
+                assertTrue(compiledEntries() > firstCompiled, "The first installed call must enter compiled code")
+                val workers = mutableListOf<Thread>()
+                fun start(operation: Long): CompletableFuture<Long> {
+                    val result = CompletableFuture<Long>()
+                    Thread({
+                        try {
+                            val answer = call(operation)
+                            assertFalse(state.stm.hasTransaction(), "Transaction log leaked on its owner carrier")
+                            assertEquals(MaskingState.UNMASKED, state.maskingState.get(), "Mask leaked after IO catch")
+                            result.complete(answer)
+                        }
+                        catch (failure: Throwable) { result.completeExceptionally(failure) }
+                    }, "stm-$backend-$operation").apply {
+                        isDaemon = true; workers.add(this); start()
+                    }
+                    return result
+                }
+                try {
+                    for ((name, operation) in listOf("retry" to 0L, "inner" to 1L)) {
+                        val answer = start(operation)
+                        val target = workers.last()
+                        assertEquals(if (name == "retry") 0L else 4L,
+                            CompletableFuture.supplyAsync { call(2) }.get(10, TimeUnit.SECONDS))
+                        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+                        while (!answer.isDone && System.nanoTime() < deadline &&
+                            !(target.state == Thread.State.WAITING && target.stackTrace.any { it.methodName == "await" }))
+                            Thread.sleep(1)
+                        assertFalse(answer.isDone, "$stage/$backend/$name must still be running")
+                        assertEquals(Thread.State.WAITING, target.state)
+                        if (name == "retry") assertEquals(1, state.stm.pendingWaiters())
+                        val sender = start(7)
+                        assertEquals(native.getValue("$name-caught"), answer.get(15, TimeUnit.SECONDS))
+                        assertEquals(0L, sender.get(15, TimeUnit.SECONDS), "killThread# returned after acknowledgement")
+                        assertEquals(0, state.stm.pendingWaiters(), "Abandoned retry registrations must be cancelled")
+                        assertEquals(native.getValue("$name-aborted"), call(5), "Tentative writes escaped")
+                        assertEquals(native.getValue("$name-prefix"), call(6))
+                        if (name == "retry") {
+                            val interruptedAgain = start(operation)
+                            assertEquals(0L, CompletableFuture.supplyAsync { call(2) }.get(10, TimeUnit.SECONDS))
+                            assertEquals(0L, start(7).get(15, TimeUnit.SECONDS))
+                            assertEquals(-1L, interruptedAgain.get(15, TimeUnit.SECONDS))
+                            assertEquals(0, state.stm.pendingWaiters())
+                            assertEquals(0L, call(5))
+                            assertEquals(1L, call(6), "Second interruption replayed enclosing prefix")
+                        }
+                        assertEquals(if (name == "retry") 4L else 9L, call(4, if (name == "retry") 4 else 9))
+                        if (name == "inner") assertEquals(0L, call(3))
+                        // The forcing carrier differs from the abandoned owner.
+                        assertEquals(native.getValue("$name-resumed"), call(operation))
+                        assertEquals(native.getValue("$name-committed"), call(5))
+                        assertEquals(native.getValue("$name-prefix-after"), call(6), "Enclosing prefix replayed")
+                        if (name == "retry") assertEquals(4L, call(2))
+                        context.enter()
+                        try { released(language) } finally { context.leave() }
+                    }
+                } finally {
+                    workers.forEach { it.join(1000) }
+                    if (workers.any { it.isAlive }) context.close(true)
+                }
+            }
+        }
+    }
+
+    @Test fun publicSynchronousAndAsynchronousTransactionsMatchNative() {
+        val manifest = fixture()
+        for ((_, paths) in manifest["stages"] as Map<String, List<String>>) {
+            for (backend in listOf("ast", "bytecode")) for (async in listOf(false, true)) context().use { context ->
+                val request = Json.parse(CoreModules.request(paths.map { File(root, it).path },
+                    "basic", backend = backend)) as Map<String, Any?>
+                val entry = context.eval("thc", Json.stringify(request + mapOf("asyncExceptions" to async,
+                    "strictLink" to true, "targetLayout" to targetLayout.document())))
+                assertEquals(model("basic", 17), entry.execute(17).asLong())
+                assertTrue(entry.invokeMember("compile").asBoolean())
+                val before = ((Json.parse(entry.getMember("diagnostics").asString()) as Map<String, Any?>)
+                    .getValue("compiledEntries") as Number).toLong()
+                assertEquals(model("basic", 63), entry.execute(63).asLong())
+                val after = ((Json.parse(entry.getMember("diagnostics").asString()) as Map<String, Any?>)
+                    .getValue("compiledEntries") as Number).toLong()
+                assertTrue(after > before)
+            }
         }
     }
 }
