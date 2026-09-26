@@ -3,6 +3,7 @@
 
 package thc.runtime
 
+import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.frame.VirtualFrame
 
 /** Select a shared Long instruction, without rewriting any exact Core type proof. */
@@ -61,8 +62,10 @@ internal enum class TupleArithmeticOp(val primitive: String, val resultArity: In
     TIMES_INT_2("timesInt2#", resultArity = 3);
 
     private fun divisionDomain(left: Long, right: Long) {
-        if (right == 0L || this == QUOT_REM_INT && left == Long.MIN_VALUE && right == -1L)
+        if (right == 0L || this == QUOT_REM_INT && left == Long.MIN_VALUE && right == -1L) {
+            CompilerDirectives.transferToInterpreter()
             throw RuntimeFault("Undefined input to $primitive")
+        }
     }
     private fun narrow(value: Long): Long = if (unsigned) value and (-1L ushr (64 - narrowBits))
         else (value shl (64 - narrowBits)) shr (64 - narrowBits)
@@ -71,7 +74,10 @@ internal enum class TupleArithmeticOp(val primitive: String, val resultArity: In
         QUOT_REM_WORD -> { divisionDomain(left, right); java.lang.Long.divideUnsigned(left, right) }
         QUOT_REM_INT8, QUOT_REM_INT16, QUOT_REM_INT32, QUOT_REM_WORD8, QUOT_REM_WORD16, QUOT_REM_WORD32 -> {
             val x = narrow(left); val y = narrow(right)
-            if (y == 0L) throw RuntimeFault("Undefined input to $primitive")
+            if (y == 0L) {
+                CompilerDirectives.transferToInterpreter()
+                throw RuntimeFault("Undefined input to $primitive")
+            }
             narrow(x / y)
         }
         QUOT_REM_WORD_2 -> error("Double-word division needs three operands")
@@ -86,7 +92,10 @@ internal enum class TupleArithmeticOp(val primitive: String, val resultArity: In
         QUOT_REM_WORD -> { divisionDomain(left, right); java.lang.Long.remainderUnsigned(left, right) }
         QUOT_REM_INT8, QUOT_REM_INT16, QUOT_REM_INT32, QUOT_REM_WORD8, QUOT_REM_WORD16, QUOT_REM_WORD32 -> {
             val x = narrow(left); val y = narrow(right)
-            if (y == 0L) throw RuntimeFault("Undefined input to $primitive")
+            if (y == 0L) {
+                CompilerDirectives.transferToInterpreter()
+                throw RuntimeFault("Undefined input to $primitive")
+            }
             narrow(x % y)
         }
         QUOT_REM_WORD_2 -> error("Double-word division needs three operands")
