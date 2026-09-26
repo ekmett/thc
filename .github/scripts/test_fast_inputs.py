@@ -126,6 +126,33 @@ class FastInputTests(unittest.TestCase):
                 if member.name != 'files/' + binary])
             self.rejected_without_writes(changed)
 
+    def test_bignat_closed_artifacts_preserve_receipt_and_reject_missing_records(self):
+        name = 'build/bignat-literals/manifest.json'
+        artifacts = cache.BIGNAT_OUTPUTS - {name}
+        self.assertEqual(121, len(artifacts))
+        self.assertIn(name, DECLARED_REQUIRED)
+        for path in artifacts:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.put(path, b'{}\n' if path.endswith('.json') else b'fixture\n')
+        for suffix in ('commands/extra.stdout', 'boot/interfaces/Unknown.hi', 'run-1/oracle.tsv', 'native/extra.o'):
+            self.assertFalse(cache.allowed_payload('build/bignat-literals/' + suffix, {}), suffix)
+        records = [{'path': path, 'sha256': cache.digest(self.root / path)} for path in sorted(artifacts)]
+        original = json.dumps({'schema': 1, 'inputHashes': self.manifest['inputHashes'], 'artifacts': records})
+        self.put(name, original)
+        for item in records:
+            with self.assertRaises(cache.CacheMiss): cache.bignat_artifact_hashes({'artifacts': [r for r in records if r != item]})
+        for changed in (records + [records[0]], records + [{'path': 'build/bignat-literals/extra.json', 'sha256': '0'*64}],
+                        [dict(records[0], sha256='bad')] + records[1:]):
+            with self.assertRaises(cache.CacheMiss): cache.bignat_artifact_hashes({'artifacts': changed})
+        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
+            packed = self.pack(); self.remove_payload(packed)
+            cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(original, (self.root / name).read_text())
+            self.remove_payload(packed)
+            missing = self.rewrite(lambda items: [(member, data) for member, data in items
+                if member.name != 'files/build/bignat-literals/commands/native-oracle.stdout'])
+            self.rejected_without_writes(missing)
+
     def test_native_malloc_cache_preserves_exact_oracle_and_rejects_extra_members(self):
         manifest_path = 'build/native-malloc/manifest.json'
         oracle_path = 'build/native-malloc/oracle.txt'

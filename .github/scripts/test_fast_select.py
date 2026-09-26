@@ -1071,6 +1071,12 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
 
     def test_floating_haskell_producers_and_main_keep_their_consumers(self):
         owners = self.policy["owners"]
+        for path in ("test/haskell-fixtures/BigNatLiteralFixtures.hs",
+                     "compiler/test-fixtures/BigNatLiteralAudit.hs", "compiler/test-fixtures/BigNatLiteralAuditNative.hs",
+                     "src/test/kotlin/thc/runtime/BigNatLiteralTest.kt"):
+            self.assertEqual(["thc.runtime.BigNatLiteralTest"], owners[path]["junit"])
+            self.assertEqual(["scripts/test-audit-core.py"], owners[path]["python"])
+        self.assertIn("thc.runtime.BigNatLiteralTest", owners["test/haskell-fixtures/Main.hs"]["junit"])
         for producer, consumer in (("FusedFloatingFixtures", "FusedFloatingTest"),
                                    ("ScalarBitCastFixtures", "ScalarBitCastTest"),
                                    ("SimdFloatFmaFixtures", "SimdFloatFmaTest"),
