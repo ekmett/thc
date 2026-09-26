@@ -64,6 +64,34 @@ originalRem :: MutableByteArray# RealWorld -> ByteArray# -> Int# -> ByteArray# -
 originalRem remainder numerator nn divisor dn = runRW# (\state -> case G.c_mpn_tdiv_r remainder numerator nn divisor dn of
   IO action -> case action state of (# _, () #) -> 0#)
 
+originalGcdWords :: Word# -> Word# -> Word#
+originalGcdWords = G.integer_gmp_gcd_word
+
+originalGcdWord :: ByteArray# -> Int# -> Word# -> Word#
+originalGcdWord = G.c_mpn_gcd_1#
+
+originalGcd :: MutableByteArray# RealWorld -> ByteArray# -> Int# -> ByteArray# -> Int# -> Int#
+originalGcd out left nl right nr = runRW# (\state -> case G.c_mpn_gcd# out left nl right nr of
+  IO action -> case action state of (# _, I# value #) -> value)
+
+originalLShift :: MutableByteArray# RealWorld -> ByteArray# -> Int# -> Word# -> Word#
+originalLShift out input count shift = runRW# (\state -> case G.c_mpn_lshift out input count shift of
+  IO action -> case action state of (# _, W# value #) -> value)
+
+originalAnd, originalAndNot, originalOr, originalXor
+  :: MutableByteArray# RealWorld -> ByteArray# -> ByteArray# -> Int# -> Int#
+originalAnd out left right count = runRW# (\state -> case G.c_mpn_and_n out left right count of
+  IO action -> case action state of (# _, () #) -> 0#)
+originalAndNot out left right count = runRW# (\state -> case G.c_mpn_andn_n out left right count of
+  IO action -> case action state of (# _, () #) -> 0#)
+originalOr out left right count = runRW# (\state -> case G.c_mpn_ior_n out left right count of
+  IO action -> case action state of (# _, () #) -> 0#)
+originalXor out left right count = runRW# (\state -> case G.c_mpn_xor_n out left right count of
+  IO action -> case action state of (# _, () #) -> 0#)
+
+originalPopCount :: ByteArray# -> Int# -> Word#
+originalPopCount = G.c_mpn_popcount
+
 originalRShift :: MutableByteArray# RealWorld -> ByteArray# -> Int# -> Word# -> Word#
 originalRShift out input count shift = runRW# (\state -> case G.c_mpn_rshift out input count shift of
   IO action -> case action state of (# _, W# value #) -> value)

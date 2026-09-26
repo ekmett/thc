@@ -57,6 +57,25 @@ internal object ManagedGmp {
                 provider.divideWord(LimbRegion.write(first, input.limbs + a, true), a, input, c)
             }
             GmpForeignOp.MODULO_WORD -> provider.moduloWord(LimbRegion.read(first, a, true), b)
+            GmpForeignOp.GCD_WORDS -> provider.gcdWords(a, b)
+            GmpForeignOp.GCD_WORD -> provider.gcdWord(LimbRegion.read(first, a), b)
+            GmpForeignOp.GCD -> provider.gcd(LimbRegion.write(first, b), LimbRegion.read(second, a), LimbRegion.read(third, b))
+            GmpForeignOp.SHIFT_LEFT -> {
+                val input = LimbRegion.read(second, a)
+                if (b <= 0 || b > Int.MAX_VALUE.toLong() * 8) fault("Invalid limb left shift count")
+                provider.shiftLeft(LimbRegion.write(first, a + (b + 63) / 64), input, b)
+            }
+            GmpForeignOp.AND, GmpForeignOp.AND_NOT, GmpForeignOp.OR, GmpForeignOp.XOR -> {
+                val logical = when (operation) {
+                    GmpForeignOp.AND -> LimbBitwise.AND
+                    GmpForeignOp.AND_NOT -> LimbBitwise.AND_NOT
+                    GmpForeignOp.OR -> LimbBitwise.OR
+                    else -> LimbBitwise.XOR
+                }
+                provider.bitwise(LimbRegion.write(first, a), LimbRegion.read(second, a), LimbRegion.read(third, a), logical)
+                0L
+            }
+            GmpForeignOp.POPCOUNT -> provider.populationCount(LimbRegion.read(first, a))
             GmpForeignOp.DIVIDE -> {
                 val numerator = LimbRegion.read(third, b); val divisor = LimbRegion.read(fourth, c)
                 provider.divide(LimbRegion.write(first, b - c + 1), LimbRegion.write(second, c), a, numerator, divisor)

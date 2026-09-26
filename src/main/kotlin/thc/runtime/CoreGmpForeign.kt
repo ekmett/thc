@@ -4,7 +4,7 @@
 package thc.runtime
 
 internal const val GMP_ARRAY_REP = "BoxedRep (Just Unlifted)"
-internal enum class GmpForm { BINARY, WORD, COMPARE, DIVIDE_WORD, MODULO_WORD, DIVIDE, ENCODE_DOUBLE, GET_DOUBLE }
+internal enum class GmpForm { BINARY, WORD, COMPARE, DIVIDE_WORD, MODULO_WORD, DIVIDE, ENCODE_DOUBLE, GET_DOUBLE, WORD_PAIR, LOGICAL, COUNT }
 
 /** Actual primitive FCallId ABIs, including State on the source-pure imports. */
 internal enum class GmpForeignOp(val symbol: String, val form: GmpForm,
@@ -38,7 +38,25 @@ internal enum class GmpForeignOp(val symbol: String, val form: GmpForm,
     GET_DOUBLE("integer_gmp_mpn_get_d", GmpForm.GET_DOUBLE,
         listOf(GMP_ARRAY_REP, "IntRep", "IntRep", null), "DoubleRep"),
     ENCODE_DOUBLE("__int_encodeDouble", GmpForm.ENCODE_DOUBLE,
-        listOf("IntRep", "IntRep", null), "DoubleRep");
+        listOf("IntRep", "IntRep", null), "DoubleRep"),
+    GCD_WORDS("integer_gmp_gcd_word", GmpForm.WORD_PAIR,
+        listOf("WordRep", "WordRep", null), "WordRep"),
+    GCD_WORD("integer_gmp_mpn_gcd_1", GmpForm.MODULO_WORD,
+        listOf(GMP_ARRAY_REP, "IntRep", "WordRep", null), "WordRep"),
+    GCD("integer_gmp_mpn_gcd", GmpForm.BINARY,
+        listOf(GMP_ARRAY_REP, GMP_ARRAY_REP, "IntRep", GMP_ARRAY_REP, "IntRep", null), "IntRep"),
+    SHIFT_LEFT("integer_gmp_mpn_lshift", GmpForm.WORD,
+        listOf(GMP_ARRAY_REP, GMP_ARRAY_REP, "IntRep", "WordRep", null), "WordRep"),
+    AND("integer_gmp_mpn_and_n", GmpForm.LOGICAL,
+        listOf(GMP_ARRAY_REP, GMP_ARRAY_REP, GMP_ARRAY_REP, "IntRep", null), null),
+    AND_NOT("integer_gmp_mpn_andn_n", GmpForm.LOGICAL,
+        listOf(GMP_ARRAY_REP, GMP_ARRAY_REP, GMP_ARRAY_REP, "IntRep", null), null),
+    OR("integer_gmp_mpn_ior_n", GmpForm.LOGICAL,
+        listOf(GMP_ARRAY_REP, GMP_ARRAY_REP, GMP_ARRAY_REP, "IntRep", null), null),
+    XOR("integer_gmp_mpn_xor_n", GmpForm.LOGICAL,
+        listOf(GMP_ARRAY_REP, GMP_ARRAY_REP, GMP_ARRAY_REP, "IntRep", null), null),
+    POPCOUNT("__gmpn_popcount", GmpForm.COUNT,
+        listOf(GMP_ARRAY_REP, "IntRep", null), "WordRep");
 
     val objectIndices = arguments.indices.filter { arguments[it] == GMP_ARRAY_REP }
     val longIndices = arguments.indices.filter { arguments[it] in listOf("IntRep", "WordRep") }
