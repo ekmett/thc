@@ -408,6 +408,14 @@ internal class ManagedAllocation private constructor(
 
     companion object {
         private val COPY_TIE_LOCK = Any()
+        init {
+            // Link both supported segment implementations before any guest
+            // target can assume the native implementation is the only subtype.
+            // Otherwise resolving an unexecuted heap branch during compilation
+            // can invalidate the compiler's own class-hierarchy dependency.
+            // This initializes storage classes, not a guest call or allocation.
+            MemorySegment.ofArray(ByteArray(0))
+        }
         fun mutable(size: Long, pointerBytes: Int, pinned: Boolean = false, alignment: Long = 8): ManagedAllocation {
             if (size < 0 || size > Int.MAX_VALUE.toLong()) fault("Managed allocation size outside JVM domain")
             if (pinned) {
