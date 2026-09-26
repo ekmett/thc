@@ -412,7 +412,11 @@ def smoke_groups(fs):
             (legacy if operation == 'insert' and not family['newCarrier'] else
              standalone if operation in ('quot', 'rem', 'shuffle') else indices).append(index)
             index += 1
-        limit = 112 // family['lanes']
+        # Wide floating lane observations include NaN canonicalization and bit
+        # casts. Keep each operation a natural entry rather than compiling a
+        # large switch containing several independent pack/unpack pipelines.
+        limit = (1 if family['laneRep'] in ('FloatRep', 'DoubleRep') and family['bits'] > 128
+                 else 112 // family['lanes'])
         for start in range(0, len(indices), limit):
             groups.append(indices[start:start + limit])
         # Keep division and shuffling separate from the ordinary arithmetic drivers.

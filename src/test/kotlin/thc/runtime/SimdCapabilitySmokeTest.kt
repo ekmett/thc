@@ -104,7 +104,7 @@ class SimdCapabilitySmokeTest {
         val rows = File(directory, "cases.tsv").readLines().filter(String::isNotEmpty).map { line ->
             line.split('\t').also { assertEquals(5, it.size) }
         }.groupBy { it[0] }
-        assertEquals((0..132).map { "simdSmoke$it" }, manifest["names"])
+        assertEquals((0..163).map { "simdSmoke$it" }, manifest["names"])
         assertEquals(manifest["names"], rows.keys.toList())
         assertEquals((manifest["rows"] as Number).toInt(), rows.values.sumOf { it.size })
         val javaEdges = rows.mapValues { (name, cases) -> javaExtremaCases(name, cases, selectors) }

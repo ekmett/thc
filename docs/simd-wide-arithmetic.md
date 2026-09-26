@@ -31,10 +31,12 @@ preserve the other lanes, including floating-point bit patterns. Indices outside
 the shape's lane range raise a runtime fault before any narrowing. Insertion covers
 all currently represented vector shapes.
 
-The capability smoke uses 133 operation/lane drivers containing all 315
+The capability smoke uses 164 operation/lane drivers containing all 315
 generated operations. Drivers keep arithmetic families separate and split large ones, with at most
 112 lane-operation pairs to bound compiled code size. Quotient, remainder and
-shuffle keep separate entries, leaving the ordinary arithmetic groups unchanged.
+shuffle keep separate entries. Wide floating operations also have individual
+entries: their per-lane NaN observations and bit casts otherwise make unrelated
+operation switches exceed the JVM's installed-code size limit.
 The current fixture has
 22,462 native scalar observations and 1,848 Java floating-extrema edge requests.
 Its JVM checks run interpreted and after explicit compilation on both backends,
