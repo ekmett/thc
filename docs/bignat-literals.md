@@ -6,9 +6,21 @@ The encoding follows the pinned `GHC.CoreToStg.Prep.cpeBigNatLit`: least-signifi
 
 Negative Integers use GHC's `IN` constructor around a nonnegative magnitude. `IP` and Natural `NB` carry the same unlifted reference shape, while `IS` and `NS` hold machine scalars. Complete original `GHC.Internal.Bignum.BigNat`, `Integer`, and `Natural` modules are exported after Tidy in their original wired unit, with source notes and hashes. No cold definitions are removed. Public `toInteger`/`fromInteger` and Natural conversion fixtures retain opaque calls and real constructors in both export stages; large constants retain their literal nodes and original conversion workers.
 
-`prepare-bignat-literals.py` builds fresh native oracles, checks every returned sign/size/word/byte against an independent integer model, and audits eight supported roots at both stages. Bounds sentinels surround every byte/word observation. Cases include machine extrema, zero, word carries, internal zero limbs, and positive/negative magnitudes up to 256 bits. The JVM tests exercise AST and bytecode with normal and disabled guest inlining, require an actual compiled entry on every measured native row, retain original/active target validity and identity, and check result-pool cleanup. Native/source evidence alone does not establish guest execution.
+The Haskell `thc-fixtures bignat-literals` command builds fresh native oracles, checks every returned sign/size/word/byte against an independent integer model, and audits eight supported roots at both stages. Bounds sentinels surround every byte/word observation. Cases include machine extrema, zero, word carries, internal zero limbs, and positive/negative magnitudes up to 256 bits. The JVM tests exercise AST and bytecode with normal and disabled guest inlining, require an actual compiled entry on every measured native row, retain original/active target validity and identity, and check result-pool cleanup. Native/source evidence alone does not establish guest execution.
 
 Malformed decimal and contradictory representation proofs are rejected. GHC Core lint forbids BigNat literal alternatives (`litIsLifted LitNumBigNat`), so both loaders and the auditor reject those explicitly; reference identity is never substituted for a BigNat pattern.
+
+Fixture orchestration and the integer-only corpus model live in Haskell; Kotlin
+defines its own domains and byte/limb model and retains the malformed-value,
+forged-proof, arithmetic-frontier and missing-source controls. The existing
+shared Python `compiler/export-boot.py` and `scripts/audit-core.py` remain
+explicit dependencies for original-source export and capability auditing.
+The auditor's nine private representation-API assertions remain in its existing
+`scripts/test-audit-core.py` self-test; no BigNat Python entrypoint or model remains.
+The manifest is published last and fingerprints every required source and
+artifact, including auditor inputs and command logs. Check-only re-runs the
+22 audits and rejects changed bytes or missing inventory entries without
+resealing the manifest.
 
 The arithmetic audit controls retain the complete original dependency closure.
 Both stages accept the seven shrink calls used by Integer addition and five
@@ -23,8 +35,8 @@ execution is covered separately in [the GMP provider tests](gmp-limb-provider.md
 Reproduce the fresh preparation and focused controls with the pinned GHC/JDK toolchain:
 
 ```sh
-python3 scripts/prepare-bignat-literals.py
-python3 scripts/test-bignat-literals.py
+cabal run exe:thc-fixtures --offline -- bignat-literals
+cabal run exe:thc-fixtures --offline -- bignat-literals --check-only
 ./gradlew test --tests thc.runtime.BigNatLiteralTest
 JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --rerun --tests thc.runtime.BigNatLiteralTest
 ```

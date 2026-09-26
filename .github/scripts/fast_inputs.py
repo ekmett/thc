@@ -44,6 +44,22 @@ show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls s
 SIMD_FLOAT_FMA_OUTPUTS = frozenset("build/simd-floatx4-fma/" + name for name in (
     "manifest.json", "oracle.txt", "pre-core/SimdFloatFma.json", "post-core/SimdFloatFma.json",
     "pre-audit.json", "post-audit.json", "pre-double-audit.json", "post-double-audit.json"))
+BIGNAT_ENTRIES = ("integerRoundTrip", "naturalRoundTrip", "integerLiteral", "naturalLiteral",
+                  "magnitudeSize", "magnitudeByte", "magnitudeWord", "magnitudeSign")
+BIGNAT_AUDITS = (*BIGNAT_ENTRIES, "integerAddFrontier", "naturalAddFrontier", "missing-source")
+BIGNAT_COMMANDS = ("plugin-build", "boot-export", "native-build", "native-oracle",
+                   *(f"{stage}-export" for stage in ("pre", "post")),
+                   *(f"{stage}-{name}-audit" for stage in ("pre", "post") for name in BIGNAT_AUDITS))
+BIGNAT_OUTPUTS = frozenset("build/bignat-literals/" + path for path in (
+    "manifest.json", "requests.tsv", "oracle.tsv", "boot/boot-provenance.json",
+    *(f"boot/core/GHC.Internal.Bignum.{name}.json" for name in ("BigNat", "Integer", "Natural")),
+    *(f"native/{name}" for name in ("bignat-literal-oracle", "Main.hi", "Main.o", "BigNatLiteralAudit.hi", "BigNatLiteralAudit.o")),
+    *(f"{stage}-core/{name}.json" for stage in ("pre", "post") for name in ("BigNatLiteralAudit", "THC.InterfaceClosure")),
+    *(f"{stage}-{name}.audit.json" for stage in ("pre", "post") for name in BIGNAT_AUDITS),
+    *(f"commands/{name}.{suffix}" for name in BIGNAT_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
+BIGNAT_VENDOR = frozenset("vendor/ghc-9.14.1/" + path for path in (
+    "include/WordSize.h", "LICENSE", *(f"GHC/Internal/Bignum/{name}{suffix}"
+      for name in ("BigNat", "Integer", "Natural") for suffix in (".hs", ".hs-boot"))))
 SIMD_WIDE_FMA_OUTPUTS = frozenset("build/simd-wide-floating-fma/" + name for name in (
     "manifest.json", "oracle.txt", "pre-core/SimdWideFloatFma.json", "pre-audit.json", "pre-double-audit.json"))
 SIMD_SMOKE_SOURCES = frozenset("build/generated/simd/fixtures/" + name for name in (
@@ -825,6 +841,17 @@ def vendor_pins(root):
     return result
 
 
+def bignat_artifact_hashes(manifest):
+    records = manifest.get("artifacts")
+    require(isinstance(records, list) and all(isinstance(item, dict) and set(item) == {"path", "sha256"} for item in records),
+            "Invalid BigNat artifact records")
+    artifacts = {item["path"]: item["sha256"] for item in records}
+    require(len(artifacts) == len(records) and set(artifacts) == BIGNAT_OUTPUTS - {"build/bignat-literals/manifest.json"},
+            "Incomplete BigNat artifact inventory")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid BigNat artifact hash")
+    return artifacts
+
+
 def allowed_payload(name, pins):
     parts = PurePosixPath(relative(name)).parts
     if name in pins:
@@ -842,6 +869,8 @@ def allowed_payload(name, pins):
             bool(re.fullmatch(r"libHSthc-[\w.-]+\.(so|dylib)", parts[2])))
     if parts[1] == "original-stdio":
         return name in ORIGINAL_STDIO_OUTPUTS
+    if parts[1] == "bignat-literals":
+        return name in BIGNAT_OUTPUTS
     if parts[1] == "simd-capability-smoke":
         return name in SIMD_SMOKE_OUTPUTS
     if parts[1] == "simd-floatx4-fma":
@@ -996,6 +1025,8 @@ def inventory(root, current, read, core_files, verified=None):
         if not name.endswith(".json"):
             continue
         doc = json.loads(data)
+        if name == "build/bignat-literals/manifest.json":
+            bignat_artifact_hashes(doc)
         if name == "build/original-stack-formatter/manifest.json":
             formatter_artifact_hashes(root, doc)
         if name == "build/original-gmp/manifest.json":

@@ -250,6 +250,10 @@
   },
   "owners": {
     "test/haskell-fixtures/ScalarBitCastFixtures.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
+    "test/haskell-fixtures/BigNatLiteralFixtures.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["scripts/test-audit-core.py"]},
+    "compiler/test-fixtures/BigNatLiteralAudit.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["scripts/test-audit-core.py"]},
+    "compiler/test-fixtures/BigNatLiteralAuditNative.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/test/kotlin/thc/runtime/BigNatLiteralTest.kt": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/ScalarBitCastAudit.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
     "compiler/test-fixtures/ScalarBitCastNative.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
     "test/haskell-fixtures/RtsShutdownFixtures.hs": {"junit": ["thc.runtime.RtsShutdownTest"], "python": []},
@@ -1125,6 +1129,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.BigNatLiteralTest",
         "thc.runtime.ScalarBitCastTest",
         "thc.runtime.RtsDiagnosticsTest",
         "thc.runtime.RtsShutdownTest",
