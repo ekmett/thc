@@ -14,6 +14,9 @@ plugins {
 }
 repositories { mavenCentral() }
 
+// The pinned GHC signature table belongs to fixture/audit tooling, not runtime loading.
+tasks.processResources { exclude("thc/scalar-primop-signatures.json") }
+
 // Documentation reads handwritten sources; it does not compile the runtime,
 // generate Truffle DSL classes, or prepare native/Core fixtures.
 val docsRevision = providers.gradleProperty("thc.docsRevision").orElse(

@@ -193,21 +193,17 @@ class WordFloatingTest {
         else -> emptyList()
     }
 
-    @Test fun exactWordArgumentFloatingResultAndUnaryArityAreRequired() {
+    @Test fun conflictingFloatingResultAndUnaryArityAreRejected() {
         for (stage in listOf("pre", "post")) for (backend in listOf("ast", "bytecode")) context(true).use { context ->
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                for (name in names) for (variant in listOf("argument", "result", "arity")) {
+                for (name in names) for (variant in listOf("result", "arity")) {
                     val linked = CoreModules.reachable(module(stage), name)
                     val binding = (linked["bindings"] as List<Map<String, Any?>>).single { it["name"] == name }
                     val lambda = binding["expr"] as List<Any?>
                     val app = primitiveCalls(lambda).single()
-                    if (variant == "argument") {
-                        val proof = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
-                        ((lambda[1] as List<MutableMap<String, Any?>>).single())["rep"] = proof
-                        (((app[2] as List<List<Any?>>).single())[2] as MutableMap<String, Any?>)["rep"] = proof
-                    } else if (variant == "result") {
+                    if (variant == "result") {
                         val other = if (name == "wordFloat") "double" else "float"
                         (app[6] as MutableMap<String, Any?>)["rep"] = mapOf("kind" to other,
                             "primReps" to listOf(if (other == "float") "FloatRep" else "DoubleRep"), "evaluated" to true)

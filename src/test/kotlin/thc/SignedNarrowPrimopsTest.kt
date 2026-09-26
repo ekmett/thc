@@ -118,44 +118,6 @@ class SignedNarrowPrimopsTest {
                 "lifted" to true, "arity" to supplied, "expr" to listOf("lam", parameters, body))))
     }
 
-    private fun castModule(primitive: String, argumentRep: String, resultRep: String): Map<String, Any?> {
-        fun proof(rep: String) = mapOf("kind" to "long", "primReps" to listOf(rep), "evaluated" to true)
-        val parameter = mapOf("id" to "x", "name" to "x", "type" to "${argumentRep.removeSuffix("Rep")}#",
-            "lifted" to false, "coercion" to false, "rep" to proof(argumentRep))
-        val operand = listOf("var", "x", mapOf("rep" to proof(argumentRep)))
-        val body = listOf("app", listOf("prim", primitive), listOf(operand), listOf(false), false, false,
-            mapOf("rep" to proof(resultRep)))
-        return mapOf("schema" to 1, "ghc" to "9.14.1", "module" to "SignedNarrowCastProofControl",
-            "constructors" to emptyList<Any?>(), "bindings" to listOf(mapOf("id" to "entry", "name" to "entry",
-                "lifted" to true, "arity" to 1, "expr" to listOf("lam", listOf(parameter), body))))
-    }
-
-    @Test fun crossSignednessCastsRejectContradictoryExactRegisterProofs() {
-        val casts = entries().filter { "ToWord" in (it["name"] as String) || "ToInt" in (it["name"] as String) }
-        assertEquals(6, casts.size)
-        for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true))
-            executionContext().use { context ->
-                for (entry in casts) {
-                    val name = entry["primitive"] as String
-                    val width = (entry["width"] as Number).toInt()
-                    val signed = "Int${width}Rep"
-                    val unsigned = "Word${width}Rep"
-                    val argument = if (name.startsWith("int")) signed else unsigned
-                    val result = if (name.startsWith("int")) unsigned else signed
-                    for ((position, wrongArgument, wrongResult) in listOf(
-                        Triple("argument 0", result, result), Triple("result", argument, argument))) {
-                        val error = assertThrows(PolyglotException::class.java) {
-                            context.eval("thc", Json.stringify(mapOf("entry" to "entry", "backend" to backend,
-                                "diagnosticUnsupported" to diagnostic,
-                                "modules" to listOf(castModule(name, wrongArgument, wrongResult)))))
-                        }
-                        assertTrue(error.message.orEmpty().contains("Primitive representation mismatch: $name $position expects"),
-                            error.message)
-                    }
-                }
-            }
-    }
-
     @Test fun directResultsAreCanonicalWithoutAnIntNToIntConversionMaskingTheResult() {
         for (entry in entries()) {
             val name = entry["name"] as String

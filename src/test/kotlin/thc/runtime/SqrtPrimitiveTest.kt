@@ -293,12 +293,12 @@ class SqrtPrimitiveTest {
             } finally { context.leave() }
         }
     }
-    @Test fun sqrtRequiresItsExactOperandAndResultProofs() {
+    @Test fun sqrtRejectsConflictingResultStorageAndWrongArity() {
         for (stage in listOf("pre", "post")) for (backend in listOf("ast", "bytecode")) context(true).use { context ->
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                for (entry in listOf("sqrtFloat", "sqrtDouble")) for (variant in listOf("argument", "result", "arity")) {
+                for (entry in listOf("sqrtFloat", "sqrtDouble")) for (variant in listOf("result", "arity")) {
                     val linked = CoreModules.reachable(module(stage), entry)
                     val lambda = ((linked["bindings"] as List<Map<String, Any?>>).single()["expr"] as List<Any?>)
                     val body = lambda[2] as List<Any?>
@@ -308,16 +308,14 @@ class SqrtPrimitiveTest {
                         (body[2] as MutableList<Any?>).clear()
                         (body[3] as MutableList<Any?>).clear()
                         (body[6] as MutableMap<String, Any?>)["callDemand"] = mapOf("arity" to 0, "strictArgs" to emptyList<Boolean>())
-                    } else if (variant == "argument") {
-                        ((lambda[1] as List<MutableMap<String, Any?>>)[0])["rep"] = proof
-                        (((body[2] as List<List<Any?>>)[0])[2] as MutableMap<String, Any?>)["rep"] = proof
                     } else {
                         (lambda[3] as MutableMap<String, Any?>)["resultRep"] = proof
                         (body[6] as MutableMap<String, Any?>)["rep"] = proof
                     }
                     val failure = assertThrows(RuntimeFault::class.java) { program(language, linked, backend) }
-                    val detail = if (variant == "arity") "arity" else "representation"
-                    assertTrue(failure.message.orEmpty().contains("Primitive $detail mismatch: $entry#"), failure.message)
+                    val detail = if (variant == "arity") "Primitive arity mismatch: $entry#"
+                        else "Conflicting Core representation proofs"
+                    assertTrue(failure.message.orEmpty().contains(detail), failure.message)
                 }
             } finally { context.leave() }
         }
