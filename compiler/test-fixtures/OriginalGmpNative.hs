@@ -9,6 +9,7 @@ import GHC.Exts
 import GHC.IO (IO(..))
 import OriginalGmpAudit ()
 import qualified GHC.Internal.Bignum.Backend.GMP as G
+import qualified GHC.Internal.Bignum.Primitives as P
 
 data Buffer = Buffer (MutableByteArray# RealWorld)
 data Frozen = Frozen ByteArray#
@@ -59,6 +60,17 @@ requests = concat
     | entry <- ["originalQuotRem", "originalQuot", "originalRem"],
       alias <- if entry == "originalQuot" then ["none"] else ["none", "remainder-left"],
       (a,b) <- [([7],[3]),([7,2],[3,1]),([1,0,1],[maxBound,1]),([maxBound,maxBound,maxBound],[maxBound,1])]]
+  , [Request entry alias a [] shift 0
+    | entry <- ["originalRShift", "originalRShiftNegative"],
+      alias <- if entry == "originalRShift" then ["none", "output-left"] else ["none"],
+      a <- [[1],[maxBound],[1,1],[0,maxBound],[maxBound,maxBound],[1,0,1]],
+      shift <- [1,63,64,65,127], shift < fromIntegral (length a * 64) ]
+  , [Request "originalGetDouble" "none" a [] (fromIntegral (sign * length a)) exponent
+    | a <- [[],[0],[1],[maxBound],[1,1],[maxBound,maxBound],[1,0,1]],
+      sign <- [-1,1], exponent <- [-1075,-1023,-1,0,1,1024] ]
+  , [Request "originalEncodeDouble" "none" [] [] (fromIntegral mantissa) exponent
+    | mantissa <- [0,1,-1,minBound,maxBound,9007199254740993] :: [Int],
+      exponent <- [minBound,-1075,-1074,-1,0,1,1024,maxBound] ]
   ]
 
 main :: IO ()
@@ -70,6 +82,10 @@ main = mapM execute requests >>= print
           outputCount = case entry of
             "originalCmp" -> 0
             "originalModWord" -> 0
+            "originalGetDouble" -> 0
+            "originalEncodeDouble" -> 0
+            "originalRShift" -> nl - fromIntegral word `div` 64
+            "originalRShiftNegative" -> nl - (fromIntegral word - 1) `div` 64
             "originalMul" -> nl + nr
             "originalDivWord" -> nl + fractional
             "originalQuotRem" -> nl - nr + 1
@@ -111,6 +127,10 @@ main = mapM execute requests >>= print
             "originalQuotRem" -> withVoid (G.c_mpn_tdiv_qr out rem fraction a an b bn)
             "originalQuot" -> withVoid (G.c_mpn_tdiv_q out a an b bn)
             "originalRem" -> withVoid (G.c_mpn_tdiv_r out a an b bn)
+            "originalRShift" -> withWord (G.c_mpn_rshift out a an w)
+            "originalRShiftNegative" -> withWord (G.c_mpn_rshift_2c out a an w)
+            "originalGetDouble" -> evaluate (I# (word2Int# (word64ToWord# (castDoubleToWord64# (G.c_mpn_get_d a (word2Int# w) fraction)))))
+            "originalEncodeDouble" -> evaluate (I# (word2Int# (word64ToWord# (castDoubleToWord64# (P.intEncodeDouble# (word2Int# w) fraction)))))
             _ -> fail "unknown original GMP request"
       afterLeft <- observe leftBuffer
       afterRight <- observe rightBuffer

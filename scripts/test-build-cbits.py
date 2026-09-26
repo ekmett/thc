@@ -92,7 +92,7 @@ class CompilerTargetTest(unittest.TestCase):
             source = root / "src/main/c/md5-api.c"
             source.parent.mkdir(parents=True)
             source.write_bytes(b"/* synthetic ABI wrapper */\n")
-            for name in ("iconv-api.c", "gmp-api.c", "strerror-locale.c", "libdw-unavailable.c"):
+            for name in ("iconv-api.c", "gmp-api.c", "strerror-locale.c", "libdw-unavailable.c", "package-pointer-api.c"):
                 (source.parent / name).write_bytes(b"/* synthetic ABI wrapper */\n")
             libdw = root / "compiler/pinned-ghc-rts"
             libdw.mkdir(parents=True)
@@ -136,9 +136,9 @@ class CompilerTargetTest(unittest.TestCase):
             self.assertEqual(target, manifest["target"])
             self.assertEqual("Linux", manifest["system"])
             self.assertEqual("x86_64", manifest["architecture"])
-            self.assertEqual(6, len(manifest["commands"]))
-            self.assertEqual(15, len(manifest["sources"]))
-            self.assertEqual(6, len(manifest["artifacts"]))
+            self.assertEqual(7, len(manifest["commands"]))
+            self.assertEqual(16, len(manifest["sources"]))
+            self.assertEqual(7, len(manifest["artifacts"]))
             for entry in manifest["sources"] + manifest["artifacts"]:
                 self.assertEqual(hashlib.sha256(Path(entry["path"]).read_bytes()).hexdigest(), entry["sha256"])
 

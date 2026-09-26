@@ -60,6 +60,15 @@ remain byte for byte intact. Their adjacent `LICENSE` and provenance identify
 the upstream terms; SPDX sidecars identify the BSD-3-Clause source license
 without changing the recorded source hashes.
 
+## GHC GMP wrappers
+
+The right-shift and floating-conversion adapters in `src/main/c/gmp-api.c`
+adapt GHC 9.14.1's `libraries/ghc-internal/cbits/gmp_wrappers.c`, copyright
+(c) 2014 Herbert Valerio Riedel <hvr@gnu.org>, under BSD-3-Clause. The original
+terms and University of Glasgow notice are retained in
+[`compiler/pinned-ghc-internal/LICENSE`](compiler/pinned-ghc-internal/LICENSE).
+Host validation, transport and lifetime management are THC additions.
+
 ## Gradle wrapper
 
 `gradlew`, `gradlew.bat`, and `gradle/wrapper/gradle-wrapper.jar` are Gradle

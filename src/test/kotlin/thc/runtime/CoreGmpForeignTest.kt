@@ -18,7 +18,7 @@ class CoreGmpForeignTest {
             }
     }
     private fun scalar(primitive: String?, evaluated: Boolean) = mapOf("kind" to when (primitive) {
-        null -> "void"; GMP_ARRAY_REP -> "object"; else -> "long"
+        null -> "void"; GMP_ARRAY_REP -> "object"; "DoubleRep" -> "double"; else -> "long"
     }, "primReps" to listOfNotNull(primitive), "evaluated" to evaluated)
     private fun result(operation: GmpForeignOp, evaluated: Boolean): Map<String, Any?> = mapOf(
         "kind" to "unknown", "primReps" to listOfNotNull(operation.result), "evaluated" to evaluated,
@@ -29,8 +29,8 @@ class CoreGmpForeignTest {
             "unit" to "ghc-internal", "isFunction" to true), "convention" to "ccall", "safety" to "unsafe",
         "arity" to operation.arguments.size.toLong(), "suppliedArity" to operation.arguments.size.toLong(),
         "argumentReps" to operation.arguments.map { scalar(it, false) }, "resultRep" to result(operation, false))
-    @Test fun allElevenExactContractsIncludeOriginalStateAndLogicalTuple() {
-        assertEquals(11, GmpForeignOp.entries.size)
+    @Test fun allFifteenExactContractsIncludeOriginalStateAndLogicalTuple() {
+        assertEquals(15, GmpForeignOp.entries.size)
         for (operation in GmpForeignOp.entries) {
             val proof = result(operation, true)
             assertEquals(operation, CoreGmpForeign.validate(mapOf("rep" to proof, "foreignCall" to descriptor(operation)),
