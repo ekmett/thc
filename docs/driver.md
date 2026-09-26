@@ -183,6 +183,14 @@ not establish a JIT-compiled path. Enable the opt-in test with
 `THC_INSTALLED_CORE_GHC_SOURCE` select the complete installation and its configured
 source tree. The test is not part of the stock-GHC suite.
 
+The separate `binary-buffers-full-core` test uses the same configuration and
+ordinary driver to compare `hPutBuf` and `hGetBuf` with native GHC. It checks
+offset pointers, NUL and high-bit bytes, short reads, EOF, untouched buffer
+boundaries, cleanup after an exception, and original shutdown flushing. Its
+strict audit supplied 72,921 bindings, reached 2,217, and reported zero missing
+bindings or issues. This bytecode run also had `compiledEntries=0`.
+Run it with `cabal test binary-buffers-full-core -ffull-core-tests`.
+
 The driver builds the selected-compiler `thc-interface` helper, discovers exact
 pre-existing registrations in the selected global package database, and reads
 each declared owned module's dynamic interface. Hidden modules are included;

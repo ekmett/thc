@@ -94,6 +94,10 @@ On Linux x86_64, with complete installed Core and matching configured GHC source
 backend now runs ordinary `putStrLn`, including GHC's original startup and Handle
 shutdown. A file-lifecycle test also matches native GHC on UTF-8 reads and writes,
 append, seeking, EOF, caught missing-file errors, and shutdown flushing.
+A binary-buffer test covers `hPutBuf` and `hGetBuf` with offset pointers, binary
+bytes, short reads, EOF and cleanup after an exception. These whole-program
+checks establish interpreted execution; they do not yet establish JIT compilation
+of the complete IO path.
 The [driver guide](../driver.md) covers the current Linux configuration
 and `--installed-core required --ghc-source DIR` options. The default provider
 remains limited. Complete boot-library loading, general file IO and FFI, and
