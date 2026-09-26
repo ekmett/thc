@@ -12,6 +12,8 @@ maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  compiler/test-fixtures/GcStatsAudit.hs
+  docs/gc-stats-clock.md
   compiler/test-fixtures/RubbishLiteralAudit.hs
   compiler/test-fixtures/OriginalDigestNative.hs
   compiler/test-fixtures/OriginalErfNative.hs
@@ -776,6 +778,7 @@ executable thc-fixtures
     OriginalFdReadyFixtures
     OriginalRtsLocksFixtures
     CompilerRtsFixtures
+    GcStatsFixtures
     FloatForeignFixtures
     GhcApiFixtures
     RtsDiagnosticFixtures

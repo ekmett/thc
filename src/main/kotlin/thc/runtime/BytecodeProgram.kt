@@ -1470,6 +1470,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val boundThreadForeign = CoreBoundThreadForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val gcForeign = CoreGcForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val allocationCounterForeign = CoreBoundThreadForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"), true)
             val stringRts = CoreStringRtsForeign.validate(foreignMetadata,
@@ -1501,7 +1503,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (gcForeign == null && memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (runtimeService != null) {
@@ -1806,6 +1808,32 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (operands.size > 2) operands[1].emit(e) else e.builder.emitLoadConstant(Unit)
                     operands.last().emit(e)
                     e.builder.endRtsDiagnostic()
+                }
+            } else if (gcForeign != null) {
+                CoreGcForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreGcForeign.validateOperand(gcForeign, index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    if (gcForeign.result != null) {
+                        e.builder.beginGcForeignQuery(destination.single(), gcForeign)
+                        operands.single().emit(e)
+                        e.builder.endGcForeignQuery()
+                    } else if (gcForeign == GcForeignOp.STATS) {
+                        check(destination.isEmpty())
+                        e.builder.beginUnavailableRtsStats()
+                        operands.forEach { it.emit(e) }
+                        e.builder.endUnavailableRtsStats()
+                    } else {
+                        check(destination.isEmpty())
+                        e.builder.beginRequestGarbageCollection(gcForeign)
+                        operands.single().emit(e)
+                        e.builder.endRequestGarbageCollection()
+                    }
+                    if (enableAsync && gcForeign.safety == "safe") emitAsyncPoll(e)
                 }
             } else if (boundThreadForeign || allocationCounterForeign) {
                 CoreBoundThreadForeign.validateHead(fn, defined)

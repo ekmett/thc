@@ -389,6 +389,21 @@ configurations[fullCoreTests.runtimeOnlyConfigurationName].extendsFrom(configura
 fullCoreTests.compileClasspath += sourceSets.test.get().output
 fullCoreTests.runtimeClasspath += sourceSets.test.get().output
 
+for ((taskName, dense) in listOf("gcStatsFullCoreTest" to false, "gcStatsFullCoreDenseTest" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests original GHC GC/statistics/clock declarations and honest JVM behavior."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.GcStatsNativeTest") }
+        inputs.files(fileTree("build/gc-stats") { include("*.json") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original GC/statistics native and first-entry checks require a fresh process") { true }
+        doFirst { check(file("build/gc-stats/manifest.json").isFile) { "Run thc-fixtures gc-stats with complete installed GHC Core" } }
+    }
+}
 for ((taskName, dense) in listOf("compilerRtsFullCoreTest" to false, "compilerRtsFullCoreDenseTest" to true)) {
     tasks.register<Test>(taskName) {
         group = "verification"

@@ -1966,6 +1966,47 @@ class OriginalMemorySearchDeclarationTest(unittest.TestCase):
             self.assertFalse(fixture.audit(fixture.fixture(bad))['accepted'])
 
 
+class OriginalGcStatsDeclarationTest(unittest.TestCase):
+    """Synthetic ABI negatives; real declarations execute in GcStatsNativeTest."""
+    def test_closed_original_gc_stats_and_clock_abis(self):
+        fixture = LibdwUnavailableAuditTest()
+        def scalar(rep, evaluated=False):
+            return dict(kind='void' if rep is None else 'address' if rep == 'AddrRep' else 'long',
+                        primReps=[] if rep is None else [rep], evaluated=evaluated)
+        for symbol, arguments, output, safety in (
+                ('getRTSStatsEnabled', (None,), 'IntRep', 'safe'),
+                ('getRTSStats', ('AddrRep', None), None, 'safe'),
+                ('performGC', (None,), None, 'safe'),
+                ('performMajorGC', (None,), None, 'safe'),
+                ('performBlockingMajorGC', (None,), None, 'safe'),
+                ('getMonotonicNSec', (None,), 'Word64Rep', 'unsafe')):
+            declaration = dict(schema=1, target=dict(kind='static', symbol=symbol,
+                unit='ghc-internal', isFunction=True), convention='ccall', safety=safety,
+                arity=len(arguments), suppliedArity=len(arguments),
+                argumentReps=[scalar(rep) for rep in arguments],
+                resultRep=dict(kind='unknown', primReps=[] if output is None else [output],
+                    evaluated=False, aggregate='unboxed-tuple', components=[scalar(None, True)] +
+                    ([] if output is None else [scalar(output, True)])))
+            module = fixture.fixture(declaration)
+            report = fixture.audit(module)
+            self.assertTrue(report['accepted'], report)
+            self.assertEqual([symbol], [call['symbol'] for call in report['foreignCalls']])
+            disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != symbol])
+            self.assertFalse(fixture.audit(module, disabled)['accepted'])
+            for key, value in (('safety', 'unsafe' if safety == 'safe' else 'safe'),
+                               ('convention', 'capi'), ('arity', 0), ('suppliedArity', 0),
+                               ('schema', True), ('resultRep', LONG)):
+                wrong = copy.deepcopy(declaration); wrong[key] = value
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], (symbol, key))
+            for key, value in (('unit', 'main'), ('isFunction', False), ('symbol', symbol + '_alias')):
+                wrong = copy.deepcopy(declaration); wrong['target'][key] = value
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], (symbol, key))
+            for index in range(len(arguments)):
+                wrong = fixture.fixture(declaration)
+                wrong['bindings'][0]['expr'][1][index]['rep'] = LONG
+                self.assertFalse(fixture.audit(wrong)['accepted'], (symbol, index))
+
+
 class OriginalLibraryMemoryDeclarationTest(unittest.TestCase):
     def test_original_library_carriers_and_abis_remain_distinct(self):
         fixture = LibdwUnavailableAuditTest()

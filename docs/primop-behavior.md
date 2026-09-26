@@ -275,6 +275,12 @@ setter primops above. Context disposal is not GHC shutdown-finalizer execution.
 Compiler-library shared FastStrings, CAF retention and unique-counter data cells
 are documented separately in [compiler RTS services](compiler-rts.md); their
 support does not imply a native GHC object loader or complete GHC API coverage.
+Original `performGC`, `performMajorGC` and `performBlockingMajorGC` request JVM
+collection without GHC generation or completion guarantees. `getRTSStatsEnabled`
+is false, and direct `getRTSStats` rejects without modifying its buffer; original
+Haskell retains its disabled-statistics exception. `getMonotonicNSec` uses the
+JVM monotonic clock with an arbitrary process-local origin. See
+[GC/statistics/clock behavior and tests](gc-stats-clock.md).
 Original `stg_sig_install` supports GHC's INT/QUIT/HUP/TERM handlers in the
 Linux x86_64 launcher with `-Xrs` and `asyncExceptions=true` on either backend
 (AST opt-in, bytecode default). Other signals, non-null masks and ordinary
