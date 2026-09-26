@@ -68,6 +68,28 @@ class PackageNativeVariantsTest(unittest.TestCase):
             with self.subTest(header=malformed), self.assertRaises(ValueError):
                 core_package_manifest.package_scalar_link(module)
 
+    def test_safe_scalars_retain_safety_and_reject_pointer_or_interruptible_calls(self):
+        def make(rep, safety):
+            module = self.module([rep])
+            module['packageNativeLink']['abi'][0]['safety'] = safety
+            imported = module['staticForeignImports']['imports'][0]
+            imported['safety'] = imported['emitted']['safety'] = safety
+            return module
+        accepted = make('WordRep', 'safe')
+        link, proved = core_package_manifest.package_scalar_link(accepted)
+        self.assertEqual('safe', link['abi'][0]['safety'])
+        self.assertEqual({link['abi'][0]['entry']}, proved)
+        for where in ('declaration', 'emitted'):
+            altered = make('WordRep', 'safe')
+            imported = altered['staticForeignImports']['imports'][0]
+            (imported if where == 'declaration' else imported['emitted'])['safety'] = 'unsafe'
+            with self.subTest(where=where), self.assertRaises(ValueError):
+                core_package_manifest.package_scalar_link(altered)
+        for rep, safety in (('AddrRep', 'safe'), ('ByteArray#', 'safe'),
+                            ('MutableByteArray#', 'safe'), ('WordRep', 'interruptible')):
+            with self.subTest(rep=rep, safety=safety), self.assertRaises(ValueError):
+                core_package_manifest.package_scalar_link(make(rep, safety))
+
 
 class PackageManifestTest(unittest.TestCase):
     def setUp(self):

@@ -46,11 +46,12 @@ the Core bundle. Native Cabal compilation still uses the selected GHC and its
 configured native compiler. LLVM acquisition is a sensible second compilation,
 not a requirement to reproduce the native object's exact bytes.
 
-Initial support is static, unsafe `ccall`/`capi`, scalar arguments, `Addr#`,
-`ByteArray#` and `MutableByteArray#`, and a scalar or void result. Pure source
-imports and IO imports both retain GHC's actual State-token worker ABI. Pointer
-results, callbacks, safe/interruptible calls, additional foreign-file products,
-initializers/finalizers and extra native libraries remain outside this profile.
+Support covers static `ccall`/`capi` with a scalar or void result. Unsafe calls
+may take scalar arguments, `Addr#`, `ByteArray#` and `MutableByteArray#`; safe
+calls currently require scalar arguments only. Pure source imports and IO
+imports both retain GHC's actual State-token worker ABI and original safety.
+Pointer results, callbacks, interruptible calls, additional foreign-file products,
+initializers/finalizers and arbitrary extra native libraries remain outside this profile.
 Ordinary memory helpers supplied by Sulong/libc are allowed. C++ `.cc`, `.cpp`
 and `.cxx` sources retain their actual Cabal compiler arguments, including
 `-optcxx` options, and replay through GHC's C++ compiler phase. The LLVM link
@@ -100,15 +101,38 @@ units and links the checksum providers. All six typed foreign adapters match
 unsigned seeds and long blocks in interpreted and first-installed compiled
 execution, in both handoff modes. This checks the common foreign adapters;
 it does not claim whole Pandoc or whole-package Core execution.
-`erf-2.0.0.0` has source-pure imports whose emitted State-threaded calls are
-`safe`, and needs a libm provider. Those obligations are not satisfied by
-pointer-variant support, and safe calls are not relabeled unsafe.
+The unchanged `erf-2.0.0.0` package has source-pure imports whose emitted
+State-threaded calls are `safe`. Its four Float/Double entries retain that safety
+through acquisition, ABI admission and call selection. A Linux native-libm
+provider checks the final LLVM declarations for exactly `erf`, `erfc`, `erff`
+and `erfcf`, then embeds the LLVM in a linked ELF container with an explicit
+`-lm` dependency. `format=llvm-embedded-elf` distinguishes that artifact from raw
+bitcode; its compiler, link arguments and digest remain recorded. This does not
+add native transport for managed pointers or authorize arbitrary library symbols.
 
-Prepare the original checksum fixture with the pinned toolchain and an unchanged
-acquired source tree, then run its two explicit test forks:
+Safe scalar calls use the existing foreign extent: other Java guest threads and
+JVM GC may progress, pending async delivery is deferred while in foreign code,
+and `finally` restores the previous permission and masking extent even when
+interop fails. Bytecode stores the result before its resumable post-call poll,
+so delivery never replays a completed foreign effect. Boundary controls exercise
+concurrent scalar C calls, GC, deferred delivery on return and exceptional cleanup.
+This tranche does not claim interruptible native blocking calls, callbacks,
+bound OS threads or native errno behavior. AST execution retains its existing
+async-admission policy.
+
+Four primitive bit-pattern entrypoints using the original package's public API
+pass the strict reachable audit and match 88 native observations, including
+signed zeros, subnormals, infinities and NaNs, in interpreted and first-installed
+compiled AST/bytecode execution in both handoff modes. Bytecode checks run with
+async capture enabled. This is actual small-program Core execution, not a whole
+Pandoc run.
+
+Prepare the original package fixtures with the pinned toolchain and unchanged
+acquired source trees, then run their two explicit test forks:
 
 ```sh
-THC_DIGEST_SOURCE=/path/to/digest-0.0.2.1 cabal run exe:thc-fixtures -- package-native-originals
+THC_DIGEST_SOURCE=/path/to/digest-0.0.2.1 THC_ERF_SOURCE=/path/to/erf-2.0.0.0 \
+  cabal run exe:thc-fixtures -- package-native-originals
 ./gradlew --continue packageNativeOriginalsDefault packageNativeOriginalsDense
 ```
 

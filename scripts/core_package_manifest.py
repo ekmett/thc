@@ -385,7 +385,8 @@ def package_scalar_link(module):
     inputs = native and isinstance(raw_link, dict) and 'buildInputs' in raw_link
     link = record(raw_link, 'schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi' + (' buildInputs' if inputs else ''))
     if inputs: require(isinstance(link['buildInputs'], dict), 'build inputs record')
-    require(type(link['schema']) is int and link['schema'] == 1 and link['format'] == 'llvm-bitcode' and
+    require(type(link['schema']) is int and link['schema'] == 1 and (link['format'] == 'llvm-bitcode' or
+            native and link['format'] == 'llvm-embedded-elf' and platform.system() == 'Linux') and
             link['profile'] == ('thc-package-c-ffi-v1' if native else 'thc-local-scalar-ccall-v1'), 'link profile')
     unit = text(link['unit'])
     require(unit == module.get('unit'), 'component owner')
@@ -412,8 +413,10 @@ def package_scalar_link(module):
         require(re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', name), 'C symbol')
         require(entry['entry'] == ('thc_native_' if native else 'thc_scalar_') + link['componentSha256'] + '_' + str(index), 'component entry namespace')
         require(isinstance(entry['arguments'], list) and all(arg in reps for arg in entry['arguments']) and entry['result'] in results, 'C ABI')
-        require(not native or entry['convention'] in ('ccall', 'capi') and entry['safety'] == 'unsafe', 'unsupported C calling convention/safety')
-        key = (name, entry.get('convention', 'ccall'), tuple(entry['arguments']), entry['result'])
+        require(not native or entry['convention'] in ('ccall', 'capi') and (entry['safety'] == 'unsafe' or
+                entry['safety'] == 'safe' and not any(rep in ('AddrRep', 'ByteArray#', 'MutableByteArray#') for rep in entry['arguments'])),
+                'unsupported C calling convention/safety')
+        key = (name, entry.get('convention', 'ccall'), entry.get('safety', 'unsafe'), tuple(entry['arguments']), entry['result'])
         require(key not in abi, 'duplicate ABI signature')
         abi[key] = entry
     require(list(abi) == sorted(abi), 'sorted unique ABI')
@@ -421,7 +424,7 @@ def package_scalar_link(module):
         variants = [entry for entry in abi.values() if entry['symbol'] == name]
         require(native or len(variants) == 1, 'duplicate scalar ABI symbol')
         def shape(entry, normalize):
-            return (entry.get('convention', 'ccall'), tuple(normalize(rep) for rep in entry['arguments']), entry['result'])
+            return (entry.get('convention', 'ccall'), entry.get('safety', 'unsafe'), tuple(normalize(rep) for rep in entry['arguments']), entry['result'])
         require(len({shape(entry, lambda rep: 'AddrRep' if rep in ('ByteArray#', 'MutableByteArray#') else rep)
                      for entry in variants}) == 1, 'conflicting C ABI variants')
         require(len({shape(entry, lambda rep: 'ByteArray#' if rep == 'MutableByteArray#' else rep)
@@ -458,15 +461,15 @@ def package_scalar_link(module):
         require((item['header'] is None or native and isinstance(item['header'], str) and
             item['header'] and '\0' not in item['header']) and
             item['unit'] in (None, unit) and (item['isFunction'] is True or native and convention == 'capi' and item['isFunction'] is False) and
-            convention in (('ccall', 'capi') if native else ('ccall',)) and item['safety'] == 'unsafe' and
-            item['normalizationRole'] == 'representational', 'static unsafe C import')
+            convention in (('ccall', 'capi') if native else ('ccall',)) and item['safety'] in (('unsafe', 'safe') if native else ('unsafe',)) and
+            item['normalizationRole'] == 'representational', 'static supported C import')
         typ(item['declaredType']); typ(item['normalizedType'])
         text(item['symbol'])
         emitted = record(item['emitted'], 'symbol unit convention safety arguments result')
         name = text(emitted['symbol'] if native else item['symbol'])
         variants = [entry for entry in abi.values() if entry['symbol'] == name and
-            convention == entry.get('convention', 'ccall') and exact(emitted,
-                dict(symbol=name, unit=unit, convention=convention, safety='unsafe', arguments=entry['arguments'] + ['void'],
+            convention == entry.get('convention', 'ccall') and item['safety'] == entry.get('safety', 'unsafe') and exact(emitted,
+                dict(symbol=name, unit=unit, convention=convention, safety=entry.get('safety', 'unsafe'), arguments=entry['arguments'] + ['void'],
                      result=['void'] if entry['result'] == 'void' else ['void', entry['result']]))]
         require(len(variants) == 1, 'emitted ABI differs from compiled C')
         proved.add(variants[0]['entry'])
@@ -529,7 +532,7 @@ def validate_package_scalar_call(call, abi, unit, arguments, flags, output):
     if (not isinstance(call, dict) or set(call) != {'schema', 'target', 'convention', 'safety', 'arity', 'suppliedArity', 'argumentReps', 'resultRep'} or
         type(call['schema']) is not int or call['schema'] != 1 or
         call['target'] != dict(kind='static', symbol=abi['symbol'], unit=unit, isFunction=True) or
-        call['target'].get('isFunction') is not True or call['convention'] != abi.get('convention', 'ccall') or call['safety'] != 'unsafe' or
+        call['target'].get('isFunction') is not True or call['convention'] != abi.get('convention', 'ccall') or call['safety'] != abi.get('safety', 'unsafe') or
         type(call['arity']) is not int or call['arity'] != len(wanted) or
         type(call['suppliedArity']) is not int or call['suppliedArity'] != len(wanted) or
         not isinstance(call['argumentReps'], list) or len(call['argumentReps']) != len(wanted) or

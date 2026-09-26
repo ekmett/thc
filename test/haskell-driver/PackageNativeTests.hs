@@ -10,6 +10,7 @@ import Data.Either (isLeft)
 import Data.List (isInfixOf)
 import Test.HUnit
 import THC.Driver.PackageNative
+import THC.Driver.NativeLibrarySources (validateNativeMathIR)
 
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
@@ -30,10 +31,23 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       , entry "wrong" "ccall" ["void"] ["void","AddrRep"]
       , entry "wrong" "ccall" ["void"] ["WordRep"]
       , entry "wrong" "stdcall" ["void"] ["void","WordRep"]
-      , changeEmitted "safety" "safe" ordinary
+      , changeEmitted "safety" "interruptible" ordinary
+      , changeEmitted "safety" "safe" (entry "wrong" "ccall" ["AddrRep","void"] ["void","WordRep"])
+      , changeEmitted "safety" "safe" (entry "wrong" "ccall" ["ByteArray#","void"] ["void","WordRep"])
+      , changeEmitted "safety" "safe" (entry "wrong" "ccall" [] ["void","WordRep"])
       , changeEmitted "unit" "other-unit" ordinary
       , entry "bad-name" "ccall" ["void"] ["void"]
       ]
+  , TestCase $ assertEqual "safe scalar import retains safe metadata"
+      (Right [("identity","ccall","safe",["WordRep"],"WordRep")])
+      (nativeSignatures "fixture-unit" [moduleWith [changeEmitted "safety" "safe" ordinary]])
+  , TestCase $ do
+      assertEqual "libm scalar declarations preserve exact native widths" (Right ())
+        (validateNativeMathIR ["erf","erff"]
+          "declare double @erf(double noundef) local_unnamed_addr\ndeclare float @erff(float)\n")
+      mapM_ (assertBool "wrong native libm prototype rejected" . isLeft . validateNativeMathIR ["erf"])
+        ["declare float @erf(float)\n", "declare double @erf(ptr)\n",
+         "declare double @erf(double, double)\n", "declare fastcc double @erf(double)\n", ""]
   , TestCase $ assertBool "conflicting emitted ABIs rejected" $ isLeft $ nativeSignatures "fixture-unit"
       [moduleWith [ordinary,entry "identity" "ccall" ["IntRep","void"] ["void","IntRep"]]]
   , TestCase $ assertEqual "one C pointer ABI retains each distinct Core carrier adapter"

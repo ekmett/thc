@@ -13,6 +13,8 @@ category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
   compiler/test-fixtures/OriginalDigestNative.hs
+  compiler/test-fixtures/OriginalErfNative.hs
+  compiler/test-fixtures/OriginalErfEntry.hs
   compiler/pinned-zlib/README.md
   compiler/pinned-zlib/1.2.11/README
   compiler/pinned-zlib/1.2.11/*.c

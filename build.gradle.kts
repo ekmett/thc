@@ -528,11 +528,11 @@ tasks.register<Test>("packageScalarFullCoreTest") {
 for ((taskName, dense) in listOf("packageNativeOriginalsDefault" to false, "packageNativeOriginalsDense" to true)) {
     tasks.register<Test>(taskName) {
         group = "verification"
-        description = "Checks original digest C++/zlib sources against native Haskell observations."
+        description = "Checks original digest C++/zlib and safe erf/libm against native Haskell observations."
         testClassesDirs = fullCoreTests.output.classesDirs
         classpath = fullCoreTests.runtimeClasspath
         systemProperty("thc.handoffSlabs", dense.toString())
-        inputs.files(fileTree("build/original-native") { include("linked/**/*.json", "digest-native.tsv", "manifest.json", "sources/**") })
+        inputs.files(fileTree("build/original-native") { include("linked/**/*.json", "*-native.tsv", "erf-entry/**/*.json", "erf-audit.json", "manifest.json", "sources/**") })
         useJUnitPlatform()
         filter { includeTestsMatching("thc.runtime.PackageNativeOriginalsTest") }
         outputs.upToDateWhen { false }
