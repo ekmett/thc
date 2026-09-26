@@ -3235,6 +3235,36 @@ class STMContractTest(unittest.TestCase):
                       [binding['id'] for binding in report['missingGlobals']])
         self.assertNotIn('sameTVar#', CAP['primitives'])
 
+    def test_erased_stm_newtype_action_refines_only_the_same_lifted_object_carrier(self):
+        for name in ('atomically#', 'catchRetry#', 'catchSTM#'):
+            for index, role in enumerate(CAP['managedSTMPrimitives'][name]['arguments']):
+                if role != 'action':
+                    continue
+                original = self.fixture(name)
+                binder = original['bindings'][0]['expr'][1][index]
+                binder['rep'] = dict(kind='object', primReps=['BoxedRep (Just Lifted)'], evaluated=False)
+                report = audit_core.Audit([('newtype-stm.json', original)], CAP).run(['root'])
+                self.assertTrue(report['accepted'], (name, index, report['issues']))
+                for wrong in (LONG, dict(kind='float', primReps=['FloatRep'], evaluated=True),
+                              dict(kind='address', primReps=['AddrRep'], evaluated=True),
+                              dict(kind='void', primReps=[], evaluated=True),
+                              dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True),
+                              dict(kind='closure', primReps=['BoxedRep (Just Unlifted)'], evaluated=True),
+                              dict(kind='data', primReps=['BoxedRep (Just Lifted)'], evaluated=True),
+                              dict(kind='unknown', aggregate='unboxed-tuple', components=[REFERENCE],
+                                   primReps=['BoxedRep (Just Lifted)'], evaluated=True)):
+                    for site in ('binding', 'occurrence'):
+                        changed = copy.deepcopy(original)
+                        target = (changed['bindings'][0]['expr'][1][index] if site == 'binding' else
+                                  changed['bindings'][0]['expr'][2][1][2][index][2])
+                        target['rep'] = wrong
+                        bad = audit_core.Audit([('bad-newtype-stm.json', changed)], CAP).run(['root'])
+                        self.assertFalse(bad['accepted'], (name, index, site, wrong))
+                # A stored object does not grant a missing function occurrence.
+                changed = copy.deepcopy(original)
+                changed['bindings'][0]['expr'][2][1][2][index][2]['rep'] = copy.deepcopy(binder['rep'])
+                self.assertFalse(audit_core.Audit([('bad-action.json', changed)], CAP).run(['root'])['accepted'])
+
 
 class OriginalTextForeignAuditTests(unittest.TestCase):
     def fixture(self, symbol):

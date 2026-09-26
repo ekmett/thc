@@ -15,8 +15,8 @@ main = do
   print (I# (count 0#))
   print (I# (other 3#))
   print (I# (process 0#) > 0)
-  observations <- forM [(rounds,keylen) | rounds <- [-1,0,255,256,4294967298],
+  observations <- forM [(rounds,keylen) | rounds <- [-1,0,255,256,32767,32768,65535,65536,4294967298],
     keylen <- [-1,0,4294967297,2147483648]] $ \(rounds,keylen) -> do
-      (typed,wide) <- mixed rounds keylen
-      pure (rounds,keylen,typed,wide)
+      (typed,wide,word16) <- mixed rounds keylen
+      pure (rounds,keylen,typed,wide,word16)
   print observations

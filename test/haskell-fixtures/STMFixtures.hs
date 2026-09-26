@@ -20,6 +20,7 @@ import System.FilePath ((</>), makeRelative, takeExtension)
 
 entries, contextEntries :: [String]
 entries = ["basic", "rollback", "alternative", "lazyPayload", "nestedAtomic", "unliftedPayload"]
+  ++ ["newtypeField", "newtypeAlternative", "newtypeCatch"]
 contextEntries = ["newCell", "readCell", "bumpCell", "awaitCell", "awaitEither"]
   ++ ["forceRetry", "forceInner", "asyncReady", "asyncRelease", "asyncSet", "asyncValue", "asyncPrefixes", "asyncPayload", "asyncEntry"]
 

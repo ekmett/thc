@@ -487,6 +487,7 @@ executable thc
     THC.Driver.NativeRecipe
     THC.Driver.PackageNative
     THC.Driver.NativeLibrarySources
+    THC.Driver.NativeArgumentBridge
     THC.Driver.ScalarBitcode
     THC.Driver.RuntimeShim
     THC.Driver.GhcProxy
@@ -549,6 +550,7 @@ test-suite driver-tests
     THC.Driver.NativeRecipe
     THC.Driver.PackageNative
     THC.Driver.NativeLibrarySources
+    THC.Driver.NativeArgumentBridge
     THC.Driver.ScalarBitcode
     THC.Driver.RuntimeShim
   build-tool-depends: thc:thc
@@ -867,6 +869,7 @@ executable thc-fixtures
     THC.Driver.NativeRecipe
     THC.Driver.PackageNative
     THC.Driver.NativeLibrarySources
+    THC.Driver.NativeArgumentBridge
     THC.Driver.ScalarBitcode
     THC.Driver.Installed
     THC.Driver.RuntimeShim
