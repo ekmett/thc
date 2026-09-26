@@ -134,6 +134,36 @@ Larger preparation lists must come from an initialization audit, not a
 package-wide build-time override. New raw diagnostics remain local; this
 checkpoint publishes source and concise results only.
 
+## Runtime graph preparation
+
+The working pure recipe also rebuilds and passes its eight interpretation checks
+after integration of main `fbbe3c2a`. A separate, larger diagnostic preparation
+inventory is being audited for guest compilation; it is not yet the supported
+recipe. It admits no-initializer class hierarchies, exact fieldless singleton
+constructors and stateless companion holders by inspecting class-file bytecode,
+with individually inspected metadata initializers added only as required.
+
+Preparing those runtime graphs exposed ten compilation-blocklist violations.
+Nine arose because thunk diagnostics obtained `RootNode.name` before entering
+the existing metrics boundary. Name lookup now occurs inside that boundary,
+still before taking the counts-map lock. The remaining violation reached
+`BigDecimal.longValue` through the generic frame writer's Kotlin type switch.
+Explicit early-return scalar guards preserve `instanceof` instructions in the
+actual JVM bytecode and exclude unrelated `Number` implementations during
+Native Image analysis. Merely changing to a subjectless `when` did not do so.
+Neither change adds a boundary to the primitive frame-write path.
+
+Focused verification covers primitive kinds, object widening, concurrent slot
+claims, thunk sharing/capture counts, and all six floating regression tests in
+both handoff modes: 20 passes. Fresh independent GHC fixtures supply 441 floating
+observations across 15 entries, exercised on AST and bytecode before and after
+explicit compilation, including the first installed-code call. The generic
+writer's negative controls retain BigInteger, BigDecimal and a custom Number
+whose conversion methods throw as references. The next image analysis no longer
+reports any of the ten blocklist violations; it stops later at an unbacked image
+constant while preparing bytecode closure creation. Guest JIT in the native THC
+executable remains unverified. Compiler assertions and blocklist checks stay on.
+
 ## Execution models
 
 | Product | What is fixed when built | Guest execution |
