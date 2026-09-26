@@ -3317,11 +3317,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             }
         }
         val entry = compile(expr[3] as List<Any?>, local, tail)
-        CoreRepresentations.requireNoSum(entry.representation, "join result")
         val bodies = definitions.mapIndexed { index, definition ->
             withSource(sources.binding(definition.binding, currentSource)) {
                 compile(definition.body, bodyScopes[index], tail).also { node ->
-                    CoreRepresentations.requireNoSum(node.representation, "join result")
                     node.representation = node.representation.refine(definition.result.copy(evaluated = false))
                 }
             }

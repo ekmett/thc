@@ -86,6 +86,7 @@ import WindowsSmokeFixtures (prepareWindowsSmoke, prepareWindowsDriver)
 import StablePointerFixtures (prepareStablePointers)
 import StablePtrFFIFixtures (prepareStablePtrFFI)
 import StableNameFixtures (prepareStableNames)
+import SumJoinFixtures (prepareSumJoins)
 import WeakFixtures (prepareWeaks)
 import ShrinkByteArrayFixtures (prepareShrinkByteArrays)
 import ByteArrayFixtures (prepareByteArrayFamily)
@@ -980,6 +981,7 @@ main = do
     ["stable-pointers"] -> prepareStablePointers root
     ["compiler-rts"] -> prepareCompilerRts root
     ["stable-names"] -> prepareStableNames root
+    ["sum-join"] -> prepareSumJoins root
     ["weak-explicit"] -> prepareWeaks root
     ["shrink-bytearrays"] -> prepareShrinkByteArrays root
     [family] | family `elem` ["bytearray", "mutable-bytearrays", "resize-bytearrays", "mutable-bytearray-size", "compare-byte-arrays"] -> prepareByteArrayFamily root family

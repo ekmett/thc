@@ -93,7 +93,9 @@ class SumProtocolTest {
                 3 -> alternatives[1][1]=alternatives[0][1]
                 4 -> alternatives[1][2]=emptyList<String>()
                 5 -> {
-                    alternatives[1][3]=listOf("lit","word","1",mapOf("rep" to mapOf("kind" to "long","primReps" to listOf("WordRep"),"evaluated" to true)))
+                    // Int# and Word# deliberately share the Long carrier at
+                    // runtime; reject a real scalar carrier mismatch instead.
+                    alternatives[1][3]=listOf("lit","float","1",mapOf("rep" to mapOf("kind" to "float","primReps" to listOf("FloatRep"),"evaluated" to true)))
                 }
                 6 -> alternatives[1][3]=listOf("void",mapOf("rep" to mapOf("kind" to "void","primReps" to emptyList<String>(),"evaluated" to true)))
                 9 -> { alternatives[1][0]="default"; alternatives[1][2]=emptyList<String>() }

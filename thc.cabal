@@ -747,6 +747,7 @@ executable thc-fixtures
     WindowsSmokeFixtures
     StablePointerFixtures
     StableNameFixtures
+    SumJoinFixtures
     WeakFixtures
     ShrinkByteArrayFixtures
     ByteArrayFixtures

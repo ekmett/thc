@@ -335,7 +335,9 @@ internal object CoreJoins {
                     listOf("lam", all.drop(arity), rhs[2], meta)
                 }
             }
-            CoreRepresentations.requireNoSum(CoreRepresentations.joinResult(binding), "join result")
+            // Binary sums already have an exact typed tag/payload layout. A
+            // local join returns into that layout without storing a sum value
+            // in its binder or introducing a closure/call boundary.
             CoreJoinDefinition(binding, binding["id"] as String, parameters, body, CoreRepresentations.joinResult(binding))
         }
     }
