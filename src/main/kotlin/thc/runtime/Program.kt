@@ -1063,7 +1063,7 @@ private class Alternative(val kind: Int, val value: Any?,
 }
 private open class Case(scrutinee: Expr, protected val binderSlot: Int,
                    @field:Children protected var alternatives: Array<Alternative>, metrics: Metrics,
-                   binderProof: CoreRepresentation? = null) : Expr() {
+                   binderProof: CoreRepresentation? = null, private val delimited: Boolean = false) : Expr() {
     init {
         val proofs = alternatives.map { it.body.representation }
         val kinds = proofs.map { it.kind }.toSet()
@@ -1081,7 +1081,31 @@ private open class Case(scrutinee: Expr, protected val binderSlot: Int,
     @Child private var scrutinee = LocalBinding(binderSlot, Evaluate(scrutinee, metrics).apply {
         if (binderProof != null) representation = representation.refine(binderProof.copy(evaluated = false))
     }, true)
-    protected fun prepare(frame: VirtualFrame) { scrutinee.write(frame) }
+    protected fun prepare(frame: VirtualFrame, destination: IntArray? = null, offset: Int = 0) {
+        if (!delimited) { scrutinee.write(frame); return }
+        try { scrutinee.write(frame) }
+        catch (cut: DelimitedCut) {
+            throw cut.append(frame, object : DelimitedStep {
+                override fun resume(frame: MaterializedFrame, input: DelimitedResume,
+                                    ambient: MaskingState, outerMask: DelimitedStep?): Any? {
+                    // The suspended scrutinee has completed. Do not evaluate it
+                    // again: only bind its value and execute the saved branch.
+                    FrameAccess.write(frame, binderSlot, input.get())
+                    val branch = select(frame).body
+                    return if (destination == null) branch.execute(frame)
+                        else branch.executeTuple(frame, destination, offset)
+                }
+            })
+        }
+    }
+    private fun select(frame: VirtualFrame): Alternative {
+        var fallback: Alternative? = null
+        for (alt in alternatives) {
+            if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
+            if (matches(frame, alt)) { restoreFields(frame, alt); return alt }
+        }
+        return fallback ?: fault("Non-exhaustive Core case")
+    }
     protected open fun matches(frame: VirtualFrame, alternative: Alternative): Boolean = alternative.matches(frame, binderSlot)
 
     @ExplodeLoop override fun execute(frame: VirtualFrame): Any? {
@@ -1177,7 +1201,7 @@ private open class Case(scrutinee: Expr, protected val binderSlot: Int,
     }
 
     @ExplodeLoop override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        prepare(frame)
+        prepare(frame, slots, offset)
         var fallback: Alternative? = null
         for (alt in alternatives) {
             if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
@@ -1202,17 +1226,17 @@ private open class Case(scrutinee: Expr, protected val binderSlot: Int,
 }
 /** Category selection happens during lowering, never in the guest loop. */
 private class DataCase(scrutinee: Expr, binder: Int, alternatives: Array<Alternative>, metrics: Metrics,
-                       proof: CoreRepresentation) : Case(scrutinee, binder, alternatives, metrics, proof) {
+                       proof: CoreRepresentation, delimited: Boolean) : Case(scrutinee, binder, alternatives, metrics, proof, delimited) {
     override fun matches(frame: VirtualFrame, alternative: Alternative): Boolean =
         alternative.matchesData(frame.getObject(binderSlot) as DataValue)
 }
 private class LongCase(scrutinee: Expr, binder: Int, alternatives: Array<Alternative>, metrics: Metrics,
-                       proof: CoreRepresentation) : Case(scrutinee, binder, alternatives, metrics, proof) {
+                       proof: CoreRepresentation, delimited: Boolean) : Case(scrutinee, binder, alternatives, metrics, proof, delimited) {
     override fun matches(frame: VirtualFrame, alternative: Alternative): Boolean =
         alternative.matchesLong(frame.getLong(binderSlot))
 }
 private class DefaultCase(scrutinee: Expr, binder: Int, alternatives: Array<Alternative>, metrics: Metrics,
-                          proof: CoreRepresentation) : Case(scrutinee, binder, alternatives, metrics, proof) {
+                          proof: CoreRepresentation, delimited: Boolean) : Case(scrutinee, binder, alternatives, metrics, proof, delimited) {
     override fun execute(frame: VirtualFrame): Any? { prepare(frame); return alternatives.last().body.execute(frame) }
     override fun executeLong(frame: VirtualFrame): Long { prepare(frame); return alternatives.last().body.executeLong(frame) }
     override fun executeFloat(frame: VirtualFrame): Float { prepare(frame); return alternatives.last().body.executeFloat(frame) }
@@ -2761,10 +2785,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 alternatives.map { it.body.representation })
             when (caseCategory(binderProof, alternatives.map { it.kind },
                 alternatives.all { it.kind != LITERAL_ALTERNATIVE || it.value is Long })) {
-                CaseCategory.DATA -> DataCase(scrutinee, binder, alternatives, metrics, binderProof)
-                CaseCategory.LONG -> LongCase(scrutinee, binder, alternatives, metrics, binderProof)
-                CaseCategory.DEFAULT_ONLY -> DefaultCase(scrutinee, binder, alternatives, metrics, binderProof)
-                CaseCategory.GENERIC -> Case(scrutinee, binder, alternatives, metrics)
+                CaseCategory.DATA -> DataCase(scrutinee, binder, alternatives, metrics, binderProof, delimited)
+                CaseCategory.LONG -> LongCase(scrutinee, binder, alternatives, metrics, binderProof, delimited)
+                CaseCategory.DEFAULT_ONLY -> DefaultCase(scrutinee, binder, alternatives, metrics, binderProof, delimited)
+                CaseCategory.GENERIC -> Case(scrutinee, binder, alternatives, metrics, delimited = delimited)
             }
             }
             }

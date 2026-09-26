@@ -20,7 +20,7 @@ prepareDelimitedContinuations root = do
       output = root </> directory
       source = "examples/DelimitedContinuations.hs"
       driver = "compiler/test-fixtures/DelimitedContinuationsNative.hs"
-      entries = ["promptPure", "abortSuffix", "resumeTwice", "nestedPrompts", "sameTagNearest", "capturedCatch", "capturedMask", "escapedResume", "ambientMask", "resumedTail", "resumedJoin"]
+      entries = ["promptPure", "abortSuffix", "resumeTwice", "nestedPrompts", "sameTagNearest", "capturedCatch", "capturedMask", "escapedResume", "ambientMask", "resumedTail", "resumedJoin", "resumedScalar", "recapturedMask"]
       stages = ["pre", "post"]
       logs = directory </> "commands"
       native = directory </> "native"
@@ -33,7 +33,7 @@ prepareDelimitedContinuations root = do
      "-odir", native, "-hidir", native, driver, "-o", native </> "oracle"]
   observations <- runLogged 30 root logs "native-run" [] (output </> "native/oracle") []
   let values = map (read . BSC.unpack) (BSC.lines (commandStdout observations)) :: [Integer]
-  unless (length values == 33) (die "Unexpected delimited-continuation native row count")
+  unless (length values == 39) (die "Unexpected delimited-continuation native row count")
   artifacts <- fmap concat $ forM stages $ \stage -> do
     let core = directory </> stage </> "core"
     exported <- runLogged 180 root logs (stage ++ "-export")
@@ -65,4 +65,4 @@ prepareDelimitedContinuations root = do
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= entries,
      "stages" .= stages, "arguments" .= ([-2,0,7] :: [Int]), "native" .= values,
      "inputHashes" .= sourceHashes, "artifactHashes" .= artifactHashes]
-  putStrLn "delimited-continuations: 33 native observations and original pre/post Core audits"
+  putStrLn "delimited-continuations: 39 native observations and original pre/post Core audits"

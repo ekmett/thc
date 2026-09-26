@@ -8,6 +8,40 @@ module DelimitedContinuations where
 
 import GHC.Exts
 
+-- An unlifted result cannot acquire an update frame. The strict call consumes
+-- the same State# thread as the enclosing prompt; no nested runRW#/unsafe IO.
+{-# OPAQUE scalarWorker #-}
+scalarWorker :: PromptTag# Int -> Int# -> State# RealWorld -> Int#
+scalarWorker tag count s = case count of
+  0# -> 17#
+  3# -> case control0# tag (\k st -> k (\sx -> (# sx, 2# #)) st) s of
+    (# st, next #) -> scalarWorker tag next st
+  _ -> scalarWorker tag (count -# 1#) s
+
+{-# OPAQUE resumedScalar #-}
+resumedScalar :: Int# -> Int#
+resumedScalar n = runRW# $ \s0 -> case newPromptTag# s0 of
+  (# s1, tag #) -> case prompt# tag (\s2 -> case scalarWorker tag 3# s2 of
+    value -> (# s2, I# (value +# 100#) #)) s1 of
+      (# _, I# answer #) -> answer +# n
+
+-- The second capture crosses a mask return restored by the first resumption.
+-- Its saved prior state is now the first resumer's state (1), not the state (0)
+-- that surrounded the original prompt.
+{-# OPAQUE recapturedMask #-}
+recapturedMask :: Int# -> Int#
+recapturedMask n = runRW# $ \s0 -> case newPromptTag# s0 of
+  (# s1, outer #) -> case newPromptTag# s1 of
+    (# s2, inner #) -> case prompt# outer (\s3 -> prompt# inner
+      (\s4 -> case maskAsyncExceptions# (\s5 ->
+        case control0# inner (\k s6 -> maskUninterruptible#
+          (\s7 -> k (\s8 -> (# s8, 0# #)) s7) s6) s5 of
+            (# s9, _ #) -> control0# outer (\k s10 -> k
+              (\s11 -> (# s11, I# 0# #)) s10) s9) s4 of
+                (# s12, _ #) -> case getMaskingState# s12 of
+                  (# s13, mask #) -> (# s13, I# (n +# mask) #)) s3) s2 of
+                    (# _, I# answer #) -> answer
+
 {-# OPAQUE resumedJoin #-}
 resumedJoin :: Int# -> Int#
 resumedJoin n = runRW# $ \s0 -> case newPromptTag# s0 of

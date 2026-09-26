@@ -97,6 +97,8 @@ internal class DelimitedTupleStep(private val destination: TupleDestination, pri
 }
 
 internal class DelimitedMaskStep(private val node: Node, private val prior: MaskingState) : DelimitedStep {
+    fun recapture(ambient: MaskingState, outerMask: DelimitedStep?): DelimitedMaskStep =
+        if (this === outerMask) DelimitedMaskStep(node, ambient) else this
     fun unwind(ambient: MaskingState, outerMask: DelimitedStep?) =
         SynchronousMasking.set(node, if (this === outerMask) ambient else prior)
     override fun resume(frame: MaterializedFrame, input: DelimitedResume, ambient: MaskingState,
@@ -185,8 +187,13 @@ internal class DelimitedStack(cut: DelimitedCut, private val outputShape: TupleS
                 catch (next: DelimitedCut) { return transfer(site, next, remaining.drop(index + 1), ambient, outerMask) }
                 return run(site, remaining.drop(index + 1), input, ambient, outerMask)
             }
-            cut.frames.add(entry)
-            if (step is DelimitedMaskStep) step.unwind(ambient, outerMask)
+            if (step is DelimitedMaskStep) {
+                // Its outer return was rebased for this invocation. A new
+                // capture may put another mask return outside it, so freeze
+                // that rebased prior rather than the original image's prior.
+                cut.frames.add(DelimitedFrame(entry.frame, step.recapture(ambient, outerMask)))
+                step.unwind(ambient, outerMask)
+            } else cut.frames.add(entry)
         }
         throw cut
     }

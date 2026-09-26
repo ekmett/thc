@@ -121,7 +121,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('examples/DelimitedContinuations.hs', group['sources'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'delimited-continuations']}], group['commands'])
         self.assertIn('"$fixture_bin" delimited-continuations', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
-        self.assertEqual(106, len(cache.DELIMITED_OUTPUTS))
+        self.assertEqual(122, len(cache.DELIMITED_OUTPUTS))
         self.assertTrue(cache.DELIMITED_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         name = 'build/delimited-continuations/manifest.json'
         artifacts = {}
@@ -129,11 +129,11 @@ class FixturePreparationTest(unittest.TestCase):
             path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
         receipt = dict(schema=1, ghc='9.14.1', entries=list(cache.DELIMITED_ENTRIES), stages=['pre', 'post'],
-                       arguments=[-2, 0, 7], native=[0] * 33, artifactHashes=artifacts)
+                       arguments=[-2, 0, 7], native=[0] * 39, artifactHashes=artifacts)
         (self.root / name).write_text(json.dumps(receipt))
         self.assertEqual(cache.DELIMITED_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
         for bad in (dict(receipt, schema=True), dict(receipt, ghc='9.12.2'), dict(receipt, entries=[]),
-                    dict(receipt, native=[0] * 32), dict(receipt, native=[False] * 33),
+                    dict(receipt, native=[0] * 38), dict(receipt, native=[False] * 39),
                     dict(receipt, stages=['pre']), dict(receipt, artifactHashes={})):
             with self.assertRaises(cache.CacheMiss): cache.delimited_artifact_hashes(bad)
         (self.root / 'build/delimited-continuations/commands/native-run.stdout').write_text('mutated')
