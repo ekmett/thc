@@ -365,7 +365,7 @@ runBuiltProject action project working thcRoot runtime output native target proj
   selectedPackage <- field (unitValue selected) "pkg-name"
   selectedComponent <- field (unitValue selected) "component-name"
   globalBundles <- prepareGlobalBundles context project
-    (selectedPackage ++ ":" ++ selectedComponent) globals
+    (selectedPackage ++ ":" ++ selectedComponent) byId localComponents globals
   (_, described) <- foldlM (\(keys, acc) unit -> do
     kind <- optionalField (unitValue unit) "type" ("" :: String)
     bundle <- if unitLocal unit
@@ -810,18 +810,33 @@ dependencyClosure units target = snd <$> visit Set.empty Set.empty target
               pure (more, ordered ++ result)) (seen, []) (unitDepends unit)
             pure (Set.insert identifier visited, dependencies ++ [unit])
 
--- Cabal's source-built store ID is the immutable package identity. Unlike
--- local -inplace IDs, it already includes Cabal's source/configuration hash.
-globalLocation :: ExportContext -> Unit -> IO (String, String, FilePath)
-globalLocation context unit = do
+-- Cabal's global store ID includes its source/configuration hash. A repository
+-- package built inplace can retain its ID while a project dependency changes.
+globalLocation :: ExportContext -> Map.Map String Unit -> Map.Map String Value -> Unit -> IO (String, String, FilePath)
+globalLocation context units inputs unit = do
   sourceHash <- field (unitValue unit) "pkg-src-sha256" :: IO String
   require (length sourceHash == 64 && all isHexDigit sourceHash &&
            all (\c -> isAlphaNum c || c `elem` ("-._" :: String)) (unitId unit))
     ("Cabal store source identity is invalid for " ++ unitId unit)
-  let buildKey = shaHex (BL.toStrict (encode
+  style <- field (unitValue unit) "style" :: IO String
+  require (style `elem` ["global", "inplace"])
+    ("unsupported source-built Cabal package style for " ++ unitId unit ++ ": " ++ style)
+  dependencies <- dependencyClosure units (unitId unit)
+  dependencyInputs <- forM (filter (\dependency -> unitLocal dependency || sourceInplace dependency) dependencies) $ \dependency ->
+    maybe (fail ("missing inplace dependency inputs for " ++ unitId dependency)) pure
+      (Map.lookup (unitId dependency) inputs)
+  require (style == "inplace" || null dependencyInputs)
+    ("global Cabal store unit depends on project-local content: " ++ unitId unit)
+  let globalKey = shaHex (BL.toStrict (encode
         ("thc-core-store-build-v1" :: String, contextCompiler context,
          contextAbi context, contextPlatform context, unitId unit,
          sourceHash, unitDepends unit, contextNativeTools context)))
+      -- Repository packages depending on a project library are Cabal 'inplace'
+      -- builds, not immutable store IDs. Their key must follow that library's
+      -- actual configured/native inputs and every intervening package identity.
+      buildKey = if style == "global" then globalKey else shaHex (BL.toStrict (encode
+        ("thc-core-inplace-source-build-v1" :: String, globalKey,
+         map sourceIdentity dependencies, dependencyInputs)))
   exporter <- exporterIdentity context
   let exportKey = shaHex (BL.toStrict (encode
         ("thc-core-export-v1" :: String, buildKey, exporter)))
@@ -829,6 +844,15 @@ globalLocation context unit = do
         (contextCompiler context ++ "-" ++ contextAbi context ++ "-" ++ contextPlatform context) </>
         exportKey </> (unitId unit ++ ".zip")
   pure (buildKey, exportKey, destination)
+
+sourceInplace :: Unit -> Bool
+sourceInplace unit = jsonField (unitValue unit) "style" == Just ("inplace" :: String)
+
+sourceIdentity :: Unit -> Value
+sourceIdentity unit = object ["unit" .= unitId unit, "depends" .= unitDepends unit,
+  "configuration" .= object [Key.fromString key .= (jsonField (unitValue unit) key :: Maybe Value) |
+    key <- ["type", "style", "pkg-name", "pkg-version", "flags", "component-name",
+            "pkg-src-sha256", "pkg-cabal-sha256"]]]
 
 exporterIdentity :: ExportContext -> IO Value
 exporterIdentity context = do
@@ -841,21 +865,48 @@ exporterIdentity context = do
                                 "foreign-import-provenance",
                                 "native-debug-info", "-dynamic", "-dcore-lint"] :: [String])]
 
-prepareGlobalBundles :: ExportContext -> FilePath -> String -> [Unit] -> IO (Map.Map String Bundle)
-prepareGlobalBundles _ _ _ [] = pure Map.empty
-prepareGlobalBundles context project target units = do
+prepareGlobalBundles :: ExportContext -> FilePath -> String -> Map.Map String Unit -> [(Unit, Component)] -> [Unit] -> IO (Map.Map String Bundle)
+prepareGlobalBundles _ _ _ _ _ [] = pure Map.empty
+prepareGlobalBundles context project target planned locals units = do
   let lockDir = contextCache context </> "core-bundles/v1"
   createDirectoryIfMissing True lockDir
   withLock (lockDir </> "global-export.lock") $ do
+    closures <- mapM (dependencyClosure planned . unitId) units
+    let localIds = Set.fromList [unitId unit | unit <- concat closures, unitLocal unit]
+        inplaceUnits = Map.elems (Map.fromList
+          [(unitId unit, unit) | unit <- concat closures, sourceInplace unit])
+        observeInputs = do
+          localInputs <- forM (filter (\(unit, _) -> unitId unit `Set.member` localIds) locals) $ \(unit, component) -> do
+            artifacts <- componentNativeInputs context unit component
+            sources <- forM (componentSources component) $ \(name, path) -> do
+              digest <- digestFile path
+              pure (name, digest)
+            pure (unitId unit, object ["unit" .= unitId unit,
+              "component" .= normalizePaths (contextNative context) (componentValue component),
+              "nativeArtifacts" .= artifacts, "sources" .= sources])
+          sourceInputs <- forM inplaceUnits $ \unit -> do
+            artifacts <- sourceNativeInputs context unit
+            pure (unitId unit, object ["unit" .= unitId unit, "nativeInputs" .= artifacts])
+          pure (Map.fromList (localInputs ++ sourceInputs))
+    inputs <- observeInputs
     located <- forM units $ \unit -> do
-      (buildKey, exportKey, path) <- globalLocation context unit
+      (buildKey, exportKey, path) <- globalLocation context planned inputs unit
       cached <- doesFileExist path
       hit <- if cached then readGlobalBundle path (unitId unit) (unitDepends unit) buildKey exportKey
              else pure Nothing
       pure (unit, buildKey, exportKey, path, hit)
     let missing = [(unit, buildKey, exportKey, path)
                   | (unit, buildKey, exportKey, path, Nothing) <- located]
-    when (not (null missing)) $ captureGlobalUnits context project target (map first4 missing) missing
+        validateInputs = do
+          currentInputs <- observeInputs
+          forM_ located $ \(unit, buildKey, _, _, _) -> do
+            (currentKey, _, _) <- globalLocation context planned currentInputs unit
+            require (currentKey == buildKey)
+              ("project dependency inputs changed during capture for " ++ unitId unit)
+    when (not (null missing)) $
+      captureGlobalUnits context project target planned (map first4 missing) missing validateInputs
+    -- Check warm hits too, before they enter the combined manifest.
+    validateInputs
     pairs <- forM located $ \(unit, buildKey, exportKey, path, hit) -> do
       bundle <- case hit of
         Just value -> pure value
@@ -866,9 +917,9 @@ prepareGlobalBundles context project target units = do
     pure (Map.fromList pairs)
   where first4 (unit, _, _, _) = unit
 
-captureGlobalUnits :: ExportContext -> FilePath -> String -> [Unit] ->
-                      [(Unit, String, String, FilePath)] -> IO ()
-captureGlobalUnits context project target requested missing = do
+captureGlobalUnits :: ExportContext -> FilePath -> String -> Map.Map String Unit -> [Unit] ->
+                      [(Unit, String, String, FilePath)] -> IO () -> IO ()
+captureGlobalUnits context project target planned requested missing validateInputs = do
   helper <- prepareInterfaceHelper context (contextRoot context)
   let stagingRoot = contextNative context </> "cache/thc/staging"
   createDirectoryIfMissing True stagingRoot
@@ -917,31 +968,42 @@ captureGlobalUnits context project target requested missing = do
       "isolated Cabal export build changed compiler or platform"
     isolated <- mapM readUnit =<< field plan "install-plan"
     let byId = Map.fromList [(unitId unit, unit) | unit <- isolated]
+    closures <- mapM (dependencyClosure planned . unitId) requested
+    let dependencies = Map.elems (Map.fromList [(unitId unit, unit) | unit <- concat closures])
+    forM_ dependencies $ \unit -> do
+      rebuilt <- maybe (fail ("isolated Cabal plan omitted dependency " ++ unitId unit)) pure
+                 (Map.lookup (unitId unit) byId)
+      require (sourceIdentity unit == sourceIdentity rebuilt)
+        ("isolated Cabal build changed dependency identity for " ++ unitId unit)
+    -- An input edit must not leave a captured ZIP under the old cache key,
+    -- even when the combined manifest would subsequently be rejected.
+    validateInputs
     forM_ missing $ \(unit, buildKey, exportKey, path) -> do
       rebuilt <- maybe (fail ("isolated Cabal plan omitted store unit " ++ unitId unit)) pure
                  (Map.lookup (unitId unit) byId)
-      originalHash <- field (unitValue unit) "pkg-src-sha256" :: IO String
-      rebuiltHash <- field (unitValue rebuilt) "pkg-src-sha256" :: IO String
       kind <- field (unitValue rebuilt) "type" :: IO String
       style <- field (unitValue rebuilt) "style" :: IO String
-      require (kind == "configured" && style == "global" &&
-               originalHash == rebuiltHash && unitDepends unit == unitDepends rebuilt)
+      require (kind == "configured" && style `elem` ["global", "inplace"])
         ("isolated Cabal build changed store identity for " ++ unitId unit)
       createDirectoryIfMissing True (takeDirectory path)
       withLock (path ++ ".lock") $
-        packGlobalBundle store capture unit buildKey exportKey path
+        packGlobalBundle store dist capture unit buildKey exportKey path
     ) `finally` cleanup
 
-packGlobalBundle :: FilePath -> FilePath -> Unit -> String -> String -> FilePath -> IO ()
-packGlobalBundle store capture unit buildKey exportKey destination = do
+packGlobalBundle :: FilePath -> FilePath -> FilePath -> Unit -> String -> String -> FilePath -> IO ()
+packGlobalBundle store dist capture unit buildKey exportKey destination = do
   let core = capture </> unitId unit </> "core"
   exported <- filter ((== ".json") . takeExtension) <$> recursiveFiles core
   empty <- if not (null exported) then pure [] else do
     -- Inspect only this freshly rebuilt private store, never the original
     -- native store or a guessed empty module. Cabal owns the compiler partition.
-    partitions <- listDirectory store
+    style <- field (unitValue unit) "style" :: IO String
+    let databaseRoot = if style == "inplace" then dist </> "packagedb" else store
+    partitions <- listDirectory databaseRoot
     registrations <- filterM doesFileExist
-      [store </> partition </> "package.db" </> unitId unit <.> "conf" | partition <- partitions]
+      [(if style == "inplace" then databaseRoot </> partition
+        else databaseRoot </> partition </> "package.db") </> unitId unit <.> "conf" |
+        partition <- partitions]
     bytes <- case registrations of
       [path] -> BS.readFile path
       _ -> fail ("isolated Cabal store lacks a unique registration for " ++ unitId unit)
@@ -1044,18 +1106,7 @@ exportConfiguredUnit context keys unit component scalar runtimeShim nativeObject
   let retainedInterfaces = case (scalar, runtimeShim) of (Nothing, Nothing) -> Nothing; _ -> Just ()
   helper <- traverse (const (prepareInterfaceHelper context (contextRoot context))) retainedInterfaces
   helperHash <- traverse (digestFile . installedHelper) helper
-  dist <- field (unitValue unit) "dist-dir"
-  let productFlags = ["-odir", "-hidir", "-hiedir", "-stubdir", "-outputdir"]
-      productRoots = nub [path | (flag, path) <- zip (componentArguments component)
-                                                   (drop 1 (componentArguments component)),
-                                 flag `elem` productFlags]
-  require (not (null productRoots) && all (within dist) productRoots)
-    ("Cabal build-info lacks component-scoped native output roots for " ++ unitId unit)
-  products <- sort . nub . filter nativeProduct . concat <$> mapM recursiveFiles productRoots
-  require (not (null products)) ("native Cabal build has no Haskell artifacts for " ++ unitId unit)
-  nativeInputs <- forM products $ \path -> do
-    digest <- digestFile path
-    pure (makeRelative (contextNative context) path, digest)
+  nativeInputs <- componentNativeInputs context unit component
   nativePieces <- traverse
     (nativePieceIdentity (contextNative context </> "cache/thc/native-pieces-v1")) nativeObjects
   let dependencies = [(identifier, Map.findWithDefault identifier identifier keys)
@@ -1103,6 +1154,34 @@ exportConfiguredUnit context keys unit component scalar runtimeShim nativeObject
       Nothing -> do
         when cached (removeFile destination)
         freshExport context component unit scalar runtimeShim helper nativeObjects buildKey exportKey buildInputs expected destination
+
+-- An inplace repository package's own project options also escape its unit ID.
+-- Hash Cabal's actual configuration as opaque bytes, never reconstruct a
+-- compiler invocation from it. Include native products for each such package.
+sourceNativeInputs :: ExportContext -> Unit -> IO [(FilePath, String)]
+sourceNativeInputs context unit = do
+  dist <- field (unitValue unit) "dist-dir"
+  require (within (contextNative context) dist)
+    ("inplace source dependency has no owned Cabal build directory: " ++ unitId unit)
+  products <- sort . filter nativeProduct <$> recursiveFiles (dist </> "build")
+  forM ((dist </> "setup-config") : products) $ \path -> do
+    digest <- digestFile path
+    pure (makeRelative (contextNative context) path, digest)
+
+componentNativeInputs :: ExportContext -> Unit -> Component -> IO [(FilePath, String)]
+componentNativeInputs context unit component = do
+  dist <- field (unitValue unit) "dist-dir"
+  let productFlags = ["-odir", "-hidir", "-hiedir", "-stubdir", "-outputdir"]
+      productRoots = nub [path | (flag, path) <- zip (componentArguments component)
+                                                   (drop 1 (componentArguments component)),
+                                 flag `elem` productFlags]
+  require (not (null productRoots) && all (within dist) productRoots)
+    ("Cabal build-info lacks component-scoped native output roots for " ++ unitId unit)
+  products <- sort . nub . filter nativeProduct . concat <$> mapM recursiveFiles productRoots
+  require (not (null products)) ("native Cabal build has no Haskell artifacts for " ++ unitId unit)
+  forM products $ \path -> do
+    digest <- digestFile path
+    pure (makeRelative (contextNative context) path, digest)
 
 freshExport :: ExportContext -> Component -> Unit -> Maybe ScalarBitcode -> Maybe RuntimeShim -> Maybe InstalledContext -> Maybe [FilePath] -> String -> String -> Value ->
                [String] -> FilePath -> IO Bundle

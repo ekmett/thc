@@ -84,5 +84,13 @@ acquisition subsequently rejected a safe foreign call with non-scalar inputs
 while capturing dependency `text-2.1.4`, after exporting its 55 modules. No
 package manifest was published, so that attempt produced neither a strict
 audit nor a THC guest execution. This is a dependency-admission failure, not a
-benchmark-selector failure. The later safe-FFI policy change requires a fresh
-actual acquisition before claiming this blocker is resolved for the suite.
+benchmark-selector failure.
+
+A second unchanged-project attempt at driver checkpoint `857808c9`, including
+the later safe-FFI policy, passed that text capture. It then failed the isolated
+build identity check for `binary-0.8.9.3-inplace`: Cabal legitimately builds this
+repository dependency in-place because it depends on the project-local
+containers library. That attempt also published no package manifest and ran no
+THC guest. Supporting this dependency style requires content-sensitive cache
+keys for the local dependency closure, not ignoring changed store identities;
+see the [driver's source-dependency rules](../../../docs/driver.md).
