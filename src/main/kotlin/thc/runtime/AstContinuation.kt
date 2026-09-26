@@ -23,6 +23,21 @@ internal class AstCapture(val yielded: Any?, val logicalMask: MaskingState) : Co
         return this
     }
 
+    /** Retain the lexical exception/cleanup scope around the saved child work. */
+    fun enclose(wrapper: (List<AstResumeStep>) -> AstResumeStep): AstCapture {
+        val scope = wrapper(steps.toList())
+        steps.clear()
+        steps.add(scope)
+        return this
+    }
+
+    fun asyncRequest(): AsyncRequest? = when (val marker = yielded) {
+        is AsyncRequest -> marker
+        is ThunkSuspended -> marker.asyncRequest
+        is CallSegmentSuspended -> marker.asyncRequest
+        else -> null
+    }
+
     fun freeze(sourceRoot: GuestRoot, frame: MaterializedFrame): AstContinuation =
         AstContinuation(sourceRoot, yielded, logicalMask, frame, steps.toList(), annotations)
 
@@ -30,6 +45,17 @@ internal class AstCapture(val yielded: Any?, val logicalMask: MaskingState) : Co
         for (i in first until old.size) steps.add(old[i])
         return this
     }
+}
+
+/** A consumed prefix is never retained after a second interruption. Scope steps
+ * use this same runner so their exception and finally handlers remain active. */
+internal fun resumeAstSteps(frame: VirtualFrame, steps: List<AstResumeStep>, input: Any?): Any? {
+    var answer = input
+    for (index in steps.indices) {
+        answer = try { steps[index].resume(frame, answer) }
+        catch (cut: AstCapture) { throw cut.appendRemaining(steps, index + 1) }
+    }
+    return answer
 }
 
 /** One owned activation; no ordinary AST call allocates this record or materializes its frame. */
@@ -51,16 +77,8 @@ internal class AstContinuation(
         try {
             SynchronousMasking.set(sourceRoot, logicalMask)
             StackAnnotations.set(sourceRoot, annotations)
-            var answer = input
-            for (index in steps.indices) {
-                answer = try { steps[index].resume(frame, answer) }
-                catch (cut: AstCapture) {
-                    // The completed prefix is gone. Only the unconsumed suffix
-                    // belongs to a second interruption of this activation.
-                    return cut.appendRemaining(steps, index + 1).freeze(sourceRoot, frame)
-                }
-            }
-            return answer
+            return try { resumeAstSteps(frame, steps, input) }
+            catch (cut: AstCapture) { cut.freeze(sourceRoot, frame) }
         } finally {
             SynchronousMasking.set(sourceRoot, ambient)
             StackAnnotations.set(sourceRoot, ambientAnnotations)
