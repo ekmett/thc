@@ -245,6 +245,12 @@ libraries with full startup/shutdown in both backends and handoff modes; the
 linked recipes distinguish these guest successes from the larger upstream
 test suites still being brought up.
 
+The [GHC library example](../examples/standard-apps/ghc-api/README.md) also runs
+the original compiler's FastString interning code on bytecode and matches native
+stdout. Its recipe needs complete Core for the `ghc` package itself; the first
+acquisition includes all 822 compiler interfaces. That result does not yet
+establish compiler sessions, module loading or GHCi support.
+
 ## Build and exercise
 
 Use GHC 9.14.1 with its bundled Cabal/Cabal-syntax 3.16. The API bounds are narrow
