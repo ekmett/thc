@@ -119,6 +119,14 @@ memory operations. Arbitrary unowned integer address bits do not grant memory or
 FFI access. Pointer cells preserve managed references rather than inventing JVM
 addresses; byte reinterpretation and foreign exposure therefore have limits.
 
+Original `memcpy` declarations from `ghc-internal` and installed `ram-0.22.1`
+use the same checked address-copy leaf. The `ram` declaration requires unsafe
+`ccall`, two `Addr#` operands, `Word64#` length and a State#/Addr# tuple result;
+it does not admit the distinct `array` byte-array ABI. Copies retain destination
+identity and reject overlap, out-of-bounds ranges, stale ownership and unowned
+numeric pointers before mutation. Admitting this declaration does not establish
+support for every dependency of the original package closure.
+
 | Primop | Current behavior and consequence |
 | --- | --- |
 | `addr2Int#` | Returns real native/numeric bits. Explicitly pinned arrays expose their original native allocation without copying; static literals may materialize a read-only native image and StablePtr handles may acquire persistent opaque native identities. Moving heap arrays reject projection even after unsafe freeze. Native authority is required; integer values do not root allocations or extend StablePtr lifetime after free. |

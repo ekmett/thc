@@ -274,6 +274,10 @@ def bytestring_unit(unit):
     return isinstance(unit, str) and re.fullmatch(r'bytestring-0\.12\.2\.0(?:-[A-Za-z0-9]+)?', unit) is not None
 
 
+def ram_unit(unit):
+    return isinstance(unit, str) and re.fullmatch(r'ram-0\.22\.1(?:-[A-Za-z0-9]+)?', unit) is not None
+
+
 def operation(target):
     unit, symbol = target.get('unit'), target['symbol']
     if symbol == 'strlen' and bytestring_unit(unit):
@@ -378,6 +382,7 @@ def validate(metadata, argument_reps, flags, result_rep):
             and (target.get('unit') == 'ghc-internal' or
                  symbol in ('memcmp', 'memchr', 'strlen') and bytestring_unit(target.get('unit')) or
                  symbol in ('close', 'dup', 'isatty', 'getenv') and unix_libc_unit(target.get('unit')) or
+                 symbol == 'memcpy' and ram_unit(target.get('unit')) or
                  isinstance(target.get('unit'), str) and (target['unit'], symbol) in LIBRARY_OPERATIONS),
             'static supported installed-library function target')
     allowed_safety = safety if isinstance(safety, tuple) else (safety,)

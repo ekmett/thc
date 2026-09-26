@@ -11,12 +11,14 @@ import org.junit.jupiter.api.Test
 import thc.Json
 import thc.Language
 
-/** Retained original ghc-internal declaration executed by explicitly synthetic callers. */
+/** Retained original declarations executed by explicitly synthetic callers. */
 class OriginalMemcpyTest {
     private val closure = mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)
     private val address = mapOf("kind" to "address", "primReps" to listOf("AddrRep"), "evaluated" to true)
     private val long = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
     private val descriptor get() = Json.parse(javaClass.getResource("/core/original-memcpy-descriptor.json")!!.readText())
+        as Map<String, Any?>
+    private val ramDescriptor get() = Json.parse(javaClass.getResource("/core/original-ram-memcpy-descriptor.json")!!.readText())
         as Map<String, Any?>
 
     private fun module(declaration: Map<String, Any?> = descriptor,
@@ -168,9 +170,63 @@ class OriginalMemcpyTest {
         }
     }
 
-    @Test fun overlapRangesAndNativeOwnershipRejectBeforeWriting() {
+    @Test fun originalRamMemcpyMatchesNativeOnFirstCompiledCalls() {
+        val rows = javaClass.getResource("/core/original-memcpy-native.tsv")!!.readText().trim().lines()
+            .map { it.split('\t') }
+        assertEquals(36, rows.size)
         for (backend in listOf("ast", "bytecode")) inside { language ->
-            val target = program(language, backend).entryTarget("copy")
+            val guest = program(language, backend, module(ramDescriptor))
+            val target = guest.entryTarget("copy")
+            val sources = mutableListOf(managed(), ManagedAddress.fromByteArray(ByteArray(16)))
+            val destinations = mutableListOf(managed(), ManagedAddress.fromByteArray(ByteArray(16)))
+            if (linuxNative()) {
+                sources += Language.currentState().nativeAllocations.malloc(16)
+                destinations += Language.currentState().nativeAllocations.malloc(16)
+            }
+            fun run(source: ManagedAddress, destination: ManagedAddress, row: List<String>) {
+                (0L until 16L).forEach { source.writeWord8(it, it + 16); destination.writeWord8(it, 0) }
+                val interior = destination.plus(row[1].toLong())
+                val result = copy(target, interior, source.plus(row[0].toLong()), row[2].toLong())
+                assertEquals(row[3].lowercase().toBooleanStrict(), result.sameLocation(interior))
+                assertSame(interior, result)
+                assertEquals(row[4].split(',').map(String::toLong), contents(destination))
+                assertEquals(row[5].split(',').map(String::toLong), contents(source))
+            }
+            for (source in sources) for (destination in destinations) for (row in rows) run(source, destination, row)
+            target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+            valid(target)
+            for (source in sources) for (destination in destinations) for (row in rows) {
+                val before = (guest.diagnostics().getValue("compiledEntries") as Number).toLong()
+                run(source, destination, row)
+                assertEquals(before + 1, (guest.diagnostics().getValue("compiledEntries") as Number).toLong())
+                valid(target)
+            }
+        }
+    }
+
+    @Test fun ramUnitAuthorityDoesNotAdmitOtherLibrariesSymbolsOrArrayAbi() = inside { language ->
+        val target = ramDescriptor.getValue("target") as Map<String, Any?>
+        val arrayDescriptor = Json.parse(javaClass.getResource("/core/original-array-memcpy-descriptor.json")!!.readText())
+            as Map<String, Any?>
+        for (backend in listOf("ast", "bytecode")) {
+            for (unit in listOf("ram-0.22.1", "ram-0.22.1-inplace", "ram-0.22.1-aB123"))
+                program(language, backend, module(ramDescriptor + ("target" to (target + ("unit" to unit)))))
+            for (unit in listOf(null, listOf("ram-0.22.1"), "other-0.22.1", "ram-0.22.0", "ram-0.22.1-",
+                "ram-0.22.1-a-b", "ram-0.22.1 hash", "ram-0.22.1:hash", "ram-0.22.1\n"))
+                assertThrows(RuntimeFault::class.java) {
+                    program(language, backend, module(ramDescriptor + ("target" to (target + ("unit" to unit)))))
+                }
+            for (replacement in listOf(
+                ramDescriptor + ("target" to (target + ("symbol" to "memmove"))),
+                ramDescriptor + ("safety" to "safe"), ramDescriptor + ("convention" to "capi"),
+                arrayDescriptor + ("target" to target)))
+                assertThrows(RuntimeFault::class.java) { program(language, backend, module(replacement, canonical = replacement)) }
+        }
+    }
+
+    @Test fun overlapRangesAndNativeOwnershipRejectBeforeWriting() {
+        for (declaration in listOf(descriptor, ramDescriptor)) for (backend in listOf("ast", "bytecode")) inside { language ->
+            val target = program(language, backend, module(declaration)).entryTarget("copy")
             val array = ByteArray(16)
             val arrayBase = ManagedAddress.fromByteArray(array)
             val bases = mutableListOf(managed(), arrayBase)
@@ -211,7 +267,7 @@ class OriginalMemcpyTest {
                     try {
                         // Use a root owned by the entered context; only the allocation is foreign.
                         val otherLanguage = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                        val otherTarget = program(otherLanguage, backend).entryTarget("copy")
+                        val otherTarget = program(otherLanguage, backend, module(declaration)).entryTarget("copy")
                         assertThrows(RuntimeFault::class.java) { copy(otherTarget, destination, native, 1) }
                         assertThrows(RuntimeFault::class.java) { copy(otherTarget, native, destination, 1) }
                     } finally { other.leave() }

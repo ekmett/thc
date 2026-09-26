@@ -363,6 +363,15 @@
     "src/test/resources/core/original-array-memcpy-descriptor.json": {
       "junit": ["thc.runtime.OriginalMemcpyTest"], "python": ["scripts/test-audit-core.py"]
     },
+    "src/test/resources/core/original-ram-memcpy-descriptor.json": {
+      "junit": ["thc.runtime.OriginalMemcpyTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/test/resources/core/original-memcpy-native.tsv": {
+      "junit": ["thc.runtime.OriginalMemcpyTest"], "python": []
+    },
+    "compiler/test-fixtures/OriginalMemcpyNative.hs": {
+      "junit": ["thc.runtime.OriginalMemcpyTest"], "python": []
+    },
     "src/test/resources/core/original-bytestring-strlen-descriptor.json": {
       "junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["scripts/test-audit-core.py"]
     },

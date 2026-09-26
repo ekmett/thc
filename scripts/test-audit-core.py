@@ -2184,6 +2184,33 @@ class OriginalLibraryMemoryDeclarationTest(unittest.TestCase):
 
 
 class OriginalMemcpyDeclarationTest(unittest.TestCase):
+    def test_original_ram_pointer_abi_and_installed_unit_authority(self):
+        declaration = json.loads((ROOT.parent / 'src/test/resources/core/original-ram-memcpy-descriptor.json').read_text())
+        arrays = json.loads((ROOT.parent / 'src/test/resources/core/original-array-memcpy-descriptor.json').read_text())
+        fixture = LibdwUnavailableAuditTest()
+        for unit in (declaration['target']['unit'], 'ram-0.22.1', 'ram-0.22.1-inplace', 'ram-0.22.1-aB123'):
+            installed = copy.deepcopy(declaration)
+            installed['target']['unit'] = unit
+            report = fixture.audit(fixture.fixture(installed))
+            self.assertTrue(report['accepted'], report)
+            self.assertEqual(['memcpy'], [call['symbol'] for call in report['foreignCalls']])
+            disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != 'memcpy'])
+            self.assertFalse(fixture.audit(fixture.fixture(installed), disabled)['accepted'])
+        for unit in (None, ['ram-0.22.1'], 'other-0.22.1', 'ram-0.22.0', 'ram-0.22.1-',
+                     'ram-0.22.1-a-b', 'ram-0.22.1 hash', 'ram-0.22.1:hash', 'ram-0.22.1\n'):
+            wrong = copy.deepcopy(declaration)
+            wrong['target']['unit'] = unit
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], unit)
+        for key, value in [('safety', 'safe'), ('convention', 'capi'), ('arity', 3), ('suppliedArity', 3),
+                           ('resultRep', LONG), ('argumentReps', arrays['argumentReps'])]:
+            wrong = copy.deepcopy(declaration)
+            wrong[key] = value
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], key)
+        for symbol in ('memmove', 'memcmp'):
+            wrong = copy.deepcopy(declaration)
+            wrong['target']['symbol'] = symbol
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], symbol)
+
     def test_exact_original_descriptor_and_checked_capability(self):
         resource = ROOT.parent / 'src/test/resources/core/original-memcpy-descriptor.json'
         declaration = json.loads(resource.read_text())
