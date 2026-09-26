@@ -207,7 +207,26 @@ def bytecode_nodes(fs):
         n=f['name'];count=f['lanes'];scalar,_,_,access=LANES[f['laneRep']];prim=access.lower(); cast=f'({scalar}) ' if scalar in ('byte', 'short', 'int') else ''
         for op in f['operations']:
             title=op.capitalize(); node=f'Generated{n}{title}'
-            if op=='unpack':
+            if op in ('pack', 'unpack') and count > 16:
+                lines += ['    @Operation', '    @ConstantOperand(type = BytecodeVectorLanes.class, name = "lanes")',
+                          f'    public static final class {node} {{',
+                          f'        @Specialization public static {vector_type(f) if op == "pack" else "void"} apply(VirtualFrame frame, BytecodeVectorLanes lanes' +
+                          (f', {vector_type(f)} raw' if op == 'unpack' else '') + ', @Bind("$node") Node node) {',
+                          '            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();']
+                if op == 'pack':
+                    lines += ['            try {',
+                              '                return ' + packed(f, [f'{cast}lanes.getSlots()[{i}].get{access}(bytecode, frame)' for i in range(count)]) + ';',
+                              '            } catch (com.oracle.truffle.api.nodes.UnexpectedResultException invalid) {',
+                              '                throw new RuntimeFault("Expected primitive vector lane");',
+                              '            }']
+                else:
+                    lines.append(f'            {vector_type(f)} value = {checked(f, "raw")};')
+                    mask = UNSIGNED_MASK.get(f['laneRep'])
+                    for i in range(count):
+                        lane = f'value.lane({i})' + (f' & {mask}' if mask else '')
+                        lines.append(f'            lanes.getSlots()[{i}].set{access}(bytecode, frame, {lane});')
+                lines += ['        }', '    }']
+            elif op=='unpack':
                 lines += ['    @Operation']+[f'    @ConstantOperand(type = LocalAccessor.class, name = "lane{i}")' for i in range(count)]
                 lines += [f'    public static final class {node} {{',
                           '        @Specialization public static void apply(VirtualFrame frame, '+', '.join(f'LocalAccessor lane{i}' for i in range(count))+f', {vector_type(f)} raw, @Bind("$node") Node node) {{',
@@ -237,12 +256,15 @@ def bytecode_emitter(fs):
             node=f'Generated{n}{op.capitalize()}'
             if op=='unpack':
                 lines += [f'        "{op}{n}#" -> tupleExpression(GeneratedVectors.unpacked{n}) {{ e, destination ->',
-                          f'            e.builder.begin{node}('+', '.join(f'destination[{i}]' for i in range(count))+')',
+                          f'            e.builder.begin{node}(' +
+                          ('BytecodeVectorLanes(destination.map(LocalAccessor::constantOf).toTypedArray())' if count > 16 else ', '.join(f'destination[{i}]' for i in range(count))) + ')',
                           '            operands[0].emit(e)',f'            e.builder.end{node}()','        }']
             else:
                 lines += [f'        "{op}{n}#" -> ProvenExpression(Expression {{ e ->','            val b = e.builder']
                 if op=='pack':
-                    lines += ['            b.beginBlock()',f'            val lanes = List({count}) {{ b.createLocal() }}','            operands[0].emitTuple(e, lanes)',f'            b.begin{node}(); lanes.forEach(b::emitLoadLocal); b.end{node}()','            b.endBlock()']
+                    emit = (f'            b.emit{node}(BytecodeVectorLanes(lanes.map(LocalAccessor::constantOf).toTypedArray()))' if count > 16 else
+                            f'            b.begin{node}(); lanes.forEach(b::emitLoadLocal); b.end{node}()')
+                    lines += ['            b.beginBlock()',f'            val lanes = List({count}) {{ b.createLocal() }}','            operands[0].emitTuple(e, lanes)',emit,'            b.endBlock()']
                 else:
                     lines += [f'            b.begin{node}(); operands.forEach {{ it.emit(e) }}; b.end{node}()']
                 lines += [f'        }}, GeneratedVectors.proof{n})']
@@ -344,10 +366,10 @@ def smoke_entries(fs):
 
 
 def smoke_groups(fs):
-    """Bound compiled size by lane work, splitting only oversized families."""
-    groups = [[]]
+    """Keep unrelated families separate and bound each driver's lane work."""
+    groups = []
     legacy = []
-    cost = index = 0
+    index = 0
     for family in fs:
         indices = []
         for operation in family['operations']:
@@ -357,13 +379,7 @@ def smoke_groups(fs):
             index += 1
         limit = 112 // family['lanes']
         for start in range(0, len(indices), limit):
-            chunk = indices[start:start + limit]
-            lanes = family['lanes'] * len(chunk)
-            if groups[-1] and cost + lanes > 112:
-                groups.append([])
-                cost = 0
-            groups[-1].extend(chunk)
-            cost += lanes
+            groups.append(indices[start:start + limit])
     if legacy:
         groups.append(legacy)
     return {f'simdSmoke{i}': indices for i, indices in enumerate(groups)}
@@ -401,7 +417,7 @@ def smoke_sources(fs):
                 'import GHC.Exts', *(['import GHC.Prim (' + ', '.join(extrema) + ')'] if name == 'GeneratedSimdSmoke' and extrema else []), '']
     def signature(entry):
         return [f'{entry} :: Int# -> Int# -> Int# -> Int#',
-                f'{entry} selector a b = case quotInt# selector 256# of']
+                f'{entry} selector a b = case quotInt# selector 4096# of']
     groups = smoke_groups(fs)
     owners = {index: name for name, indices in groups.items() for index in indices}
     drivers = {name: signature(name) for name in groups}
@@ -409,12 +425,12 @@ def smoke_sources(fs):
     for index, (f, op) in enumerate(smoke_entries(fs)):
         vector = drivers[owners[index]]
         n, count, rep = f['name'], f['lanes'], f['laneRep']
-        lane = 'remInt# selector 16#'
+        lane = f'remInt# selector {count}#'
         left = f'pack{n}# (# ' + ', '.join(convert[rep](f'a +# {i * 104729}#') for i in range(count)) + ' #)'
         right = f'pack{n}# (# ' + ', '.join(convert[rep](f'b -# {i * 7919}#') for i in range(count)) + ' #)'
         value = (f'broadcast{n}# ({convert[rep]("a")})' if op == 'broadcast' else
                  f'{op}{n}# ({left})' + (f' ({right})' if op in BINARY else ''))
-        inserted = 'remInt# (quotInt# selector 16#) 16#'
+        inserted = f'remInt# (quotInt# selector 64#) {count}#'
         if op == 'insert':
             value += f' ({convert[rep]("b")}) ({inserted})'
         vector += [f'  {index}# -> case unpack{n}# ({value}) of',

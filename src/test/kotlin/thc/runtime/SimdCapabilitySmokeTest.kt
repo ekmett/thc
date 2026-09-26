@@ -29,7 +29,7 @@ class SimdCapabilitySmokeTest {
 
     /** Requests use real exported vector primops; only their edge expectations are Java-specific. */
     private fun javaExtremaCases(name: String, cases: List<List<String>>, selectors: Map<String, String>): List<List<String>> {
-        val owned = cases.map { it[1].toInt() / 256 }.toSet()
+        val owned = cases.map { it[1].toInt() / 4096 }.toSet()
         return selectors.entries.filter { (index, primitive) -> index.toInt() in owned &&
             Regex("(min|max)(Float|Double)X(2|4|8|16)#").matches(primitive) }.flatMap { (index, primitive) ->
             val double = "Double" in primitive
@@ -54,7 +54,7 @@ class SimdCapabilitySmokeTest {
                     val value = if (minimum) Math.min(x,y) else Math.max(x,y)
                     if (value.isNaN()) 0x7fc00000L else value.toRawBits().toLong() and 0xffffffffL
                 }
-                listOf(name, (index.toInt() * 256 + lane).toString(),
+                listOf(name, (index.toInt() * 4096 + lane).toString(),
                     (a - lane * 104729L).toString(), (b + lane * 7919L).toString(), expected.toString())
             } }
         }
@@ -84,7 +84,7 @@ class SimdCapabilitySmokeTest {
     @Test fun finiteLocalVectorsCompileOnAstAndBytecode() {
         val manifest = Json.parse(File(directory, "manifest.json").readText()) as Map<String, Any?>
         assertEquals("9.14.1", manifest["ghcVersion"])
-        assertEquals(5430L, (manifest["rows"] as Number).toLong())
+        assertEquals(20718L, (manifest["rows"] as Number).toLong())
         assertTrue(manifest["nativeOracle"] in listOf("scalar", "scalar-and-vector"))
         assertEquals("java-math", manifest["floatingExtrema"])
         assertEquals("finite-without-mixed-zero-ties", manifest["nativeFloatingExtrema"])
@@ -99,11 +99,12 @@ class SimdCapabilitySmokeTest {
             assertEquals(item["sha256"], digest, "Stale SIMD smoke input/artifact: ${item["path"]}")
         }
         val module = Json.parse(File(directory, "pre-core/GeneratedSimdSmoke.json").readText()) as Map<String, Any?>
+        val audits = Json.parse(File(directory, "audits.json").readText()) as Map<String, Map<String, Any?>>
         assertEquals(GeneratedVectors.operations, (manifest["operations"] as List<String>).toSet())
         val rows = File(directory, "cases.tsv").readLines().filter(String::isNotEmpty).map { line ->
             line.split('\t').also { assertEquals(5, it.size) }
         }.groupBy { it[0] }
-        assertEquals((0..14).map { "simdSmoke$it" }, manifest["names"])
+        assertEquals((0..54).map { "simdSmoke$it" }, manifest["names"])
         assertEquals(manifest["names"], rows.keys.toList())
         assertEquals((manifest["rows"] as Number).toInt(), rows.values.sumOf { it.size })
         val javaEdges = rows.mapValues { (name, cases) -> javaExtremaCases(name, cases, selectors) }
@@ -118,6 +119,9 @@ class SimdCapabilitySmokeTest {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                     for ((name, nativeCases) in rows) {
                         val cases = nativeCases + javaEdges.getValue(name)
+                        // A single wide unary operation can make GHC introduce an
+                        // argument-dropping worker. Both guest entries must compile.
+                        val guestEntries = (audits.getValue(name).getValue("reachableBindings") as List<*>).size
                         val input = CoreModules.reachable(module, name) + ("instrument" to true)
                         val program: ExecutableProgram = if (backend == "ast") Program(language, input)
                             else BytecodeProgram(language, input)
@@ -132,16 +136,20 @@ class SimdCapabilitySmokeTest {
                         assertEquals(0L, (program.diagnostics().getValue("compiledEntries") as Number).toLong(),
                             "$backend/$name interpreted cases")
                         val active = targets(host)
-                        assertEquals(2, active.size, "$backend/$name target graph")
+                        assertEquals(guestEntries + 1, active.size, "$backend/$name target graph")
                         (active + entry).distinct().filter { it !== host }.forEach { target ->
-                            target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                            try {
+                                target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                            } catch (failure: Exception) {
+                                throw AssertionError("$backend/$name guest compilation", failure)
+                            }
                             assertTrue(compiled(target), "$backend/$name guest installation")
                         }
                         assertTrue(function.invokeMember("compile").asBoolean(), "$backend/$name host installation")
                         for (row in cases) {
                             val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                             check(row)
-                            assertEquals(before + 1,
+                            assertEquals(before + guestEntries,
                                 (program.diagnostics().getValue("compiledEntries") as Number).toLong(),
                                 "$backend/$name exact compiled guest entries")
                             assertEquals(active, targets(host), "$backend/$name active target identity")

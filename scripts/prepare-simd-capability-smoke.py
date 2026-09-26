@@ -64,14 +64,14 @@ def inputs(generator):
             for inserted in range(family['lanes']):
                 for lane in range(family['lanes']):
                     for left, right in pairs if inserted == lane else pairs[:1]:
-                        yield owners[index], index * 256 + inserted * 16 + lane, signed(left - lane * 104729), signed(right)
+                        yield owners[index], index * 4096 + inserted * 64 + lane, signed(left - lane * 104729), signed(right)
             continue
         # Every lane is observed once; first/last lanes also get wrap and sign edges.
         for lane in range(family['lanes']):
             for left, right in pairs if lane in (0, family['lanes'] - 1) else pairs[:1]:
                 a = signed(left if operation == 'broadcast' else left - lane * 104729)
                 b = signed(right + lane * 7919)
-                yield owners[index], index * 256 + lane, a, b
+                yield owners[index], index * 4096 + lane, a, b
 
 
 def main():
