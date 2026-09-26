@@ -217,6 +217,7 @@ tasks.withType<Test>().configureEach {
             "original-iconv/**/*.json", "original-iconv/native/oracle",
             "original-iconv/logs/*.stdout", "original-iconv/logs/*.stderr",
             "managed-md5-native/**",
+            "text-cbits/**/*.json", "text-cbits/*.tsv", "text-cbits/logs/*.stdout", "text-cbits/logs/*.stderr",
             "original-stack/manifest.json", "original-stack/run-*/**",
             "original-stack-formatter/manifest.json", "original-stack-formatter/run-*/logs/*",
             "original-stack-formatter/run-*/pre-core/*.json", "original-stack-formatter/run-*/post-core/*.json",
@@ -389,6 +390,21 @@ configurations[fullCoreTests.runtimeOnlyConfigurationName].extendsFrom(configura
 fullCoreTests.compileClasspath += sourceSets.test.get().output
 fullCoreTests.runtimeClasspath += sourceSets.test.get().output
 
+for ((taskName, dense) in listOf("rtsEventFullCoreTest" to false, "rtsEventFullCoreDenseTest" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests original GHC event prerequisites and context-local logical capabilities."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.RtsEventNativeTest") }
+        inputs.files(fileTree("build/rts-event") { include("*.json") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original event prerequisites require fresh first-compiled-entry checks") { true }
+        doFirst { check(file("build/rts-event/manifest.json").isFile) { "Run thc-fixtures rts-event with complete installed GHC Core" } }
+    }
+}
 for ((taskName, dense) in listOf("gcStatsFullCoreTest" to false, "gcStatsFullCoreDenseTest" to true)) {
     tasks.register<Test>(taskName) {
         group = "verification"
@@ -450,6 +466,22 @@ for ((taskName, dense) in listOf("aggregateHeapFullCoreTest" to false, "aggregat
     }
 }
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("main"))
+for ((taskName, dense) in listOf("tupleJoinFullCoreTest" to false, "tupleJoinFullCoreDenseTest" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests original roundTo tuple joins and bottoming empty tuple cases against native GHC."
+        maxHeapSize = "6g"
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.TupleJoinNativeTest") }
+        inputs.files(fileTree("build/tuple-join-input") { include("**/*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Native and first-compiled tuple join checks require a fresh process") { true }
+        doFirst { check(file("build/tuple-join-input/manifest.json").isFile) { "Run thc-fixtures tuple-join" } }
+    }
+}
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("test"))
 tasks.register<Test>("graphWorkloadTest") {
     group = "verification"
@@ -812,6 +844,8 @@ val compileCbits by tasks.registering(Exec::class) {
         "bench/experiments/pinned-addresses/reference/md5.c",
         "bench/experiments/pinned-addresses/reference/md5.h")
     inputs.files(fileTree("compiler/pinned-ghc-rts") { include("*.c", "*.h") })
+    inputs.files("src/main/c/text-api.c")
+    inputs.files(fileTree("compiler/pinned-text/2.1.3"))
     outputs.dir(layout.buildDirectory.dir("generated/cbits"))
     outputs.upToDateWhen { false }
     commandLine(python.get(), "scripts/build-cbits.py", "--output", layout.buildDirectory.dir("generated/cbits").get().asFile)
@@ -961,14 +995,15 @@ val generateStdioAbi by tasks.registering {
         val executable = temporaryDir.resolve("stdio-abi-probe")
         run(command + listOf("-std=c11", source.path, "-o", executable.path))
         val probe = JsonSlurper().parseText(run(listOf(executable.path))) as Map<*, *>
-        require(probe.keys == setOf("widths", "errno", "seek", "open")) { "Malformed native stdio ABI probe" }
+        require(probe.keys == setOf("widths", "errno", "seek", "open", "siginfoBytes")) { "Malformed native stdio ABI probe" }
         // The C probe asserts widths; runtime Kotlin validates all exact fields and errno values.
         val manifest = linkedMapOf<String, Any?>("schema" to 1, "system" to system,
             "architecture" to arch, "target" to target, "compilerDefaultTarget" to defaultTarget,
             "compilerVersion" to run(listOf(compiler, "--version")),
             "sourceSha256" to MessageDigest.getInstance("SHA-256").digest(source.readBytes())
                 .joinToString("") { "%02x".format(it) },
-            "widths" to probe["widths"], "errno" to probe["errno"], "seek" to probe["seek"], "open" to probe["open"])
+            "widths" to probe["widths"], "errno" to probe["errno"], "seek" to probe["seek"], "open" to probe["open"],
+            "siginfoBytes" to probe["siginfoBytes"])
         val destination = output.get().asFile.resolve("thc/native/stdio-host-abi.json")
         destination.parentFile.mkdirs()
         destination.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n")

@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import subprocess
 
@@ -16,6 +17,12 @@ ROOT = Path(__file__).resolve().parent.parent
 PINNED = {"md5.c": "4fa83bda7aacc8a1656d7e2d78251bbe70a04b56",
           "md5.h": "a87296687a2f3dc6748264ff2a8a0c919518db55"}
 STRERROR_SHA256 = "bf3a2129e508a108611b734864b63b234fae319c544c1cc500a53a2b7a91953b"
+TEXT_SHA256 = {
+    "cbits/utils.c": "4e2e096101ccfc7585cb06177fa9d4f523979aed584feb6814e92a868d234f5d",
+    "cbits/measure_off.c": "fd5c712c6d93dc9b1121cd6a890a2eb47a0afd96c5e796877e370cfd8a226985",
+    "LICENSE": "cf522e3d53b8d1768695fe5b66438baf4514fcd64b7a95739960f2f5b50c6ee8",
+    "openbsd-memchr.c": "6058dd440eacf8f9929437d8f6bacc593066c3032407e4428ea5f0e6bccff053",
+}
 LIBDW_SHA256 = {
     "BeginPrivate.h": "9523f652d274067f5a89ca3ce9ad156f212c88941affbcdf23711f33f684055e",
     "EndPrivate.h": "636273ae8e7d978ab90ea1c51b2b05aeb624392b2f04c25894622acf84f1726e",
@@ -86,6 +93,10 @@ def main():
     for name, expected in LIBDW_SHA256.items():
         if hashlib.sha256((libdw / name).read_bytes()).hexdigest() != expected:
             raise SystemExit(f"Original GHC 9.14.1 {name} changed")
+    text_source = ROOT / "compiler/pinned-text/2.1.3"
+    for name, expected in TEXT_SHA256.items():
+        if hashlib.sha256((text_source / name).read_bytes()).hexdigest() != expected:
+            raise SystemExit(f"Original text 2.1.3 {name} changed")
     output = args.output.resolve() / "thc/cbits"
     output.mkdir(parents=True, exist_ok=True)
     commands = []
@@ -99,15 +110,32 @@ def main():
         sources["strerror-locale"] = ROOT / "src/main/c/strerror-locale.c"
     if system == "Linux":
         sources["iconv"] = ROOT / "src/main/c/iconv-api.c"
+        if arch == "x86_64":
+            sources["text"] = ROOT / "src/main/c/text-api.c"
     for name, source in sources.items():
         command = [*compiler, "-O1", "-g", "-fno-strict-aliasing", "-emit-llvm", "-c",
                    f"-ffile-prefix-map={ROOT}=.", f"-fdebug-prefix-map={ROOT}=.",
                    "-I", str(reference), "-I", str(headers[0].parent), "-I", str(config[0].parent),
                    str(source.relative_to(ROOT)),
                    "-o", str(output / (name + ".bc"))]
+        if name == "text":
+            command.insert(1, "-D__STDC_NO_ATOMICS__=1")
+            command.insert(1, "-fno-builtin-memchr")
         subprocess.run(command, cwd=ROOT, check=True)
         commands.append(command)
+        if name == "text":
+            # Inspect the compiled artifact, not only source spelling. The
+            # managed buffer must never escape to native libc's memchr.
+            inspect = [*compiler, "-S", "-emit-llvm", str(output / "text.bc"), "-o", "-"]
+            ir = subprocess.check_output(inspect, cwd=ROOT, text=True)
+            commands.append(inspect)
+            if (re.search(r'^declare .*@(?:memchr|thc_text_memchr)\(', ir, re.M) or
+                    not re.search(r'^define .*@thc_text_memchr\(', ir, re.M)):
+                raise SystemExit("text memchr dependency is not defined in the original managed bitcode")
+            (output / "text-LICENSE").write_bytes((text_source / "LICENSE").read_bytes())
+            (output / "text-memchr-LICENSE").write_bytes((text_source / "openbsd-memchr.c").read_bytes())
     source_files = [reference / n for n in PINNED] + [libdw / n for n in LIBDW_SHA256] + list(sources.values())
+    source_files += [text_source / n for n in TEXT_SHA256]
     artifacts = [output / (name + ".bc") for name in sources]
     if system == "Windows":
         # Sulong's PE dependency locator probes the guest filesystem even for

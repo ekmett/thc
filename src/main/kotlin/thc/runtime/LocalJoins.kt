@@ -16,28 +16,26 @@ internal class LocalJoinTarget(val group: Any, val index: Int,
     @field:CompilationFinal(dimensions = 1) val proofs: Array<CoreRepresentation>,
     @field:CompilationFinal(dimensions = 1) val entryStrict: BooleanArray = BooleanArray(slots.size),
     val result: CoreRepresentation = CoreRepresentation.UNKNOWN,
-    val vectorSlots: Array<IntArray?> = arrayOfNulls(proofs.size)) {
+    @field:CompilationFinal(dimensions = 2) val typedSlots: Array<IntArray?> = arrayOfNulls(proofs.size)) {
     val jump = LocalJoinJump(this)
 }
 internal class LocalJoinJump(val target: LocalJoinTarget) : ControlFlowException()
 
-internal class LocalJoinCall(private val target: LocalJoinTarget,
+internal class LocalJoinCall(language: thc.Language, private val target: LocalJoinTarget,
     @field:Children private var arguments: Array<Expr>,
     @field:CompilationFinal(dimensions = 1) private val temporaries: IntArray,
     private val metrics: Metrics,
     @field:CompilationFinal(dimensions = 2)
-    private val vectorTemporaries: Array<IntArray?> = arrayOfNulls(target.proofs.size)) : Expr() {
+    private val typedTemporaries: Array<IntArray?> = arrayOfNulls(target.proofs.size)) : Expr() {
     // This node never returns a value. It must not weaken the WHNF proof
     // contributed by the region's actual returning branches.
     init { representation = target.result.copy(evaluated = true) }
     @field:CompilationFinal(dimensions = 1)
     private val referenceKinds = target.proofs.map { if (it.evaluated) it.kind else CoreKind.UNKNOWN }.toTypedArray()
-    @field:CompilationFinal(dimensions = 1)
-    private val vectorLayouts = target.proofs.map { if (it.isVector) VectorLayout(it) else null }.toTypedArray()
-    // The logical component list is a regular immutable-by-contract List, not a PE constant.
-    // Decide emptiness while lowering, so invalid scalar paths for slot -1 never enter the graph.
-    @field:CompilationFinal(dimensions = 1) private val emptyInputs = target.proofs.map { it.isEmptyTuple }.toBooleanArray()
-    @field:CompilationFinal(dimensions = 1) private val emptySlots = IntArray(0)
+    @field:Children private var typedCopies = target.proofs.mapIndexed { index, proof ->
+        if (proof.isTypedTransport) TupleLocalRead(TupleShape(proof, language),
+            typedTemporaries[index] ?: fault("Missing typed join temporaries")) else null
+    }.toTypedArray()
     override fun execute(frame: VirtualFrame): Nothing {
         prepare(frame, 0)
         transfer(frame)
@@ -47,9 +45,8 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
         // All operands are read before any formal is overwritten, including recursive swaps.
         for (i in first until arguments.size) {
             try {
-                if (emptyInputs[i]) arguments[i].executeTuple(frame, emptySlots, 0)
-                else if (vectorLayouts[i] != null) arguments[i].executeTuple(frame,
-                    vectorTemporaries[i] ?: fault("Missing vector join temporaries"), 0)
+                if (typedCopies[i] != null) arguments[i].executeTuple(frame,
+                    typedTemporaries[i] ?: fault("Missing typed join temporaries"), 0)
                 else if (target.proofs[i].isLong) FrameAccess.writeLong(frame, temporaries[i], arguments[i].executeRequiredLong(frame))
                 else if (target.proofs[i].isFloat) FrameAccess.writeFloat(frame, temporaries[i], arguments[i].executeRequiredFloat(frame))
                 else if (target.proofs[i].isDouble) FrameAccess.writeDouble(frame, temporaries[i], arguments[i].executeRequiredDouble(frame))
@@ -72,7 +69,7 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
     private fun saveArgument(frame: VirtualFrame, index: Int, value: Any?) {
         // Aggregate children already copied their resumed result into the same
         // scratch slots; scalar children still owe this caller their store.
-        if (emptyInputs[index] || vectorLayouts[index] != null) return
+        if (typedCopies[index] != null) return
         when {
             target.proofs[index].isLong -> FrameAccess.writeLong(frame, temporaries[index],
                 value as? Long ?: fault("Expected primitive Long join argument"))
@@ -92,11 +89,9 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
 
     @ExplodeLoop private fun transfer(frame: VirtualFrame): Nothing {
         for (i in arguments.indices) {
-            if (!emptyInputs[i]) {
-                val vectorLayout = vectorLayouts[i]
-                if (vectorLayout != null) vectorLayout.copy(frame,
-                    vectorTemporaries[i] ?: fault("Missing vector join temporaries"), 0,
-                    target.vectorSlots[i] ?: fault("Missing vector join formals"), 0)
+            val typedCopy = typedCopies[i]
+            if (typedCopy != null) typedCopy.executeTuple(frame,
+                    target.typedSlots[i] ?: fault("Missing typed join formals"), 0)
                 else if (target.proofs[i].isLong) FrameAccess.writeLong(frame, target.slots[i], frame.getLong(temporaries[i]))
                 else if (target.proofs[i].isFloat) FrameAccess.writeFloat(frame, target.slots[i], frame.getFloat(temporaries[i]))
                 else if (target.proofs[i].isDouble) FrameAccess.writeDouble(frame, target.slots[i], frame.getDouble(temporaries[i]))
@@ -107,12 +102,11 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
                 else if (referenceKinds[i] == CoreKind.ADDRESS) FrameAccess.write(frame, target.slots[i],
                     frame.getObject(temporaries[i]) as? ManagedAddress ?: fault("Expected address join argument"))
                 else FrameAccess.write(frame, target.slots[i], FrameAccess.read(frame, temporaries[i]))
-            }
         }
         // Clear only after every parallel move succeeds; no join body reads
         // these scratch slots, including when control enters a different join.
         for (temporary in temporaries) if (temporary >= 0) frame.clear(temporary)
-        for (lanes in vectorTemporaries) lanes?.forEach(frame::clear)
+        for (fields in typedTemporaries) fields?.forEach(frame::clear)
         if (metrics.enabled) metrics.incrementLocalJoinTransfers()
         throw target.jump
     }

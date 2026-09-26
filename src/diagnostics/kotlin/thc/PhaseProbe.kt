@@ -57,7 +57,12 @@ fun main(args: Array<String>) {
     val phases = PhaseMeasurements()
     val launcher = Class.forName("thc.MainKt")
     val context = phases.measure("context") {
-        val factory = launcher.methods.single { it.name == "executionContext" }
+        // Select the stable public signature, not internal launcher overloads.
+        val factories = launcher.methods.filter {
+            it.name == "executionContext" && it.parameterCount == 1 &&
+                it.parameterTypes[0] == Boolean::class.javaPrimitiveType
+        }
+        val factory = if (factories.isEmpty()) launcher.getMethod("executionContext") else factories.single()
         (if (factory.parameterCount == 0) factory.invoke(null)
             else factory.invoke(null, false)) as Context
     }

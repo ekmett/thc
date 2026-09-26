@@ -90,6 +90,22 @@ C prototypes still reject. `ByteArray#`/`MutableByteArray#` variants that erase
 to the same call shape remain ambiguous: the current descriptor cannot choose
 a read/write policy from those erased representations alone.
 
+Within each module, retained CAPI stubs and their adapters compile separately
+from direct `ccall` adapters, just as GHC emits those calls outside the CAPI C
+stub. A CAPI header can declare opaque struct pointers and narrow C parameters
+for neighboring `ccall` functions; combining those declarations with the exact
+GHC caller prototypes in one C file would create spurious conflicting-type
+errors. Separation preserves both the original callee definition and the
+emitted caller ABI, without rewriting either declaration or guessing a header
+prototype. Both translation units and their real header dependencies contribute
+to the native component identity. The mixed-header fixture compares an existing
+managed buffer passed as an opaque struct pointer and 8/32-bit argument-boundary
+behavior against native GHC with exact-width Haskell arguments. The retained
+machine-word caller variant also succeeds natively, but currently fails in
+Sulong when an i64 caller enters an i8/i32 C definition. A separate control retains the current rejection
+when an unowned static C pointer is returned and passed into another call; TU
+separation does not grant byte ownership to that numeric address.
+
 The checksum source provider recognizes retained `zlib.h` imports for `adler32`
 and `crc32`, compiles unchanged upstream zlib 1.2.11 source with the package's
 configured header, and rejects a header-version or source-hash mismatch. It
@@ -171,6 +187,32 @@ or AD test suite.
 ```sh
 THC_TASTY_SOURCE=/path/to/tasty-1.5.4 cabal run exe:thc-fixtures -- wcwidth
 ./gradlew --continue wcwidthDefault wcwidthDense
+```
+
+Installed `text-2.1.3-inplace` also has two closed original-C adapters on Linux
+x86-64: `_hs_text_memchr` and `_hs_text_measure_off`. Their exact unsafe
+State-threaded declarations retain the `ByteArray#`, size/byte and signed
+result carriers. They execute the unchanged upstream C over a read-only
+Sulong buffer view of the existing heap or pinned allocation; ordinary heap
+arrays are neither copied nor pinned. Full-width offset/length checks and
+pointer-cell rejection precede C access. The measure operation retains text's
+valid-UTF-8 precondition and negative available-character-count result.
+
+The original sources and license are under `compiler/pinned-text/2.1.3`.
+Their supported non-atomic configuration selects the original SSE/word/tail
+code, avoiding a native CPUID/AVX dispatcher inside Sulong. This is not generic
+installed-package C acquisition. The original portable OpenBSD `memchr` is
+linked into this bitcode under a private name, so the heap buffer cannot fall
+through to native libc. The full unsigned character-count domain preserves
+the original C's signed-intermediate wrap behavior, including its non-ideal
+result at `UINT64_MAX`; it is checked against the native library, not corrected
+to an idealized text algorithm. The focused fixture calls the unchanged
+installed declarations and native library over 500 search/UTF-8 inputs; it is
+separate from completion of the original AD upstream test suite.
+
+```sh
+cabal run exe:thc-fixtures -- text-cbits
+./gradlew --continue testDefault --tests thc.runtime.TextCbitsTest testDense --tests thc.runtime.TextCbitsTest
 ```
 
 The unchanged `erf-2.0.0.0` package has source-pure imports whose emitted

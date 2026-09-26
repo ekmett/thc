@@ -69,5 +69,7 @@ now exists on both backends, but neither synchronous-mode evaluation nor
 context-wide cancellation becomes resumable through that option. The capture
 machinery does not establish spark admission, abandoned-result management or a
 both-backend spark scheduler.
-Logical capability indices describe available CPU capacity and can be shared by
-many guest threads. No spark admission or parallel-speedup claim is made here.
+Logical capabilities initially reflect available CPU capacity and can be shared
+by many guest threads. Original `setNumCapabilities` changes their context-local
+count without resizing JVM pools; see [RTS capabilities](rts-event-capabilities.md).
+No spark admission or parallel-speedup claim is made here.

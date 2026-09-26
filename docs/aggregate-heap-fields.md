@@ -23,8 +23,8 @@ The supported tuple leaves and binary-sum payloads are the existing
 [tuple](tuple-results.md) and [sum](sum-results.md) layouts. Logical shape, arity,
 sum tags/projections, scalar carriers, vector species and heap ownership remain
 checked. This does not add nested/nonbinary sums, ordinary sum function inputs,
-aggregate closure captures, ordinary aggregate lets or nonempty tuple join
-inputs. Constructors with aggregate fields currently require direct saturated
+aggregate closure captures or ordinary aggregate lets. [Tuple join inputs](tuple-joins.md)
+are supported separately. Constructors with aggregate fields currently require direct saturated
 applications; their unsaturated/PAP workers remain an explicit boundary.
 
 ## Reproduce
