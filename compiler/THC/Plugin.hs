@@ -937,15 +937,22 @@ exportProvenanceFields owner annotations program original = do
 -- The complete archived product is compared before producing managed-stub
 -- evidence. The execution label remains not-linked: no C code is registered.
 importProvenanceFields :: Module -> [Annotation] -> ForeignCore.IfaceForeign -> J -> IO [(String,J)]
-importProvenanceFields _ _ (ForeignCore.IfaceForeign Nothing []) _ = pure []
-importProvenanceFields _ _ (ForeignCore.IfaceForeign (Just (ForeignCore.IfaceCStubs "" "" [] [])) []) _ = pure []
 importProvenanceFields owner annotations original core = do
   verdict <- either (ioError . userError . ("THC: " ++)) pure
     (ImportProvenance.inspectImports owner annotations original)
   pure $ case verdict of
     Nothing -> []
-    Just value -> [("staticForeignImportStubs", O (common ++ details value))]
+    Just value ->
+      let record = O (common ++ details value)
+          associations = case value of
+            ImportProvenance.Verified [] -> []
+            _ -> [("staticForeignImports", record)]
+      in associations ++ [("staticForeignImportStubs", record) | not emptyProduct]
   where
+    emptyProduct = case original of
+      ForeignCore.IfaceForeign Nothing [] -> True
+      ForeignCore.IfaceForeign (Just (ForeignCore.IfaceCStubs "" "" [] [])) [] -> True
+      _ -> False
     common = [("schema",num (1::Int)),("scope",S "retained-static-import-products"),("execution",S "not-linked"),
       ("profile",S "ghc-9.14.1-thc-only-static-c-imports-v1"),
       ("unit",S (unitString (moduleUnit owner))),("module",S (moduleNameString (moduleName owner)))]

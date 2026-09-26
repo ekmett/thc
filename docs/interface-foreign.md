@@ -4,7 +4,7 @@ Complete Core acquisition and native foreign-export registration are different
 operations. The selected GHC interface loader preserves original Core together
 with `IfaceForeign`; it does not compile, link, initialize or register its C.
 
-Ordinary modules with no foreign products remain Core schema 1, unchanged.
+Ordinary modules with no foreign products remain Core schema 1.
 An installed module with nonempty foreign products uses **Core schema 2**. Its
 normal Core fields retain their meanings, with an additional `foreign` object:
 
@@ -36,6 +36,47 @@ Unversioned synthetic backend inputs remain allowed only without foreign
 metadata; a schema-1 document cannot hide a `foreign` field. The strict Core
 auditor applies the same reachability and global-obligation boundary. This
 does not change the ordinary source-plugin foreign-output contract.
+
+## Local package scalar C calls
+
+The `thc-local-scalar-ccall-v1` link profile covers a registered local Cabal
+library component with one C translation unit and static, unsafe `ccall`
+imports. Arguments and the single result must use `Int32Rep`, `Int64Rep`,
+`FloatRep` or `DoubleRep`, with the original IO State argument/result retained.
+It does not admit pointers, callbacks, safe/interruptible imports, native RTS
+closures, initializers, destructors, global variables or additional native
+libraries. This is a bounded source-component path, not arbitrary installed
+Hackage cbits support.
+
+The selected GHC remains Cabal's native compiler. Its saved component C recipe
+must explicitly select Clang (for example with `ghc-options: -pgmc
+/absolute/path/to/clang`); acquisition does not replace a configured GCC.
+Matching `llvm-link`, `opt` and `llvm-nm` must be available, or selected with
+`THC_LLVM_LINK`, `THC_LLVM_OPT` and `THC_LLVM_NM`. The producer rejects unsupported C options
+and LLVM constructs, requires the LLVM roundtrip to reproduce Cabal's actual
+native object, and records source/header observations in the component cache
+key. A target-specific native build and full-Core GHC 9.14.1 remain required.
+
+Typed `staticForeignImports` associations retain the original declaration,
+normalization and emitted GHC ABI. A separate `packageScalarLink` carries the
+component identity, target, bitcode digest and exact scalar entry signatures.
+Calls resolve by the genuine emitted `(unit, symbol)` pair, including after
+inlining. The producer internalizes the original C definitions and exports
+component-hash entry names, so two components may use the same C spelling.
+The JVM and strict auditor reject missing or conflicting ownership/ABI proof.
+Sulong libraries belong to their THC context and require native access; this
+profile makes no native errno or native callback claim.
+
+The explicit `package-scalar-cbits` fixture group builds and runs two ordinary
+Cabal projects and records their native results. `packageScalarFullCoreTest`
+uses the unchanged acquired library bundles to check both compiled backends,
+same-symbol component isolation, repeated imports and authority/carrier
+rejection. It is separate from the stock/thin-GHC default test inventory and
+fails when its real fixture has not been prepared.
+
+This first runtime slice checks semantics and ownership. Its interop call uses
+a Truffle boundary and boxed argument/result transport; compiled guest-entry
+validity does not establish Sulong inlining or allocation-free foreign calls.
 
 ## Why compiling the stubs through Sulong is insufficient
 

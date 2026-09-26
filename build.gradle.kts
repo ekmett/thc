@@ -363,6 +363,22 @@ tasks.register<Test>("arithmeticExceptionsFullCoreTest") {
         }
     }
 }
+tasks.register<Test>("packageScalarFullCoreTest") {
+    group = "verification"
+    description = "Tests genuine package-owned scalar C calls from ordinary Cabal acquisitions."
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    inputs.files(fileTree("build/package-scalar-cbits") { include("**/*.json", "**/library.zip", "logs/*.stdout", "logs/*.stderr") })
+    useJUnitPlatform()
+    filter { includeTestsMatching("thc.runtime.PackageScalarCbitsTest") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Native package C/compiled evidence requires a fresh test process") { true }
+    doFirst {
+        check(file("build/package-scalar-cbits/manifest.json").isFile) {
+            "Missing scalar cbits fixture: select full-Core GHC9.14.1/configured Clang and run cabal run exe:thc-fixtures -- package-scalar-cbits"
+        }
+    }
+}
 tasks.register<Test>("simdFamiliesExperimentTest") {
     group = "verification"
     description = "Runs the prepared generated SIMD Core, native-oracle, and compiled-path experiment."

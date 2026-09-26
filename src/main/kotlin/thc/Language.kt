@@ -79,6 +79,8 @@ object CoreModules {
         private val sourceSpans = linkedMapOf<String, Map<String, Any?>>()
         private val bindingOrigins = linkedMapOf<String, Map<String, String>>()
         private val foreignLinks = linkedMapOf<Pair<String, String>, ForeignBitcode>()
+        private val packageScalarLinks = linkedMapOf<String, PackageScalarLink>()
+        private val packageScalarProofs = linkedMapOf<String, MutableSet<String>>()
         private val archiveBindings = linkedMapOf<String, String>()
         private val moduleKeys = hashSetOf<Pair<String, String>>()
         @Suppress("UNCHECKED_CAST")
@@ -89,6 +91,15 @@ object CoreModules {
             count++
             if (admission != null) admissions.add(admission)
             CoreForeignArtifacts.validateArchive(module)
+            PackageScalarLinks.read(module)?.let { admission ->
+                val link = admission.link
+                require(packageScalarLinks.values.none { it.unit != link.unit && it.componentSha256 == link.componentSha256 }) {
+                    "Package C entry namespace belongs to another unit: ${link.componentSha256}"
+                }
+                val previous = packageScalarLinks.putIfAbsent(link.unit, link)
+                require(previous == null || previous.same(link)) { "Conflicting package C component: ${link.unit}" }
+                packageScalarProofs.getOrPut(link.unit) { linkedSetOf() }.addAll(admission.proved)
+            }
             val link = CoreForeignArtifacts.linked(module)
             val archiveOnly = module["schema"] == 2L || module["schema"] == 2
             val managedExport = admission != null
@@ -142,12 +153,18 @@ object CoreModules {
         }
         fun finish(): Map<String, Any?> {
             require(count != 0) { "No Core modules supplied" }
+            packageScalarLinks.forEach { (unit, link) ->
+                require(packageScalarProofs[unit] == link.abi.map { it.symbol }.toSet()) {
+                    "Package C ABI lacks complete typed import provenance: $unit"
+                }
+            }
             return mapOf("schema" to 1L, "ghc" to "9.14.1", "module" to "THC.Bundle",
                 "bindings" to bindings.values.toList(), "constructors" to constructors.values.toList(),
                 "bindingOrigins" to bindingOrigins,
                 "archiveBindings" to archiveBindings,
                 "managedRegistrations" to admissions.toList(),
                 "foreignLinks" to foreignLinks.values.toList(),
+                "packageScalarLinks" to packageScalarLinks.values.toList(),
                 "sourceFiles" to sourceFiles.values.toList(), "sourceSpans" to sourceSpans.values.toList())
         }
     }
@@ -365,6 +382,7 @@ class Language : TruffleLanguage<Language.State>() {
         internal val foreignRoots = ManagedForeignRoots(this)
         internal val handoffLayouts = thc.runtime.HandoffLayouts(language)
         internal val javaScriptImports = thc.runtime.JavaScriptImports()
+        internal val packageCbits = thc.runtime.PackageScalarLibraries(env)
         internal val maskingState = ThreadLocal.withInitial { thc.runtime.MaskingState.UNMASKED }
         internal val threads = thc.runtime.GuestThreads(env, maskingState)
         internal val files = thc.runtime.ManagedFiles(env, threads)
@@ -461,6 +479,7 @@ class Language : TruffleLanguage<Language.State>() {
     }
     override fun disposeContext(context: State) {
         context.managedExports.close()
+        context.packageCbits.close()
         context.foreignRoots.close()
         context.savedTermios.close()
         try {
@@ -548,6 +567,7 @@ class Language : TruffleLanguage<Language.State>() {
                 // registration roots belong to the Context executing the load.
                 val owner = currentState(this)
                 (linked["foreignLinks"] as List<ForeignBitcode>).forEach { owner.cbits().link(it) }
+                (linked["packageScalarLinks"] as List<PackageScalarLink>).forEach { owner.packageCbits.link(it) }
                 val program = if (backend == "ast") Program(this@Language, linked)
                     else BytecodeProgram(this@Language, linked, true)
                 val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), hostResultFault,

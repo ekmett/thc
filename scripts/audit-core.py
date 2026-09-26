@@ -56,9 +56,24 @@ class Audit:
         self.chains = {}
         self.queue = deque()
         self.linked_foreign = {}
+        self.package_scalar_links = {}
+        self.package_scalar_proofs = {}
         self.archive_bindings = {}
         self.retained_exports = []
         for source, module in modules:
+            try:
+                scalar_link = core_package_manifest.package_scalar_link(module)
+                if scalar_link:
+                    link, proved = scalar_link
+                    if any(other['unit'] != link['unit'] and other['componentSha256'] == link['componentSha256']
+                           for other in self.package_scalar_links.values()):
+                        raise ValueError('Package C entry namespace belongs to another unit: ' + link['componentSha256'])
+                    previous = self.package_scalar_links.setdefault(link['unit'], link)
+                    if previous != link:
+                        raise ValueError('Conflicting package C component identity: ' + link['unit'])
+                    self.package_scalar_proofs.setdefault(link['unit'], set()).update(proved)
+            except (ValueError, KeyError, TypeError) as error:
+                self.issue('module-format', None, source, str(error))
             foreign = module.get('foreign')
             stubs = foreign.get('stubs') if isinstance(foreign, dict) else None
             registration = ((isinstance(foreign, dict) and bool(foreign.get('files'))) or
@@ -123,6 +138,9 @@ class Audit:
                     self.issue('inconsistent-constructor', None, source, key)
                 else:
                     self.constructors[key] = constructor
+        for unit, link in self.package_scalar_links.items():
+            if self.package_scalar_proofs[unit] != {entry['symbol'] for entry in link['abi']}:
+                self.issue('module-format', None, unit, 'Package C ABI lacks complete typed import provenance')
 
     def issue(self, code, owner, path, detail):
         self.issues.append(dict(code=code, owner=owner, path=path, detail=detail))
@@ -636,6 +654,29 @@ class Audit:
 
         target = call.get('target') if isinstance(call, dict) else None
         symbol = target.get('symbol') if isinstance(target, dict) else None
+        package_link = self.package_scalar_links.get(target.get('unit')) if isinstance(target, dict) else None
+        package_abi = next((entry for entry in package_link['abi'] if entry['symbol'] == symbol), None) if package_link else None
+        if package_link is not None and package_abi is None:
+            self.issue('foreign-call', owner, path, 'Unlinked package C symbol in scalar component')
+            return True
+        if package_abi is not None:
+            try:
+                head = self.expression_rep(function)
+                if (len(function) != 3 or function[0] != 'var' or not isinstance(function[1], str) or not function[1] or
+                    function[1] in bound or function[1] in self.bindings or not isinstance(head, dict) or
+                    set(head) != {'kind', 'primReps', 'evaluated'} or head['kind'] != 'closure' or
+                    head['primReps'] != ['BoxedRep (Just Lifted)'] or head['evaluated'] is not True):
+                    raise ValueError('Package C call requires its unresolved foreign identifier')
+                core_package_manifest.validate_package_scalar_call(call, package_abi, package_link['unit'],
+                    [core_original_foreign.raw_rep(argument) for argument in arguments], expr[3],
+                    core_original_foreign.raw_rep(expr))
+                for index, (argument, primitive) in enumerate(zip(arguments, package_abi['arguments'] + [None])):
+                    self.original_stack_operand(argument, primitive, bound, index)
+                self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path, linkedUnit=package_link['unit']))
+            except (ValueError, KeyError, TypeError) as error:
+                self.issue('foreign-call', owner, path, str(error))
+            return True
+
         if isinstance(symbol, str) and symbol in core_original_foreign.OPERATIONS:
             try:
                 core_original_foreign.validate(metadata, [core_original_foreign.raw_rep(arg) for arg in arguments],
