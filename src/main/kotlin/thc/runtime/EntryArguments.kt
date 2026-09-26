@@ -14,7 +14,7 @@ internal class EntryArguments(target: RootCallTarget, metrics: Metrics,
                               knownEvaluated: BooleanArray = booleanArrayOf(), prefixSize: Int = 0) : Node() {
     @field:CompilationFinal(dimensions = 1)
     private val positions: IntArray = (target.rootNode as? GuestRoot)?.takeUnless {
-        it is BytecodeRoot && it.isAsyncEnabled
+        it is BytecodeRoot && it.isAsyncEnabled || it is FunctionRoot && it.enableAsync
     }?.let { root ->
         root.entryStrict.indices.filter { root.entryStrict[it] && root.inputLayout?.isTuple(it) != true &&
             root.inputLayout?.isVector(it) != true &&
@@ -36,7 +36,7 @@ internal class IndirectEntryArguments(metrics: Metrics) : Node() {
     @Child private var force = Force(metrics)
     fun execute(frame: VirtualFrame, target: RootCallTarget, packet: Array<Any?>) {
         val root = target.rootNode as? GuestRoot ?: return
-        if (root is BytecodeRoot && root.isAsyncEnabled) return
+        if (root is BytecodeRoot && root.isAsyncEnabled || root is FunctionRoot && root.enableAsync) return
         // These positions are physical and already exclude zero-storage logical
         // inputs. Iterating logical arity here also invites speculative range
         // checks against a shorter compact packet before any marked operand runs.

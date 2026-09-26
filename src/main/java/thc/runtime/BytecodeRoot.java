@@ -589,12 +589,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                     TupleResultsKt.requireVoidCarrier(second);
                     // A lifted fork action may still be a thunk. Only the new
                     // child may enter it; the parent must return after registration.
-                    yield GuestThreadOps.fork(node, first, true);
+                    yield GuestThreadOps.fork(node, first, ((BytecodeRoot) node.getRootNode()).isAsyncEnabled());
                 }
                 case FORK_ON -> {
                     TupleResultsKt.requireVoidCarrier(third);
                     if (!(first instanceof Long capability)) throw fail("forkOn# requires Int#");
-                    yield GuestThreadOps.fork(node, second, true, capability);
+                    yield GuestThreadOps.fork(node, second, ((BytecodeRoot) node.getRootNode()).isAsyncEnabled(), capability);
                 }
                 case BEGIN_KILL -> {
                     TupleResultsKt.requireVoidCarrier(third);
@@ -685,6 +685,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             if (failure instanceof DelimitedCut cut) return cut;
             if (failure instanceof CapturedCallSuspension captured) return new CallSegmentSuspended(captured.getSegment());
             if (failure instanceof AsyncBlocked blocked) return blocked.getRequest();
+            if (failure instanceof STMRestart restart) return restart.getRequest();
             throw failure;
         }
     }
@@ -2348,16 +2349,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = STMOp.class, name = "operation")
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = Metrics.class, name = "metrics")
+    @ConstantOperand(type = boolean.class, name = "async")
     public static final class InvokeSTM {
         @Specialization public static void run(VirtualFrame frame, STMOp operation,
-                BytecodeTupleSlots destination, Metrics metrics, Object action, Object alternative,
+                BytecodeTupleSlots destination, Metrics metrics, boolean async, Object action, Object alternative,
                 Object nested, Object state,
-                @Cached(value = "create(operation, destination, metrics)", neverDefault = true) STMCall call) {
+                @Cached(value = "create(operation, destination, metrics, async)", neverDefault = true) STMCall call) {
             TupleResultsKt.requireVoidCarrier(state);
             call.execute(frame, action, alternative, nested);
         }
-        public static STMCall create(STMOp operation, BytecodeTupleSlots destination, Metrics metrics) {
-            return new STMCall(operation, destination, metrics);
+        public static STMCall create(STMOp operation, BytecodeTupleSlots destination, Metrics metrics, boolean async) {
+            return new STMCall(operation, destination, metrics, async);
         }
     }
     @Operation

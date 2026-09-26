@@ -23,7 +23,7 @@ import thc.Language
  */
 class BytecodeProgram internal constructor(private val language: Language, moduleData: Map<String, Any?>,
                                            private val checkpoint: BytecodeCheckpoint?,
-                                           private val enableAsync: Boolean) : ExecutableProgram {
+                                           internal val enableAsync: Boolean) : ExecutableProgram {
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
     private val foreignLinks = moduleData["foreignLinks"] as? List<thc.ForeignBitcode> ?: emptyList()
     private val packageScalarLinks = moduleData["packageScalarLinks"] as? List<thc.PackageScalarLink> ?: emptyList()
@@ -262,7 +262,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         return when (value) { is Closure -> value.target; is Thunk -> value.target ?: hostEntryTarget(0); else -> hostEntryTarget(0) }
     }
     override fun diagnostics(): Map<String, Any> = linkedMapOf(
-        "backend" to "bytecode", "bytecodeRootCount" to roots.size,
+        "backend" to "bytecode", "asyncExceptions" to enableAsync, "bytecodeRootCount" to roots.size,
         "sourceNotesEnabled" to sources.enabled, "sourceSpanCount" to sources.spanCount,
         "sourceRootCount" to roots.count { it.bytecodeNode.hasSourceInformation() && it.sourceSection != null }, "localJoinCount" to localJoinCount,
         "localJoinTransfers" to metrics.localJoinTransfers,
@@ -2644,8 +2644,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 }
             } else if (fn[0] == "prim" && STMOp.named(fn[1] as String) != null) {
                 val operation = STMOp.named(fn[1] as String)!!
-                if (resumable && operation != STMOp.NEW && operation != STMOp.READ_IO)
-                    throw UnsupportedCore("STM transaction frames do not yet support resumable async/checkpoint delivery")
+                if ((checkpoint != null || delimited) && operation != STMOp.NEW && operation != STMOp.READ_IO)
+                    throw UnsupportedCore("STM transaction frames do not support explicit checkpoint/delimited capture")
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
                 operation.validate(operands.map { it.proof }, flags, tupleProof)
@@ -2657,12 +2657,28 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 else tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
                     if (operation.callback) {
-                        b.beginInvokeSTM(operation, tupleSlots(TupleShape(tupleProof, language), destination), metrics)
-                        operands[0].emit(e)
-                        if (operands.size == 3) operands[1].emit(e) else b.emitLoadNull()
-                        if (nested != null) b.emitReadGlobal(nested) else b.emitLoadNull()
-                        operands.last().emit(e)
-                        b.endInvokeSTM()
+                        val slots = tupleSlots(TupleShape(tupleProof, language), destination)
+                        if (enableAsync) {
+                            // An interrupted attempt has already discarded its
+                            // carrier-local log. Yield the request itself, not
+                            // the abandoned callback's continuation, then enter
+                            // the scope again with the original saved operands.
+                            emitBlockingRequest(e, operands, false) { values ->
+                                b.beginInvokeSTM(operation, slots, metrics, true)
+                                b.emitLoadLocal(values[0])
+                                if (values.size == 3) b.emitLoadLocal(values[1]) else b.emitLoadNull()
+                                if (nested != null) b.emitReadGlobal(nested) else b.emitLoadNull()
+                                b.emitLoadLocal(values.last())
+                                b.endInvokeSTM()
+                            }
+                        } else {
+                            b.beginInvokeSTM(operation, slots, metrics, enableAsync)
+                            operands[0].emit(e)
+                            if (operands.size == 3) operands[1].emit(e) else b.emitLoadNull()
+                            if (nested != null) b.emitReadGlobal(nested) else b.emitLoadNull()
+                            operands.last().emit(e)
+                            b.endInvokeSTM()
+                        }
                     } else {
                         b.beginTVarAccess(operation, destination[0])
                         if (operation == STMOp.RETRY) b.emitLoadNull() else operands[0].emit(e)

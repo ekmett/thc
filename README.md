@@ -114,10 +114,13 @@ All prefetch hints and the three user trace primops have
 [JVM target implementations](docs/hints-and-tracing.md): hints are no-ops,
 and trace records use the context's stderr diagnostic stream.
 
-The bytecode backend also supports [asynchronous exceptions](docs/async-exceptions.md)
-between Haskell threads. An interrupted shared thunk keeps its continuation, so
-another thread can resume it without repeating completed work. Thread identities
-are Java thread IDs scoped to their THC context.
+Both backends support [asynchronous exceptions](docs/async-exceptions.md)
+between Haskell threads. Public load requests accept a Boolean `asyncExceptions`:
+`true` enables resumable delivery; when omitted, it defaults to `false` for AST
+and `true` for bytecode. AST capture covers ordinary calls, cases, lets, local
+joins, mask/catch scopes and shared-thunk updates. An interrupted shared thunk
+keeps its continuation, so another thread can resume it without repeating
+completed work. Thread identities are Java thread IDs scoped to their THC context.
 
 `forkOn#` requests best-effort CPU affinity; ordinary `fork#` clears an inherited
 pin, and capability queries report available CPU capacity rather than guest-thread

@@ -5,7 +5,7 @@ module Main where
 import GHC.Exts
 import GHC.IO (IO(..))
 import Control.Concurrent
-import Control.Exception (evaluate)
+import Control.Exception (evaluate, AsyncException(ThreadKilled))
 import Control.Monad (forM_, replicateM_)
 import qualified STMAudit as P
 
@@ -19,6 +19,12 @@ bump (Cell v) (I# x) = IO (\s -> case atomically# (P.bumpAction v x) s of
   (# t, P.Box result #) -> (# t, I# result #))
 readCell :: Cell -> IO Int
 readCell (Cell v) = evaluate (I# (P.readCell v))
+
+-- Invoke the fixture once per IO execution, not as a native-driver CAF shared
+-- between the interrupted call and its later observation.
+{-# OPAQUE invoke #-}
+invoke :: (Int# -> Int#) -> Int -> IO Int
+invoke f (I# n) = IO (\s -> case f n of result -> (# s, I# result #))
 
 main :: IO ()
 main = do
@@ -47,3 +53,20 @@ main = do
     _ <- bump (if side == 0 then a else b) 7
     answer <- takeMVar result
     putStrLn ("either\t" ++ show side ++ "\t" ++ show answer)
+  let observation name action = action >>= \n -> putStrLn (name ++ "\t0\t" ++ show n)
+      call = invoke
+  forM_ [("retry",P.forceRetry),("inner",P.forceInner)] $ \(name,force) -> do
+    result <- newEmptyMVar
+    target <- forkIO (call force 0 >>= putMVar result)
+    _ <- call P.asyncReady 0
+    threadDelay 20000
+    throwTo target ThreadKilled
+    observation (name ++ "-caught") (takeMVar result)
+    observation (name ++ "-aborted") (call P.asyncValue 0)
+    observation (name ++ "-prefix") (call P.asyncPrefixes 0)
+    _ <- call P.asyncSet (if name == "retry" then 4 else 9)
+    if name == "inner" then call P.asyncRelease 0 >> pure () else pure ()
+    observation (name ++ "-resumed") (call force 0)
+    observation (name ++ "-committed") (call P.asyncValue 0)
+    observation (name ++ "-prefix-after") (call P.asyncPrefixes 0)
+    if name == "retry" then call P.asyncReady 0 >> pure () else pure ()

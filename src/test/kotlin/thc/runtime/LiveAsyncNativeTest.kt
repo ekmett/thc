@@ -8,7 +8,8 @@ import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Context
 import org.graalvm.polyglot.Value
 import org.junit.jupiter.api.Assertions.*
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import thc.CoreModules
 import thc.EntryValue
 import thc.Json
@@ -64,20 +65,25 @@ class LiveAsyncNativeTest {
         fail<Unit>("Target did not reach $method: ${thread.stackTrace.toList()}")
     }
 
-    private fun exercise(stage: String, running: Boolean, ownerWait: Boolean = false, repeat: Boolean = false) {
+    private fun exercise(backend: String, stage: String, running: Boolean, ownerWait: Boolean = false, repeat: Boolean = false) {
         val module = fixture(stage)
         Context.newBuilder("thc").allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false")
             .option("engine.MultiTier", "false").option("engine.Splitting", "false")
             .option("engine.CompilationFailureAction", "Throw").build().use { context ->
             context.initialize("thc")
-            lateinit var program: BytecodeProgram
+            lateinit var program: ExecutableProgram
             lateinit var state: Language.State
             lateinit var functions: Map<String, Value>
             entered(context) {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 state = Language.currentState()
-                program = BytecodeProgram(language, module, true)
+                // All entry values must share one program and its CAFs. Separate
+                // public parser loads intentionally create independent programs;
+                // ThreadAsyncNativeTest exercises that loader on both backends.
+                program = if (backend == "ast") Program(language, module, true)
+                    else BytecodeProgram(language, module, true)
+                assertEquals(backend, program.diagnostics()["backend"])
                 functions = entries.filter { it != "asyncPayload" }.associateWith {
                     context.asValue(EntryValue(program, it, 1))
                 }
@@ -102,7 +108,7 @@ class LiveAsyncNativeTest {
                 val thread = Thread({
                     try { answer.complete(call("forceShared")) }
                     catch (failure: Throwable) { answer.completeExceptionally(failure) }
-                }, "thc-async-target").apply { isDaemon = true }
+                }, "thc-$backend-$stage-async-target").apply { isDaemon = true }
                 targets.add(thread)
                 thread.start()
                 return thread to answer
@@ -161,19 +167,23 @@ class LiveAsyncNativeTest {
         }
     }
 
-    @Test fun blockedMVarPreservesSharedThunk() {
-        for (stage in listOf("pre", "post")) exercise(stage, false)
+    @ParameterizedTest @ValueSource(strings = ["bytecode", "ast"])
+    fun blockedMVarPreservesSharedThunk(backend: String) {
+        for (stage in listOf("pre", "post")) exercise(backend, stage, false)
     }
 
-    @Test fun compiledLoopPreservesSharedThunk() {
-        for (stage in listOf("pre", "post")) exercise(stage, true)
+    @ParameterizedTest @ValueSource(strings = ["bytecode", "ast"])
+    fun compiledLoopPreservesSharedThunk(backend: String) {
+        for (stage in listOf("pre", "post")) exercise(backend, stage, true)
     }
 
-    @Test fun interruptedWaiterLeavesTheOtherThunkOwnerIntact() {
-        for (stage in listOf("pre", "post")) exercise(stage, false, ownerWait = true)
+    @ParameterizedTest @ValueSource(strings = ["bytecode", "ast"])
+    fun interruptedWaiterLeavesTheOtherThunkOwnerIntact(backend: String) {
+        for (stage in listOf("pre", "post")) exercise(backend, stage, false, ownerWait = true)
     }
 
-    @Test fun resumedThunkCanBeInterruptedAgain() {
-        for (stage in listOf("pre", "post")) exercise(stage, false, repeat = true)
+    @ParameterizedTest @ValueSource(strings = ["bytecode", "ast"])
+    fun resumedThunkCanBeInterruptedAgain(backend: String) {
+        for (stage in listOf("pre", "post")) exercise(backend, stage, false, repeat = true)
     }
 }

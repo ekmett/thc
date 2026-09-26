@@ -190,11 +190,12 @@ class AstKillThreadTest {
                     val selfId = threads.currentIdentity()
                     try {
                         repeat(5) {
-                            val delivered = assertThrows(AsyncDelivery::class.java) {
-                                Calls.target(captured.entryTarget("direct"), arrayOf(0L, selfId, "warm", Unit))
-                            }
-                            assertEquals("warm", delivered.request.payload)
-                            delivered.request.acknowledge()
+                            val continuation = Calls.target(captured.entryTarget("direct"),
+                                arrayOf(0L, selfId, "warm", Unit)) as AstContinuation
+                            val request = continuation.asyncRequest() ?: error("Self throw did not retain its request")
+                            assertEquals("warm", request.payload)
+                            request.acknowledge()
+                            assertSame(Unit, continuation.continueWith(Unit))
                         }
                         assertEquals(self, selfId.javaId)
                         val target = captured.entryTarget("direct")

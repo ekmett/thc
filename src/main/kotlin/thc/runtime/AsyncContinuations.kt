@@ -31,6 +31,15 @@ internal class TailYield(val continuation: ContinuationResult, val target: RootC
     }
 }
 
+/** AST trampoline witness: no suffix survives the transfer to this exact body. */
+internal class AstTailYield(val continuation: SavedGuestContinuation, val target: RootCallTarget) {
+    init {
+        check((continuation.sourceRoot as? GuestRoot)?.isSelf(target) == true) {
+            "AST tail continuation does not belong to the final tail target"
+        }
+    }
+}
+
 internal object AsyncContinuations {
     @JvmStatic fun isYieldMarker(value: Any?): Boolean = value === Unit ||
         value is ThunkSuspended || value is CallSegmentSuspended || value is AsyncRequest
@@ -69,6 +78,13 @@ internal object AsyncContinuations {
     }
 
     @JvmStatic fun publicResult(result: Any?, node: Node): Any? {
+        val ast = when (result) {
+            is SavedGuestContinuation -> result
+            is AstTailYield -> result.continuation
+            else -> null
+        }
+        if (ast != null) uncaught(ast.asyncRequest()
+            ?: fault("Guest AST continuation escaped without an async request"), node)
         val continuation = when (result) {
             is ContinuationResult -> result
             is TailYield -> result.continuation

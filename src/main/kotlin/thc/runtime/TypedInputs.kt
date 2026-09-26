@@ -367,18 +367,42 @@ private class InputCallArm(private val source: InputSource, private val count: I
             else legacyPap(frame, this, function, source, values, start, count)
         }
         val isTail = tail && arity == count
-        val result = if (input == null) {
-            legacy.call(frame, scalarPacket(frame, this, function, source, values, start, arity), isTail)
-        } else {
-            try { callTypedInput(frame, this, function, input, source, values, start, arity, force, isTail, metrics, prefixCount, strictPositions) { packet ->
-                Calls.direct(direct, packet)
-            } } catch (transfer: TailCall) {
-                if (isTail) throw transfer
-                if (arity == count && tupleBounce != null) { tupleBounce!!.execute(frame, transfer); return null }
-                loop.execute(transfer)
+        val result = try {
+            val answer = if (input == null) {
+                legacy.call(frame, scalarPacket(frame, this, function, source, values, start, arity), isTail)
+            } else {
+                try { callTypedInput(frame, this, function, input, source, values, start, arity, force, isTail, metrics, prefixCount, strictPositions) { packet ->
+                    Calls.direct(direct, packet)
+                } } catch (transfer: TailCall) {
+                    if (isTail) throw transfer
+                    if (arity == count && tupleBounce != null && !AstControl.enabled(this)) {
+                        tupleBounce!!.execute(frame, transfer); return null
+                    }
+                    loop.execute(transfer)
+                }
             }
+            if (AstControl.enabled(this)) AstControl.complete(this, answer, target,
+                if (arity == count) destination?.shape else null) else answer
+        } catch (cut: AstCapture) {
+            val savedValues = values?.copyOf()
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? = finish(frame, input, savedValues)
+            })
         }
-        if (arity < count) return remainder!!.execute(frame, requireClosure(force.execute(frame, result)), values)
+        return finish(frame, result, values)
+    }
+    private fun finish(frame: VirtualFrame, result: Any?, values: Array<Any?>?): Any? {
+        if (arity < count) {
+            val closure = try { requireClosure(AstControl.force(frame, this, force, result)) }
+            catch (cut: AstCapture) {
+                val savedValues = values?.copyOf()
+                throw cut.append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Any? =
+                        remainder!!.execute(frame, requireClosure(input), savedValues)
+                })
+            }
+            return remainder!!.execute(frame, closure, values)
+        }
         if (destination != null) { destination.consume(frame, this, result); return null }
         return result
     }
@@ -409,39 +433,73 @@ internal class GenericInputCall(private val source: InputSource, private val cou
             }
             val exact = function.arity == remaining
             val isTail = tail && exact
-            val result = if (input == null) {
-                legacy.call(frame, target, scalarPacket(frame, this, function, source, values, offset, function.arity, count + start), isTail)
-            } else {
-                if (metrics.enabled) metrics.incrementIndirectCalls()
-                try {
-                    val storage = prepareGenericInput(frame, this, function, input, source, values, count + start, offset, function.arity, force)
-                    val generation = storage.generation
-                    var transferred = false
+            val next = offset + function.arity
+            val result = try {
+                val answer = if (input == null) {
+                    legacy.call(frame, target, scalarPacket(frame, this, function, source, values, offset, function.arity, count + start), isTail)
+                } else {
+                    if (metrics.enabled) metrics.incrementIndirectCalls()
                     try {
-                        if (isTail) try { checkTypedTail(frame, this, target, storage, input.packet, metrics) }
-                        catch (transfer: TailCall) { transferred = transfer.input === storage; throw transfer }
-                        if (metrics.enabled) input.state().calls++
-                        Calls.indirect(indirect, target, arrayOf(storage))
-                    } finally { if (!transferred) releaseGenericInput(input, storage, generation) }
-                } catch (transfer: TailCall) {
-                    if (isTail) throw transfer
-                    if (exact && tupleBounce != null) { tupleBounce!!.execute(frame, transfer); return null }
-                    loop.execute(transfer)
+                        val storage = prepareGenericInput(frame, this, function, input, source, values, count + start, offset, function.arity, force)
+                        val generation = storage.generation
+                        var transferred = false
+                        try {
+                            if (isTail) try { checkTypedTail(frame, this, target, storage, input.packet, metrics) }
+                            catch (transfer: TailCall) { transferred = transfer.input === storage; throw transfer }
+                            if (metrics.enabled) input.state().calls++
+                            Calls.indirect(indirect, target, arrayOf(storage))
+                        } finally { if (!transferred) releaseGenericInput(input, storage, generation) }
+                    } catch (transfer: TailCall) {
+                        if (isTail) throw transfer
+                        if (exact && tupleBounce != null && !AstControl.enabled(this)) {
+                            tupleBounce!!.execute(frame, transfer); return null
+                        }
+                        loop.execute(transfer)
+                    }
                 }
+                if (AstControl.enabled(this)) AstControl.complete(this, answer, target,
+                    if (exact) destination?.shape else null) else answer
+            } catch (cut: AstCapture) {
+                val savedValues = values?.copyOf()
+                throw cut.append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Any? =
+                        finish(frame, input, savedValues, exact, next)
+                })
             }
             if (exact) {
                 if (destination != null) { destination.consume(frame, this, result); return null }
                 return result
             }
-            offset += function.arity
-            function = requireClosure(force.execute(frame, result))
+            offset = next
+            function = try { requireClosure(AstControl.force(frame, this, force, result)) }
+            catch (cut: AstCapture) {
+                val savedValues = values?.copyOf()
+                throw cut.append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Any? =
+                        execute(frame, requireClosure(input), savedValues, next)
+                })
+            }
         }
+    }
+    private fun finish(frame: VirtualFrame, result: Any?, values: Array<Any?>?, exact: Boolean, next: Int): Any? {
+        if (exact) {
+            if (destination != null) { destination.consume(frame, this, result); return null }
+            return result
+        }
+        val closure = try { requireClosure(AstControl.force(frame, this, force, result)) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? =
+                    execute(frame, requireClosure(input), values, next)
+            })
+        }
+        return execute(frame, closure, values, next)
     }
 }
 
 @CompilerDirectives.TruffleBoundary
 internal fun strictInputPositions(root: GuestRoot, input: TypedInputLayout): IntArray {
-    if (root is BytecodeRoot && root.isAsyncEnabled) return intArrayOf()
+    if (root is BytecodeRoot && root.isAsyncEnabled || root is FunctionRoot && root.enableAsync) return intArrayOf()
     return root.entryStrict.indices.filter { root.entryStrict[it] && !input.logical.isTuple(it) && !input.logical.isVector(it) &&
         input.packet.isObject(input.header + input.logical.offset(it)) }.toIntArray()
 }
@@ -517,15 +575,30 @@ internal class AstInputOperands(arguments: Array<Expr>, frameLayout: FrameLayout
     @Children private var arguments = arguments
     val layout = ArgumentLayout.fromProofs(arguments.map { it.representation })!!
     val source = AstInputSource(layout, IntArray(layout.physicalArity) { frameLayout.bind("<typed input $it>") })
-    @ExplodeLoop fun evaluate(frame: VirtualFrame) {
-        for (i in arguments.indices) {
+    @ExplodeLoop fun evaluate(frame: VirtualFrame, start: Int = 0) {
+        for (i in arguments.indices) if (i >= start) {
             val proof = layout.proof(i)
             val offset = layout.offset(i)
-            if (proof.isTuple || proof.isVector) arguments[i].executeTuple(frame, source.slots, offset)
-            else if (proof.isLong) FrameAccess.writeLong(frame, source.slots[offset], arguments[i].executeRequiredLong(frame))
-            else if (proof.isFloat) FrameAccess.writeFloat(frame, source.slots[offset], arguments[i].executeRequiredFloat(frame))
-            else if (proof.isDouble) FrameAccess.writeDouble(frame, source.slots[offset], arguments[i].executeRequiredDouble(frame))
-            else FrameAccess.write(frame, source.slots[offset], arguments[i].execute(frame))
+            try {
+                if (proof.isTuple || proof.isVector) arguments[i].executeTuple(frame, source.slots, offset)
+                else if (proof.isLong) FrameAccess.writeLong(frame, source.slots[offset], arguments[i].executeRequiredLong(frame))
+                else if (proof.isFloat) FrameAccess.writeFloat(frame, source.slots[offset], arguments[i].executeRequiredFloat(frame))
+                else if (proof.isDouble) FrameAccess.writeDouble(frame, source.slots[offset], arguments[i].executeRequiredDouble(frame))
+                else FrameAccess.write(frame, source.slots[offset], arguments[i].execute(frame))
+            } catch (cut: AstCapture) {
+                throw cut.append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                        if (!proof.isTuple && !proof.isVector) {
+                            if (proof.isLong) FrameAccess.writeLong(frame, source.slots[offset], input as Long)
+                            else if (proof.isFloat) FrameAccess.writeFloat(frame, source.slots[offset], input as Float)
+                            else if (proof.isDouble) FrameAccess.writeDouble(frame, source.slots[offset], input as Double)
+                            else FrameAccess.write(frame, source.slots[offset], input)
+                        } else if (input != null) fault("Invalid typed operand continuation")
+                        evaluate(frame, i + 1)
+                        return Unit
+                    }
+                })
+            }
         }
     }
 }
@@ -547,10 +620,19 @@ internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frame
     init { representation = shape?.proof?.copy(evaluated = true) ?: CoreRepresentation(CoreKind.UNKNOWN, evaluated = true) }
     override fun execute(frame: VirtualFrame): Any? {
         if (vector != null) {
-            executeInto(frame, vectorSlots!!, 0)
+            try { executeInto(frame, vectorSlots!!, 0) }
+            catch (cut: AstCapture) {
+                throw cut.append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                        if (input != null) fault("Invalid vector application continuation")
+                        return vector.read(frame, vectorSlots!!, 0)
+                    }
+                })
+            }
             return vector.read(frame, vectorSlots, 0)
         }
         if (shape != null) fault("Aggregate value requires a typed destination")
+        if (AstControl.enabled(this)) return executeAsync(frame, null, 0)
         val closure = function.executeRequiredClosure(frame)
         try {
             operands.evaluate(frame)
@@ -561,12 +643,22 @@ internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frame
     }
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         if (vector == null) return executeInto(frame, slots, offset)
-        executeInto(frame, vectorSlots!!, 0)
+        try { executeInto(frame, vectorSlots!!, 0) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                    if (input != null) fault("Invalid vector application continuation")
+                    vector.copy(frame, vectorSlots!!, 0, slots, offset)
+                    return null
+                }
+            })
+        }
         vector.copy(frame, vectorSlots, 0, slots, offset)
         return null
     }
     private fun executeInto(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val tuple = shape ?: fault("Scalar application has no aggregate destination")
+        if (AstControl.enabled(this)) return executeAsync(frame, slots, offset)
         val closure = function.executeRequiredClosure(frame)
         try {
             operands.evaluate(frame)
@@ -587,8 +679,74 @@ internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frame
             return null
         } finally { operands.source.clear(frame) }
     }
+
+    private fun executeAsync(frame: VirtualFrame, slots: IntArray?, offset: Int): Any? {
+        val closure = try { function.executeRequiredClosure(frame) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? =
+                    invokeAsync(frame, requireClosure(input), slots, offset)
+            })
+        }
+        return invokeAsync(frame, closure, slots, offset)
+    }
+
+    private fun invokeAsync(frame: VirtualFrame, closure: Closure, slots: IntArray?, offset: Int): Any? {
+        var suspended = false
+        try {
+            try { operands.evaluate(frame) }
+            catch (cut: AstCapture) {
+                throw cut.append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                        if (input !== Unit) fault("Invalid typed operands continuation")
+                        return dispatchAsync(frame, closure, slots, offset)
+                    }
+                })
+            }
+            return dispatchAsync(frame, closure, slots, offset)
+        } catch (cut: AstCapture) {
+            suspended = true
+            throw cut.enclose { steps -> Cleanup(this, steps) }
+        } finally {
+            // The materialized caller frame owns the operand fields while parked.
+            // They cannot be cleared until its saved overapplication has finished.
+            if (!suspended) operands.source.clear(frame)
+        }
+    }
+
+    private fun dispatchAsync(frame: VirtualFrame, closure: Closure, slots: IntArray?, offset: Int): Any? {
+        if (slots == null) return dispatch!!.execute(frame, closure)
+        val tuple = shape ?: fault("Scalar application has no aggregate destination")
+        val child = dispatch ?: run {
+            CompilerDirectives.transferToInterpreterAndInvalidate()
+            atomic(Callable {
+                dispatch ?: insert(InputDispatch(operands.source, operands.layout.logicalArity, tail, metrics,
+                    AstTupleDestination(tuple, slots, offset))).also {
+                    destinationSlots = slots
+                    destinationOffset = offset
+                    dispatch = it
+                }
+            })
+        }
+        check(destinationSlots === slots && destinationOffset == offset)
+        child.execute(frame, closure)
+        return null
+    }
+
+    private class Cleanup(private val owner: AstTypedApplication,
+                          private val steps: List<AstResumeStep>) : AstResumeStep {
+        override fun resume(frame: VirtualFrame, input: Any?): Any? {
+            var suspended = false
+            try { return resumeAstSteps(frame, steps, input) }
+            catch (cut: AstCapture) {
+                suspended = true
+                throw cut.enclose { remaining -> Cleanup(owner, remaining) }
+            } finally { if (!suspended) owner.operands.source.clear(frame) }
+        }
+    }
+
     private fun transferSelf(frame: VirtualFrame, function: Closure) {
-        if (selfTransfer && function.arity == operands.layout.logicalArity && function.suppliedCount == 0 &&
+        if (!AstControl.enabled(this) && selfTransfer && function.arity == operands.layout.logicalArity && function.suppliedCount == 0 &&
             function.supplied.isEmpty() && function.typedSupplied == null && selfTarget!!.matches(function.target)) {
             (rootNode as FunctionRoot).transferTypedSelf(frame, function, operands.source, this)
             throw AstSelfCall
