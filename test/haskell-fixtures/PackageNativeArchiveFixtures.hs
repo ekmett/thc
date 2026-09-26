@@ -69,10 +69,10 @@ preparePackageNativeArchives root = do
   unless (take 5 oracleLines == ["40","99","1","7","True"]) (fail "native archive oracle differs")
   observations <- case drop 5 oracleLines of
     [row] -> maybe (fail "native mixed-header oracle is malformed") pure
-      (readMaybe (BSC.unpack row) :: Maybe [(Integer,Integer,Integer,Integer,Integer)])
+      (readMaybe (BSC.unpack row) :: Maybe [(Integer,Integer,Integer,Integer,Integer,Integer)])
     _ -> fail "missing native mixed-header oracle"
   unless (length observations == 36) (fail "native mixed-header oracle row count differs")
-  unless (all (\(_,_,typed,wide,_) -> typed == wide) observations)
+  unless (all (\(_,_,typed,wide,_,staticPointer) -> typed == wide && typed == staticPointer) observations)
     (fail "native typed and machine-register argument calls differ")
   linked <- concat <$> forM units (\unit -> do
     paths <- sort . filter ((== ".json") . takeExtension) <$> files (capture </> unit </> "core")
