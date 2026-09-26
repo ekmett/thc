@@ -349,12 +349,15 @@ class AddressArrayCopyTest {
                         fun call(array: Any, state: Any = Unit) = Calls.target(target, if (operation.toArray)
                             arrayOf(0L, base.plus(4), array, 2L, 8L, state) else arrayOf(0L, array, 2L, base.plus(4), 8L, state))
                         for (installed in listOf(false, true)) {
-                            if (installed) compile(target)
                             for (owned in listOf(false, true)) {
+                                // The previous case deliberately trips a state
+                                // guard, which may invalidate installed code.
+                                // Install before this case's first measured call.
+                                if (installed) compile(target)
                                 for (i in 0L until 24L) base.writeWord8(i, i + 31)
                                 val array = storage(ByteArray(12) { (it + 91).toByte() }, owned)
                                 val before = count(p); assertEquals(23L, call(array))
-                                if (installed) { assertEquals(before + 1, count(p)); valid(target) }
+                                if (installed) { assertEquals(before + 1, count(p), "$backend/$operation/owned=$owned"); valid(target) }
                                 if (operation.toArray) assertArrayEquals(ByteArray(12) { if (it in 2..9) (it + 33).toByte() else (it + 91).toByte() }, bytes(array))
                                 else assertEquals(List(24) { if (it in 4..11) it + 89L else it + 31L }, (0L until 24L).map(base::readWord8))
                                 val old = bytes(array); val nativeOld = (0L until 24L).map(base::readWord8)
