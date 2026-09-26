@@ -370,6 +370,7 @@ jobs:
             build/thread-label/oracle.txt
             build/hint-trace/
             build/delimited-continuations/
+            build/ghc-bco/
             build/rts-diagnostics/*.json
             build/rts-diagnostics/logs/
             build/rts-shutdown/*.json

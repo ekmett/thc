@@ -2352,6 +2352,12 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 PolyglotExpression(polyglot, args.mapIndexed { index, value ->
                     argument(value, scope, flags[index] as Boolean)
                 }.toTypedArray()).proven(tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && fn[1] in setOf("newBCO#", "mkApUpd0#")) {
+                val name = fn[1] as String
+                GhcBCO.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                GhcBCOExpression(name, args.mapIndexed { index, value ->
+                    argument(value, scope, flags[index] as Boolean)
+                }.toTypedArray(), language as thc.Language, metrics, tupleProof)
             } else if (fn[0] == "prim" && fn[1] in setOf("newPromptTag#", "prompt#", "control0#")) {
                 val name = fn[1] as String
                 DelimitedControl.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)

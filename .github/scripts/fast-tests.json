@@ -11,6 +11,9 @@
     ]
   },
   "leafSources": {
+    "src/main/kotlin/thc/runtime/GhcBCO.kt": {
+      "junit": ["thc.runtime.GhcBCOTest"], "python": []
+    },
     "src/main/kotlin/thc/runtime/GuestArguments.kt": {
       "junit": ["thc.runtime.GuestArgumentsTest"], "python": []
     },
@@ -299,6 +302,15 @@
     }
   },
   "owners": {
+    "examples/GhcBCO.hs": {
+      "junit": ["thc.runtime.GhcBCOTest"], "python": []
+    },
+    "compiler/test-fixtures/GhcBCONative.hs": {
+      "junit": ["thc.runtime.GhcBCOTest"], "python": []
+    },
+    "test/haskell-fixtures/GhcBCOFixtures.hs": {
+      "junit": ["thc.runtime.GhcBCOTest"], "python": []
+    },
     "test/haskell-fixtures/SimdByteArrayFixtures.hs": {
       "junit": [
         "thc.runtime.SimdInt32ByteArrayTest",
@@ -345,7 +357,7 @@
       "junit": ["thc.runtime.DelimitedContinuationsTest"], "python": []
     },
     "src/test/kotlin/thc/runtime/ThreadInventoryCoreEvidence.kt": {
-      "junit": ["thc.runtime.ThreadInventoryNativeTest", "thc.runtime.DelimitedContinuationsTest", "thc.runtime.StableNamesTest"], "python": []
+      "junit": ["thc.runtime.ThreadInventoryNativeTest", "thc.runtime.DelimitedContinuationsTest", "thc.runtime.StableNamesTest", "thc.runtime.GhcBCOTest"], "python": []
     },
     "src/main/kotlin/thc/runtime/StableNames.kt": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
     "examples/StableNames.hs": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
@@ -975,6 +987,7 @@
     },
     "src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt": {
       "junit": [
+        "thc.runtime.GhcBCOTest",
         "thc.runtime.StableNamesTest",
         "thc.runtime.AtomicAddressTest",
         "thc.runtime.AtomicIntArrayTest",
@@ -1372,6 +1385,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.GhcBCOTest",
         "thc.runtime.SimdAddressFamiliesTest",
         "thc.runtime.StableNamesTest",
         "thc.runtime.FloatingRemainderTest",

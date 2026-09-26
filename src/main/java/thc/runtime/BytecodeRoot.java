@@ -2456,6 +2456,22 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation
+    @ConstantOperand(type = Language.class, name = "language")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class NewGhcBCO {
+        @Specialization public static Closure create(Language language, Metrics metrics, Object code,
+                Object literals, Object pointers, long arity, Object bitmap, Object state, @Bind Node node) {
+            return GhcBCO.create(node, language, metrics, code, literals, pointers, arity, bitmap, state);
+        }
+    }
+
+    @Operation public static final class MkApUpd0 {
+        @Specialization public static Thunk create(Object value, @Bind Node node) {
+            return GhcBCO.updating(node, value);
+        }
+    }
+
     @Operation public static final class NewPromptTag {
         @Specialization public static PromptTag create(Object state, @Bind Node node) {
             TupleResultsKt.requireVoidCarrier(state);

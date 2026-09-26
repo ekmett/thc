@@ -126,6 +126,14 @@
         "test/haskell-fixtures/ScalarMemoryUtilitiesFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
+    "ghc-bco": {
+      "junit": ["thc.runtime.GhcBCOTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "ghc-bco"]}],
+      "outputs": ["build/ghc-bco"],
+      "sources": ["examples/GhcBCO.hs", "compiler/test-fixtures/GhcBCONative.hs",
+        "test/haskell-fixtures/GhcBCOFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "delimited-continuations": {
       "junit": ["thc.runtime.DelimitedContinuationsTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "delimited-continuations"]}],

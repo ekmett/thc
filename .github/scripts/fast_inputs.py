@@ -35,12 +35,20 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 # preparers. An additional recorded runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
-MANIFEST_DIRS = """simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
+MANIFEST_DIRS = """ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 thread-status thread-label hint-trace thread-inventory boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
 narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
+BCO_ENTRIES = ("bcoConstant", "bcoApply", "bcoApplyTwo", "bcoFunction", "bcoArithmetic", "bcoBranch", "bcoLargeOperand", "bcoSharing")
+BCO_COMMANDS = ("ghc-version", "native-build", "native-run",
+                *(f"{stage}-export" for stage in ("pre", "post")),
+                *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in BCO_ENTRIES))
+BCO_OUTPUTS = frozenset("build/ghc-bco/" + name for name in (
+    "manifest.json", *(f"{stage}/{suffix}" for stage in ("pre", "post")
+        for suffix in ("core/GhcBCO.json", *(f"{entry}-audit.json" for entry in BCO_ENTRIES))),
+    *(f"commands/{command}.{suffix}" for command in BCO_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 STABLE_NAME_ENTRIES = ("sameLifted", "sameUnlifted", "differentUnlifted", "unevaluatedName")
 STABLE_NAME_COMMANDS = ("ghc-version", "native-build", "native-run",
                        *(f"{stage}-export" for stage in ("pre", "post")),
@@ -1227,6 +1235,20 @@ def stable_name_artifact_hashes(manifest):
     return artifacts
 
 
+def bco_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
+            manifest.get("ghc") == "9.14.1", "Invalid GHC BCO manifest")
+    require(manifest.get("entries") == list(BCO_ENTRIES) and manifest.get("stages") == ["pre", "post"] and
+            manifest.get("arguments") == [-2, 0, 7] and isinstance(manifest.get("native"), list) and
+            len(manifest["native"]) == 24 and all(type(value) is int for value in manifest["native"]),
+            "Invalid GHC BCO provenance")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) == BCO_OUTPUTS - {"build/ghc-bco/manifest.json"},
+            "Incomplete GHC BCO artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid GHC BCO artifact hash")
+    return artifacts
+
+
 def delimited_artifact_hashes(manifest):
     require(type(manifest.get("schema")) is int and manifest["schema"] == 1 and manifest.get("ghc") == "9.14.1",
             "Invalid delimited-continuation manifest")
@@ -1285,6 +1307,8 @@ def allowed_payload(name, pins):
         return name in STABLE_NAME_OUTPUTS
     if parts[1] == "delimited-continuations":
         return name in DELIMITED_OUTPUTS
+    if parts[1] == "ghc-bco":
+        return name in BCO_OUTPUTS
     if parts[1] == "simd-address-families":
         return name in SIMD_ADDRESS_OUTPUTS
     if parts[1] == "bignat-literals":
@@ -1480,6 +1504,8 @@ def inventory(root, current, read, core_files, verified=None):
             scalar_memory_artifact_hashes(doc)
         if name == "build/delimited-continuations/manifest.json":
             delimited_artifact_hashes(doc)
+        if name == "build/ghc-bco/manifest.json":
+            bco_artifact_hashes(doc)
         if name == "build/simd-address-families/manifest.json":
             simd_address_artifact_hashes(doc)
         if name == "build/stable-names/manifest.json":

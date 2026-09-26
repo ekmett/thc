@@ -1023,6 +1023,8 @@
     "readTVarIO#": 2,
     "writeTVar#": 3,
     "newPromptTag#": 1,
+    "newBCO#": 6,
+    "mkApUpd0#": 1,
     "prompt#": 3,
     "control0#": 3,
     "unmaskAsyncExceptions#": 2,
@@ -1693,6 +1695,7 @@
     "subWordC#": 2
   },
   "limitations": [
+    "newBCO# and mkApUpd0# decode and execute a GHC 9.14.1 scalar BCO slice on both backends, with actual lazy pointer references, positive-arity closures/PAPs and zero-arity updating thunks. The ABI uses native-endian Word16 code and 64-bit words, with one physical word per argument. Native calls, info-table/PACK and AP allocation instructions, case-continuation BCOs, packed subword stacks, tuple/vector results, breakpoints and unlisted opcodes reject. Async suspension and delimited capture through the BCO interpreter reject rather than lose saved work. See docs/ghc-bco.md for the exact opcode set and native evidence.",
     "Delimited continuations are an initial synchronous IO slice on both backends: opaque context-owned prompt identities, nearest matching prompts, reusable copied control frames, shared heap effects, escaped resumptions, and captured catch/mask boundaries. Saved function and local-join owners preserve resumed tail/self/join transfers. Overapplication and composition with one-shot asynchronous suspension are not yet established. Capturing through a thunk update rejects. See docs/delimited-continuations.md; this is not a claim of complete control0# support.",
     "STM/TVar primops admit synchronous transactions in both backends with context-owned lazy boxed cells, validated buffered writes, atomic commit, real retry wakeup and nested catch/orElse rollback. Transaction frames reject resumable async/checkpoint modes; GC-driven BlockedIndefinitelyOnSTM detection is unavailable. Empty-read-set retries wait until cancellation/disposal. Nested atomically raises the original implicit GHC exception closure.",
     "All 16 address atomics return old values (including failed CAS), narrow exact widths, require alignment and complete checked ranges, and supply full barriers. Managed byte storage synchronizes owner then backing bytes; pointer CAS/exchange retain managed pointer cells and compare address identity. Numeric atomics reject pointer-cell overlaps. Native-enabled Linux x86_64 owned allocations use real atomics, with exact byte/short C CAS; native pointer values must have real address bits. Freed or foreign owners, unowned numeric dereferences, opaque locations and immutable writes reject.",

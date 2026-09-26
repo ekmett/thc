@@ -112,6 +112,33 @@ class FixturePreparationTest(unittest.TestCase):
         (self.root / 'build/scalar-memory-utilities/native/oracle').write_text('mutated')
         with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
 
+    def test_bco_retain_closed_command_and_native_evidence(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        cache = fast_fixtures.fast_inputs
+        group = manifest['groups']['ghc-bco']
+        self.assertEqual('ghc-bco', owners['thc.runtime.GhcBCOTest'])
+        self.assertIn('examples/GhcBCO.hs', group['sources'])
+        self.assertIn('"$fixture_bin" ghc-bco', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertEqual(82, len(cache.BCO_OUTPUTS))
+        self.assertTrue(cache.BCO_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
+        name = 'build/ghc-bco/manifest.json'
+        artifacts = {}
+        for item in cache.BCO_OUTPUTS - {name}:
+            path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
+        receipt = dict(schema=1, ghc='9.14.1', entries=list(cache.BCO_ENTRIES), stages=['pre', 'post'],
+                       arguments=[-2, 0, 7], native=[0] * 24, artifactHashes=artifacts)
+        (self.root / name).write_text(json.dumps(receipt))
+        self.assertEqual(cache.BCO_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+        for bad in (dict(receipt, schema=True), dict(receipt, ghc='9.12.2'), dict(receipt, entries=[]),
+                    dict(receipt, native=[0] * 23), dict(receipt, native=[False] * 24),
+                    dict(receipt, stages=['pre']), dict(receipt, artifactHashes={})):
+            with self.assertRaises(cache.CacheMiss): cache.bco_artifact_hashes(bad)
+        self.assertFalse(cache.allowed_payload('build/ghc-bco/unknown.json', {}))
+        (self.root / 'build/ghc-bco/commands/native-run.stdout').write_text('mutated')
+        with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+
     def test_delimited_continuations_retain_closed_command_and_native_evidence(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
