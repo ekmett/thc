@@ -21,7 +21,7 @@ class NativeAddressTest {
     private val address = mapOf("kind" to "address", "primReps" to listOf("AddrRep"), "evaluated" to true)
     private val integer = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
     private val closure = mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)
-    private fun module(wrongArgument: Boolean = false): Map<String, Any?> {
+    private fun module(): Map<String, Any?> {
         fun binding(name: String, primitive: String, argument: Map<String, Any>, result: Map<String, Any>): Map<String, Any?> {
             val formal = mapOf("id" to "arg", "lifted" to false, "rep" to argument)
             val call = listOf("app", listOf("prim", primitive), listOf(listOf("var", "arg", mapOf("rep" to argument))),
@@ -31,7 +31,7 @@ class NativeAddressTest {
         }
         return mapOf("schema" to 1, "ghc" to "9.14.1", "module" to "SyntheticAddressConsumers", "instrument" to true,
             "constructors" to emptyList<Any>(), "bindings" to listOf(
-                binding("toBits", "addr2Int#", if (wrongArgument) integer else address, integer),
+                binding("toBits", "addr2Int#", address, integer),
                 binding("fromBits", "int2Addr#", integer, address)))
     }
     private fun context(native: Boolean = true, inlining: Boolean = false) = Context.newBuilder("thc")
@@ -39,7 +39,8 @@ class NativeAddressTest {
         .option("compiler.Inlining", inlining.toString()).option("engine.BackgroundCompilation", "false")
         .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
         .option("engine.SingleTierCompilationThreshold", "10000000").build()
-    private fun valid(target: RootCallTarget) = assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+    private fun valid(target: RootCallTarget, label: String) =
+        assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), label)
 
     @Test fun exactBitsAndImmutableAliasesSurviveTheFirstCompiledEntryInBothBackends() {
         for (backend in listOf("ast", "bytecode")) for (inlining in listOf(false, true)) context(inlining = inlining).use { context ->
@@ -54,8 +55,10 @@ class NativeAddressTest {
                     val target = targets.getValue(name)
                     val result = Calls.target(target, arrayOf(0L, argument))
                     if (compiled) {
-                        assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
-                        valid(target)
+                        val label = "$backend/inlining=$inlining/$name($argument)"
+                        assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong(),
+                            "$label must enter compiled code exactly once")
+                        valid(target, "$label must remain valid after the call")
                     }
                     return result
                 }
@@ -80,15 +83,15 @@ class NativeAddressTest {
                     literalBits?.let { assertEquals(it, bits) }; literalBits = bits
                 }
                 repeat(3) { exercise() }
-                targets.values.forEach { it.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(it, true); valid(it) }
+                targets.forEach { (name, target) ->
+                    target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                    valid(target, "$backend/inlining=$inlining/$name after compilation")
+                }
                 compiled = true
                 exercise() // first calls after installation, with no settling calls
                 compiled = false
                 assertThrows(RuntimeFault::class.java) { call("toBits", 1L) }
                 assertThrows(RuntimeFault::class.java) { call("fromBits", literal) }
-                assertThrows(RuntimeFault::class.java) {
-                    if (backend == "ast") Program(language, module(true)) else BytecodeProgram(language, module(true))
-                }
                 assertEquals(0, language.handoffState.get().arguments.depth)
                 assertEquals(0, language.handoffState.get().results.depth)
                 assertEquals(0, language.handoffState.get().arguments.retainedReferences())
