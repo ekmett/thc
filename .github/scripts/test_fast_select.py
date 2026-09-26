@@ -900,7 +900,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
         self.assertEqual({"AddressIdentity", "AtomicAddresses", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArrays", "ManagedMutVars", "ManagedNativeAllocations", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
-                         "VectorAddresses", "IntegerVectorPrimitives", "FloatingVectorPrimitives", "FloatDecodePrimitives", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopy", "AtomicIntArrays", "ThreadObservation", "ManagedSTM", "STMPrimops", "HintTracePrimops"},
+                         "VectorAddresses", "VectorIntegerDivision", "IntegerVectorPrimitives", "FloatingVectorPrimitives", "FloatDecodePrimitives", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopy", "AtomicIntArrays", "ThreadObservation", "ManagedSTM", "STMPrimops", "HintTracePrimops"},
                          {Path(path).stem for path in self.families})
         for path, group in self.families.items():
             with self.subTest(path=path):
@@ -1124,11 +1124,11 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                 "SimdWord32VectorTest", "SimdWord32ByteArrayTest", "Word32VectorMemoryProofTest",
                 "Word32VectorStorageTest", "Simd128ArrayNativeTest", "Simd128ArrayProofTest",
                 "SimdWideArrayNativeTest", "SimdWideArrayProofTest",
-                "Simd128AddressNativeTest", "Simd128AddressTest"],
+                "Simd128AddressNativeTest", "Simd128AddressTest", "SimdArithmeticTest"],
             "FloatingVectorPrimitives": ["SimdFloatVectorTest", "SimdFloatFmaTest", "SimdWideFloatFmaTest", "SimdFloatByteArrayTest",
                 "FloatVectorMemoryProofTest", "FloatVectorStorageTest", "SimdDoubleVectorTest",
                 "SimdDoubleByteArrayTest", "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest",
-                "SimdWideArrayNativeTest", "SimdWideArrayProofTest"],
+                "SimdWideArrayNativeTest", "SimdWideArrayProofTest", "SimdArithmeticTest"],
         }
         python = {
             "IntegerVectorPrimitives": ["core-vector-memory", "core-vectors", "core-word32-vector-memory",

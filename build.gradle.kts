@@ -260,6 +260,8 @@ tasks.withType<Test>().configureEach {
             "simd-wide-arrays/*-audit.json", "simd-wide-arrays/native/oracle", "simd-wide-arrays/commands/*",
             "simd128-addresses/manifest.json", "simd128-addresses/*.tsv", "simd128-addresses/*-core/*.json",
             "simd128-addresses/*-audit.json", "simd128-addresses/native/oracle", "simd128-addresses/commands/*",
+            "simd-arithmetic/manifest.json", "simd-arithmetic/*.tsv", "simd-arithmetic/pre-core/*.json",
+            "simd-arithmetic/*-audit.json", "simd-arithmetic/native/oracle", "simd-arithmetic/commands/*", "simd-arithmetic/sources/*.hs",
             "simd128-arrays/manifest.json", "simd128-arrays/*.tsv", "simd128-arrays/*-core/*.json",
             "simd-address-families/manifest.json", "simd-address-families/*.tsv", "simd-address-families/source/*.hs",
             "simd-address-families/*-core/*.json", "simd-address-families/*-audit.json", "simd-address-families/commands/*",
