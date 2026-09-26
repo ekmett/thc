@@ -14,6 +14,11 @@ foreign import ccall unsafe "stg_sig_install"
 -- Normalize to DFL for the comparison and restore that actual prior action.
 -- No OS signal is delivered by this oracle.
 main :: IO ()
-main = bracket (install 2 (-1) nullPtr) (\old -> install 2 old nullPtr >> pure ()) $ \_ -> do
-  previous <- mapM (\action -> install 2 action nullPtr) [-2, -4, -5, -1]
-  print (map fromIntegral previous :: [Int])
+main = do
+  rows <- mapM check [1, 2, 3, 15]
+  print rows
+  where
+    check signal = bracket (install signal (-1) nullPtr)
+      (\old -> install signal old nullPtr >> pure ()) $ \_ -> do
+        previous <- mapM (\action -> install signal action nullPtr) [-2, -4, -5, -1]
+        pure (fromIntegral signal :: Int, map fromIntegral previous :: [Int])
