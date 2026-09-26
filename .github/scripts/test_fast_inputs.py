@@ -22,7 +22,7 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 class FastInputTests(unittest.TestCase):
     def test_thread_inventory_exact_closed_archive_roundtrip_and_missing_member(self):
-        self.assertEqual(12, len(cache.THREAD_INVENTORY_OUTPUTS))
+        self.assertEqual(20, len(cache.THREAD_INVENTORY_OUTPUTS))
         self.assertIn('build/thread-inventory/manifest.json', DECLARED_REQUIRED)
         for path in cache.THREAD_INVENTORY_OUTPUTS:
             self.assertTrue(cache.allowed_payload(path, {}), path)

@@ -22,11 +22,22 @@ boxing them. Array allocation/writes retain their existing lifted-element gate.
 ## Example and evidence
 
 [ThreadInventory.hs](../examples/ThreadInventory.hs) finds the current thread in
-a snapshot using identity, and observes its boundness. Its bytecode-only
+a snapshot using identity, and observes its boundness. Its
 `forkSnapshot` example uses real `fork#`/MVar coordination to acquire a snapshot
 containing a live child and retain that snapshot across its completion signal.
-Only the existing `fork#` admission is bytecode-only; the new observations and
-concurrent host-entry tests run on both backends.
+The fork, observations, and concurrent host-entry tests run on both backends.
+The same example checks lazy action-head evaluation in the child, discarding an
+unforced result, inherited masking, and uncaught self-directed child death.
+`parkedFork` deliberately leaves a child blocked for embedding shutdown tests;
+it is not a standalone program that completes all its child work.
+
+Ordinary AST forks do not receive external `killThread#`: their general bodies
+cannot capture resumable continuations. The registry rejects such a send before
+enqueueing or waking the child, including across nested guest entries. Self
+delivery still reaches the original handler or terminates the child as `DIED`.
+Bytecode forks retain their existing captured async delivery. Both kinds are
+real Truffle-managed threads cancelled by `Context.close(true)`; context-wide
+cancellation does not imply that a shared AST thunk can later be resumed.
 
 ```sh
 cabal run exe:thc-fixtures --offline -- thread-inventory

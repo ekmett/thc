@@ -1477,7 +1477,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                             tuple: TupleShape? = null,
                             tupleSlots: IntArray = intArrayOf(),
                             inputLayout: ArgumentLayout? = null,
-                            private val enableAsync: Boolean = false,
+                            internal val enableAsync: Boolean = false,
                             @field:CompilationFinal(dimensions = 2) private val environmentVectorSlots: Array<IntArray?> = emptyArray()) : GuestRoot(language, descriptor) {
     init { configureEntry(entryStrict, captureLayout != null); configureInput(inputLayout); configureTupleResult(tuple) }
     @field:CompilationFinal(dimensions = 1)
@@ -2341,12 +2341,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val payload = globals[CoreFileWait.badFd]
                     ?: throw UnsupportedCore("$name requires original blockedOnBadFD payload")
                 WaitFileDescriptor(operands[0], operands[1], payload, name == "waitWrite#", enableAsync, tupleProof)
-            } else if (fn[0] == "prim" && fn[1] in listOf("myThreadId#", "threadStatus#", "killThread#", "labelThread#", "threadLabel#")) {
+            } else if (fn[0] == "prim" && fn[1] in listOf("fork#", "myThreadId#", "threadStatus#", "killThread#", "labelThread#", "threadLabel#")) {
                 val name = fn[1] as String
                 CoreGuestThreads.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
                 CoreGuestThreads.validate(name, operands.map { it.representation }, flags, tupleProof)
                 when (name) {
+                    "fork#" -> ForkThread(operands[0], operands[1], tupleProof)
                     "myThreadId#" -> MyThreadId(operands[0], tupleProof)
                     "threadStatus#" -> ThreadStatus(operands[0], operands[1], tupleProof)
                     "threadLabel#" -> ThreadLabel(operands[0], operands[1], tupleProof)

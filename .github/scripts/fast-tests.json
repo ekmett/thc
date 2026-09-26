@@ -253,6 +253,9 @@
     }
   },
   "owners": {
+    "src/test/kotlin/thc/runtime/ThreadInventoryCoreEvidence.kt": {
+      "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
+    },
     "examples/ThreadInventory.hs": {
       "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
     },
@@ -788,6 +791,7 @@
     },
     "src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt": {
       "junit": [
+        "thc.runtime.ThreadInventoryNativeTest",
         "thc.runtime.BoxedArrayExtensionsTest",
         "thc.runtime.ArrayCoreEvidenceTest",
         "thc.runtime.IntArrayNativeTest",

@@ -61,7 +61,6 @@ class ThreadLabelNativeTest {
             File(directory, "oracle.txt").readLines())
         for (stage in listOf("pre", "post")) for (backend in listOf("ast", "bytecode"))
             for (entry in cases) {
-                if (backend == "ast" && entry.startsWith("dead")) continue // fork# is bytecode-only.
                 Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true)
                     .option("compiler.Inlining", "false")
                     .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")

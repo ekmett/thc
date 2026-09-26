@@ -69,6 +69,18 @@ internal object CoreGuestThreads {
 
 internal data class GuestThreadSnapshot(val status: Long, val capability: Long, val locked: Long)
 
+internal class ForkThread(@field:Child private var action: Expr, @field:Child private var state: Expr,
+                          proof: CoreRepresentation) : Expr() {
+    init { representation = proof.copy(evaluated = true) }
+    override fun execute(frame: VirtualFrame): Nothing = fault("fork# requires a tuple destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val child = action.execute(frame) // Do not force the lifted action on its parent.
+        requireVoidCarrier(state.execute(frame))
+        FrameAccess.write(frame, slots[offset], GuestThreadOps.fork(this, child, false))
+        return null
+    }
+}
+
 internal class MyThreadId(@field:Child private var state: Expr, proof: CoreRepresentation) : Expr() {
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("myThreadId# requires a tuple destination")
@@ -204,9 +216,10 @@ private class ForkDestination(shape: TupleShape, private val language: Language)
 }
 
 /** One child entry owns its dispatch tree; no caller frame or handoff loan crosses threads. */
-private class ForkActionRoot(private val language: Language, initialShape: TupleShape?) :
+private class ForkActionRoot(private val language: Language, initialShape: TupleShape?,
+                             private val asyncEnabled: Boolean) :
     RootNode(language, FrameLayout().build()) {
-    @Child private var force = Force(Metrics(false), true)
+    @Child private var force = Force(Metrics(false), asyncEnabled)
     @Child private var dispatch: TupleDispatch? = initialShape?.let {
         TupleDispatch(ForkDestination(it, language), Metrics(false), 1, false)
     }
@@ -225,7 +238,7 @@ private class ForkActionRoot(private val language: Language, initialShape: Tuple
             // It does not own the thunk or a continuation to resume.
             throw UncaughtForkAsync(blocked.request)
         }
-        val shape = GuestThreadOps.actionResult(action)
+        val shape = GuestThreadOps.actionResult(action, asyncEnabled)
         val callee = dispatch ?: insert(TupleDispatch(ForkDestination(shape, language), Metrics(false), 1, false))
             .also { dispatch = it }
         callee.execute(frame, action, arrayOf(Unit))
@@ -236,10 +249,14 @@ private class ForkActionRoot(private val language: Language, initialShape: Tuple
 
 internal object GuestThreadOps {
     private val lifted = listOf("BoxedRep (Just Lifted)")
-    internal fun actionResult(action: Closure): TupleShape {
-        val root = action.target.rootNode as? BytecodeRoot
-            ?: fault("fork# requires an async-capable bytecode action")
-        if (!root.isAsyncEnabled) fault("fork# action has no async continuation capture")
+    internal fun actionResult(action: Closure, asyncEnabled: Boolean): TupleShape {
+        val root = action.target.rootNode as? GuestRoot ?: fault("fork# requires a guest action")
+        if (asyncEnabled) {
+            if (root !is BytecodeRoot || !root.isAsyncEnabled)
+                fault("fork# bytecode action has no async continuation capture")
+        } else if (root !is FunctionRoot || root.enableAsync) {
+            throw UnsupportedCore("fork# AST action must use ordinary nonresumable AST execution")
+        }
         val shape = root.tupleResult ?: fault("fork# action has no tuple result proof")
         val fields = shape.proof.components
         if (fields?.size != 2 || fields[0].kind != CoreKind.VOID ||
@@ -271,18 +288,18 @@ internal object GuestThreadOps {
     }
 
     /** Start a real Truffle thread and wait only until its guest registration is visible. */
-    @JvmStatic @TruffleBoundary fun fork(node: Node, action: Any?): GuestThreadId {
+    @JvmStatic @TruffleBoundary fun fork(node: Node, action: Any?, asyncEnabled: Boolean): GuestThreadId {
         val state = Language.currentState(node)
         val threads = state.threads
         // A known closure retains immediate contract validation. A lazy action
         // must be forced after the child enters its own guest thread instead.
         val shape = when (action) {
-            is Closure -> actionResult(action)
+            is Closure -> actionResult(action, asyncEnabled)
             is Thunk -> null
             else -> fault("fork# requires a lazy state-transformer action")
         }
         val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(node)
-        val root = ForkActionRoot(language, shape).callTarget
+        val root = ForkActionRoot(language, shape, asyncEnabled).callTarget
         val inheritedMask = state.maskingState.get()
         val ready = CountDownLatch(1)
         val registrationFailure = AtomicReference<Throwable?>()
@@ -291,7 +308,7 @@ internal object GuestThreadOps {
             var registered = false
             var outcome = GuestThreadStatus.FINISHED
             try {
-                threads.enterCurrent(inheritedMask, forked = true)
+                threads.enterCurrent(inheritedMask, forked = true, externalAsync = asyncEnabled)
                 registered = true
                 identity.set(threads.currentIdentity())
                 ready.countDown()
@@ -299,6 +316,11 @@ internal object GuestThreadOps {
             } catch (uncaught: UncaughtForkAsync) {
                 // No catch# accepted the payload. The child terminates, so the
                 // sender may complete without treating a control yield as a tuple.
+                outcome = GuestThreadStatus.DIED
+                uncaught.request.acknowledge()
+            } catch (uncaught: AsyncDelivery) {
+                // Ordinary AST self-throw has no continuation to resume. It is
+                // nevertheless a guest death, not a runtime protocol failure.
                 outcome = GuestThreadStatus.DIED
                 uncaught.request.acknowledge()
             } catch (failure: Throwable) {

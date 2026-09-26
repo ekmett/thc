@@ -20,6 +20,47 @@ import java.util.concurrent.atomic.AtomicReference
 class GuestThreadsTest {
     private val node = object : Node() {}
 
+    @Test fun nonresumableForkRejectsExternalSendBeforeWakeButAllowsSelfAndDeadTargets() {
+        val masks = ThreadLocal.withInitial { MaskingState.UNMASKED }
+        val wakes = AtomicInteger()
+        val threads = GuestThreads(masks) { wakes.incrementAndGet() }
+        val ready = CountDownLatch(1)
+        val finish = CountDownLatch(1)
+        val identity = AtomicReference<GuestThreadId>()
+        val failure = AtomicReference<Throwable>()
+        val worker = Thread {
+            threads.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, forked = true, externalAsync = false)
+            try {
+                val self = threads.currentIdentity()
+                identity.set(self)
+                threads.enterCurrent() // Default arguments cannot upgrade this lifetime.
+                try {
+                    ready.countDown()
+                    assertTrue(finish.await(5, TimeUnit.SECONDS))
+                    assertNull(threads.poll(node, true), "Rejected external sends never enter the queue")
+                    val sent = threads.send(self, "self")
+                    assertTrue(sent.forceSelf)
+                    assertSame(sent, threads.poll(node))
+                    sent.acknowledge()
+                    assertEquals(AsyncRequestState.ACKNOWLEDGED, sent.state)
+                } finally { threads.leaveCurrent() }
+            } catch (error: Throwable) { failure.set(error); ready.countDown() }
+            finally { threads.leaveCurrent() }
+        }
+        worker.start()
+        try {
+            assertTrue(ready.await(5, TimeUnit.SECONDS))
+            failure.get()?.let { throw AssertionError("fork worker failed", it) }
+            repeat(3) { assertThrows(UnsupportedCore::class.java) { threads.send(identity.get(), "external") } }
+            assertEquals(0, wakes.get())
+        } finally { finish.countDown(); worker.join(5000) }
+        assertFalse(worker.isAlive)
+        failure.get()?.let { throw AssertionError("fork worker failed", it) }
+        assertEquals(AsyncRequestState.TARGET_FINISHED, threads.send(identity.get(), "late").state)
+        assertEquals(0, wakes.get())
+        threads.close()
+    }
+
     @Test fun javaThreadIdAndMaskingGateQueuedDelivery() {
         val masks = ThreadLocal.withInitial { MaskingState.UNMASKED }
         val wakes = AtomicInteger()

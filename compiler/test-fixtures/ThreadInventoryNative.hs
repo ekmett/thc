@@ -16,9 +16,10 @@ main = do
   _ <- forkIO $ do
     results <- try $ mapM evaluate
       [I# (Audit.selfInventory 0#), I# (Audit.boundQuery 0#),
-       I# (Audit.forkSnapshot 0#), if I# (Audit.snapshotSize 0#) >= 1 then 1 else 0]
+       I# (Audit.forkSnapshot 0#), if I# (Audit.snapshotSize 0#) >= 1 then 1 else 0,
+       I# (Audit.lazyFork 0#), I# (Audit.forkMasks 0#), I# (Audit.selfKilledStatus 0#), I# (Audit.parkedFork 0#)]
     putMVar done (results :: Either SomeException [Int])
   result <- takeMVar done
   case result of
-    Right [10, 0, 111, 1] -> mapM_ print [10, 0, 111, 1 :: Int]
+    Right [10, 0, 111, 1, 42, 210, 17, 1] -> mapM_ print [10, 0, 111, 1, 42, 210, 17, 1 :: Int]
     _ -> error ("thread inventory contract disagreed: " ++ show result)

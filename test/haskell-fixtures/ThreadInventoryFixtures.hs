@@ -21,7 +21,7 @@ prepareThreadInventory root = do
       manifest = output </> "manifest.json"
       source = "examples/ThreadInventory.hs"
       driver = "compiler/test-fixtures/ThreadInventoryNative.hs"
-      entries = ["selfInventory", "boundQuery", "snapshotSize", "forkSnapshot"]
+      entries = ["selfInventory", "boundQuery", "snapshotSize", "forkSnapshot", "lazyFork", "forkMasks", "selfKilledStatus", "parkedFork"]
       stages = ["pre", "post"]
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
@@ -50,7 +50,7 @@ prepareThreadInventory root = do
     "-i" ++ (root </> "examples"), "-odir", native, "-hidir", native,
     root </> driver, "-o", native </> "oracle"] ""
   observations <- runWithTimeout (Just 30000000) root [] (native </> "oracle") ["+RTS", "-N2", "-RTS"] ""
-  unless (observations == "10\n0\n111\n1\n") (die "Native thread inventory disagreed")
+  unless (observations == "10\n0\n111\n1\n42\n210\n17\n1\n") (die "Native thread inventory disagreed")
   writeFile (output </> "oracle.txt") observations
   pluginFiles <- listDirectory (root </> "compiler/THC")
   coreScripts <- listDirectory (root </> "scripts")
@@ -66,7 +66,7 @@ prepareThreadInventory root = do
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
-    "entries" .= entries, "stages" .= stages, "native" .= ([10, 0, 111, 1] :: [Int]),
+    "entries" .= entries, "stages" .= stages, "native" .= ([10, 0, 111, 1, 42, 210, 17, 1] :: [Int]),
     "nativeThread" .= ("unbound forkIO, threaded RTS -N2" :: String),
     "inputHashes" .= sourceHashes, "artifactHashes" .= artifactHashes]
   putStrLn "thread-inventory: native unbound/self/live-child snapshots, strict pre/post Core"

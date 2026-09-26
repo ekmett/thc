@@ -68,7 +68,7 @@ internal class GuestThreads internal constructor(
         }
     )
 
-    private class GuestThread(val thread: Thread, val identity: GuestThreadId) {
+    private class GuestThread(val thread: Thread, val identity: GuestThreadId, val externalAsync: Boolean) {
         val entriesPrevious = ArrayDeque<GuestEntry>()
         val queue = ArrayDeque<AsyncRequest>()
         var claimed: AsyncRequest? = null
@@ -150,7 +150,8 @@ internal class GuestThreads internal constructor(
         return state.permission == DeliveryPermission.GUEST && (foreignExtents.get() ?: 0) > 0
     }
 
-    @TruffleBoundary @Synchronized fun enterCurrent(inheritedMask: MaskingState? = null, forked: Boolean = false): Long {
+    @TruffleBoundary @Synchronized fun enterCurrent(inheritedMask: MaskingState? = null, forked: Boolean = false,
+                                                   externalAsync: Boolean = true): Long {
         check(!closed) { "Guest context has closed" }
         val current = Thread.currentThread()
         val id = current.threadId()
@@ -161,7 +162,8 @@ internal class GuestThreads internal constructor(
             GuestThreadId(id, this, allocatedCapabilities++, current, forked).also { knownThreads[it] = Unit }
         }
         check(!identity.status.terminal) { "Terminated guest Java thread re-entered" }
-        val slot = prior ?: GuestThread(current, identity).also { threads[id] = it }
+        // Re-entry cannot turn a nonresumable fork into an async receiver.
+        val slot = prior ?: GuestThread(current, identity, externalAsync).also { threads[id] = it }
         slot.entriesPrevious.addLast(GuestEntry(activeIdentity.get(), slot.identity.status))
         slot.identity.status = GuestThreadStatus.RUNNING
         activeIdentity.set(slot.identity)
@@ -247,6 +249,8 @@ internal class GuestThreads internal constructor(
                     it.transition(AsyncRequestState.TARGET_FINISHED)
                 }
             val self = target.thread === Thread.currentThread()
+            if (!self && !target.externalAsync)
+                throw UnsupportedCore("External killThread# to a nonresumable AST fork is unsupported")
             AsyncRequest(this, targetId, target.thread, payload, self).also {
                 if (self) target.queue.addFirst(it) else target.queue.addLast(it)
                 target.pending = target.claimed == null
