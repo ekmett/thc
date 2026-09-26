@@ -81,6 +81,7 @@ prepareStablePtrFFI root = do
     unless (actual == expected) (die "stableptr-ffi: acquired bundle hash differs")
   inputs <- hashes root $ [fixture </> source | source <- sources] ++
     ["test/haskell-fixtures/StablePtrFFIFixtures.hs","src/THC/Driver/PackageNative.hs",
+     "src/THC/Driver/NativeArgumentBridge.hs",
      "src/main/kotlin/thc/runtime/StablePointers.kt","src/main/kotlin/thc/runtime/PackageScalarAccess.kt"]
   artifacts <- hashes root $ [directory </> "packages.json",directory </> "audit.json",projectFile,packageFile] ++
     [project </> source | source <- sources] ++ concatMap commandArtifacts [built,located,managed,native]

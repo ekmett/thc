@@ -183,6 +183,7 @@ preparePackageNativeOriginals root = do
     "compiler/test-fixtures/OriginalPrimitiveEntry.hs",
     "compiler/test-fixtures/OriginalErfNative.hs","compiler/test-fixtures/OriginalErfEntry.hs",
     "test/haskell-fixtures/PackageNativeOriginalsFixtures.hs","src/THC/Driver/PackageNative.hs",
+    "src/THC/Driver/NativeArgumentBridge.hs",
     "src/THC/Driver/NativeLibrarySources.hs","src/THC/Driver/GhcProxy.hs",
     "scripts/audit-core.py","scripts/core_package_manifest.py","scripts/core-capabilities.json"]
   artifacts <- hashes root ([relative </> "digest-native.tsv",relative </> "erf-native.tsv",relative </> "primitive-native.tsv",

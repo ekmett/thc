@@ -82,7 +82,8 @@ prepareWcwidth root = do
     ["scripts/audit-core.py","--entry",unit ++ ":Width." ++ entry,
      "--output",output </> entry <.> "json",output </> "Width.json"]
   inputs <- hashes root ([fixture </> name | name <- ["cabal.project","wcwidth-ffi.cabal","src/Width.hs","app/Main.hs"]] ++
-    ["test/haskell-fixtures/WcwidthFixtures.hs","src/THC/Driver/PackageNative.hs","src/THC/Driver/NativeLibrarySources.hs",
+    ["test/haskell-fixtures/WcwidthFixtures.hs","src/THC/Driver/PackageNative.hs",
+     "src/THC/Driver/NativeArgumentBridge.hs","src/THC/Driver/NativeLibrarySources.hs",
      "compiler/THC/ForeignImportProvenance.hs","scripts/audit-core.py","scripts/core_package_manifest.py"])
   artifacts <- hashes root ([relative </> name | name <-
     ["Width.json","rawWidth.json","displayWidth.json","C.tsv","C.UTF-8.tsv","ConsoleReporter.hs","TASTY-LICENSE"]] ++

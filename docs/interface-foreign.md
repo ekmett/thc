@@ -101,8 +101,16 @@ prototype. Both translation units and their real header dependencies contribute
 to the native component identity. The mixed-header fixture compares an existing
 managed buffer passed as an opaque struct pointer and 8/32-bit argument-boundary
 behavior against native GHC with exact-width Haskell arguments. The retained
-machine-word caller variant also succeeds natively, but currently fails in
-Sulong when an i64 caller enters an i8/i32 C definition. A separate control retains the current rejection
+machine-word caller variant uses an explicit x86_64 Linux argument bridge when
+the verified LLVM caller and actual C definition establish ordinary C integer
+register slots. The bridge truncates i64/i32 arguments to the definition's
+i8/i16/i32 width and preserves its sign/zero-extension attributes. Original
+Haskell import metadata remains unchanged. The native GHC oracle includes
+negative and high-bit values, including signed/unsigned 16-bit parameters.
+The original LLVM definition lines, bridge source/hash and linked input hash
+are retained in build inputs. No return conversion, pointer conversion,
+variadic or non-C convention adaptation is inferred. Unrecognized signatures
+keep the original adapter. A separate control retains the current rejection
 when an unowned static C pointer is returned and passed into another call; TU
 separation does not grant byte ownership to that numeric address.
 
