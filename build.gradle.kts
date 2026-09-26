@@ -101,10 +101,16 @@ require(compactObjectHeaders == "true" || compactObjectHeaders == "false") { "th
 val compactHeaderOption = "-XX:${if (compactObjectHeaders == "true") "+" else "-"}UseCompactObjectHeaders"
 application {
     mainClass.set("thc.MainKt")
-    applicationDefaultJvmArgs = listOf("--add-modules=jdk.incubator.vector", "--enable-native-access=ALL-UNNAMED", "-Xss2m", compactHeaderOption)
+    applicationDefaultJvmArgs = listOf("--add-modules=jdk.incubator.vector", "--enable-native-access=ALL-UNNAMED", "-Xss2m", compactHeaderOption) +
+        // The Linux standalone guest owns GHC's INT/QUIT/HUP/TERM handlers.
+        // Embedders do not inherit these launcher JVM arguments.
+        if (System.getProperty("os.name") == "Linux") listOf("-Xrs") else emptyList()
 }
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    // Isolated native-signal controls need a child JVM with the actual test
+    // classpath; modern Gradle workers need not use URLClassLoader.
+    doFirst { systemProperty("thc.testRuntimeClasspath", classpath.asPath) }
     // Exported Core and native expectations are test inputs even when JVM sources
     // are unchanged. Source inputs also make stale corpus fingerprints observable.
     inputs.files(fileTree(layout.buildDirectory) {
