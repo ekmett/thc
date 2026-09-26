@@ -4,7 +4,7 @@
 package thc.runtime
 
 internal const val GMP_ARRAY_REP = "BoxedRep (Just Unlifted)"
-internal enum class GmpForm { BINARY, WORD, COMPARE, DIVIDE_WORD, MODULO_WORD, DIVIDE }
+internal enum class GmpForm { BINARY, WORD, COMPARE, DIVIDE_WORD, MODULO_WORD, DIVIDE, ENCODE_DOUBLE, GET_DOUBLE }
 
 /** Actual primitive FCallId ABIs, including State on the source-pure imports. */
 internal enum class GmpForeignOp(val symbol: String, val form: GmpForm,
@@ -30,7 +30,15 @@ internal enum class GmpForeignOp(val symbol: String, val form: GmpForm,
     QUOTIENT("integer_gmp_mpn_tdiv_q", GmpForm.BINARY,
         listOf(GMP_ARRAY_REP, GMP_ARRAY_REP, "IntRep", GMP_ARRAY_REP, "IntRep", null), null),
     REMAINDER("integer_gmp_mpn_tdiv_r", GmpForm.BINARY,
-        listOf(GMP_ARRAY_REP, GMP_ARRAY_REP, "IntRep", GMP_ARRAY_REP, "IntRep", null), null);
+        listOf(GMP_ARRAY_REP, GMP_ARRAY_REP, "IntRep", GMP_ARRAY_REP, "IntRep", null), null),
+    SHIFT_RIGHT("integer_gmp_mpn_rshift", GmpForm.WORD,
+        listOf(GMP_ARRAY_REP, GMP_ARRAY_REP, "IntRep", "WordRep", null), "WordRep"),
+    SHIFT_RIGHT_NEGATIVE("integer_gmp_mpn_rshift_2c", GmpForm.WORD,
+        listOf(GMP_ARRAY_REP, GMP_ARRAY_REP, "IntRep", "WordRep", null), "WordRep"),
+    GET_DOUBLE("integer_gmp_mpn_get_d", GmpForm.GET_DOUBLE,
+        listOf(GMP_ARRAY_REP, "IntRep", "IntRep", null), "DoubleRep"),
+    ENCODE_DOUBLE("__int_encodeDouble", GmpForm.ENCODE_DOUBLE,
+        listOf("IntRep", "IntRep", null), "DoubleRep");
 
     val objectIndices = arguments.indices.filter { arguments[it] == GMP_ARRAY_REP }
     val longIndices = arguments.indices.filter { arguments[it] in listOf("IntRep", "WordRep") }
@@ -46,7 +54,7 @@ internal object CoreGmpForeign {
     private fun exactInteger(value: Any?, expected: Int): Boolean =
         (value is Int || value is Long) && (value as Number).toLong() == expected.toLong()
     private fun kind(primitive: String?): CoreKind = when (primitive) {
-        null -> CoreKind.VOID; GMP_ARRAY_REP -> CoreKind.OBJECT; else -> CoreKind.LONG
+        null -> CoreKind.VOID; GMP_ARRAY_REP -> CoreKind.OBJECT; "DoubleRep" -> CoreKind.DOUBLE; else -> CoreKind.LONG
     }
     private fun scalar(raw: Any?, primitive: String?, declared: Boolean = false): Boolean {
         val value = raw as? Map<*, *> ?: return false

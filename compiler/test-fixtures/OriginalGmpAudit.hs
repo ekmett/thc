@@ -6,6 +6,7 @@ module OriginalGmpAudit where
 import GHC.Exts
 import GHC.IO (IO(..))
 import qualified GHC.Internal.Bignum.Backend.GMP as G
+import qualified GHC.Internal.Bignum.Primitives as P
 
 -- These calls import the installed original declarations. No replacement FFI
 -- or reconstructed foreign Id is used. runRW# supplies the original State
@@ -62,3 +63,17 @@ originalRem :: MutableByteArray# RealWorld -> ByteArray# -> Int# -> ByteArray# -
   -> Int#
 originalRem remainder numerator nn divisor dn = runRW# (\state -> case G.c_mpn_tdiv_r remainder numerator nn divisor dn of
   IO action -> case action state of (# _, () #) -> 0#)
+
+originalRShift :: MutableByteArray# RealWorld -> ByteArray# -> Int# -> Word# -> Word#
+originalRShift out input count shift = runRW# (\state -> case G.c_mpn_rshift out input count shift of
+  IO action -> case action state of (# _, W# value #) -> value)
+
+originalRShiftNegative :: MutableByteArray# RealWorld -> ByteArray# -> Int# -> Word# -> Word#
+originalRShiftNegative out input count shift = runRW# (\state -> case G.c_mpn_rshift_2c out input count shift of
+  IO action -> case action state of (# _, W# value #) -> value)
+
+originalGetDouble :: ByteArray# -> Int# -> Int# -> Double#
+originalGetDouble = G.c_mpn_get_d
+
+originalEncodeDouble :: Int# -> Int# -> Double#
+originalEncodeDouble = P.intEncodeDouble#

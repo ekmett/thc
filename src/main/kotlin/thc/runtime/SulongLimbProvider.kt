@@ -35,6 +35,8 @@ internal class SulongLimbProvider(env: TruffleLanguage.Env) : LimbProvider {
     private val divide = member("divide")
     private val quotient = member("quotient")
     private val remainder = member("remainder")
+    private val shiftRight = member("shift_right")
+    private val getDouble = member("get_double")
     private fun member(name: String): Any = interop.readMember(library, "thc_gmp_$name")
 
     // Native transport belongs to this provider, not to the shared limb-region
@@ -147,6 +149,23 @@ internal class SulongLimbProvider(env: TruffleLanguage.Env) : LimbProvider {
         nonzero(divisor)
         return owned(input) { scope -> interop.asLong(interop.execute(moduloWord, input.snapshot(scope), input.limbs, divisor)) }
     }
+    @TruffleBoundary override fun shiftRight(output: LimbRegion, input: LimbRegion, count: Long, negative: Boolean): Long {
+        input.requirePositive()
+        if (count <= 0 || count >= input.limbs * 64) fault("Limb right shift must be inside the input width")
+        output.requireOutput(input.limbs - (if (negative) count - 1 else count) / 64)
+        // The source wrappers permit disjoint output or an exact-start shift.
+        exactAlias(output, input)
+        return owned(output, input) { scope ->
+            val source = input.snapshot(scope); val destination = output.destination(scope)
+            val result = interop.asLong(interop.execute(shiftRight, destination, source,
+                input.limbs, count, if (negative) 1 else 0))
+            output.copyFrom(destination)
+            result
+        }
+    }
+    @TruffleBoundary override fun toDouble(input: LimbRegion, negative: Boolean, exponent: Long): Double =
+        owned(input) { scope -> interop.asDouble(interop.execute(getDouble, input.snapshot(scope),
+            if (negative) -input.limbs else input.limbs, exponent)) }
     private fun divisionInputs(numerator: LimbRegion, divisor: LimbRegion) {
         ordered(numerator, divisor)
         disjoint(numerator, divisor)

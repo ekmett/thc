@@ -1,7 +1,8 @@
 # Checked native GMP limb provider
 
-This implements eleven exact original GHC foreign calls through a checked
-native provider on Linux x86_64. Genuine pre/post Core calls match a native GHC
+This implements fifteen exact original GHC foreign calls: fourteen through a
+checked native provider on Linux x86_64, plus the original RTS scalar
+`__int_encodeDouble` translated directly to JVM scaling. Genuine pre/post Core calls match a native GHC
 oracle in interpreted and first-installed compiled AST/bytecode execution,
 with inlining both enabled and disabled. No whole hello or lens load is
 established by these bounded tests.
@@ -18,6 +19,32 @@ platforms are rejected by the provider before loading native code. The ordinary
 MD5 build remains present on its previously supported platforms.
 
 ## Contracts
+
+The extended original-call fixture has 296 native observations and fifteen
+genuine imported declarations. It adds `integer_gmp_mpn_rshift`,
+`integer_gmp_mpn_rshift_2c`, `integer_gmp_mpn_get_d` and `__int_encodeDouble`.
+Both backends retain typed Double result slots; no boxed numeric result packet
+or Java `BigInteger` conversion is introduced. Both handoff modes check every
+original entry before and on the first call after explicit compilation.
+
+Right shifts require `0 < count < inputLimbs * 64`. The ordinary destination has
+`inputLimbs - count / 64` limbs; the negative-magnitude version has
+`inputLimbs - (count - 1) / 64` limbs and rounds discarded nonzero bits upward
+to implement arithmetic shifting of a negative integer. Both return the top
+stored limb, not the shifted-out bits. Invalid capacities and partial overlaps
+reject before stores. Exact-start aliases, whole-limb boundaries and the extra
+negative carry limb are tested, including native-pinned storage without a copy.
+
+The original `get_d` conversion uses native GMP's truncation toward zero and
+retains the wrapper's signed limb count, zero handling and C-int `ldexp`
+exponent boundary. `__int_encodeDouble` clamps the exponent to C int, scales
+with `Math.scalb`, and preserves the pinned RTS's wrapped machine-absolute-value
+and subsequent sign restoration. In particular, `minBound :: Int` produces the
+same positive result/sign as that original RTS wrapper, including underflow;
+the native oracle records this edge case rather than substituting mathematical
+signed conversion. These are original FFI contracts, not new primops.
+
+The baseline eleven-call contracts and their initial evidence follow.
 
 The eleven adapter entry points correspond to the nine native GMP operations
 and two GHC quotient/remainder wrappers reached by the current hello closure.
@@ -52,7 +79,9 @@ return-register bits on other targets.
 
 Every region, output capacity, mutability and alias contract is checked before
 the native call. Pointer-bearing managed storage is rejected. Inputs are copied
-into native snapshots before any output store. The divisor normalization check
+into native snapshots before any output store, unless the region is already
+native-pinned: such regions borrow their existing address for the call and do
+not allocate a second data buffer. The divisor normalization check
 uses that actual snapshot, so subsequent guest mutation cannot supply a zero
 divisor to the native routine. Copies recheck logical allocation size under the
 allocation-owner monitor; concurrent guest data races are not made transactional.
