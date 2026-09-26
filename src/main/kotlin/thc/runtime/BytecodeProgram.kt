@@ -1720,7 +1720,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         val local = b.createLocal("Package C operand $index", null)
                         b.beginStoreLocal(local)
                         when (packageScalar.arguments.getOrNull(index)) {
-                            "Int32Rep", "Int64Rep" -> { b.beginToLong(); operand.emit(e); b.endToLong() }
+                            "IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep" ->
+                                { b.beginToLong(); operand.emit(e); b.endToLong() }
                             "FloatRep" -> { b.beginToFloat(); operand.emit(e); b.endToFloat() }
                             "DoubleRep" -> { b.beginToDouble(); operand.emit(e); b.endToDouble() }
                             else -> operand.emit(e)
@@ -1731,9 +1732,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     val arguments = BytecodePackageScalarArguments(packageScalar,
                         locals.dropLast(1).toTypedArray(), locals.last())
                     when (packageScalar.result) {
-                        "Int32Rep", "Int64Rep" -> b.emitLinkedPackageScalarLong(arguments, destination.single())
+                        "IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep" ->
+                            b.emitLinkedPackageScalarLong(arguments, destination.single())
                         "FloatRep" -> b.emitLinkedPackageScalarFloat(arguments, destination.single())
                         "DoubleRep" -> b.emitLinkedPackageScalarDouble(arguments, destination.single())
+                        "void" -> {
+                            if (destination.isNotEmpty()) fault("Void package C call has result slots")
+                            b.emitLinkedPackageVoid(arguments)
+                        }
                         else -> fault("Invalid package C result representation")
                     }
                 }

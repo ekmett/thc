@@ -7,7 +7,7 @@ import java.util.HexFormat
 
 /** The C entry is namespaced by the complete component recipe, not the source symbol. */
 internal data class PackageScalarSignature(val symbol: String, val entry: String,
-    val arguments: List<String>, val result: String)
+    val arguments: List<String>, val result: String, val convention: String = "ccall")
 
 internal class PackageScalarLink(val unit: String, val target: String,
     val componentSha256: String, val bitcodeSha256: String, val bytes: ByteArray,
@@ -24,6 +24,8 @@ internal object PackageScalarLinks {
     private val hash = Regex("[0-9a-f]{64}")
     private val symbol = Regex("[A-Za-z_][A-Za-z0-9_]*")
     private val reps = setOf("Int32Rep", "Int64Rep", "FloatRep", "DoubleRep")
+    private val nativeReps = reps + setOf("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep",
+        "Word16Rep", "Word32Rep", "Word64Rep", "AddrRep", "ByteArray#", "MutableByteArray#")
     private fun check(condition: Boolean, detail: String) = require(condition) { "Invalid package scalar link: $detail" }
     private fun record(value: Any?, keys: String): Map<*, *> {
         check(value is Map<*, *> && value.keys == keys.split(' ').toSet(), "record fields")
@@ -48,16 +50,22 @@ internal object PackageScalarLinks {
         it.values.forEach(::text)
         check(it["namespace"] in setOf("value", "type", "data"), "name namespace")
     }
-    private fun type(value: Any?) {
+    private fun type(value: Any?, depth: Int = 0) {
         check(value is Map<*, *>, "type record")
         val raw = value as Map<*, *>
         when (raw["kind"]) {
             "tycon" -> {
                 record(raw, "kind name arguments"); identity(raw["name"])
-                list(raw["arguments"]).forEach(::type)
+                list(raw["arguments"]).forEach { type(it, depth) }
             }
-            "application" -> { record(raw, "kind function argument"); type(raw["function"]); type(raw["argument"]) }
-            "function" -> { record(raw, "kind multiplicity argument result"); type(raw["multiplicity"]); type(raw["argument"]); type(raw["result"]) }
+            "application" -> { record(raw, "kind function argument"); type(raw["function"], depth); type(raw["argument"], depth) }
+            "function" -> { record(raw, "kind multiplicity argument result"); type(raw["multiplicity"], depth); type(raw["argument"], depth); type(raw["result"], depth) }
+            "forall" -> { record(raw, "kind binderKind body"); type(raw["binderKind"], depth); type(raw["body"], depth + 1) }
+            "bound-variable" -> {
+                record(raw, "kind index")
+                val index = raw["index"]
+                check((index is Long || index is Int) && (index as Number).toLong() in 0 until depth.toLong(), "free import type variable")
+            }
             else -> check(false, "unknown type")
         }
     }
@@ -70,14 +78,20 @@ internal object PackageScalarLinks {
     }
 
     fun read(module: Map<*, *>): PackageScalarAdmission? {
-        val raw = module["packageScalarLink"] ?: return null
-        check(module["ghc"] == "9.14.1" && version(module["schema"], 1), "GHC/schema")
-        check(!module.containsKey("foreign") && !module.containsKey("foreignLink") &&
-            !module.containsKey("staticForeignImportStubs") && !module.containsKey("staticForeignExports") &&
+        val native = module.containsKey("packageNativeLink")
+        val raw = module[if (native) "packageNativeLink" else "packageScalarLink"] ?: return null
+        check(!native || !module.containsKey("packageScalarLink"), "two package link profiles")
+        check(module["ghc"] == "9.14.1" && (version(module["schema"], 1) ||
+            native && version(module["schema"], 2)), "GHC/schema")
+        check((native || !module.containsKey("foreign")) && !module.containsKey("foreignLink") &&
+            (native || !module.containsKey("staticForeignImportStubs")) && !module.containsKey("staticForeignExports") &&
             !module.containsKey("staticForeignExportRegistration"), "mixed foreign obligations")
-        val fields = record(raw, "schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi")
+        val inputs = native && raw is Map<*, *> && raw.containsKey("buildInputs")
+        val fields = record(raw, "schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi" +
+            if (inputs) " buildInputs" else "")
+        if (inputs) check(fields["buildInputs"] is Map<*, *>, "build inputs record")
         check(version(fields["schema"], 1) && fields["format"] == "llvm-bitcode" &&
-            fields["profile"] == "thc-local-scalar-ccall-v1", "link profile")
+            fields["profile"] == (if (native) "thc-package-c-ffi-v1" else "thc-local-scalar-ccall-v1"), "link profile")
         val unit = text(fields["unit"])
         check(unit == module["unit"], "component owner")
         val target = text(fields["target"]).also(::target)
@@ -90,49 +104,71 @@ internal object PackageScalarLinks {
         check(bytes.isNotEmpty() && digest(bytes) == bitcodeHash, "bitcode digest")
         val entries = list(fields["abi"])
         val abi = entries.mapIndexed { index, value ->
-            val entry = record(value, "symbol entry arguments result")
+            val entry = record(value, if (native) "symbol entry convention safety arguments result" else "symbol entry arguments result")
             val name = text(entry["symbol"])
             check(symbol.matches(name), "C symbol")
-            check(entry["entry"] == "thc_scalar_${componentHash}_$index", "component entry namespace")
+            check(entry["entry"] == "thc_${if (native) "native" else "scalar"}_${componentHash}_$index", "component entry namespace")
             val arguments = list(entry["arguments"])
-            check(arguments.all { it in reps } && entry["result"] in reps, "scalar ABI")
-            PackageScalarSignature(name, entry["entry"] as String, arguments.map { it as String }, entry["result"] as String)
+            val admitted = if (native) nativeReps else reps
+            check(arguments.all { it in admitted } && entry["result"] in
+                (if (native) nativeReps - setOf("AddrRep", "ByteArray#", "MutableByteArray#") + "void" else reps), "C ABI")
+            val convention = if (native) text(entry["convention"]) else "ccall"
+            check(!native || convention in setOf("ccall", "capi") && entry["safety"] == "unsafe", "unsupported C calling convention/safety")
+            PackageScalarSignature(name, entry["entry"] as String, arguments.map { it as String }, entry["result"] as String, convention)
         }
         check(abi.isNotEmpty() && abi.map { it.symbol } == abi.map { it.symbol }.distinct().sorted(), "sorted unique ABI")
         val bySymbol = abi.associateBy { it.symbol }
+        val link = PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, abi)
+        if (native && !module.containsKey("staticForeignImports")) {
+            check(!module.containsKey("foreign") && !module.containsKey("staticForeignImportStubs"),
+                "foreign products lack import provenance")
+            // GHC omits an empty declaration inventory in modules containing
+            // only inlined calls. Their unit's declarations are checked at merge.
+            return PackageScalarAdmission(link, emptySet())
+        }
         val proof = record(module["staticForeignImports"],
             "schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls")
+        if (native && module.containsKey("staticForeignImportStubs"))
+            check(module["staticForeignImportStubs"] == proof, "retained CAPI import provenance differs")
         check(version(proof["schema"], 1) && proof["scope"] == "retained-static-import-products" &&
             proof["execution"] == "not-linked" && proof["profile"] == "ghc-9.14.1-thc-only-static-c-imports-v1" &&
             proof["unit"] == unit && proof["module"] == module["module"] && proof["status"] == "verified" &&
             version(proof["wordBits"], 64), "typed import profile/owner")
         val product = record(proof["expectedForeign"], "schema execution stubs files")
         check(version(product["schema"], 1) && product["execution"] == "not-linked" && product["files"] == emptyList<Any>(), "foreign product")
+        if (native && module.containsKey("foreign")) check(product == module["foreign"], "retained C stubs differ")
         if (product["stubs"] != null) {
             val stubs = record(product["stubs"], "header source initializers finalizers")
-            check(stubs["header"] == "" && stubs["source"] == "" && stubs["initializers"] == emptyList<Any>() &&
+            check(stubs["header"] == "" && (if (native) stubs["source"] is String else stubs["source"] == "") && stubs["initializers"] == emptyList<Any>() &&
                 stubs["finalizers"] == emptyList<Any>(), "nonempty foreign products")
+            check(!native || module.containsKey("foreign") || stubs["source"] == "", "missing retained C stubs")
         }
         val imports = list(proof["imports"])
-        check(imports.isNotEmpty(), "empty import inventory")
+        // Inlining may move calls into another module in this component. The
+        // merger checks the complete unit's declaration inventory before use.
+        check(native || imports.isNotEmpty(), "empty import inventory")
         val binders = hashSetOf<Map<*, *>>()
         val proved = hashSetOf<String>()
         for (value in imports) {
             val item = record(value, "binder header symbol unit isFunction convention safety declaredType normalizedType normalizationRole emitted")
             val binder = identity(item["binder"])
             check(binder["unit"] == unit && binder["module"] == module["module"] && binder["namespace"] == "value" && binders.add(binder), "import binder")
-            check(item["header"] == null && item["unit"] in listOf(null, unit) && item["isFunction"] == true &&
-                item["convention"] == "ccall" && item["safety"] == "unsafe" && item["normalizationRole"] == "representational", "static unsafe ccall")
+            val convention = item["convention"]
+            check((item["header"] == null || native && convention == "capi" && item["header"] is String) &&
+                item["unit"] in listOf(null, unit) && (item["isFunction"] == true || native && convention == "capi" && item["isFunction"] == false) &&
+                convention in (if (native) setOf("ccall", "capi") else setOf("ccall")) && item["safety"] == "unsafe" &&
+                item["normalizationRole"] == "representational", "static unsafe C import")
             type(item["declaredType"]); type(item["normalizedType"])
-            val name = text(item["symbol"])
-            val signature = requireNotNull(bySymbol[name]) { "Unlinked typed package C import: $name" }
+            text(item["symbol"])
             val emitted = record(item["emitted"], "symbol unit convention safety arguments result")
-            check(emitted["symbol"] == name && emitted["unit"] == unit && emitted["convention"] == "ccall" &&
+            val name = if (native) text(emitted["symbol"]) else text(item["symbol"])
+            val signature = requireNotNull(bySymbol[name]) { "Unlinked typed package C import: $name" }
+            check(emitted["symbol"] == name && emitted["unit"] == unit && emitted["convention"] == signature.convention && convention == signature.convention &&
                 emitted["safety"] == "unsafe" && emitted["arguments"] == signature.arguments + "void" &&
-                emitted["result"] == listOf("void", signature.result), "emitted ABI differs from compiled C")
+                emitted["result"] == (if (signature.result == "void") listOf("void") else listOf("void", signature.result)), "emitted ABI differs from compiled C")
             proved.add(name)
         }
         check(proof["expectedCalls"] == calls(module["bindings"]), "retained Core foreign inventory differs")
-        return PackageScalarAdmission(PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, abi), proved)
+        return PackageScalarAdmission(link, proved)
     }
 }
