@@ -42,6 +42,11 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
     @Child private var calls = InteropLibrary.getFactory().createDispatched(1)
     @Child private var numbers = InteropLibrary.getFactory().createDispatched(1)
     private val pointers = argumentReps.any { it in setOf("AddrRep", "ByteArray#", "MutableByteArray#") }
+    private val integerResult = when (call.result) {
+        "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep",
+        "IntRep", "WordRep", "Int64Rep", "Word64Rep" -> true
+        else -> false
+    }
 
     private fun function(): PackageScalarFunction {
         // Check the entered context even when a host misuses a root from another context.
@@ -162,8 +167,7 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
     }
 
     fun executeLong(arguments: Array<Any?>, state: Any?): Long {
-        if (call.result !in setOf("Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep",
-                "IntRep", "WordRep", "Int64Rep", "Word64Rep")) fault("Package C result is not an integer ABI")
+        if (!integerResult) fault("Package C result is not an integer ABI")
         val entry = prepare(arguments, state)
         val result = invoke(entry, arguments)
         return when (call.result) {
