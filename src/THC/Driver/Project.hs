@@ -33,7 +33,7 @@ import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
 import System.FilePath ((</>), (<.>), pathSeparator, isAbsolute, makeRelative, normalise, splitDirectories,
                         takeDirectory, takeExtension, takeFileName, joinPath, replaceExtension)
 import System.IO (IOMode(ReadMode), hClose, hGetContents,
-                  hSetEncoding, openTempFile, stderr, utf8, withFile)
+                  hSetEncoding, openTempFile, stderr, utf8, withBinaryFile, withFile)
 import System.IO.Error (tryIOError)
 import qualified System.Info as Host
 import THC.Driver.Lock (withLock)
@@ -1454,10 +1454,19 @@ readJson path = do
   either (fail . (("invalid JSON " ++ path ++ ": ") ++)) pure (eitherDecodeStrict' contents)
 
 digestFile :: FilePath -> IO String
-digestFile path = shaHex <$> BS.readFile path
+digestFile path = withBinaryFile path ReadMode $ \handle -> do
+  bytes <- BL.hGetContents handle
+  -- Finish the streamed digest before closing the handle. A lazy hex String
+  -- must retain only the 32-byte digest, not a whole driver/helper/artifact
+  -- ByteString across later subprocesses or cache validation.
+  digest <- evaluate (SHA.hashlazy bytes)
+  pure (digestHex digest)
 
 shaHex :: BS.ByteString -> String
-shaHex = concatMap byteHex . BS.unpack . SHA.hash
+shaHex = digestHex . SHA.hash
+
+digestHex :: BS.ByteString -> String
+digestHex = concatMap byteHex . BS.unpack
   where byteHex byte = let digits = showHex byte "" in if length digits == 1 then '0':digits else digits
 
 require :: Bool -> String -> IO ()
