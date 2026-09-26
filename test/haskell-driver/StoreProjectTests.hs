@@ -67,6 +67,16 @@ storeProjectTest env = TestLabel "source-built Cabal store Core" $ TestCase $
     copyTree (project </> "dep-data") source
     removePathForcibly (project </> "dep-data")
     sourceDist env source project
+    -- Both the initial native build and fresh-store Core capture must select
+    -- the requested executable, not build every sibling component. This valid
+    -- Cabal component deliberately fails if either path still uses `all`.
+    let appDescription = project </> "app/app.cabal"
+    description <- readText appDescription
+    writeText appDescription (description ++ unlines
+      ["", "executable unrelated", "  main-is: Unrelated.hs", "  hs-source-dirs: app",
+       "  build-depends: base >=4.22 && <4.23", "  default-language: Haskell2010"])
+    writeText (project </> "app/app/Unrelated.hs")
+      "module Main where\nmain :: IO ()\nmain = intentionallyUnbuildableSibling\n"
     first <- invoke "ast"
     assertSuccess first
     assertNoStdout first

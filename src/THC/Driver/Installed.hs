@@ -8,6 +8,7 @@ module THC.Driver.Installed
   ( InstalledContext(..), InstalledUnit(..), InstalledCore(..), MissingCore(..)
   , installedContext, discoverInstalled, validateReexports, acquireInstalled
   , installedProvenance, installedLayoutHeaders, helperCommand, probeInstalled
+  , emptyRegistration
   ) where
 
 import Control.Monad (filterM, foldM, forM, forM_, unless)
@@ -54,6 +55,17 @@ data InstalledCore = InstalledCore
 data MissingCore = MissingCore
   { missingUnit :: String, missingModule :: String, missingInterface :: FilePath }
   deriving (Eq, Show)
+
+-- Compatibility packages such as nats have no library modules on modern GHC.
+-- A missing capture alone does not establish that: retain the registration
+-- produced by the same successful build, and check it again on cache reads.
+emptyRegistration :: String -> [String] -> BS.ByteString -> Bool
+emptyRegistration identifier dependencies bytes = case parseInstalledPackageInfo bytes of
+  Left _ -> False
+  Right (_, info) -> prettyShow (Package.installedUnitId info) == identifier &&
+    sort (map prettyShow (Package.depends info)) == sort dependencies &&
+    null (Package.exposedModules info) && null (Package.hiddenModules info) &&
+    null (Package.hsLibraries info)
 
 installedContext :: FilePath -> FilePath -> FilePath -> [FilePath] -> Value -> IO InstalledContext
 installedContext ghc pkg helper databases compiler = do

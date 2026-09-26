@@ -125,8 +125,10 @@ runProject opts target = do
       executable = runExecutable opts
   createDirectoryIfMissing True requestedOutput
   output <- canonicalizePath requestedOutput
+  (wantedPackage, wantedComponent) <- executableSelection executable
+  let targetComponent = maybe "" (++ ":") wantedPackage ++ wantedComponent
   let native = output </> "native"
-      cabalArgs = ["build", "all", "--enable-build-info", "--project-file", "cabal.project",
+      cabalArgs = ["build", targetComponent, "--enable-build-info", "--project-file", "cabal.project",
                    "--builddir", native]
   compiler <- case ghcPath flags of
     Just path -> canonicalizePath path
@@ -209,8 +211,8 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   let byId = Map.fromList [(unitId unit, unit) | unit <- units]
   require (Map.size byId == length units) "Cabal plan has duplicate unit IDs"
   selected <- selectExecutable executable units
-  -- The plan also lists optional tests and benchmarks that `cabal build all`
-  -- did not build. Only the requested executable and its complete dependency
+  -- The plan can also list unrelated executables, tests and benchmarks.
+  -- Only the requested executable and its complete dependency
   -- closure have required build-info; a missing member of that closure fails.
   ordered <- dependencyClosure byId (unitId selected)
   builtLocals <- filterM (\unit -> case jsonField (unitValue unit) "build-info" of
@@ -270,7 +272,10 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
                   installedOwner item `notElem` registered && Map.notMember (installedOwner item) byId) bundles)
       "installed Core owner collides with another Cabal unit"
     pure (Map.fromList bundles)
-  globalBundles <- prepareGlobalBundles context project globals
+  selectedPackage <- field (unitValue selected) "pkg-name"
+  selectedComponent <- field (unitValue selected) "component-name"
+  globalBundles <- prepareGlobalBundles context project
+    (selectedPackage ++ ":" ++ selectedComponent) globals
   (_, described) <- foldlM (\(keys, acc) unit -> do
     kind <- optionalField (unitValue unit) "type" ("" :: String)
     bundle <- if unitLocal unit
@@ -671,14 +676,16 @@ readUnit value = do
   style <- optionalField value "style" ("" :: String)
   pure (Unit identifier value dependencies (kind == "configured" && style == "local"))
 
+executableSelection :: String -> IO (Maybe String, String)
+executableSelection target = case split ':' target of
+  [name] | not (null name) -> pure (Nothing, "exe:" ++ name)
+  [package, "exe", name] | not (null package) && not (null name) ->
+    pure (Just package, "exe:" ++ name)
+  _ -> fail "--exe must be NAME or PACKAGE:exe:NAME"
+
 selectExecutable :: String -> [Unit] -> IO Unit
 selectExecutable target units = do
-  let pieces = split ':' target
-  (wantedPackage, wantedComponent) <- case pieces of
-    [name] | not (null name) -> pure (Nothing, "exe:" ++ name)
-    [package, "exe", name] | not (null package) && not (null name) ->
-      pure (Just package, "exe:" ++ name)
-    _ -> fail "--exe must be NAME or PACKAGE:exe:NAME"
+  (wantedPackage, wantedComponent) <- executableSelection target
   matches <- filterM (\unit -> if not (unitLocal unit) then pure False else do
     component <- optionalField (unitValue unit) "component-name" ("" :: String)
     package <- optionalField (unitValue unit) "pkg-name" ("" :: String)
@@ -733,34 +740,34 @@ exporterIdentity context = do
                                 "foreign-import-provenance",
                                 "-g", "-dynamic", "-dcore-lint"] :: [String])]
 
-prepareGlobalBundles :: ExportContext -> FilePath -> [Unit] -> IO (Map.Map String Bundle)
-prepareGlobalBundles _ _ [] = pure Map.empty
-prepareGlobalBundles context project units = do
+prepareGlobalBundles :: ExportContext -> FilePath -> String -> [Unit] -> IO (Map.Map String Bundle)
+prepareGlobalBundles _ _ _ [] = pure Map.empty
+prepareGlobalBundles context project target units = do
   let lockDir = contextCache context </> "core-bundles/v1"
   createDirectoryIfMissing True lockDir
   withLock (lockDir </> "global-export.lock") $ do
     located <- forM units $ \unit -> do
       (buildKey, exportKey, path) <- globalLocation context unit
       cached <- doesFileExist path
-      hit <- if cached then readGlobalBundle path (unitId unit) buildKey exportKey
+      hit <- if cached then readGlobalBundle path (unitId unit) (unitDepends unit) buildKey exportKey
              else pure Nothing
       pure (unit, buildKey, exportKey, path, hit)
     let missing = [(unit, buildKey, exportKey, path)
                   | (unit, buildKey, exportKey, path, Nothing) <- located]
-    when (not (null missing)) $ captureGlobalUnits context project (map first4 missing) missing
+    when (not (null missing)) $ captureGlobalUnits context project target (map first4 missing) missing
     pairs <- forM located $ \(unit, buildKey, exportKey, path, hit) -> do
       bundle <- case hit of
         Just value -> pure value
         Nothing -> do
-          ready <- readGlobalBundle path (unitId unit) buildKey exportKey
+          ready <- readGlobalBundle path (unitId unit) (unitDepends unit) buildKey exportKey
           maybe (fail ("Cabal store Core bundle was not published: " ++ unitId unit)) pure ready
       pure (unitId unit, bundle)
     pure (Map.fromList pairs)
   where first4 (unit, _, _, _) = unit
 
-captureGlobalUnits :: ExportContext -> FilePath -> [Unit] ->
+captureGlobalUnits :: ExportContext -> FilePath -> String -> [Unit] ->
                       [(Unit, String, String, FilePath)] -> IO ()
-captureGlobalUnits context project requested missing = do
+captureGlobalUnits context project target requested missing = do
   let stagingRoot = contextNative context </> "cache/thc/staging"
   createDirectoryIfMissing True stagingRoot
   (staging, handle) <- openTempFile stagingRoot "store-export-"
@@ -776,7 +783,9 @@ captureGlobalUnits context project requested missing = do
         capture = staging </> "capture"
         -- Cabal's offline mode rejects Hackage sources in a fresh store even
         -- when their tarballs are cached; use its normal source cache here.
-        arguments = ["--store-dir=" ++ store, "build", "all",
+        -- Rebuild only the selected executable's closure. `all` also builds
+        -- unrelated tests/apps and their dependencies in this fresh store.
+        arguments = ["--store-dir=" ++ store, "build", target,
                      "--enable-build-info", "--project-file", "cabal.project",
                      "--builddir", dist, "--with-compiler", wrapper] ++
                     maybe [] (\path -> ["--with-hc-pkg", path]) (contextGhcPkg context)
@@ -814,15 +823,25 @@ captureGlobalUnits context project requested missing = do
         ("isolated Cabal build changed store identity for " ++ unitId unit)
       createDirectoryIfMissing True (takeDirectory path)
       withLock (path ++ ".lock") $
-        packGlobalBundle capture unit buildKey exportKey path
+        packGlobalBundle store capture unit buildKey exportKey path
     ) `finally` cleanup
 
-packGlobalBundle :: FilePath -> Unit -> String -> String -> FilePath -> IO ()
-packGlobalBundle capture unit buildKey exportKey destination = do
+packGlobalBundle :: FilePath -> FilePath -> Unit -> String -> String -> FilePath -> IO ()
+packGlobalBundle store capture unit buildKey exportKey destination = do
   let core = capture </> unitId unit </> "core"
   exported <- filter ((== ".json") . takeExtension) <$> recursiveFiles core
-  require (not (null exported))
-    ("Cabal store build did not export Core for " ++ unitId unit)
+  empty <- if not (null exported) then pure [] else do
+    -- Inspect only this freshly rebuilt private store, never the original
+    -- native store or a guessed empty module. Cabal owns the compiler partition.
+    partitions <- listDirectory store
+    registrations <- filterM doesFileExist
+      [store </> partition </> "package.db" </> unitId unit <.> "conf" | partition <- partitions]
+    bytes <- case registrations of
+      [path] -> BS.readFile path
+      _ -> fail ("isolated Cabal store lacks a unique registration for " ++ unitId unit)
+    require (emptyRegistration (unitId unit) (unitDepends unit) bytes)
+      ("Cabal store build did not export Core for nonempty unit " ++ unitId unit)
+    pure ["emptyRegistration" .= Text.decodeUtf8 bytes]
   checked <- forM exported $ \path -> do
     value <- readJson path
     foundUnit <- field value "unit"
@@ -841,14 +860,14 @@ packGlobalBundle capture unit buildKey exportKey destination = do
       modules = [object ["name" .= name, "boundary" .= boundary,
                          "path" .= member, "sha256" .= shaHex bytes]
                 | ((name, bytes), (member, _)) <- zip sorted members]
-      inner = object ["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
+      inner = object (["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
                       "unit" .= unitId unit, "buildKey" .= buildKey,
-                      "exportKey" .= exportKey, "modules" .= modules]
+                      "exportKey" .= exportKey, "modules" .= modules] ++ empty)
   archive <- either fail pure (encodeZip (("manifest.json", BL.toStrict (encode inner)) : members))
   atomicBytes destination (BL.toStrict archive)
 
-readGlobalBundle :: FilePath -> String -> String -> String -> IO (Maybe Bundle)
-readGlobalBundle path unit buildKey exportKey = do
+readGlobalBundle :: FilePath -> String -> [String] -> String -> String -> IO (Maybe Bundle)
+readGlobalBundle path unit dependencies buildKey exportKey = do
   bytes <- BS.readFile path
   decoded <- decodeZip bytes
   pure $ do
@@ -856,7 +875,10 @@ readGlobalBundle path unit buildKey exportKey = do
     raw <- lookup "manifest.json" entries
     inner <- either (const Nothing) Just (eitherDecodeStrict' raw)
     modules <- jsonField inner "modules" :: Maybe [Value]
-    let names = [name | Just name <- map (`jsonField` "name") modules :: [Maybe String]]
+    let validInventory = case jsonField inner "emptyRegistration" :: Maybe Text.Text of
+          Nothing -> not (null modules)
+          Just receipt -> null modules && emptyRegistration unit dependencies (Text.encodeUtf8 receipt)
+        names = [name | Just name <- map (`jsonField` "name") modules :: [Maybe String]]
         paths = [member | Just member <- map (`jsonField` "path") modules :: [Maybe String]]
         validModule item = do
           name <- jsonField item "name" :: Maybe String
@@ -875,7 +897,7 @@ readGlobalBundle path unit buildKey exportKey = do
         jsonField inner "unit" == Just unit &&
         jsonField inner "buildKey" == Just buildKey &&
         jsonField inner "exportKey" == Just exportKey &&
-        not (null modules) && length names == length modules &&
+        validInventory && length names == length modules &&
         length paths == length modules && length names == length (nub names) &&
         sort (map fst entries) == sort ("manifest.json" : paths) &&
         all (== Just True) (map validModule modules))

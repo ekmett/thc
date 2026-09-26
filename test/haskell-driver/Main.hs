@@ -9,6 +9,7 @@ import qualified PlanTests
 import qualified RunTests
 import qualified ProjectTests
 import qualified StoreProjectTests
+import qualified EmptyStoreProjectTests
 import qualified ScalarBitcodeTests
 import qualified NativeRecipeTests
 import qualified InstalledForeignTests
@@ -28,5 +29,6 @@ main = do
     , RunTests.tests env
     , ProjectTests.tests env
     , StoreProjectTests.tests env
+    , EmptyStoreProjectTests.tests env
     ]
   if errors counts + failures counts == 0 then pure () else exitFailure

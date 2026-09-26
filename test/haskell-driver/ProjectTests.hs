@@ -54,11 +54,13 @@ projectTests env = TestLabel "three-package project native versus THC run" $ Tes
     initiallyBuilt <- doesFileExist (sourceOnlyRoot </> "build/compiler/plugin.json")
     assertBool "source-only checkout has no plugin manifest" (not initiallyBuilt)
     bootstrap <- run env base Nothing 120
-      ["run", project, "--exe", "missing-bootstrap-probe", "--thc-root", sourceOnlyRoot,
+      ["run", project, "--exe", "app-run:exe:missing-bootstrap-probe", "--thc-root", sourceOnlyRoot,
        "--runtime", runtime env, "--dist-dir", output]
     assertFailure bootstrap
     assertNoStdout bootstrap
-    assertContains "selected executable \"missing-bootstrap-probe\" has 0 matching local Cabal components"
+    -- Targeted native acquisition lets Cabal reject the missing component
+    -- before a plan/build exists. Plugin bootstrapping must still happen first.
+    assertContains "The package app-run has no executable component 'missing-bootstrap-probe'."
       (unwords $ words $ err bootstrap)
     let pluginPath = sourceOnlyRoot </> "build/compiler/plugin.json"
     requireFile pluginPath
