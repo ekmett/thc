@@ -1,0 +1,191 @@
+{
+  "thc_runtime_v1_query": {
+    "schema": 1,
+    "target": {
+      "kind": "static",
+      "symbol": "thc_runtime_v1_query",
+      "unit": "main",
+      "isFunction": true
+    },
+    "convention": "ccall",
+    "safety": "unsafe",
+    "arity": 4,
+    "suppliedArity": 4,
+    "argumentReps": [
+      {
+        "primReps": [
+          "Int32Rep"
+        ],
+        "kind": "long",
+        "evaluated": false
+      },
+      {
+        "primReps": [
+          "Int64Rep"
+        ],
+        "kind": "long",
+        "evaluated": false
+      },
+      {
+        "primReps": [
+          "Int64Rep"
+        ],
+        "kind": "long",
+        "evaluated": false
+      },
+      {
+        "primReps": [],
+        "kind": "void",
+        "evaluated": false
+      }
+    ],
+    "resultRep": {
+      "primReps": [
+        "Int64Rep"
+      ],
+      "kind": "unknown",
+      "evaluated": false,
+      "aggregate": "unboxed-tuple",
+      "components": [
+        {
+          "primReps": [],
+          "kind": "void",
+          "evaluated": true
+        },
+        {
+          "primReps": [
+            "Int64Rep"
+          ],
+          "kind": "long",
+          "evaluated": true
+        }
+      ]
+    }
+  },
+  "thc_runtime_v1_control": {
+    "schema": 1,
+    "target": {
+      "kind": "static",
+      "symbol": "thc_runtime_v1_control",
+      "unit": "main",
+      "isFunction": true
+    },
+    "convention": "ccall",
+    "safety": "unsafe",
+    "arity": 3,
+    "suppliedArity": 3,
+    "argumentReps": [
+      {
+        "primReps": [
+          "Int32Rep"
+        ],
+        "kind": "long",
+        "evaluated": false
+      },
+      {
+        "primReps": [
+          "Int64Rep"
+        ],
+        "kind": "long",
+        "evaluated": false
+      },
+      {
+        "primReps": [],
+        "kind": "void",
+        "evaluated": false
+      }
+    ],
+    "resultRep": {
+      "primReps": [
+        "Int64Rep"
+      ],
+      "kind": "unknown",
+      "evaluated": false,
+      "aggregate": "unboxed-tuple",
+      "components": [
+        {
+          "primReps": [],
+          "kind": "void",
+          "evaluated": true
+        },
+        {
+          "primReps": [
+            "Int64Rep"
+          ],
+          "kind": "long",
+          "evaluated": true
+        }
+      ]
+    }
+  },
+  "thc_runtime_v1_trace": {
+    "schema": 1,
+    "target": {
+      "kind": "static",
+      "symbol": "thc_runtime_v1_trace",
+      "unit": "main",
+      "isFunction": true
+    },
+    "convention": "ccall",
+    "safety": "unsafe",
+    "arity": 5,
+    "suppliedArity": 5,
+    "argumentReps": [
+      {
+        "primReps": [
+          "Int32Rep"
+        ],
+        "kind": "long",
+        "evaluated": false
+      },
+      {
+        "primReps": [
+          "Int64Rep"
+        ],
+        "kind": "long",
+        "evaluated": false
+      },
+      {
+        "primReps": [
+          "AddrRep"
+        ],
+        "kind": "address",
+        "evaluated": false
+      },
+      {
+        "primReps": [
+          "Int64Rep"
+        ],
+        "kind": "long",
+        "evaluated": false
+      },
+      {
+        "primReps": [],
+        "kind": "void",
+        "evaluated": false
+      }
+    ],
+    "resultRep": {
+      "primReps": [
+        "Int64Rep"
+      ],
+      "kind": "unknown",
+      "evaluated": false,
+      "aggregate": "unboxed-tuple",
+      "components": [
+        {
+          "primReps": [],
+          "kind": "void",
+          "evaluated": true
+        },
+        {
+          "primReps": [
+            "Int64Rep"
+          ],
+          "kind": "long",
+          "evaluated": true
+        }
+      ]
+    }
+  }
+}

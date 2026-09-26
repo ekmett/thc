@@ -126,7 +126,12 @@ extra-source-files:
   docs/ghc-core.md
   docs/interface-foreign.md
   docs/cpu-affinity-api.md
+  docs/runtime-services.md
   examples/THC/CpuAffinity.hs
+  examples/THC/RuntimeServices.hs
+  test/haskell-runtime/SafeClient.hs
+  test/haskell-runtime/UnsafeClient.hs
+  test/haskell-runtime/check-safe-haskell.sh
   docs/original-posix-dup.md
   docs/original-termios.md
   docs/original-sigset.md
@@ -283,8 +288,16 @@ flag full-core-tests
 library runtime
   visibility: public
   hs-source-dirs: runtime
-  exposed-modules: THC
-  c-sources: runtime/cpu-affinity.c
+  exposed-modules:
+    THC
+    THC.Runtime
+    THC.Thread
+    THC.Memory
+    THC.GC
+    THC.Trace
+    THC.Internal.JIT
+  other-modules: THC.Runtime.Types, THC.Internal.RuntimeABI
+  c-sources: runtime/cpu-affinity.c, runtime/runtime-services.c
   build-depends: base >= 4.22 && < 4.23
   default-language: Haskell2010
   ghc-options: -Wall
@@ -295,6 +308,16 @@ test-suite cpu-affinity-api
   type: exitcode-stdio-1.0
   main-is: Main.hs
   hs-source-dirs: test/haskell-affinity
+  build-depends: base >= 4.22 && < 4.23, thc:runtime
+  default-language: Haskell2010
+  ghc-options: -Wall -threaded
+  if flag(development)
+    ghc-options: -Werror
+
+test-suite runtime-services-api
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  hs-source-dirs: test/haskell-runtime
   build-depends: base >= 4.22 && < 4.23, thc:runtime
   default-language: Haskell2010
   ghc-options: -Wall -threaded
