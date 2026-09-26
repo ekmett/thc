@@ -40,7 +40,10 @@ checkInstalledCache root directory ghc ghcPkg helper libdir baseUnit = withCurre
       mutateAfterProbe = work </> "mutate-after-probe"
       replacement = work </> "replacement.dyn_hi"
       cache = work </> "cache"
-      output name = work </> name
+      -- Real interface and source paths exercise the UTF-8 probe boundary, not
+      -- just ASCII package identifiers. A double-encoded path breaks exact
+      -- inventory matching and silently turns every warm request into a load.
+      output name = work </> "λ雪🙂" </> name
       source name = output name </> "source" </> name ++ ".hs"
       hi name = output name </> name ++ ".dyn_hi"
       run label program arguments = runLogged 180 root (relative </> "logs") label [] program arguments
@@ -254,6 +257,7 @@ checkInstalledCache root directory ghc ghcPkg helper libdir baseUnit = withCurre
     "mutableDependency" .= True, "sourceContentAndAvailability" .= True,
     "hitInputMutation" .= True, "incompleteRegistrationFallback" .= True,
     "transactionExactProbeReuse" .= True, "rawProbeAndHelperMutation" .= True,
+    "unicodePathsRoundTrip" .= True,
     "retainedProviderWithPresentUsages" .= True,
     "corruptBundleAndIndex" .= True, "missingCorruptThinInterfaces" .= True,
     "compilerBinariesHashed" .= False])
