@@ -376,7 +376,7 @@ internal class ManagedAllocation private constructor(
     }
 
     /** Copy and comparison must share the same collision lock and owner order. */
-    private inline fun <T> withOrderedLocks(other: ManagedAllocation, action: () -> T): T {
+    internal inline fun <T> withOrderedLocks(other: ManagedAllocation, action: () -> T): T {
         val otherId = System.identityHashCode(other)
         val thisId = System.identityHashCode(this)
         return when {

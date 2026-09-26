@@ -1,12 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE MagicHash #-}
-module TextCbitsAudit (textMemchr, textMeasure) where
+module TextCbitsAudit (textMemchr, textMeasure, textReverse) where
 
 import GHC.Exts
 import GHC.Word (Word8(W8#))
 import qualified Data.Text.Internal.ArrayUtils as A
 import qualified Data.Text.Internal.Measure as M
+import qualified Data.Text.Array as Array
+import qualified Data.Text.Internal as T
+import qualified Data.Text.Internal.Reverse as R
 
 -- These call the installed original text declarations; no redeclared FFI or
 -- Haskell substitute is used in the native oracle or exported Core.
@@ -20,3 +23,8 @@ textMeasure bytes off len count =
   case fromIntegral (M.measure_off bytes (fromIntegral (W# off))
     (fromIntegral (W# len)) (fromIntegral (W# count))) :: Int of
       I# value -> value
+
+textReverse :: ByteArray# -> Word# -> Word# -> ByteArray#
+textReverse bytes off len =
+  case R.reverseNonEmpty (T.Text (Array.ByteArray bytes) (I# (word2Int# off)) (I# (word2Int# len))) of
+    T.Text (Array.ByteArray result) _ _ -> result

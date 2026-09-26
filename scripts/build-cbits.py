@@ -18,6 +18,7 @@ PINNED = {"md5.c": "4fa83bda7aacc8a1656d7e2d78251bbe70a04b56",
           "md5.h": "a87296687a2f3dc6748264ff2a8a0c919518db55"}
 STRERROR_SHA256 = "bf3a2129e508a108611b734864b63b234fae319c544c1cc500a53a2b7a91953b"
 TEXT_SHA256 = {
+    "cbits/reverse.c": "912cc8bd4684ef5913c1694f1cda73d36c6d200f1a58ff9b6e661d7d8490ea90",
     "cbits/utils.c": "4e2e096101ccfc7585cb06177fa9d4f523979aed584feb6814e92a868d234f5d",
     "cbits/measure_off.c": "fd5c712c6d93dc9b1121cd6a890a2eb47a0afd96c5e796877e370cfd8a226985",
     "LICENSE": "cf522e3d53b8d1768695fe5b66438baf4514fcd64b7a95739960f2f5b50c6ee8",

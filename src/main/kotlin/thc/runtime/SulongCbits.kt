@@ -89,6 +89,9 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
         if (!interop.fitsInLong(result)) fault("Original text result is not ssize_t")
         return interop.asLong(result)
     }
+    internal fun textReverse(function: Any, destination: CbitsBuffer, source: CbitsBuffer, offset: Long, length: Long) {
+        executeWithOwners(function, destination, source, offset, length)
+    }
     private val finalizerTask = FutureTask {
         val original = load(env, "libdw-unavailable")
         listOf("libdwPoolRelease", "backtraceFree").associateWith { symbol ->

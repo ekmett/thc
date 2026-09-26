@@ -1,6 +1,6 @@
 # Original text 2.1.3 C leaves
 
-`cbits/utils.c`, `cbits/measure_off.c` and `LICENSE` are unchanged files from
+`cbits/utils.c`, `cbits/measure_off.c`, `cbits/reverse.c` and `LICENSE` are unchanged files from
 the text 2.1.3 source distributed with the pinned GHC 9.14.1 source tree.
 The C files retain Andrew Lelechenko's copyright notice; `LICENSE` contains
 the upstream redistribution terms. `scripts/build-cbits.py` checks their

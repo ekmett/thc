@@ -251,14 +251,19 @@ cabal run exe:thc-fixtures -- unix-wait-status
   testDense --tests thc.runtime.UnixWaitStatusTest
 ```
 
-Installed `text-2.1.3-inplace` also has two closed original-C adapters on Linux
-x86-64: `_hs_text_memchr` and `_hs_text_measure_off`. Their exact unsafe
+Installed `text-2.1.3-inplace` also has three closed original-C adapters on Linux
+x86-64: `_hs_text_memchr`, `_hs_text_measure_off` and `_hs_text_reverse`. Their exact unsafe
 State-threaded declarations retain the `ByteArray#`, size/byte and signed
 result carriers. They execute the unchanged upstream C over a read-only
 Sulong buffer view of the existing heap or pinned allocation; ordinary heap
 arrays are neither copied nor pinned. Full-width offset/length checks and
 pointer-cell rejection precede C access. The measure operation retains text's
 valid-UTF-8 precondition and negative available-character-count result.
+Reverse retains the original valid-UTF-8 precondition and singleton State result.
+It writes reversed code points into a distinct mutable array, starting at byte
+zero. Checked writable output and read-only input views borrow both allocation
+owners under the existing ordered locks; out-of-range, immutable, pointer-bearing
+or aliased output storage is rejected before C access. Empty slices write nothing.
 
 The original sources and license are under `compiler/pinned-text/2.1.3`.
 Their supported non-atomic configuration selects the original SSE/word/tail
@@ -269,7 +274,7 @@ through to native libc. The full unsigned character-count domain preserves
 the original C's signed-intermediate wrap behavior, including its non-ideal
 result at `UINT64_MAX`; it is checked against the native library, not corrected
 to an idealized text algorithm. The focused fixture calls the unchanged
-installed declarations and native library over 500 search/UTF-8 inputs; it is
+installed declarations and native library over 520 search/UTF-8/reverse inputs; it is
 separate from completion of the original AD upstream test suite.
 
 ```sh

@@ -6,7 +6,7 @@ module Main (main) where
 
 import GHC.Exts
 import GHC.Word (Word(W#), Word8(W8#))
-import Numeric (readHex)
+import Numeric (readHex, showHex)
 import TextCbitsAudit
 
 data Bytes = Bytes ByteArray#
@@ -29,10 +29,17 @@ row input = case words input of
   [operation,hex,off,len,arg] -> case (bytesFromList (decode hex),read off,read len,read arg) of
     (Bytes bytes,W# offset,W# size,W# count) ->
       let value = case operation of
-            "memchr" -> I# (textMemchr bytes offset size count)
-            "measure" -> I# (textMeasure bytes offset size count)
+            "memchr" -> show (I# (textMemchr bytes offset size count))
+            "measure" -> show (I# (textMeasure bytes offset size count))
+            "reverse" -> case textReverse bytes offset size of
+              result -> let byte i = let hex = showHex (W8# (indexWord8Array# result i)) ""
+                                    in replicate (2 - length hex) '0' ++ hex
+                            go i | isTrue# (i ==# sizeofByteArray# result) = ""
+                                 | otherwise = byte i ++ go (i +# 1#)
+                            encoded = go 0#
+                        in if null encoded then "-" else encoded
             _ -> error "operation"
-      in input ++ "\t" ++ show value
+      in input ++ "\t" ++ value
   _ -> error "input"
 main :: IO ()
 main = interact (unlines . map row . lines)

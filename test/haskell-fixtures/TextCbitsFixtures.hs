@@ -7,6 +7,7 @@ import Control.Monad (forM_, unless)
 import Data.Aeson (object, (.=))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
+import Data.Char (isHexDigit)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Distribution.InstalledPackageInfo as Package
@@ -30,7 +31,7 @@ prepareTextCbits root = do
           show (BS.length prefix), show (BS.length bytes), show count] |
         value <- corpus, let bytes = T.encodeUtf8 value, prefix <- [BS.empty, BS.pack [1,2,3]],
         (operation,counts) <- [("memchr",[0,10,65,97,127,128,195,255]),
-          ("measure",[0,1,2,3,7,8,15,16,17,31,32,63,64,65,127,999,2^(64::Int)-1])],
+          ("measure",[0,1,2,3,7,8,15,16,17,31,32,63,64,65,127,999,2^(64::Int)-1]), ("reverse",[0])],
         count <- counts :: [Integer]]
   createDirectoryIfMissing True output
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
@@ -41,17 +42,17 @@ prepareTextCbits root = do
   original <- case Package.parseInstalledPackageInfo (commandStdout registration) of
     Left errors -> fail (show errors)
     Right (_,package) -> pure package
-  let name = ModuleName.fromString "Data.Text.Internal.Measure"
+  let names = map ModuleName.fromString ["Data.Text.Internal.Measure", "Data.Text.Internal.Reverse"]
       exposed = Package.exposedModules original
       hidden = Package.hiddenModules original
-      needExpose = all ((/= name) . Package.exposedName) exposed
-      visible = original { Package.exposedModules = exposed ++ [Package.ExposedModule name Nothing | needExpose],
-        Package.hiddenModules = filter (/= name) hidden }
+      needExpose = filter (\name -> all ((/= name) . Package.exposedName) exposed) names
+      visible = original { Package.exposedModules = exposed ++ map (\name -> Package.ExposedModule name Nothing) needExpose,
+        Package.hiddenModules = filter (`notElem` names) hidden }
       findDatabase index = do
         let path = output </> "package-db-" ++ show index
         exists <- doesDirectoryExist path
         if exists then findDatabase (index+1) else pure path
-  unless (not needExpose || name `elem` hidden) (fail "original text Measure module missing")
+  unless (all (`elem` hidden) needExpose) (fail "original text Measure/Reverse module missing")
   database <- findDatabase (0::Int)
   writeFile (output </> "exposed-text.conf") (Package.showInstalledPackageInfo visible)
   _ <- execute "package-init" [] ghcPkg ["init",database]
@@ -72,16 +73,20 @@ prepareTextCbits root = do
     "native-oracle" [] (native </> "text-cbits-oracle") []
   let rows = BSC.lines (commandStdout oracle)
   unless (length rows == length cases && and (zipWith (\input row ->
-    case splitTab (BSC.unpack row) of [originalInput,result] -> originalInput == input && readInteger result /= Nothing; _ -> False) cases rows))
+    case splitTab (BSC.unpack row) of
+      [originalInput,result] -> originalInput == input &&
+        (if take 7 input == "reverse" then result == "-" || not (null result) && even (length result) && all isHexDigit result
+         else readInteger result /= Nothing)
+      _ -> False) cases rows))
     (fail "native text row inventory differs")
   BS.writeFile (output </> "oracle.tsv") (commandStdout oracle)
   forM_ ["pre","post"] $ \stage -> do
-    _ <- execute ("audit-" ++ stage) [] "python3" ["scripts/audit-core.py","--entry","textMemchr","--entry","textMeasure",
+    _ <- execute ("audit-" ++ stage) [] "python3" ["scripts/audit-core.py","--entry","textMemchr","--entry","textMeasure","--entry","textReverse",
       "--output",output </> stage ++ "-audit.json",output </> stage ++ "-core/TextCbitsAudit.json"]
     pure ()
   inputs <- hashes root [source,nativeSource,"test/haskell-fixtures/TextCbitsFixtures.hs",
     "scripts/core_original_foreign.py","scripts/audit-core.py","scripts/core-capabilities.json",
-    "compiler/pinned-text/2.1.3/cbits/utils.c","compiler/pinned-text/2.1.3/cbits/measure_off.c",
+    "compiler/pinned-text/2.1.3/cbits/utils.c","compiler/pinned-text/2.1.3/cbits/measure_off.c","compiler/pinned-text/2.1.3/cbits/reverse.c",
     "compiler/pinned-text/2.1.3/LICENSE","compiler/pinned-text/2.1.3/openbsd-memchr.c",
     "src/main/c/text-api.c","scripts/build-cbits.py"]
   artifacts <- hashes root [directory </> file | file <- ["inputs.tsv","oracle.tsv",

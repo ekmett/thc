@@ -3350,6 +3350,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
     @Operation
+    public static final class OriginalTextReverse {
+        @Specialization public static void apply(Object destination, Object source, long offset, long length, Object state) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedText.reverse(destination, source, offset, length);
+        }
+    }
+    @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = FloatForeignOp.class, name = "operation")
     public static final class OriginalFloatCall {

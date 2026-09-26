@@ -156,7 +156,7 @@
     "shutdownHaskellAndExit",
     "shutdownHaskellAndSignal",
     "__hsbase_MD5Init", "__hsbase_MD5Update", "__hsbase_MD5Final",
-    "_hs_text_memchr", "_hs_text_measure_off",
+    "_hs_text_memchr", "_hs_text_measure_off", "_hs_text_reverse",
     "ghczuwrapperZC0ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWCOREDUMP",
     "ghczuwrapperZC1ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWSTOPSIG",
     "ghczuwrapperZC2ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWIFSTOPPED",
