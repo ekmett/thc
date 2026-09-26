@@ -485,13 +485,18 @@ groups and CBV evidence. Cabal registration IDs remain dependency/cache keys;
 the receipt records their mapping to original wired Core owners. Checked ZIPs
 use the existing schema and atomic publication, with registration/DB/compiler/
 way/inventory provenance and hashes of generated Core plus THC-owned exporter
-code. GHC remains version-gated; compiler executables and installed libraries
-are not hashed. An optional batch probe fingerprints GHC's full retained
+code. GHC remains version-gated; compiler executables and native library
+binaries are not hashed. An optional batch probe fingerprints GHC's full retained
 interface bytes across the registered dependency inventory, including complete
 Core, annotations and foreign products. Exact provider membership and current
 source-note contents must also agree before a checked ZIP can bypass hydration
-and JSON rendering. The driver repeats these observations after archive
-validation. Missing or inconsistent evidence falls back to ordinary acquisition;
+and JSON rendering. The driver revalidates after archive validation. Within
+one bundle transaction, byte-identical streamed SHA-256 hashes of every raw
+interface and the helper, plus freshly discovered registrations, permit reuse
+of the first validated exact-inventory probe. The initial probe is always
+fresh; nothing is shared between bundle transactions or differing inventories.
+Source-content and archive checks still run independently. Missing or
+inconsistent evidence falls back to ordinary acquisition;
 this is not a command-free cache or an ABI-only freshness claim. Failed refreshes
 leave prior complete bundles intact. Source-built package caching is unchanged.
 
