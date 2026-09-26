@@ -10,7 +10,7 @@ import Data.Either (isLeft)
 import Data.List (isInfixOf)
 import Test.HUnit
 import THC.Driver.PackageNative
-import THC.Driver.NativeLibrarySources (validateNativeMathIR)
+import THC.Driver.NativeLibrarySources (validateNativeMathIR, validateNativeEntropyIR)
 
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
@@ -51,6 +51,17 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
          "declare double @erf(double, double)\n", "declare fastcc double @erf(double)\n", ""]
   , TestCase $ assertBool "conflicting emitted ABIs rejected" $ isLeft $ nativeSignatures "fixture-unit"
       [moduleWith [ordinary,entry "identity" "ccall" ["IntRep","void"] ["void","IntRep"]]]
+  , TestCase $ do
+      let target = "x86_64-unknown-linux-gnu"
+          valid = "declare i32 @getentropy(ptr noundef, i64 noundef) local_unnamed_addr\n"
+      assertEqual "getentropy preserves native pointer/size_t/status ABI" (Right ())
+        (validateNativeEntropyIR target valid)
+      mapM_ (assertBool "wrong getentropy prototype rejected" . isLeft . validateNativeEntropyIR target)
+        ["declare i64 @getentropy(ptr, i64)\n", "declare i32 @getentropy(ptr, i32)\n",
+         "declare i32 @getentropy(i64, i64)\n", "declare i32 @getentropy(ptr, i64, ...)\n",
+         "declare fastcc i32 @getentropy(ptr, i64)\n", valid ++ valid, ""]
+      assertBool "unsupported getentropy target rejected"
+        (isLeft (validateNativeEntropyIR "x86_64-apple-darwin" valid))
   , TestCase $ assertEqual "one C pointer ABI retains each distinct Core carrier adapter"
       (Right [("read_bytes","ccall","unsafe",["AddrRep","WordRep"],"WordRep"),
               ("read_bytes","ccall","unsafe",["ByteArray#","WordRep"],"WordRep")])

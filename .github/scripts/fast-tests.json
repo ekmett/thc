@@ -11,6 +11,9 @@
     ]
   },
   "leafSources": {
+    "src/main/kotlin/thc/runtime/RubbishLiterals.kt": {
+      "junit": ["thc.runtime.RubbishLiteralTest"], "python": ["scripts/test-audit-core.py"]
+    },
     "src/main/kotlin/thc/runtime/CoreCpuAffinity.kt": {
       "junit": ["thc.runtime.CpuAffinityApiTest"], "python": ["scripts/test-audit-core.py"]
     },
@@ -326,6 +329,9 @@
     }
   },
   "owners": {
+    "test/haskell-fixtures/RubbishLiteralFixtures.hs": {"junit": ["thc.runtime.RubbishLiteralTest"], "python": ["scripts/test-audit-core.py"]},
+    "compiler/test-fixtures/RubbishLiteralAudit.hs": {"junit": ["thc.runtime.RubbishLiteralTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/test/kotlin/thc/runtime/RubbishLiteralTest.kt": {"junit": ["thc.runtime.RubbishLiteralTest"], "python": ["scripts/test-audit-core.py"]},
     "test/primop-tools/Main.hs": {
       "junit": [], "python": [], "haskell": ["primop-tools"]
     },
@@ -1447,6 +1453,7 @@
         "thc.runtime.HintTraceTest",
         "thc.runtime.DelimitedContinuationsTest",
         "thc.runtime.BigNatLiteralTest",
+        "thc.runtime.RubbishLiteralTest",
         "thc.runtime.FloatDecodeTest",
         "thc.runtime.ScalarBitCastTest",
         "thc.runtime.RtsDiagnosticsTest",

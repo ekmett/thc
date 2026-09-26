@@ -1972,6 +1972,7 @@ private data class FunctionSpec(val target: RootCallTarget, val captureLayout: C
 class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>,
               internal val enableAsync: Boolean = false) : ExecutableProgram {
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
+    private val rubbishLiterals = RubbishLiterals(language)
     private val foreignLinks = moduleData["foreignLinks"] as? List<thc.ForeignBitcode> ?: emptyList()
     private val packageScalarLinks = moduleData["packageScalarLinks"] as? List<thc.PackageScalarLink> ?: emptyList()
     private val stackTargetLayout = moduleData["targetLayout"]
@@ -2252,6 +2253,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }.also { check(it.representation) }
     }
     private fun literal(kind: String, value: String, proof: CoreRepresentation? = null): Any = when (kind) {
+        "rubbish" -> rubbishLiterals.decode(requireNotNull(proof))
         "int8" -> int8Literal(value)
         "int16" -> int16Literal(value)
         "int32" -> int32Literal(value)
@@ -2322,7 +2324,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         }
         "lit" -> Literal(literal(expr[1] as String, expr[2] as String, CoreRepresentations.expression(expr))).let {
             if (expr[1] in listOf("int8", "word8", "int16", "word16", "int32", "word32")) it.proven(CoreRepresentations.narrowLiteralProof(expr))
-            else if (expr[1] == "bignat") it.proven(BigNatLiterals.proof(expr)) else it
+            else if (expr[1] == "bignat") it.proven(BigNatLiterals.proof(expr))
+            else if (expr[1] == "rubbish") it.proven(RubbishLiterals.proof(expr)) else it
         }
         "void" -> Literal(Unit)
         "lam" -> {
@@ -3074,7 +3077,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val child = local.child(); val kind = alt[0] as String
                 val value = when (kind) {
                     "lit" -> (alt[1] as List<String>).let {
-                        if (it[0] == "bignat") throw UnsupportedCore("BigNat literal alternatives are invalid GHC Core")
+                        if (it[0] in setOf("bignat", "rubbish")) throw UnsupportedCore("BigNat/rubbish literal alternatives are invalid GHC Core")
                         if (it[0] in setOf("float", "double")) throw UnsupportedCore("Floating literal alternatives are invalid GHC Core")
                         literal(it[0], it[1])
                     }

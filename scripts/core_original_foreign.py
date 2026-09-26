@@ -27,6 +27,15 @@ GMP_OPERATIONS = {
     'integer_gmp_mpn_rshift_2c': ((GMP_ARRAY, GMP_ARRAY, 'IntRep', 'WordRep', None), (None, 'WordRep')),
     'integer_gmp_mpn_get_d': ((GMP_ARRAY, 'IntRep', 'IntRep', None), (None, 'DoubleRep')),
     '__int_encodeDouble': (('IntRep', 'IntRep', None), (None, 'DoubleRep')),
+    'integer_gmp_gcd_word': (('WordRep', 'WordRep', None), (None, 'WordRep')),
+    'integer_gmp_mpn_gcd_1': ((GMP_ARRAY, 'IntRep', 'WordRep', None), (None, 'WordRep')),
+    'integer_gmp_mpn_gcd': ((GMP_ARRAY, GMP_ARRAY, 'IntRep', GMP_ARRAY, 'IntRep', None), (None, 'IntRep')),
+    'integer_gmp_mpn_lshift': ((GMP_ARRAY, GMP_ARRAY, 'IntRep', 'WordRep', None), (None, 'WordRep')),
+    'integer_gmp_mpn_and_n': ((GMP_ARRAY, GMP_ARRAY, GMP_ARRAY, 'IntRep', None), (None,)),
+    'integer_gmp_mpn_andn_n': ((GMP_ARRAY, GMP_ARRAY, GMP_ARRAY, 'IntRep', None), (None,)),
+    'integer_gmp_mpn_ior_n': ((GMP_ARRAY, GMP_ARRAY, GMP_ARRAY, 'IntRep', None), (None,)),
+    'integer_gmp_mpn_xor_n': ((GMP_ARRAY, GMP_ARRAY, GMP_ARRAY, 'IntRep', None), (None,)),
+    '__gmpn_popcount': ((GMP_ARRAY, 'IntRep', None), (None, 'WordRep')),
 }
 GMP_SYMBOLS = frozenset(GMP_OPERATIONS)
 # The managed runtime has no native DWARF backend, matching RTS USE_LIBDW=0.

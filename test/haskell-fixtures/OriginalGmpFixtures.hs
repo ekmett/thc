@@ -31,7 +31,12 @@ entries = [("originalAdd","__gmpn_add"),("originalAddWord","__gmpn_add_1"),
   ("originalQuotRem","__gmpn_tdiv_qr"),("originalQuot","integer_gmp_mpn_tdiv_q"),
   ("originalRem","integer_gmp_mpn_tdiv_r"),
   ("originalRShift","integer_gmp_mpn_rshift"),("originalRShiftNegative","integer_gmp_mpn_rshift_2c"),
-  ("originalGetDouble","integer_gmp_mpn_get_d"),("originalEncodeDouble","__int_encodeDouble")]
+  ("originalGetDouble","integer_gmp_mpn_get_d"),("originalEncodeDouble","__int_encodeDouble"),
+  ("originalGcdWords","integer_gmp_gcd_word"),("originalGcdWord","integer_gmp_mpn_gcd_1"),
+  ("originalGcd","integer_gmp_mpn_gcd"),("originalLShift","integer_gmp_mpn_lshift"),
+  ("originalAnd","integer_gmp_mpn_and_n"),("originalAndNot","integer_gmp_mpn_andn_n"),
+  ("originalOr","integer_gmp_mpn_ior_n"),("originalXor","integer_gmp_mpn_xor_n"),
+  ("originalPopCount","__gmpn_popcount")]
 
 -- Native observations only. Kotlin owns arithmetic and raw-ABI expectations.
 type Row = ((String,String,[Int],[Int],Int,Int,Int,Int,Int,Int,[Int],[Int]),
@@ -99,7 +104,7 @@ prepareOriginalGmp root requireSupported = do
   observed <- execute "native-observations" [] (root </> binary) []
   rows <- maybe (die "Malformed original GMP observations") pure
     (readMaybe (BSC.unpack (commandStdout observed)) :: Maybe [Row])
-  unless (length rows == 296 && sort (Map.keys (Map.fromList [(entry,()) |
+  unless (length rows == 464 && sort (Map.keys (Map.fromList [(entry,()) |
       ((entry,_,_,_,_,_,_,_,_,_,_,_),_) <- rows])) == sort (map fst entries))
     (die "Unexpected original GMP observation inventory")
   let oracle = directory </> "oracle.json"
@@ -146,4 +151,4 @@ prepareOriginalGmp root requireSupported = do
      "testPackageExposure" .= object ["modules" .= map ModuleName.toFilePath exposedBackends,"database" .= database,
        "registration" .= configuration,"sameUnitAndLibraries" .= True,"installedDatabaseModified" .= False],
      "inputHashes" .= inputHashes,"artifactHashes" .= artifactHashes,"commands" .= map commandRecord commands]
-  putStrLn "original-gmp: 296 native observations, fifteen original declarations, pre/post strict audit receipts"
+  putStrLn "original-gmp: 464 native observations, twenty-four original declarations, pre/post strict audit receipts"

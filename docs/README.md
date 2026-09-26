@@ -15,6 +15,7 @@ are different claims; each report identifies which it establishes.
 | Containers | [IntMap, IntSet and Sequence](library-coverage.md); [breadth-first graph example](graph-example.md); [Map example and its diagnostic frontier](map-example.md); [Set source-binding audit](set-source-binding-audit.md) |
 | Formatting | [Int formatting](show-int.md), [Word and list formatting](show-word-list.md) |
 | Integer and Natural | [BigNat literals and original conversion workers](bignat-literals.md); this does not imply general large-integer arithmetic |
+| Absent-value fillers | [Scalar GHC rubbish literals](rubbish-literals.md), original interface evidence and aggregate/vector frontiers |
 | Mutable references | [ST/STRef with lazy lifted storage](mutvars.md) |
 | Stable names | [Non-evaluating weak identity tokens](stable-names.md) |
 | Compact regions | [Copied graphs, membership, sharing, cycles and context-local serialized blocks](compact-regions.md); no cross-context/process import or GHC wire-format compatibility |

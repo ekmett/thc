@@ -612,13 +612,31 @@ for ((taskName, dense) in listOf("packageNativeOriginalsDefault" to false, "pack
         testClassesDirs = fullCoreTests.output.classesDirs
         classpath = fullCoreTests.runtimeClasspath
         systemProperty("thc.handoffSlabs", dense.toString())
-        inputs.files(fileTree("build/original-native") { include("linked/**/*.json", "*-native.tsv", "erf-entry/**/*.json", "erf-audit.json", "manifest.json", "sources/**") })
+        inputs.files(fileTree("build/original-native") { include("linked/**/*.json", "*-native.tsv", "erf-entry/**/*.json", "primitive-entry/**/*.json", "*-audit.json", "manifest.json", "sources/**") })
         useJUnitPlatform()
         filter { includeTestsMatching("thc.runtime.PackageNativeOriginalsTest") }
         outputs.upToDateWhen { false }
         doFirst {
             check(file("build/original-native/manifest.json").isFile) {
                 "Missing original package fixtures: set THC_DIGEST_SOURCE, THC_ERF_SOURCE and THC_PRIMITIVE_SOURCE; run cabal run exe:thc-fixtures -- package-native-originals"
+            }
+        }
+    }
+}
+for ((taskName, dense) in listOf("getEntropyDefault" to false, "getEntropyDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Checks original splitmix initialization and native libc getentropy status/bounds."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        systemProperty("thc.handoffSlabs", dense.toString())
+        inputs.files(fileTree("build/getentropy") { include("**/*.json", "native.tsv", "control.so", "sources/**") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.GetEntropyTest") }
+        outputs.upToDateWhen { false }
+        doFirst {
+            check(file("build/getentropy/manifest.json").isFile) {
+                "Set THC_SPLITMIX_SOURCE and run cabal run exe:thc-fixtures -- getentropy"
             }
         }
     }

@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "180d2dbd03ac15072268fd8b47988ac5e5e71a1106430388ddae63c8c852f3cd"
+FULL_PREPARATION_PLAN = "7838e7fc408bb59852b09e734ebe184a7295bc8aca62954405c48b9f0de0c7f6"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/address-array-copy", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -34,6 +34,7 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
     "build/original-fd-ready", "build/simd-calls", "build/sum-join", "build/record-fields",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    *fast_inputs.RUBBISH_OUTPUTS,
     "build/sum-join/manifest.json", "build/sum-join/oracle.tsv", "build/sum-join/native/oracle",
     *[f"build/sum-join/{stage}/{suffix}" for stage in ("pre", "post")
       for suffix in ("core/SumJoinAudit.json", "audit.json")],

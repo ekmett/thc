@@ -22,7 +22,7 @@ internal class ClosureImage(val descriptor: String, val bytes: ByteArray, val po
 internal class ClosureInfoTables {
     private val tables = ConcurrentHashMap<String, ManagedAddress>()
     @TruffleBoundary fun address(descriptor: String): ManagedAddress = tables.computeIfAbsent(descriptor) {
-        ManagedAddress.fromAllocation(ManagedAllocation.immutable(("THC closure v1: $it\u0000").toByteArray(Charsets.UTF_8), 8))
+        ManagedAddress.fromStaticBytes(("THC closure v1: $it\u0000").toByteArray(Charsets.UTF_8))
     }
 }
 
