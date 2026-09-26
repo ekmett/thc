@@ -4,7 +4,7 @@
 module StoreProjectTests (tests) where
 
 import Control.Exception (bracket)
-import Control.Monad (unless)
+import Control.Monad (forM_, unless)
 import Data.Char (isHexDigit)
 import Data.List (isPrefixOf)
 import System.Directory (getModificationTime, getPermissions, removeFile,
@@ -16,35 +16,60 @@ import System.FilePath ((</>), takeDirectory, takeFileName)
 import qualified System.Process as Process
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
+import THC.Driver.GhcProxy (ghcProxyCommand)
 
 tests :: Env -> Test
 tests env = TestList [proxyOptionsTest env, storeProjectTest env]
 
 proxyOptionsTest :: Env -> Test
-proxyOptionsTest env = TestLabel "global Core replay opts into foreign import provenance" $ TestCase $
+proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay provenance" $ TestCase $
   withFixtureNamed env "test/fixtures/run-store-project" "proxy" $ \project -> do
     let compiler = project </> "compiler.sh"
+        wrapper = project </> "ghc-proxy.sh"
         arguments = project </> "compiler-arguments.txt"
-        settings = [("THC_PROXY_GHC", compiler), ("THC_PROXY_GLOBAL_UNITS", "sample\n"),
+        response = project </> "compiler response.txt"
+        settings = [("THC_PROXY_DRIVER", driver env),
+                    ("THC_PROXY_GHC", compiler), ("THC_PROXY_GLOBAL_UNITS", "sample\n"),
                     ("THC_PROXY_CAPTURE", project </> "capture"),
                     ("THC_PROXY_PLUGIN_DB", project </> "plugin-db"),
                     ("THC_PROXY_PLUGIN_UNIT", "thc-plugin"),
                     ("THC_PROXY_ARGUMENTS", arguments)]
-    writeText compiler "#!/bin/sh\nprintf 'BEGIN\\n' >> \"$THC_PROXY_ARGUMENTS\"\nprintf '%s\\n' \"$@\" >> \"$THC_PROXY_ARGUMENTS\"\n"
-    permissions <- getPermissions compiler
-    setPermissions compiler permissions { Directory.executable = True }
+    writeText compiler "#!/bin/sh\nprintf 'BEGIN\\0' >> \"$THC_PROXY_ARGUMENTS\"\nprintf '%s\\0' \"$@\" >> \"$THC_PROXY_ARGUMENTS\"\n"
+    writeText wrapper ("#!/bin/sh\n" ++ ghcProxyCommand)
+    writeText response "--make\n-this-unit-id\nsample\n+RTS\n-A8m\n-RTS\n"
+    forM_ [compiler, wrapper] $ \path -> do
+      permissions <- getPermissions path
+      setPermissions path permissions { Directory.executable = True }
     original <- getEnvironment
     let environment = settings ++ filter ((`notElem` map fst settings) . fst) original
-        command = (Process.proc (driver env) ["ghc-proxy", "--make", "-this-unit-id", "sample"])
-          { Process.cwd = Just project, Process.env = Just environment }
-    (status, _, stderr) <- Process.readCreateProcessWithExitCode command ""
-    assertEqual stderr ExitSuccess status
-    calls <- lines <$> readText arguments
-    let (_, replay) = break (== "BEGIN") (drop 1 calls)
-        flag = "-fplugin-opt=THC.Plugin:foreign-import-provenance"
-    assertEqual "native compile and Core replay both invoked" 2 (length $ filter (== "BEGIN") calls)
-    assertEqual "replayed compiler receives exactly one provenance opt-in" 1
-      (length $ filter (== flag) replay)
+        cases = [ (True, ["--make", "-this-unit-id", "sample", "+RTS", "-A8m", "-RTS"])
+                , (False, ["--numeric-version", "+RTS", "-A8m", "-RTS", "--",
+                           "space and café", "", "line\nbreak", "\"quoted\"", "$literal"])
+                , (True, ["@" ++ response])
+                , (False, ["--numeric-version", "--RTS", "+RTS", "-A8m", "-RTS"])
+                ]
+    forM_ cases $ \(replays, supplied) -> do
+      writeText arguments ""
+      let command = (Process.proc wrapper supplied)
+            { Process.cwd = Just project, Process.env = Just environment }
+      (status, _, stderr) <- Process.readCreateProcessWithExitCode command ""
+      assertEqual stderr ExitSuccess status
+      calls <- splitArguments <$> readText arguments
+      let (native, replay) = break (== "BEGIN") (drop 1 calls)
+          flag = "-fplugin-opt=THC.Plugin:foreign-import-provenance"
+      assertEqual "native compiler receives every original argument exactly" supplied native
+      assertEqual "only selected Core compilations replay" (if replays then 2 else 1)
+        (length $ filter (== "BEGIN") calls)
+      if replays then do
+        assertEqual "Core replay retains original arguments exactly" supplied
+          (take (length supplied) (drop 1 replay))
+        assertEqual "replayed compiler receives exactly one provenance opt-in" 1
+          (length $ filter (== flag) replay)
+      else pure ()
+  where
+    splitArguments "" = []
+    splitArguments input = let (value, rest) = break (== '\0') input
+                           in value : case rest of [] -> []; _:more -> splitArguments more
 
 storeProjectTest :: Env -> Test
 storeProjectTest env = TestLabel "source-built Cabal store Core" $ TestCase $
@@ -66,13 +91,18 @@ storeProjectTest env = TestLabel "source-built Cabal store Core" $ TestCase $
           ((== identifier) . string . (`field` "id")) (objects manifest "units")) "bundle"
     copyTree (project </> "dep-data") source
     removePathForcibly (project </> "dep-data")
+    -- Exercise both generated wrappers with a real GHC RTS option: local
+    -- compilation uses native-ghc, store capture uses its temporary wrapper.
+    let dependencyDescription = source </> "dep-data.cabal"
+    dependency <- readText dependencyDescription
+    writeText dependencyDescription (dependency ++ "\n  ghc-options: +RTS -A8m -RTS\n")
     sourceDist env source project
     -- Both the initial native build and fresh-store Core capture must select
     -- the requested executable, not build every sibling component. This valid
     -- Cabal component deliberately fails if either path still uses `all`.
     let appDescription = project </> "app/app.cabal"
     description <- readText appDescription
-    writeText appDescription (description ++ unlines
+    writeText appDescription (description ++ "\n  ghc-options: +RTS -A8m -RTS\n" ++ unlines
       ["", "executable unrelated", "  main-is: Unrelated.hs", "  hs-source-dirs: app",
        "  build-depends: base >=4.22 && <4.23", "  default-language: Haskell2010"])
     writeText (project </> "app/app/Unrelated.hs")
