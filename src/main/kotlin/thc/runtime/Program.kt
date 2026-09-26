@@ -1752,6 +1752,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         CoreLibdwForeign.validateHeads(bindings)
         CoreNativeAllocationForeign.validateHeads(bindings)
         CoreMemmoveForeign.validateHeads(bindings)
+        CoreMemcpyForeign.validateHeads(bindings)
         CoreSignalForeign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(bindings, constructors)
@@ -2056,10 +2057,12 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val memmove = CoreMemmoveForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val memcpy = CoreMemcpyForeign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && capi == null &&
-                !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && processSignal == null)
+                !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -2175,6 +2178,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     }
                 }
                 MemmoveExpression(operands.toTypedArray(), tupleProof)
+            } else if (memcpy) {
+                CoreMemcpyForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreMemcpyForeign.validateOperand(index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                MemcpyExpression(operands.toTypedArray(), tupleProof)
             } else if (libdw != null) {
                 CoreLibdwForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->

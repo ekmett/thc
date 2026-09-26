@@ -97,7 +97,7 @@
     "ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR",
     "ghczuwrapperZC0ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuEND",
     "hs_free_stable_ptr",
-    "malloc", "free", "memmove", "strlen",
+    "malloc", "free", "memmove", "memcpy", "strlen",
     "getOrSetSystemEventThreadEventManagerStore",
     "getOrSetGHCConcSignalSignalHandlerStore",
     "rts_setMainThread",
@@ -1025,6 +1025,7 @@
 
     "Original malloc/free use owned libc allocations on native-enabled Linux x86_64 contexts. Live aliases share the allocation until explicit free, explicit weak finalization through &free, or context disposal; free waits for outstanding borrows. Only the owned base may be freed, and free(NULL) succeeds. Sizes above signed Long, calloc/realloc, recovery from unregistered numeric pointers, array-only cbits transports, and automatic GC finalization remain unsupported.",
     "Original ghc-internal memmove copies exact checked byte ranges between owned managed or native addresses, including overlap, and returns the destination Addr#. Managed pointer cells retain their references only when copied as whole cells; partial cells, freed native owners, unowned numeric pointers, and immutable destinations reject before mutation. Word64 lengths beyond the signed JVM range reject rather than wrap.",
+    "Original ghc-internal memcpy has the same exact Addr#/Addr#/Word64#/State# declaration and checked storage transport as memmove, but rejects overlapping nonempty ranges before mutation. Adjacent and empty checked regions are permitted; the returned Addr# is the original destination carrier.",
     "Original ghc-internal strlen scans only live, bounded managed or owned native Addr# bytes through the first NUL and returns the exact Int# length. Unterminated storage, pointer-cell byte exposure, opaque labels, unowned numeric addresses and freed native allocations reject. rts_isThreaded reports the nonthreaded RTS mode used by THC's admitted original FD and wait path; it does not report the number of Java guest threads or offer GHC's threaded RTS ABI.",
     "labelThread#/threadLabel# retain and observe the exact UTF-8 ByteArray# on context-owned Java thread identities, including finished threads; empty labels are present and host Java thread names are unchanged. Labels are released with their identities or context disposal. No RTS eventlog emission is claimed.",
     "threadStatus# returns the exact State#/Int#/Int#/Int# tuple for context-owned Java thread identities. Logical capabilities are monotonically allocated per Java carrier, not physical CPU numbers; forkOn/count/affinity APIs remain unsupported. Registered MVar, black-hole, throwTo and foreign boundaries report their actual managed states. Forked threads retain normal/uncaught-guest completion; a live host carrier outside guest entry remains foreign and keeps its identity on re-entry. Existing throwTo mailboxes are scoped to active guest invocations and do not queue across separate host calls.",

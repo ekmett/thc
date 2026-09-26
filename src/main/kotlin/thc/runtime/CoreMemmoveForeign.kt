@@ -4,16 +4,18 @@ package thc.runtime
 
 import com.oracle.truffle.api.frame.VirtualFrame
 
-/** Exact original ghc-internal memmove FCallId, not an arbitrary libc symbol bridge. */
-internal object CoreMemmoveForeign {
-    private const val SYMBOL = "memmove"
+/** Exact original ghc-internal memory-copy FCallIds, not an arbitrary libc symbol bridge. */
+internal object CoreMemmoveForeign : CoreMemoryCopyForeign("memmove")
+internal object CoreMemcpyForeign : CoreMemoryCopyForeign("memcpy")
+
+internal sealed class CoreMemoryCopyForeign(private val symbol: String) {
     private val scalarKeys = setOf("kind", "primReps", "evaluated")
     private val tupleKeys = scalarKeys + setOf("aggregate", "components")
     private val descriptorKeys = setOf("schema", "target", "convention", "safety", "arity", "suppliedArity", "argumentReps", "resultRep")
     private val argumentReps = listOf("AddrRep", "AddrRep", "Word64Rep", null)
 
     private fun requireProof(valid: Boolean, detail: String) {
-        if (!valid) fault("Invalid original memmove call: $detail")
+        if (!valid) fault("Invalid original $symbol call: $detail")
     }
     private fun exactInteger(value: Any?, expected: Int): Boolean =
         (value is Int || value is Long) && (value as Number).toLong() == expected.toLong()
@@ -49,9 +51,9 @@ internal object CoreMemmoveForeign {
             is List<*> -> {
                 if (value.firstOrNull() == "app") {
                     val target = ((value.getOrNull(6) as? Map<*, *>)?.get("foreignCall") as? Map<*, *>)?.get("target") as? Map<*, *>
-                    if (target?.get("symbol") == SYMBOL)
+                    if (target?.get("symbol") == symbol)
                         validateHead(value.getOrNull(1) as? List<Any?>
-                            ?: fault("Invalid original memmove call: missing variable head"), false)
+                            ?: fault("Invalid original $symbol call: missing variable head"), false)
                 }
                 value.forEach(::validateHeads)
             }
@@ -73,7 +75,7 @@ internal object CoreMemmoveForeign {
         val meta = metadata as? Map<*, *> ?: return false
         val descriptor = meta["foreignCall"] as? Map<*, *> ?: return false
         val target = descriptor["target"] as? Map<*, *> ?: return false
-        if (target["symbol"] != SYMBOL) return false
+        if (target["symbol"] != symbol) return false
         requireProof(descriptor.keys == descriptorKeys && exactInteger(descriptor["schema"], 1), "descriptor schema")
         requireProof(target.keys == setOf("kind", "symbol", "unit", "isFunction") && target["kind"] == "static" &&
             target["unit"] == "ghc-internal" && target["isFunction"] == true, "exact installed GHC target")
@@ -98,6 +100,20 @@ internal class MemmoveExpression(@field:Children private var operands: Array<Exp
         val count = operands[2].executeRequiredLong(frame)
         requireVoidCarrier(operands[3].execute(frame))
         FrameAccess.writeObject(frame, slots[offset], source.moveTo(destination, count))
+        return null
+    }
+}
+
+internal class MemcpyExpression(@field:Children private var operands: Array<Expr>, proof: CoreRepresentation) : Expr() {
+    init { representation = proof.copy(evaluated = true) }
+    override fun execute(frame: VirtualFrame): Nothing = fault("memcpy requires a tuple destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val destination = operands[0].executeRequiredAddress(frame)
+        val source = operands[1].executeRequiredAddress(frame)
+        val count = operands[2].executeRequiredLong(frame)
+        requireVoidCarrier(operands[3].execute(frame))
+        source.copyNonOverlappingTo(destination, count)
+        FrameAccess.writeObject(frame, slots[offset], destination)
         return null
     }
 }

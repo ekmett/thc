@@ -1655,6 +1655,63 @@ class OriginalMemmoveDeclarationTest(unittest.TestCase):
             self.assertFalse(fixture.audit(wrong)['accepted'])
 
 
+class OriginalMemcpyDeclarationTest(unittest.TestCase):
+    def test_exact_original_descriptor_and_checked_capability(self):
+        resource = ROOT.parent / 'src/test/resources/core/original-memcpy-descriptor.json'
+        declaration = json.loads(resource.read_text())
+        self.assertEqual('memcpy', declaration['target']['symbol'])
+        fixture = LibdwUnavailableAuditTest()
+        result = fixture.audit(fixture.fixture(declaration))
+        self.assertTrue(result['accepted'], result)
+        self.assertEqual(['memcpy'], [call['symbol'] for call in result['foreignCalls']])
+        disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != 'memcpy'])
+        self.assertFalse(fixture.audit(fixture.fixture(declaration), disabled)['accepted'])
+        for key, value in [('safety', 'safe'), ('convention', 'capi'), ('arity', 3),
+                           ('suppliedArity', 3), ('schema', 1.0), ('resultRep', LONG),
+                           ('argumentReps', declaration['argumentReps'][:3])]:
+            wrong = copy.deepcopy(declaration); wrong[key] = value
+            result = fixture.audit(fixture.fixture(wrong))
+            self.assertFalse(result['accepted'], result)
+            self.assertEqual([], result['foreignCalls'])
+        for key, value in [('unit', None), ('unit', 'other'), ('kind', 'dynamic'), ('isFunction', False)]:
+            wrong = copy.deepcopy(declaration); wrong['target'][key] = value
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+        for symbol in ('memcpy2', '__memcpy_chk', 'prefixmemcpy'):
+            self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
+
+    def test_stored_intrinsic_head_and_raw_proof_spoofs_reject(self):
+        declaration = json.loads((ROOT.parent / 'src/test/resources/core/original-memcpy-descriptor.json').read_text())
+        fixture = LibdwUnavailableAuditTest()
+
+        def reject(change):
+            module = fixture.fixture(declaration)
+            call = module['bindings'][0]['expr'][2][1]
+            change(module, call)
+            result = fixture.audit(module)
+            self.assertFalse(result['accepted'], result)
+            self.assertEqual([], result['foreignCalls'])
+
+        for index in range(4):
+            reject(lambda module, call: module['bindings'][0]['expr'][1][index].__setitem__('rep', LONG))
+            reject(lambda module, call: call[2][index].__setitem__(2, {}))
+        for head in [['var', 'arg-0', dict(rep=CLOSURE)], ['prim', 'memcpy', dict(rep=CLOSURE)],
+                     ['var', 'unproved-foreign-variable']]:
+            reject(lambda module, call: call.__setitem__(1, head))
+        reject(lambda module, call: call.__setitem__(3, [True, False, False, False]))
+        reject(lambda module, call: call[2].__setitem__(0,
+            ['lit', 'int', '0', dict(rep=dict(declaration['argumentReps'][0], evaluated=True))]))
+        reject(lambda module, call: call[6].__setitem__('rep', LONG))
+
+        def shadow_with_join(module, call):
+            join = dict(id='synthetic-fcall-id', name='shadowedForeign', lifted=False, rep=LONG,
+                        expr=['lit', 'int', '0', dict(rep=LONG)], joinValueArity=0,
+                        joinResultRep=LONG, info=dict(joinArity=0))
+            wrapper = module['bindings'][0]['expr']
+            wrapper[2] = ['let', False, [join], wrapper[2], dict(rep=LONG)]
+
+        reject(shadow_with_join)
+
+
 class OriginalStringRtsDeclarationTest(unittest.TestCase):
     def test_retained_posix_descriptors_and_capability(self):
         resource = ROOT.parent / 'src/test/resources/core/original-string-rts-descriptors.json'
