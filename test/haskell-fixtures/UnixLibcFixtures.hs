@@ -1,7 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP, OverloadedStrings #-}
 module UnixLibcFixtures (prepareUnixLibc) where
+
+#if defined(mingw32_HOST_OS)
+import System.Exit (die)
+
+prepareUnixLibc :: FilePath -> IO ()
+prepareUnixLibc _ = die "unix-libc requires Unix"
+#else
 
 import Control.Monad (forM, unless)
 import Data.Aeson (object, (.=))
@@ -216,3 +223,5 @@ prepareUnixLibc root = do
      "interfaces" .= interfaces, "installedArtifactsHashed" .= False, "inputHashes" .= inputHashes,
      "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
   putStrLn "unix-libc: 4 original FCallIds, native file/environment observations and 8 strict audits"
+
+#endif
