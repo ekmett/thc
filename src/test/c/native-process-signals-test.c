@@ -71,7 +71,7 @@ static void independent_signals(void) {
 }
 static void unsupported_signal_rejected(void) {
     void *session = thc_signal_open(); assert(session != NULL);
-    assert(thc_signal_install(session, SIGUSR1, -4) == -3 && errno == EINVAL);
+    assert(thc_signal_install(session, SIGRTMAX, -4) == -3 && errno == EINVAL);
     assert(thc_signal_install(session, SIGSEGV, -4) == -3 && errno == EINVAL);
     assert(thc_signal_install(session, SIGINT, 42) == -3 && errno == EINVAL);
     assert(thc_signal_close(session) == 0);
@@ -124,6 +124,6 @@ int main(void) {
         stop_or_continue_signal = stopping[i];
         child(stop_or_continue_exit, -255);
     }
-    puts("25 isolated native signal controls passed");
+    puts("41 isolated native signal controls passed");
     return 0;
 }

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 #define _GNU_SOURCE
+#include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -19,7 +20,7 @@ _Static_assert(ATOMIC_INT_LOCK_FREE == 2, "signal atomics must be lock free");
 _Static_assert(sizeof(siginfo_t) <= 512, "one signal record must fit PIPE_BUF");
 static atomic_int signal_fd = -1, active_handlers, overflow;
 static atomic_int owned;
-static const int supported_signals[] = {SIGHUP, SIGINT, SIGQUIT, SIGTERM};
+static const int supported_signals[] = {SIGHUP, SIGINT, SIGQUIT, SIGUSR1, SIGUSR2, SIGTERM, SIGXCPU, SIGXFSZ};
 #define SIGNAL_COUNT (sizeof(supported_signals) / sizeof(supported_signals[0]))
 struct signal_session {
     int read_fd, write_fd, wake_fd;
@@ -40,6 +41,26 @@ static void capture(int signal_number, siginfo_t *info, void *context) {
 
 int thc_signal_info_size(void) { return sizeof(siginfo_t); }
 int thc_signal_number(const void *info) { return ((const siginfo_t *)info)->si_signo; }
+
+static int vm_handler(const struct sigaction *action) {
+    Dl_info image;
+    if (!(action->sa_flags & SA_SIGINFO) || !dladdr((void *)action->sa_sigaction, &image) || !image.dli_fname)
+        return 0;
+    const char *name = strrchr(image.dli_fname, '/');
+    return strcmp(name ? name + 1 : image.dli_fname, "libjvm.so") == 0;
+}
+
+/* HotSpot's suspend handler does not chain. The standalone Linux launcher must
+ * move it before JVM startup; environment text alone is not evidence that the
+ * current VM released USR2. Signal 64 remains excluded from the guest set.
+ * Interposers hiding the real VM dispositions conservatively fail this check. */
+int thc_signal_usr2_available(void) {
+    const char *setting = getenv("_JAVA_SR_SIGNUM");
+    struct sigaction reserved, guest;
+    return setting && strcmp(setting, "64") == 0 &&
+        sigaction(64, NULL, &reserved) == 0 && vm_handler(&reserved) &&
+        sigaction(SIGUSR2, NULL, &guest) == 0 && !vm_handler(&guest);
+}
 
 void *thc_signal_open(void) {
     int expected = 0;

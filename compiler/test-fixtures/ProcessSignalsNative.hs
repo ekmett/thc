@@ -15,7 +15,7 @@ foreign import ccall unsafe "stg_sig_install"
 -- No OS signal is delivered by this oracle.
 main :: IO ()
 main = do
-  rows <- mapM check [1, 2, 3, 15]
+  rows <- mapM check [1, 2, 3, 10, 12, 15, 24, 25]
   print rows
   where
     check signal = bracket (install signal (-1) nullPtr)
