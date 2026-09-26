@@ -480,6 +480,17 @@ class PinnedPointerCellsTest {
                 .single { it["name"] == "copyAddrToAddrNonOverlapping#" }["uses"] as List<Map<String, Any?>>)
             assertEquals(setOf("main:PinnedPointerCellsAudit.nonOverlappingCopy"), uses.map { it["owner"] }.toSet())
             val source = CoreModules.reachable(module(stage), "nonOverlappingCopy") + ("instrument" to true)
+            // Both retained Core stages apply a state lambda inside the public
+            // entry. The counter measures guest roots, including inlined ones,
+            // rather than just public invocations.
+            val evidence = ArrayCoreEvidence(source, "nonOverlappingCopy")
+            val expectedEntries = evidence.immediateStateCalls().toLong()
+            assertEquals(2L, expectedEntries, "$stage entry and immediate state lambda")
+            val expectedLabels = evidence.guestLambdas(evidence.root["expr"]).map { expression ->
+                val formal = (expression[1] as List<Map<String, Any?>>).single()
+                "lambda ${formal["name"]}"
+            }.toSet()
+            assertEquals(2, expectedLabels.size, "$stage entry and state root labels")
             val calls = primitiveCalls(source).filter { (it[1] as List<*>)[1] == "copyAddrToAddrNonOverlapping#" }
             assertEquals(1, calls.size)
             val arguments = (calls.single()[2] as List<List<Any?>>).map(CoreRepresentations::expression)
@@ -494,38 +505,46 @@ class PinnedPointerCellsTest {
                 flags, result) }
             assertThrows(RuntimeFault::class.java) { operation.validate(arguments, flags,
                 result.copy(kind = CoreKind.LONG, primReps = listOf("IntRep"))) }
-            for (backend in listOf("ast", "bytecode")) strictContext(true).use { context ->
+            for (backend in listOf("ast", "bytecode")) for (inlining in listOf(false, true))
+                strictContext(inlining).use { context ->
                 context.initialize("thc"); context.enter()
                 try {
+                    val label = "$stage/$backend/inlining=$inlining"
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                     val program = program(language, source, backend)
                     val function = context.asValue(EntryValue(program, "nonOverlappingCopy", 1))
                     val host = program.hostEntryTarget(1)
                     val original = program.entryTarget("nonOverlappingCopy")
-                    fun publicTargets(): List<RootCallTarget> {
-                        // EntryValue.compile installs the selected entry's active
-                        // direct target (possibly split) and the host bridge. It
-                        // does not promise installation of every nested helper.
-                        val entries = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
+                    fun measuredTargets(): List<RootCallTarget> {
+                        val entry = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
                             .filter { it.callTarget === original }
-                            .map { it.currentCallTarget as RootCallTarget }.distinct()
-                            .ifEmpty { listOf(original) }
-                        return entries + host
+                            .map { it.currentCallTarget as RootCallTarget }.distinct().single()
+                        return activeTargets(entry)
                     }
                     fun check(row: Row) = assertEquals(row.nonOverlappingCopy,
-                        function.execute(row.input).asLong(), "$stage/$backend/${row.input}")
+                        function.execute(row.input).asLong(), "$label/${row.input}")
                     rows.forEach(::check)
-                    assertTrue(function.invokeMember("compile").asBoolean(), "$stage/$backend compile")
-                    val targets = publicTargets()
-                    targets.forEach { valid(it, "$stage/$backend/${it.rootNode.name} installed target") }
+                    val targets = measuredTargets()
+                    assertEquals(expectedEntries.toInt(), targets.size, "$label active guest roots")
+                    assertEquals(expectedLabels, targets.map { it.rootNode.name }.toSet(), "$label guest root labels")
+                    // Compile callees before callers so residual state calls are
+                    // measured too. Public compilation then installs the bridge
+                    // and restores its shared entry prerequisite without a call.
+                    targets.forEach {
+                        it.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(it, true)
+                        valid(it, "$label/${it.rootNode.name} installation")
+                    }
+                    assertTrue(function.invokeMember("compile").asBoolean(), "$label compile")
+                    assertEquals(targets, measuredTargets(), "$label installed active targets")
+                    (targets + host).forEach { valid(it, "$label/${it.rootNode.name} installed target") }
                     for (row in rows.asReversed()) {
                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                         check(row)
-                        assertEquals(before + 1,
+                        assertEquals(before + expectedEntries,
                             (program.diagnostics().getValue("compiledEntries") as Number).toLong(),
-                            "$stage/$backend/${row.input} compiled entry")
-                        assertEquals(targets, publicTargets(), "$stage/$backend active targets")
-                        targets.forEach { valid(it, "$stage/$backend/${it.rootNode.name} retained target") }
+                            "$label/${row.input} exact entry and state-lambda compiled entries")
+                        assertEquals(targets, measuredTargets(), "$label active targets")
+                        (targets + host).forEach { valid(it, "$label/${it.rootNode.name} retained target") }
                     }
                     assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong())
                     released(language)
