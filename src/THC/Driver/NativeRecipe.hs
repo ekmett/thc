@@ -21,7 +21,8 @@ import Distribution.PackageDescription.Parsec (parseGenericPackageDescriptionMay
 import Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import Distribution.Parsec (eitherParsec)
 import Distribution.Simple.LocalBuildInfo (lookupComponent, componentBuildInfo)
-import Distribution.Types.ComponentName (ComponentName(CExeName))
+import Distribution.Types.ComponentName (ComponentName(CExeName, CLibName))
+import Distribution.Types.LibraryName (LibraryName(LMainLibName, LSubLibName))
 import Distribution.Types.UnqualComponentName (unUnqualComponentName)
 import Distribution.Utils.Path (getSymbolicPath)
 import GHC.Generics (Generic)
@@ -143,21 +144,30 @@ componentNativeObjects native dist allRoots component = do
   roots <- componentRoots dist component
   modules <- field component "modules"
   kind <- field component "type" :: IO String
-  haskellRoots <- if kind == "exe" then do
-    name <- field component "name"
-    executableName <- case eitherParsec name of
-      Right (CExeName value) -> pure (unUnqualComponentName value)
-      _ -> fail "Cabal executable build-info has an invalid component name"
-    arguments <- field component "compiler-args"
-    -- Cabal 3.16 build-info reports the base build directory, but its GHC
-    -- builder puts executable artifacts in <name>/<name>-tmp beneath it.
-    -- Recognize only that exact layout, still requiring the paired interface
-    -- and rejecting any native receipt for the same object below.
-    artifacts <- mapM canonicalizePath
-      [directory </> executableName </> (executableName ++ "-tmp") |
-        (flag,directory) <- zip arguments (drop 1 arguments), flag `elem` ["-odir", "-outputdir"]]
-    pure (nub (roots ++ artifacts))
-    else pure roots
+  -- Cabal 3.16 build-info reports the base build directory, but its GHC
+  -- builder nests executable artifacts in <name>/<name>-tmp and named-library
+  -- artifacts in <name>. Derive only those exact parsed component layouts;
+  -- the paired-interface, native-receipt and component-ownership guards below
+  -- still apply to every object.
+  suffixes <- case kind of
+    "exe" -> do
+      name <- field component "name"
+      case eitherParsec name of
+        Right (CExeName value) -> let executableName = unUnqualComponentName value
+          in pure [executableName </> (executableName ++ "-tmp")]
+        _ -> fail "Cabal executable build-info has an invalid component name"
+    "lib" -> do
+      name <- field component "name"
+      case eitherParsec name of
+        Right (CLibName (LSubLibName value)) -> pure [unUnqualComponentName value]
+        Right (CLibName LMainLibName) -> pure []
+        _ -> fail "Cabal library build-info has an invalid component name"
+    _ -> pure []
+  arguments <- field component "compiler-args"
+  artifacts <- mapM canonicalizePath
+    [directory </> suffix | suffix <- suffixes,
+      (flag,directory) <- zip arguments (drop 1 arguments), flag `elem` ["-odir", "-outputdir"]]
+  let haskellRoots = nub (roots ++ artifacts)
   let names = nub (modules ++ ["Main" | kind == "exe"])
       expected = [joinPath (splitModule name) | name <- names]
       owns path = any (`within` path) roots &&
