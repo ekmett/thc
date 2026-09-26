@@ -21,4 +21,5 @@ _Static_assert(CHAR_BIT == 8 && sizeof(size_t) == 8 && sizeof(ssize_t) == 8,
  * inside Sulong. The byte buffer remains the caller's original allocation. */
 #include "../../../compiler/pinned-text/2.1.3/cbits/utils.c"
 #include "../../../compiler/pinned-text/2.1.3/cbits/measure_off.c"
+#include "../../../compiler/pinned-text/2.1.3/cbits/reverse.c"
 #undef memchr

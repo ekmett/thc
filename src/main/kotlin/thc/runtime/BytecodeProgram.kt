@@ -1937,9 +1937,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     }
                 }
                 tupleExpression(tupleProof) { e, destination ->
-                    e.builder.beginOriginalTextCall(destination.single(), textForeign)
+                    if (textForeign == TextForeignOp.REVERSE) e.builder.beginOriginalTextReverse()
+                    else e.builder.beginOriginalTextCall(destination.single(), textForeign)
                     operands.forEach { it.emit(e) }
-                    e.builder.endOriginalTextCall()
+                    if (textForeign == TextForeignOp.REVERSE) e.builder.endOriginalTextReverse()
+                    else e.builder.endOriginalTextCall()
                 }
             } else if (floatingForeign != null) {
                 CoreFloatForeign.validateHead(fn, defined || fn.getOrNull(1) in scope.joins)

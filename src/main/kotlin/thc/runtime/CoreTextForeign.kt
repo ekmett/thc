@@ -7,8 +7,10 @@ import com.oracle.truffle.api.frame.VirtualFrame
 /** Exact original text-2.1.3 declarations, including their hidden State argument. */
 internal enum class TextForeignOp(val symbol: String, val lastRep: String) {
     MEMCHR("_hs_text_memchr", "Word8Rep"),
-    MEASURE("_hs_text_measure_off", "Word64Rep");
-    val arguments: List<String?> get() = listOf("BoxedRep (Just Unlifted)", "Word64Rep", "Word64Rep", lastRep, null)
+    MEASURE("_hs_text_measure_off", "Word64Rep"),
+    REVERSE("_hs_text_reverse", "Word64Rep");
+    val arguments: List<String?> get() = listOf("BoxedRep (Just Unlifted)",
+        if (this == REVERSE) "BoxedRep (Just Unlifted)" else "Word64Rep", "Word64Rep", lastRep, null)
 }
 
 internal object CoreTextForeign {
@@ -28,13 +30,14 @@ internal object CoreTextForeign {
             proof["primReps"] == listOfNotNull(rep) && proof["evaluated"] is Boolean &&
             (evaluated == null || proof["evaluated"] == evaluated)
     }
-    private fun result(raw: Any?, declared: Boolean = false): Boolean {
+    private fun result(raw: Any?, operation: TextForeignOp, declared: Boolean = false): Boolean {
         val proof = raw as? Map<*, *> ?: return false
         val components = proof["components"] as? List<*> ?: return false
+        val reverse = operation == TextForeignOp.REVERSE
         return proof.keys == tupleKeys && proof["kind"] == "unknown" && proof["aggregate"] == "unboxed-tuple" &&
-            proof["primReps"] == listOf("Int64Rep") && proof["evaluated"] is Boolean &&
-            (!declared || proof["evaluated"] == false) && components.size == 2 &&
-            scalar(components[0], null, true) && scalar(components[1], "Int64Rep", true)
+            proof["primReps"] == (if (reverse) emptyList<String>() else listOf("Int64Rep")) && proof["evaluated"] is Boolean &&
+            (!declared || proof["evaluated"] == false) && components.size == (if (reverse) 1 else 2) &&
+            scalar(components[0], null, true) && (reverse || scalar(components[1], "Int64Rep", true))
     }
     fun validate(metadata: Any?, arguments: List<*>, flags: List<*>, resultProof: Any?): TextForeignOp? {
         val meta = metadata as? Map<*, *> ?: return null
@@ -51,7 +54,8 @@ internal object CoreTextForeign {
         requireProof(declared?.size == 5 && arguments.size == 5 && flags == List(5) { false } &&
             operation.arguments.indices.all { scalar(declared[it], operation.arguments[it], false) &&
                 scalar(arguments[it], operation.arguments[it]) }, "ByteArray#/size/byte/State arguments")
-        requireProof(result(call["resultRep"], true) && result(meta["rep"]) && result(resultProof), "State#/Int64 tuple result")
+        requireProof(result(call["resultRep"], operation, true) && result(meta["rep"], operation) &&
+            result(resultProof, operation), "original State tuple result")
         return operation
     }
     fun validateHead(function: List<Any?>, defined: Boolean) {
@@ -75,6 +79,15 @@ internal class TextForeignExpression(private val operation: TextForeignOp,
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("Text foreign call requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        if (operation == TextForeignOp.REVERSE) {
+            val destination = operands[0].execute(frame)
+            val source = operands[1].execute(frame)
+            val start = operands[2].executeRequiredLong(frame)
+            val length = operands[3].executeRequiredLong(frame)
+            requireVoidCarrier(operands[4].execute(frame))
+            ManagedText.reverse(destination, source, start, length)
+            return null
+        }
         val bytes = operands[0].execute(frame)
         val start = operands[1].executeRequiredLong(frame)
         val length = operands[2].executeRequiredLong(frame)

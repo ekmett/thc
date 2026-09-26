@@ -340,6 +340,21 @@
     "src/test/resources/core/original-unix-libc-descriptors.json": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["scripts/test-audit-core.py"]},
     "test/haskell-fixtures/UnixLibcFixtures.hs": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/UnixLibcAudit.hs": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/kotlin/thc/runtime/CoreTextForeign.kt": {
+      "junit": ["thc.runtime.TextCbitsTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/kotlin/thc/runtime/ManagedText.kt": {
+      "junit": ["thc.runtime.TextCbitsTest"], "python": []
+    },
+    "compiler/test-fixtures/TextCbitsAudit.hs": {
+      "junit": ["thc.runtime.TextCbitsTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "compiler/test-fixtures/TextCbitsNative.hs": {
+      "junit": ["thc.runtime.TextCbitsTest"], "python": []
+    },
+    "test/haskell-fixtures/TextCbitsFixtures.hs": {
+      "junit": ["thc.runtime.TextCbitsTest"], "python": []
+    },
     "test/haskell-fixtures/ProxyVoidFixtures.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
     "compiler/test-fixtures/ProxyVoidAudit.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
     "compiler/test-fixtures/ProxyVoidAuditNative.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
@@ -1467,7 +1482,9 @@
       "python": []
     },
     "test/haskell-fixtures/Main.hs": {
-      "junit": ["thc.runtime.UnixLibcTest",
+      "junit": [
+        "thc.runtime.UnixLibcTest",
+        "thc.runtime.TextCbitsTest",
         "thc.runtime.ClosureInspectionTest",
         "thc.runtime.GhcBCOTest",
         "thc.runtime.ThreadSchedulingTest",

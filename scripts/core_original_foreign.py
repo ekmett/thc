@@ -17,6 +17,7 @@ WAIT_STATUS_OPERATIONS = {
                                   'WIFSIGNALED', 'WEXITSTATUS', 'WIFEXITED'))
 }
 TEXT_OPERATIONS = {
+    '_hs_text_reverse': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', 'BoxedRep (Just Unlifted)', 'Word64Rep', 'Word64Rep', None), (None,)),
     '_hs_text_memchr': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', 'Word64Rep', 'Word64Rep', 'Word8Rep', None), (None, 'Int64Rep')),
     '_hs_text_measure_off': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', 'Word64Rep', 'Word64Rep', 'Word64Rep', None), (None, 'Int64Rep')),
 }

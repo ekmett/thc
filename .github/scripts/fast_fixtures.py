@@ -24,8 +24,14 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "08438e9f2bc2497c4bcaf17906ac73d50b83125f03f4957d5d7cc6aefd5ce0f9"
+FULL_PREPARATION_PLAN = "3373ad85e4fd6bbc6751da9e6284683668e93368ef25759c43ca9c2ee92ae990"
+TEXT_CBITS_OUTPUTS = frozenset("build/text-cbits/" + name for name in (
+    "manifest.json", "inputs.tsv", "oracle.tsv", "native/text-cbits-oracle", "exposed-text.conf",
+    "logs/original-registration.stdout", "logs/native-oracle.command.json", "logs/native-build.command.json",
+    *[f"{stage}-{suffix}" for stage in ("pre", "post") for suffix in ("core/TextCbitsAudit.json", "audit.json")],
+))
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
+    "build/text-cbits",
     "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/address-array-copy", "build/simd-capability-smoke", "build/managed-address-reads",
     "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/thread-status", "build/thread-label", "build/uncaught-self", "build/small-arrays", "build/floating-address", "build/atomic-address",
@@ -34,6 +40,7 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
     "build/original-fd-ready", "build/simd-calls", "build/sum-join", "build/record-fields",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    *TEXT_CBITS_OUTPUTS,
     *fast_inputs.MEMORY_SEARCH_OUTPUTS,
     *fast_inputs.RUBBISH_OUTPUTS,
     "build/sum-join/manifest.json", "build/sum-join/oracle.tsv", "build/sum-join/native/oracle",
@@ -344,6 +351,13 @@ def cache_key(root, group_id, group, toolchain):
 
 
 def _output_hashes(root, group):
+    if group["outputs"] == ["build/text-cbits"]:
+        name = "build/text-cbits/manifest.json"
+        manifest = json.loads(fast_inputs.file_path(root, name).read_text())
+        expected = manifest.get("artifactHashes")
+        fast_inputs.require(isinstance(expected, dict) and set(expected) == TEXT_CBITS_OUTPUTS - {name},
+                            "Incomplete original text artifact inventory")
+        return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/thread-scheduling"]:
         name = "build/thread-scheduling/manifest.json"
         expected = fast_inputs.thread_scheduling_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
@@ -581,7 +595,7 @@ def _full_output_hashes(root):
             if fast_inputs.GMP_NATIVE_HOST:
                 files.update(_gmp_output_hashes(root))
             continue
-        if name == "build/original-memory-search":
+        if name in ("build/original-memory-search", "build/text-cbits"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
         if name.removeprefix("build/") in (fast_inputs.BYTEARRAY_FAMILIES | fast_inputs.SIMD_BYTEARRAY_FAMILIES) or name in ("build/float-decode", "build/pinned-addresses", "build/bignat-literals", "build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-open", "build/original-fcntl", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr", "build/original-sigprocmask", "build/original-sigset"):

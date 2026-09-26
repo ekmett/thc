@@ -59,6 +59,18 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "text-cbits": {
+      "junit": ["thc.runtime.TextCbitsTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "text-cbits"]}],
+      "outputs": ["build/text-cbits"],
+      "sources": ["compiler/test-fixtures/TextCbitsAudit.hs", "compiler/test-fixtures/TextCbitsNative.hs",
+        "test/haskell-fixtures/TextCbitsFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal", "scripts/core_original_foreign.py",
+        "scripts/audit-core.py", "scripts/core-capabilities.json", "scripts/build-cbits.py",
+        "src/main/c/text-api.c", "compiler/pinned-text/2.1.3/cbits/utils.c",
+        "compiler/pinned-text/2.1.3/cbits/measure_off.c", "compiler/pinned-text/2.1.3/cbits/reverse.c",
+        "compiler/pinned-text/2.1.3/LICENSE", "compiler/pinned-text/2.1.3/openbsd-memchr.c"]
+    },
     "proxy-void": {
       "junit": ["thc.runtime.ProxyVoidTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "proxy-void"]}],
