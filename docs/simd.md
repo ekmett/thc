@@ -1,55 +1,41 @@
 # Bounded Int64X2 and Int32X4 execution
 
-The separate [FloatX4 foundation](floatx4.md) adds local floating pack/unpack,
-broadcast and addition/subtraction/multiplication using a fixed-width
-FloatVector carrier. The integer-carrier storage description below is unchanged.
+The runtime represents each supported vector directly with a fixed-species JDK
+`ByteVector`, `ShortVector`, `IntVector`, `LongVector`, `FloatVector`, or
+`DoubleVector`. The exact GHC `VecRep` retains lane count, width and signedness
+in node and layout metadata. Generic value boundaries check the raw vector's
+species; signed and unsigned families share the same physical lane class.
 
-Both backends execute local `Int64X2#` and `Int32X4#` pack, unpack, broadcast, addition,
-subtraction and negation. Each operation requires exact GHC representation
-metadata; `VecRep 2 Int64ElemRep` and `VecRep 4 Int32ElemRep` have vector identities
-distinct from each other and from unboxed tuples. Pack consumes the ordinary
-tuple writer into typed local slots, and unpack writes typed local slots. Neither operation allocates a
-tuple or a payload array.
+Both backends perform arithmetic, broadcast, insertion and pack construction
+at the selected primop site. Arithmetic retains the Vector API result rather
+than extracting every lane into another carrier. Explicit GHC pack/unpack
+converts between scalar tuple lanes and the vector. Integer unpack preserves
+its signed or unsigned extension; arithmetic wraps at the lane width. Floating
+operations follow Java semantics, including min/max NaN and signed-zero behavior
+and fused operations that negate operands before the single rounding.
 
-Int32X4 also supports [signed wrapping multiplication](int32x4-multiply.md):
-the low 32 product bits are retained and unpack sign-extends them. The newer
-slice has its own native/model corpus and strict compiled-code checks, separate
-from the original add/subtract evidence below.
-The [Int32X4 ByteArray slice](int32x4-bytearray.md) adds six managed packed memory
-operations, including immediate local mutable-read cases; it does not extend
-vector function, capture, join or general tuple boundaries.
+Activation locals, tuple leaves, arguments/results, PAP prefixes and joins
+transport one vector reference per exact `VecRep`. Owned heap fields and captures
+retain dense primitive lane fields, converting only at that durable storage
+boundary. ByteArray operations preserve native byte order at their memory
+boundary. The current supported families and frontiers are recorded in the
+[capability contract](../scripts/core-capabilities.json) and
+[generated-family guide](simd-families.md). The launcher enables
+`jdk.incubator.vector`; direct Java launches need
+`--add-modules=jdk.incubator.vector` too.
 
-An interpreter/deoptimized Int64X2 value has two immutable primitive `long`
-fields. Int32X4 has four immutable primitive `int` fields, also a 16-byte payload.
-Int32 tuple lanes use the existing primitive `long` local slots: pack narrows to
-32 bits, and unpack sign-extends each lane back to `long`. Arithmetic wraps at
-the lane width and constructs transient JDK `LongVector` or `IntVector` values with fixed
-128-bit species and immediately extracts the result into those primitive
-fields. JDK vector objects and their payload arrays are never stored in guest
-values. Partial evaluation can remove the temporary lane carriers and use
-hardware SIMD. Type acceptance alone is not proof of this optimization; see the
-fixed-input compiler inspection probes in `bench/experiments/simd-foundation`.
-The application launcher enables `jdk.incubator.vector`; direct Java launches
-that execute vectors must add `--add-modules=jdk.incubator.vector` too.
+Raw vectors remove THC's nominal carrier wrapper and its repeated lane
+reconstruction. This source change alone does not prove uninterrupted vector
+SSA, register retention, or faster execution. The historical graph captures
+below measured older carrier implementations. In particular, allocation
+elimination did not prevent the AArch64 Int32X4 extraction/reinsertion described
+below. A fresh dynamic arithmetic-chain and vector-loop graph check must inspect
+both backends for interior cuts/reinserts, allocations and residual calls, with
+entry/exit pack and unpack distinguished from arithmetic transport. Public JVM
+`Object[] -> Object` calls still make no hardware vector calling-convention
+promise.
 
-This first slice rejects vector function arguments/results, PAP prefixes,
-closure captures, ordinary let bindings, join arguments/results, constructor
-fields, vector leaves inside transported unboxed tuples, and other lane types/widths.
-Apart from the separate bounded Int32X4 ByteArray slice, vector arrays and
-loads/stores remain unsupported, as do shuffle, insertion, Int64X2 multiplication,
-quotient and remainder primops. A vector-valued case/local expression is supported when GHC
-retains it within one scalar root. GHC can turn a source-local expression into a
-join with vector formals; the native `branchCase` fixture records that explicit
-frontier.
-
-The next ABI extension should flatten exact lanes into caller-owned typed input
-slots and the existing callee-completion result storage, with vector identity
-checked independently of physical layout. Constructor and capture layouts need
-separate primitive lane fields as well. Public JVM `Object[] -> Object` calls do
-not promise a hardware vector calling convention. This change does not pretend
-to provide one.
-
-## Validation and architectures
+## Historical validation and architectures
 
 `prepare-simd-audit.py` produces genuine pre/post-Tidy Core and 147 GHC-native
 Int64X2 oracle rows on x86. `--vector int32x4` prepares a separate

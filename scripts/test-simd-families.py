@@ -168,16 +168,20 @@ class SimdFamiliesTest(unittest.TestCase):
         with patch('simd_family_model.FAMILIES', legacy):
             self.assertEqual(4776, sum(1 for _ in rows()), "Legacy extrema also retain only finite native rows")
 
-    def test_new_carriers_have_only_fixed_primitive_lane_fields(self):
+    def test_raw_vector_operations_live_at_the_selected_primop_sites(self):
         for family in GEN.families():
-            if not family['newCarrier']:
-                continue
-            source = GEN.carrier(family)
-            primitive = GEN.LANES[family['laneRep']][0]
-            self.assertEqual(family['lanes'], source.count('@JvmField val lane'))
-            self.assertIn(f'.SPECIES_{family["bits"]}', source)
-            for forbidden in ('Object', '[]', 'SPECIES_PREFERRED', 'VectorSpecies'):
-                self.assertNotIn(forbidden, source)
+            ast, bytecode = GEN.ast_code([family]), GEN.bytecode_nodes([family])
+            vector = GEN.vector_type(family)
+            self.assertIn(vector, ast)
+            self.assertIn(vector, bytecode)
+            self.assertNotIn('new ' + family['name'] + '(', bytecode)
+            self.assertNotIn(f"class {family['name']}(", ast)
+            if 'pack' in family['operations']:
+                self.assertIn(f'{vector}.broadcast({GEN.species(family)}', ast)
+                self.assertIn(f'.withLane({family["lanes"] - 1}, ', bytecode)
+            for forbidden in ('RawVectors.', 'GeneratedVectorInsert', 'SPECIES_PREFERRED'):
+                self.assertNotIn(forbidden, ast)
+                self.assertNotIn(forbidden, bytecode)
 
     def test_narrow_lanes_extend_with_exact_signedness_in_both_backends(self):
         for name, width, mask in [('Word16X16', 16, '0xffffL'), ('Word32X8', 32, '0xffff_ffffL')]:
@@ -187,16 +191,16 @@ class SimdFamiliesTest(unittest.TestCase):
             self.assertEqual(17, result(family, 'times', 0, 1 << (width - 1), 2))
             ast, bytecode = GEN.ast_code([family]), GEN.bytecode_nodes([family])
             for i in range(family['lanes']):
-                self.assertIn(f'value.lane{i}.toLong() and {mask}', ast)
-                self.assertIn(f'value.lane{i} & {mask}', bytecode)
+                self.assertIn(f'value.lane({i}).toLong() and {mask}', ast)
+                self.assertIn(f'value.lane({i}) & {mask}', bytecode)
         family = next(f for f in GEN.families() if f['name'] == 'Int16X16')
         self.assertEqual(-1 + 17, result(family, 'broadcast', 0, 65535, 0))
         self.assertEqual(-32768 + 17, result(family, 'plus', 0, 32767, 1))
         self.assertEqual(-32768 + 17, result(family, 'negate', 0, -32768, 0))
         ast, bytecode = GEN.ast_code([family]), GEN.bytecode_nodes([family])
         for i in range(family['lanes']):
-            self.assertIn(f'frame, slots[offset + {i}], value.lane{i}.toLong())', ast)
-            self.assertIn(f'frame, value.lane{i});', bytecode)
+            self.assertIn(f'frame, slots[offset + {i}], value.lane({i}).toLong())', ast)
+            self.assertIn(f'frame, value.lane({i}));', bytecode)
 
     def test_signed_min_max_select_high_bit_lanes(self):
         for name in ('Int8X16', 'Int16X8', 'Int16X16', 'Int32X4', 'Int32X8', 'Int32X16', 'Int64X2', 'Int64X4', 'Int64X8'):

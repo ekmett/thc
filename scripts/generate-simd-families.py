@@ -16,7 +16,7 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = ROOT / 'scripts/simd-families.json'
-# primitive scalar type, bit width, Java Vector type, Kotlin carrier accessor
+# primitive scalar type, bit width, Java Vector type, Kotlin scalar accessor
 LANES = {
     'Int8Rep': ('byte', 8, 'ByteVector', 'Long'),
     'Word8Rep': ('byte', 8, 'ByteVector', 'Long'),
@@ -59,13 +59,13 @@ def families():
                 or type(f.get('composite', False)) is not bool):
             raise ValueError('Malformed SIMD operation family')
         if f.get('composite') and (not f['newCarrier'] or not {'pack', 'unpack'} <= set(f['operations'])):
-            raise ValueError('Composite fixture needs a new carrier and pack/unpack')
+            raise ValueError('Composite fixture needs a generated foundation family and pack/unpack')
         if 'divide' in f['operations'] and scalar not in ('float', 'double'):
             raise ValueError('Integer vector division is a separate semantic family')
         if 'negate' in f['operations'] and f['laneRep'].startswith('Word'):
             raise ValueError('No unsigned vector negation primop')
         if 'insert' in f['operations'] and not f['newCarrier'] and f['name'] not in LEGACY_INSERT:
-            raise ValueError('Insert requires a known concrete lane carrier')
+            raise ValueError('Insert requires a known exact vector family')
         names.add(f['name'])
     return data['families']
 
@@ -98,82 +98,31 @@ def verify_ghc(fs):
     print(f'Verified {len(expected)} exact SIMD contracts with pinned GHC APIs')
 
 
-def carrier(f):
-    n = f['name']; count = f['lanes']; scalar, _, vector, _ = LANES[f['laneRep']]
-    primitive = scalar.capitalize()
-    fields = ', '.join(f'@JvmField val lane{i}: {primitive}' for i in range(count))
-    vec = f'{vector}.broadcast({vector}.SPECIES_{f["bits"]}, lane0)' + ''.join(f'.withLane({i}, lane{i})' for i in range(1, count))
-    unsigned_extrema = f['laneRep'].startswith('Word') and any(op in ('min', 'max') for op in f['operations'])
-    lines = [HEADER, 'package thc.runtime', f'import jdk.incubator.vector.{vector}',
-             *(['import jdk.incubator.vector.VectorOperators'] if unsigned_extrema else []),
-             '/** Exact durable primitive lanes; transient Vector API storage never escapes here. */',
-             f'class {n}({fields}) {{', f'    private fun vector(): {vector} = {vec}',
-             '    companion object {',
-             f'        private fun lanes(v: {vector}): {n} = {n}('+', '.join(f'v.lane({i})' for i in range(count))+')',
-             f'        @JvmStatic fun broadcast(x: {primitive}): {n} = {n}('+', '.join('x' for _ in range(count))+')']
-    for op in f['operations']:
-        if op in BINARY:
-            method = BINARY[op]
-            expression = (f'a.vector().lanewise(VectorOperators.U{op.upper()}, b.vector())'
-                          if unsigned_extrema and op in ('min', 'max') else
-                          f'a.vector().{VECTOR_METHOD[method]}(b.vector())')
-            lines.append(f'        @JvmStatic fun {method}(a: {n}, b: {n}): {n} = lanes({expression})')
-        elif op == 'negate':
-            lines.append(f'        @JvmStatic fun negate(a: {n}): {n} = lanes(a.vector().neg())')
-        elif op == 'insert':
-            lines += [f'        @JvmStatic fun insert(a: {n}, value: {primitive}, index: Long): {n} {{',
-                      f'            if (index < 0L || index >= {count}L) fault("Invalid {n} lane index")',
-                      f'            return {n}(' + ', '.join(f'if (index == {i}L) value else a.lane{i}' for i in range(count)) + ')',
-                      '        }']
-    return '\n'.join(lines + ['    }', '}']) + '\n'
+def vector_type(f):
+    return LANES[f['laneRep']][2]
 
 
-def transport_code(fs):
-    """Concrete lane codecs: no reflection, payload arrays, or boxed lane lists."""
-    fields = 'first second third fourth fifth sixth seventh eighth ninth tenth eleventh twelfth thirteenth fourteenth fifteenth sixteenth'.split()
-    lines = [HEADER, 'package thc.runtime',
-             'import com.oracle.truffle.api.frame.VirtualFrame',
-             'import com.oracle.truffle.api.bytecode.BytecodeNode',
-             'import com.oracle.truffle.api.bytecode.LocalAccessor',
-             '', 'internal object GeneratedVectorTransport {']
-    lines += [f'    private val shape{f["name"]} = CoreVector({f["lanes"]}, "{f["element"]}")' for f in fs]
-    for bytecode in (False, True):
-        parameters = ('bytecode: BytecodeNode, frame: VirtualFrame, slots: Array<LocalAccessor>' if bytecode
-                      else 'frame: VirtualFrame, slots: IntArray')
-        lines += [f'    fun write(shape: CoreVector, {parameters}, offset: Int, raw: Any?) {{',
-                  '        when (shape) {']
-        for f in fs:
-            n, count = f['name'], f['lanes']
-            scalar, _, _, access = LANES[f['laneRep']]
-            lines += [f'            shape{n} -> {{',
-                      f'                val value = raw as? {n} ?: fault("Expected exact {n}# carrier")']
-            for i in range(count):
-                lane = (f'value.lane{i}' if f['newCarrier'] else f'value.lane({i})'
-                        if n in ('FloatX4', 'DoubleX2') else f'value.{fields[i]}')
-                if access == 'Long' and scalar != 'long':
-                    lane += '.toLong()'
-                    if f['laneRep'] in UNSIGNED_MASK:
-                        lane += ' and ' + UNSIGNED_MASK[f['laneRep']]
-                setter = (f'slots[offset + {i}].set{access}(bytecode, frame, {lane})' if bytecode
-                          else f'FrameAccess.write{access}(frame, slots[offset + {i}], {lane})')
-                lines.append('                ' + setter)
-            lines += ['            }']
-        lines += ['            else -> fault("Unsupported vector transport shape")', '        }', '    }',
-                  f'    fun read(shape: CoreVector, {parameters}, offset: Int): Any = when (shape) {{']
-        for f in fs:
-            n, count = f['name'], f['lanes']
-            scalar, _, _, access = LANES[f['laneRep']]
-            values = []
-            for i in range(count):
-                value = (f'slots[offset + {i}].get{access}(bytecode, frame)' if bytecode
-                         else f'frame.get{access}(slots[offset + {i}])')
-                if scalar in ('byte', 'short', 'int'):
-                    value += f'.to{scalar.capitalize()}()'
-                values.append(value)
-            constructor = n + '.pack' if n in ('FloatX4', 'DoubleX2') else n
-            lines.append(f'        shape{n} -> {constructor}(' + ', '.join(values) + ')')
-        lines += ['        else -> fault("Unsupported vector transport shape")', '    }']
-    return '\n'.join(lines + ['}']) + '\n'
+def species(f):
+    return f'{vector_type(f)}.SPECIES_{f["bits"]}'
+
+
+def packed(f, values):
+    return f'{vector_type(f)}.broadcast({species(f)}, {values[0]})' + ''.join(f'.withLane({i}, {value})' for i, value in enumerate(values[1:], 1))
+
+
+def checked(f, value):
+    return f'CoreVectors.require{vector_type(f).removesuffix("Vector")}({value}, {species(f)})'
+
+
+def operation_expression(f, op, args):
+    if op == 'broadcast': return f'{vector_type(f)}.broadcast({species(f)}, {args[0]})'
+    if op == 'insert':
+        return f'{args[0]}.withLane(CoreVectors.laneIndex({args[2]}, {f["lanes"]}), {args[1]})'
+    if op == 'negate': return f'{args[0]}.neg()'
+    if f['laneRep'].startswith('Word') and op in ('min', 'max'):
+        return f'{args[0]}.lanewise(VectorOperators.U{op.upper()}, {args[1]})'
+    return f'{args[0]}.{VECTOR_METHOD[BINARY[op]]}({args[1]})'
+
 
 
 def proof_code(fs):
@@ -208,46 +157,27 @@ def proof_code(fs):
     return '\n'.join(lines)+'\n'
 
 
-def legacy_insert_code(fs):
-    fields = 'first second third fourth fifth sixth seventh eighth ninth tenth eleventh twelfth thirteenth fourteenth fifteenth sixteenth'.split()
-    lines = [HEADER, 'package thc.runtime', '',
-             '/** Replace one lane without changing the existing carrier representation. */',
-             'internal object GeneratedVectorInsert {']
-    for f in fs:
-        if f['newCarrier'] or 'insert' not in f['operations']:
-            continue
-        n, count = f['name'], f['lanes']
-        primitive = LANES[f['laneRep']][0].capitalize()
-        vector_backed = n in ('FloatX4', 'DoubleX2')
-        constructor = n + '.pack' if vector_backed else n
-        lanes = [f'a.lane({i})' if vector_backed else f'a.{fields[i]}' for i in range(count)]
-        lines += [f'    @JvmStatic fun insert(a: {n}, value: {primitive}, index: Long): {n} {{',
-                  f'        if (index < 0L || index >= {count}L) fault("Invalid {n} lane index")',
-                  f'        return {constructor}(' + ', '.join(f'if (index == {i}L) value else {lane}' for i, lane in enumerate(lanes)) + ')',
-                  '    }']
-    return '\n'.join(lines + ['}']) + '\n'
-
 
 def ast_code(fs):
-    lines=[HEADER,'package thc.runtime\n','import com.oracle.truffle.api.CompilerDirectives.CompilationFinal','import com.oracle.truffle.api.frame.VirtualFrame\n']
+    lines=[HEADER,'package thc.runtime\n','import jdk.incubator.vector.*','import com.oracle.truffle.api.CompilerDirectives.CompilationFinal','import com.oracle.truffle.api.frame.VirtualFrame\n']
     for f in fs:
         n=f['name'];count=f['lanes'];scalar,_,_,access=LANES[f['laneRep']]; cast=f'.to{scalar.capitalize()}()' if scalar in ('byte', 'short', 'int') else ''
         if 'pack' in f['operations']:
             lines += [f'internal class Generated{n}Pack(@field:Child private var argument: Expr,',
                       '    @field:CompilationFinal(dimensions = 1) private val slots: IntArray) : Expr() {',
                       f'    init {{ representation = GeneratedVectors.proof{n} }}',
-                      f'    override fun execute(frame: VirtualFrame): {n} {{', '        argument.executeTuple(frame, slots)',
-                      f'        return {n}('+', '.join(f'frame.get{access}(slots[{i}]){cast}' for i in range(count))+')','    }','}']
+                      f'    override fun execute(frame: VirtualFrame): {vector_type(f)} {{', '        argument.executeTuple(frame, slots)',
+                      f'        return {packed(f, [f"frame.get{access}(slots[{i}]){cast}" for i in range(count)])}','    }','}']
         if 'unpack' in f['operations']:
             lines += [f'internal class Generated{n}Unpack(@field:Child private var argument: Expr) : Expr() {{',
                       f'    init {{ representation = GeneratedVectors.unpacked{n} }}',
                       '    override fun execute(frame: VirtualFrame): Nothing = fault("Vector unpack requires a tuple destination")',
                       '    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {',
-                      f'        val value = argument.execute(frame) as? {n} ?: fault("Expected {n}#")']
+                      f'        val value = {checked(f, "argument.execute(frame)")}']
             mask = UNSIGNED_MASK.get(f['laneRep'])
             for i in range(count):
-                lane = (f'value.lane{i}.toLong() and {mask}' if mask
-                        else f'value.lane{i}.toLong()' if cast else f'value.lane{i}')
+                lane = (f'value.lane({i}).toLong() and {mask}' if mask
+                        else f'value.lane({i}).toLong()' if cast else f'value.lane({i})')
                 lines.append(f'        FrameAccess.write{access}(frame, slots[offset + {i}], {lane})')
             lines += ['        return null','    }','}']
         ops=[op for op in f['operations'] if op not in ('pack','unpack')]
@@ -256,12 +186,18 @@ def ast_code(fs):
         lines += [f'        "{op}{n}#" -> {i}' for i,op in enumerate(ops)]
         lines += [f'        else -> throw RuntimeFault("Invalid {n} operation")','    }',
                   f'    init {{ representation = GeneratedVectors.proof{n} }}',
-                  f'    override fun execute(frame: VirtualFrame): {n} = when (operation) {{']
+                  f'    override fun execute(frame: VirtualFrame): {vector_type(f)} = when (operation) {{']
         for i,op in enumerate(ops):
-            expr=f'{n}.broadcast(arguments[0].executeRequired{access}(frame){cast})' if op=='broadcast' else f'{n}.negate(vector(frame, 0))' if op=='negate' else f'{n if f["newCarrier"] else "GeneratedVectorInsert"}.insert(vector(frame, 0), arguments[1].executeRequired{access}(frame){cast}, arguments[2].executeRequiredLong(frame))' if op=='insert' else f'{n}.{BINARY[op]}(vector(frame, 0), vector(frame, 1))'
-            lines.append(f'        {i} -> {expr}')
+            operands = [f'arguments[0].executeRequired{access}(frame){cast}'] if op == 'broadcast' else ['vector(frame, 0)', f'arguments[1].executeRequired{access}(frame){cast}', 'arguments[2].executeRequiredLong(frame)'] if op == 'insert' else ['vector(frame, 0)'] if op == 'negate' else ['vector(frame, 0)', 'vector(frame, 1)']
+            if op == 'insert':
+                # Evaluate Core operands in source order before withLane's index-first API.
+                lines += [f'        {i} -> {{', f'            val value = {operands[0]}',
+                          f'            val lane = {operands[1]}', f'            val index = {operands[2]}',
+                          f'            {operation_expression(f, op, ["value", "lane", "index"])}', '        }']
+            else:
+                lines.append(f'        {i} -> {operation_expression(f, op, operands)}')
         lines += [f'        else -> fault("Invalid {n} operation")','    }',
-                  f'    private fun vector(frame: VirtualFrame, index: Int): {n} = arguments[index].execute(frame) as? {n} ?: fault("Expected {n}#")','}\n']
+                  f'    private fun vector(frame: VirtualFrame, index: Int): {vector_type(f)} = {checked(f, "arguments[index].execute(frame)")}','}\n']
     return '\n'.join(lines)+'\n'
 
 
@@ -274,21 +210,22 @@ def bytecode_nodes(fs):
             if op=='unpack':
                 lines += ['    @Operation']+[f'    @ConstantOperand(type = LocalAccessor.class, name = "lane{i}")' for i in range(count)]
                 lines += [f'    public static final class {node} {{',
-                          '        @Specialization public static void apply(VirtualFrame frame, '+', '.join(f'LocalAccessor lane{i}' for i in range(count))+f', {n} value, @Bind("$node") Node node) {{',
-                          '            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();']
+                          '        @Specialization public static void apply(VirtualFrame frame, '+', '.join(f'LocalAccessor lane{i}' for i in range(count))+f', {vector_type(f)} raw, @Bind("$node") Node node) {{',
+                          '            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();',
+                          f'            {vector_type(f)} value = {checked(f, "raw")};']
                 mask = UNSIGNED_MASK.get(f['laneRep'])
-                lane = (lambda i: f'value.lane{i} & {mask}' if mask
-                        else f'value.lane{i}')
+                lane = (lambda i: f'value.lane({i}) & {mask}' if mask
+                        else f'value.lane({i})')
                 lines += [f'            lane{i}.set{access}(bytecode, frame, {lane(i)});' for i in range(count)]
                 lines += ['        }','    }']
             else:
                 if op=='pack':
-                    params=', '.join(f'{prim} lane{i}' for i in range(count)); expr=f'new {n}('+', '.join(cast+f'lane{i}' for i in range(count))+')'
-                elif op=='broadcast':params=f'{prim} value';expr=f'{n}.broadcast({cast}value)'
-                elif op=='negate':params=f'{n} value';expr=f'{n}.negate(value)'
-                elif op=='insert':params=f'{n} vector, {prim} value, long index';expr=f'{n if f["newCarrier"] else "GeneratedVectorInsert"}.insert(vector, {cast}value, index)'
-                else:params=f'{n} left, {n} right';expr=f'{n}.{BINARY[op]}(left, right)'
-                lines += [f'    @Operation public static final class {node} {{',f'        @Specialization public static {n} apply({params}) {{ return {expr}; }}','    }']
+                    params=', '.join(f'{prim} lane{i}' for i in range(count)); expr=packed(f, [cast+f'lane{i}' for i in range(count)])
+                elif op=='broadcast':params=f'{prim} value';expr=operation_expression(f, op, [cast+'value'])
+                elif op=='negate':params=f'{vector_type(f)} value';expr=operation_expression(f, op, [checked(f, 'value')])
+                elif op=='insert':params=f'{vector_type(f)} vector, {prim} value, long index';expr=operation_expression(f, op, [checked(f, 'vector'), cast+'value', 'index'])
+                else:params=f'{vector_type(f)} left, {vector_type(f)} right';expr=operation_expression(f, op, [checked(f, 'left'), checked(f, 'right')])
+                lines += [f'    @Operation public static final class {node} {{',f'        @Specialization public static {vector_type(f)} apply({params}) {{ return {expr}; }}','    }']
     return '\n'.join(lines)+'\n'
 
 
@@ -551,13 +488,14 @@ def main():
     region(ROOT/'src/main/java/thc/runtime/BytecodeRoot.java',bytecode_nodes(fs),args.write)
     region(ROOT/'src/main/kotlin/thc/runtime/BytecodeProgram.kt',bytecode_emitter(fs),args.write)
     outputs={'kotlin/thc/runtime/GeneratedVectorProofs.kt':proof_code(fs),'kotlin/thc/runtime/GeneratedVectorExpressions.kt':ast_code(fs)}
-    outputs.update({f'kotlin/thc/runtime/{f["name"]}.kt':carrier(f) for f in fs if f['newCarrier']})
-    outputs['kotlin/thc/runtime/GeneratedVectorInsert.kt'] = legacy_insert_code(fs)
-    outputs['kotlin/thc/runtime/GeneratedVectorTransport.kt'] = transport_code(fs)
     outputs.update(fixture_sources(fs))
     outputs.update(smoke_sources(fs))
-    # Remove only the former generated carrier files when switching an existing build.
+    # Remove only former generated carriers/helpers when switching an existing build.
+    (args.output / 'kotlin/thc/runtime/GeneratedVectorInsert.kt').unlink(missing_ok=True)
+    (args.output / 'kotlin/thc/runtime/GeneratedVectorTransport.kt').unlink(missing_ok=True)
+    (args.output / 'kotlin/thc/runtime/RawVectors.kt').unlink(missing_ok=True)
     for f in fs:
+        (args.output / f'kotlin/thc/runtime/{f["name"]}.kt').unlink(missing_ok=True)
         (args.output / f'java/thc/runtime/{f["name"]}.java').unlink(missing_ok=True)
     for name,body in outputs.items():
         p=args.output/name;p.parent.mkdir(parents=True,exist_ok=True)

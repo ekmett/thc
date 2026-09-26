@@ -41,7 +41,7 @@ dokka {
         }
     }
 }
-// The checked family table generates concrete primitive carriers and typed nodes.
+// The checked family table generates typed nodes with fixed Vector API species.
 // BytecodeRoot's DSL requires nested declarations; its marked regions are checked,
 // never rewritten by a build. Refresh them explicitly with the generator --write.
 val generateSimdFamilies = tasks.register<Exec>("generateSimdFamilies") {

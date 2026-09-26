@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import jdk.incubator.vector.ShortVector
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.Instruction
@@ -16,7 +18,6 @@ import thc.CoreModules
 import thc.Json
 import thc.Language
 import java.io.File
-import java.lang.reflect.Modifier
 import java.security.MessageDigest
 import java.util.Collections
 import java.util.IdentityHashMap
@@ -38,19 +39,15 @@ class SimdInt16VectorTest {
         val linked = CoreModules.reachable(input, entry) + mapOf("instrument" to true, "diagnosticUnsupported" to diagnostic)
         return if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
     }
-    private fun lanes(value: Int16X8) = listOf(value.first, value.second, value.third, value.fourth,
-        value.fifth, value.sixth, value.seventh, value.eighth).map(Short::toLong)
-    private fun pack(values: List<Long>) = Int16X8(values[0].toShort(), values[1].toShort(), values[2].toShort(), values[3].toShort(),
-        values[4].toShort(), values[5].toShort(), values[6].toShort(), values[7].toShort())
+    private fun lanes(value: ShortVector) = listOf(value.lane(0), value.lane(1), value.lane(2), value.lane(3),
+        value.lane(4), value.lane(5), value.lane(6), value.lane(7)).map(Short::toLong)
+    private fun pack(values: List<Long>) = ShortVector.broadcast(ShortVector.SPECIES_128, values[0].toShort()).withLane(1, values[1].toShort()).withLane(2, values[2].toShort()).withLane(3, values[3].toShort()).withLane(4, values[4].toShort()).withLane(5, values[5].toShort()).withLane(6, values[6].toShort()).withLane(7, values[7].toShort())
     private fun signed(value: Long): Long = (value and 0xffffL).let { if (it >= 32768) it - 65536 else it }
 
-    @Test fun exactShapeRequiresEightShortFieldsAndEightInt16TupleLanes() {
+    @Test fun exactShapeRequiresEightInt16TupleLanes() {
         val proof = CoreRepresentations.parse(metadata())
         assertEquals(CoreVectors.proof16, proof)
         assertFalse(proof.isTuple); assertFalse(proof.isLong)
-        val fields = Int16X8::class.java.declaredFields
-        assertEquals(List(8) { Short::class.javaPrimitiveType }, fields.map { it.type })
-        assertTrue(fields.all { Modifier.isFinal(it.modifiers) && !Modifier.isStatic(it.modifiers) })
         assertEquals(List(8) { "Int16Rep" }, CoreVectors.unpacked16.primReps)
         assertTrue(CoreVectors.unpacked16.components!!.all { it.isLong })
         for (wrong in listOf(CoreVectors.proof, CoreVectors.proof32, CoreVectors.proofFloat, CoreVectors.proofDouble, CoreVectors.unpacked16)) {
@@ -80,11 +77,11 @@ class SimdInt16VectorTest {
             val a = List(8) { signed(bits + it * 7919L) }
             val b = List(8) { signed(bits * (2 * it + 1) + 32767L - it * 3571L) }
             val left = pack(a); val right = pack(b)
-            assertEquals(a, lanes(left)); assertEquals(List(8) { signed(bits) }, lanes(Int16X8.broadcast(bits.toShort())))
-            assertEquals(a.zip(b).map { signed(it.first + it.second) }, lanes(Int16X8.add(left, right)))
-            assertEquals(a.zip(b).map { signed(it.first - it.second) }, lanes(Int16X8.subtract(left, right)))
-            assertEquals(a.zip(b).map { signed(it.first * it.second) }, lanes(Int16X8.multiply(left, right)))
-            assertEquals(a.map { signed(-it) }, lanes(Int16X8.negate(left)))
+            assertEquals(a, lanes(left)); assertEquals(List(8) { signed(bits) }, lanes(ShortVector.broadcast(ShortVector.SPECIES_128, bits.toShort())))
+            assertEquals(a.zip(b).map { signed(it.first + it.second) }, lanes((left).add(right)))
+            assertEquals(a.zip(b).map { signed(it.first - it.second) }, lanes((left).sub(right)))
+            assertEquals(a.zip(b).map { signed(it.first * it.second) }, lanes((left).mul(right)))
+            assertEquals(a.map { signed(-it) }, lanes((left).neg()))
         }
     }
 
