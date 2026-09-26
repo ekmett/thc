@@ -6,12 +6,12 @@ GHC 9.14.1 exposes **1491 primops** on the pinned 64-bit target. This list is
 generated from `allThePrimOps`, the [runtime capabilities](../scripts/core-capabilities.json)
 and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signatures.json).
 
-**Implementation coverage: 1480 / 1491 (99.3%).**
+**Implementation coverage: 1482 / 1491 (99.4%).**
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Implemented | 1480 | A runtime implementation is registered in the capability inventory. |
-| Missing | 11 | No runtime implementation is registered. |
+| Implemented | 1482 | A runtime implementation is registered in the capability inventory. |
+| Missing | 9 | No runtime implementation is registered. |
 
 Implemented means translating the GHC operation to a sensible runtime implementation and
 checking it with ordinary tests. It does not require formal proof or exhaustive input testing.
@@ -49,6 +49,7 @@ supported/partial split incorrectly treated every non-numeric-scalar implementat
 The following describes implemented behavior and specific remaining restrictions.
 Shared runtime gaps are not automatically attributed to every operation using that runtime.
 
+- newBCO# and mkApUpd0# decode and execute a GHC 9.14.1 scalar BCO slice on both backends, with actual lazy pointer references, positive-arity closures/PAPs and zero-arity updating thunks. The ABI uses native-endian Word16 code and 64-bit words, with one physical word per argument. Native calls, info-table/PACK and AP allocation instructions, case-continuation BCOs, packed subword stacks, tuple/vector results, breakpoints and unlisted opcodes reject. Async suspension and delimited capture through the BCO interpreter reject rather than lose saved work. See docs/ghc-bco.md for the exact opcode set and native evidence.
 - Delimited continuations are a synchronous IO slice on both backends: opaque context-owned prompt identities, nearest matching prompts, reusable copied control frames, shared heap effects, escaped resumptions, and captured catch/mask boundaries. Saved owners preserve resumed tail/self/join transfers, scalar case callers, and pending scalar-argument applications with scalar or tuple results, including megamorphic calls. Applications with unboxed tuple/vector inputs and composition with one-shot asynchronous suspension are not yet established. Capturing through a thunk update rejects. See docs/delimited-continuations.md; this is not a claim of complete control0# support.
 - STM/TVar primops admit synchronous transactions in both backends with context-owned lazy boxed cells, validated buffered writes, atomic commit, real retry wakeup and nested catch/orElse rollback. Transaction frames reject resumable async/checkpoint modes; GC-driven BlockedIndefinitelyOnSTM detection is unavailable. Empty-read-set retries wait until cancellation/disposal. Nested atomically raises the original implicit GHC exception closure.
 - All 16 address atomics return old values (including failed CAS), narrow exact widths, require alignment and complete checked ranges, and supply full barriers. Managed byte storage synchronizes owner then backing bytes; pointer CAS/exchange retain managed pointer cells and compare address identity. Numeric atomics reject pointer-cell overlaps. Native-enabled Linux x86_64 owned allocations use real atomics, with exact byte/short C CAS; native pointer values must have real address bits. Freed or foreign owners, unowned numeric dereferences, opaque locations and immutable writes reject.
@@ -726,6 +727,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `minusWord8X16#` — arity 2 — Specialized lowering
 - [x] `minusWord8X32#` — arity 2 — Specialized lowering
 - [x] `minusWord8X64#` — arity 2 — Specialized lowering
+- [x] `mkApUpd0#` — arity 1 — Specialized lowering
 - [x] `mkWeak#` — arity 4 — Weak-pointer operation
 - [x] `mkWeakNoFinalizer#` — arity 3 — Weak-pointer operation
 - [x] `mulIntMayOflo#` — arity 2 — Numeric scalar signature
@@ -776,6 +778,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `negateInt8X64#` — arity 1 — Specialized lowering
 - [x] `newAlignedPinnedByteArray#` — arity 3 — Pointer or pinned-memory operation
 - [x] `newArray#` — arity 3 — Boxed-array operation
+- [x] `newBCO#` — arity 6 — Specialized lowering
 - [x] `newByteArray#` — arity 2 — Byte-array operation
 - [x] `newMVar#` — arity 1 — MVar operation
 - [x] `newMutVar#` — arity 2 — Mutable-reference operation
@@ -1573,8 +1576,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `delay#` — arity 2
 - [ ] `forkOn#` — arity 3
 - [ ] `getSpark#` — arity 1
-- [ ] `mkApUpd0#` — arity 1
-- [ ] `newBCO#` — arity 6
 - [ ] `numSparks#` — arity 1
 - [ ] `par#` — arity 1
 - [ ] `setOtherThreadAllocationCounter#` — arity 3

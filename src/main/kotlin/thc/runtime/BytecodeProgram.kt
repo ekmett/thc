@@ -2057,6 +2057,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (destination != null) b.endStoreLocal()
                     b.endBlock()
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && fn[1] in setOf("newBCO#", "mkApUpd0#")) {
+                val name = fn[1] as String
+                GhcBCO.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    b.beginStoreLocal(destination.single())
+                    if (name == "newBCO#") {
+                        b.beginNewGhcBCO(language, metrics)
+                        operands.forEach { it.emit(e) }
+                        b.endNewGhcBCO()
+                    } else {
+                        b.beginMkApUpd0(); operands.single().emit(e); b.endMkApUpd0()
+                    }
+                    b.endStoreLocal()
+                }
             } else if (fn[0] == "prim" && (fn[1] in setOf("newPromptTag#", "prompt#", "control0#") ||
                     delimited && fn[1] in setOf("catch#", "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#"))) {
                 val name = fn[1] as String

@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "2f5798f0238c80b6be89a75631a804f3d58e9b5d371a8b551795f17b542d6e1e"
+FULL_PREPARATION_PLAN = "c7b20367323433f54041ab077b205c050a7dfde46876d6d77836448fb6d953db"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/address-array-copy", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -37,6 +37,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     *fast_inputs.CLOSURE_INSPECTION_OUTPUTS,
     *fast_inputs.STABLE_NAME_OUTPUTS,
     *fast_inputs.DELIMITED_OUTPUTS,
+    *fast_inputs.BCO_OUTPUTS,
     *fast_inputs.THREAD_INVENTORY_OUTPUTS,
     "build/aligned-scalar-memory/manifest.json", "build/aligned-scalar-memory/oracle.tsv",
     *[f"build/aligned-scalar-memory/{stage}/{file}" for stage in ("pre", "post")
@@ -334,6 +335,10 @@ def _output_hashes(root, group):
     if group["outputs"] == ["build/delimited-continuations"]:
         name = "build/delimited-continuations/manifest.json"
         expected = fast_inputs.delimited_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
+    if group["outputs"] == ["build/ghc-bco"]:
+        name = "build/ghc-bco/manifest.json"
+        expected = fast_inputs.bco_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
         return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/thread-inventory"]:
         name = "build/thread-inventory/manifest.json"

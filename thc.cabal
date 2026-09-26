@@ -515,6 +515,7 @@ executable thc-fixtures
     IntegerCompletionFixtures
     ContinuationFixtures
     DelimitedContinuationsFixtures
+    GhcBCOFixtures
     LiveAsyncFixtures
     ThreadLabelFixtures
     ThreadStatusFixtures

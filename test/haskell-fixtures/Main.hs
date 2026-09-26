@@ -38,6 +38,7 @@ import FloatingRemainderFixtures (prepareFloatingRemainder)
 import UnsafeEqualityFixtures (prepareUnsafeEquality)
 import ContinuationFixtures (prepareCoreContinuation)
 import DelimitedContinuationsFixtures (prepareDelimitedContinuations)
+import GhcBCOFixtures (prepareGhcBCO)
 import ArithmeticExceptionFixtures (prepareArithmeticExceptions, refreshArithmeticCore)
 import LiveAsyncFixtures (prepareLiveAsync)
 import ThreadLabelFixtures (prepareThreadLabel)
@@ -994,6 +995,7 @@ main = do
     ["address-array-copy"] -> prepareAddressArrayCopy root
     ["core-continuation"] -> prepareCoreContinuation root
     ["delimited-continuations"] -> prepareDelimitedContinuations root
+    ["ghc-bco"] -> prepareGhcBCO root
     ["arithmetic-exceptions"] -> prepareArithmeticExceptions root
     ["arithmetic-exceptions", "--core-only"] -> refreshArithmeticCore root
     ["live-async"] -> prepareLiveAsync root
