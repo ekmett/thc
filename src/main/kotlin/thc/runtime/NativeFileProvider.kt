@@ -36,7 +36,9 @@ import thc.NativeIO.StandardEndpoint
 import thc.NativeFileSystem
 import thc.NativeIO
 import thc.ContextProfile
+import thc.FfiMode
 import thc.withContextProfile
+import thc.withFfiMode
 
 /** Linux provider proof only. Acquisition is reachable solely through the
  * explicitly configured NativeFileSystem request, never from a guest fd.
@@ -46,10 +48,11 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
         /** No arbitrary Builder, FileSystem, provider attachment, or global map.
          * The factory knows the exact final provider whose channel it authenticates. */
         internal fun createContext(endpoints: Set<StandardEndpoint>,
-                                   profile: ContextProfile = ContextProfile.NATIVE): Context {
+                                   profile: ContextProfile = ContextProfile.NATIVE,
+                                   ffiMode: FfiMode = FfiMode.NATIVE): Context {
             val builder = Context.newBuilder("thc").allowNativeAccess(true)
                 .allowIO(IOAccess.newBuilder().fileSystem(NativeFileSystem(endpoints)).build())
-            val context = builder.withContextProfile(profile).build()
+            val context = builder.withContextProfile(profile).withFfiMode(ffiMode).build()
             try {
                 context.initialize("thc"); context.enter()
                 try {

@@ -70,7 +70,6 @@ internal class CatchException(private val shape: TupleShape,
     init { representation = shape.proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("catch# requires a tuple destination")
     @ExplodeLoop override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        requireVoidCarrier(state.execute(frame))
         if (actionCall == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate()
             atomic(Callable {
@@ -84,26 +83,111 @@ internal class CatchException(private val shape: TupleShape,
             })
         }
         check(destinationSlots === slots && destinationOffset == offset)
-        val failure = try {
-            actionCall!!.execute(frame, requireClosure(force.execute(frame, action.execute(frame))), arrayOf(Unit))
-            null
-        } catch (guest: GuestException) { guest }
-        catch (delivered: AsyncDelivery) {
-            // The target has reached this exact catch# frame. Keep its async
-            // origin until here so Force cannot memoize it as an ordinary error.
-            delivered.request.acknowledge()
-            GuestException(delivered.request.payload, this)
+        val value = try { action.execute(frame) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? = loadHandler(frame, input)
+            })
         }
-        if (failure != null) {
-            val prior = SynchronousMasking.current(this)
-            if (prior == MaskingState.UNMASKED) SynchronousMasking.set(this, MaskingState.MASKED_INTERRUPTIBLE)
-            try {
-                handlerCall!!.execute(frame, requireClosure(force.execute(frame, handler.execute(frame))),
-                    arrayOf(failure.payload, Unit))
-            } finally { SynchronousMasking.set(this, prior) }
-        }
-        return null
+        return loadHandler(frame, value)
     }
+
+    private fun loadHandler(frame: VirtualFrame, actionValue: Any?): Any? {
+        val value = try { handler.execute(frame) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? =
+                    loadState(frame, actionValue, input)
+            })
+        }
+        return loadState(frame, actionValue, value)
+    }
+
+    private fun loadState(frame: VirtualFrame, actionValue: Any?, handlerValue: Any?): Any? {
+        val value = try { state.execute(frame) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                    requireVoidCarrier(input)
+                    return runAction(frame, actionValue, handlerValue)
+                }
+            })
+        }
+        requireVoidCarrier(value)
+        return runAction(frame, actionValue, handlerValue)
+    }
+
+    private fun runAction(frame: VirtualFrame, actionValue: Any?, handlerValue: Any?): Any? =
+        protect(frame, handlerValue) {
+            val closure = try { AstControl.force(frame, this, force, actionValue) }
+            catch (cut: AstCapture) {
+                throw cut.append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                        actionCall!!.execute(frame, requireClosure(input), arrayOf(Unit))
+                        return null
+                    }
+                })
+            }
+            actionCall!!.execute(frame, requireClosure(closure), arrayOf(Unit))
+            null
+        }
+
+    /** A resumed child must still throw into this same catch frame. A live
+     * request is accepted here before the masked handler can itself suspend. */
+    private inline fun protect(frame: VirtualFrame, handlerValue: Any?, body: () -> Any?): Any? {
+        return try { body() }
+        catch (guest: GuestException) { runHandler(frame, handlerValue, guest.payload) }
+        catch (delivered: AsyncDelivery) {
+            delivered.request.acknowledge()
+            runHandler(frame, handlerValue, delivered.request.payload)
+        } catch (cut: AstCapture) {
+            val request = cut.asyncRequest()
+            if (request == null) throw cut.enclose { CatchScope(this, handlerValue, it) }
+            check(request.target === Thread.currentThread() && request.state == AsyncRequestState.CLAIMED) {
+                "AST catch delivery left its target thread or was already consumed"
+            }
+            request.acknowledge()
+            runHandler(frame, handlerValue, request.payload)
+        }
+    }
+
+    private class CatchScope(private val node: CatchException, private val handler: Any?,
+                             private val steps: List<AstResumeStep>) : AstResumeStep {
+        override fun resume(frame: VirtualFrame, input: Any?): Any? =
+            node.protect(frame, handler) { resumeAstSteps(frame, steps, input) }
+    }
+
+    private fun runHandler(frame: VirtualFrame, handlerValue: Any?, payload: Any?): Any? {
+        val prior = SynchronousMasking.current(this)
+        if (prior == MaskingState.UNMASKED) SynchronousMasking.set(this, MaskingState.MASKED_INTERRUPTIBLE)
+        return withAstMaskRestore(this, prior) {
+            val closure = try { AstControl.force(frame, this, force, handlerValue) }
+            catch (cut: AstCapture) {
+                throw cut.append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                        handlerCall!!.execute(frame, requireClosure(input), arrayOf(payload, Unit))
+                        return null
+                    }
+                })
+            }
+            handlerCall!!.execute(frame, requireClosure(closure), arrayOf(payload, Unit))
+            null
+        }
+    }
+}
+
+/** Mask scopes restore on success and every exceptional exit. Recapture saves
+ * the same logical return mask while the current carrier unwinds normally. */
+private class AstMaskScope(private val node: Node, private val prior: MaskingState,
+                           private val steps: List<AstResumeStep>) : AstResumeStep {
+    override fun resume(frame: VirtualFrame, input: Any?): Any? =
+        withAstMaskRestore(node, prior) { resumeAstSteps(frame, steps, input) }
+}
+
+private inline fun withAstMaskRestore(node: Node, prior: MaskingState, body: () -> Any?): Any? {
+    return try { body() }
+    catch (cut: AstCapture) { throw cut.enclose { AstMaskScope(node, prior, it) } }
+    finally { SynchronousMasking.set(node, prior) }
 }
 
 /** The three GHC masking-state tags, local to a guest context and guest thread. */
@@ -112,7 +196,7 @@ enum class MaskingState(val tag: Long) {
 }
 
 object SynchronousMasking {
-    @JvmStatic @TruffleBoundary fun current(node: Node): MaskingState = Language.currentState(node).maskingState.get()
+    @JvmStatic fun current(node: Node): MaskingState = Language.currentState(node).threadMaskingState.get().value
     @JvmStatic @TruffleBoundary fun set(node: Node, state: MaskingState) {
         Language.currentState(node).maskingState.set(state)
     }
@@ -138,7 +222,6 @@ internal class MaskAction(private val shape: TupleShape, private val target: Mas
     init { representation = shape.proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("mask action requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        requireVoidCarrier(state.execute(frame))
         if (actionCall == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate()
             atomic(Callable {
@@ -150,14 +233,47 @@ internal class MaskAction(private val shape: TupleShape, private val target: Mas
             })
         }
         check(destinationSlots === slots && destinationOffset == offset)
+        val value = try { action.execute(frame) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? = loadState(frame, input)
+            })
+        }
+        return loadState(frame, value)
+    }
+
+    private fun loadState(frame: VirtualFrame, actionValue: Any?): Any? {
+        val value = try { state.execute(frame) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                    requireVoidCarrier(input)
+                    return runAction(frame, actionValue)
+                }
+            })
+        }
+        requireVoidCarrier(value)
+        return runAction(frame, actionValue)
+    }
+
+    private fun runAction(frame: VirtualFrame, actionValue: Any?): Any? {
         val prior = SynchronousMasking.current(this)
         // These are raw GHC primops: maskAsyncExceptions# deliberately sets
         // interruptible masking even inside maskUninterruptible#.
         SynchronousMasking.set(this, target)
-        try {
-            actionCall!!.execute(frame, requireClosure(force.execute(frame, action.execute(frame))), arrayOf(Unit))
-        } finally { SynchronousMasking.set(this, prior) }
-        return null
+        return withAstMaskRestore(this, prior) {
+            val closure = try { AstControl.force(frame, this, force, actionValue) }
+            catch (cut: AstCapture) {
+                throw cut.append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                        actionCall!!.execute(frame, requireClosure(input), arrayOf(Unit))
+                        return null
+                    }
+                })
+            }
+            actionCall!!.execute(frame, requireClosure(closure), arrayOf(Unit))
+            null
+        }
     }
 }
 

@@ -10,6 +10,8 @@ import com.oracle.truffle.api.nodes.RootNode
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import thc.Language
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
@@ -24,16 +26,22 @@ class AstContinuationTest {
     private val longRep = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
     private val tupleRep = mapOf("kind" to "unknown", "aggregate" to "unboxed-tuple",
         "primReps" to listOf("BoxedRep (Just Lifted)"), "components" to listOf(stateRep, dataRep), "evaluated" to false)
+    private val nestedTupleRep = mapOf("kind" to "unknown", "aggregate" to "unboxed-tuple",
+        "primReps" to listOf("BoxedRep (Just Lifted)", "IntRep"),
+        "components" to listOf(tupleRep, longRep), "evaluated" to false)
 
     private fun directMVarModule(wrap: Boolean = false, strict: Boolean = false,
                                  caseLiteral: Boolean = false, casePayload: Boolean = false,
                                  wrongCaseResult: Boolean = false,
-                                 unevaluatedCell: Boolean = false): Map<String, Any?> {
+                                 unevaluatedCell: Boolean = false, nestedTuple: Boolean = false): Map<String, Any?> {
         val cell = listOf("var", "cell", mapOf("rep" to mvarRep))
         val state = listOf("void", mapOf("rep" to stateRep))
         val read = listOf("app", listOf("prim", "takeMVar#"), listOf(cell, state),
             listOf(false, false), false, false, mapOf("rep" to tupleRep))
         val body: Any = when {
+            nestedTuple -> listOf("app", listOf("con", "Outer", 2),
+                listOf(read, listOf("lit", "int", "7", mapOf("rep" to longRep))),
+                listOf(false, false), false, false, mapOf("rep" to nestedTupleRep))
             wrap -> listOf("case", read, "returned", emptyList<Any>())
             caseLiteral || casePayload -> listOf("case", read, "returned", listOf(listOf("data", "Pair",
                 listOf("stateOut", "payload"), if (casePayload) listOf("var", "payload", mapOf("rep" to dataRep))
@@ -50,46 +58,37 @@ class AstContinuationTest {
                 "rep" to if (unevaluatedCell) mvarRep + ("evaluated" to false) else mvarRep),
             mapOf("id" to "state", "name" to "state", "lifted" to false, "coercion" to false, "rep" to stateRep))
         val lambda = listOf("lam", parameters, body, mapOf("resultRep" to when {
+            nestedTuple -> nestedTupleRep
             wrongCaseResult || casePayload -> dataRep; caseLiteral -> longRep; else -> tupleRep },
             "entryStrict" to listOf(strict, false)))
         return mapOf("bindings" to listOf(mapOf("id" to "direct", "name" to "direct",
             "lifted" to true, "expr" to lambda)), "instrument" to true,
-            "constructors" to listOf(mapOf("id" to "Pair", "name" to "Pair", "kind" to "unboxed-tuple", "arity" to 2)))
+            "constructors" to listOf(
+                mapOf("id" to "Pair", "name" to "Pair", "kind" to "unboxed-tuple", "arity" to 2),
+                mapOf("id" to "Outer", "name" to "Outer", "kind" to "unboxed-tuple", "arity" to 2)))
     }
 
-    @Test fun asyncAstAdmissionRejectsAnUncapturedParentSuffix() {
+    @Test fun ordinaryCallerAndEntryRoutesAreCapturedAndConflictingProofsStillFail() {
         Context.newBuilder("thc").build().use { context ->
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 Program(language, directMVarModule(), true)
-                val failure = assertThrows(RuntimeFault::class.java) {
-                    Program(language, directMVarModule(wrap = true), true)
-                }
-                assertTrue(failure.message!!.contains("direct"))
-                val eager = assertThrows(RuntimeFault::class.java) {
-                    Program(language, directMVarModule(strict = true), true)
-                }
-                assertTrue(eager.message!!.contains("direct"))
-                Program(language, directMVarModule(casePayload = true))
-                val lazyBranch = assertThrows(RuntimeFault::class.java) {
-                    Program(language, directMVarModule(casePayload = true), true)
-                }
-                assertTrue(lazyBranch.message!!.contains("direct"))
-                val wrongRoute = assertThrows(RuntimeFault::class.java) {
+                Program(language, directMVarModule(strict = true), true)
+                Program(language, directMVarModule(casePayload = true), true)
+                assertThrows(RuntimeFault::class.java) {
                     Program(language, directMVarModule(caseLiteral = true, wrongCaseResult = true), true)
                 }
-                assertTrue(wrongRoute.message!!.contains("direct"))
-                Program(language, directMVarModule(unevaluatedCell = true))
-                val hiddenForce = assertThrows(RuntimeFault::class.java) {
-                    Program(language, directMVarModule(unevaluatedCell = true), true)
+                Program(language, directMVarModule(unevaluatedCell = true), true)
+                assertThrows(UnsupportedCore::class.java) {
+                    AstAsyncAdmission.validate(listOf(mapOf("id" to "unsupported", "expr" to listOf("unknown"))))
                 }
-                assertTrue(hiddenForce.message!!.contains("direct"))
             } finally { context.leave() }
         }
     }
 
-    @Test fun admittedProgramCompiledMVarCutResumesItsTupleOnAnotherJavaThread() {
+    @ParameterizedTest @ValueSource(booleans = [false, true])
+    fun admittedProgramCompiledMVarCutResumesItsTupleOnAnotherJavaThread(nested: Boolean) {
         Context.newBuilder("thc").allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
             .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw")
@@ -102,17 +101,18 @@ class AstContinuationTest {
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 state = Language.currentState()
-                program = Program(language, directMVarModule(), true)
+                program = Program(language, directMVarModule(nestedTuple = nested), true)
                 target = program.entryTarget("direct")
                 assertNull((target.rootNode as FunctionRoot).handoff,
                     "An async AST root must not receive a typed caller loan without caller capture")
-                shape = TupleShape(CoreRepresentations.parse(tupleRep), language)
+                shape = TupleShape(CoreRepresentations.parse(if (nested) nestedTupleRep else tupleRep), language)
                 repeat(5) {
                     val ready = ManagedMVar()
                     assertTrue(ready.tryPut("one"))
                     val result = Calls.target(target, arrayOf(0L, ready, Unit))
                     val owned = ownedTupleResult(result, shape)
                     assertEquals("one", shape.layout.getObject(owned, 0))
+                    if (nested) assertEquals(7L, shape.layout.getLong(owned, 1))
                 }
                 target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
                 assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
@@ -151,6 +151,7 @@ class AstContinuationTest {
                     val completed = continuation.continueWith(Unit)
                     val owned = ownedTupleResult(completed, shape)
                     assertEquals("forty-one", shape.layout.getObject(owned, 0))
+                    if (nested) assertEquals(7L, shape.layout.getLong(owned, 1))
                     assertThrows(RuntimeFault::class.java) { continuation.continueWith(Unit) }
                     val handoff = shape.language.handoffState.get()
                     assertEquals(0, handoff.results.depth)

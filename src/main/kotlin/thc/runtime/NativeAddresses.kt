@@ -28,20 +28,29 @@ import thc.Language
 internal class NativeAddresses(private val env: TruffleLanguage.Env) {
     private val images = WeakHashMap<Any, NativeReadOnlyImage>()
     private val ranges = TreeMap<Long, WeakReference<NativeReadOnlyImage>>(java.lang.Long::compareUnsigned)
+    private val pinned = TreeMap<Long, WeakReference<ManagedAllocation>>(java.lang.Long::compareUnsigned)
     private var closed = false
     private fun requireOpen() { if (closed) fault("Native address registry is closed") }
     private fun reap() {
         images.size // Drain dead backing keys before resolving their numerical ranges.
         ranges.entries.removeIf { it.value.get()?.hasSource != true }
+        pinned.entries.removeIf { it.value.get() == null }
     }
 
     @Synchronized @TruffleBoundary
     fun project(address: ManagedAddress): Long {
         requireOpen()
         if (!env.isNativeAccessAllowed) fault("Native address projection requires native access")
-        val key = address.nativeImageKey()
-            ?: fault("Numeric projection requires immutable byte storage; mutable managed and opaque addresses are unsupported")
         reap()
+        address.cbitsOwner()?.nativeSegment()?.let { segment ->
+            // Exporting the address changes no storage or lifetime. Numeric
+            // pointers do not root it; typed aliases retain the automatic arena.
+            address.cbitsSegment()
+            pinned[segment.address()] = WeakReference(address.cbitsOwner()!!)
+            return segment.address() + address.cbitsOffset()
+        }
+        val key = address.nativeImageKey()
+            ?: fault("Numeric projection requires pinned storage or a static literal; moving heap arrays cannot be projected")
         val image = images[key] ?: NativeReadOnlyImage(key, address.nativeImageBytes()).also {
             images[key] = it
             ranges[it.base] = WeakReference(it)
@@ -54,7 +63,15 @@ internal class NativeAddresses(private val env: TruffleLanguage.Env) {
     fun recover(bits: Long): ManagedAddress {
         requireOpen()
         if (bits == 0L) return ManagedAddress.nullAddress()
+        StablePointers.current(null).recoverToken(bits)?.let { return it }
         reap()
+        pinned.floorEntry(bits)?.let { (base, reference) ->
+            reference.get()?.let { allocation ->
+                val displacement = bits - base
+                if (java.lang.Long.compareUnsigned(displacement, allocation.size) <= 0)
+                    return ManagedAddress.fromGuestByteArray(allocation).plus(displacement)
+            }
+        }
         val image = ranges.floorEntry(bits)?.value?.get()
         if (image != null) {
             val displacement = bits - image.base
@@ -84,7 +101,7 @@ internal class NativeAddresses(private val env: TruffleLanguage.Env) {
         if (closed) return
         closed = true
         ranges.values.forEach { it.get()?.close() }
-        images.clear(); ranges.clear()
+        images.clear(); ranges.clear(); pinned.clear()
     }
 
     companion object {
@@ -145,11 +162,22 @@ internal class NativeLimbScope : AutoCloseable {
         return allocate(count.toLong()).also { it.copyFrom(bytes, offset, count) }
     }
 
+    fun borrow(address: ManagedAddress, count: Long): Pointer {
+        address.requireByteRegion(count)
+        return Pointer(address.cbitsSegment().asSlice(address.cbitsOffset(), count), count, address)
+    }
+
     override fun close() = arena.close()
 
     /** Sulong transport tied to its arena lifetime, never a guest Addr# value. */
     @ExportLibrary(InteropLibrary::class)
-    class Pointer internal constructor(private val segment: MemorySegment, private val capacity: Long) : TruffleObject {
+    class Pointer internal constructor(private val segment: MemorySegment, private val capacity: Long,
+        private val retainedOwner: ManagedAddress? = null) : TruffleObject {
+        fun aliases(address: ManagedAddress): Boolean = retainedOwner?.sameLocation(address) == true
+        fun copyTo(destination: MemorySegment, offset: Long, count: Long) {
+            Objects.checkFromIndexSize(0L, count, capacity)
+            MemorySegment.copy(segment, 0, destination, offset, count)
+        }
         fun copyTo(destination: ByteArray, offset: Int, count: Int) {
             Objects.checkFromIndexSize(offset, count, destination.size)
             Objects.checkFromIndexSize(0L, count.toLong(), capacity)

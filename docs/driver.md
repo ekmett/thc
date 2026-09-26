@@ -25,6 +25,33 @@ Embedded callers can still read the `diagnostics` member directly. This output
 setting does not change instrumentation, strict admission, or shutdown behavior.
 The low-level integer-kernel launcher retains its diagnostic report.
 
+The driver and JVM launcher accept `--ffi native` or `--ffi managed`. Native is
+the default and preserves the current Sulong execution with native-library
+access; C bitcode still runs through Sulong. Managed execution is **not supported
+by the tested distribution**. The pinned `llvm-community` 25.3.4.1 runtime has no
+`llvm.managed` option. A managed request fails with that exact reason before
+native providers initialize or an entry executes. If another LLVM installation
+exposes the option, THC instead reports its remaining provider/artifact
+incompatibility: native file/GMP libraries and the packaged bitcode have not
+been ported and verified for managed execution. There is no native fallback.
+
+[GraalVM's LLVM options](https://www.graalvm.org/jdk25.4/reference-manual/llvm/Options/)
+describe managed availability and its potentially different LLVM toolchain.
+This selector does not claim managed execution merely because a guest buffer
+has a managed interop view, and it does not introduce another allocation arena.
+
+This is a runtime-only option on both the single-package and project paths: it
+does not change GHC flags, Core export, native build settings, or cache identities.
+When the option is omitted, the driver passes no override. The launcher selects
+the explicit option first, then `-Dthc.ffiMode`, then `THC_FFI_MODE`, then native.
+Values are exactly `native` or `managed`; malformed values fail. Selection is
+local to each launch and does not modify environment variables or JVM properties.
+The `executionContext` embedding factory follows the same property/environment
+defaults; the explicit `NativeIO` factory retains its native policy. Put a guest's
+own `--ffi` argument after the literal `--`, where it is preserved without
+interpretation. The low-level JVM launcher accepts this selector before its
+entry command and also supports `--ffi=native` / `--ffi=managed`.
+
 Pass guest command-line arguments after a literal `--`:
 
 ```sh
@@ -89,6 +116,19 @@ cabal run thc -- run test/fixtures/run-pure/run-pure.cabal \
 cabal test driver-tests --test-show-details=direct
 ```
 
+The runtime-selection parser and argument-forwarding checks can run without
+building or exporting the application fixtures:
+
+```sh
+cabal test driver-tests --test-options=--run-options-only --test-show-details=direct
+```
+
+After `./gradlew installDist`, `--test-options=--run-ffi-only` also runs the
+ordinary single-package fixture through both backends with explicit native
+selection and checks that a managed request fails without guest output.
+The JVM `FfiModeTest` and `LauncherDiagnosticsTest` cover both IO entry protocols,
+mode precedence, unchanged guest arguments, and rejection before entry loading.
+
 `run` requires a real Cabal executable and its `Main.main :: IO ()`. It builds
 an explicit `.cabal` component with Cabal's own `LocalBuildInfo`, then invokes
 GHC again with its selected source directories, language/CPP/GHC options and
@@ -125,6 +165,11 @@ test or benchmark in the project. An unrelated unbuildable executable therefore
 does not block the selected workload. The driver
 reads `plan.json` and Cabal's `--enable-build-info` records, retaining exact
 unit IDs and GHC arguments for a separate post-Tidy export of local dependencies.
+For Cabal's grouped library records, including Custom Setup packages, the
+runtime closure follows `components.lib.depends`. The separate
+`components.setup.depends` graph belongs to native Setup execution, not the
+guest; it must neither hide transitive library dependencies nor pull host-only
+Setup packages into the Core manifest.
 It writes one compressed Core ZIP per local component under
 `<dist-dir>/native/cache/thc/core-bundles/v1`, inside Cabal's build directory,
 and a checked `packages.json` manifest. `cabal clean --builddir <dist-dir>/native`
@@ -145,6 +190,11 @@ GHC unchanged, then exports Core with the same Cabal arguments while its unpacke
 source still exists. Both compiler wrappers disable the THC driver's own RTS
 argument parsing with `--RTS`, preserving the compiler's `+RTS ... -RTS` options
 and response-file arguments for native compilation and Core replay. The
+replay also preserves Cabal's original debug-info settings: adding `-g` only to
+an export can change optimizer-generated binder names and leave consumers of
+the native interfaces with missing globals. Source-note export retains whatever
+notes those original compiler settings produced; it does not force a different
+debug level for either local components or store packages. The
 temporary store is removed after ZIP publication;
 matching store IDs skip that export on later runs. The fixture has a
 data library, a native Template Haskell helper, an internal library, CPP and an

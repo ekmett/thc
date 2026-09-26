@@ -47,6 +47,7 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
         "IntRep", "WordRep", "Int64Rep", "Word64Rep" -> true
         else -> false
     }
+    private val addressResult = call.result == "AddrRep"
 
     private fun function(): PackageScalarFunction {
         // Check the entered context even when a host misuses a root from another context.
@@ -94,7 +95,8 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
         val threads = entry.owner.threads
         val previous = threads.enterForeign()
         try {
-            return if (pointers) invokePointers(entry, arguments) else Calls.interop(calls, entry.receiver, arguments)
+            return if (pointers) invokePointers(entry, arguments)
+                else normalizeResult(entry, Calls.interop(calls, entry.receiver, arguments))
         } finally {
             threads.leaveForeign(previous)
             Reference.reachabilityFence(arguments)
@@ -123,13 +125,17 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
                 val views = IdentityHashMap<ManagedAddress, PackagePointerBuffer>()
                 for ((index, address) in addresses) {
                     if (address === ManagedAddress.nullAddress()) continue
+                    if (address.stableHandle() != null) {
+                        entry.owner.stablePointers.validate(address)
+                        continue
+                    }
                     if (address.nativeAllocation() != null) {
                         address.requireByteRegion(0)
                         continue
                     }
                     address.requireByteRegion(0, argumentReps[index] == "MutableByteArray#")
                     val writable = argumentReps[index] != "ByteArray#" && address.cbitsWritable()
-                    val key = address.nativeImageKey() ?: address.cbitsBacking()
+                    val key = address.cbitsStorageKey()
                     val buffer = buffers.getOrPut(key) { PackagePointerBuffer(address, writable) }
                     if (buffer.address.cbitsOwner() == null && address.cbitsOwner() != null) buffer.address = address
                     buffer.writable = buffer.writable || writable
@@ -144,12 +150,16 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
                         entry.owner.nativeAddresses.project(address)
                         entry.owner.nativeAddresses.transport(address) ?: fault("Missing immutable C pointer image")
                     }
-                    buffer.transport = CbitsBuffer(address.cbitsBacking(), buffer.writable,
-                        LongSupplier { address.cbitsSize() }, 0, nativeImage)
+                    buffer.transport = CbitsBuffer(address.cbitsBuffer(), buffer.writable,
+                        LongSupplier { address.cbitsSize() }, 0, nativeImage,
+                        if (address.cbitsOwner()?.isPinned == true)
+                            LongSupplier { address.toNativeBits() - address.cbitsOffset() } else null)
                 }
                 for ((index, address) in addresses) {
                     converted[index] = when {
                         address === ManagedAddress.nullAddress() -> PackageNativePointer(0L, lease)
+                        address.stableHandle() != null ->
+                            entry.owner.stablePointers.nativeTransport(address)
                         address.nativeAllocation() != null -> {
                             address.requireByteRegion(0)
                             PackageNativePointer(address.toNativeBits(), lease)
@@ -157,7 +167,9 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
                         else -> entry.owner.packageCbits.pointer(views.getValue(address).transport!!, address.cbitsOffset())
                     }
                 }
-                Calls.interop(calls, entry.receiver, converted)
+                // Pointer results can alias call-scoped native transports. Read
+                // their bits before releasing leases and allocation borrows.
+                normalizeResult(entry, Calls.interop(calls, entry.receiver, converted))
             } finally {
                 lease.open = false
                 Reference.reachabilityFence(addresses)
@@ -213,6 +225,22 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
     fun executeVoid(arguments: Array<Any?>, state: Any?) {
         if (call.result != "void") fault("Package C result is not void")
         invoke(prepare(arguments, state), arguments)
+    }
+
+    fun executeAddress(arguments: Array<Any?>, state: Any?): ManagedAddress {
+        if (!addressResult) fault("Package C result is not a pointer ABI")
+        val entry = prepare(arguments, state)
+        return invoke(entry, arguments) as ManagedAddress
+    }
+
+    private fun normalizeResult(entry: PackageScalarFunction, result: Any?): Any? {
+        if (!addressResult) return result
+        if (numbers.isNull(result)) return ManagedAddress.nullAddress()
+        if (!numbers.isPointer(result)) fault("Package C returned a non-native opaque pointer")
+        val bits = numbers.asPointer(result)
+        // A return type never grants ownership or permission to dereference C
+        // storage. StablePtr identities are the sole recovered authority here.
+        return entry.owner.stablePointers.recoverToken(bits) ?: ManagedAddress.unownedNumeric(bits)
     }
 }
 

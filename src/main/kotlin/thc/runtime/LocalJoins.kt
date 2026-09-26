@@ -4,6 +4,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
+import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.frame.MaterializedFrame
@@ -37,20 +38,59 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
     // Decide emptiness while lowering, so invalid scalar paths for slot -1 never enter the graph.
     @field:CompilationFinal(dimensions = 1) private val emptyInputs = target.proofs.map { it.isEmptyTuple }.toBooleanArray()
     @field:CompilationFinal(dimensions = 1) private val emptySlots = IntArray(0)
-    @ExplodeLoop override fun execute(frame: VirtualFrame): Nothing {
+    override fun execute(frame: VirtualFrame): Nothing {
+        prepare(frame, 0)
+        transfer(frame)
+    }
+
+    @ExplodeLoop private fun prepare(frame: VirtualFrame, first: Int) {
         // All operands are read before any formal is overwritten, including recursive swaps.
-        for (i in arguments.indices) {
-            if (emptyInputs[i]) arguments[i].executeTuple(frame, emptySlots, 0)
-            else if (vectorLayouts[i] != null) arguments[i].executeTuple(frame,
-                vectorTemporaries[i] ?: fault("Missing vector join temporaries"), 0)
-            else if (target.proofs[i].isLong) FrameAccess.writeLong(frame, temporaries[i], arguments[i].executeRequiredLong(frame))
-            else if (target.proofs[i].isFloat) FrameAccess.writeFloat(frame, temporaries[i], arguments[i].executeRequiredFloat(frame))
-            else if (target.proofs[i].isDouble) FrameAccess.writeDouble(frame, temporaries[i], arguments[i].executeRequiredDouble(frame))
-            else if (referenceKinds[i] == CoreKind.DATA) FrameAccess.write(frame, temporaries[i], arguments[i].executeRequiredDataValue(frame))
-            else if (referenceKinds[i] == CoreKind.CLOSURE) FrameAccess.write(frame, temporaries[i], arguments[i].executeRequiredClosure(frame))
-            else if (referenceKinds[i] == CoreKind.ADDRESS) FrameAccess.write(frame, temporaries[i], arguments[i].executeRequiredAddress(frame))
-            else FrameAccess.write(frame, temporaries[i], arguments[i].execute(frame))
+        for (i in first until arguments.size) {
+            try {
+                if (emptyInputs[i]) arguments[i].executeTuple(frame, emptySlots, 0)
+                else if (vectorLayouts[i] != null) arguments[i].executeTuple(frame,
+                    vectorTemporaries[i] ?: fault("Missing vector join temporaries"), 0)
+                else if (target.proofs[i].isLong) FrameAccess.writeLong(frame, temporaries[i], arguments[i].executeRequiredLong(frame))
+                else if (target.proofs[i].isFloat) FrameAccess.writeFloat(frame, temporaries[i], arguments[i].executeRequiredFloat(frame))
+                else if (target.proofs[i].isDouble) FrameAccess.writeDouble(frame, temporaries[i], arguments[i].executeRequiredDouble(frame))
+                else if (referenceKinds[i] == CoreKind.DATA) FrameAccess.write(frame, temporaries[i], arguments[i].executeRequiredDataValue(frame))
+                else if (referenceKinds[i] == CoreKind.CLOSURE) FrameAccess.write(frame, temporaries[i], arguments[i].executeRequiredClosure(frame))
+                else if (referenceKinds[i] == CoreKind.ADDRESS) FrameAccess.write(frame, temporaries[i], arguments[i].executeRequiredAddress(frame))
+                else FrameAccess.write(frame, temporaries[i], arguments[i].execute(frame))
+            } catch (cut: AstCapture) {
+                throw cut.append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Nothing {
+                        saveArgument(frame, i, input)
+                        prepare(frame, i + 1)
+                        transfer(frame)
+                    }
+                })
+            }
         }
+    }
+
+    private fun saveArgument(frame: VirtualFrame, index: Int, value: Any?) {
+        // Aggregate children already copied their resumed result into the same
+        // scratch slots; scalar children still owe this caller their store.
+        if (emptyInputs[index] || vectorLayouts[index] != null) return
+        when {
+            target.proofs[index].isLong -> FrameAccess.writeLong(frame, temporaries[index],
+                value as? Long ?: fault("Expected primitive Long join argument"))
+            target.proofs[index].isFloat -> FrameAccess.writeFloat(frame, temporaries[index],
+                value as? Float ?: fault("Expected primitive Float join argument"))
+            target.proofs[index].isDouble -> FrameAccess.writeDouble(frame, temporaries[index],
+                value as? Double ?: fault("Expected primitive Double join argument"))
+            referenceKinds[index] == CoreKind.DATA -> FrameAccess.write(frame, temporaries[index],
+                value as? DataValue ?: fault("Expected constructor join argument"))
+            referenceKinds[index] == CoreKind.CLOSURE -> FrameAccess.write(frame, temporaries[index],
+                value as? Closure ?: fault("Expected closure join argument"))
+            referenceKinds[index] == CoreKind.ADDRESS -> FrameAccess.write(frame, temporaries[index],
+                value as? ManagedAddress ?: fault("Expected address join argument"))
+            else -> FrameAccess.write(frame, temporaries[index], value)
+        }
+    }
+
+    @ExplodeLoop private fun transfer(frame: VirtualFrame): Nothing {
         for (i in arguments.indices) {
             if (!emptyInputs[i]) {
                 val vectorLayout = vectorLayouts[i]
@@ -95,10 +135,18 @@ private class LocalJoinRepeater(private val group: Any, private val selector: In
     private val exactDouble = proof.isDouble
     private val referenceKind = if (proof.evaluated) proof.kind else CoreKind.UNKNOWN
     private fun executeBody(frame: VirtualFrame, body: Expr) {
-        if (!delimited) return executeUninterrupted(frame, body)
+        if (!delimited && !AstControl.enabled(this)) return executeUninterrupted(frame, body)
         try {
             executeUninterrupted(frame, body)
+        } catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                    saveResult(frame, input)
+                    return null
+                }
+            })
         } catch (cut: DelimitedCut) {
+            if (!delimited) throw cut
             throw cut.append(frame, object : DelimitedStep {
                 override fun resume(frame: MaterializedFrame, input: DelimitedResume, ambient: MaskingState,
                                     outerMask: DelimitedStep?): Any? {
@@ -107,6 +155,22 @@ private class LocalJoinRepeater(private val group: Any, private val selector: In
                     return null
                 }
             })
+        }
+    }
+
+    private fun saveResult(frame: VirtualFrame, value: Any?) {
+        when {
+            tuple -> Unit // The tuple child owns its destination writes.
+            exactLong -> FrameAccess.writeLong(frame, result, value as? Long ?: fault("Expected primitive Long join result"))
+            exactFloat -> FrameAccess.writeFloat(frame, result, value as? Float ?: fault("Expected primitive Float join result"))
+            exactDouble -> FrameAccess.writeDouble(frame, result, value as? Double ?: fault("Expected primitive Double join result"))
+            referenceKind == CoreKind.DATA -> FrameAccess.write(frame, result,
+                value as? DataValue ?: fault("Expected constructor join result"))
+            referenceKind == CoreKind.CLOSURE -> FrameAccess.write(frame, result,
+                value as? Closure ?: fault("Expected closure join result"))
+            referenceKind == CoreKind.ADDRESS -> FrameAccess.write(frame, result,
+                value as? ManagedAddress ?: fault("Expected address join result"))
+            else -> FrameAccess.write(frame, result, value)
         }
     }
     private fun executeUninterrupted(frame: VirtualFrame, body: Expr) {
@@ -141,13 +205,28 @@ private class LocalJoinRepeater(private val group: Any, private val selector: In
     override fun executeRepeating(frame: VirtualFrame): Boolean {
         try {
             val selected = frame.getLong(selector)
-            if (selected == 0L) executeBody(frame, bodies[0]) else executeTarget(frame, selected)
+            val enteredCompiled = CompilerDirectives.inCompiledCode()
+            if (AstControl.enabled(this)) GuestThreads.pollCurrent(this, false)?.let { request ->
+                request.compiledCapture = enteredCompiled
+                throw AstCapture(request, SynchronousMasking.current(this)).append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                        if (input !== Unit) fault("Local join loop continuation requires Unit")
+                        executeSelected(frame, selected)
+                        return null
+                    }
+                })
+            }
+            executeSelected(frame, selected)
             return false
         } catch (jump: LocalJoinJump) {
             if (jump.target.group !== group) throw jump
             frame.setLong(selector, jump.target.index.toLong())
             return true
         }
+    }
+
+    private fun executeSelected(frame: VirtualFrame, selected: Long) {
+        if (selected == 0L) executeBody(frame, bodies[0]) else executeTarget(frame, selected)
     }
 }
 
@@ -163,9 +242,37 @@ internal class LocalJoinRegion(private val group: Any, private val selector: Int
     @Child private var loop: LoopNode? = if (recursive) Truffle.getRuntime().createLoopNode(
         LocalJoinRepeater(group, selector, result, bodies, proof, tupleSlots, delimited)) else null
     private fun run(frame: VirtualFrame, slots: IntArray? = null, offset: Int = 0) {
-        if (!delimited) return runUninterrupted(frame)
+        if (!delimited && !AstControl.enabled(this)) return runUninterrupted(frame)
         try { runUninterrupted(frame) }
-        catch (cut: DelimitedCut) { throw cut.append(frame, ResumeRegion(this, slots, offset)) }
+        catch (cut: AstCapture) { throw cut.enclose { ResumeAsyncRegion(this, it, slots, offset) } }
+        catch (cut: DelimitedCut) {
+            if (!delimited) throw cut
+            throw cut.append(frame, ResumeRegion(this, slots, offset))
+        }
+    }
+
+    /** Restored operands can perform a lexical transfer. The region enclosing
+     * their saved steps must catch it before any outer caller suffix runs. */
+    private class ResumeAsyncRegion(private val region: LocalJoinRegion,
+                                    private val steps: List<AstResumeStep>,
+                                    private val slots: IntArray?, private val offset: Int) : AstResumeStep {
+        override fun resume(frame: VirtualFrame, input: Any?): Any? {
+            try {
+                try { resumeAstSteps(frame, steps, input) }
+                catch (jump: LocalJoinJump) {
+                    if (jump.target.group !== region.group) throw jump
+                    val once = region.single
+                    if (once != null) once.executeTarget(frame, jump.target.index.toLong())
+                    else {
+                        FrameAccess.writeLong(frame, region.selector, jump.target.index.toLong())
+                        region.loop!!.execute(frame)
+                    }
+                }
+            } catch (cut: AstCapture) {
+                throw cut.enclose { ResumeAsyncRegion(region, it, slots, offset) }
+            }
+            return if (slots == null) region.resultValue(frame) else region.finishTuple(frame, slots, offset)
+        }
     }
     private fun runUninterrupted(frame: VirtualFrame) {
         val once = single

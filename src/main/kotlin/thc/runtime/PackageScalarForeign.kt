@@ -54,14 +54,18 @@ internal object CorePackageScalarForeign {
         val descriptor = meta["foreignCall"] as? Map<*, *> ?: return null
         val target = descriptor["target"] as? Map<*, *> ?: return null
         val link = links.singleOrNull { it.unit == target["unit"] } ?: return null
-        val signature = link.abi.singleOrNull { it.symbol == target["symbol"] }
-            ?: fault("Unlinked package C symbol in scalar component: ${target["symbol"]}")
+        val declared = descriptor["argumentReps"] as? List<*> ?: fault("Missing package C declared arguments")
+        val signature = link.abi.singleOrNull { candidate ->
+            val expected = candidate.arguments + null
+            candidate.symbol == target["symbol"] && candidate.convention == descriptor["convention"] &&
+                declared.size == expected.size && expected.indices.all { scalar(declared[it], expected[it], true) } &&
+                result(descriptor["resultRep"], candidate.result, true)
+        } ?: fault("Unlinked or ambiguous package C signature in scalar component: ${target["symbol"]}")
         check(descriptor.keys == setOf("schema", "target", "convention", "safety", "arity", "suppliedArity", "argumentReps", "resultRep") &&
             number(descriptor["schema"], 1) && target.keys == setOf("kind", "symbol", "unit", "isFunction") &&
             target["kind"] == "static" && target["isFunction"] == true &&
             descriptor["convention"] == signature.convention && descriptor["safety"] == "unsafe", "static unsafe declaration")
         val expected = signature.arguments + null
-        val declared = descriptor["argumentReps"] as? List<*> ?: fault("Missing package C declared arguments")
         check(number(descriptor["arity"], expected.size) && number(descriptor["suppliedArity"], expected.size) &&
             arguments.size == expected.size && declared.size == expected.size && flags == List(expected.size) { false } &&
             expected.indices.all { scalar(declared[it], expected[it], true) && scalar(arguments[it], expected[it]) } &&
@@ -101,6 +105,7 @@ internal class PackageScalarExpression(private val call: PackageScalarCall,
                 FrameAccess.writeLong(frame, slots[offset], access.executeLong(values, state))
             "FloatRep" -> FrameAccess.writeFloat(frame, slots[offset], access.executeFloat(values, state))
             "DoubleRep" -> FrameAccess.writeDouble(frame, slots[offset], access.executeDouble(values, state))
+            "AddrRep" -> FrameAccess.write(frame, slots[offset], access.executeAddress(values, state))
             "void" -> access.executeVoid(values, state)
             else -> fault("Invalid package C result")
         }

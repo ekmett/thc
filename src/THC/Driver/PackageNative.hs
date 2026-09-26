@@ -2,7 +2,7 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
 
--- | Package-owned C/CAPI acquisition. Compile the real configured source and
+-- | Package-owned C/C++/CAPI acquisition. Compile the real configured source and
 -- retained GHC wrappers while Cabal's headers exist; carry LLVM, not guesses
 -- about native object layouts, into the immutable Core bundle.
 module THC.Driver.PackageNative
@@ -18,7 +18,7 @@ import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.Char (isAlpha, isAlphaNum)
-import Data.List (isPrefixOf, nub, sort, sortOn)
+import Data.List (groupBy, isPrefixOf, nub, sort)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Numeric (showHex)
@@ -36,11 +36,24 @@ nativeSignatures :: String -> [Value] -> Either String [Signature]
 nativeSignatures unit modules = do
   imports <- concat <$> mapM moduleImports modules
   signatures <- mapM classify imports
-  let ordered = sortOn first (nub signatures)
-  require (length ordered == length (nub (map first ordered))) "conflicting package native signatures"
+  let ordered = sort (nub signatures)
+  forM_ (groupBy (\a b -> first a == first b) ordered) $ \variants -> do
+    require (length (nub (map cAbi variants)) == 1) "conflicting package native signatures"
+    -- Addr# and ByteArray# have the same C pointer ABI but distinct Core
+    -- carriers. Do not collapse their typed adapters or pointer handling.
+    -- ByteArray# and MutableByteArray# erase to the same Core shape; without
+    -- further call-site proof, choosing a read/write policy would be ambiguous.
+    require (length variants == length (nub (map coreAbi variants)))
+      "ambiguous package native byte-array mutability variants"
   pure ordered
   where
     first (symbol,_,_,_,_) = symbol
+    cAbi (_,convention,safety,arguments,result) =
+      (convention,safety,map pointerAbi arguments,result)
+    pointerAbi value | value `elem` ["ByteArray#","MutableByteArray#"] = "AddrRep"
+                     | otherwise = value
+    coreAbi (_,convention,safety,arguments,result) =
+      (convention,safety,map (\value -> if value == "MutableByteArray#" then "ByteArray#" else value) arguments,result)
     moduleImports value = do
       require (member value "unit" == Just (toJSON unit)) "package native module owner differs"
       case member value "staticForeignImports" of
@@ -70,7 +83,7 @@ nativeSignatures unit modules = do
         "package native call requires static unsafe C/CAPI and supported scalar/byte-array inputs"
       result <- case results of
         ["void"] -> Right "void"
-        ["void", value] | scalarCarrier value && value /= "AddrRep" -> Right value
+        ["void", value] | scalarCarrier value -> Right value
         _ -> Left "package native call requires State with zero or one scalar result"
       pure (symbol,convention,safety,init arguments,result)
 
@@ -98,7 +111,7 @@ validateNativeIR source = require (not (any forbidden (lines source)))
 nativeWrapperSource :: [(Signature, String)] -> Either String String
 nativeWrapperSource entries = fmap concat $ forM entries $ \((symbol,convention,_,arguments,result), entry) -> do
   require (identifier symbol && identifier entry && all inputCarrier arguments &&
-    (result == "void" || scalarCarrier result && result /= "AddrRep"))
+    (result == "void" || scalarCarrier result))
     "invalid native wrapper ABI"
   let types = map cType arguments
       parameters = if null types then "void" else join ", " [ty ++ " a" ++ show index | (index,ty) <- zip [0::Int ..] types]
@@ -148,7 +161,8 @@ captureNativeComponent pieces arguments = when ("--make" `elem` arguments) $ do
 
 captureNativeObject :: FilePath -> FilePath -> [String] -> IO ()
 captureNativeObject pieces compiler arguments = when ("-c" `elem` arguments && after "-osuf" arguments /= Just "dyn_o") $
-  case [value | value <- arguments, takeExtension value == ".c", not ("-" `isPrefixOf` value)] of
+  case [value | value <- arguments, takeExtension value `elem` [".c", ".cc", ".cpp", ".cxx"],
+                not ("-" `isPrefixOf` value)] of
     [source] -> do
       root <- getCurrentDirectory >>= canonicalizePath
       sourcePath <- canonicalizePath source
@@ -339,9 +353,16 @@ compileC compiler root original directory generated = do
     Just contents -> do
       writeFile source contents
       pure (original ++ ["-c",source])
-  _ <- command root compiler (arguments ++ ["-pgmc",clang,"-fPIC","-o",bitcode,
-    "-optc-emit-llvm","-optc-O1","-optc-MD","-optc-MF","-optc" ++ dependency,
-    "-optc-MT","-optcthc_scalar_input","-optc-Werror=date-time"])
+  -- GHC has separate C and C++ compiler phases and option namespaces. Keep
+  -- Cabal's complete successful invocation, including -optcxx configuration;
+  -- replace only the selected compiler and output for its LLVM replay.
+  let cxx = any (\value -> takeExtension value `elem` [".cc", ".cpp", ".cxx"] &&
+                           not ("-" `isPrefixOf` value)) arguments
+      compilerFlag = if cxx then "-pgmcxx" else "-pgmc"
+      option = if cxx then "-optcxx" else "-optc"
+  _ <- command root compiler (arguments ++ [compilerFlag,clang,"-fPIC","-o",bitcode] ++
+    map (option ++) ["-emit-llvm","-O1","-MD","-MF",dependency,
+                    "-MT","thc_scalar_input","-Werror=date-time"])
   dependencies <- either fail pure . parseDependencies =<< readFile dependency
   observed <- forM (sort (nub dependencies)) $ \path -> do
     absolute <- canonicalizePath (root </> path)
@@ -356,6 +377,7 @@ compileC compiler root original directory generated = do
       adjusted = directory </> "target.bc"
   _ <- command root opt ["-passes=verify","--mtriple=" ++ target,bitcode,"-o",adjusted]
   pure (adjusted,target,object ["compiler" .= compiler,"clang" .= clang,"arguments" .= arguments,
+    "language" .= (if cxx then "c++" else "c" :: String),
     "nativeTarget" .= nativeTarget,"target" .= target,"files" .= observed])
 
 calls :: Value -> [Value]

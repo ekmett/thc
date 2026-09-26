@@ -12,6 +12,10 @@ maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  test/fixtures/run-native-variants/cabal.project
+  test/fixtures/run-native-variants/native-variants.cabal
+  test/fixtures/run-native-variants/Main.hs
+  test/fixtures/run-native-variants/variants.c
   examples/standard-apps/README.md
   examples/standard-apps/TinyLexer.x
   examples/standard-apps/TinyParser.y
@@ -38,6 +42,20 @@ extra-source-files:
   test/fixtures/run-scalar-cbits/app/Main.hs
   test/fixtures/run-scalar-cbits/cbits/scalar.c
   test/fixtures/run-scalar-cbits/cbits/scalar.h
+  test/fixtures/run-stableptr-ffi/src/StableForeign.hs
+  test/fixtures/run-stableptr-ffi/app/Main.hs
+  test/fixtures/run-stableptr-ffi/cbits/stable.c
+  test/fixtures/run-stableptr-ffi/cbits/stable.h
+  test/fixtures/run-native-capi/cabal.project
+  test/fixtures/run-native-capi/README.md
+  test/fixtures/run-native-capi/run-native-capi.cabal
+  test/fixtures/run-native-capi/src/NativeLeft.hs
+  test/fixtures/run-native-capi/src/NativeRight.hs
+  test/fixtures/run-native-capi/include/left.h
+  test/fixtures/run-native-capi/include/right.h
+  test/fixtures/run-native-capi/cbits/first.c
+  test/fixtures/run-native-capi/cbits/second.c
+  test/fixtures/run-native-capi/app/Main.hs
   compiler/test-fixtures/OriginalStringRtsNative.hs
   compiler/test-fixtures/RtsShutdownNative.hs
   compiler/pinned-ghc-internal/cbits/strerror.c
@@ -79,6 +97,7 @@ extra-source-files:
   compiler/test-fixtures/FileWaitNative.hs
   compiler/test-fixtures/OriginalFdReadyAudit.hs
   compiler/test-fixtures/OriginalRtsLocksAudit.hs
+  compiler/test-fixtures/CompilerRtsAudit.hs
   compiler/test-fixtures/RtsDiagnosticsNative.hs
   compiler/test-fixtures/OriginalFcntlAudit.hs
   compiler/test-fixtures/OriginalFcntlNative.hs
@@ -417,6 +436,7 @@ test-suite driver-tests
     TestSupportTests
     PlanTests
     RunTests
+    RunOptionsTests
     ProjectTests
     StoreProjectTests
     EmptyStoreProjectTests
@@ -426,6 +446,9 @@ test-suite driver-tests
     NativeRecipeTests
     RuntimeShimTests
     InstalledForeignTests
+    THC.Driver.Cabal
+    THC.Driver.Json
+    THC.Driver.Run
     THC.Driver.GhcProxy
     THC.Driver.Installed
     THC.Driver.InstalledForeign
@@ -697,9 +720,11 @@ executable thc-fixtures
     FileWaitFixtures
     OriginalFdReadyFixtures
     OriginalRtsLocksFixtures
+    CompilerRtsFixtures
     RtsDiagnosticFixtures
     OriginalOpenFixtures
     PackageScalarFixtures
+    StablePtrFFIFixtures
     HashableFfiFixtures
     OriginalTermiosFixtures
     OriginalTcsetattrFixtures

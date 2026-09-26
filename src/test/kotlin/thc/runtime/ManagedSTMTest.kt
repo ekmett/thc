@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicReference
 class ManagedSTMTest {
     private val location = object : Node() {}
     private fun <T> atomic(stm: ManagedSTM, action: () -> T): T =
-        stm.atomically(null, { throw GuestException("nested", location) }, action)
+        stm.atomically(null, { throw GuestException("nested", location) }, action = action)
     private fun await(gate: CountDownLatch) = assertTrue(gate.await(5, TimeUnit.SECONDS), "gate timed out")
     private fun queued(stm: ManagedSTM) {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
@@ -105,6 +105,38 @@ class ManagedSTMTest {
             assertEquals(2, attempts.get())
             assertEquals(101L, stm.readIO(cell))
         } finally { release.countDown(); stm.close(); worker.shutdownNow() }
+    }
+
+    @Test fun abandoningNestedAttemptDoesNotCatchOrTransferPrivateWrites() {
+        val stm = ManagedSTM()
+        val cell = stm.newTVar(1L)
+        val abandoned = object : ControlFlowException() {}
+        val failure = assertThrows(ControlFlowException::class.java) {
+            atomic(stm) {
+                stm.write(cell, 2L)
+                stm.orElse({
+                    stm.catchSTM({
+                        stm.write(cell, 3L)
+                        throw abandoned
+                    }, { error("A control unwind is not catchSTM's synchronous exception") })
+                }, { error("A control unwind is not retry") })
+            }
+        }
+        assertSame(abandoned, failure)
+        assertFalse(stm.hasTransaction())
+        assertEquals(1L, stm.readIO(cell))
+        val carrier = Executors.newSingleThreadExecutor()
+        try {
+            assertEquals(4L, carrier.submit<Long> {
+                assertFalse(stm.hasTransaction())
+                atomic(stm) {
+                    assertEquals(1L, stm.read(cell))
+                    stm.write(cell, 4L)
+                    4L
+                }.also { assertFalse(stm.hasTransaction()) }
+            }.get(5, TimeUnit.SECONDS))
+            assertEquals(4L, stm.readIO(cell))
+        } finally { carrier.shutdownNow(); stm.close() }
     }
 
     @Test fun validationPreventsMixedSnapshotsAndStaleExceptionEscape() {

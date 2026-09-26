@@ -49,7 +49,7 @@ import THC.Driver.PackageNative (captureNativeObject, capturePackageNative, fini
 import THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign
-import THC.Driver.Run (RunOptions(..))
+import THC.Driver.Run (RunOptions(..), FfiMode, runtimeLaunchArguments)
 import THC.Driver.Zip (decodeZip, encodeZip)
 import THC.Driver.Wired (WiredArtifacts(..), moduleSources, sourceHashes,
                          exportPinnedCore, probeTargetLayout)
@@ -144,7 +144,7 @@ runProject opts target = do
   withProjectLock output $
     runBuiltProject project thcRoot runtime output native executable cabalArgs
                     pluginDb pluginUnit pluginLibrary compiler packageTool (runInstalledCore opts)
-                    source registeredLibrary (runArguments opts)
+                    source registeredLibrary (runFfiMode opts) (runArguments opts)
 
 -- Resolve the actual selected compiler's companion before Cabal sees the
 -- forwarding wrapper. The wrapper directory is not a GHC installation.
@@ -178,9 +178,9 @@ selectedPackageTool ghc requested = do
 
 runBuiltProject :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath ->
                    String -> [String] -> FilePath -> String -> FilePath -> FilePath ->
-                   Maybe FilePath -> String -> Maybe FilePath -> FilePath -> [String] -> IO ()
+                   Maybe FilePath -> String -> Maybe FilePath -> FilePath -> Maybe FfiMode -> [String] -> IO ()
 runBuiltProject project thcRoot runtime output native executable cabalArgs
-                pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary guestArguments = do
+                pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary ffiMode guestArguments = do
   driver <- getExecutablePath
   let proxy = native </> "cache/thc/native-ghc"
       receipts = native </> "cache/thc/native-recipes-v1"
@@ -321,9 +321,9 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   -- Full-Core main and shutdown share one program and its Handle CAFs.
   -- Execute relative paths from the Cabal project just as the native binary does.
   let programName = reverse (takeWhile (/= ':') (reverse executable))
-  runCommand False runtime ((if lifecycle
+  runCommand False runtime (runtimeLaunchArguments ffiMode (if lifecycle
       then ["--run-executable", '@' : manifest, entry, shutdown]
-      else ["--run-io", '@' : manifest, entry]) ++ ["--", programName] ++ guestArguments) project
+      else ["--run-io", '@' : manifest, entry]) programName guestArguments) project
 
 prepareInterfaceHelper :: ExportContext -> FilePath -> IO InstalledContext
 prepareInterfaceHelper context root = do
@@ -679,7 +679,16 @@ withProjectLock output = withLock (output </> ".lock")
 readUnit :: Value -> IO Unit
 readUnit value = do
   identifier <- field value "id"
-  dependencies <- optionalField value "depends" []
+  dependencies <- case jsonField value "depends" :: Maybe Value of
+    Just _ -> field value "depends"
+    Nothing -> case jsonField value "components" :: Maybe Value of
+      Nothing -> pure []
+      Just components -> do
+        -- Cabal's non-per-component library records (including Custom Setup)
+        -- group runtime dependencies under lib. Setup runs on the host and its
+        -- separate dependency graph must not become part of the guest closure.
+        library <- field components "lib"
+        field library "depends"
   kind <- optionalField value "type" ("" :: String)
   style <- optionalField value "style" ("" :: String)
   pure (Unit identifier value dependencies (kind == "configured" && style == "local"))
@@ -746,7 +755,7 @@ exporterIdentity context = do
                  "driverHash" .= contextDriverHash context,
                  "options" .= (["post-tidy", "unit-qualified", "source-notes",
                                 "foreign-import-provenance",
-                                "-g", "-dynamic", "-dcore-lint"] :: [String])]
+                                "native-debug-info", "-dynamic", "-dcore-lint"] :: [String])]
 
 prepareGlobalBundles :: ExportContext -> FilePath -> String -> [Unit] -> IO (Map.Map String Bundle)
 prepareGlobalBundles _ _ _ [] = pure Map.empty
@@ -982,7 +991,7 @@ exportConfiguredUnit context keys unit component scalar runtimeShim nativeObject
                          "driverHash" .= contextDriverHash context,
                          "options" .= (["post-tidy", "unit-qualified", "source-notes",
                                          "foreign-import-provenance",
-                                         "-g", "-dynamic", "-dcore-lint"] :: [String])] ++
+                                         "native-debug-info", "-dynamic", "-dcore-lint"] :: [String])] ++
                      maybe [] (\digest -> ["scalarInterfaceHelperSha256" .= digest,
                        "scalarInterfaceOptions" .= (["-fwrite-if-simplified-core", "-hisuf", "hi"] :: [String])]) helperHash
       exportKey = shaHex (BL.toStrict (encode ("thc-core-export-v1" :: String, buildKey, exporter)))
@@ -1026,7 +1035,7 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
            "-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:unit-qualified",
            "-fplugin-opt=THC.Plugin:source-notes",
            "-fplugin-opt=THC.Plugin:foreign-import-provenance",
-           "-g", "-dynamic", "-fforce-recomp", "-dcore-lint", "-fwrite-if-simplified-core", "-hisuf", "hi"] ++
+           "-dynamic", "-fforce-recomp", "-dcore-lint", "-fwrite-if-simplified-core", "-hisuf", "hi"] ++
           map snd (componentSources component)
     sourceDir <- field (componentValue component) "src-dir"
     runCommand True (componentCompiler component) arguments sourceDir

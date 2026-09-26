@@ -121,12 +121,45 @@ internal class SumCase(@Child private var scrutinee: Expr,
     proof: CoreRepresentation) : Expr() {
     init { representation = proof }
     private val tagProfile = com.oracle.truffle.api.profiles.CountingConditionProfile.create()
-    private fun prepare(frame: VirtualFrame): Boolean {
-        scrutinee.executeTuple(frame, slots, 0)
-        return tagProfile.profile(SumShape.checkedTag(frame.getLong(slots[0])) == 1)
+
+    private enum class Route { GENERIC, LONG, FLOAT, DOUBLE, CLOSURE, DATA, ADDRESS, TUPLE }
+
+    private class ResumeBranch(private val node: SumCase, private val route: Route,
+                               private val destination: IntArray?, private val offset: Int) : AstResumeStep {
+        override fun resume(frame: VirtualFrame, input: Any?): Any? {
+            if (input != null) fault("Invalid AST sum-case resume value")
+            return node.resumeBranch(frame, route, destination, offset)
+        }
+    }
+
+    private fun isFirst(frame: VirtualFrame): Boolean =
+        tagProfile.profile(SumShape.checkedTag(frame.getLong(slots[0])) == 1)
+
+    private fun prepare(frame: VirtualFrame, route: Route,
+                        destination: IntArray? = null, offset: Int = 0): Boolean {
+        try { scrutinee.executeTuple(frame, slots, 0) }
+        catch (cut: AstCapture) { throw cut.append(ResumeBranch(this, route, destination, offset)) }
+        return isFirst(frame)
+    }
+
+    /** The scrutinee has already populated this activation's sum slots. */
+    private fun resumeBranch(frame: VirtualFrame, route: Route, destination: IntArray?, offset: Int): Any? {
+        val selected = if (isFirst(frame)) first else second
+        if (selected < 0) fault("Non-exhaustive unboxed sum case")
+        val branch = alternatives[selected]
+        return when (route) {
+            Route.GENERIC -> branch.execute(frame)
+            Route.LONG -> branch.executeLong(frame)
+            Route.FLOAT -> branch.executeFloat(frame)
+            Route.DOUBLE -> branch.executeDouble(frame)
+            Route.CLOSURE -> branch.executeClosure(frame)
+            Route.DATA -> branch.executeDataValue(frame)
+            Route.ADDRESS -> branch.executeAddress(frame)
+            Route.TUPLE -> branch.executeTuple(frame, destination!!, offset)
+        }
     }
     override fun execute(frame: VirtualFrame): Any? {
-        if (prepare(frame)) {
+        if (prepare(frame, Route.GENERIC)) {
             if (first < 0) fault("Non-exhaustive unboxed sum case")
             return alternatives[first].execute(frame)
         }
@@ -134,7 +167,7 @@ internal class SumCase(@Child private var scrutinee: Expr,
         return alternatives[second].execute(frame)
     }
     override fun executeLong(frame: VirtualFrame): Long {
-        if (prepare(frame)) {
+        if (prepare(frame, Route.LONG)) {
             if (first < 0) fault("Non-exhaustive unboxed sum case")
             return alternatives[first].executeLong(frame)
         }
@@ -142,7 +175,7 @@ internal class SumCase(@Child private var scrutinee: Expr,
         return alternatives[second].executeLong(frame)
     }
     override fun executeFloat(frame: VirtualFrame): Float {
-        if (prepare(frame)) {
+        if (prepare(frame, Route.FLOAT)) {
             if (first < 0) fault("Non-exhaustive unboxed sum case")
             return alternatives[first].executeFloat(frame)
         }
@@ -150,7 +183,7 @@ internal class SumCase(@Child private var scrutinee: Expr,
         return alternatives[second].executeFloat(frame)
     }
     override fun executeDouble(frame: VirtualFrame): Double {
-        if (prepare(frame)) {
+        if (prepare(frame, Route.DOUBLE)) {
             if (first < 0) fault("Non-exhaustive unboxed sum case")
             return alternatives[first].executeDouble(frame)
         }
@@ -158,7 +191,7 @@ internal class SumCase(@Child private var scrutinee: Expr,
         return alternatives[second].executeDouble(frame)
     }
     override fun executeClosure(frame: VirtualFrame): Closure {
-        if (prepare(frame)) {
+        if (prepare(frame, Route.CLOSURE)) {
             if (first < 0) fault("Non-exhaustive unboxed sum case")
             return alternatives[first].executeClosure(frame)
         }
@@ -166,7 +199,7 @@ internal class SumCase(@Child private var scrutinee: Expr,
         return alternatives[second].executeClosure(frame)
     }
     override fun executeDataValue(frame: VirtualFrame): DataValue {
-        if (prepare(frame)) {
+        if (prepare(frame, Route.DATA)) {
             if (first < 0) fault("Non-exhaustive unboxed sum case")
             return alternatives[first].executeDataValue(frame)
         }
@@ -174,7 +207,7 @@ internal class SumCase(@Child private var scrutinee: Expr,
         return alternatives[second].executeDataValue(frame)
     }
     override fun executeAddress(frame: VirtualFrame): ManagedAddress {
-        if (prepare(frame)) {
+        if (prepare(frame, Route.ADDRESS)) {
             if (first < 0) fault("Non-exhaustive unboxed sum case")
             return alternatives[first].executeAddress(frame)
         }
@@ -182,7 +215,7 @@ internal class SumCase(@Child private var scrutinee: Expr,
         return alternatives[second].executeAddress(frame)
     }
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        if (prepare(frame)) {
+        if (prepare(frame, Route.TUPLE, slots, offset)) {
             if (first < 0) fault("Non-exhaustive unboxed sum case")
             return alternatives[first].executeTuple(frame, slots, offset)
         }

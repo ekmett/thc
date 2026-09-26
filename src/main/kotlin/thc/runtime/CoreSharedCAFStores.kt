@@ -5,10 +5,11 @@ package thc.runtime
 
 import com.oracle.truffle.api.frame.VirtualFrame
 
-/** The two selected GHC 9.14.1 RTS slots holding shared-CAF StablePtr values. */
-internal enum class SharedCAFStore(val symbol: String) {
+/** Selected GHC 9.14.1 RTS slots holding context-owned shared-CAF StablePtrs. */
+internal enum class SharedCAFStore(val symbol: String, val unit: String = "ghc-internal") {
     EVENT_MANAGER("getOrSetSystemEventThreadEventManagerStore"),
-    SIGNAL_HANDLER("getOrSetGHCConcSignalSignalHandlerStore");
+    SIGNAL_HANDLER("getOrSetGHCConcSignalSignalHandlerStore"),
+    FAST_STRING("getOrSetLibHSghcFastStringTable", "ghc-9.14.1-inplace");
 
     companion object { fun named(symbol: Any?): SharedCAFStore? = entries.firstOrNull { it.symbol == symbol } }
 }
@@ -45,7 +46,7 @@ internal object CoreSharedCAFStores {
         val store = SharedCAFStore.named(target["symbol"]) ?: return null
         requireProof(descriptor.keys == descriptorKeys && exactInteger(descriptor["schema"], 1), "descriptor schema")
         requireProof(target.keys == setOf("kind", "symbol", "unit", "isFunction") &&
-            target["kind"] == "static" && target["unit"] == "ghc-internal" && target["isFunction"] == true,
+            target["kind"] == "static" && target["unit"] == store.unit && target["isFunction"] == true,
             "exact installed GHC target")
         requireProof(descriptor["convention"] == "ccall" && descriptor["safety"] == "unsafe" &&
             exactInteger(descriptor["arity"], 2) && exactInteger(descriptor["suppliedArity"], 2),

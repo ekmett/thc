@@ -171,15 +171,16 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
         // Its arena closes even if a guest copyback or context cancellation throws.
         val invoke = {
             address.requireRange(0, 16, writable = true)
-            val backing = address.cbitsBacking()
+            address.cbitsSegment()
             NativeLimbScope().use { scope ->
-                val native = scope.allocate(16)
+                val native = if (address.cbitsOwner()?.isPinned == true) scope.borrow(address, 16) else scope.allocate(16)
                 val result = interop.execute(foreignFunction(unit, symbol), word, native)
                 if (!interop.fitsInInt(result)) fault("CAPI result is not a CInt: $symbol")
                 val value = interop.asInt(result).toLong()
                 if (value != 0L && value != -1L) fault("CAPI clock status is outside the POSIX result domain")
                 val errno = if (value < 0) capiErrno() else 0L
-                if (value == 0L) native.copyTo(backing, address.cbitsOffset().toInt(), 16)
+                if (value == 0L && !native.aliases(address))
+                    native.copyTo(address.cbitsSegment(), address.cbitsOffset(), 16)
                 CapiResult(value, errno)
             }
         }
@@ -197,17 +198,19 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
         return interop.asInt(value).toLong()
     }
 
-    @Synchronized internal fun buffer(address: ManagedAddress): CbitsBuffer {
-        val bytes = address.cbitsBacking()
+    @Synchronized internal fun buffer(address: ManagedAddress, allowNativePointer: Boolean = true): CbitsBuffer {
+        val bytes = address.cbitsBuffer()
         val owner = address.cbitsOwner()
-        val key = address.nativeImageKey() ?: owner ?: bytes
+        val key = address.cbitsStorageKey()
+        if (!allowNativePointer) return CbitsBuffer(bytes, address.cbitsWritable(), LongSupplier { address.cbitsSize() })
         return buffers[key]?.get() ?: CbitsBuffer(bytes, address.cbitsWritable(),
             LongSupplier { address.cbitsSize() }, 0,
             if (address.nativeImageKey() == null) null else Supplier {
                 val registry = NativeAddresses.current(null)
                 registry.project(address)
                 registry.transport(address) ?: fault("Missing immutable native image")
-            }).also { buffers[key] = WeakReference(it) }
+            }, if (owner?.isPinned == true) LongSupplier { address.toNativeBits() - address.cbitsOffset() } else null
+        ).also { buffers[key] = WeakReference(it) }
     }
     private fun executeWithOwners(function: Any, vararg arguments: Any): Any? = try {
         interop.execute(function, *arguments)
@@ -219,15 +222,17 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
     private fun transport(address: ManagedAddress): Any =
         NativeAddresses.current(null).transport(address) ?: buffer(address)
     /** A C callback receives Addr# itself, unlike Cbits calls with a separate offset. */
-    internal fun pointerTransport(address: ManagedAddress): CbitsBuffer {
+    internal fun pointerTransport(address: ManagedAddress, allowNativePointer: Boolean = true): CbitsBuffer {
         address.requireByteRegion(0)
-        val nativeImage = if (address.nativeImageKey() == null) null else Supplier {
+        val nativeImage = if (!allowNativePointer || address.nativeImageKey() == null) null else Supplier {
             val registry = NativeAddresses.current(null)
             registry.project(address)
             registry.transport(address) ?: fault("Missing immutable callback pointer image")
         }
-        return CbitsBuffer(address.cbitsBacking(), address.cbitsWritable(),
-            LongSupplier { address.cbitsSize() }, address.cbitsOffset(), nativeImage)
+        return CbitsBuffer(address.cbitsBuffer(), address.cbitsWritable(),
+            LongSupplier { address.cbitsSize() }, address.cbitsOffset(), nativeImage,
+            if (allowNativePointer && address.cbitsOwner()?.isPinned == true)
+                LongSupplier { address.toNativeBits() - address.cbitsOffset() } else null)
     }
     fun init(context: ManagedAddress) {
         if (windows) WindowsMd5.init(context)
@@ -258,12 +263,17 @@ internal class CFinalizerFunction internal constructor(
 
 /** Byte interop over the original allocation; immutable views may acquire an owned native image. */
 @ExportLibrary(InteropLibrary::class)
-internal class CbitsBuffer @JvmOverloads constructor(bytes: ByteArray, private val writable: Boolean,
-    private val logicalSize: LongSupplier = LongSupplier { bytes.size.toLong() },
+internal class CbitsBuffer @JvmOverloads constructor(bytes: ByteBuffer, private val writable: Boolean,
+    private val logicalSize: LongSupplier = LongSupplier { bytes.capacity().toLong() },
     private val baseOffset: Long = 0,
-    private val nativeImage: Supplier<NativeReadOnlyPointer>? = null) : TruffleObject {
-    private val little = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
-    private val big = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN)
+    private val nativeImage: Supplier<NativeReadOnlyPointer>? = null,
+    private val nativeAddress: LongSupplier? = null) : TruffleObject {
+    @JvmOverloads constructor(bytes: ByteArray, writable: Boolean,
+        logicalSize: LongSupplier = LongSupplier { bytes.size.toLong() }, baseOffset: Long = 0,
+        nativeImage: Supplier<NativeReadOnlyPointer>? = null) :
+        this(ByteBuffer.wrap(bytes), writable, logicalSize, baseOffset, nativeImage)
+    private val little = bytes.duplicate().order(ByteOrder.LITTLE_ENDIAN)
+    private val big = bytes.duplicate().order(ByteOrder.BIG_ENDIAN)
     private var pointer: NativeReadOnlyPointer? = null
 
     init {
@@ -271,18 +281,18 @@ internal class CbitsBuffer @JvmOverloads constructor(bytes: ByteArray, private v
         require(baseOffset >= 0 && baseOffset <= logicalSize.asLong) { "C buffer address exceeds its allocation" }
     }
 
-    @Synchronized @ExportMessage fun isPointer(): Boolean = pointer?.isPointer() == true
+    @Synchronized @ExportMessage fun isPointer(): Boolean = nativeAddress != null || pointer?.isPointer() == true
     @Synchronized @ExportMessage fun toNative() {
         if (nativeImage != null && pointer == null) pointer = nativeImage.get()
     }
     @Synchronized @ExportMessage @Throws(UnsupportedMessageException::class)
     fun asPointer(): Long {
         if (!isPointer()) throw UnsupportedMessageException.create()
-        return pointer!!.asPointer() + baseOffset
+        return (nativeAddress?.asLong ?: pointer!!.asPointer()) + baseOffset
     }
     @ExportMessage fun hasBufferElements(): Boolean = true
     @ExportMessage fun isBufferWritable(): Boolean = writable
-    @ExportMessage fun getBufferSize(): Long = logicalSize.asLong - baseOffset
+    @ExportMessage fun getBufferSize(): Long = maxOf(0L, logicalSize.asLong - baseOffset)
 
     private fun index(offset: Long, width: Int): Int {
         if (offset < 0 || offset > logicalSize.asLong - baseOffset - width)

@@ -23,9 +23,10 @@ internal object STMConflict : ControlFlowException()
 /**
  * One commit domain per language context. The lock protects only storage, validation
  * and wake registration: no guest action, handler, force or equality runs under it.
- * Logs belong to the executing carrier and are removed on every exit. Resumable
- * transaction frames are deliberately not admitted until a log can travel with an
- * interrupted atomically frame (including GHC's interrupted-thunk restart rule).
+ * Logs belong to the executing carrier and are removed on every exit. An async
+ * unwind aborts the attempt; only the original atomically action may be saved for
+ * restart. The abandoned invocation never carries its log or its child chain to
+ * another carrier; saved inner thunk updates are demanded under a fresh attempt.
  */
 internal class ManagedSTM : AutoCloseable {
     internal class Entry(val revision: Any, val original: Any?, var value: Any?, var written: Boolean) {
@@ -106,8 +107,8 @@ internal class ManagedSTM : AutoCloseable {
         if (changed) waiters.forEach { it.changedLocked() }
     }
     @TruffleBoundary private fun validException(tx: Transaction): Boolean = lock.withLock { live(); valid(tx) }
-    @TruffleBoundary private fun await(tx: Transaction, node: Node?) {
-        val request = RetryWait(tx)
+    @TruffleBoundary private fun await(tx: Transaction, node: Node?, async: Boolean) {
+        val request = RetryWait(tx, if (async) node else null)
         try {
             if (node == null) request.await() // Direct protocol tests, same wait state machine.
             else TruffleSafepoint.setBlockedThreadInterruptibleFunction(node, awaitRetry, request)
@@ -117,7 +118,7 @@ internal class ManagedSTM : AutoCloseable {
     // Inline callbacks before bytecode generation: a closure capturing the caller's
     // VirtualFrame must not become a loop-carried heap object across retries.
     // Only log/storage operations cross opaque Truffle boundaries.
-    internal inline fun <T> atomically(node: Node?, crossinline nested: () -> Nothing,
+    internal inline fun <T> atomically(node: Node?, crossinline nested: () -> Nothing, async: Boolean = false,
         crossinline action: () -> T): T {
         if (hasTransaction()) nested()
         while (true) {
@@ -130,7 +131,7 @@ internal class ManagedSTM : AutoCloseable {
                 // Only transactional effects are replayed; no lock spans action().
             } catch (_: STMRetry) {
                 restore(null)
-                await(tx, node)
+                await(tx, node, async)
             } catch (failure: GuestException) {
                 // GHC validates before raising out of atomically: a stale snapshot
                 // may have produced an exception that a fresh execution never raises.
@@ -178,7 +179,7 @@ internal class ManagedSTM : AutoCloseable {
         } finally { restore(parent) }
     }
 
-    private inner class RetryWait(tx: Transaction) {
+    private inner class RetryWait(tx: Transaction, private val checkpoint: Node?) {
         private val versions = IdentityHashMap<ManagedTVar, Any>().also { versions ->
             tx.entries.forEach { (cell, entry) -> versions[cell] = entry.revision }
         }
@@ -202,6 +203,13 @@ internal class ManagedSTM : AutoCloseable {
                 }
                 while (!changed) {
                     live()
+                    // The log was already discarded. A cancelled wait restarts
+                    // atomically, never the suffix following retry#.
+                    checkpoint?.let { GuestThreads.pollCurrent(it, true) }?.let {
+                        waiters.remove(this)
+                        versions.clear()
+                        throw AsyncBlocked(it, checkpoint)
+                    }
                     GuestThreads.blocking(GuestThreadStatus.STM).use { ready.await() }
                 }
                 live()

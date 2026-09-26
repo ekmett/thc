@@ -404,7 +404,7 @@ def package_scalar_link(module):
     if native:
         reps += ('IntRep', 'WordRep', 'Int8Rep', 'Word8Rep', 'Int16Rep', 'Word16Rep', 'Word32Rep',
                  'Word64Rep', 'AddrRep', 'ByteArray#', 'MutableByteArray#')
-    results = tuple(rep for rep in reps if rep not in ('AddrRep', 'ByteArray#', 'MutableByteArray#')) + (('void',) if native else ())
+    results = tuple(rep for rep in reps if rep not in ('ByteArray#', 'MutableByteArray#')) + (('void',) if native else ())
     abi = {}
     for index, entry in enumerate(link['abi']):
         record(entry, 'symbol entry convention safety arguments result' if native else 'symbol entry arguments result')
@@ -413,9 +413,19 @@ def package_scalar_link(module):
         require(entry['entry'] == ('thc_native_' if native else 'thc_scalar_') + link['componentSha256'] + '_' + str(index), 'component entry namespace')
         require(isinstance(entry['arguments'], list) and all(arg in reps for arg in entry['arguments']) and entry['result'] in results, 'C ABI')
         require(not native or entry['convention'] in ('ccall', 'capi') and entry['safety'] == 'unsafe', 'unsupported C calling convention/safety')
-        require(name not in abi, 'duplicate ABI symbol')
-        abi[name] = entry
+        key = (name, entry.get('convention', 'ccall'), tuple(entry['arguments']), entry['result'])
+        require(key not in abi, 'duplicate ABI signature')
+        abi[key] = entry
     require(list(abi) == sorted(abi), 'sorted unique ABI')
+    for name in {entry['symbol'] for entry in abi.values()}:
+        variants = [entry for entry in abi.values() if entry['symbol'] == name]
+        require(native or len(variants) == 1, 'duplicate scalar ABI symbol')
+        def shape(entry, normalize):
+            return (entry.get('convention', 'ccall'), tuple(normalize(rep) for rep in entry['arguments']), entry['result'])
+        require(len({shape(entry, lambda rep: 'AddrRep' if rep in ('ByteArray#', 'MutableByteArray#') else rep)
+                     for entry in variants}) == 1, 'conflicting C ABI variants')
+        require(len({shape(entry, lambda rep: 'ByteArray#' if rep == 'MutableByteArray#' else rep)
+                     for entry in variants}) == len(variants), 'ambiguous byte-array mutability variants')
     if native and 'staticForeignImports' not in module:
         require('foreign' not in module and 'staticForeignImportStubs' not in module,
                 'foreign products lack import provenance')
@@ -445,7 +455,8 @@ def package_scalar_link(module):
         require(binder['unit'] == unit and binder['module'] == module.get('module') and binder['namespace'] == 'value' and binder not in binders, 'import binder')
         binders.append(binder)
         convention = item['convention']
-        require((item['header'] is None or native and convention == 'capi' and isinstance(item['header'], str)) and
+        require((item['header'] is None or native and isinstance(item['header'], str) and
+            item['header'] and '\0' not in item['header']) and
             item['unit'] in (None, unit) and (item['isFunction'] is True or native and convention == 'capi' and item['isFunction'] is False) and
             convention in (('ccall', 'capi') if native else ('ccall',)) and item['safety'] == 'unsafe' and
             item['normalizationRole'] == 'representational', 'static unsafe C import')
@@ -453,12 +464,12 @@ def package_scalar_link(module):
         text(item['symbol'])
         emitted = record(item['emitted'], 'symbol unit convention safety arguments result')
         name = text(emitted['symbol'] if native else item['symbol'])
-        require(name in abi, 'unlinked typed import')
-        entry = abi[name]
-        require(convention == entry.get('convention', 'ccall') and exact(emitted,
-            dict(symbol=name, unit=unit, convention=convention, safety='unsafe', arguments=entry['arguments'] + ['void'],
-                 result=['void'] if entry['result'] == 'void' else ['void', entry['result']])), 'emitted ABI differs from compiled C')
-        proved.add(name)
+        variants = [entry for entry in abi.values() if entry['symbol'] == name and
+            convention == entry.get('convention', 'ccall') and exact(emitted,
+                dict(symbol=name, unit=unit, convention=convention, safety='unsafe', arguments=entry['arguments'] + ['void'],
+                     result=['void'] if entry['result'] == 'void' else ['void', entry['result']]))]
+        require(len(variants) == 1, 'emitted ABI differs from compiled C')
+        proved.add(variants[0]['entry'])
     require(exact(proof['expectedCalls'], calls(module.get('bindings'))), 'retained Core foreign inventory differs')
     return link, proved
 
@@ -476,6 +487,24 @@ def foreign_execution_issue(module):
                 'Core schema 2 is archive-only (execution=not-linked); typed foreign registration, '
                 'native stubs, initializers/finalizers, and callback support are required')
     return None
+
+
+def select_package_scalar_call(call, entries, unit, arguments, flags, output):
+    """Select one proved semantic adapter, never just the shared C symbol."""
+    matched = []
+    target = call.get('target') if isinstance(call, dict) else None
+    symbol = target.get('symbol') if isinstance(target, dict) else None
+    for entry in entries:
+        if entry['symbol'] != symbol:
+            continue
+        try:
+            validate_package_scalar_call(call, entry, unit, arguments, flags, output)
+        except ValueError:
+            continue
+        matched.append(entry)
+    if len(matched) != 1:
+        raise ValueError('Package C call lacks its unique exact scalar/State ABI')
+    return matched[0]
 
 
 def validate_package_scalar_call(call, abi, unit, arguments, flags, output):

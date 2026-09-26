@@ -1,0 +1,119 @@
+Resource run log: /home/ekmett/.codex/worktrees/98d0/cult/build-agent-logs/20260926-114015-0nf6lik3/output.log
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.7.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :generateSimdFamilies UP-TO-DATE
+> Task :kaptGenerateStubsKotlin UP-TO-DATE
+> Task :kaptKotlin UP-TO-DATE
+> Task :compileKotlin UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+
+> Task :compileCbits
+Compiled C resources package-pointer.bc, md5.bc, libdw-unavailable.bc, strerror.bc, strerror-locale.bc, iconv.bc, gmp-api.so for x86_64-unknown-linux-gnu
+
+> Task :generateStdioAbi
+Probed original stdio ABI and errno values for x86_64-unknown-linux-gnu
+
+> Task :compileNativeAtomics UP-TO-DATE
+> Task :compileNativeFiles UP-TO-DATE
+> Task :compileNativeOpenRequests UP-TO-DATE
+> Task :compileNativeProcessSignals UP-TO-DATE
+> Task :compileNativeSignals UP-TO-DATE
+> Task :generatePosixStatAbi
+> Task :generateSigsetAbi
+> Task :generateTermiosAbi
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :jar UP-TO-DATE
+> Task :kaptGenerateStubsTestKotlin UP-TO-DATE
+> Task :kaptTestKotlin UP-TO-DATE
+> Task :compileTestKotlin UP-TO-DATE
+> Task :compileTestJava UP-TO-DATE
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses UP-TO-DATE
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/home/ekmett/ai/thc-sequence-current-main-01a0cdeb/.gradle-user-home/caches/modules-2/files-2.1/org.graalvm.truffle/truffle-runtime/25.3.4.1/5f9818cd0413f63bdf1fe52ba4f2fc2786f4cbb7/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+
+> Task :testDefault
+WARNING: Using incubator modules: jdk.incubator.vector
+
+AsyncStrictEntryNativeTest > blockedDynamicPapDemandsUnusedStrictFormalInsideOriginalCatch() PASSED
+
+LiveAsyncNativeTest > blockedMVarPreservesSharedThunk() PASSED
+
+LiveAsyncNativeTest > interruptedWaiterLeavesTheOtherThunkOwnerIntact() PASSED
+
+LiveAsyncNativeTest > compiledLoopPreservesSharedThunk() PASSED
+
+LiveAsyncNativeTest > resumedThunkCanBeInterruptedAgain() PASSED
+
+ThreadAsyncNativeTest > yieldRequiresOneExactStateToken() PASSED
+
+ThreadAsyncNativeTest > astSelfDirectedThrowReachesTheOriginalHandlerWithoutPoisoningTheAction() PASSED
+
+ThreadAsyncNativeTest > astSelfDirectedThrowBypassesTheOuterUninterruptibleMask() PASSED
+
+ThreadAsyncNativeTest > uncaughtChildDeliveryReleasesTheSender() PASSED
+
+ThreadAsyncNativeTest > maskedYieldDefersAnExternalRequestAndUnmaskedYieldCapturesOnce() PASSED
+
+ThreadAsyncNativeTest > yieldPreservesStateAndMaskInCompiledAstAndBytecode() PASSED
+
+ThreadAsyncNativeTest > publicForkAndThrowResumeTheSharedThunk() PASSED
+
+ThreadAsyncNativeTest > forkedChildOwnsAndResumesTheSharedLazyActionHead() PASSED
+
+ThreadAsyncNativeTest > outerUninterruptibleMaskStillCapturesCalleeThatUnmasksAndSelfThrows() PASSED
+
+ThreadAsyncNativeTest > selfDirectedThrowEntersTheOriginalHandler() PASSED
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/home/ekmett/ai/thc-sequence-current-main-01a0cdeb/.gradle-user-home/caches/modules-2/files-2.1/org.graalvm.truffle/truffle-runtime/25.3.4.1/5f9818cd0413f63bdf1fe52ba4f2fc2786f4cbb7/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+
+> Task :testDense
+WARNING: Using incubator modules: jdk.incubator.vector
+
+AsyncStrictEntryNativeTest > blockedDynamicPapDemandsUnusedStrictFormalInsideOriginalCatch() PASSED
+
+LiveAsyncNativeTest > blockedMVarPreservesSharedThunk() PASSED
+
+LiveAsyncNativeTest > interruptedWaiterLeavesTheOtherThunkOwnerIntact() PASSED
+
+LiveAsyncNativeTest > compiledLoopPreservesSharedThunk() PASSED
+
+LiveAsyncNativeTest > resumedThunkCanBeInterruptedAgain() PASSED
+
+ThreadAsyncNativeTest > yieldRequiresOneExactStateToken() PASSED
+
+ThreadAsyncNativeTest > astSelfDirectedThrowReachesTheOriginalHandlerWithoutPoisoningTheAction() PASSED
+
+ThreadAsyncNativeTest > astSelfDirectedThrowBypassesTheOuterUninterruptibleMask() PASSED
+
+ThreadAsyncNativeTest > uncaughtChildDeliveryReleasesTheSender() PASSED
+
+ThreadAsyncNativeTest > maskedYieldDefersAnExternalRequestAndUnmaskedYieldCapturesOnce() PASSED
+
+ThreadAsyncNativeTest > yieldPreservesStateAndMaskInCompiledAstAndBytecode() PASSED
+
+ThreadAsyncNativeTest > publicForkAndThrowResumeTheSharedThunk() PASSED
+
+ThreadAsyncNativeTest > forkedChildOwnsAndResumesTheSharedLazyActionHead() PASSED
+
+ThreadAsyncNativeTest > outerUninterruptibleMaskStillCapturesCalleeThatUnmasksAndSelfThrows() PASSED
+
+ThreadAsyncNativeTest > selfDirectedThrowEntersTheOriginalHandler() PASSED
+
+[Incubating] Problems report is available at: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.7.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 30s
+24 actionable tasks: 7 executed, 17 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html

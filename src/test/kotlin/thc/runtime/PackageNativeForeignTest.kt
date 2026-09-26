@@ -21,7 +21,7 @@ import java.util.HexFormat
 class PackageNativeForeignTest {
     @TempDir lateinit var directory: Path
 
-    private fun library(): PackageScalarLink {
+    private fun library(pointerVariants: Boolean = false): PackageScalarLink {
         val source = directory.resolve("native.c")
         val bitcode = directory.resolve("native.bc")
         Files.writeString(source, """
@@ -31,6 +31,9 @@ class PackageNativeForeignTest {
               uint64_t result = 0;
               for (uint64_t i = 0; i < n; ++i) result += p[i];
               return result;
+            }
+            uint64_t sum_bytes_address(const unsigned char *p, uint64_t n) {
+              return sum_bytes(p, n);
             }
             void update(unsigned char *state, const unsigned char *p, uint64_t n) {
               for (uint64_t i = 0; i < n; ++i) state[0] += p[i];
@@ -75,7 +78,9 @@ class PackageNativeForeignTest {
             PackageScalarSignature("read_before", "read_before", listOf("AddrRep"), "Word32Rep"),
             PackageScalarSignature("native_bits", "native_bits", listOf("AddrRep"), "Word64Rep"),
             PackageScalarSignature("mixed_alias", "mixed_alias", listOf("MutableByteArray#", "ByteArray#"), "Word32Rep"))
-        return PackageScalarLink("native-ffi-control", "test-host", sha, sha, bytes, abi)
+        val selected = if (pointerVariants) listOf(abi.first(), abi.first().copy(entry = "sum_bytes_address",
+            arguments = listOf("AddrRep", "Word64Rep"))) else abi
+        return PackageScalarLink("native-ffi-control", "test-host", sha, sha, bytes, selected)
     }
 
     private class Entry(language: Language, private val operation: PackageScalarCall,
@@ -115,6 +120,36 @@ class PackageNativeForeignTest {
             }
     }
 
+    @Test fun sameCNameRetainsEachNativeAdapterAndItsFirstCompiledCall() {
+        val link = library(pointerVariants = true)
+        Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
+            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+            .option("engine.CompilationFailureAction", "Throw").build().use { context ->
+                context.initialize("thc"); context.enter()
+                try {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val registry = Language.currentState().packageCbits
+                    registry.link(link)
+                    for (signature in link.abi) {
+                        assertSame(signature, registry.resolve(link, signature).signature,
+                            "same C symbol must not overwrite a sibling adapter")
+                        val target = Entry(language, PackageScalarCall(link, signature)).callTarget
+                        fun argument(bytes: ByteArray): Any = if (signature.arguments.first() == "AddrRep")
+                            ManagedAddress.fromByteArray(bytes).plus(1) else bytes
+                        val bytes = byteArrayOf(1, 2, 127, -1)
+                        val expected = if (signature.arguments.first() == "AddrRep") 384L else 130L
+                        assertEquals(expected, target.call(argument(bytes), 3L))
+                        target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                        assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                        val next = byteArrayOf(3, 5, 7, 11)
+                        assertEquals(if (signature.arguments.first() == "AddrRep") 23L else 15L,
+                            target.call(argument(next), 3L), "first installed call preserves the selected carrier")
+                        assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                    }
+                } finally { context.leave() }
+            }
+    }
+
     @Test fun realCReadsAndMutatesAliasedPersistentByteStorage() {
         val link = library()
         Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
@@ -128,7 +163,7 @@ class PackageNativeForeignTest {
                     }
                     val source = byteArrayOf(1, 2, 127, -1)
                     assertEquals(385L, functions.getValue("sum_bytes").call(source, 4L))
-                    val state = ManagedAllocation.mutable(8, 8, true)
+                    val state = ManagedAllocation.mutable(8, 8)
                     functions.getValue("update").call(state, source, 4L)
                     assertEquals(129L, state.readByte(0))
                     functions.getValue("update").call(state, byteArrayOf(3, 5), 2L)
@@ -148,6 +183,18 @@ class PackageNativeForeignTest {
                     assertEquals(91L, state.readByte(0))
                     val rawAlias = ManagedAddress.fromByteArray(state.rawBytesIfPointerFree())
                     assertEquals(1L, functions.getValue("equal").call(address, rawAlias), "raw and owned views share identity")
+                    assertEquals(1L, functions.getValue("equal").call(rawAlias, address), "raw-first views use the same owned transport")
+                    val pinned = PinnedMemory.allocate(8, 64)
+                    val pinnedAddress = ManagedAddress.fromAllocation(pinned)
+                    val pinnedBits = pinned.nativeSegment()!!.address()
+                    functions.getValue("update").call(pinned, source, 4L)
+                    assertEquals(129L, pinned.readByte(0))
+                    assertEquals(197L, functions.getValue("alias").call(pinnedAddress, pinnedAddress.plus(1)))
+                    assertEquals(197L, pinned.readByte(1))
+                    assertEquals(1L, functions.getValue("next_equal").call(pinnedAddress, pinnedAddress.plus(1)))
+                    assertEquals(pinnedBits + 1,
+                        (functions.getValue("native_bits").call(pinnedAddress.plus(1)) as Long) xor 0x5a5a123456787654L)
+                    assertEquals(pinnedBits, pinned.nativeSegment()!!.address(), "C uses the original pinned allocation")
                     val literal = ManagedAddress.fromHex("6162")
                     assertEquals(1L, functions.getValue("next_equal").call(literal, literal.plus(1)))
                     assertEquals(97L, functions.getValue("read_before").call(literal.plus(1)))

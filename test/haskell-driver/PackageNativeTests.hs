@@ -27,7 +27,7 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       [ entry "wrong" "ccall" ["WordRep"] ["void","WordRep"]
       , entry "wrong" "ccall" ["BoxedRep (Just Unlifted)","void"] ["void","WordRep"]
       , entry "wrong" "ccall" ["void","WordRep","void"] ["void","WordRep"]
-      , entry "wrong" "ccall" ["void"] ["void","AddrRep"]
+      , entry "wrong" "ccall" ["void"] ["void","MutableByteArray#"]
       , entry "wrong" "ccall" ["void"] ["WordRep"]
       , entry "wrong" "stdcall" ["void"] ["void","WordRep"]
       , changeEmitted "safety" "safe" ordinary
@@ -36,6 +36,23 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       ]
   , TestCase $ assertBool "conflicting emitted ABIs rejected" $ isLeft $ nativeSignatures "fixture-unit"
       [moduleWith [ordinary,entry "identity" "ccall" ["IntRep","void"] ["void","IntRep"]]]
+  , TestCase $ assertEqual "one C pointer ABI retains each distinct Core carrier adapter"
+      (Right [("read_bytes","ccall","unsafe",["AddrRep","WordRep"],"WordRep"),
+              ("read_bytes","ccall","unsafe",["ByteArray#","WordRep"],"WordRep")])
+      (nativeSignatures "fixture-unit" [moduleWith
+        [entry "read_bytes" "ccall" ["ByteArray#","WordRep","void"] ["void","WordRep"],
+         entry "read_bytes" "ccall" ["AddrRep","WordRep","void"] ["void","WordRep"]]])
+  , TestCase $ assertBool "erased byte-array mutability cannot choose a writable policy" $ isLeft $
+      nativeSignatures "fixture-unit" [moduleWith
+        [entry "read_bytes" "ccall" ["ByteArray#","void"] ["void","WordRep"],
+         entry "read_bytes" "ccall" ["MutableByteArray#","void"] ["void","WordRep"]]]
+  , TestCase $ do
+      let signature = ("identity_pointer","ccall","unsafe",["AddrRep"],"AddrRep")
+      assertEqual "opaque pointer return preserves the emitted address ABI" (Right [signature])
+        (nativeSignatures "fixture-unit" [moduleWith [entry "identity_pointer" "ccall" ["AddrRep","void"] ["void","AddrRep"]]])
+      assertEqual "pointer adapter uses pointers, not integer addresses"
+        (Right "extern void * identity_pointer(void *);\nvoid * thc_native_pointer_0(void * a0) { return identity_pointer(a0); }\n")
+        (nativeWrapperSource [(signature,"thc_native_pointer_0")])
   , TestCase $ mapM_ (\value -> assertBool "retained proof mismatch rejected"
       (isLeft (nativeSignatures "fixture-unit" [value])))
       [ set "unit" "other-unit" (moduleWith [ordinary])

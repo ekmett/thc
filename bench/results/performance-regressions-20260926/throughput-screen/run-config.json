@@ -1,0 +1,1321 @@
+{
+  "schema": 1,
+  "recordedAtUtc": "2026-09-26T15:47:06.961030+00:00",
+  "entry": "mapAggregate",
+  "baselineCommit": "f72f924f6e521711e7c966430b680342587a90f5",
+  "backends": {
+    "baseline": "bytecode",
+    "candidate": "bytecode"
+  },
+  "inputBase": 10000,
+  "forks": 3,
+  "samples": 5,
+  "sampleSeconds": 2,
+  "jvmWarmSeconds": 15,
+  "nativeWarmSeconds": 1,
+  "minimumJvmWarmCalls": 12000,
+  "diagnosticUnsupported": true,
+  "instrumented": false,
+  "moduleManifests": {
+    "baseline": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/modules.txt",
+    "candidate": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/modules.txt"
+  },
+  "sourceNotesModes": {
+    "baseline": null,
+    "candidate": null
+  },
+  "protocol": "serialized rotated engine order; median of per-fork window medians; signed64 checksums",
+  "candidateSourceNote": "Recorded source hashes identify the supplied tree; the caller must build these runtime JARs from that tree.",
+  "host": {
+    "system": "Linux",
+    "platform": "Linux-6.8.0-100-generic-x86_64-with-glibc2.35",
+    "machine": "x86_64"
+  },
+  "commands": [
+    {
+      "fork": 1,
+      "position": 1,
+      "engine": "baseline",
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "-XX:+UseCompactObjectHeaders",
+        "-Xmx4g",
+        "-Dthc.handoffSlabs=false",
+        "--add-modules=jdk.incubator.vector",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=12000",
+        "-Dthc.backend=bytecode",
+        "-cp",
+        "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/annotations-13.0.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/collections-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/jniutils-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/nativeimage-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/polyglot-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/thc-0.1-experiment.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/truffle-api-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.BitUtil.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.BitQueue.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.Prelude.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.PtrEquality.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.StrictMaybe.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.StrictPair.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.EqOrdUtil.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Set.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Internal.Debug.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Strict.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Strict.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/THC.MapWorkload.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/THC.InterfaceClosure.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.Internal.CString.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.Internal.Err.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "15",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 1,
+      "position": 2,
+      "engine": "candidate",
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "-XX:+UseCompactObjectHeaders",
+        "-Xmx4g",
+        "-Dthc.handoffSlabs=false",
+        "--add-modules=jdk.incubator.vector",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=12000",
+        "-Dthc.backend=bytecode",
+        "-cp",
+        "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/annotations-13.0.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/antlr4-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/collections-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/jniutils-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-api-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-native-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-native-resources-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-nfi-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/nativeimage-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/polyglot-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/thc-0.1-experiment.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-api-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-nfi-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-nfi-libffi-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-nfi-panama-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/word-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/thc-tools.jar",
+        "thc.ProbeKt",
+        "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.BitUtil.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.BitQueue.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.Prelude.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.PtrEquality.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.StrictMaybe.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.StrictPair.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.EqOrdUtil.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Set.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Internal.Debug.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Strict.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Strict.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/THC.MapWorkload.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/THC.InterfaceClosure.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.Internal.CString.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.Internal.Err.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "15",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 1,
+      "position": 3,
+      "engine": "native",
+      "argv": [
+        "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/native/native-oracle",
+        "--bench-steady",
+        "mapAggregate",
+        "1",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 2,
+      "position": 1,
+      "engine": "candidate",
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "-XX:+UseCompactObjectHeaders",
+        "-Xmx4g",
+        "-Dthc.handoffSlabs=false",
+        "--add-modules=jdk.incubator.vector",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=12000",
+        "-Dthc.backend=bytecode",
+        "-cp",
+        "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/annotations-13.0.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/antlr4-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/collections-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/jniutils-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-api-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-native-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-native-resources-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-nfi-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/nativeimage-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/polyglot-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/thc-0.1-experiment.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-api-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-nfi-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-nfi-libffi-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-nfi-panama-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/word-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/thc-tools.jar",
+        "thc.ProbeKt",
+        "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.BitUtil.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.BitQueue.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.Prelude.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.PtrEquality.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.StrictMaybe.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.StrictPair.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.EqOrdUtil.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Set.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Internal.Debug.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Strict.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Strict.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/THC.MapWorkload.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/THC.InterfaceClosure.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.Internal.CString.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.Internal.Err.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "15",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 2,
+      "position": 2,
+      "engine": "native",
+      "argv": [
+        "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/native/native-oracle",
+        "--bench-steady",
+        "mapAggregate",
+        "1",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 2,
+      "position": 3,
+      "engine": "baseline",
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "-XX:+UseCompactObjectHeaders",
+        "-Xmx4g",
+        "-Dthc.handoffSlabs=false",
+        "--add-modules=jdk.incubator.vector",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=12000",
+        "-Dthc.backend=bytecode",
+        "-cp",
+        "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/annotations-13.0.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/collections-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/jniutils-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/nativeimage-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/polyglot-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/thc-0.1-experiment.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/truffle-api-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.BitUtil.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.BitQueue.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.Prelude.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.PtrEquality.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.StrictMaybe.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.StrictPair.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.EqOrdUtil.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Set.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Internal.Debug.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Strict.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Strict.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/THC.MapWorkload.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/THC.InterfaceClosure.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.Internal.CString.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.Internal.Err.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "15",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 3,
+      "position": 1,
+      "engine": "native",
+      "argv": [
+        "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/native/native-oracle",
+        "--bench-steady",
+        "mapAggregate",
+        "1",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 3,
+      "position": 2,
+      "engine": "baseline",
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "-XX:+UseCompactObjectHeaders",
+        "-Xmx4g",
+        "-Dthc.handoffSlabs=false",
+        "--add-modules=jdk.incubator.vector",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=12000",
+        "-Dthc.backend=bytecode",
+        "-cp",
+        "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/annotations-13.0.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/collections-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/jniutils-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/nativeimage-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/polyglot-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/thc-0.1-experiment.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/truffle-api-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.BitUtil.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.BitQueue.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.Prelude.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.PtrEquality.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.StrictMaybe.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.StrictPair.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.EqOrdUtil.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Set.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Internal.Debug.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Strict.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Strict.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/THC.MapWorkload.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/THC.InterfaceClosure.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.Internal.CString.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.Internal.Err.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "15",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 3,
+      "position": 3,
+      "engine": "candidate",
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "-XX:+UseCompactObjectHeaders",
+        "-Xmx4g",
+        "-Dthc.handoffSlabs=false",
+        "--add-modules=jdk.incubator.vector",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=12000",
+        "-Dthc.backend=bytecode",
+        "-cp",
+        "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/annotations-13.0.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/antlr4-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/collections-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/jniutils-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-api-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-native-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-native-resources-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-nfi-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/nativeimage-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/polyglot-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/thc-0.1-experiment.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-api-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-nfi-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-nfi-libffi-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-nfi-panama-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/word-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/thc-tools.jar",
+        "thc.ProbeKt",
+        "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.BitUtil.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.BitQueue.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.Prelude.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.PtrEquality.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.StrictMaybe.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.StrictPair.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.EqOrdUtil.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Set.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Internal.Debug.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Strict.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Strict.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/THC.MapWorkload.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/THC.InterfaceClosure.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.Internal.CString.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.Internal.Err.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "15",
+        "2",
+        "5",
+        "10000"
+      ]
+    }
+  ],
+  "provenance": {
+    "runtimeJars": {
+      "baseline": [
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/annotations-13.0.jar",
+          "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/collections-25.3.4.1.jar",
+          "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/jniutils-25.3.4.1.jar",
+          "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/kotlin-stdlib-2.4.20.jar",
+          "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/nativeimage-25.3.4.1.jar",
+          "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/polyglot-25.3.4.1.jar",
+          "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/thc-0.1-experiment.jar",
+          "sha256": "5670b6562bc4ae643f2b00bcd3295defb782f0380976a241901efd0ec6e795ec"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/truffle-api-25.3.4.1.jar",
+          "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/truffle-compiler-25.3.4.1.jar",
+          "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/truffle-runtime-25.3.4.1.jar",
+          "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/work/performance-reference/build/install/thc/lib/word-25.3.4.1.jar",
+          "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+        }
+      ],
+      "candidate": [
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/annotations-13.0.jar",
+          "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/antlr4-25.3.4.1.jar",
+          "sha256": "31f8c4fa0715ca486fa73dfb634537f74d4fae3d8786e37eea00994f8b10da7f"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/collections-25.3.4.1.jar",
+          "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/jniutils-25.3.4.1.jar",
+          "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/kotlin-stdlib-2.4.20.jar",
+          "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-api-25.3.4.1.jar",
+          "sha256": "4e7bf9f0f6e41dbdb9fb68b2b9004548dcda154f83bd769609435f50d8ec593c"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-25.3.4.1.jar",
+          "sha256": "c835fc80abdc818b7487c9e0b9ecd6c7cd59a7bbb7ac7041d6e2cda2be4b9335"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-native-25.3.4.1.jar",
+          "sha256": "b49d4ea22e77be015a8a4dedd497e725326add5c03297eafd8eca50806a388ef"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-native-resources-25.3.4.1.jar",
+          "sha256": "2b5fb413806a0046127c975dae8a55d1047b2c3757072b97cb9d06b024c541c3"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-nfi-25.3.4.1.jar",
+          "sha256": "c3eed55afc590063636b939e0d75597dbe5d57edb5f237da898b179eaaaf02c9"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/nativeimage-25.3.4.1.jar",
+          "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/polyglot-25.3.4.1.jar",
+          "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/thc-0.1-experiment.jar",
+          "sha256": "19be03fd3990e0daad78ace7fbf09e9291a0ba98f1b35514f7a651dba5b89eff"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-api-25.3.4.1.jar",
+          "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-compiler-25.3.4.1.jar",
+          "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-nfi-25.3.4.1.jar",
+          "sha256": "5320c98ba65a13a4ad9609732efa1ca2742ede7892863a154b5a89c987491853"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-nfi-libffi-25.3.4.1.jar",
+          "sha256": "edb64301941d86f785f748f70742614e625971adf4595789e3b7a068dcd574d3"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-nfi-panama-25.3.4.1.jar",
+          "sha256": "e3bdc4c7fa813218cf13a5210cfbc994ede13df5082326c2d709ce652a78ef2c"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-runtime-25.3.4.1.jar",
+          "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/word-25.3.4.1.jar",
+          "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+        },
+        {
+          "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/thc-tools.jar",
+          "sha256": "531134aeba44dfb67ffd8a789013a00065485c800b67d97a7bfe3b88cdf45486"
+        }
+      ]
+    },
+    "nativeBinary": [
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/native/native-oracle",
+        "sha256": "86741ff4b45260de0824052ce84c207c5814c0c3eab92ccf6e1758b2a4ed7885"
+      }
+    ],
+    "moduleManifest": [
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/modules.txt",
+        "sha256": "25da085c629ad50c999cd3ad4e2a435f145f8e3d0f38843ed72794e9d182002d"
+      }
+    ],
+    "modules": [
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Internal.Debug.json",
+        "sha256": "6295c2a63efdecbb90766245e43825cbcae476e7393fafefc9d2f725e8f0df23"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Internal.json",
+        "sha256": "1fd69ba818a19b548055d6a146f521665d30b7dfeb9b65ac20b1c3219cdd4063"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Strict.Internal.json",
+        "sha256": "dd9dc337ae295b14a0a8371264fc6aeb037ca7d33c2ae5da4c36e7c38a8067d3"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Strict.json",
+        "sha256": "8e1dbb016eed5e44fa8bee0aa80abb3127efaa5aa6d67d63ee832f08b48aac2d"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Set.Internal.json",
+        "sha256": "c7a50a8d918ae780d3d6f9cbfe2c7a166c35c470284e45aedc2b0193620d4cd5"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.InterfaceClosure.json",
+        "sha256": "ab56d9f0ce17da236df19a644fa6aad269933c6065390ee609dbd2d79fe8d626"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.Internal.CString.json",
+        "sha256": "e5ede77615e7b20f4d15204f945097508d4e0b7477cb90a6a8eee3c272e0cff4"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.Internal.Err.json",
+        "sha256": "3707e4cc03d6b9dd428a970b91d9b9256e37aa0611ca1588869093246c620dc0"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/THC.InterfaceClosure.json",
+        "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/THC.MapWorkload.json",
+        "sha256": "7c0efb1211b55866439e5aa9be46fbdc2cc59a4996e3fd913b573c6ddad692a3"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.BitQueue.json",
+        "sha256": "405b3a7351827721a52ab9badbca170e0cd0bfe447a4e6e91b5c99687b271490"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.BitUtil.json",
+        "sha256": "9d12883f3b7b9dc72921f484383259fe958876d403a47df17e703c734c0ab8d9"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.EqOrdUtil.json",
+        "sha256": "aedbcffeb6bae78fe43325aced7bf8ef1f1bf5d22f89767aa154cd53ac755b8f"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.Prelude.json",
+        "sha256": "21fe1712a7b2fa48df026f62a750b9af3b11fcf03e211c20dd8ca3c325f8397b"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.PtrEquality.json",
+        "sha256": "1e0c043c03a7749c7e250eb4871c731439f89605a5c3658d93f00832503f352a"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.StrictMaybe.json",
+        "sha256": "157719e8c9a7857333ac674a5602b3ad3887fe353aef4461752337e6b9c45d7f"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.StrictPair.json",
+        "sha256": "c5869c62e628e67d562b9cd1a6b0c5835718e7208f6ec28e7aefe4d1b51c6ee5"
+      }
+    ],
+    "candidateSources": [
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/c/gmp-api.c",
+        "sha256": "33d5657664820fe5ac32225fa6d238a63a151f1f426a4fa5e6b726fb81a4f98b"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/c/iconv-api.c",
+        "sha256": "78522dfa4223a46e175a10ba9f19f1bb43f5144dd29c7c4a208ee6139ebe79ef"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/c/libdw-unavailable.c",
+        "sha256": "61aff351cbb02168fd608b47d7a3230fa448c03eabed9a1862156c124071223d"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/c/md5-api.c",
+        "sha256": "290d63141f5021aff1f79d1528a6efacecaeff736278792fd764ede48fe5828b"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/c/native-atomic-api.c",
+        "sha256": "531b6bf56de20d68f1daafb0ece6e64d4db88fe6d63d50cfe0f461442180bfc7"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/c/native-file-api.c",
+        "sha256": "4f62dae03d50b56551050e6ed02d644b57176b848f5453c2b69815866607f408"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/c/native-open-request.c",
+        "sha256": "d7b388f6972349ec25d3d9939e40e2f123b597ffee5fb0669801744127860d31"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/c/native-process-signal-api.c",
+        "sha256": "92c96f5d21bb117e97677b9a493e8add78f833b08d36f66d9d4d3f53dba8c9b6"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/c/native-signal-api.c",
+        "sha256": "7e477e38725afa5937b66f384a763fbdcaa19bb7b380fa7f7906942cfa856b8e"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/c/package-pointer-api.c",
+        "sha256": "8ad9c6069dc16940613f607e39221cf0610008cabe5ef96ab2ba88c31db9e38d"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/c/posix-stat-abi-probe.c",
+        "sha256": "20db53a11e76ba2bc76969290ca59edf1609483d09ecee033010b866f93d6aef"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/c/sigset-abi-probe.c",
+        "sha256": "b763673ae09628403c3b6e2c3932c0743792585853d978b09ef8d7b7b4e8104b"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/c/stdio-abi-probe.c",
+        "sha256": "ad9653c4bdcc289b990fab1b0b11c6ef18dfb52c6f67675ecb7f83588e74852d"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/c/strerror-locale.c",
+        "sha256": "16858440f92465f396a10fc5fc10a950b217e947b2b2fabe57ba4c01d3252283"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/c/termios-abi-probe.c",
+        "sha256": "7df4af12d37c717bcad36f5194e59e2afc85f0d48408323a690da099fad9870a"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java",
+        "sha256": "35e77beeacc7752b07a8c984fccdf7a9f4c58ad904a74a9668c9d5c6ac9cb6db"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/Calls.java",
+        "sha256": "34c94661d5d261ae37f5b75b1beafd0584c83a9c7732473825b3a51904eb7eb0"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/RuntimeTypes.java",
+        "sha256": "ff48144419fe5b00e0af1d4573a5e861a7c026bbc37e5cb41e0477c53dd3fc81"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/CoreForeignArtifacts.kt",
+        "sha256": "622b68a9f1eebbaf7394fed69bfc78f35f9d101313d4c5adcca73d3d7db14894"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/CorePackageManifest.kt",
+        "sha256": "e15cb46b2cca06f9433d90ee6dcab09283eb7468544e95bce6407de6b08e4d04"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/Json.kt",
+        "sha256": "a5d31e293e85fa3deb84e335e1ad8dd1b818b244e90961fcc3a4525cf2101bd7"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/Language.kt",
+        "sha256": "8f2994a14e2902c4cef42c2ca1c6a25a2827ed65402fe6582dcdbad930807f3c"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/Main.kt",
+        "sha256": "97ce6d1f96b7e7e78cbd332ba30af9c88428fcc20c1c3418c5d94e0f3507abc8"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/ManagedExportMetadata.kt",
+        "sha256": "3fe208cd9744256362abd08d01638a411bc8a19388747dc4379d16be309f5673"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/ManagedExports.kt",
+        "sha256": "5098fe3f56f30a63187a42a007754f2a6ce6f53d667acfd0be9ce8da84580e2f"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/ManagedForeignRoots.kt",
+        "sha256": "b01d56135d959a87438b5e905938f2c7b1893ffd62b88985a99a86d9e1ed1420"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/ManagedImportMetadata.kt",
+        "sha256": "f1d43028e333b8adcd1ace7ac1d5734a7aad972a470abfad79c934dcd6a10336"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/NativeFileSystem.kt",
+        "sha256": "fd0861bacb5beddd0dc6bb69b52655eef4df69349d39ee561cee91c2de96541c"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/NativeIO.kt",
+        "sha256": "badfc59e4e0c27c609e77ed9d2553e2b750450471fc72aec0e017585f9ac4067"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/PackageScalarLinks.kt",
+        "sha256": "aaddd23d6d0501ac4e32d0a454aaf5a7aef486da1a1416a7aeaad3862e73ec14"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/AddressArrayCopy.kt",
+        "sha256": "9e7ff40211ce0769704e0c893c787f1988bfb12eadbf068b73bf3842b363086f"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/AddressIdentity.kt",
+        "sha256": "9bbf9b4d812329f5d7b7a051d814af314075a9e4cc33c5dc947d2d76ab705caa"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/Application.kt",
+        "sha256": "a316645538a4a1fefb9ea84528a51e32b25d7504f3676aae807b1857d9b8640c"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ArgumentLayout.kt",
+        "sha256": "9c9cc98b53e979974682cb0f46166f2db71478a8840e017a981cf4b060248d16"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/AstAsyncAdmission.kt",
+        "sha256": "0d416ac62736644b799c3693e4861d812367540a25ad5bf3d903e6c0a509a518"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/AstContinuation.kt",
+        "sha256": "67d855d148dc94157997256f7277244bf5eb576e9f11ac3ed5c62c8caa2f068c"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/AstSelfCalls.kt",
+        "sha256": "9117e4b909aafcc94c4f37364b2447b9c21c2a6d1d5f06424b6cae5fea2b8e1a"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/AsyncContinuations.kt",
+        "sha256": "2c3f2cb11113e96d6cda46176fa71dff8363df3dd3a81a5d5d74a7f82dadb31a"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/AtomicAddresses.kt",
+        "sha256": "ed753ef9058e394cecb9dcc47273d55ee71c28ad8f1e6a45e70fae228040c8c4"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/AtomicIntArrays.kt",
+        "sha256": "78d39183e884b7ed0c0b88aa90e310bb39a7e9d3b98ac8f39c0212fdb4333aae"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/BigNatLiterals.kt",
+        "sha256": "54c6728a9770492beee9b84143b52276d5a1694e7f1ab098066e8b4805b89c29"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/BitPrimitives.kt",
+        "sha256": "943d43867faa05a39f8efed865fcc5bafe7f0edbae143e3b07a15577146c9fba"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/BloomValue.kt",
+        "sha256": "327c058daa6f00796a51fe6da81800dc524ce51c313afe7f11d25c710bd2b715"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/BytecodeCheckpoint.kt",
+        "sha256": "0f6457d0adf005c75beeb80425b8d37b7f735de872ba71fc629540a01040563f"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/BytecodeProgram.kt",
+        "sha256": "268324b27b1d193c5dd501a23f786a90babe8286c50d3f5581edaf6c96065f8a"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/BytecodeTypedInputSlots.kt",
+        "sha256": "5dba212e72f0bf7e95882535b5c39282dec65797e7f83a584925f04a1f1af46b"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CapiExpression.kt",
+        "sha256": "4123e2c7a809d5986c5c27e14ac8813be5e48172f7e58fa84640f8c862b2f18f"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CapturedAsyncRequest.kt",
+        "sha256": "b04fd4dd309a3c8983265448135ee4f6ab540985fb96b7dfc85a5175570c09ec"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CaseCategories.kt",
+        "sha256": "58c34e11b4bcfbd36fdd30ef84ee6f0786a375d87e4e76bffdf6db95d4662b90"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ClassOwnedLayouts.kt",
+        "sha256": "cbec053ed357c8f2147b042ceb3125430022e5f4354d27f0d9c7cd30dd3c794a"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CloneStackExpression.kt",
+        "sha256": "d6cc4399ebaa7eae280b1bedd62619dca32c5405388ea8135ce77e06078a9743"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ClosureInspection.kt",
+        "sha256": "837ee4da5d2a4e0677b3a8a50de77ee75fd277217c55ed51ab98e71a892e5f08"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CompactImages.kt",
+        "sha256": "d2fe0b5c4ecf72fe7459e510ed85b8d34c2da182fe459f36cc0791ec4ea13145"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CompilerCpuAffinity.kt",
+        "sha256": "9d2487401e02dace01093b897248fef31c419f3f0ba3e1e8253450422739ef96"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ConstructorClassIdentity.kt",
+        "sha256": "35144a503ce1b469ac7ffe09e76faef4ca90fddf438ade277d582f6877d927a6"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreApplicationCertificates.kt",
+        "sha256": "760c2bfed22d4ba8a7086497f1f2e5e5d5f11b544c802c357760890fdcc7703a"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreBoundThreadForeign.kt",
+        "sha256": "b9be37601b408564c1fe751dbd39057a5d51d7f8fa0eb287acdfb745c6a6384e"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreCallDemands.kt",
+        "sha256": "db2a513c45a894b69c5d9600e2da855e08131e9325a32625bc4c365710cd7661"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreCapiForeign.kt",
+        "sha256": "10a35aaf482e30383649f5b044b68babc2a59bc20b00059731e4b994fa9f7fbb"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreCompactImages.kt",
+        "sha256": "17c5bdfc9162c14a7de7cf80a302063f2c1eaf6cff14eb5b3ad0cd022125a1a8"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreCpuAffinity.kt",
+        "sha256": "fe80e228ae8cfa669c516757de3a7e35ea620afedaa20856be8eece364bfa3ac"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreDataLabels.kt",
+        "sha256": "c6382b6536c74a7c4957fe49ea4575d3f54ae9dce23c79ea665a9563bbf5650d"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreEntries.kt",
+        "sha256": "bc7936a44d10edef7fa1b49def4f3c2dde243d0afbbfd1d6b4c17a479216f7b5"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreEnvironmentForeign.kt",
+        "sha256": "ff081fc17f0d283674d3aab7f57c52b64a1c7c505675e32628064918bb7ddbd4"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreFields.kt",
+        "sha256": "606bed1507efcdef6defe135288e3a5bd4776c4aef22a5b4d4a560f907334fe8"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreFunctionIdentity.kt",
+        "sha256": "cd35d995db178f07f00297c55dadb3a92d7ab414c98c7504a92fb501d031e34e"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreGmpForeign.kt",
+        "sha256": "91a2c39fb8958a3c25595dcaa83d6ee526147657d2d317bb5a79395e1697848f"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreInputCalls.kt",
+        "sha256": "024447c3158264cc6b552c2f49ea301634801fa3aab310c4386feeef2620061b"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreLibdwForeign.kt",
+        "sha256": "f75d9a4c5c02bbcd63f672d21b31227290dd5a0128cb19fb978d6243ea4662ee"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreMainThreadForeign.kt",
+        "sha256": "7b2e5eea6a63728978cd8f30750b0f4a570c0662a8ffe2b39e0d6ed0ef13739a"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreManagedFiles.kt",
+        "sha256": "8002b7986c1e64c632ff9c34cda12d0d48beabaf66251c89cd5acdd93a862f67"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreMd5Foreign.kt",
+        "sha256": "abea8b510eb6c4513ff926ef8874304681f3a9596b26ed9bbc0b02e32ed7c351"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreMemmoveForeign.kt",
+        "sha256": "78776d473d4fd594ac81dda01925fd32772183bd687cee41adaef9b0eb3c7c3a"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreNativeAllocationForeign.kt",
+        "sha256": "36541ec9013fc59207bcda75341a94327e03d4cd4ce80f36e31c216179ea249e"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
+        "sha256": "59dea1a1da4c88c2808fdd769f6c97410f02114285096aba545325a4d48f3ca6"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreRepresentations.kt",
+        "sha256": "a76f9eca484751bd70a2a2a9ac8dd8c5df3843e12e2b498780b4d1e49524d913"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreRtsArgumentsForeign.kt",
+        "sha256": "e64e96856f1a62945c365008a1afe4d173d261180f80510f0d6e6bc26e3ccc16"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreRtsDiagnosticForeign.kt",
+        "sha256": "4f1eb00d3d54830de0cbbaca0897269a297e52fa6e3ea3d37ea28429439e55b7"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreRtsShutdown.kt",
+        "sha256": "c231cc3066ea0eaeac411ee4bbf5889e2310347432007a07061f7eca38379fde"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreRuntimeServices.kt",
+        "sha256": "0a989d3925f2b338dcfdfcc8a99cf366f1880edff5be3d578c2dec21ca5ace20"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreSharedCAFStores.kt",
+        "sha256": "298b3c8cc33a857206599b8dd47b366e30bb70c5cada15c7b9cd192a1a24cf04"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreSignalForeign.kt",
+        "sha256": "fc2ba2353ab4464a90565d24bb0563abf3a31a7ccbc33f6bbb0e72878e417c0e"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreSources.kt",
+        "sha256": "bd060675e4a030e023e1599ff3dd537a95f42004edb89c004f94f28ecccd8aea"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreStablePointers.kt",
+        "sha256": "1956733789d3025526cc9f7dd92671eb9fdbdcb2f0070da588e136c47d77c97e"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreStackForeign.kt",
+        "sha256": "306d399f691bf4987cc584469a33f096ee99888c8c351816aaaf2965d4bb3403"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreStackInfoForeign.kt",
+        "sha256": "c25c9422bb74848b265e1dc90f38b7c1decbf8b04eabb829953bcc48bfb05930"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreStringRtsForeign.kt",
+        "sha256": "e71a11c4a445657828069eda4b0c3285105269d3666e712d9cff20c737c9b114"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CoreVectors.kt",
+        "sha256": "593038e4fe21461f79f0b2ef3f6eda9325effb212d166d0de27a5c79deb1882b"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/CpuAffinity.kt",
+        "sha256": "14321ee39e897815a8ff9a56cbf4a7b8e99e2adabb073e20a5cda2557b29e41a"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/DataTagPrimitives.kt",
+        "sha256": "5c3c9dccdb0cd60f2cd2381daa219f1ceeccd768c41fd329ca0890364a52ecef"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/DataValues.kt",
+        "sha256": "2f7b93890ee7c75f6403c00946cf0b892cde9c3153f8ed7c79482ebae833f288"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/DelimitedContinuations.kt",
+        "sha256": "91b84493cdd219b4bc17cb18ba5c65859bde077da5cda8147d130dfce1cee8fe"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/EntryArguments.kt",
+        "sha256": "30378e9ff5ea3f1f5f3b28e400348bf28ff668b7043fd6c19de065a9a896c4e3"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/FileWaitPrimitives.kt",
+        "sha256": "eba77574ca953a7eb07fb1fbc5977ac6f6c7f728346dabd088e2bbad6348220e"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/FloatDecodePrimitives.kt",
+        "sha256": "8644817a2a12bbc41685473acdce4010be51407aadd56f75f8b6877a62af7129"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/FloatingAddresses.kt",
+        "sha256": "0496e299405f716e5e0ed01729307bda4361ca05554ea76e6fbd1b4cb5c03d5a"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/FloatingPrimitives.kt",
+        "sha256": "491161fb0cb36aacb726031dfda1b756d913915892926cc69db103887b136841"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/FloatingVectorPrimitives.kt",
+        "sha256": "0c3b69974fa563e1129e09d0275749707e451b762b675832b78ded4bbf8bf912"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/Frames.kt",
+        "sha256": "d38a1e695cc8f328e7c8d354046aee14f375b31dca813669b5406441aaa878af"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/GenericTypedInputs.kt",
+        "sha256": "810ea5c22db3145e44d7108b75d9654a14faba87417d875a3973cf04a906b742"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/GhcBCO.kt",
+        "sha256": "622789f2ae7ae123179daca295db3a350f455526341d6a444eb38093538cba81"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/GmpForeignExpression.kt",
+        "sha256": "ec4c97340c0825cb098b41e0e9c5a38cdc79a51ca1f8825c2b546bb431d8fea9"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/GuestAllocationAccounting.kt",
+        "sha256": "e9f3d17b43a911d0ce40a15e86256cbe4b8c6d66a301ccebb5e75b7eabc6aebd"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/GuestArguments.kt",
+        "sha256": "dbb3a53fde5741c30f7df2090aa0ff16e7f5c368765c0f8c0a4e0f942d17c68f"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/GuestEnvironment.kt",
+        "sha256": "b29a608ba092d87ce9d705bd2623a0dd4b061799030d977213f360902801fd70"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/GuestExceptions.kt",
+        "sha256": "ebfe94ef7e720b65cbd679deb8379c6576ea39427bb89b79ada10e9ddcb618b9"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/GuestRoot.kt",
+        "sha256": "d801746beaac6f6924fe748fccdcde4502b000e9122fb15b6d72d2128921c2b2"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/GuestThreadOps.kt",
+        "sha256": "9431d1ca635c6a38ac1b0ed24526ab99bfbdd4e8efc4277b93dfcc5e362765fb"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/GuestThreads.kt",
+        "sha256": "794b00e7ffb8c4222974151a2c61dbe895ffb2026b2307e591665f616112ae2c"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/Handoff.kt",
+        "sha256": "dc474e8496d52b23a8c5f6ad89409e35cb7bda56842b7fab1c628770657ac711"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/HeapAddresses.kt",
+        "sha256": "f452ab6c49fb35b3029393dcf8f753dbb0b2a208a024f27c16ae7adf255e1452"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/HintTracePrimops.kt",
+        "sha256": "18792d2577649d4daf74b3c5d06c33dc4c5712a844d08b4e0d22ab5db40631f4"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/IntegerVectorPrimitives.kt",
+        "sha256": "3b5612c4f25d9b32d4662eacb6130490d5db0798a3a76247137ab5dbb9f6b382"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/IoMain.kt",
+        "sha256": "b7c5b1ef2dd2903f388a4ef6749ca94eaaa8a66f3b8d58caf09f923d840ca425"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/JavaScriptFFI.kt",
+        "sha256": "e4f205bc94c526baad76e2dac1f0b706a0ea1d58d0aefadf6136d6481329078b"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/KeepAlive.kt",
+        "sha256": "24aefdeece5ccb60c8b8660a35a782b5a484f7050a25654e1d014949f2f3f42e"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/LeadingCaseReturn.kt",
+        "sha256": "9b63731f2536f3da6aa211a0142543de9c2adec40921a9bd35d771988ca1a0cf"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/LimbRegion.kt",
+        "sha256": "e867bf8a1f07f140fe4950487aaebe062708741a634620bbae4967a932f3faeb"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/LiteralAddresses.kt",
+        "sha256": "055d53496d778a64166a057b816b69e1ded7d032b8e14b0d09f03ae9d4a855c1"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/LocalJoins.kt",
+        "sha256": "49cf9461c6feee7cca85729ead7763d6c05ef97992772bdc03c6ee6ff3a02645"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedAddressReads.kt",
+        "sha256": "e417a35bc25b6a767df294b25b078933aaf57635c14aec8b050b00d8a8874fa6"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedAllocation.kt",
+        "sha256": "bb6ee587284fa21c7871315498340f3fa99c6c3a2fae465742f44b3a25776b96"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedArrays.kt",
+        "sha256": "fd16b156b0577e19e2432b2c9713f0de1423e33a8382d435ed78587a5851d2a2"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedByteArrays.kt",
+        "sha256": "8c525e244a3c0422095dc854722ec736e5938493f61337bbbcb32f5ad7635704"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedCompacts.kt",
+        "sha256": "cd3d50d4dadc388b4088b85360cbeb62da11af05c3e114da3d1cff41876e9e74"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedExportIo.kt",
+        "sha256": "cf0b7715cfd1a9eefe987a6fc915fa89f32ee03ec0f1de2af68bbf1b1089f9eb"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedExportScalars.kt",
+        "sha256": "7185215708e9b211c31d3c2e8c7da1f74caf66c325ddc5ff354b0494e5ca417c"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedFileExpression.kt",
+        "sha256": "99cbfddb173bf0d5918ea6643ccae9d5d6778d385fbb64ce5599c9f2132c27b0"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedFiles.kt",
+        "sha256": "c98eb72c3e6688b7342778309bb6ffd72c2fa0a1b6bd3d90d1392c7865ea643d"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedGmp.kt",
+        "sha256": "6fddcc8f7efecf96b2afa8f6ec7e12da79d6193ddcaf22b6364dc598d714fa83"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedIconv.kt",
+        "sha256": "17b22b23002b5cdbc377119966904649f5989f4a1cc6ba5742cc3d07d4de7526"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedMVarCell.kt",
+        "sha256": "161f929ec04548a55b6ada3010611415d4ebf94dd10692c425f893f5e21d5999"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedMVars.kt",
+        "sha256": "00b72fa4ff570c0193d8fb22e679e0bb6bb85f75496cf550dcdb332cb91adbcd"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedMd5.kt",
+        "sha256": "09bdef23d926088e696a4822b733ffdfd15e1acdbc058be5be97118538a5bfcc"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedMutVars.kt",
+        "sha256": "d75677772885735b19537b7b048909e016023d5a9fef78997ed887ed007efbf1"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedNativeAllocations.kt",
+        "sha256": "8e9f8c8b9e7ccda7c1f7b87403fd673fed45ba6ea105452b6ca9d31676cc8071"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedSTM.kt",
+        "sha256": "89b50a76366f32eb128372717cc3628ac0ea115382b0e76bf1d659faa9510b2b"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedSignalMask.kt",
+        "sha256": "f68426ba696756c5a70dab37af36df9f311d09f1230a8c617a763349e8a753ed"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedSignals.kt",
+        "sha256": "e747f990f277b24e899d0657908c94a5950a0624a6930d6561e434828db86f88"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedSmallArrays.kt",
+        "sha256": "d078075f9319873e029b9fe37bf69e7ad754d20914e996119deb35c4e4808bc5"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedStackInfoImage.kt",
+        "sha256": "2f392a3c18dfbcdb4696ef412dc1c0fd0862395f7e26c2d975859a3609c844bb"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedStackRuntime.kt",
+        "sha256": "07b1ad5bd0050971690f9602006f88ca2d24c2f5ce1e21f29204cb3d6bcdaa19"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedStackSnapshot.kt",
+        "sha256": "845f8ba353e6f633bae82b220e5772f0b81ceea24cd26efe6fbb2355539411b9"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedStdio.kt",
+        "sha256": "16ddc10f54aa54ed0735faa083ddfa072cc3c63c679a76667a58145316b9e163"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedStrerror.kt",
+        "sha256": "ef3f2e8dd1e5f4245942ef3a81a76f16a38536dede26cd51653e2b76abd998c9"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ManagedWeaks.kt",
+        "sha256": "ec19f7e9a15ab8c8305494b0fae3b8fc3db92f64793f882f85de6ba46cb4b08a"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/Md5ForeignExpression.kt",
+        "sha256": "7f5aba3926d098c9b224ba8e57ba47504936de70659c59dd319ede6f6f3c0666"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/NativeAddresses.kt",
+        "sha256": "7949082229edd4c577843cff09613ac22264a6b331459eff62683b77eee7c2cb"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/NativeAllocationExpression.kt",
+        "sha256": "95be1635eebefd97c1e4c58a497e5d31e0a31b93aea2c1cee342f3cdb26be8b1"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/NativeFdWait.kt",
+        "sha256": "8f559db9d9f9914a38e68a90aa7952fc90d0de06e872a0ffe9fb13874f54de70"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/NativeFileException.kt",
+        "sha256": "239ee3d87d27ec9f015f7ca3a5420fb679237b43ab6f9ba825186ed70f184d49"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/NativeFileProvider.kt",
+        "sha256": "7ac11ad27ff3670678e3ec4a5f95f96dd92e450434c1c81792d8702045dc0503"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/NativeOpenOperation.kt",
+        "sha256": "15aa50ebd0dca7ef81212b954b49fb53badcc9614bdb7c35327de48bf29a8d10"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/NativeOpenRequest.kt",
+        "sha256": "d4fb88630e7331b8a1dab8bfced99193f34b4beedb5d0675004e0373e46aba62"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/OriginalLibdwExpression.kt",
+        "sha256": "536d1c2724047797e2c9eff28a763add9ad21df65b6ea514f27933d1beb0c906"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/OriginalStackInfoExpression.kt",
+        "sha256": "ba16abedd441f55e64ff3a2583e11734635fd91a5c5b6bd1e18067d36be6308d"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/OriginalStdioExpression.kt",
+        "sha256": "6d469f41285ac11d6c3901ee43afffc6644843917781a507be1b215d91f67e81"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/OwnedVectorFields.kt",
+        "sha256": "ab1bb7624a1a994c9f4e740d855b0e64aa22132514eaf4623f108d2b93dfdfa8"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/PackageScalarAccess.kt",
+        "sha256": "849c2b74c1d5e67621fd1f1aa98b47eca9fe80b3aa1958e59543e1af7c6dc66b"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/PackageScalarForeign.kt",
+        "sha256": "554cc232f3346b694295442534c3fe136a8c953b889b67be90a398e2e78ff80a"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/PackageScalarLibraries.kt",
+        "sha256": "783ea073a53e049660b7b182c45d921d8cff03aa325c461f4b736a3bda18cc12"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/PinnedMemory.kt",
+        "sha256": "eca6e113ada26865624848c94982b8e358a971124fadd7f81fd4226244ce6db7"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/PolyglotFFI.kt",
+        "sha256": "998b00a75ea714e594761bca1ccdb162fab00ffa0740484571f0d5ea6fbc1032"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/PosixStat.kt",
+        "sha256": "67c112130c43752f6fe90525a04af9b2a55aad1a2367185b4c439e7f09d95668"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/Program.kt",
+        "sha256": "04652b40633c14394087427275cba8b06940017fecbc96037838d4c8b7a519b0"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/RawBitCasts.kt",
+        "sha256": "701d6a5f084a772a5044789947a19f224d1e8b608b8341618022b774e94dca2b"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/RtsDiagnostics.kt",
+        "sha256": "9392e71d6e7dac0b1ecc230a96a09832c94d622c77fc37f01b8e8df76cf78602"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/RtsFileLocks.kt",
+        "sha256": "97ed70175e05419255ece3d4781f0556ba7c6a24e458b153f8e3ca685a7c343b"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/RuntimeGCServices.kt",
+        "sha256": "c037042907b9931df8e2d5b52cc2b45a05055031ddc95defce83feb0640a1639"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/RuntimeJitServices.kt",
+        "sha256": "e4d73c32153fd2b19e577c9447509986a071d719c43658d8aaf9338ce8fa97c3"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/RuntimeMemoryServices.kt",
+        "sha256": "a6fa5f978575993aabe03f31b43769b23af4f9c31f46210e5ba3e08a4fcb7b9f"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/RuntimeServiceStatus.kt",
+        "sha256": "d5a0a7e7434fc0b0feb3a01a6eb7317dee3fa0d3c5e914bd96763ca8efee67e3"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/RuntimeServices.kt",
+        "sha256": "6e506b7356ebf1926e8838458348bc85c4573226e40d5e968582cd8173f9e97b"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/RuntimeThreadServices.kt",
+        "sha256": "57cfd3e61ecb44b2891cc780680fdd89231afbdd7cadca7fc9bf11e5b4f17901"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/RuntimeTraceServices.kt",
+        "sha256": "ab04d19579bbbb056de2958a44c0d76ce685ccdd444e47eef00b8a1491dc5d47"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/STMPrimops.kt",
+        "sha256": "ab4478662def7c11cda7cb4db60c588b16c73052b8ffc59d15bb1c0ebe8977d4"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/SavedGuestContinuation.kt",
+        "sha256": "3a4281e0d512fae5e773f744b4708e32348fa44df0c67ad5d34d20b0227f6c14"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/SavedTermios.kt",
+        "sha256": "92f07e81d98d5e4fb630e693523523120983120498f90117c4ce95f52d0e86e6"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/Scalar64Primitives.kt",
+        "sha256": "4fb0dd11295295dade710e904a0c7b43eca93df28e0f17210d55fb582e1ce728"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/SigsetImage.kt",
+        "sha256": "64180170e81a254d72fb77ae4f58e2ad1155cc772b35f5acf9a344c1c989077e"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/StableNames.kt",
+        "sha256": "aecc5a76a36c322e50ff4f124e9090ef21272395f4f94b57fbe1703f7f23893d"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/StablePointers.kt",
+        "sha256": "5b62eff933d014514584675840a2f0df4d70477bcac9fd23b43c65c90d429009"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/StackAnnotations.kt",
+        "sha256": "29800fe3a86594d21e89e922237aab572c1c206180de3dbb3210b69a34687e41"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/StdioHostAbi.kt",
+        "sha256": "233e1276889e2208ff18c8da750702c7e86d2dc0de9c2fa6e7c190b0e4fe25b7"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/SulongCbits.kt",
+        "sha256": "d94f14ac8a54d6b166ed386644a2f6478f7da8da3ce46883ab64fdc515a28a46"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/SulongLimbProvider.kt",
+        "sha256": "05a202aefd9be54d38b98c97c3d5db69e0b72eebbdb0b71401b7ee035656c94b"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/SumResults.kt",
+        "sha256": "05116bdd82e14869d2074fbd73778aa524a55649b9a22e060e10fda006744bc3"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/TargetLayout.kt",
+        "sha256": "70e5262e4dbc6923f82afa0994a52202fc31a2fbda18171b23b8fabfc70a7211"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/TermiosImage.kt",
+        "sha256": "e368da2affef59112a07b8062abbfc2cfeed62ae25fc7241cab2c240887df42e"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ThreadDelay.kt",
+        "sha256": "dd4230dc460b9da81051231cfe7ccd6f18f2fb6c51d7f02fe72ca97886558593"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ThreadObservation.kt",
+        "sha256": "7ae109ec89510811e7c86288c11ac6bf33b3295b669db1cc73eb13e5fa723222"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/ThreadScheduling.kt",
+        "sha256": "0822cb693c189f3299313a705ef6b47c01f7c824200432f3d566a8f5dab6c7a2"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/Touch.kt",
+        "sha256": "078d33bd264300808f9d3510e4251b6634eb77840e1631d75a1972ebf10d0411"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/TupleResults.kt",
+        "sha256": "e3bca26b3c62610982dc4ff494960e31798bac390a86041de40d253550480021"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/TypedInputs.kt",
+        "sha256": "053ea9f63add38ace228767b8b71a247de8c90e138653067388615084880215a"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/VectorAddresses.kt",
+        "sha256": "c2432533ae47b3221dc7db81356a7990f82a6128b3a7b8115a506cb069fa3792"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/VectorIntegerDivision.kt",
+        "sha256": "ba6a475b7eeb3241358038eee40bea0a91c89ba797a262a2e666056804d93e47"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/VectorLayout.kt",
+        "sha256": "0cec4ee2557d1d952e47a8256e1f9595d42fce724f7b4e60fef27b122c2fff41"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/VectorMemory.kt",
+        "sha256": "fa082d604e5d9ddc42281f97aedf089faa193f81feb30364adcc28fffb9a8b2a"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
+        "sha256": "e97451bd6ccc57ee1baf7890c0dbd311cf59c1d784dc9737118aeb98a0d53a84"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/WindowsCpuAffinity.kt",
+        "sha256": "5a9fb702238acd5d594f1e9442b1a77004fd56841453e5442a7555ffe67f7712"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/WindowsMd5.kt",
+        "sha256": "6907ca2443c0f6add4bee956258da49ff03ad1f386d448173192a2ec8f840198"
+      },
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/resources/thc/scalar-primop-signatures.json",
+        "sha256": "5aa5d5d61bc52b660efefb37548c77f4a8ee8edb0fceb71290c3e000dd18539d"
+      }
+    ],
+    "java": [
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "sha256": "f29a1a3f9f2d1c54cc6cbc5db756eea8da062a3b02712d4052ccf855a0a57b57"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/release",
+        "sha256": "41cfd6836fbaa2d7e301c52141c7086779a4a05767efcbde06a95ad665250c96"
+      }
+    ],
+    "harness": [
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/tools/compare-map-runtimes.py",
+        "sha256": "7e23eaaa5a82f978889e101ed503e6d1dbcf221d608945a9e7c835c93d6f7772"
+      }
+    ]
+  },
+  "oracle": {
+    "values": [
+      56348923,
+      56349446,
+      56349569,
+      56353391,
+      56359652,
+      56362669,
+      56365275,
+      56367476,
+      56392339,
+      56393734,
+      56394726,
+      56395324,
+      56410122,
+      56414010,
+      56417496,
+      56420571
+    ],
+    "cycleChecksumSigned64": 902094723,
+    "rows": [
+      {
+        "path": "/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/throughput-screen/oracle.tsv",
+        "sha256": "81dff827f844730a41c6bff3d3f4c8e1c77e0d04fef2770521a30c084bed5277"
+      }
+    ]
+  }
+}

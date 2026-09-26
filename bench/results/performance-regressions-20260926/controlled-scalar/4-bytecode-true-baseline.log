@@ -1,0 +1,12 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/baseline/lib/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] opt done   engine=1  id=3     lambda x, acc                                      |Tier 2|Time   918( 131+787 )ms|AST    2|Inlined   0Y   0N|IR   7277/ 35540|CodeSize  226980|Addr 0x7709ea2d6ea0|CompId 2647   |UTC 2026-09-26T16:13:54.245|Src examples/THC/Fixtures.hs:17 0x22caa2fa
+[engine] opt done   engine=1  id=4     lambda n                                           |Tier 2|Time  1842( 138+1704)ms|AST    2|Inlined   1Y   0N|IR  12138/ 59757|CodeSize  349948|Addr 0x7709ea32f420|CompId 2893   |UTC 2026-09-26T16:13:56.118|Src examples/THC/Fixtures.hs:16 0x22caa2fa
+[engine] opt done   engine=1  id=6     EntryRoot@e518714                                  |Tier 2|Time  1970(  64+1906)ms|AST   21|Inlined   2Y   0N|IR  12163/ 64263|CodeSize  349367|Addr 0x7709ea386da0|CompId 2896   |UTC 2026-09-26T16:13:58.101|Src n/a

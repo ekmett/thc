@@ -1,0 +1,20 @@
+cabal-version: 3.0
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+name: run-native-capi
+version: 0.1.0.0
+build-type: Simple
+
+library
+  exposed-modules: NativeLeft, NativeRight
+  hs-source-dirs: src
+  include-dirs: include
+  c-sources: cbits/first.c cbits/second.c
+  build-depends: base
+  default-language: Haskell2010
+
+executable oracle
+  main-is: Main.hs
+  hs-source-dirs: app
+  build-depends: base, run-native-capi
+  default-language: Haskell2010

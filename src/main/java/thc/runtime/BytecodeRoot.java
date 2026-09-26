@@ -589,12 +589,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                     TupleResultsKt.requireVoidCarrier(second);
                     // A lifted fork action may still be a thunk. Only the new
                     // child may enter it; the parent must return after registration.
-                    yield GuestThreadOps.fork(node, first, true);
+                    yield GuestThreadOps.fork(node, first, ((BytecodeRoot) node.getRootNode()).isAsyncEnabled());
                 }
                 case FORK_ON -> {
                     TupleResultsKt.requireVoidCarrier(third);
                     if (!(first instanceof Long capability)) throw fail("forkOn# requires Int#");
-                    yield GuestThreadOps.fork(node, second, true, capability);
+                    yield GuestThreadOps.fork(node, second, ((BytecodeRoot) node.getRootNode()).isAsyncEnabled(), capability);
                 }
                 case BEGIN_KILL -> {
                     TupleResultsKt.requireVoidCarrier(third);
@@ -685,6 +685,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             if (failure instanceof DelimitedCut cut) return cut;
             if (failure instanceof CapturedCallSuspension captured) return new CallSegmentSuspended(captured.getSegment());
             if (failure instanceof AsyncBlocked blocked) return blocked.getRequest();
+            if (failure instanceof STMRestart restart) return restart.getRequest();
             throw failure;
         }
     }
@@ -1312,6 +1313,22 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             destination.setDouble(bytecode, frame,
                     access.executeDouble(arguments.read(bytecode, frame), arguments.state(bytecode, frame)));
+        }
+        public static PackageScalarAccess createAccess(BytecodePackageScalarArguments arguments) {
+            return new PackageScalarAccess(arguments.getCall());
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = BytecodePackageScalarArguments.class, name = "arguments")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class LinkedPackageAddress {
+        @Specialization public static void call(VirtualFrame frame, BytecodePackageScalarArguments arguments,
+                LocalAccessor destination, @Bind("$node") Node node,
+                @Cached(value = "createAccess(arguments)", neverDefault = true) PackageScalarAccess access) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            destination.setObject(bytecode, frame,
+                    access.executeAddress(arguments.read(bytecode, frame), arguments.state(bytecode, frame)));
         }
         public static PackageScalarAccess createAccess(BytecodePackageScalarArguments arguments) {
             return new PackageScalarAccess(arguments.getCall());
@@ -2348,16 +2365,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = STMOp.class, name = "operation")
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = Metrics.class, name = "metrics")
+    @ConstantOperand(type = boolean.class, name = "async")
     public static final class InvokeSTM {
         @Specialization public static void run(VirtualFrame frame, STMOp operation,
-                BytecodeTupleSlots destination, Metrics metrics, Object action, Object alternative,
+                BytecodeTupleSlots destination, Metrics metrics, boolean async, Object action, Object alternative,
                 Object nested, Object state,
-                @Cached(value = "create(operation, destination, metrics)", neverDefault = true) STMCall call) {
+                @Cached(value = "create(operation, destination, metrics, async)", neverDefault = true) STMCall call) {
             TupleResultsKt.requireVoidCarrier(state);
             call.execute(frame, action, alternative, nested);
         }
-        public static STMCall create(STMOp operation, BytecodeTupleSlots destination, Metrics metrics) {
-            return new STMCall(operation, destination, metrics);
+        public static STMCall create(STMOp operation, BytecodeTupleSlots destination, Metrics metrics, boolean async) {
+            return new STMCall(operation, destination, metrics, async);
         }
     }
     @Operation
@@ -3377,14 +3395,15 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                     GuestEnvironment.current(node).environ());
         }
     }
-    /** The admitted FD scheduler follows the non-threaded GHC RTS branch. */
+    /** Exact RTS queries whose selected THC policy is fixed during lowering. */
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    public static final class OriginalRtsIsThreaded {
-        @Specialization public static void query(VirtualFrame frame, LocalAccessor destination,
+    @ConstantOperand(type = long.class, name = "value")
+    public static final class OriginalRtsConstant {
+        @Specialization public static void query(VirtualFrame frame, LocalAccessor destination, long value,
                 Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, 0L);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, value);
         }
     }
     @Operation
