@@ -126,7 +126,9 @@ internal class CompactImages(private val regions: ManagedCompacts, private val h
         else -> invalid()
     }
     private fun children(value: Any): List<Any?> = when (value) {
-        is DataValue -> (0 until value.layout.arity).filter(value.layout::compactPointer).map { value.layout.read(value, it) }
+        is DataValue -> (0 until value.layout.arity).filter {
+            value.layout.compactPointer(it) && !value.layout.inactiveSumReference(value, it)
+        }.map { value.layout.read(value, it) }
         is Array<*> -> value.asList()
         is SmallArrayStorage -> value.elements.asList().take(value.logicalSize)
         else -> emptyList()
@@ -158,7 +160,8 @@ internal class CompactImages(private val regions: ManagedCompacts, private val h
                 is DataValue -> {
                     output.writeByte(DATA); output.writeLong(layoutId(value.layout))
                     for (field in 0 until value.layout.arity) if (value.layout.compactPointer(field))
-                        output.writeInt(reference(value.layout.read(value, field)))
+                        output.writeInt(if (value.layout.inactiveSumReference(value, field)) -1
+                            else reference(value.layout.read(value, field)))
                     else value.layout.writeCompactScalar(value, field, output)
                 }
                 is ManagedAllocation -> {
@@ -205,7 +208,11 @@ internal class CompactImages(private val regions: ManagedCompacts, private val h
                     val layout = layouts[input.readLong()] ?: invalid()
                     val value = if (layout.arity == 0) layout.create(emptyArray()) else layout.allocate()
                     val fields = IntArray(layout.arity) { -1 }
-                    for (field in fields.indices) if (layout.compactPointer(field)) fields[field] = reference()
+                    for (field in fields.indices) if (try { layout.inactiveSumReference(value, field) }
+                        catch (_: RuntimeFault) { invalid() }) {
+                        if (input.readInt() != -1) invalid()
+                        layout.initialize(value, field, null)
+                    } else if (layout.compactPointer(field)) fields[field] = reference()
                     else layout.readCompactScalar(value, field, input)
                     references[index] = fields
                     value

@@ -47,12 +47,15 @@ sum value. Actual sum captures and sum join arguments remain unsupported.
 Nested sums, tuples containing sums, nonbinary sums, integer-width conversion,
 address/vector leaves, `BoxedRep Nothing` and unknown logical or physical layouts
 remain unsupported. Sum arguments, partial sum constructors, captured sums,
-ordinary sum let bindings, heap fields, join arguments/captures and
+ordinary sum let bindings, join arguments/captures and
 public host sum results also remain unsupported. Function values returning sums
 may still pass through existing scalar/reference closure paths, but a sum value
 cannot cross those excluded boundaries. Top-level sum storage is rejected in
 both strict and diagnostic mode; diagnostic mode does not invent a heap carrier.
 Unsupported cold function paths retain the existing diagnostic trap policy.
+Exact sum fields in saturated boxed constructors are supported separately through
+[owned aggregate heap storage](aggregate-heap-fields.md), retaining their tag and
+payload projections; this does not enable ordinary sum function parameters.
 
 `check-sum-layout.py --prepare` retains 17 layout families and 130 native/model
 rows. Six retained-sum consumers plus a GHC-eliminated scalar control are accepted;

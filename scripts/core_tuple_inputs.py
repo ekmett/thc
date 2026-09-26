@@ -22,7 +22,7 @@ def contains_tuple(proof):
                 for child in (proof.get(key) if isinstance(proof.get(key), list) else [])))
 
 
-def proof_error(proof, allow_vectors=False):
+def proof_error(proof, allow_vectors=False, allow_addresses=False):
     """Mirror TupleShape.validate plus the input-only known boxed-levity guard."""
     def visit(rep):
         if not isinstance(rep, dict) or type(rep.get('evaluated')) is not bool:
@@ -51,6 +51,7 @@ def proof_error(proof, allow_vectors=False):
                  kind == 'long' and len(registers) == 1 and registers[0] in LONG_REPS or
                  kind == 'float' and registers == ['FloatRep'] or
                  kind == 'double' and registers == ['DoubleRep'] or
+                 allow_addresses and kind == 'address' and registers == ['AddrRep'] and rep['evaluated'] or
                  kind in ('object', 'data', 'closure') and len(registers) == 1 and registers[0] in BOXED_REPS)
         if not valid:
             raise ValueError('Unsupported or unknown tuple input leaf representation')

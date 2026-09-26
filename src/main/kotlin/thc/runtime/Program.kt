@@ -1379,15 +1379,28 @@ private class Construct(private val layout: DataLayout,
         if (layout.hasBoxedValueCache) return layout.createLong(fields[0].executeRequiredLong(frame))
         val value = layout.allocate()
         for (i in fields.indices) {
-            if (layout.isVector(i)) {
+            val physical = layout.fieldOffset(i)
+            if (layout.logicalProof(i)?.isAggregate == true) {
+                val slots = vectorSlots[i] ?: fault("Missing aggregate constructor slots")
+                fields[i].executeTuple(frame, slots, 0)
+                for (leaf in slots.indices) {
+                    val index = physical + leaf
+                    if (layout.isVector(index)) layout.initializeVector(value, index, frame, slots, leaf)
+                    else if (layout.isLong(index)) layout.initializeLong(value, index, frame.getLong(slots[leaf]))
+                    else if (layout.isFloat(index)) layout.initializeFloat(value, index, frame.getFloat(slots[leaf]))
+                    else if (layout.isDouble(index)) layout.initializeDouble(value, index, frame.getDouble(slots[leaf]))
+                    else layout.initialize(value, index, frame.getObject(slots[leaf]))
+                }
+                for (slot in slots) frame.clear(slot)
+            } else if (layout.isVector(physical)) {
                 val lanes = vectorSlots[i] ?: fault("Missing vector constructor lane slots")
                 fields[i].executeTuple(frame, lanes, 0)
-                layout.initializeVector(value, i, frame, lanes, 0)
+                layout.initializeVector(value, physical, frame, lanes, 0)
                 for (slot in lanes) frame.clear(slot)
-            } else if (layout.isLong(i)) layout.initializeLong(value, i, fields[i].executeRequiredLong(frame))
-            else if (layout.isFloat(i)) layout.initializeFloat(value, i, fields[i].executeRequiredFloat(frame))
-            else if (layout.isDouble(i)) layout.initializeDouble(value, i, fields[i].executeRequiredDouble(frame))
-            else layout.initialize(value, i, fields[i].execute(frame))
+            } else if (layout.isLong(physical)) layout.initializeLong(value, physical, fields[i].executeRequiredLong(frame))
+            else if (layout.isFloat(physical)) layout.initializeFloat(value, physical, fields[i].executeRequiredFloat(frame))
+            else if (layout.isDouble(physical)) layout.initializeDouble(value, physical, fields[i].executeRequiredDouble(frame))
+            else layout.initialize(value, physical, fields[i].execute(frame))
         }
         return value
     }
@@ -2972,6 +2985,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else {
             val constructorStrictFields = if (fn[0] == "con" && (fn[2] as Number).toInt() == args.size)
                 strictConstructorFields(fn[1] as String, args.size) else null
+            val constructorLayout = if (constructorStrictFields != null) dataLayout(fn[1] as String) else null
             val entryStrict = when (fn[0]) {
                 "lam" -> CoreEntries.lambda(fn)
                 "var" -> (fn[1] as String).let { id -> if (id in scope.locals) scope.locals.getValue(id).entry else globalEntries[id] }
@@ -2982,7 +2996,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 // A saturated constructor's strict operand is already a CBV
                 // context. Compile it directly, without an allocate/force thunk.
                 // Partial constructors deliberately take the ordinary lazy path.
-                argument(arg, scope, lifted && !callStrict[i] && constructorStrictFields?.get(i) != true && entryStrict?.getOrNull(i) != true,
+                val field = constructorLayout?.logicalProof(i)
+                if (field?.isAggregate == true) {
+                    if (lifted) throw RuntimeFault("Aggregate constructor operand must be unlifted")
+                    compile(arg, scope, false).also { TupleShape.requireCompatible(field, it.representation, component = true) }
+                } else argument(arg, scope, lifted && !callStrict[i] && constructorStrictFields?.get(i) != true && entryStrict?.getOrNull(i) != true,
                     allowEmpty = fn[0] != "prim" && fn[0] != "con", declaredLifted = lifted)
             }.toTypedArray()
             when {
@@ -3086,24 +3104,39 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 val ids = alt[2] as List<String>
                 val layout = value as? DataLayout
-                if (layout != null && layout.arity != ids.size) throw RuntimeFault("Constructor field/binder mismatch")
+                if (layout != null && layout.logicalArity != ids.size) throw RuntimeFault("Constructor field/binder mismatch")
                 val metadata = CoreRepresentations.alternativeBinders(alt)
                 val strict = if (kind == "data") strictConstructorFields(alt[1] as String, ids.size) else null
-                val vectorFields = arrayOfNulls<IntArray>(ids.size)
-                val slots = ids.mapIndexed { index, id ->
+                val vectorFields = arrayOfNulls<IntArray>(layout?.arity ?: ids.size)
+                val slots = ids.flatMapIndexed { index, id ->
                     val raw = metadata.getOrNull(index)?.let(CoreRepresentations::binder) ?: CoreRepresentation.UNKNOWN
-                    val vector = layout?.vectorProof(index)
+                    val physical = layout?.fieldOffset(index) ?: index
+                    val aggregate = layout?.logicalProof(index)?.takeIf { it.isAggregate }
+                    val vector = if (aggregate == null) layout?.vectorProof(physical) else null
+                    if (aggregate != null) {
+                        if (!raw.present || metadata.getOrNull(index)?.get("lifted") != false)
+                            throw RuntimeFault("Aggregate constructor binder requires an unlifted shape")
+                        TupleShape.requireCompatible(aggregate, raw, component = true)
+                        val proof = aggregate.refine(raw)
+                        val lanes = IntArray(layout.logicalWidth(index)) { child.layout.bind("$id constructor aggregate $it") }
+                        child.bindTuple(id, proof, lanes)
+                        lanes.forEachIndexed { leaf, slot ->
+                            if (layout.isVector(physical + leaf)) vectorFields[physical + leaf] = intArrayOf(slot)
+                        }
+                        lanes.toList()
+                    } else {
                     val proof = if (vector != null) raw.refine(vector)
-                        else if (layout?.isLong(index) == true) raw.refine(CoreRepresentation(CoreKind.LONG, true))
+                        else if (layout?.isLong(physical) == true) raw.refine(CoreRepresentation(CoreKind.LONG, true))
                         else raw.copy(evaluated = strict?.get(index) == true ||
                             ((constructors[alt[1] as? String]?.get("fieldLifted") as? List<*>)?.getOrNull(index) == false))
                     if (vector != null) {
                         if (metadata.getOrNull(index)?.get("lifted") != false)
                             throw UnsupportedCore("Vector constructor binder must be unlifted")
                         val lanes = IntArray(1) { child.layout.bind("$id constructor vector") }
-                        vectorFields[index] = lanes
-                        child.bindTuple(id, proof, lanes).slot
-                    } else child.bind(id, layout?.isLong(index) == true, proof).slot
+                        vectorFields[physical] = lanes
+                        listOf(child.bindTuple(id, proof, lanes).slot)
+                    } else listOf(child.bind(id, layout?.isLong(physical) == true, proof).slot)
+                    }
                 }.toIntArray()
                 val tag = when (kind) {
                     "default" -> DEFAULT_ALTERNATIVE
@@ -3139,6 +3172,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (arity == 0) construct(id, emptyArray(), scope.layout) else {
                 val layout = FrameLayout()
                 val constructor = dataLayout(id)
+                if (constructor.hasAggregateFields)
+                    throw UnsupportedCore("Unsaturated aggregate-field constructor requires aggregate inputs")
                 // CoreFields has already validated every fieldType against its
                 // registered primitive representation. A typed constructor PAP
                 // must retain the scalar proofs beside its vector lanes too.
@@ -3438,8 +3473,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         }
     }
     private fun constructorVectorSlots(layout: DataLayout, frame: FrameLayout): Array<IntArray?> =
-        Array(layout.arity) { index ->
-            if (layout.isVector(index)) IntArray(layout.fieldWidth(index)) { lane ->
+        Array(layout.logicalArity) { index ->
+            if (layout.logicalProof(index)?.isAggregate == true || layout.isVector(layout.fieldOffset(index)))
+                IntArray(layout.logicalWidth(index)) { lane ->
                 frame.bind("<constructor ${layout.id} field $index lane $lane>")
             } else null
         }
