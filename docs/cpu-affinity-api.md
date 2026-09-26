@@ -1,7 +1,9 @@
 # Public Haskell affinity queries
 
-Depend on `thc:runtime` and import `THC`. This small public sublibrary depends
-only on `base`; it does not pull GHC's compiler API into applications.
+Depend on `thc:runtime` and import `THC` or `THC.Thread`. This small public sublibrary depends
+only on `base`; it does not pull GHC's compiler API into applications. The wider
+[runtime services API](runtime-services.md) adds typed observations with explicit
+unavailable/disabled/denied status, without removing these original functions.
 
 ```haskell
 import THC
@@ -32,8 +34,9 @@ pinning is not a promise against later OS/cpuset policy changes. This API does
 not establish bound foreign TLS or a scoped pin of the calling thread.
 
 The complete example is [THC.CpuAffinity](../examples/THC/CpuAffinity.hs). When
-building it outside Cabal, use `ghc --make -threaded -iruntime
-examples/THC/CpuAffinity.hs runtime/cpu-affinity.c -main-is THC.CpuAffinity`.
+building it outside Cabal, use `ghc --make -XHaskell2010 -threaded -iruntime
+examples/THC/CpuAffinity.hs runtime/cpu-affinity.c runtime/runtime-services.c
+-main-is THC.CpuAffinity`.
 
 The same source compiles and links under ordinary native GHC. Its tiny C shim
 returns `NoCpuAffinity`/`False`: ordinary GHC `forkOn` by itself does not promise
