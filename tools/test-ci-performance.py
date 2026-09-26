@@ -30,6 +30,39 @@ def options(flags):
 
 
 class ConfigurationTest(unittest.TestCase):
+    def test_frozen_inventory_and_hash_checks_cannot_be_optimized_away(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            frozen = out / 'frozen'
+            frozen.mkdir()
+            payload = frozen / 'runtime.jar'
+            payload.write_bytes(b'original')
+            ci.write_json(out / 'immutable-manifest.json', {'files': [
+                {'path': 'runtime.jar', 'sha256': ci.sha(payload)}]})
+            ci.verify(out)
+            extra = frozen / 'unexpected.jar'
+            extra.write_bytes(b'extra')
+            with self.assertRaisesRegex(AssertionError, 'Frozen file inventory changed'):
+                ci.verify(out)
+            extra.unlink()
+            payload.write_bytes(b'changed')
+            with self.assertRaisesRegex(AssertionError, 'Frozen input changed'):
+                ci.verify(out)
+            payload.unlink()
+            with self.assertRaisesRegex(AssertionError, 'Frozen file inventory changed'):
+                ci.verify(out)
+
+    def test_rejected_checks_never_launch_timing(self):
+        for failure in ('map', 'compatibility'):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+                out = Path(directory)
+                ci.write_json(out / 'checks.json', {'passed': failure != 'map'})
+                ci.write_json(out / 'combined-status.json', {'compatibilityPassed': False})
+                with patch.object(ci, 'run') as run:
+                    with self.assertRaisesRegex(AssertionError, 'must pass before timing'):
+                        ci.compare(out, 'all-on', '/fake-java')
+                    run.assert_not_called()
+
     def test_freeze_retains_separate_tools_and_diagnostics_sources(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / 'repo'
