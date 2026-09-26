@@ -59,7 +59,7 @@ class PackageScalarLinksTest {
             proofChange(imported + ("emitted" to (emitted + ("unit" to "another-unit")))),
             proofChange(imported + ("emitted" to (emitted + ("arguments" to listOf("AddrRep", "void"))))),
             proofChange(imported + ("emitted" to (emitted + ("result" to listOf("void", "Int64Rep"))))))
-        assertEquals(setOf("scalar_value"), PackageScalarLinks.read(original)!!.proved)
+        assertEquals(setOf("thc_scalar_${"a".repeat(64)}_0"), PackageScalarLinks.read(original)!!.proved)
         if (System.getProperty("os.name").startsWith("Mac")) {
             val clangTarget = "${System.getProperty("os.arch")}-apple-macosx15.0.0"
             assertNotNull(PackageScalarLinks.read(original + ("packageScalarLink" to (link + ("target" to clangTarget)))))
@@ -111,7 +111,7 @@ class PackageScalarLinksTest {
         val proof = oldProof + mapOf("expectedForeign" to foreign, "imports" to listOf(imported))
         val native = (base - "packageScalarLink") + mapOf("schema" to 2L, "foreign" to foreign,
             "staticForeignImports" to proof, "staticForeignImportStubs" to proof, "packageNativeLink" to link)
-        assertEquals(setOf("wrapper"), PackageScalarLinks.read(native)!!.proved)
+        assertEquals(setOf("thc_native_${"a".repeat(64)}_0"), PackageScalarLinks.read(native)!!.proved)
         assertNotNull(PackageScalarLinks.read(native + ("packageNativeLink" to (link + ("buildInputs" to emptyMap<String, Any>())))))
         assertEquals(1, (CoreModules.merge(listOf(native))["packageScalarLinks"] as List<*>).size)
         val inlined = (base - "packageScalarLink" - "staticForeignImports") +
@@ -134,6 +134,40 @@ class PackageScalarLinksTest {
         val freeProof = proof + ("imports" to listOf(imported + ("declaredType" to freeType)))
         assertThrows(IllegalArgumentException::class.java) {
             CoreModules.merge(listOf(native + mapOf("staticForeignImports" to freeProof, "staticForeignImportStubs" to freeProof)))
+        }
+    }
+
+    @Test fun nativePointerVariantsNeedSeparateExactImportProofs() {
+        val base = module()
+        val originalLink = base["packageScalarLink"] as Map<String, Any?>
+        val originalProof = base["staticForeignImports"] as Map<String, Any?>
+        val originalImport = (originalProof["imports"] as List<Map<String, Any?>>).single()
+        fun variant(reps: List<String>): Map<String, Any?> {
+            val abi = reps.mapIndexed { index, rep -> mapOf("symbol" to "read_bytes",
+                "entry" to "thc_native_${"a".repeat(64)}_$index", "convention" to "ccall", "safety" to "unsafe",
+                "arguments" to listOf(rep), "result" to "WordRep") }
+            val imports = reps.mapIndexed { index, rep -> originalImport + mapOf(
+                "symbol" to "read_bytes", "binder" to ((originalImport["binder"] as Map<String, Any?>) +
+                    ("occurrence" to "read$index")), "emitted" to mapOf("symbol" to "read_bytes", "unit" to base["unit"],
+                    "convention" to "ccall", "safety" to "unsafe", "arguments" to listOf(rep, "void"),
+                    "result" to listOf("void", "WordRep"))) }
+            return (base - "packageScalarLink") + mapOf(
+                "packageNativeLink" to (originalLink + mapOf("profile" to "thc-package-c-ffi-v1", "abi" to abi)),
+                "staticForeignImports" to (originalProof + ("imports" to imports)))
+        }
+        val native = variant(listOf("AddrRep", "ByteArray#"))
+        val admitted = PackageScalarLinks.read(native)!!
+        assertEquals(admitted.link.abi.map { it.entry }.toSet(), admitted.proved)
+        assertEquals(2, admitted.proved.size)
+        assertEquals(1, (CoreModules.merge(listOf(native))["packageScalarLinks"] as List<*>).size)
+        val proof = native["staticForeignImports"] as Map<String, Any?>
+        val imports = proof["imports"] as List<*>
+        for (one in imports) assertThrows(IllegalArgumentException::class.java) {
+            CoreModules.merge(listOf(native + ("staticForeignImports" to (proof + ("imports" to listOf(one))))))
+        }
+        for (reps in listOf(listOf("AddrRep", "WordRep"), listOf("ByteArray#", "MutableByteArray#"),
+            listOf("ByteArray#", "AddrRep"), listOf("AddrRep", "AddrRep"))) {
+            assertThrows(IllegalArgumentException::class.java) { CoreModules.merge(listOf(variant(reps))) }
         }
     }
 }

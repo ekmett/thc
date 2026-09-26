@@ -54,7 +54,7 @@ internal class PackageScalarLibraries(private val env: TruffleLanguage.Env) {
                         fault("Missing package C entry: ${signature.entry}")
                     val function = interop.readMember(library, signature.entry)
                     if (!interop.isExecutable(function)) fault("Package C entry is not executable")
-                    signature.symbol to PackageScalarFunction(owner, signature, function, alive)
+                    signature.entry to PackageScalarFunction(owner, signature, function, alive)
                 }
             }).also { libraries[link.unit] = it }
         }
@@ -90,7 +90,7 @@ internal class PackageScalarLibraries(private val env: TruffleLanguage.Env) {
                     fault("Package C call differs from its registered component ABI")
             } ?: fault("Unlinked package C component: ${link.unit}")
         }
-        return await(selected.task).getValue(signature.symbol)
+        return await(selected.task).getValue(signature.entry)
     }
 
     @Synchronized fun close() { closed = true; alive.invalidate(); libraries.clear() }

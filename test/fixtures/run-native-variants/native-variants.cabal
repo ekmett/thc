@@ -1,0 +1,11 @@
+cabal-version: 3.0
+name: native-variants
+version: 0.1.0.0
+build-type: Simple
+
+executable variants
+  main-is: Main.hs
+  c-sources: variants.c
+  build-depends: base >=4.22 && <4.23
+  default-language: Haskell2010
+  ghc-options: -O1

@@ -52,8 +52,10 @@ runGhcProxy arguments = do
          "-fplugin-opt=THC.Plugin:" ++ core,
          "-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:unit-qualified",
          "-fplugin-opt=THC.Plugin:source-notes",
+         -- Adding -g only to the replay can change CSE/tidied helper names.
+         -- Consumers use the native interfaces, so preserve their debug flags.
          "-fplugin-opt=THC.Plugin:foreign-import-provenance", "-fwrite-if-simplified-core",
-         "-g", "-dcore-lint"])
+         "-dcore-lint"])
       unless (exported == ExitSuccess) (exitWith exported)
       helper <- lookupEnv "THC_PROXY_INTERFACE_HELPER"
       libdir <- lookupEnv "THC_PROXY_INTERFACE_LIBDIR"

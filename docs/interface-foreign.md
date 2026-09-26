@@ -71,6 +71,20 @@ against the complete unit's real declaration inventory, even when their own
 module declares no imports. Libraries and mutable byte-array backing storage
 remain context-owned; this profile does not authorize raw JVM addresses.
 
+One C symbol may have distinct `AddrRep` and byte-array import variants when
+their C ABI agrees. Each variant retains its original semantic carriers, typed
+import proof and namespaced adapter; call sites select the exact Core shape,
+and proving one declaration does not authorize another variant. Incompatible
+C prototypes still reject. `ByteArray#`/`MutableByteArray#` variants that erase
+to the same call shape remain ambiguous: the current descriptor cannot choose
+a read/write policy from those erased representations alone.
+
+The genuine Pandoc dependency probe exposes remaining boundaries, not implicit
+allowlists: `digest-0.0.2.1` also needs its C++ CRC32C sources and zlib linkage;
+`erf-2.0.0.0` has source-pure imports whose emitted State-threaded calls are
+`safe`, and needs a libm provider. Those obligations are not satisfied by
+pointer-variant support, and safe calls are not relabeled unsafe.
+
 Select LLVM tools with `THC_CLANG`, `THC_LLVM_LINK`, `THC_LLVM_OPT` and
 `THC_LLVM_NM`, or provide their ordinary executable names on `PATH`. The exact
 Linux x86_64 `pc` vendor alias is normalized to Sulong's `unknown` spelling;

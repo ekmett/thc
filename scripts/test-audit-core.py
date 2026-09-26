@@ -6,6 +6,7 @@
 import importlib.util
 import copy
 import hashlib
+import io
 import json
 from pathlib import Path
 import unittest
@@ -39,6 +40,23 @@ LONG = dict(primReps=['IntRep'], kind='long', evaluated=True)
 REFERENCE = dict(primReps=['BoxedRep (Just Lifted)'], kind='data', evaluated=False)
 CLOSURE = dict(REFERENCE, kind='closure', evaluated=True)
 TUPLE_CAP = dict(CAP, aggregateResults=['unboxed-tuple'])
+
+
+class ReportStreamTest(unittest.TestCase):
+    def test_report_stream_matches_previous_format_without_one_large_write(self):
+        class Sink(io.StringIO):
+            largest = 0
+            def write(self, value):
+                self.largest = max(self.largest, len(value))
+                return super().write(value)
+        for expression in (lit(42), var('missing-λ\n')):
+            with self.subTest(expression=expression):
+                report = run(expression)
+                sink = Sink()
+                audit_core.write_report(report, sink)
+                expected = json.dumps(report, indent=2) + '\n'
+                self.assertEqual(expected, sink.getvalue())
+                self.assertLess(sink.largest, len(expected))
 
 
 class CompactSignatureTest(unittest.TestCase):
@@ -200,7 +218,7 @@ class PackageScalarOperandTest(unittest.TestCase):
 
     def inspect(self, abi, expression, stored):
         audit = audit_core.Audit([], CAP)
-        audit.package_scalar_links['first'] = dict(unit='first', abi=[abi])
+        audit.package_scalar_links['first'] = dict(unit='first', abi=abi if isinstance(abi, list) else [abi])
         self.assertTrue(audit.polyglot_call(expression, dict(argument=stored), 'root', 'root'))
         return audit.issues
 
@@ -245,6 +263,20 @@ class PackageScalarOperandTest(unittest.TestCase):
             altered = copy.deepcopy(expression)
             altered[6]['rep']['components'].append(dict(kind='long', primReps=['Word64Rep'], evaluated=True))
             self.assertIn('exact scalar/State ABI', str(self.inspect(abi, altered, stored)), rep)
+
+    def test_same_symbol_pointer_variants_select_by_exact_call_shape(self):
+        original, expression, _ = self.call('Word64Rep')
+        variants = [dict(original, entry='adapter_' + str(index), arguments=[rep])
+                    for index, rep in enumerate(('AddrRep', 'ByteArray#'))]
+        for rep in ('AddrRep', 'ByteArray#'):
+            stored = dict(kind='address' if rep == 'AddrRep' else 'object',
+                          primReps=['AddrRep'] if rep == 'AddrRep' else ['BoxedRep (Just Unlifted)'], evaluated=True)
+            expression[2][0][2]['rep'] = stored
+            expression[6]['foreignCall']['argumentReps'][0] = dict(stored, evaluated=False)
+            self.assertEqual([], self.inspect(variants, expression, stored), rep)
+        ambiguous = [variants[1], dict(variants[1], entry='mutable_adapter', arguments=['MutableByteArray#'])]
+        self.assertIn('unique exact scalar/State ABI', str(self.inspect(ambiguous, expression, stored)))
+
 class ArchiveReachabilityTest(unittest.TestCase):
     def report(self, expression, initializers=(), finalizers=(), files=()):
         root = dict(schema=1, ghc='9.14.1', bindings=[bind('root', expression)], constructors=[])

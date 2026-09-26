@@ -116,8 +116,21 @@ internal object PackageScalarLinks {
             check(!native || convention in setOf("ccall", "capi") && entry["safety"] == "unsafe", "unsupported C calling convention/safety")
             PackageScalarSignature(name, entry["entry"] as String, arguments.map { it as String }, entry["result"] as String, convention)
         }
-        check(abi.isNotEmpty() && abi.map { it.symbol } == abi.map { it.symbol }.distinct().sorted(), "sorted unique ABI")
-        val bySymbol = abi.associateBy { it.symbol }
+        val ordered = compareBy<PackageScalarSignature>({ it.symbol }, { it.convention },
+            { it.arguments.joinToString("\u0000") }, { it.result })
+        check(abi.isNotEmpty() && abi == abi.sortedWith(ordered) &&
+            abi.map { listOf(it.symbol, it.convention, it.arguments, it.result) }.distinct().size == abi.size,
+            "sorted unique ABI")
+        val bySymbol = abi.groupBy { it.symbol }
+        bySymbol.values.forEach { variants ->
+            check(native || variants.size == 1, "duplicate scalar ABI symbol")
+            check(variants.map { listOf(it.convention, it.arguments.map { rep ->
+                if (rep in setOf("ByteArray#", "MutableByteArray#")) "AddrRep" else rep }, it.result) }.distinct().size == 1,
+                "conflicting C ABI variants")
+            check(variants.map { listOf(it.convention, it.arguments.map { rep ->
+                if (rep == "MutableByteArray#") "ByteArray#" else rep }, it.result) }.distinct().size == variants.size,
+                "ambiguous byte-array mutability variants")
+        }
         val link = PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, abi)
         if (native && !module.containsKey("staticForeignImports")) {
             check(!module.containsKey("foreign") && !module.containsKey("staticForeignImportStubs"),
@@ -162,11 +175,14 @@ internal object PackageScalarLinks {
             text(item["symbol"])
             val emitted = record(item["emitted"], "symbol unit convention safety arguments result")
             val name = if (native) text(emitted["symbol"]) else text(item["symbol"])
-            val signature = requireNotNull(bySymbol[name]) { "Unlinked typed package C import: $name" }
+            val signature = requireNotNull(bySymbol[name]?.singleOrNull {
+                it.convention == convention && emitted["arguments"] == it.arguments + "void" &&
+                    emitted["result"] == (if (it.result == "void") listOf("void") else listOf("void", it.result))
+            }) { "Unlinked typed package C import variant: $name" }
             check(emitted["symbol"] == name && emitted["unit"] == unit && emitted["convention"] == signature.convention && convention == signature.convention &&
                 emitted["safety"] == "unsafe" && emitted["arguments"] == signature.arguments + "void" &&
                 emitted["result"] == (if (signature.result == "void") listOf("void") else listOf("void", signature.result)), "emitted ABI differs from compiled C")
-            proved.add(name)
+            proved.add(signature.entry)
         }
         check(proof["expectedCalls"] == calls(module["bindings"]), "retained Core foreign inventory differs")
         return PackageScalarAdmission(link, proved)

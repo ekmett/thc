@@ -125,6 +125,11 @@ test or benchmark in the project. An unrelated unbuildable executable therefore
 does not block the selected workload. The driver
 reads `plan.json` and Cabal's `--enable-build-info` records, retaining exact
 unit IDs and GHC arguments for a separate post-Tidy export of local dependencies.
+For Cabal's grouped library records, including Custom Setup packages, the
+runtime closure follows `components.lib.depends`. The separate
+`components.setup.depends` graph belongs to native Setup execution, not the
+guest; it must neither hide transitive library dependencies nor pull host-only
+Setup packages into the Core manifest.
 It writes one compressed Core ZIP per local component under
 `<dist-dir>/native/cache/thc/core-bundles/v1`, inside Cabal's build directory,
 and a checked `packages.json` manifest. `cabal clean --builddir <dist-dir>/native`
@@ -145,6 +150,11 @@ GHC unchanged, then exports Core with the same Cabal arguments while its unpacke
 source still exists. Both compiler wrappers disable the THC driver's own RTS
 argument parsing with `--RTS`, preserving the compiler's `+RTS ... -RTS` options
 and response-file arguments for native compilation and Core replay. The
+replay also preserves Cabal's original debug-info settings: adding `-g` only to
+an export can change optimizer-generated binder names and leave consumers of
+the native interfaces with missing globals. Source-note export retains whatever
+notes those original compiler settings produced; it does not force a different
+debug level for either local components or store packages. The
 temporary store is removed after ZIP publication;
 matching store IDs skip that export on later runs. The fixture has a
 data library, a native Template Haskell helper, an internal library, CPP and an
