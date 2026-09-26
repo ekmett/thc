@@ -111,6 +111,10 @@ jobs:
           done
       - name: Build and test both handoff modes from source
         run: scripts/try.sh --handoff-modes --fail-fast
+      - name: Check original aggregate constructor fields against native GHC
+        run: |
+          cabal run exe:thc-fixtures --offline -- aggregate-heap
+          ./gradlew aggregateHeapFullCoreTest aggregateHeapFullCoreDenseTest
       - name: Check Haskell calls into JavaScript
         run: |
           python3 scripts/test-polyglot-audit.py

@@ -3,11 +3,16 @@
 
 package thc.runtime
 
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
+
 /** Constructor worker metadata describes the representation after its CBV obligations. */
 internal class CoreFields(info: Map<String, Any?>) {
     val storage: Array<String>
     val referenceTypes: Array<Class<*>?>
     val vectorProofs: Array<CoreRepresentation?>
+    @field:CompilationFinal(dimensions = 1) val logicalProofs: Array<CoreRepresentation>
+    @field:CompilationFinal(dimensions = 1) val offsets: IntArray
+    val hasAggregates: Boolean get() = logicalProofs.any { it.isAggregate }
 
     init {
         val id = info["id"]
@@ -18,7 +23,21 @@ internal class CoreFields(info: Map<String, Any?>) {
         if (arity < 0 || arityValue.toDouble() != arity.toDouble()) throw RuntimeFault("Invalid constructor arity: $id")
         val reps = info["fieldReps"] as? List<*> ?: throw RuntimeFault("Missing constructor primitive representations: $id")
         if (reps.size != arity) throw RuntimeFault("Constructor representation count mismatch: $id")
-        storage = reps.map { field ->
+        val types = info["fieldTypes"] as? List<*>
+        if (types != null && types.size != arity) throw RuntimeFault("Constructor field type count mismatch: $id")
+        logicalProofs = Array(arity) { index -> types?.get(index)?.let(CoreRepresentations::parse) ?: CoreRepresentation.UNKNOWN }
+        val leaves = logicalProofs.map { proof -> when {
+            proof.isSum -> SumShape.storage(proof)
+            proof.isTuple -> TupleShape.flatten(proof)
+            else -> listOf(proof)
+        } }
+        offsets = IntArray(arity + 1)
+        leaves.forEachIndexed { index, fields -> offsets[index + 1] = offsets[index] + fields.size }
+        val physicalReps = reps.flatMapIndexed { index, field ->
+            if (logicalProofs[index].isAggregate) leaves[index].map { it.primReps }
+            else listOf(field)
+        }
+        storage = physicalReps.map { field ->
             val registers = field as? List<*> ?: throw UnsupportedCore("Unresolved constructor field representation: $id")
             when (registers.size) {
                 0 -> "VoidRep"
@@ -33,11 +52,11 @@ internal class CoreFields(info: Map<String, Any?>) {
         }.toTypedArray()
         // AddrRep has one managed carrier even in older exports lacking fieldTypes.
         // It must never become a generic reference property or a native pointer.
-        referenceTypes = Array(arity) { if (storage[it] == "AddrRep") ManagedAddress::class.java else null }
-        vectorProofs = arrayOfNulls(arity)
+        referenceTypes = Array(storage.size) { if (storage[it] == "AddrRep") ManagedAddress::class.java else null }
+        vectorProofs = arrayOfNulls(storage.size)
         if (storage.any { it.startsWith("VecRep ") } && !info.containsKey("fieldTypes"))
             throw UnsupportedCore("Vector constructor field requires exact logical metadata: $id")
-        for (index in storage.indices) if (storage[index] == "AddrRep") {
+        for (index in reps.indices) if (reps[index] == listOf("AddrRep") && !logicalProofs[index].isAggregate) {
             if (info.containsKey("fieldLifted")) {
                 val lifted = info["fieldLifted"] as? List<*>
                     ?: throw RuntimeFault("Invalid address constructor levity: $id field $index")
@@ -52,22 +71,24 @@ internal class CoreFields(info: Map<String, Any?>) {
             if (types.size != arity || strict.size != arity || lifted.size != arity)
                 throw RuntimeFault("Constructor field type count mismatch: $id")
             for (index in types.indices) {
-                val proof = CoreRepresentations.parse(types[index])
-                if (proof.isVector) {
-                    VectorLayout.validate(proof)
-                    vectorProofs[index] = proof
-                } else CoreRepresentations.requireScalar(proof, "constructor field")
+                val proof = logicalProofs[index]
+                if (proof.isVector) VectorLayout.validate(proof)
+                else if (!proof.isAggregate) CoreRepresentations.requireScalar(proof, "constructor field")
                 if (!proof.present || proof.primReps != reps[index])
                     throw RuntimeFault("Constructor field type disagrees with its primitive representation: $id field $index")
-                if (storage[index] == "AddrRep" && proof.kind != CoreKind.ADDRESS)
+                if (!proof.isAggregate && storage[offsets[index]] == "AddrRep" && proof.kind != CoreKind.ADDRESS)
                     throw RuntimeFault("Address constructor field lacks its exact managed carrier: $id field $index")
                 val strictField = strict[index] as? Boolean ?: throw RuntimeFault("Unknown constructor field strictness: $id")
-                val expectedLifted = storage[index] == "LiftedRep"
+                val expectedLifted = !proof.isAggregate && storage[offsets[index]] == "LiftedRep"
                 if (lifted[index] != expectedLifted)
                     throw RuntimeFault("Constructor field levity disagrees with its primitive representation: $id field $index")
                 if (proof.evaluated != (strictField || lifted[index] == false))
                     throw RuntimeFault("Constructor field evaluatedness lacks a worker obligation: $id field $index")
-                referenceTypes[index] = proof.referenceCarrier()
+                leaves[index].forEachIndexed { leaf, field ->
+                    val physical = offsets[index] + leaf
+                    referenceTypes[physical] = field.referenceCarrier()
+                    if (field.isVector) vectorProofs[physical] = field
+                }
             }
         }
     }

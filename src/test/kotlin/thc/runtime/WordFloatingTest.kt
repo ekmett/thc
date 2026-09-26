@@ -29,10 +29,19 @@ class WordFloatingTest {
     private fun module(stage: String) = json("$stage-core/WordFloatingAudit.json")
     private data class Row(val input: Long, val floatBits: Int, val doubleBits: Long)
 
+    private fun operationIds(source: String): Map<String, Int> =
+        Regex("(?m)^private const val ([A-Z][A-Z0-9_]*) = ([0-9]+)[ \\t]*\\r?$").findAll(source)
+            .associate { it.groupValues[1] to it.groupValues[2].toInt() }
+
+    @Test fun integerInventoryDoesNotParseFloatingPrefixesOrNestedConstants() {
+        assertEquals(mapOf("FLOAT_ADD" to 0, "WORD_FLOAT" to 58), operationIds(
+            "private const val FLOAT_ADD = 0\nprivate const val LN2 = 0.6931471805599453\n" +
+                "private const val SCALE = 1e3\n    private const val NESTED = 0\nprivate const val WORD_FLOAT = 58\r\n"))
+    }
+
     @Test fun floatingOperationIdsRemainDistinctAcrossMergedFamilies() {
         val source = File(root, "src/main/kotlin/thc/runtime/FloatingPrimitives.kt").readText()
-        val ids = Regex("private const val ([A-Z][A-Z0-9_]*) = ([0-9]+)").findAll(source)
-            .associate { it.groupValues[1] to it.groupValues[2].toInt() }
+        val ids = operationIds(source)
         assertTrue(ids.keys.containsAll(listOf("WORD_FLOAT", "WORD_DOUBLE", "FLOAT_ABS", "FLOAT_EXP")))
         assertEquals(ids.size, ids.values.toSet().size, "Floating operation IDs must not alias another family")
     }

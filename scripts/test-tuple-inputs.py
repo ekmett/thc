@@ -247,13 +247,18 @@ class TupleInputs(unittest.TestCase):
         module=fixture([shape]);module['bindings'][0]['expr'][1]=['prim','negateInt#']
         self.rejected(module,detail='unboxed-tuple argument')
 
-    def test_boxed_constructor_fields_cannot_hide_zero_or_single_slot_tuples(self):
+    def test_boxed_constructor_fields_preserve_zero_or_single_slot_tuple_identity(self):
         for shape in (tup(),tup(STATE),tup(LONG)):
             module=fixture([shape]);call=module['bindings'][0]['expr']
             module['constructors'].append(dict(id='Heap',kind='boxed',arity=1,fieldReps=[shape['primReps']],fieldTypes=[shape],strictFields=[False],fieldLifted=[False]))
             call[1]=['con','Heap',1];call[6]['rep']=REF
-            self.rejected(module,detail='unboxed-tuple heap field')
-            self.rejected(module,detail='unboxed-tuple argument')
+            self.accepted(module)
+            disabled=dict(ENABLED,aggregateHeapFields=[])
+            self.rejected(module,cap=disabled,detail='unboxed-tuple heap field')
+            self.rejected(module,cap=disabled,detail='unboxed-tuple argument')
+            scalar=copy.deepcopy(module)
+            scalar['bindings'][0]['expr'][2][0]=lit()
+            self.rejected(scalar,code='aggregate-shape')
 
     def test_constructor_alias_and_pap_are_not_ordinary_tuple_ingress(self):
         for precise in (False,True):

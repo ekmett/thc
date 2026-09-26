@@ -31,6 +31,7 @@ are different claims; each report identifies which it establishes.
 | Delimited continuations | [Initial synchronous multi-shot slice](delimited-continuations.md); prompt identity, saved suffixes, shared effects, and catch/mask restoration |
 | GHC bytecode objects | [Executable scalar BCOs and updating wrappers](ghc-bco.md); real instruction decoding and guest application, with explicit opcode/ABI limits |
 | Compiler-library RTS hooks | [FastString shared CAF, CAF retention and unique-supply cells](compiler-rts.md); not the native GHC object loader |
+| GC, statistics and time | [Original GHC declarations](gc-stats-clock.md); advisory JVM collection, explicitly disabled GHC statistics and monotonic nanoseconds |
 | Process signals | [Original GHC INT/QUIT/HUP/TERM dispatch](process-signals.md); Linux x86_64 launcher with `-Xrs` and async enabled on either backend, not embedding authority |
 | ShortByteString | [Pack, length, unpack, uncons, comparison, prefix and suffix](bytearrays.md); [public slicing](library-coverage.md) |
 | Boxed arrays | [Public fixed-bounds STArray and lazy elements](core-evidence.md#lifted-boxed-array-storage); [clone, freeze and thaw slices](array-slices.md) |
@@ -73,8 +74,9 @@ Float/Double leaves, local join results and zero-width State components.
 [Typed tuple inputs](tuple-inputs.md) preserve logical arity across direct calls,
 PAPs, overapplication and tail transfers. [Empty inputs](empty-tuple-inputs.md)
 and [empty join inputs](empty-tuple-joins.md) have no physical payload fields.
-Nonempty aggregate join inputs, aggregate captures and heap fields remain
-unsupported.
+Nonempty aggregate join inputs and ordinary aggregate captures remain unsupported.
+[Aggregate constructor fields](aggregate-heap-fields.md) flatten exact tuple and
+binary-sum layouts into owned typed heap properties.
 
 [Binary sum results](sum-results.md) use typed destinations and explicit tags.
 Local sum join results use those same destinations. Sum inputs, captures,

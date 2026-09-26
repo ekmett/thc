@@ -198,6 +198,9 @@ internal class TupleDispatch @JvmOverloads constructor(private val destination: 
         try { executeCall(frame, function, arguments) }
         catch (cut: DelimitedCut) {
             if (!DelimitedControl.enabled(this)) throw cut
+            // Saving a continuation makes this activation escape. Leave the
+            // compiled path before materializing it, without retiring its code.
+            CompilerDirectives.transferToInterpreter()
             throw DelimitedControl.tupleCut(cut, frame.materialize(), destination, this)
         }
     }
@@ -270,8 +273,9 @@ private class DirectTupleCaller(private val destination: TupleDestination, metri
         System.arraycopy(function.supplied, 0, packet, skip, prefixSize)
         System.arraycopy(arguments, 0, packet, skip + prefixSize, physicalCount)
         if (arity < argsSize) {
+            val scalarCall = scalar ?: fault("Missing tuple overapplication scalar caller")
             if (AstControl.enabled(this)) {
-                val result = try { scalar!!.call(frame, packet, false) }
+                val result = try { scalarCall.call(frame, packet, false) }
                 catch (cut: AstCapture) {
                     val remaining = arguments.copyOfRange(physicalCount, arguments.size)
                     throw cut.append(object : AstResumeStep {
@@ -282,9 +286,9 @@ private class DirectTupleCaller(private val destination: TupleDestination, metri
                 resumeOverapplication(frame, result, arguments.copyOfRange(physicalCount, arguments.size))
                 return
             }
-            val result = if (!DelimitedControl.enabled(this)) force.execute(frame, scalar!!.call(frame, packet, false))
+            val result = if (!DelimitedControl.enabled(this)) force.execute(frame, scalarCall.call(frame, packet, false))
                 else try {
-                    val answer = scalar!!.call(frame, packet, false)
+                    val answer = scalarCall.call(frame, packet, false)
                     DelimitedControl.captureBytecode(answer, null)
                     force.execute(frame, answer)
                 } catch (cut: DelimitedCut) {
@@ -293,13 +297,15 @@ private class DirectTupleCaller(private val destination: TupleDestination, metri
                         override val destination = this@DirectTupleCaller.destination
                         override fun resume(frame: MaterializedFrame, input: DelimitedResume,
                                             ambient: MaskingState, outerMask: DelimitedStep?): Any? {
-                            rest!!.execute(frame, requireClosure(force.execute(frame, input.get())), remaining.copyOf())
+                            val remainingCall = rest ?: fault("Missing tuple overapplication remainder")
+                            remainingCall.execute(frame, requireClosure(force.execute(frame, input.get())), remaining.copyOf())
                             return destination.delimitedResult(frame, this@DirectTupleCaller)
                         }
                     })
                 }
             val closure = requireClosure(result)
-            rest!!.execute(frame, closure, arguments.copyOfRange(physicalCount, arguments.size))
+            val remainingCall = rest ?: fault("Missing tuple overapplication remainder")
+            remainingCall.execute(frame, closure, arguments.copyOfRange(physicalCount, arguments.size))
             return
         }
         entry.execute(frame, packet)
@@ -318,12 +324,14 @@ private class DirectTupleCaller(private val destination: TupleDestination, metri
         catch (cut: AstCapture) {
             throw cut.append(object : AstResumeStep {
                 override fun resume(frame: VirtualFrame, input: Any?): Any? {
-                    rest!!.execute(frame, requireClosure(input), remaining)
+                    val remainingCall = rest ?: fault("Missing tuple overapplication remainder")
+                    remainingCall.execute(frame, requireClosure(input), remaining)
                     return null
                 }
             })
         }
-        rest!!.execute(frame, closure, remaining)
+        val remainingCall = rest ?: fault("Missing tuple overapplication remainder")
+        remainingCall.execute(frame, closure, remaining)
         return null
     }
 }

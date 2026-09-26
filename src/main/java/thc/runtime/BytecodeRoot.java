@@ -3388,6 +3388,31 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                     RuntimeServices.trace(node, (int) operation, token, address, length));
         }
     }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = GcForeignOp.class, name = "operation")
+    public static final class GcForeignQuery {
+        @Specialization public static void query(VirtualFrame frame, LocalAccessor destination,
+                GcForeignOp operation, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, operation.invoke());
+        }
+    }
+    @Operation
+    @ConstantOperand(type = GcForeignOp.class, name = "operation")
+    public static final class RequestGarbageCollection {
+        @Specialization public static void collect(GcForeignOp operation, Object state) {
+            TupleResultsKt.requireVoidCarrier(state);
+            operation.invoke();
+        }
+    }
+    @Operation
+    public static final class UnavailableRtsStats {
+        @Specialization public static void unavailable(ManagedAddress address, Object state) {
+            TupleResultsKt.requireVoidCarrier(state);
+            GcForeignOp.STATS.invoke();
+        }
+    }
     /** Original thread queries. Neither capability support nor accounting enforces a limit. */
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")

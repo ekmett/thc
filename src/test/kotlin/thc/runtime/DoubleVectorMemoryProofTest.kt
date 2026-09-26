@@ -402,7 +402,7 @@ class DoubleVectorMemoryProofTest {
                 val unchanged = bytes.copyOf()
                 val sentinel = Any(); var published: Any? = sentinel
                 val error = assertThrows(RuntimeFault::class.java, { published = invoke(p, bytes, index) }, label)
-                assertEquals("DoubleX2 ByteArray# range outside its backing storage", error.message, label)
+                assertEquals("Vector ByteArray# range outside its backing storage", error.message, label)
                 assertSame(sentinel, published, "$label no failed result publication")
                 assertArrayEquals(unchanged, bytes, "$label no partial memory effects")
                 released(language)

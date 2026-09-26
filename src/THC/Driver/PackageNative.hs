@@ -107,7 +107,8 @@ archiveNativeModules unit values = do
         first signature `elem` conflicting, supportedSignature signature,
         Just emitted <- [member entry "emitted"]]
   forM (zip3 values imports signatures) $ \(value,entries,typed) -> do
-    let names = nub [first signature | signature <- typed, first signature `elem` conflicting]
+    let names = nub [first signature | signature <- typed,
+          supportedSignature signature, first signature `elem` conflicting]
         conflicts = [emitted | emitted <- witnesses, member emitted "symbol" `elem` map (Just . toJSON) names]
         excluded = [emitted | (entry,signature) <- zip entries typed,
           not (supportedSignature signature) || first signature `elem` conflicting,

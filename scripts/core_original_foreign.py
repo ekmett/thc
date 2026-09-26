@@ -108,6 +108,11 @@ OPERATIONS = {
     **{symbol: ('capi', 'unsafe', arguments, output)
        for symbol, (arguments, output) in SIGSET_OPERATIONS.items()},
     'rtsSupportsBoundThreads': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
+    'getRTSStatsEnabled': ('ccall', 'safe', (None,), (None, 'IntRep')),
+    'getRTSStats': ('ccall', 'safe', ('AddrRep', None), (None,)),
+    **{symbol: ('ccall', 'safe', (None,), (None,))
+       for symbol in ('performGC', 'performMajorGC', 'performBlockingMajorGC')},
+    'getMonotonicNSec': ('ccall', 'unsafe', (None,), (None, 'Word64Rep')),
     'stg_getThreadAllocationCounterzh': ('prim', 'safe', (None,), (None, 'Int64Rep')),
     'rts_isThreaded': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
     'reportStackOverflow': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', None), (None,)),

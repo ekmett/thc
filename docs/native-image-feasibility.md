@@ -48,9 +48,6 @@ backend/workload checks currently fail rather than silently substituting an
 interpreter. The first call after successful installation remains a future
 acceptance gate.
 
-The original successful build took 114.03 seconds and 3,550,308 KiB peak RSS on
-the shared Linux x86-64 host; its file size was 67.25 MiB. These are bounded
-compatibility measurements, not isolated startup or throughput benchmarks.
 The image contains no frozen guest program: it reads those Core files at run
 time. Generated Truffle DSL field-access descriptors must be prepared at image
 build time because the pinned image implementation replaces their reflective
@@ -208,8 +205,7 @@ The unchanged pure-image recipe also rebuilds successfully after integrating
 main `80c23c62`, including the cached FFM byte-access handle and prepared root
 control metadata. All eight original native result checks still pass; all four
 explicit scalar/constructor compilation controls still report the frame
-materialization bailout. The build took 105.91 seconds wall time and 3,534,800 KiB
-peak RSS on the shared host. This checks image compatibility, not native downcalls.
+materialization bailout. This checks image compatibility, not native downcalls.
 
 Further runtime preparation exposed Kotlin's generated nonnull diagnostics in
 the generic dispatcher's cold continuation-capture branches. These branches now
@@ -275,6 +271,24 @@ self-tail calls, joins and scalar address reads. Thread-inventory expectations
 independently prove the single original `runRW#` State# wrapper eliminated by
 lowering; all remaining root labels, entry counts and first-call validity checks
 stay exact. This is runtime preparation, not native guest-JIT success.
+
+Direct tuple overapplication now checks its optional child nodes explicitly;
+ordinary direct calls snapshot the handoff child once before a null-guarded
+call. These avoid generated nonnull diagnostics without changing caller loans,
+capture order or call boundaries. The frozen-array weak map moves to a private
+runtime holder, while the three public metadata operations retain their exact
+static synchronized locks and host boundaries. Only the outer singleton and
+immutable array access handle are prepared for the image; no guest array or
+mutable registry is initialized at build time. Real image analysis advances
+past these failures and next reports cold arithmetic diagnostic formatting.
+
+The final scoped run passes 56 checks in both handoff modes, including original
+GHC array results across residual calls. A broader inlined array test still
+retires the AST host entry after a correct clone result; unchanged production
+source reproduces it in both modes, so it is retained separately, not hidden by
+altering validity assertions. An initial typed-cycle trampoline-count failure
+did not recur in the unchanged-source or final candidate runs. Mask diagnostics
+were added without changing its counter assertion; its cause is not established.
 
 ## Execution models
 
@@ -352,14 +366,9 @@ executed inside a native image because image construction failed.
    calls with literal tokens, preserving both allocation strategies and the
    allocation authentication checks.
 
-The first substantive attempt took 13.96 seconds and 1,603,064 KiB maximum RSS;
-the provider-only retry took 22.35 seconds and 1,706,628 KiB. Both failed, so
-neither has executable-size or startup measurements.
-
 The split-shape source rebuild passes `ClassOwnedLayoutTest` in both
 `testDefault` and `testDense`: five tests per mode, no failures/skips. The next
-optimizing-image attempt gets past shape registration, but fails after 42.44
-seconds / 2,786,388 KiB with:
+optimizing-image attempt gets past shape registration, but fails with:
 
 ```text
 CompilerAsserts.neverPartOfCompilation reachable for runtime compilation
@@ -401,23 +410,6 @@ fallback runtime is not a demonstrated turnkey alternative for this THC tree.
 The next focused investigation should isolate the runtime telemetry and
 explicit compile API's reachability; it should not keep applying broad package
 initialization overrides.
-
-| Probe log | Configuration/result | Wall seconds | Peak RSS KiB |
-| --- | --- | ---: | ---: |
-| `02-pure-build.log` | Original runtime; provider image-heap error | 13.96 | 1,603,064 |
-| `03-provider-init-build.log` | Provider initialized; conditional shape class error | 22.35 | 1,706,628 |
-| `06-split-shape-build.log` | Shape calls split; node-constructor compiler assertion | 42.44 | 2,786,388 |
-| `08-fallback-build.log` | Intentional fallback; generated export initialization error | 19.66 | 1,662,176 |
-| `09-interop-init-fallback-build.log` | Audited generated exports; JVMCI module access error | 19.11 | 1,655,368 |
-| `10-interop-init-optimizing-build.log` | Optimizing + exports + method list; same assertion | 46.62 | 2,943,712 |
-| `11-fallback-module-export-build.log` | Fallback + JVMCI export; ArgumentsProfile cast | 31.23 | 2,703,000 |
-| `12-dispatch-init-optimizing-build.log` | Optimizing + dispatch initialization + call tree; same assertion | 45.48 | 3,013,532 |
-| `13-fallback-runtime-profile-build.log` | Fallback + ArgumentsProfile at run time; ReturnProfile cast | 32.16 | 2,698,836 |
-
-These are resource-bounded feasibility runs on a shared host, not isolated
-performance benchmarks. The largest resident set was 2.87 GiB. Heavy work stopped
-when the performance worker requested a prospective controlled measurement window;
-that window was subsequently postponed because another workload remained active.
 
 ## Storage and generated code
 
@@ -571,7 +563,6 @@ native-image -Ob -J-Xmx8g -J-XX:ActiveProcessorCount=2 --parallelism=2 \
 ```
 
 For the intentional interpreter-only control add
-`-Dtruffle.UseFallbackRuntime=true` and use a distinct output name. Full commands,
-including exact classpaths and `/usr/bin/time -v` results, are in the retained
-logs. Each native invocation is wrapped in the host's build-directory resource
+`-Dtruffle.UseFallbackRuntime=true` and use a distinct output name. Full commands
+and exact classpaths are retained locally. Each native invocation is wrapped in the host's build-directory resource
 lease. No global Graal configuration is changed.
