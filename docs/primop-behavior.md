@@ -115,21 +115,22 @@ addresses; byte reinterpretation and foreign exposure therefore have limits.
 
 | Primop | Current behavior and consequence |
 | --- | --- |
-| `addr2Int#` | Returns real native/numeric bits. Immutable literals and pointer-free immutable images may acquire an owned native image when native access is enabled. Mutable managed storage and opaque stable/heap handles cannot be projected numerically. Integer values do not root the allocation. |
-| `int2Addr#` | Preserves machine bits, including null. Recovers registered immutable native-image aliases; otherwise returns an opaque numeric address. In particular, converting an owned malloc address to an integer and back does not itself recover dereferenceability. |
+| `addr2Int#` | Returns real native/numeric bits. Explicitly pinned arrays expose their original native allocation without copying; static literals may materialize a read-only native image and StablePtr handles may acquire persistent opaque native identities. Moving heap arrays reject projection even after unsafe freeze. Native authority is required; integer values do not root allocations or extend StablePtr lifetime after free. |
+| `int2Addr#` | Preserves machine bits, including null. Recovers registered pinned-array and literal-image aliases and exact live current-context StablePtr identities; otherwise returns an opaque numeric address. Converting an owned malloc address to an integer and back does not itself recover dereferenceability. |
+| `makeStablePtr#`, `deRefStablePtr#`, `eqStablePtr#` | Context-owned roots preserve lazy referents and live identity. Ordinary unsafe C imports can retain and return an opaque native identity; `freeStablePtr` or disposal releases it. Tokens expose no guest byte storage or native GHC closure ABI; safe calls and callback re-entry remain separate work. |
 | `minusAddr#` | Managed addresses can be subtracted only within the same backing allocation. Native/numeric addresses retain machine-word subtraction; unrelated managed allocations have no synthetic numeric separation. |
 | `remAddr#` | Uses unsigned remainder of the allocation-relative byte offset for managed addresses, real address bits for native/numeric addresses. It is not a physical-address alignment query for managed storage. |
 | `ltAddr#`, `leAddr#`, `gtAddr#`, `geAddr#` | Order aliases within one managed allocation, or compare numeric/native bits. Unrelated managed allocations do not acquire a fabricated total address order. |
-| `newPinnedByteArray#` | Supplies a stable managed address guarantee, not a physical JVM heap pin or an automatically usable C pointer. |
-| `newAlignedPinnedByteArray#` | Same managed guarantee; power-of-two alignment is logical, not a promise of a physically aligned native allocation. |
+| `newPinnedByteArray#` | Allocates real stable native storage from creation, reclaimed with its last live owner/view. No copy-to-pin or per-call repinning. Ordinary `newByteArray#` remains moving heap storage. |
+| `newAlignedPinnedByteArray#` | Same native storage guarantee with actual requested power-of-two alignment. |
 | `byteArrayContents#` | Returns an alias retaining its backing storage, not an unconditional raw native address. Native projection has the `addr2Int#` restrictions above. |
-| `mutableByteArrayContents#` | Returns a stable managed alias without copying. It cannot be projected to raw native bits just because the array is pinned. |
-| `isByteArrayPinned#`, `isMutableByteArrayPinned#` | Report explicit managed pinning. Do not emulate GHC large-object or compact-region automatic pinning policy. |
+| `mutableByteArrayContents#` | Returns an alias without copying or pinning; explicitly pinned backing has a real stable native address, moving heap backing does not. |
+| `isByteArrayPinned#`, `isMutableByteArrayPinned#` | Report explicit native-backed pinning. Do not emulate GHC large-object or compact-region automatic pinning policy. |
 | `isByteArrayWeaklyPinned#`, `isMutableByteArrayWeaklyPinned#` | Currently report the same explicit pinning flag as the strong queries; no separate GHC weak-pinning allocation policy. |
 | `anyToAddr#` | Returns a weak opaque heap-identity handle. Equality/roundtrip work, but raw bytes, native projection and general pointer arithmetic do not. The caller must keep the evaluated referent alive, as required by GHC. |
 | `addrToAny#` | Recovers a live context-owned heap handle, not an arbitrary GHC heap object at native address bits. |
 | `shrinkMutableByteArray#` | Shrinks logical size in place and preserves aliases, but retains backing capacity. Partial truncation of a managed pointer cell is rejected. Host-injected raw byte arrays cannot be shrunk in place. |
-| `resizeMutableByteArray#` | Copies the retained prefix into a replacement owner, preserving pinning. Partial truncation of a managed pointer cell is rejected. No extra promise about old aliases beyond GHC's contract. |
+| `resizeMutableByteArray#` | Shrinks in place without copying; growth copies the prefix into a new **unpinned** heap allocation. Partial truncation of a managed pointer cell is rejected. No extra promise about old aliases beyond GHC's contract. |
 
 The following names spell out the pointer-cell boundary; they are not missing
 implementations of numeric reads/writes or atomics.
@@ -139,13 +140,13 @@ implementations of numeric reads/writes or atomics.
 | `indexAddrArray#`, `readAddrArray#`, `writeAddrArray#`, `indexWord8ArrayAsAddr#`, `readWord8ArrayAsAddr#`, `writeWord8ArrayAsAddr#` | Managed pointer cells require allocation-owned storage, not a raw host `byte[]`. Whole-cell copies preserve references; numeric reads/partial overwrites of those cells reject. A raw/Sulong buffer exposure prevents later managed pointer-cell writes. Disjoint numeric fields remain usable. |
 | `indexStablePtrArray#`, `readStablePtrArray#`, `writeStablePtrArray#`, `indexWord8ArrayAsStablePtr#`, `readWord8ArrayAsStablePtr#`, `writeWord8ArrayAsStablePtr#` | Same cell restrictions, retaining opaque stable-pointer handles. Storing a handle does not extend the stable-pointer registry lifetime after explicit release. |
 | `indexAddrOffAddr#`, `readAddrOffAddr#`, `writeAddrOffAddr#`, `indexWord8OffAddrAsAddr#`, `readWord8OffAddrAsAddr#`, `writeWord8OffAddrAsAddr#` | Managed storage uses the cell rules above. Live owned native storage can contain real address bits, but native stores reject mutable-managed/opaque handle values with no native projection. Unknown read bits remain opaque numeric addresses. |
-| `indexStablePtrOffAddr#`, `readStablePtrOffAddr#`, `writeStablePtrOffAddr#`, `indexWord8OffAddrAsStablePtr#`, `readWord8OffAddrAsStablePtr#`, `writeWord8OffAddrAsStablePtr#` | Live stable-pointer values are opaque managed handles without raw native bits; native stable-pointer cell interchange is unsupported. Managed cells work. |
-| `atomicExchangeAddrAddr#`, `atomicCasAddrAddr#` | Managed cells retain/compare pointer identities; owned native storage requires real bits. Mutable-managed pointers and opaque stable-pointer handles cannot be stored as native bits. |
+| `indexStablePtrOffAddr#`, `readStablePtrOffAddr#`, `writeStablePtrOffAddr#`, `indexWord8OffAddrAsStablePtr#`, `readWord8OffAddrAsStablePtr#`, `writeWord8OffAddrAsStablePtr#` | Managed cells retain handles; owned native cells store opaque native identities and recover exact live handles in the current context. Neither a cell nor a C copy extends lifetime after `freeStablePtr`. Tokens remain non-byte-addressable and are not native GHC heap addresses. |
+| `atomicExchangeAddrAddr#`, `atomicCasAddrAddr#` | Managed cells retain/compare pointer identities; owned native storage requires real bits, including pinned storage addresses and opaque live StablePtr identities. Moving heap pointers cannot be stored as native bits. |
 | `atomicCasWord8Addr#`, `atomicCasWord16Addr#`, `atomicCasWord32Addr#` | Managed storage works; owned-native narrow CAS requires the packaged Linux x86_64 helper. This is a native-path platform restriction, not a lack of managed atomic semantics. |
 
 `newArray#`, `newSmallArray#`, `newByteArray#`, `newPinnedByteArray#`,
-`newAlignedPinnedByteArray#`, and `resizeMutableByteArray#` use Int-indexable JVM
-backing storage: requested lengths cannot exceed `Int.MAX_VALUE`, with actual
+`newAlignedPinnedByteArray#`, and `resizeMutableByteArray#` retain Int-indexable
+buffer bounds: requested lengths cannot exceed `Int.MAX_VALUE`, with actual
 allocation limits lower. This is a target allocation limit, not a 64-bit
 arithmetic limitation. Atomic implementations using locks/full fences are
 implementations, not semantic gaps merely because they are not lock-free.

@@ -83,6 +83,7 @@ import HintTraceFixtures (prepareHintTrace)
 import ClosureInspectionFixtures (prepareClosureInspection)
 import WindowsSmokeFixtures (prepareWindowsSmoke, prepareWindowsDriver)
 import StablePointerFixtures (prepareStablePointers)
+import StablePtrFFIFixtures (prepareStablePtrFFI)
 import StableNameFixtures (prepareStableNames)
 import WeakFixtures (prepareWeaks)
 import ShrinkByteArrayFixtures (prepareShrinkByteArrays)
@@ -951,6 +952,7 @@ main = do
     ["original-posix-stat"] -> prepareOriginalPosixStat root
     ["original-open"] -> prepareOriginalOpen root
     ["package-scalar-cbits"] -> preparePackageScalar root
+    ["stableptr-ffi"] -> prepareStablePtrFFI root
     ["hashable-ffi"] -> prepareHashableFfi root
     ["libdw-unavailable"] -> prepareLibdwUnavailable root
     ["original-termios"] -> prepareOriginalTermios root

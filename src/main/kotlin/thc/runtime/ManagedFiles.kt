@@ -520,10 +520,10 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         return result { withDescriptor(fd) { entry ->
             if (!entry.readable) fail(4, "THC file descriptor is not readable: $fd")
             if (count == 0L) 0L else {
-                val n = if (address.nativeAllocation() != null) address.withNativeSegment { segment ->
+                val n = if (address.hasNativeStorage()) address.withNativeSegment { segment ->
                     // Descriptor before allocation, as for terminal-image IO.
                     // Recheck after borrowing: free may win after the preflight.
-                    address.requireRange(0, count, true)
+                    address.requireByteRegion(count, true)
                     val window = segment.asSlice(0, minOf(count, Int.MAX_VALUE.toLong())).asByteBuffer()
                     if (entry.input == null) entry.channel!!.read(window)
                     else {
@@ -648,8 +648,8 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         return result { withDescriptor(fd) { entry ->
             if (!entry.writable) fail(4, "THC file descriptor is not writable: $fd")
             if (count == 0L) 0L else {
-                if (address.nativeAllocation() != null) address.withNativeSegment { segment ->
-                    address.requireRange(0, count)
+                if (address.hasNativeStorage()) address.withNativeSegment { segment ->
+                    address.requireByteRegion(count)
                     val window = segment.asSlice(0, minOf(count, Int.MAX_VALUE.toLong())).asByteBuffer().asReadOnlyBuffer()
                     if (entry.output == null) entry.channel!!.write(window).toLong()
                     else {

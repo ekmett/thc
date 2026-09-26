@@ -404,7 +404,7 @@ def package_scalar_link(module):
     if native:
         reps += ('IntRep', 'WordRep', 'Int8Rep', 'Word8Rep', 'Int16Rep', 'Word16Rep', 'Word32Rep',
                  'Word64Rep', 'AddrRep', 'ByteArray#', 'MutableByteArray#')
-    results = tuple(rep for rep in reps if rep not in ('AddrRep', 'ByteArray#', 'MutableByteArray#')) + (('void',) if native else ())
+    results = tuple(rep for rep in reps if rep not in ('ByteArray#', 'MutableByteArray#')) + (('void',) if native else ())
     abi = {}
     for index, entry in enumerate(link['abi']):
         record(entry, 'symbol entry convention safety arguments result' if native else 'symbol entry arguments result')

@@ -111,7 +111,7 @@ internal object PackageScalarLinks {
             val arguments = list(entry["arguments"])
             val admitted = if (native) nativeReps else reps
             check(arguments.all { it in admitted } && entry["result"] in
-                (if (native) nativeReps - setOf("AddrRep", "ByteArray#", "MutableByteArray#") + "void" else reps), "C ABI")
+                (if (native) nativeReps - setOf("ByteArray#", "MutableByteArray#") + "void" else reps), "C ABI")
             val convention = if (native) text(entry["convention"]) else "ccall"
             check(!native || convention in setOf("ccall", "capi") && entry["safety"] == "unsafe", "unsupported C calling convention/safety")
             PackageScalarSignature(name, entry["entry"] as String, arguments.map { it as String }, entry["result"] as String, convention)

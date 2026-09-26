@@ -47,9 +47,10 @@ configured native compiler. LLVM acquisition is a sensible second compilation,
 not a requirement to reproduce the native object's exact bytes.
 
 Initial support is static, unsafe `ccall`/`capi`, scalar arguments, `Addr#`,
-`ByteArray#` and `MutableByteArray#`, and a scalar or void result. Pure source
+`ByteArray#` and `MutableByteArray#`, and a scalar, address or void result. Pure source
 imports and IO imports both retain GHC's actual State-token worker ABI. Pointer
-results, callbacks, safe/interruptible calls, additional foreign-file products,
+results retain the runtime's pointer ownership/lifetime boundary. Callbacks,
+safe/interruptible calls, additional foreign-file products,
 initializers/finalizers and extra native libraries remain outside this profile.
 Ordinary memory helpers supplied by Sulong/libc are allowed. C++ and assembly
 sources are not acquired by this initial C implementation.
@@ -183,16 +184,17 @@ must not receive a temporary snapshot when it may retain a pointer, observe
 aliases, or mutate state used by later calls. Nor can a general adapter infer
 a buffer's required size or retention rules from an `AddrRep` alone.
 
-The intended general path is stable native backing for pinned/FFI allocations,
-accessed by THC primops, Sulong and host C as the same allocation. Ordinary
-non-escaping storage can remain managed. Scoped copies remain useful for
+Explicitly pinned arrays have stable native backing from allocation, accessed
+by THC primops, Sulong and host C as the same allocation. Ordinary heap arrays
+remain managed and reject native pointer projection, including after unsafe
+freeze. Scoped copies remain useful for
 explicitly bounded interfaces, such as the existing GMP limb provider, but
 are not a universal FFI policy. Opaque guest objects need handles and a
 separate re-entry contract, not pointer reinterpretation.
 
-Current support is narrower: managed package-C buffer views and separately
-owned native `malloc` addresses are implemented; generic native-backed pinned
-byte arrays, retained-pointer lifetimes and native callbacks remain work.
+Managed package-C buffer views, native-backed pinned byte arrays and separately
+owned native `malloc` addresses are implemented; general retained-buffer lifetime
+contracts and native callbacks remain work.
 The package-C acquisition path must eventually carry declared external native
 dependencies as well as bitcode. This design direction is not a claim that
 arbitrary mixed native packages already run.
@@ -203,7 +205,7 @@ The separate `thc-package-c-ffi-v1` profile extends the runtime link boundary
 for ordinary package C code. It accepts static, unsafe `ccall` and `capi`
 entries with machine-word and 8/16/32/64-bit signed/unsigned integers,
 `FloatRep`, `DoubleRep`, `AddrRep`, `ByteArray#` and `MutableByteArray#`
-arguments, and numeric or void results. Source-level pure imports still use
+arguments, and numeric, opaque pointer or void results. Source-level pure imports still use
 GHC's emitted State-threaded foreign worker. A CAPI value import is executed
 through its original generated function wrapper.
 
@@ -217,13 +219,31 @@ types; an arbitrary unlifted object is not accepted as byte storage.
 The runtime writes numeric results directly into the lowered carriers and
 preserves unsigned low bits at narrow C boundaries. Mutable managed buffers
 remain shared across calls rather than being copied per invocation. Owned
-native addresses are borrowed through synchronous return. This first slice
-does not support safe/interruptible calls, pointer results, retained pointers,
+native addresses are borrowed through synchronous return. Ordinary
+`Foreign.StablePtr` arguments use persistent, context-owned opaque identities:
+C may compare, store and return them across calls, and `deRefStablePtr` recovers
+the original lazy referent. `freeStablePtr` releases both the root and any native
+identity; context disposal releases remaining identities. Passing a token does
+not expose JVM object layout or a GHC RTS heap pointer. Exact live pointer results
+recover their StablePtr identity; unrelated native pointer results remain opaque
+and unowned, without permission to read, write or free their target. Returning
+arbitrary managed Sulong pointers is not yet supported. Storing a token does not
+extend its lifetime after explicit free, and use after free remains invalid.
+
+The fixture producer `cabal run exe:thc-fixtures -- stableptr-ffi` compares an
+ordinary Haskell/C package with native GHC; `stablePtrFfiFullCoreDefault` and
+`stablePtrFfiFullCoreDense` test both AST and bytecode, interpreted and compiled.
+Focused tests execute the same C source through Sulong and an actual host-native
+shared library, including context and lifetime controls. This does not implement
+GHC's C `hs_deref_stable_ptr`/closure ABI or callbacks into guest Haskell.
+
+This slice does not support safe/interruptible calls, general retained buffers,
 callbacks, foreign exports, initialization/finalization or arbitrary extra
 native libraries. Within one call, aliases share their allocation transport and
 a small C bridge produces Sulong's allocation-relative pointer, preserving C
 pointer equality, distances, and backward access from an interior address.
-Read-only and writable arguments to the same allocation share identity; a
+Read-only and writable arguments to the same allocation share identity,
+including an ordinary heap allocation's permitted raw byte-array aliases; a
 permitted writable alias permits writes to that shared storage, while genuinely
 immutable allocations remain read-only. The original Hashable XXH3 end-to-end
 fixture remains integration work; focused C buffer tests alone are not evidence
@@ -238,7 +258,7 @@ initializer calls `registerForeignExports` with native closure addresses.
 
 THC's existing Sulong integration executes bounded original MD5 C over managed
 buffer views. It does not implement GHC's closure ABI, RTS capabilities,
-stable-pointer representation, callbacks into THC, foreign-export rooting or
+native GHC stable-pointer representation, callbacks into THC, foreign-export rooting or
 bound-thread scheduling. Compiling the original C to LLVM would still leave
 those obligations. Linking it to a host GHC RTS would invoke native Haskell,
 not the THC closures, and is not a supported substitution.
