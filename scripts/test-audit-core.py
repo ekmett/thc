@@ -80,6 +80,66 @@ class AggregateHeapFieldTest(unittest.TestCase):
             self.assertTrue(self.check(copy.deepcopy(self.sum_rep), mutation))
 
 
+class ReportReachabilityTest(unittest.TestCase):
+    def test_first_discovery_forest_preserves_roots_cycles_and_diagnostic_paths(self):
+        bindings = [
+            bind('root', ['app', var('left'), [var('right')], [True]]),
+            bind('second', var('shared')),
+            bind('retained', var('retainedMissing')),
+            bind('left', var('shared')),
+            bind('right', var('root')),
+            bind('shared', ['let', False, [bind('bad', ['lit', 'unknown-kind', 'x'])], var('missing')]),
+        ]
+        module = dict(schema=1, ghc='9.14.1', bindings=bindings, constructors=[])
+        auditor = audit_core.Audit([('first.json', module)], CAP)
+        auditor.retained_exports = ['retained']
+        report = auditor.run(['root', 'second', 'root', 'absent'])
+        self.assertEqual(2, report['schema'])
+        self.assertFalse(report['accepted'])
+        self.assertEqual(['root', 'second', 'root'], report['roots'])
+        self.assertEqual(['retained'], report['retainedExports'])
+        self.assertEqual(dict(suppliedBindings=6, reachableBindings=6, missingGlobals=2, issues=2), report['summary'])
+        self.assertEqual([dict(id=key, source='first.json', predecessor=parent) for key, parent in (
+            ('root', None), ('second', None), ('retained', None),
+            ('left', 'root'), ('right', 'root'), ('shared', 'second'))], report['reachableBindings'])
+        self.assertEqual([
+            dict(code='entry-resolution', owner=None, path='absent', detail=dict(candidates=[])),
+            dict(code='unsupported-literal', owner='shared', path='/expr/bindings/0/rhs',
+                 detail='unknown-kind', reachableVia=['second', 'shared']),
+        ], report['issues'])
+        self.assertEqual([
+            dict(id='missing', reachableVia=['second', 'shared', 'missing'],
+                 references=[dict(owner='shared', path='/expr/body')]),
+            dict(id='retainedMissing', reachableVia=['retained', 'retainedMissing'],
+                 references=[dict(owner='retained', path='/expr')]),
+        ], report['missingGlobals'])
+        self.assertEqual(7, len(report['dependencies']))
+
+    def test_long_chains_have_linear_reports_and_complete_tail_diagnostics(self):
+        sizes = []
+        for count in (5000, 10000):
+            with self.subTest(count=count):
+                keys = [f'node{index:05d}' for index in range(count)]
+                # Keep dependency depth separate from root type inference: each
+                # ordinary local RHS reaches the next global in the chain.
+                bindings = [bind(key, ['let', False, [bind('edge', var(keys[index + 1]))], lit(0)])
+                            for index, key in enumerate(keys[:-1])]
+                bindings.append(bind(keys[-1], ['let', False,
+                    [bind('bad', ['lit', 'unknown-kind', 'x'])], var('missing')]))
+                module = dict(schema=1, ghc='9.14.1', bindings=bindings, constructors=[])
+                report = audit_core.Audit([('chain.json', module)], CAP).run([keys[0]])
+                self.assertFalse(report['accepted'])
+                self.assertEqual(dict(suppliedBindings=count, reachableBindings=count,
+                                      missingGlobals=1, issues=1), report['summary'])
+                self.assertEqual(keys, report['issues'][0]['reachableVia'])
+                self.assertEqual(keys + ['missing'], report['missingGlobals'][0]['reachableVia'])
+                self.assertEqual(count, len(report['dependencies']))
+                self.assertEqual(keys[-2], report['reachableBindings'][-1]['predecessor'])
+                sizes.append(len(json.dumps(report)))
+        self.assertEqual(2, len(sizes))
+        self.assertLess(sizes[1], sizes[0] * 2.1)
+
+
 class ReportStreamTest(unittest.TestCase):
     def test_report_stream_matches_previous_format_without_one_large_write(self):
         class Sink(io.StringIO):
