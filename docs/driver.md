@@ -188,12 +188,13 @@ these are separate choices, not an implicit fallback after an interface error.
 The explicit `.cabal` path does not yet support the installed provider.
 
 An optional `--ghc-source DIR` supplies the matching configured GHC 9.14.1
-source tree when original `Conc.Bound` or `System.Posix.Internals` interfaces lack
+source tree when original `Conc.Bound`, `System.Posix.Internals`, or Unix's
+`System.Posix.Files.PosixString` interfaces lack
 THC's typed foreign annotations. It requires `--installed-core required` and
 currently supports native x86_64/aarch64 Linux with the original
-`_build/stage1/libraries/ghc-internal/setup-config`, built interfaces and generated
-headers intact. The selected compiler remains the native compiler. Only missing
-annotations trigger genuine two-module compilation into an acquisition-only
+`_build/stage1/libraries/{ghc-internal,unix}/setup-config`, built interfaces and generated
+sources/headers intact. The selected compiler remains the native compiler. Only missing
+annotations trigger genuine selected-module compilation into an acquisition-only
 cache; no installed compiler, native library or existing ZIP is changed.
 Source/interface mismatches and present but invalid provenance fail explicitly.
 See [the producer and cache contract](interface-foreign.md#typed-annotations-and-ordinary-acquisition).
@@ -326,6 +327,23 @@ provider. It uses the same `THC_INSTALLED_CORE_GHC`,
 `THC_INSTALLED_CORE_GHC_PKG` and `THC_INSTALLED_CORE_GHC_SOURCE` settings as the
 other full-Core tests. The JVM controls additionally cover pointer aliasing,
 context isolation, ABI rejection and first-installed calls on both backends.
+
+## Original file removal
+
+The original Unix `unlink` import uses the explicitly authorized native file
+provider. Paths retain their raw bytes and resolve relative to the context's
+working directory; removal follows native symlink and open-file semantics.
+Failures expose the native errno, while success leaves the previous errno
+unchanged. Invalid or retired path storage rejects before any filesystem effect.
+An arbitrary embedding context does not acquire this authority merely by
+enabling native access or ordinary Truffle IO access.
+
+`cabal test unlink-full-core -ffull-core-tests` compares ordinary
+`System.Directory.removeFile` with native GHC, including a caught missing-file
+error, using the same installed-Core settings as the environment test. JVM
+controls cover byte-preserving relative names, symlinks, open descriptors,
+directory rejection, invalid arguments and both first-installed backend paths.
+This bounded operation is not general directory or process support.
 
 ## What the plan means
 

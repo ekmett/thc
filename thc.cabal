@@ -214,6 +214,9 @@ extra-source-files:
   test/fixtures/run-environment/cabal.project
   test/fixtures/run-environment/run-environment.cabal
   test/fixtures/run-environment/app/Main.hs
+  test/fixtures/run-unlink/cabal.project
+  test/fixtures/run-unlink/run-unlink.cabal
+  test/fixtures/run-unlink/app/Main.hs
   test/fixtures/run-pure/run-pure.cabal
   test/fixtures/run-pure/app/Main.hs
   test/fixtures/run-pure/app/Answer.hs
@@ -515,6 +518,30 @@ test-suite environment-full-core
   if !flag(full-core-tests)
     buildable: False
   main-is: EnvironmentFullCore.hs
+  hs-source-dirs: test/haskell-driver
+  other-modules: TestSupport
+  build-tool-depends: thc:thc
+  build-depends:
+    base >= 4.22 && < 4.23,
+    aeson >= 2.3 && < 2.4,
+    bytestring >= 0.12.2 && < 0.13,
+    directory >= 1.3.10 && < 1.4,
+    filepath >= 1.5.4 && < 1.6,
+    HUnit >= 1.6 && < 1.7,
+    process >= 1.6.26 && < 1.7,
+    text >= 2.1 && < 2.2,
+    vector >= 0.13 && < 0.14,
+    zip-archive >= 0.4.3.2 && < 0.5
+  default-language: Haskell2010
+  ghc-options: -Wall
+  if flag(development)
+    ghc-options: -Werror
+
+test-suite unlink-full-core
+  type: exitcode-stdio-1.0
+  if !flag(full-core-tests)
+    buildable: False
+  main-is: UnlinkFullCore.hs
   hs-source-dirs: test/haskell-driver
   other-modules: TestSupport
   build-tool-depends: thc:thc

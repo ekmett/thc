@@ -81,6 +81,7 @@ OPERATIONS = {
     'memcpy': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', 'Word64Rep', None), (None, 'AddrRep')),
     'strlen': ('ccall', 'unsafe', ('AddrRep', None), (None, 'IntRep')),
     'getenv': ('ccall', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
+    'unlink': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Int32Rep')),
     'putenv': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Int32Rep')),
     '__hsbase_unsetenv': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Int32Rep')),
     '__hscore_environ': ('ccall', 'unsafe', (None,), (None, 'AddrRep')),

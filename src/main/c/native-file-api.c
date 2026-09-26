@@ -43,6 +43,12 @@ int64_t thc_file_open_raw(int *lease, const char *path, int flags, uint32_t mode
   return fd < 0 ? -1 : 0;
 }
 
+int64_t thc_file_unlink(const char *path, int64_t *error) {
+  int result = unlink(path);
+  *error = result < 0 ? errno : 0;
+  return result;
+}
+
 int64_t thc_file_open(int *lease, const char *path, int mode, int64_t *error) {
   int flags;
   switch (mode) {

@@ -33,6 +33,8 @@ tests = TestLabel "installed foreign regeneration decisions" $ TestList
         (missingForeignProof bound (object []))
       assertEqual "old Posix interface needs the typed producer" (Right True)
         (missingForeignProof posix (object []))
+      assertEqual "original configured Unix import stubs need the typed producer" (Right True)
+        (missingForeignProof "System.Posix.Files.PosixString" (object []))
   , TestCase $ do
       assertEqual "complete verified export evidence is not regenerated" (Right False)
         (missingForeignProof bound (object ["staticForeignExports" .= object [],
@@ -114,6 +116,9 @@ viewTests env = TestLabel "acquisition view preserves native registration" $ Tes
     -- unchanged ABI/registration would miss it. Neither copy is loaded as Core.
     originalDynamic <- maybe (fail "missing Bound interface") pure
       (lookup "GHC.Internal.Conc.Bound" (installedInterfaces original))
+    originalVanilla <- canonicalizePath (replaceExtension originalDynamic "hi")
+    viewedVanilla <- canonicalizePath (view </> "interfaces/GHC/Internal/Conc/Bound.hi")
+    assertEqual "composed views retain vanilla dependency interfaces" originalVanilla viewedVanilla
     let dependency = directory </> "dependency"
         dynamic = dependency </> "GHC/Internal/Conc/Bound.dyn_hi"
         vanilla = replaceExtension dynamic "hi"

@@ -99,7 +99,7 @@
     "ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR",
     "ghczuwrapperZC0ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuEND",
     "hs_free_stable_ptr",
-    "malloc", "realloc", "free", "memmove", "memcpy", "strlen",
+    "malloc", "realloc", "free", "memmove", "memcpy", "strlen", "unlink",
     "getenv", "putenv", "__hsbase_unsetenv", "__hscore_environ",
     "getOrSetSystemEventThreadEventManagerStore",
     "getOrSetGHCConcSignalSignalHandlerStore",
