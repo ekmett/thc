@@ -99,7 +99,7 @@ All active targets must remain installed after each row. Callback orchestration
 is Kotlin-inlined to keep virtual frames out of heap closures; expected retry and
 conflict signals do not trigger an interpreter transfer at storage boundaries.
 
-The eleven transaction-protocol tests and strict audit mutation controls run in
+The twelve transaction-protocol tests and strict audit mutation controls run in
 ordinary CI. The original-Core/native tests have a required explicit
 `stmFullCoreTest` gate, using the existing full-Core source set, a hashed native
 receipt and no cached test success. Missing fixtures fail, never skip. Even a

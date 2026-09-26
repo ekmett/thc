@@ -7,6 +7,7 @@ import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.Instruction
 import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.NodeUtil
+import com.oracle.truffle.api.source.Source
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Timeout
@@ -119,9 +120,36 @@ class ThreadStatusNativeTest {
                     .option("engine.SingleTierCompilationThreshold", "10000000")
                     .option("engine.CompilationFailureAction", "Throw").build().use { context ->
                     val source = File(directory, "$stage/core/ThreadStatusAudit.json")
-                    val function = context.eval("thc", CoreModules.request(listOf(source.path), entry,
-                        backend = backend, asyncExceptions = asyncExceptions))
+                    context.initialize("thc"); context.enter()
+                    val loaded = try {
+                        // Keep the actual public parser's result so this test can
+                        // inspect its installed dispatch graph, not reconstruct a
+                        // private Program or load independent CAFs for each root.
+                        Language.currentState().env.parsePublic(Source.newBuilder("thc",
+                            CoreModules.request(listOf(source.path), entry, backend = backend,
+                                asyncExceptions = asyncExceptions), "thread-status-request").build()).call() as EntryValue
+                    } finally { context.leave() }
+                    val function = context.asValue(loaded)
+                    val host = EntryValue::class.java.getDeclaredField("guestTarget").run {
+                        isAccessible = true
+                        get(loaded) as RootCallTarget
+                    }
                     repeat(3) { assertEquals(expected, function.execute(0L).asLong(), label) }
+                    context.enter()
+                    val active = try {
+                        targets(host).onEach { target ->
+                            target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                            assertTrue(valid(target), label)
+                        }
+                    } finally { context.leave() }
+                    val observations = active.filter {
+                        val identity = (it.rootNode as? GuestRoot)?.coreIdentity
+                        identity?.moduleName == "ThreadStatusAudit" && identity.occurrence == "observe"
+                    }
+                    assertTrue(observations.isNotEmpty(), "$label retains the real threadStatus# body")
+                    // Public compile installs the entry and bridge, not every
+                    // residual callee. The traversal above installs those too;
+                    // no guest invocation occurs between compilation and check.
                     assertTrue(function.invokeMember("compile").asBoolean(), label)
                     val before = Json.parse(function.getMember("diagnostics").asString()) as Map<*, *>
                     assertEquals(backend, before["backend"], label)
@@ -131,6 +159,7 @@ class ThreadStatusNativeTest {
                     assertTrue((after["compiledEntries"] as Number).toLong() -
                         (before["compiledEntries"] as Number).toLong() >= 2,
                         "$label entry and retained threadStatus# body enter installed code")
+                    for (target in observations) assertTrue(valid(target), "$label first call preserves ${target.rootNode.name}")
                     assertEquals(0L, after["unsupportedTraps"], label)
                 }
             }
