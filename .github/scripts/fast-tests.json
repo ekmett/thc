@@ -330,8 +330,12 @@
       "junit": ["thc.runtime.DelimitedContinuationsTest"], "python": []
     },
     "src/test/kotlin/thc/runtime/ThreadInventoryCoreEvidence.kt": {
-      "junit": ["thc.runtime.ThreadInventoryNativeTest", "thc.runtime.DelimitedContinuationsTest"], "python": []
+      "junit": ["thc.runtime.ThreadInventoryNativeTest", "thc.runtime.DelimitedContinuationsTest", "thc.runtime.StableNamesTest"], "python": []
     },
+    "src/main/kotlin/thc/runtime/StableNames.kt": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
+    "examples/StableNames.hs": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
+    "compiler/test-fixtures/StableNamesNative.hs": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
+    "test/haskell-fixtures/StableNameFixtures.hs": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
     "test/haskell-fixtures/HintTraceFixtures.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
     "compiler/test-fixtures/HintTraceAudit.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
     "compiler/test-fixtures/HintTraceNative.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
@@ -952,6 +956,7 @@
     },
     "src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt": {
       "junit": [
+        "thc.runtime.StableNamesTest",
         "thc.runtime.AtomicAddressTest",
         "thc.runtime.AtomicIntArrayTest",
         "thc.runtime.DelimitedContinuationsTest",
@@ -1347,6 +1352,7 @@
     "test/haskell-fixtures/Main.hs": {
       "junit": [
         "thc.runtime.SimdAddressFamiliesTest",
+        "thc.runtime.StableNamesTest",
         "thc.runtime.FloatingRemainderTest",
         "thc.runtime.AlignedScalarMemoryTest",
         "thc.runtime.IntegerCompletionTest",

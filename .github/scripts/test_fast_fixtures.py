@@ -19,6 +19,33 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_stable_names_keep_native_values_and_closed_artifacts(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        cache = fast_fixtures.fast_inputs
+        group = manifest['groups']['stable-names']
+        self.assertEqual('stable-names', owners['thc.runtime.StableNamesTest'])
+        self.assertIn('test/haskell-fixtures/StableNameFixtures.hs', group['sources'])
+        self.assertIn('"$fixture_bin" stable-names', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertEqual(50, len(cache.STABLE_NAME_OUTPUTS))
+        self.assertTrue(cache.STABLE_NAME_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
+        name = 'build/stable-names/manifest.json'
+        artifacts = {}
+        for item in cache.STABLE_NAME_OUTPUTS - {name}:
+            path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
+        receipt = dict(schema=1, ghc='9.14.1', entries=list(cache.STABLE_NAME_ENTRIES), stages=['pre', 'post'],
+                       native=[0] * 20, artifactHashes=artifacts)
+        (self.root / name).write_text(json.dumps(receipt))
+        self.assertEqual(cache.STABLE_NAME_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+        for bad in (dict(receipt, schema=True), dict(receipt, ghc='9.12.2'), dict(receipt, entries=[]),
+                    dict(receipt, native=[0] * 19), dict(receipt, native=[False] * 20),
+                    dict(receipt, stages=['pre']), dict(receipt, artifactHashes={})):
+            with self.assertRaises(cache.CacheMiss): cache.stable_name_artifact_hashes(bad)
+        self.assertFalse(cache.allowed_payload('build/stable-names/unknown.json', {}))
+        (self.root / 'build/stable-names/commands/native-run.stdout').write_text('mutated')
+        with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+
     def test_hint_trace_has_native_fixture_and_complete_cache_scope(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

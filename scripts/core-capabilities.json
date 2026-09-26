@@ -1234,6 +1234,8 @@
     "maxDouble#": 2,
     "newMutVar#": 2,
     "makeStablePtr#": 2,
+    "makeStableName#": 2,
+    "stableNameToInt#": 1,
     "deRefStablePtr#": 2,
     "eqStablePtr#": 2,
     "mkWeak#": 4,
@@ -6655,6 +6657,10 @@
     "deRefWeak#": {"arguments": ["weak", "state"], "result": ["state", "flag", "boxed"]},
     "finalizeWeak#": {"arguments": ["weak", "state"], "result": ["state", "flag", "action"]},
     "addCFinalizerToWeak#": {"arguments": ["address", "address", "flag", "address", "weak", "state"], "result": ["state", "flag"]}
+  },
+  "managedStableNamePrimitives": {
+    "makeStableName#": {"arguments": ["boxed", "state"], "result": ["state", "name"]},
+    "stableNameToInt#": {"arguments": ["name"], "result": "int"}
   },
   "managedStablePtrPrimitives": {
     "makeStablePtr#": {"arguments": ["lifted", "state"], "result": ["state", "address"]},

@@ -2954,6 +2954,22 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class MakeStableName {
+        @Specialization public static void make(VirtualFrame frame, LocalAccessor destination,
+                Object value, Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    StableNames.current(node).make(value));
+        }
+    }
+    @Operation public static final class HashStableName {
+        @Specialization public static long hash(Object value, @Bind Node node) {
+            return StableNames.current(node).hash(value);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = StablePointerOp.class, name = "operation")
     public static final class StablePointerTuple {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,

@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "272c40361679f6e92e412d476b47b429bf6f7f0e456e46c9e4fa5cb1c7fc2782"
+FULL_PREPARATION_PLAN = "747c164368eaa0867d04ae8d790485454f63b774fb8d58075ad63f23a11d9f20"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/address-array-copy", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -34,6 +34,7 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
     "build/original-fd-ready", "build/simd-calls",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    *fast_inputs.STABLE_NAME_OUTPUTS,
     *fast_inputs.DELIMITED_OUTPUTS,
     *fast_inputs.THREAD_INVENTORY_OUTPUTS,
     "build/aligned-scalar-memory/manifest.json", "build/aligned-scalar-memory/oracle.tsv",
@@ -320,6 +321,10 @@ def _output_hashes(root, group):
     if group["outputs"] == ["build/simd-address-families"]:
         name = "build/simd-address-families/manifest.json"
         expected = fast_inputs.simd_address_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
+    if group["outputs"] == ["build/stable-names"]:
+        name = "build/stable-names/manifest.json"
+        expected = fast_inputs.stable_name_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
         return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/scalar-memory-utilities"]:
         name = "build/scalar-memory-utilities/manifest.json"
