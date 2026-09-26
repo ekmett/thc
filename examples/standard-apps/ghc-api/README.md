@@ -72,8 +72,14 @@ installed-Core cache when resuming: acquisition is expensive, but unchanged
 compiler bundles can be reused by these probes and other compiler-library apps.
 
 This demonstrates FastString interning through the real compiler library, not
-general GHC API or GHCi/native object-loader support. `runGhc` session creation
-and module load/typecheck are still being tested. Compiler RTS hook tests are
+general GHC API or GHCi/native object-loader support. The subsequent `runGhc`
+session probe acquired successfully, then failed strict admission before guest
+execution: 370,616 supplied bindings, 26,818 reachable bindings, 99 unresolved
+foreign identifiers and 186 issues. The unresolved identifiers are secondary to
+unimplemented foreign calls, not 99 missing Haskell modules. The frontier includes
+additional compiler-global CAF hooks, event/process calls, unsupported literals,
+and aggregate boundaries; the retained report is `build/ghc-api/guest-session/audit.json`.
+Module load/typecheck has not yet run in THC. Compiler RTS hook tests are
 separate lower-level coverage. `runGhc` temporarily installs process signal
 handlers; merely importing the `ghc` package does not. See the
 [standalone signal policy](../../../docs/process-signals.md) before embedding.

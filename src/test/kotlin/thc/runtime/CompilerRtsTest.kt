@@ -85,4 +85,42 @@ class CompilerRtsTest {
         assertThrows(RuntimeFault::class.java) { registry.dereference(winner) }
         foreign.close()
     }
+
+    @Test fun everySharedSlotHasOneConcurrentWinnerAndIndependentLifetime() {
+        val registry = StablePointers()
+        val foreign = StablePointers()
+        val pool = Executors.newFixedThreadPool(4)
+        val none = ManagedAddress.nullAddress()
+        val winners = mutableListOf<ManagedAddress>()
+        try {
+            for (slot in SharedCAFStore.entries) {
+                assertSame(none, registry.getOrSetSharedCAF(slot, none))
+                val candidates = List(16) { registry.make(Any()) }
+                val values = pool.invokeAll(candidates.map { candidate ->
+                    Callable { registry.getOrSetSharedCAF(slot, candidate) }
+                }).map { it.get(20, TimeUnit.SECONDS) }
+                val winner = values.first()
+                assertTrue(values.all { registry.equal(winner, it) })
+                assertTrue(winners.none { registry.equal(winner, it) })
+                winners += winner
+                for (candidate in candidates) {
+                    if (registry.equal(candidate, winner))
+                        assertThrows(RuntimeFault::class.java) { registry.free(candidate) }
+                    else registry.free(candidate)
+                }
+                assertNotNull(registry.dereference(registry.getOrSetSharedCAF(slot, none)))
+                assertSame(none, foreign.getOrSetSharedCAF(slot, none))
+                assertThrows(RuntimeFault::class.java) { foreign.getOrSetSharedCAF(slot, winner) }
+                assertThrows(RuntimeFault::class.java) { registry.getOrSetSharedCAF(slot, foreign.make(Any())) }
+            }
+            registry.close()
+            for (winner in winners) assertThrows(RuntimeFault::class.java) { registry.dereference(winner) }
+            for (slot in SharedCAFStore.entries)
+                assertThrows(RuntimeFault::class.java) { registry.getOrSetSharedCAF(slot, none) }
+        } finally {
+            pool.shutdownNow()
+            registry.close()
+            foreign.close()
+        }
+    }
 }

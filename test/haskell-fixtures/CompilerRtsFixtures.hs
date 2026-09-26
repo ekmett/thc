@@ -6,6 +6,7 @@ module CompilerRtsFixtures (prepareCompilerRts) where
 import Control.Monad (forM, unless)
 import qualified Data.ByteString.Char8 as BS
 import Data.List (nubBy)
+import Data.IORef (readIORef)
 import Data.Aeson (object, (.=))
 import FixtureSupport
 import GHC hiding (entry, exprType)
@@ -19,6 +20,7 @@ import GHC.Iface.Binary
 import GHC.Runtime.Interpreter (wormhole)
 import GHC.Unit.Module.WholeCoreBindings (emptyIfaceForeign)
 import GHC.Types.Avail (availName)
+import qualified GHC.Utils.GlobalVars as Globals
 import qualified GHC.Types.ForeignCall as F
 import System.Directory (createDirectoryIfMissing)
 import System.Environment (lookupEnv)
@@ -34,7 +36,14 @@ symbol v = case isFCallId_maybe v of
   Just (F.CCall (F.CCallSpec (F.StaticTarget _ name (Just unit) True) F.CCallConv F.PlayRisky))
     | unitString unit == "ghc-9.14.1-inplace", unpackFS name `elem` targets -> Just (unpackFS name)
   _ -> Nothing
-  where targets = ["keepCAFsForGHCi", "getOrSetLibHSghcFastStringTable"]
+  where targets = map snd compilerCalls
+
+compilerCalls :: [(String, String)]
+compilerCalls =
+  [("Keep", "keepCAFsForGHCi"), ("Fast", "getOrSetLibHSghcFastStringTable"),
+   ("Ppr", "getOrSetLibHSghcGlobalHasPprDebug"),
+   ("NoDebug", "getOrSetLibHSghcGlobalHasNoDebugOutput"),
+   ("NoState", "getOrSetLibHSghcGlobalHasNoStateHack")]
 
 variables :: CoreExpr -> [Id]
 variables expr = case expr of
@@ -62,8 +71,8 @@ prepareCompilerRts root = do
   unless (oneLine version == "9.14.1") (die "Compiler RTS fixture requires GHC9.14.1")
   library <- execute "libdir" [] ghc ["--print-libdir"]
   imports <- execute "imports" [] pkg ["field", "ghc", "import-dirs", "--simple-output"]
-  let interfaces = map (oneLine imports </>) ["GHC.hi", "GHC/Data/FastString.hi"]
-      entries = ["originalKeep", "originalFast", "uniqueCells"]
+  let interfaces = map (oneLine imports </>) ["GHC.hi", "GHC/Data/FastString.hi", "GHC/Utils/GlobalVars.hi"]
+      entries = map (("original" ++) . fst) compilerCalls ++ ["uniqueCells"]
   rows <- runGhc (Just (oneLine library)) $ do
     initial <- getSessionDynFlags
     env0 <- getSession
@@ -80,7 +89,7 @@ prepareCompilerRts root = do
       recovered <- loadInterfaceCore env (mi_module raw) path
       actual <- maybe (die "Installed compiler lacks complete Core") pure recovered
       pure [v | (_, body) <- flattenBinds (interfaceBindings actual), v <- variables body, symbol v /= Nothing]
-    liftIO $ unless (length originals == 2) (die "Missing genuine compiler RTS declarations")
+    liftIO $ unless (length originals == length compilerCalls) (die "Missing genuine compiler RTS declarations")
     file <- guessTarget (root </> source) Nothing Nothing
     setTargets [file]
     graph <- depanal [] False
@@ -104,8 +113,8 @@ prepareCompilerRts root = do
             let applied = simpleOptExpr (initSimpleOpts flags) (App (resolve body) (Var original))
             in (setIdArity (setIdType (setIdInfo v vanillaIdInfo) (exprType applied)) (exprArity applied), applied)
           _ -> error ("Original compiler FCallId differs from typed consumer " ++ name)
-        guests = [specialize "originalKeep" "keepCAFsForGHCi", specialize "originalFast" "getOrSetLibHSghcFastStringTable",
-                  select "uniqueCells"] ++ [(v, body) | (v, body) <- bindings, getOccString v `elem` ["counter", "increment"]]
+        guests = [specialize ("original" ++ name) target | (name, target) <- compilerCalls] ++
+                  [select "uniqueCells"] ++ [(v, body) | (v, body) <- bindings, getOccString v `elem` ["counter", "increment"]]
         adapted = optimized { mg_binds = [NonRec v body | (v, body) <- guests],
                               mg_exports = filter (\a -> availName a `elem` map (varName . fst) guests) (mg_exports optimized) }
     liftIO $ do
@@ -117,10 +126,13 @@ prepareCompilerRts root = do
           let (_, body) = specialize name target
           (value, _, _) <- hscCompileCoreExpr current noSrcSpan (mkLets (mg_binds optimized) body)
           wormhole (hscInterp current) value
-    keep <- native "nativeKeep" "keepCAFsForGHCi"
-    fast <- native "nativeFast" "getOrSetLibHSghcFastStringTable"
-    let functions = [("originalKeep", unsafeCoerce keep :: Int -> Int),
-                     ("originalFast", unsafeCoerce fast :: Int -> Int)]
+    -- Initialize genuine native compiler CAFs before querying their slots:
+    -- test values must never replace an IORef Bool belonging to this GHC.
+    liftIO $ mapM_ readIORef [Globals.v_unsafeHasPprDebug, Globals.v_unsafeHasNoDebugOutput,
+                            Globals.v_unsafeHasNoStateHack]
+    functions <- forM compilerCalls $ \(name, target) -> do
+      value <- native ("native" ++ name) target
+      pure ("original" ++ name, unsafeCoerce value :: Int -> Int)
     liftIO $ forM [(name, f, x) | (name, f) <- functions, x <- [-17, 0, 1, 42, 65535]] $ \(name, f, x) -> do
       let result = f x
       unless (result == x + 1) (die "Native original compiler RTS observation differs")
@@ -151,4 +163,4 @@ prepareCompilerRts root = do
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= entries,
      "consumerKind" .= ("typed test consumers specialized with genuine installed compiler FCallIds; original address symbols" :: String),
      "interfaceHashes" .= interfaceHashes, "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]
-  putStrLn "compiler-rts: genuine keepCAFs/FastString FCallIds and native unique cells; pre/post strict audits"
+  putStrLn "compiler-rts: genuine compiler shared-CAF/keepCAFs FCallIds and native unique cells; pre/post strict audits"

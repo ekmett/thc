@@ -12,9 +12,7 @@ internal class StablePointers {
     internal class Handle(val owner: StablePointers, val id: Long)
     private class Entry(val handle: Handle, val value: Any?)
     private val entries = HashMap<Long, Entry>()
-    private var eventManagerStore: Handle? = null
-    private var signalHandlerStore: Handle? = null
-    private var fastStringStore: Handle? = null
+    private val sharedCAFStores = arrayOfNulls<Handle>(SharedCAFStore.entries.size)
     private var nextId = 1L
     private var disposed = false
 
@@ -50,7 +48,7 @@ internal class StablePointers {
     @Synchronized @TruffleBoundary
     fun free(address: ManagedAddress) {
         val handle = entry(address).handle
-        if (handle === eventManagerStore || handle === signalHandlerStore || handle === fastStringStore)
+        if (sharedCAFStores.any { it === handle })
             fault("RTS shared CAF StablePtr# remains owned until context disposal")
         entries.remove(handle.id)
     }
@@ -59,26 +57,16 @@ internal class StablePointers {
     fun getOrSetSharedCAF(store: SharedCAFStore, candidate: ManagedAddress): ManagedAddress {
         if (disposed) fault("StablePtr context is closed")
         val supplied = if (candidate === ManagedAddress.nullAddress()) null else entry(candidate).handle
-        val current = when (store) {
-            SharedCAFStore.EVENT_MANAGER -> eventManagerStore
-            SharedCAFStore.SIGNAL_HANDLER -> signalHandlerStore
-            SharedCAFStore.FAST_STRING -> fastStringStore
-        }
+        val current = sharedCAFStores[store.ordinal]
         if (current != null) return ManagedAddress.fromStableHandle(current)
         if (supplied == null) return ManagedAddress.nullAddress()
-        when (store) {
-            SharedCAFStore.EVENT_MANAGER -> eventManagerStore = supplied
-            SharedCAFStore.SIGNAL_HANDLER -> signalHandlerStore = supplied
-            SharedCAFStore.FAST_STRING -> fastStringStore = supplied
-        }
+        sharedCAFStores[store.ordinal] = supplied
         return candidate
     }
 
     @Synchronized fun close() {
         disposed = true
-        eventManagerStore = null
-        signalHandlerStore = null
-        fastStringStore = null
+        sharedCAFStores.fill(null)
         entries.clear()
     }
 
