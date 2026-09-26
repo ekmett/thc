@@ -187,7 +187,9 @@ readJson path = BS.readFile path >>= \bytes -> case eitherDecodeStrict' bytes of
 
 readCore :: FilePath -> FilePath -> IO Value
 readCore bundle member = do
-  bytes <- BL.readFile bundle
+  -- The caller may replace the archive after inspecting one member. Do not
+  -- retain a lazy read handle for uninspected ZIP members until a later GC.
+  bytes <- BL.fromStrict <$> BS.readFile bundle
   archive <- either fail pure (toArchiveOrFail bytes)
   entry <- maybe (fail ("missing ZIP member " ++ member)) pure
            (findEntryByPath member archive)

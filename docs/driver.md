@@ -213,6 +213,17 @@ metadata, and revalidates it on cache reads. Referenced foreign calls still pass
 the normal strict audit. A missing capture for a library with Haskell modules
 still fails; no replacement Core is invented.
 
+A reexport-only store library, such as the top-level `happy-lib` component,
+also owns no Core. Its bundle retains the original registration separately as
+`reexportRegistration`. The driver accepts only definite reexports, preserves
+their exposed names and original provider unit/module identities, and checks
+each provider against the resolved dependency closure and captured module
+inventory before writing the executable manifest. Renaming an exposed module
+does not rename or synthesize its provider's Core. Hidden or ordinary owned
+modules still require actual exports. `cabal test driver-tests
+--test-options=--store-inventory-only --test-show-details=direct` exercises empty,
+C-only and renamed-reexport store dependencies, both backends, and cache reuse.
+
 This is a bounded executable path. Native code remains necessary for Template
 Haskell and build tools. THC still rejects unsupported runtime dependencies;
 the default pinned provider rejects ordinary `putStrLn`. This path does not
