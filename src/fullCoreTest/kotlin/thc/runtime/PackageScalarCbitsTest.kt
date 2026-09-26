@@ -6,8 +6,10 @@ package thc.runtime
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.Instruction
+import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.NodeUtil
+import com.oracle.truffle.api.nodes.RootNode
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -110,6 +112,35 @@ class PackageScalarCbitsTest {
     private fun identity(record: Map<String, Any?>, row: Map<String, Any?>) =
         "${record["unit"]}:${row["module"]}.${row["entry"]}"
 
+    private class ScalarCallRoot(language: Language, private val call: PackageScalarCall) : RootNode(language) {
+        @Child private var access = PackageScalarAccess(call)
+        override fun getName() = "package scalar access ${call.signature.symbol}"
+        override fun execute(frame: VirtualFrame): Any {
+            val arguments = frame.arguments[0] as Array<Any?>
+            val state = frame.arguments[1]
+            return when (call.result) {
+                "Int32Rep", "Int64Rep" -> access.executeLong(arguments, state)
+                "FloatRep" -> access.executeFloat(arguments, state)
+                "DoubleRep" -> access.executeDouble(arguments, state)
+                else -> error("Unexpected test ABI")
+            }
+        }
+    }
+
+    private fun checkNestedForeignScope(threads: GuestThreads, action: () -> Unit) {
+        val previous = threads.enterForeign()
+        try {
+            assertEquals(GuestThreads.DeliveryPermission.NONE, previous)
+            action()
+            val nested = threads.enterForeign()
+            try { assertEquals(GuestThreads.DeliveryPermission.FOREIGN, nested, "scalar call restores its outer foreign extent") }
+            finally { threads.leaveForeign(nested) }
+        } finally { threads.leaveForeign(previous) }
+        val restored = threads.enterForeign()
+        try { assertEquals(GuestThreads.DeliveryPermission.NONE, restored, "scalar call leaves no foreign extent") }
+        finally { threads.leaveForeign(restored) }
+    }
+
     @Test fun genuineCabalLibrariesMatchNativeInBothFirstInstalledBackends() {
         val fixture = fixture()
         val rows = fixture.records.flatMap { record -> (record["observations"] as List<Map<String, Any?>>).map { record to it } }
@@ -167,7 +198,9 @@ class PackageScalarCbitsTest {
         context().use { first ->
             first.initialize("thc"); first.enter()
             try {
-                val registry = Language.currentState().packageCbits
+                val owner = Language.currentState()
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val registry = owner.packageCbits
                 fixture.links.forEach(registry::link)
                 fixture.links.forEach(registry::link) // Same component imported by several modules is reusable.
                 val link = fixture.links.first()
@@ -175,27 +208,44 @@ class PackageScalarCbitsTest {
                     registry.link(PackageScalarLink(link.unit + ":alias", link.target, link.componentSha256,
                         link.bitcodeSha256, link.bytes, link.abi))
                 }
-                for (signature in link.abi) {
+                val calls = link.abi.map { signature ->
                     val values: Array<Any?> = signature.arguments.map { when (it) {
-                        "Int32Rep", "Int64Rep" -> 0L; "FloatRep" -> 0.0f; "DoubleRep" -> 0.0
+                        "Int32Rep" -> 0; "Int64Rep" -> 0L; "FloatRep" -> 0.0f; "DoubleRep" -> 0.0
                         else -> error("Unexpected test ABI")
                     } }.toTypedArray()
+                    val target = ScalarCallRoot(language, PackageScalarCall(link, signature)).callTarget
+                    fun invoke(arguments: Array<Any?>) = Calls.target(target, arrayOf(arguments, Unit))
+                    checkNestedForeignScope(owner.threads) { invoke(values) }
+                    invoke(values) // Exercise the cached handle, not just resolution.
+                    assertThrows(RuntimeFault::class.java) { Calls.target(target, arrayOf(values, 0L)) }
                     for (index in values.indices) {
                         val invalid = values.copyOf(); invalid[index] = "not a scalar"
-                        assertThrows(RuntimeFault::class.java) { registry.call(link, signature, invalid) }
+                        assertThrows(RuntimeFault::class.java) { invoke(invalid) }
                         if (signature.arguments[index] == "Int32Rep") {
                             invalid[index] = Int.MAX_VALUE.toLong() + 1
-                            assertThrows(RuntimeFault::class.java) { registry.call(link, signature, invalid) }
+                            assertThrows(RuntimeFault::class.java) { invoke(invalid) }
                         }
                     }
+                    target to values
                 }
                 context().use { second ->
                     second.initialize("thc"); second.enter()
-                    try { assertThrows(RuntimeFault::class.java) { registry.link(link) } }
+                    try {
+                        assertThrows(RuntimeFault::class.java) { registry.link(link) }
+                        for ((target, values) in calls)
+                            assertThrows(RuntimeFault::class.java) { Calls.target(target, arrayOf(values, Unit)) }
+                    }
                     finally { second.leave() }
+                }
+                calls.forEach { (target, values) ->
+                    Calls.target(target, arrayOf(values, Unit))
+                    target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                    valid(target, "cached scalar access before registry close")
                 }
                 registry.close()
                 assertThrows(RuntimeFault::class.java) { registry.link(link) }
+                for ((target, values) in calls)
+                    assertThrows(RuntimeFault::class.java) { Calls.target(target, arrayOf(values, Unit)) }
             } finally { first.leave() }
         }
     }

@@ -1655,8 +1655,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.endStoreLocal()
                         LocalAccessor.constantOf(local)
                     }
-                    b.emitLinkedPackageScalar(BytecodePackageScalarArguments(packageScalar,
-                        locals.dropLast(1).toTypedArray(), locals.last()), destination.single())
+                    val arguments = BytecodePackageScalarArguments(packageScalar,
+                        locals.dropLast(1).toTypedArray(), locals.last())
+                    when (packageScalar.result) {
+                        "Int32Rep", "Int64Rep" -> b.emitLinkedPackageScalarLong(arguments, destination.single())
+                        "FloatRep" -> b.emitLinkedPackageScalarFloat(arguments, destination.single())
+                        "DoubleRep" -> b.emitLinkedPackageScalarDouble(arguments, destination.single())
+                        else -> fault("Invalid package C result representation")
+                    }
                 }
             } else if (stableFree) {
                 CoreStablePointers.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)

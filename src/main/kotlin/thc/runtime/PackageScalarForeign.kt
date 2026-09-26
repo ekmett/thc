@@ -7,8 +7,6 @@ import com.oracle.truffle.api.bytecode.BytecodeNode
 import com.oracle.truffle.api.bytecode.LocalAccessor
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.ExplodeLoop
-import com.oracle.truffle.api.nodes.Node
-import thc.Language
 import thc.PackageScalarLink
 import thc.PackageScalarSignature
 
@@ -72,29 +70,27 @@ internal object CorePackageScalarForeign {
             stored.kind in setOf(kind(rep), CoreKind.UNKNOWN) &&
             (stored.primReps == null || stored.primReps == listOfNotNull(rep)), "stored operand $index")
     }
-    @JvmStatic fun invoke(node: Node, call: PackageScalarCall, values: Array<Any?>, state: Any?): Any {
-        requireVoidCarrier(state)
-        return Language.currentState(node).packageCbits.call(call.link, call.signature, values)
-    }
 }
 
 internal class PackageScalarExpression(private val call: PackageScalarCall,
     @field:Children private var operands: Array<Expr>, proof: CoreRepresentation) : Expr() {
+    @Child private var access = PackageScalarAccess(call)
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("Package C call requires its State/result tuple")
     @ExplodeLoop override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val values = arrayOfNulls<Any>(call.arguments.size)
         for (index in values.indices) values[index] = when (call.arguments[index]) {
-            "Int32Rep", "Int64Rep" -> operands[index].executeRequiredLong(frame)
+            "Int32Rep" -> packageScalarInt32(operands[index].executeRequiredLong(frame))
+            "Int64Rep" -> operands[index].executeRequiredLong(frame)
             "FloatRep" -> operands[index].executeRequiredFloat(frame)
             "DoubleRep" -> operands[index].executeRequiredDouble(frame)
             else -> fault("Invalid package C operand")
         }
-        val result = CorePackageScalarForeign.invoke(this, call, values, operands.last().execute(frame))
+        val state = operands.last().execute(frame)
         when (call.result) {
-            "Int32Rep", "Int64Rep" -> FrameAccess.writeLong(frame, slots[offset], result as Long)
-            "FloatRep" -> FrameAccess.writeFloat(frame, slots[offset], result as Float)
-            "DoubleRep" -> FrameAccess.writeDouble(frame, slots[offset], result as Double)
+            "Int32Rep", "Int64Rep" -> FrameAccess.writeLong(frame, slots[offset], access.executeLong(values, state))
+            "FloatRep" -> FrameAccess.writeFloat(frame, slots[offset], access.executeFloat(values, state))
+            "DoubleRep" -> FrameAccess.writeDouble(frame, slots[offset], access.executeDouble(values, state))
             else -> fault("Invalid package C result")
         }
         return null
@@ -107,7 +103,8 @@ internal class BytecodePackageScalarArguments(val call: PackageScalarCall,
     @ExplodeLoop fun read(bytecode: BytecodeNode, frame: VirtualFrame): Array<Any?> {
         val values = arrayOfNulls<Any>(slots.size)
         for (index in slots.indices) values[index] = when (call.arguments[index]) {
-            "Int32Rep", "Int64Rep" -> slots[index].getLong(bytecode, frame)
+            "Int32Rep" -> packageScalarInt32(slots[index].getLong(bytecode, frame))
+            "Int64Rep" -> slots[index].getLong(bytecode, frame)
             "FloatRep" -> slots[index].getFloat(bytecode, frame)
             "DoubleRep" -> slots[index].getDouble(bytecode, frame)
             else -> fault("Invalid package C argument local")
