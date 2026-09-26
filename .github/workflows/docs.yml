@@ -7,10 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Pages is latest-only: obsolete documentation does not delay the next revision.
+# Let active publications finish; newer runs may replace pending work.
 concurrency:
   group: docs-pages-${{ github.repository }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
