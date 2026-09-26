@@ -34,7 +34,22 @@ class OriginalMemcpyTest {
             reps.mapIndexed { index, rep -> listOf("var", "arg$index", mapOf("rep" to rep)) },
             listOf(false, false, false, false), false, false,
             mapOf("rep" to tuple, "foreignCall" to declaration)))
-        val body = listOf("case", call, "result-tuple", listOf(
+        val callRegion = if (!shadowForeignWithJoin) call else {
+            val joinFormals = reps.mapIndexed { index, rep ->
+                mapOf("id" to "join$index", "lifted" to false, "rep" to rep)
+            }
+            val pair = listOf("app", listOf("con", "tuple2", 2, mapOf("rep" to closure)),
+                listOf(listOf("var", "join3", mapOf("rep" to reps[3])),
+                    listOf("var", "join0", mapOf("rep" to reps[0]))),
+                listOf(false, false), false, false, mapOf("rep" to (tuple + ("evaluated" to true))))
+            val join = mapOf("id" to "original-memcpy-id", "name" to "shadowedForeign", "lifted" to true,
+                "rep" to closure, "expr" to listOf("lam", joinFormals, pair, mapOf("rep" to closure, "resultRep" to tuple)),
+                "joinValueArity" to 4L, "joinResultRep" to tuple, "info" to mapOf("joinArity" to 4L))
+            // The four-argument call is tail-positioned within its own tuple-returning join region.
+            CoreJoins.validate(listOf(join), call, false)
+            listOf("let", false, listOf(join), call, mapOf("rep" to tuple))
+        }
+        val body = listOf("case", callRegion, "result-tuple", listOf(
             listOf("data", "tuple2", listOf("result-state", "result-address"),
                 listOf("var", "result-address", mapOf("rep" to address)),
                 mapOf("binders" to fields.mapIndexed { index, rep ->
@@ -42,14 +57,8 @@ class OriginalMemcpyTest {
                 }))),
             mapOf("rep" to address, "binder" to mapOf("id" to "result-tuple", "lifted" to false,
                 "rep" to (tuple + ("evaluated" to true)))))
-        val joinedBody = if (!shadowForeignWithJoin) body else {
-            val join = mapOf("id" to "original-memcpy-id", "name" to "shadowedForeign", "lifted" to false,
-                "rep" to long, "expr" to listOf("lit", "int", "0", mapOf("rep" to long)),
-                "joinValueArity" to 0L, "joinResultRep" to long, "info" to mapOf("joinArity" to 0L))
-            listOf("let", false, listOf(join), body, mapOf("rep" to address))
-        }
         val binding = mapOf("id" to "copy", "name" to "copy", "arity" to 4, "lifted" to true,
-            "rep" to closure, "expr" to listOf("lam", formals, joinedBody,
+            "rep" to closure, "expr" to listOf("lam", formals, body,
                 mapOf("rep" to closure, "resultRep" to address)))
         return mapOf("schema" to 1, "module" to "SyntheticOriginalMemcpy", "unit" to "test", "ghc" to "9.14.1",
             "instrument" to true, "bindings" to listOf(binding), "constructors" to listOf(
@@ -200,6 +209,13 @@ class OriginalMemcpyTest {
             reject { it["target"] = (it.getValue("target") as Map<String, Any?>) + ("kind" to "dynamic") }
             for (index in 0..3)
                 assertThrows(RuntimeFault::class.java) { program(language, backend, module(stored = mapOf(index to long))) }
+            // The same local join runs normally when it does not claim foreign-call authority.
+            val ordinaryJoin = module(shadowForeignWithJoin = true, changeCall = { it.toMutableList().also { call ->
+                call[6] = (call[6] as Map<String, Any?>) - "foreignCall"
+            } })
+            val ordinaryTarget = program(language, backend, ordinaryJoin).entryTarget("copy")
+            val destination = managed()
+            assertSame(destination, copy(ordinaryTarget, destination, managed(), 1))
             val shadowed = assertThrows(RuntimeFault::class.java) {
                 program(language, backend, module(shadowForeignWithJoin = true))
             }

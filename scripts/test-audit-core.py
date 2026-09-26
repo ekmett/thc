@@ -1703,13 +1703,30 @@ class OriginalMemcpyDeclarationTest(unittest.TestCase):
         reject(lambda module, call: call[6].__setitem__('rep', LONG))
 
         def shadow_with_join(module, call):
-            join = dict(id='synthetic-fcall-id', name='shadowedForeign', lifted=False, rep=LONG,
-                        expr=['lit', 'int', '0', dict(rep=LONG)], joinValueArity=0,
-                        joinResultRep=LONG, info=dict(joinArity=0))
+            output = declaration['resultRep']
+            parameters = [dict(id=f'join-{i}', lifted=False, rep=dict(rep, evaluated=True))
+                          for i, rep in enumerate(declaration['argumentReps'])]
+            pair = ['app', ['con', 'Tuple2', 2, dict(rep=CLOSURE)],
+                    [['var', parameters[i]['id'], dict(rep=parameters[i]['rep'])] for i in (3, 0)],
+                    [False, False], False, False, dict(rep=dict(output, evaluated=True))]
+            join = dict(id='synthetic-fcall-id', name='shadowedForeign', lifted=True, rep=CLOSURE,
+                        expr=['lam', parameters, pair, dict(rep=CLOSURE, resultRep=output)], joinValueArity=4,
+                        joinResultRep=output, info=dict(joinArity=4))
             wrapper = module['bindings'][0]['expr']
-            wrapper[2] = ['let', False, [join], wrapper[2], dict(rep=LONG)]
+            wrapper[2][1] = ['let', False, [join], call, dict(rep=output)]
+            module['constructors'] = [dict(id='Tuple2', name='(#,#)', kind='unboxed-tuple', arity=2,
+                                           fieldReps=[None, None], strictFields=[False, False], fieldLifted=[False, False])]
 
-        reject(shadow_with_join)
+        shadowed = fixture.fixture(declaration)
+        shadow_with_join(shadowed, shadowed['bindings'][0]['expr'][2][1])
+        ordinary = copy.deepcopy(shadowed)
+        del ordinary['bindings'][0]['expr'][2][1][3][6]['foreignCall']
+        self.assertTrue(fixture.audit(ordinary)['accepted'])
+        result = fixture.audit(shadowed)
+        self.assertFalse(result['accepted'], result)
+        self.assertEqual([], result['foreignCalls'])
+        self.assertTrue(any('unresolved declared foreign variable required' in issue['detail']
+                            for issue in result['issues']), result)
 
 
 class OriginalStringRtsDeclarationTest(unittest.TestCase):
