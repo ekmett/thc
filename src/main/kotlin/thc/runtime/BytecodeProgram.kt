@@ -816,6 +816,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             is ManagedAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
         }, evaluated = true))
     private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expression {
+        CoreStateApplications.inline(expr)?.let { return compile(it, scope, tail) }
         val source = sources.expression(expr, scope.source)
         val value = try {
             val lowered = compileSupported(expr, scope.withSource(source), tail)

@@ -12,3 +12,5 @@ main = do
   emit "forwardCase" S.forwardCase [-4097,-1,0,1,4097,3000000000]
   emit "recursiveCase" S.recursiveCase [-4097,-1,0,1,4097,20000]
   emit "nestedCase" S.nestedCase [-4097,-1,0,1,4097,3000000000]
+  emit "stateForwardCase" S.stateForwardCase [-4097,-1,0,1,4097,3000000000]
+  emit "stateRecursiveCase" S.stateRecursiveCase [-4097,-1,0,1,4097,20000]

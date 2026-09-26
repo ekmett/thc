@@ -346,6 +346,7 @@ internal object CoreJoins {
         val joinsInGroup = definitions(group) ?: return
         val arities = joinsInGroup.associate { it.id to it.parameters.size }
         fun visit(expr: List<Any?>, tail: Boolean, shadowed: Set<String>) {
+            CoreStateApplications.inline(expr)?.let { visit(it, tail, shadowed); return }
             fun isJoin(id: String) = id in arities && id !in shadowed
             when (expr.firstOrNull()) {
                 "var" -> {

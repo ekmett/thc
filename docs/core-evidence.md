@@ -190,6 +190,18 @@ This matters when a join returns a function. If a flattened RHS has two value la
 
 The shared validator requires every reference to a local join to be exactly saturated in tail position within its lexical region. It rejects escaping joins, partial/overapplication, use beneath a returned lambda, and calls with pending work inside the same region. Recursive and nonrecursive scopes differ; ordinary binders shadow join names. Mixed ordinary/join binding groups are currently unsupported rather than guessed.
 
+GHC permits an outer-join jump inside a `runRW#` continuation because CorePrep
+beta-reduces that continuation. The exporter retains a direct one-parameter
+`State#` lambda applied to the literal zero-width `realWorld#` token. Shared
+runtime lowering and join validation reduce exactly that form to a state case,
+preserving the original binder, source metadata and tail context. It introduces
+no closure boundary and does not inline arbitrary lambdas or discard a
+state-producing argument. Ordinary captured joins and non-tail transfers remain
+rejected. `StateLambdaJoinTest` covers those negative controls and retained
+metadata; the genuine sum-join fixtures exercise forward and recursive outer
+jumps through `runRW#` on both backends, including each first installed compiled
+call after the independent interpreted/native comparison.
+
 Validated joins stay inside the current guest root. Nonrecursive groups use acyclic dispatch: the AST catches one lexical transfer and bytecode emits forward branches without a selector or loop. Recursive groups retain a local loop and backedges. Both evaluate operands into temporaries before replacing parameters, preserving swaps and mutually recursive transfers. A join region may itself appear within a larger non-tail expression: leaving that region resumes the outer continuation. Join transfers do not allocate closures or ordinary application packets.
 
 Exact unboxed tuple and binary sum join results use typed locals in the same activation. The AST writes flattened result leaves or sum tag/payload slots into region slots and copies them to the enclosing destination; bytecode writes each returning branch directly into that destination. Nested logical tuples, singleton tuples and empty tuples retain their exact shape. No aggregate carrier, pool loan, or Truffle call boundary is introduced by the join. Lifted payloads remain lazy; copying reference slots does not force them. Scalar void components keep logical positions without payload slots, and their expressions still execute. Tuple join inputs are limited to exact `(# #)`; their operands still execute before transfer. Local joins may also read an enclosing tuple's existing typed slots. Nonempty tuple join arguments, sum arguments/captures and unresolved layouts remain rejected. Exact vector join arguments/results and captures follow the separate [vector transport contract](primops.md#current-aggregate-and-address-limits). See [empty tuple joins](empty-tuple-joins.md) and [sum results](sum-results.md) for their capabilities and evidence. The logical shape must agree across the join annotation, its retained RHS lambda result, body, applications and enclosing region.
