@@ -22,10 +22,16 @@ jobs:
     timeout-minutes: 30
     env:
       GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-user-home
+      # Publish the verified raw-SIMD documentation without merging the pending
+      # runtime checkpoint. Restore github.sha when that checkpoint integrates.
+      DOCS_REVISION: f53d0be7c17a55fc31ec2b5a58e6086f13e0d6c3
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ env.DOCS_REVISION }}
+      - name: Verify documentation source revision
+        run: test "$(git rev-parse HEAD)" = "$DOCS_REVISION"
       - uses: haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d # v2
         with:
           ghc-version: '9.14.1'
@@ -52,8 +58,6 @@ jobs:
       - name: Install Markdown renderer
         run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends pandoc
       - name: Generate and validate documentation only
-        env:
-          DOCS_REVISION: ${{ github.sha }}
         run: make docs GRADLE_FLAGS='--no-daemon --build-cache'
       - uses: actions/upload-pages-artifact@v3
         with:
