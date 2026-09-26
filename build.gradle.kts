@@ -14,6 +14,10 @@ plugins {
 }
 repositories { mavenCentral() }
 
+kapt {
+    javacOptions { option("--add-modules", "jdk.incubator.vector") }
+}
+
 // The pinned GHC signature table belongs to fixture/audit tooling, not runtime loading.
 tasks.processResources { exclude("thc/scalar-primop-signatures.json") }
 
