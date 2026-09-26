@@ -59,13 +59,15 @@ data MissingCore = MissingCore
 -- Compatibility packages such as nats have no library modules on modern GHC.
 -- A missing capture alone does not establish that: retain the registration
 -- produced by the same successful build, and check it again on cache reads.
+-- Cabal also registers C-only archives (for example libyaml-clib) under
+-- hs-libraries. Those archives do not imply Haskell modules or Core bodies;
+-- accepting their empty module inventory does not admit their foreign calls.
 emptyRegistration :: String -> [String] -> BS.ByteString -> Bool
 emptyRegistration identifier dependencies bytes = case parseInstalledPackageInfo bytes of
   Left _ -> False
   Right (_, info) -> prettyShow (Package.installedUnitId info) == identifier &&
     sort (map prettyShow (Package.depends info)) == sort dependencies &&
-    null (Package.exposedModules info) && null (Package.hiddenModules info) &&
-    null (Package.hsLibraries info)
+    null (Package.exposedModules info) && null (Package.hiddenModules info)
 
 installedContext :: FilePath -> FilePath -> FilePath -> [FilePath] -> Value -> IO InstalledContext
 installedContext ghc pkg helper databases compiler = do
