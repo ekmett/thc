@@ -1,5 +1,20 @@
 # Development
 
+## Implementation style
+
+Follow the [agent and contributor guidance](../AGENTS.md). Keep simple primop
+behavior in its JVM implementation, normally Kotlin, and inline forwarding-only
+helpers instead of adding wrapper layers or temporary carrier objects. Retain
+real compiler/ABI boundaries and ownership, lifetime, and synchronization rules;
+verify allocation and call elimination rather than inferring it from source size.
+
+Use Haskell for GHC-facing fixture generation and native-oracle tooling, and
+Kotlin for JVM checks and independent runtime models. Introduce Python only for
+a concrete Python-specific need. Migrations must preserve native comparisons,
+negative controls, strict Core audits, provenance, and all active CI callers.
+
+## Build and test
+
 `make` builds the runtime and Haskell components. `make test` prepares native
 fixtures and runs the JVM tests; `make test TESTS='thc.RuntimeTest'` selects one
 JUnit class. `make jit-test` runs the separate advisory JIT retention suite.
