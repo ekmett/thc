@@ -29,7 +29,7 @@ class FloatingTupleTest {
             assertEquals(record["sha256"], hash, "Stale floating tuple evidence: $file")
         }
         assertTrue(sources.map { it["path"] }.containsAll(listOf("scripts/audit-core.py", "scripts/core-capabilities.json",
-            "src/main/resources/thc/scalar-primop-signatures.json", "scripts/generate-scalar-signatures.py")))
+            "src/main/resources/thc/scalar-primop-signatures.json", "tools/primops/PrimopTools.hs")))
         for (stage in listOf("pre", "post")) assertEquals(true,
             (Json.parse(File(root, "build/floating-tuple/$stage-audit.json").readText()) as Map<*, *>)["accepted"])
     }

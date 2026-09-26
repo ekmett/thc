@@ -89,7 +89,10 @@ jobs:
           PY
           java --version
       - name: Check the primop checklist
-        run: python3 scripts/primop-coverage.py --check
+        run: |
+          cabal run exe:thc-primops -- coverage --check
+          cabal run exe:thc-primops -- scalars
+          cabal test primop-tools -fdevelopment --test-show-details=direct
       - name: Resolve Cabal driver dependencies
         run: cabal build exe:thc
       - name: Install Linux native and LLVM build dependencies
@@ -206,7 +209,6 @@ jobs:
           python3 scripts/test-narrow-literal-proofs.py
           python3 scripts/test-short-bytes-slices-model.py
           python3 scripts/test-array-slice-model.py
-          python3 scripts/test-primop-coverage.py
       - name: Check merged fixture and runtime recipes with and without assertions
         shell: bash
         run: |

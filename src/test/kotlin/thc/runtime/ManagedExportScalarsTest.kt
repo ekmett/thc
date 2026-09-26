@@ -9,9 +9,41 @@ import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
+import java.math.BigDecimal
 import java.math.BigInteger
 
 class ManagedExportScalarsTest {
+    @Test fun unsignedWord64InteropChecksExactFloatingAndSignedRanges() {
+        val interop = InteropLibrary.getUncached()
+        val limit = BigInteger.ONE.shiftLeft(64)
+        val values = linkedSetOf(BigInteger.ZERO, limit.subtract(BigInteger.ONE))
+        for (bit in 0..63) for (delta in -1..1) {
+            val candidate = BigInteger.ONE.shiftLeft(bit).add(BigInteger.valueOf(delta.toLong()))
+            if (candidate.signum() >= 0 && candidate < limit) values.add(candidate)
+        }
+        // Highest representable values below 2^64 for binary32 and binary64.
+        for (precision in listOf(24, 53)) for (delta in -1..1)
+            values.add(limit.subtract(BigInteger.ONE.shiftLeft(64 - precision)).add(BigInteger.valueOf(delta.toLong())))
+        for (expected in values) {
+            val value = UnsignedWord64(expected.toLong())
+            assertEquals(expected, interop.asBigInteger(value))
+            assertEquals(expected <= BigInteger.valueOf(Byte.MAX_VALUE.toLong()), interop.fitsInByte(value))
+            assertEquals(expected <= BigInteger.valueOf(Short.MAX_VALUE.toLong()), interop.fitsInShort(value))
+            assertEquals(expected <= BigInteger.valueOf(Int.MAX_VALUE.toLong()), interop.fitsInInt(value))
+            assertEquals(expected <= BigInteger.valueOf(Long.MAX_VALUE), interop.fitsInLong(value))
+            val asFloat = expected.toFloat()
+            val asDouble = expected.toDouble()
+            val exactFloat = BigDecimal(asFloat.toDouble()).toBigIntegerExact() == expected
+            val exactDouble = BigDecimal(asDouble).toBigIntegerExact() == expected
+            assertEquals(exactFloat, interop.fitsInFloat(value), "binary32 $expected")
+            assertEquals(exactDouble, interop.fitsInDouble(value), "binary64 $expected")
+            if (exactFloat) assertEquals(asFloat.toRawBits(), interop.asFloat(value).toRawBits())
+            else assertThrows(com.oracle.truffle.api.interop.UnsupportedMessageException::class.java) { interop.asFloat(value) }
+            if (exactDouble) assertEquals(asDouble.toRawBits(), interop.asDouble(value).toRawBits())
+            else assertThrows(com.oracle.truffle.api.interop.UnsupportedMessageException::class.java) { interop.asDouble(value) }
+        }
+    }
+
     private fun inContext(action: (Language) -> Unit) {
         Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
             context.initialize("thc")

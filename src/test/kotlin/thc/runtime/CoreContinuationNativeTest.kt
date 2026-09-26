@@ -4,6 +4,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.ThreadLocalAction
 import com.oracle.truffle.api.bytecode.BytecodeRootNode
@@ -32,8 +33,16 @@ class CoreContinuationNativeTest {
     private val root = File(System.getProperty("thc.projectRoot"))
 
     private fun compile(target: RootCallTarget) {
-        target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
-        assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+        val type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
+        assertTrue(type.isInstance(target))
+        type.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+        assertEquals(true, type.getMethod("isValidLastTier").invoke(target))
+        // Match the public EntryValue.compile setup: a valid guest target can
+        // outlive HotSpot's shared entry stub. Restore that stub without a
+        // guest settling call before arming the first-effect checkpoint.
+        val runtime = Truffle.getRuntime()
+        runtime.javaClass.getMethod("bypassedInstalledCode", type).invoke(runtime, target)
+        assertEquals(true, type.getMethod("isValidLastTier").invoke(target))
     }
 
     private class Driver : RootNode(null) {
@@ -49,6 +58,63 @@ class CoreContinuationNativeTest {
     private fun <T> entered(context: Context, action: () -> T): T {
         context.enter()
         try { return action() } finally { context.leave() }
+    }
+
+    @Test fun explicitCompilationRestoresEntryBeforeAnOriginalCatchCanYield() {
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            entered(context) {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val checkpoint = BytecodeCheckpoint()
+                val program = BytecodeProgram(language, CoreModules.reachable(module, "catchActionAnswer", strictLink = true), checkpoint)
+                val parent = program.entryValue("catchActionAnswer") as Thunk
+                val target = parent.target!!
+                val warm = Calls.target(target, arrayOf(0L)) as DataValue
+                assertEquals(42L, warm.layout.readLong(warm, 0))
+                compile(target)
+
+                val type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
+                val valid = type.getMethod("isValidLastTier")
+                val calls = type.getMethod("getCallCount")
+                val jvmci = Class.forName("jdk.vm.ci.runtime.JVMCI").getMethod("getRuntime").invoke(null)
+                val backend = Class.forName("jdk.vm.ci.runtime.JVMCIRuntime").getMethod("getHostJVMCIBackend").invoke(jvmci)
+                val metaAccess = Class.forName("jdk.vm.ci.runtime.JVMCIBackend").getMethod("getMetaAccess").invoke(backend)
+                val method = type.getDeclaredMethod("callBoundary", Array<Any?>::class.java)
+                val boundary = Class.forName("jdk.vm.ci.meta.MetaAccessProvider")
+                    .getMethod("lookupJavaMethod", java.lang.reflect.Executable::class.java).invoke(metaAccess, method)
+                val hasCode = Class.forName("jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod").getMethod("hasCompiledCode")
+                val runtime = Truffle.getRuntime()
+                try {
+                    Class.forName("jdk.vm.ci.meta.ResolvedJavaMethod").getMethod("reprofile").invoke(boundary)
+                    assertEquals(false, hasCode.invoke(boundary))
+                    assertEquals(true, valid.invoke(target), "Retiring the host stub must leave the guest code valid")
+                    val callsBefore = calls.invoke(target)
+                    val effectsBefore = checkpoint.visits.get()
+                    val compiledBefore = program.diagnostics().getValue("compiledEntries") as Long
+                    compile(target)
+                    assertEquals(true, hasCode.invoke(boundary), "Compilation setup must restore the retired entry stub")
+                    assertEquals(callsBefore, calls.invoke(target), "Setup must not execute a settling guest call")
+                    assertEquals(effectsBefore, checkpoint.visits.get())
+                    assertEquals(compiledBefore, program.diagnostics().getValue("compiledEntries"))
+
+                    checkpoint.armed = true
+                    val driver = Driver()
+                    assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                    assertEquals(1, checkpoint.visits.get())
+                    assertTrue(checkpoint.compiledVisits.get() > 0, "The first suspending call must enter installed Core")
+                    assertTrue((program.diagnostics().getValue("compiledEntries") as Long) > compiledBefore)
+                    assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                    val answer = driver.force(parent) as DataValue
+                    assertEquals(42L, answer.layout.readLong(answer, 0))
+                    assertEquals(2, checkpoint.visits.get(), "Neither original checkpoint may replay")
+                    assertEquals(0, language.handoffState.get().results.depth)
+                } finally {
+                    runtime.javaClass.getMethod("bypassedInstalledCode", type).invoke(runtime, target)
+                }
+            }
+        }
     }
 
     @Test fun compiledCoreRootPollParksTheClaimedRequestAndResumesItsFrame() {

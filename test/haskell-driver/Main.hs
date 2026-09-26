@@ -18,20 +18,29 @@ import qualified NativeCacheTests
 import qualified NativeRecipeTests
 import qualified RuntimeShimTests
 import qualified InstalledForeignTests
+import qualified InstalledHydrationTests
 import qualified TestSupportTests
 import TestSupport (setup)
 
 main :: IO ()
 main = do
-  env <- setup
   arguments <- getArgs
+  case InstalledHydrationTests.helperMode arguments of
+    Just action -> action
+    Nothing -> runTests arguments
+
+runTests :: [String] -> IO ()
+runTests arguments = do
+  env <- setup
   selected <- case arguments of
+    ["--installed-hydration-only"] -> pure [InstalledHydrationTests.tests]
     ["--acquire-project-only"] -> pure [ProjectTests.acquisitionTests env]
     ["--run-options-only"] -> pure [RunOptionsTests.tests env]
     ["--run-ffi-only"] -> pure [RunOptionsTests.tests env, RunTests.tests env]
     ["--store-inventory-only"] -> pure [EmptyStoreProjectTests.tests env]
     [] -> pure
       [ InstalledForeignTests.tests
+      , InstalledHydrationTests.tests
       , ScalarBitcodeTests.tests
       , PackageNativeTests.tests
       , NativeCacheTests.tests
@@ -46,6 +55,6 @@ main = do
       , StoreProjectTests.tests env
       , EmptyStoreProjectTests.tests env
       ]
-    _ -> die "Usage: driver-tests [--acquire-project-only|--run-options-only|--run-ffi-only|--store-inventory-only]"
+    _ -> die "Usage: driver-tests [--acquire-project-only|--run-options-only|--run-ffi-only|--store-inventory-only|--installed-hydration-only]"
   counts <- runTestTT $ TestList selected
   if errors counts + failures counts == 0 then pure () else exitFailure

@@ -190,7 +190,7 @@ prepareByteArrayFamily root command = do
   description <- logRun "bytestring-description" [] ghcPkg ["describe","bytestring"]
   signatureCommands <- if Map.null (signatureArities family) then pure [] else do
     compiler <- logRun "compiler-build" [] "compiler/build.sh" []
-    coverage <- logRun "primop-coverage" [] "python3" ["scripts/primop-coverage.py"]
+    coverage <- logRun "primop-coverage" [] "cabal" ["run", "exe:thc-primops", "--", "coverage"]
     pure [compiler,coverage]
   signatures <- if Map.null (signatureArities family) then pure [] else do
     inventory <- readJson (root </> "build/primop-coverage.json") >>= field "primitives" :: IO [Value]
@@ -281,7 +281,7 @@ prepareByteArrayFamily root command = do
   inputHashes <- hashes root . sort . Set.toList . Set.fromList $ [source,"test/haskell-fixtures/ByteArrayFixtures.hs",
     "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/Main.hs","thc.cabal","scripts/audit-core.py","scripts/core-capabilities.json",
     "src/main/resources/thc/scalar-primop-signatures.json","compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py"] ++
-    ["compiler/export-boot.py" | originalList family] ++ ["scripts/primop-coverage.py" | not (Map.null (signatureArities family))] ++
+    ["compiler/export-boot.py" | originalList family] ++ ["tools/primops/PrimopTools.hs" | not (Map.null (signatureArities family))] ++
     [path | not generated, path <- [driver,"compiler/test-fixtures/ByteArrayFixtureInputs.hs"]] ++ compilerInputs ++ auditorInputs ++ originalSources
   artifactHashes <- hashes root . sort . Set.toList . Set.fromList $ [directory </> "requests.tsv",directory </> "oracle.tsv",binary] ++
     [driver | generated] ++ concatMap commandArtifacts commands ++ concat
@@ -293,7 +293,7 @@ prepareByteArrayFamily root command = do
     "installedBytestring" .= BSC.unpack (commandStdout description),"primopSignatures" .= signatures,
     "limitations" .= (["Native inputs obey each size, lifetime and overlap precondition; managed rejection controls remain separate.",
       "Original List/ShortByteString identities are preserved; public comparison results are sign-only.",
-      "Existing Python audit-core.py, export-boot.py and primop-coverage.py remain explicit shared dependencies."] :: [String])] ++
+      "Existing Python audit-core.py and export-boot.py, and Haskell thc-primops remain explicit shared dependencies."] :: [String])] ++
     ["inputs" .= [[raw,code] | (raw,code) <- pairs] | family `elem` [Mutable,Resize,Size]] ++
     ["modelValidation" .= ("Independent Kotlin model and complete ordered corpus" :: String)] ++
     ["reachableBindings" .= Map.fromList [(stage ++ "/" ++ name,reachable) | (stage,_,audited,_,_,_) <- stages,(name,reachable,_,_,_) <- audited] | family == Bytes] ++

@@ -58,7 +58,7 @@ alias misuse.
 The primitive contracts come from the pinned
 [GHC primop declarations](https://gitlab.haskell.org/ghc/ghc/-/blob/902339d332fb4ce2b3c87dcac1ee6495d41ad886/compiler/GHC/Builtin/primops.txt.pp),
 whose ByteArray documentation states that freeze does not copy and both variants
-share the same heap structure. `scripts/primop-coverage.py` also checks the advertised
+share the same heap structure. `thc-primops coverage` also checks the advertised
 names and arities against the installed GHC API, and records its signatures.
 
 Run `cabal run exe:thc-fixtures --offline -- bytearray` and

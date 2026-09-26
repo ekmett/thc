@@ -24,16 +24,31 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "ac895d03a6d831c19d1a1926784f974e1b699672e201f8b904983a3e91976a79"
+FULL_PREPARATION_PLAN = "180d2dbd03ac15072268fd8b47988ac5e5e71a1106430388ddae63c8c852f3cd"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/address-array-copy", "build/simd-capability-smoke", "build/managed-address-reads",
     "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/thread-status", "build/thread-label", "build/uncaught-self", "build/small-arrays", "build/floating-address", "build/atomic-address",
     "build/floating-byte-offset", "build/narrow-byte-offset", "build/int32-byte-offset", "build/unaligned-scalar-memory",
     "build/explicit64-arrays", "build/mask-functions", "build/interface-core",
-    "build/original-fd-ready", "build/simd-calls",
+    "build/original-fd-ready", "build/simd-calls", "build/sum-join", "build/record-fields",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    "build/sum-join/manifest.json", "build/sum-join/oracle.tsv", "build/sum-join/native/oracle",
+    *[f"build/sum-join/{stage}/{suffix}" for stage in ("pre", "post")
+      for suffix in ("core/SumJoinAudit.json", "audit.json")],
+    *[f"build/sum-join/commands/{command}.{suffix}"
+      for command in ("ghc-version", "native-build", "native-run", "pre-export", "pre-audit", "post-export", "post-audit")
+      for suffix in ("stdout", "stderr", "command.json")],
+    "build/record-fields/manifest.json", "build/record-fields/pre/oracle", "build/record-fields/post/oracle",
+    *[f"build/record-fields/{stage}/{name}.json" for stage in ("pre", "post", "installed")
+      for name in ("RecordFieldLibrary", "RecordFieldClient", "fieldAlias-audit", "duplicateFields-audit")],
+    *[f"build/record-fields/logs/{command}.{suffix}"
+      for command in ("plugin-build", "helper-location", "libdir", "pre-compile", "pre-native", "post-compile", "post-native",
+                      "installed-RecordFieldLibrary", "installed-RecordFieldClient",
+                      *[f"{stage}-audit-{entry}" for stage in ("pre", "post", "installed")
+                        for entry in ("fieldAlias", "duplicateFields")])
+      for suffix in ("stdout", "stderr", "command.json")],
     *fast_inputs.CLOSURE_INSPECTION_OUTPUTS,
     *fast_inputs.STABLE_NAME_OUTPUTS,
     *fast_inputs.DELIMITED_OUTPUTS,
@@ -233,7 +248,7 @@ COMMON_SOURCES = (
     "scripts/audit-core.py",
     "scripts/core_*.py",
     "scripts/core-capabilities.json",
-    "scripts/generate-scalar-signatures.py",
+    "tools/primops/PrimopTools.hs",
     "src/main/resources/thc/scalar-primop-signatures.json",
 )
 
@@ -644,7 +659,7 @@ def prepare(root, selection, run, toolchain):
 
     state = classify()
     if any(not reusable for _, _, _, _, reusable in state):
-        run("fixture-scalar-signatures", ["python3", "scripts/generate-scalar-signatures.py"])
+        run("fixture-scalar-signatures", ["cabal", "run", "exe:thc-primops", "--", "scalars"])
         run("fixture-compiler", ["compiler/build.sh"])
         # A preparatory command may have updated a declared source. Never skip
         # a previously reusable group on an identity calculated before it ran.

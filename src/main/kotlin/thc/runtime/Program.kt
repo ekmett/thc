@@ -114,7 +114,10 @@ internal class Thunk(target: RootCallTarget, var environment: CapturedFrame?) {
     @Volatile var state = 0
     var value: Any? = null
     var owner: Thread? = null
-    val monitor = java.lang.Object()
+    // Thunks are internal runtime values, not host-interoperable lock objects.
+    // Keep one stable monitor per thunk without allocating a second object.
+    @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
+    val monitor: java.lang.Object get() = this as java.lang.Object
 }
 /** A cold, one-shot call continuation. Unlike a thunk update, its answer may itself be lazy. */
 internal class CallSegment @JvmOverloads constructor(
@@ -164,8 +167,11 @@ internal class CallSegmentSuspended @JvmOverloads constructor(
 internal class ChildResume(val value: Any?, val failure: GuestException?)
 internal class Metrics(val enabled: Boolean) {
     private val thunkCounts = linkedMapOf<String, Long>()
-    @CompilerDirectives.TruffleBoundary @Synchronized fun recordThunk(label: String) {
-        thunkCounts[label] = (thunkCounts[label] ?: 0L) + 1L
+    @CompilerDirectives.TruffleBoundary fun recordThunk(target: RootCallTarget) {
+        // Root names may perform host reflection/string formatting. Resolve
+        // diagnostic metadata outside guest compilation and before the map lock.
+        val label = target.rootNode.name
+        synchronized(this) { thunkCounts[label] = (thunkCounts[label] ?: 0L) + 1L }
     }
     @CompilerDirectives.TruffleBoundary @Synchronized fun thunkCountsSnapshot(): Map<String, Long> = thunkCounts.toMap()
     private val compiledEntriesCounter = java.util.concurrent.atomic.AtomicLong()
@@ -748,7 +754,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         try {
             if (metrics.enabled && continuation == null) {
                 val target = thunk.target ?: fault("Unevaluated thunk has no body")
-                metrics.incrementThunkEvaluations(); metrics.recordThunk(target.rootNode.name)
+                metrics.incrementThunkEvaluations(); metrics.recordThunk(target)
             }
             val returned = if (continuation == null) {
                 try { calls.call(thunk.target ?: fault("Unevaluated thunk has no body"), thunk.environment) }

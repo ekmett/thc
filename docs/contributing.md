@@ -86,6 +86,13 @@ task: select only `testDense` to repeat that mode, or use `testHandoffModes
 compilation dependencies to run again. Existing `test` and its
 `JAVA_TOOL_OPTIONS` selection remain supported.
 
+For first-compiled-call checks, a valid guest target is not by itself sufficient:
+HotSpot can retire Truffle's shared call-entry stub while retaining the guest
+code. Private compilation setup must restore that prerequisite, as the public
+`EntryValue.compile` path does, without executing a settling guest call. The
+original-Core continuation and mask tests include forced-stub-retirement controls;
+keep their first-effect and no-replay assertions intact.
+
 ### Generated instruction metadata
 
 The pinned Truffle 25.3.4.1 processor emits one large
@@ -119,10 +126,10 @@ backends and the native checks pass. Then refresh the generated
 [primop checklist](primops.md):
 
 ```sh
-python3 scripts/generate-scalar-signatures.py --write
-python3 scripts/primop-coverage.py --write-checklist
-python3 scripts/primop-coverage.py --check
-python3 scripts/test-primop-coverage.py
+cabal run exe:thc-primops -- scalars --write
+cabal run exe:thc-primops -- coverage --write-checklist
+cabal run exe:thc-primops -- coverage --check
+cabal test primop-tools
 ```
 
 The scalar signature command needs the pinned GHC 9.14.1. The checklist is

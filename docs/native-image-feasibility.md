@@ -6,6 +6,63 @@ a Haskell ahead-of-time compiler. Native packaging of the interpreter, guest
 runtime compilation, and program-specific ahead-of-time compilation are separate
 deliverables.
 
+**Current checkpoint:** a real native THC executable loads the original exported
+Haskell Core and returns native GHC's `5050` for `sumLoop 100` and `210` for
+`caseList 20`. Both AST and bytecode backends pass in both handoff modes: eight
+checks. The optimizing Truffle runtime is included, but explicit guest compilation
+fails with frame-materialization/inlining bailouts. This establishes native
+packaging and interpretation, not native guest-JIT execution or guest AOT.
+Sulong/FFI and a full Haskell executable lifecycle remain unverified.
+
+## Reproduce the working pure image
+
+The working checkpoint incorporates main `981b360c`, the lazy-fork interpreter
+transition, native-file binding isolation and primitive unsigned interop queries.
+Use the pinned GraalVM `25.3.4.1` JDK/Native Image and GHC `9.14.1` toolchains
+described in the repository setup instructions, with `JAVA_HOME` selecting that
+JDK. From the repository root:
+
+```sh
+./gradlew --max-workers=2 installDist
+./compiler/export.sh examples/THC/Fixtures.hs
+bash scripts/native-image-pure.sh
+build/native-image/thc-pure -Xmx2g build/core/THC.Prim.json,build/core/THC.Fixtures.json sumLoop 100
+build/native-image/thc-pure -Xmx2g build/core/THC.Prim.json,build/core/THC.Fixtures.json caseList 20
+```
+
+The [probe script](../scripts/native-image-pure.sh) uses the installed runtime
+JARs, excludes LLVM/NFI dependencies deliberately, and reads the exact audited
+[initialization inventory](../scripts/native-image/pure-initialization.txt).
+The versioned script was then rebuilt independently and passed the same eight
+native result checks, rather than merely transcribing the successful command.
+It bounds the builder to an 8 GiB heap and two compiler threads. On a shared
+development host, put the build and the probe inside the host's existing
+build-directory resource lease. An optional script argument selects the output
+path. This is an explicit compatibility probe, not a shipping distribution.
+
+The commands above select the default bytecode backend. Add `-Dthc.backend=ast`
+before the Core paths for AST, and `-Dthc.handoffSlabs=true` for dense handoff
+storage. All four combinations produce both expected results. Adding `--compile`
+after the integer exercises the separate explicit-compilation check; all four
+backend/workload checks currently fail rather than silently substituting an
+interpreter. The first call after successful installation remains a future
+acceptance gate.
+
+The original successful build took 114.03 seconds and 3,550,308 KiB peak RSS on
+the shared Linux x86-64 host; its file size was 67.25 MiB. These are bounded
+compatibility measurements, not isolated startup or throughput benchmarks.
+The image contains no frozen guest program: it reads those Core files at run
+time. Generated Truffle DSL field-access descriptors must be prepared at image
+build time because the pinned image implementation replaces their reflective
+fields with native offsets. Preparing those exact descriptors removed the
+first executable's runtime `InlineSupport.UnsafeField.declaringClass` failure.
+The signing key, guest contexts and native resource owners are not initialized
+as part of this inventory. Runtime graph preparation for guest JIT continues
+separately; the working interpretation recipe does not use the larger diagnostic
+preparation list.
+
+## Earlier build investigation
+
 **First-phase result:** no native executable linked, so native execution,
 guest-JIT installation in an executable, executable size and startup remain
 unverified. The investigation produced reproducible build blockers, one small
@@ -51,14 +108,61 @@ capture-state handling, close ordering and readiness duplication are unchanged.
 52 cases across the two modes. Bytecode inspection confirms that preparing the
 receiver class no longer resolves a native handle.
 
-The receiver/companion initialization probe gets beyond those blocklist and
-image-heap failures but then fails in the pinned runtime-graph encoder while
-preparing `ManagedAddress.toNativeBits`: an `ImageHeapConstant` has no backing
-hosted constant. The cause is still under investigation; this is not a linked
-image or a successful Haskell/native result. Larger preparation lists must be
-derived from an initialization audit, not a package-wide build-time override.
-New raw diagnostics remain local; this checkpoint publishes source and concise
-results only.
+The runtime-graph encoder next failed while preparing `ManagedAddress.toNativeBits`:
+two `ImageHeapConstant` values had no backing hosted constant. A targeted graph
+dump identifies the stateless `StablePointers` and `NativeAddresses` companions,
+created by Native Image's class-initializer simulation. Explicit initialization
+of those two classes and companions, after inspecting their initializers,
+removes this failure without disabling simulation globally.
+
+The resulting analysis exposed arbitrary-precision arithmetic in `UnsignedWord64`
+interop queries. Signed range checks now use the primitive bits; binary32/64
+exactness counts the span between the highest and lowest set bits. Exact values
+in the unsigned upper half convert by shifting the zero low bit and doubling.
+The BigInteger result representation is unchanged. An independent BigInteger /
+BigDecimal model checks 196 boundary values, exact conversions and rejection of
+lossy conversions. Host display formatting and native buffer projection also
+receive explicit Truffle boundaries; typed scalar buffer operations remain on
+their existing paths. Scalar, buffer, pinned-storage and namespace tests pass
+50 cases across the two handoff modes.
+
+The next optimizing build completes analysis with all compiler assertions and
+blocklist checks enabled, then fails during native method compilation because
+`Intrinsics.areEqual` and `ManagedAllocation.getSize` lack prepared deoptimization
+variants. This is still not a linked image or a successful Haskell/native result.
+Larger preparation lists must come from an initialization audit, not a
+package-wide build-time override. New raw diagnostics remain local; this
+checkpoint publishes source and concise results only.
+
+## Runtime graph preparation
+
+The working pure recipe also rebuilds and passes its eight interpretation checks
+after integration of main `fbbe3c2a`. A separate, larger diagnostic preparation
+inventory is being audited for guest compilation; it is not yet the supported
+recipe. It admits no-initializer class hierarchies, exact fieldless singleton
+constructors and stateless companion holders by inspecting class-file bytecode,
+with individually inspected metadata initializers added only as required.
+
+Preparing those runtime graphs exposed ten compilation-blocklist violations.
+Nine arose because thunk diagnostics obtained `RootNode.name` before entering
+the existing metrics boundary. Name lookup now occurs inside that boundary,
+still before taking the counts-map lock. The remaining violation reached
+`BigDecimal.longValue` through the generic frame writer's Kotlin type switch.
+Explicit early-return scalar guards preserve `instanceof` instructions in the
+actual JVM bytecode and exclude unrelated `Number` implementations during
+Native Image analysis. Merely changing to a subjectless `when` did not do so.
+Neither change adds a boundary to the primitive frame-write path.
+
+Focused verification covers primitive kinds, object widening, concurrent slot
+claims, thunk sharing/capture counts, and all six floating regression tests in
+both handoff modes: 20 passes. Fresh independent GHC fixtures supply 441 floating
+observations across 15 entries, exercised on AST and bytecode before and after
+explicit compilation, including the first installed-code call. The generic
+writer's negative controls retain BigInteger, BigDecimal and a custom Number
+whose conversion methods throw as references. The next image analysis no longer
+reports any of the ten blocklist violations; it stops later at an unbacked image
+constant while preparing bytecode closure creation. Guest JIT in the native THC
+executable remains unverified. Compiler assertions and blocklist checks stay on.
 
 ## Execution models
 

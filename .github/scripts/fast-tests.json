@@ -296,9 +296,9 @@
         "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
-        "scripts/test-primop-coverage.py",
         "scripts/test-simd-families.py"
-      ]
+      ],
+      "haskell": ["primop-tools"]
     },
     "explicit64-primops": {
       "junit": [
@@ -326,6 +326,9 @@
     }
   },
   "owners": {
+    "test/primop-tools/Main.hs": {
+      "junit": [], "python": [], "haskell": ["primop-tools"]
+    },
     "examples/GhcBCO.hs": {
       "junit": ["thc.runtime.GhcBCOTest"], "python": []
     },

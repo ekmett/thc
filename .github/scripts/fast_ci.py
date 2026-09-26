@@ -183,7 +183,8 @@ def haskell_suites(selection):
             and selected.get("count") == len(selected["suites"]),
             "Invalid Haskell test selection")
     suites = selected["suites"]
-    require(isinstance(suites, list) and suites in ([], ["driver-tests"]),
+    require(isinstance(suites, list) and all(name in ("driver-tests", "primop-tools") for name in suites)
+            and len(suites) == len(set(suites)),
             "Unknown or duplicate Haskell test suite")
     return suites
 
@@ -300,7 +301,7 @@ def execute(recorder, base, head, identity_path):
     recorder.data.update(requestedBase=base, selectionBase=base)
     # Check generated documentation against the actual pinned GHC API on hits
     # as well as misses. Keep this fresh report separate from cached provenance.
-    recorder.command("primop-checklist", [sys.executable, "scripts/primop-coverage.py",
+    recorder.command("primop-checklist", ["cabal", "run", "exe:thc-primops", "--", "coverage",
                      "--check", "--output", str(recorder.directory / "primop-coverage.json")])
     identity = json.loads(identity_path.read_text())
     inputs = fixtures.prepare(recorder.root, selection, recorder.command,
@@ -314,7 +315,7 @@ def execute(recorder, base, head, identity_path):
                                                  "-fdevelopment", "-ffull-core-tests"])
         except RuntimeError as error:
             failures.append("haskell-compile: " + str(error))
-    if selected_haskell:
+    if "driver-tests" in selected_haskell:
         try:
             recorder.command("driver-plugin", ["compiler/build.sh"])
         except RuntimeError as error:
@@ -329,16 +330,16 @@ def execute(recorder, base, head, identity_path):
             failures.append(str(error))
     summaries = {}
     try:
-        summaries, mode_failures = run_modes(recorder, selection, install_dist=bool(selected_haskell))
+        summaries, mode_failures = run_modes(recorder, selection, install_dist="driver-tests" in selected_haskell)
         failures.extend(mode_failures)
     except (RuntimeError, ValueError, ET.ParseError) as error:
         failures.append(f"handoff modes: {error}")
-    if selected_haskell:
+    for suite in selected_haskell:
         try:
-            recorder.command("driver-tests", ["cabal", "test", "driver-tests", "-fdevelopment",
+            recorder.command(suite, ["cabal", "test", suite, "-fdevelopment",
                                               "--test-show-details=direct"])
         except RuntimeError as error:
-            failures.append("driver-tests: " + str(error))
+            failures.append(suite + ": " + str(error))
     polyglot_summary = None
     if polyglot is not None:
         try:

@@ -31,13 +31,18 @@ thc run examples/standard-apps/ghc-api --exe ghc-faststring \
   -- "THC λ" "GHC API"
 ```
 
-The existing Haskell fixture runner can retain the native output, ordinary THC
-run, strict audit and provenance together:
+The Haskell fixture runner retains native output, the ordinary THC run, strict
+audit and provenance together. From the repository root, select the pinned GHC
+9.14.1 installation with complete Core for `ghc` and its dependencies, its
+matching configured source tree, and GraalVM 25.3.4.1 / JDK 25. Build the runtime
+with `./gradlew installDist`; see the [full-Core build guide](../../../docs/ghc-core.md).
 
 ```sh
 export THC_INSTALLED_CORE_GHC_SOURCE=/path/to/ghc-9.14.1
 cabal run exe:thc-fixtures -- ghc-api faststring
-# After the preceding probe succeeds:
+# Compiler sessions install process handlers; standalone Linux launches must
+# explicitly relinquish the JVM's INT/QUIT/HUP/TERM handlers:
+export JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:+$JAVA_TOOL_OPTIONS }-Xrs"
 cabal run exe:thc-fixtures -- ghc-api session load
 ```
 
@@ -48,14 +53,27 @@ probe retains its command logs under `build/ghc-api/guest-PROBE/logs` and does
 not publish a success manifest. Successful probes require a strict audit and
 byte-for-byte native stdout equality. The default runs all three probes in order.
 
-These are development probes, not a claim that GHC runs under THC. The resumed
-THC attempt on 2026-09-26 acquired all dependencies and all 822 compiler-library
-interfaces. Its strict audit found 370,600 supplied bindings, 2,098 reachable
-bindings, no missing globals, and twelve duplicate global IDs. Those collisions
-came from discarding GHC's constructor-qualified record-field namespace; the
-exporter now preserves GHC's own mangled names. A fresh complete acquisition
-and guest execution remain necessary before reporting end-to-end success.
-Preserve the installed-Core cache when resuming. Compiler RTS hook tests are
-separate from these end-to-end runs.
-`runGhc` itself temporarily installs process signal handlers; merely importing
-the `ghc` package does not.
+On 2026-09-26, `ghc-faststring` passed the complete ordinary THC workflow on
+Linux x86_64 with the bytecode runtime: all 822 compiler interfaces acquired,
+strict audit accepted, original compiler Core executed, stdout matched native
+byte for byte, and normal Handle shutdown completed. The accepted graph had
+370,612 supplied bindings, 2,098 reachable bindings, no missing globals, and no
+issues. The retained success receipt is `build/ghc-api/guest-faststring/manifest.json`.
+
+```text
+THC λ GHC API
+True
+```
+
+The preceding attempt exposed twelve record-selector identity collisions;
+preserving GHC's constructor-qualified field names resolved them. No compiler
+bodies were substituted and strict admission was not weakened. Preserve the
+installed-Core cache when resuming: acquisition is expensive, but unchanged
+compiler bundles can be reused by these probes and other compiler-library apps.
+
+This demonstrates FastString interning through the real compiler library, not
+general GHC API or GHCi/native object-loader support. `runGhc` session creation
+and module load/typecheck are still being tested. Compiler RTS hook tests are
+separate lower-level coverage. `runGhc` temporarily installs process signal
+handlers; merely importing the `ghc` package does not. See the
+[standalone signal policy](../../../docs/process-signals.md) before embedding.

@@ -126,14 +126,26 @@ internal object FrameAccess {
     }
 
     fun write(frame: Frame, slot: Int, value: Any?) {
-        when (value) {
-            is Float -> writeFloat(frame, slot, value)
-            is Double -> writeDouble(frame, slot, value)
-            is Long -> writeLong(frame, slot, value)
-            is Boolean -> if (primitiveKind(frame.frameDescriptor, slot, FrameSlotKind.Boolean))
-                frame.setBoolean(slot, value) else writeObject(frame, slot, value)
-            else -> writeObject(frame, slot, value)
+        // Keep explicit instanceof guards in JVM bytecode. The pinned Kotlin
+        // subject-type switch loses numeric receiver refinement during Native
+        // Image analysis and admits unrelated Number conversion implementations.
+        if (value is Float) {
+            writeFloat(frame, slot, value)
+            return
         }
+        if (value is Double) {
+            writeDouble(frame, slot, value)
+            return
+        }
+        if (value is Long) {
+            writeLong(frame, slot, value)
+            return
+        }
+        if (value is Boolean && primitiveKind(frame.frameDescriptor, slot, FrameSlotKind.Boolean)) {
+            frame.setBoolean(slot, value)
+            return
+        }
+        writeObject(frame, slot, value)
     }
 }
 

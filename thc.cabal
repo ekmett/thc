@@ -288,6 +288,40 @@ extra-source-files:
   test/fixtures/run-executable-failure/app/Main.hs
 build-type: Simple
 
+-- Pinned GHC inventory and scalar-contract tooling; no JVM runtime dependency.
+common primop-tool-dependencies
+  build-depends:
+    base >= 4.22 && < 4.23,
+    ghc == 9.14.1,
+    aeson >= 2.3 && < 2.4,
+    bytestring >= 0.12.2 && < 0.13,
+    containers >= 0.8 && < 0.9,
+    cryptohash-sha256 >= 0.11 && < 0.12,
+    directory >= 1.3.10 && < 1.4,
+    filepath >= 1.5.4 && < 1.6,
+    process >= 1.6.26 && < 1.7,
+    scientific >= 0.3.8 && < 0.4,
+    text >= 2.1 && < 2.2
+  default-language: Haskell2010
+  ghc-options: -Wall
+  if flag(development)
+    ghc-options: -Werror
+
+executable thc-primops
+  import: primop-tool-dependencies
+  main-is: PrimopTools.hs
+  hs-source-dirs: tools/primops
+  ghc-options: -main-is PrimopTools
+
+test-suite primop-tools
+  import: primop-tool-dependencies
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  hs-source-dirs: test/primop-tools, tools/primops
+  other-modules: PrimopTools
+  build-tool-depends: thc:thc-primops
+  build-depends: HUnit >= 1.6 && < 1.7
+
 -- Small, docs-only assembly/link checker. No GHC API or runtime dependency.
 executable thc-docs
   main-is: Main.hs
@@ -454,6 +488,7 @@ test-suite driver-tests
     NativeRecipeTests
     RuntimeShimTests
     InstalledForeignTests
+    InstalledHydrationTests
     THC.Driver.Cabal
     THC.Driver.Json
     THC.Driver.Run

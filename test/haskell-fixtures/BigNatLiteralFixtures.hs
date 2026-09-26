@@ -104,7 +104,7 @@ sourcePaths root = do
      "test/haskell-fixtures/BigNatLiteralFixtures.hs","test/haskell-fixtures/FixtureSupport.hs",
      "test/haskell-fixtures/Main.hs","thc.cabal","compiler/export-boot.py","compiler/build.sh",
      "compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py","scripts/audit-core.py",
-     "scripts/core-capabilities.json","scripts/generate-scalar-signatures.py",
+     "scripts/core-capabilities.json","tools/primops/PrimopTools.hs",
      "src/main/resources/thc/scalar-primop-signatures.json"] ++
     ["compiler/THC" </> name | name <- plugins, takeExtension name == ".hs"] ++
     ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
