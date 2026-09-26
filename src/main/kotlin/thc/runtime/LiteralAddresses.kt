@@ -13,6 +13,7 @@ import java.lang.ref.WeakReference
 import jdk.incubator.vector.ByteVector
 import jdk.incubator.vector.VectorShape
 import java.nio.ByteOrder
+import java.nio.ByteBuffer
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
 
@@ -45,13 +46,17 @@ internal class ManagedAddress private constructor(
         }
     }
     internal fun nativeAllocation(): ManagedNativeAllocations.Owner? = native
+    internal fun hasNativeStorage(): Boolean = native != null || owner?.isPinned == true
     internal fun isNativeBase(): Boolean = native != null && offset == 0L
     /** Keep native storage alive across a complete operation, including calls
      * whose native pointer outlives an individual checked byte access. */
     internal fun <T> withNativeBorrow(body: () -> T): T =
         if (native == null) body() else native.borrow().use { body() }
     internal fun <T> withNativeSegment(body: (MemorySegment) -> T): T =
-        (native ?: fault("Address has no owned native allocation")).access { body(it.asSlice(offset)) }
+        if (native != null) native.access { body(it.asSlice(offset)) }
+        else synchronized(owner ?: fault("Address has no owned native allocation")) {
+            body((owner.nativeSegment() ?: fault("Address has no owned native allocation")).asSlice(offset))
+        }
     internal fun <T> withNativeBorrows(other: ManagedAddress, body: () -> T): T {
         if (native == null) return other.withNativeBorrow(body)
         if (other.native == null || native === other.native) return withNativeBorrow(body)
@@ -74,10 +79,11 @@ internal class ManagedAddress private constructor(
         if (finalizer != null) fault("Opaque C function label is not byte-addressable")
         if (numeric != null) fault("Unowned numeric Addr# is not byte-addressable")
     }
-    /** Only immutable storage can be materialized without breaking existing aliases. */
-    internal fun nativeImageKey(): Any? = literalBytes ?: owner?.takeIf { !it.isWritable }
-    internal fun nativeImageBytes(): ByteArray = owner?.takeIf { !it.isWritable }?.let { it.copyBytesOut(0, it.size) }
-        ?: literalBytes?.copyOf() ?: fault("Native image requires immutable byte storage")
+    /** Only static literals have a native image. Dynamic heap arrays never
+     * acquire a second allocation merely because their address escapes. */
+    internal fun nativeImageKey(): Any? = literalBytes
+    internal fun nativeImageBytes(): ByteArray = literalBytes
+        ?: fault("Native image requires static literal storage")
     fun toNativeBits(): Long {
         if (heap != null) fault("Opaque guest heap address has no native pointer bits")
         if (capabilities != null) fault("RTS data label has no numeric guest address")
@@ -93,6 +99,14 @@ internal class ManagedAddress private constructor(
         ?: literalBytes?.copyOf() ?: mutableBytes ?: fault("Null Addr# has no backing storage")
     }
     internal fun cbitsBacking(): ByteArray { requireBytes(); return owner?.exposeToNative() ?: rawBacking() }
+    internal fun cbitsSegment(): MemorySegment {
+        requireBytes()
+        return owner?.exposeSegment() ?: literalBytes?.let { MemorySegment.ofArray(it).asReadOnly() }
+            ?: mutableBytes?.let(MemorySegment::ofArray) ?: fault("Address has no managed buffer storage")
+    }
+    internal fun cbitsBuffer(): ByteBuffer = cbitsSegment().asByteBuffer()
+    internal fun cbitsStorageKey(): Any = owner ?: literalBytes ?: mutableBytes
+        ?: fault("Address has no managed buffer storage")
     internal fun cbitsWritable(): Boolean { requireBytes(); native?.requireLive(); return native != null || (owner?.isWritable ?: (mutableBytes != null)) }
     internal fun cbitsOffset(): Long { size(); return offset }
     internal fun cbitsOwner(): ManagedAllocation? = owner
@@ -260,7 +274,7 @@ internal class ManagedAddress private constructor(
     fun remainder(divisor: Long): Long {
         if (divisor == 0L) fault("remAddr# divisor is zero")
         // GHC 9.14.1 lowers AddrRemOp to unsigned machine-word remainder.
-        val bits = if (this === NULL || numeric != null || native != null) toNativeBits()
+        val bits = if (this === NULL || numeric != null || hasNativeStorage()) toNativeBits()
             else { requireBytes(); size(); offset }
         return java.lang.Long.remainderUnsigned(bits, divisor)
     }
@@ -277,18 +291,18 @@ internal class ManagedAddress private constructor(
     @TruffleBoundary
     fun utf8(): String {
         requireRange(0, 1)
-        val bytes = rawBacking()
+        val bytes = cbitsBuffer()
         val start = offset.toInt()
         val limit = size().toInt()
         if (start < 0 || start >= limit) fault("UTF-8 address outside its backing storage")
         var end = start
-        while (end < limit && bytes[end] != 0.toByte()) end++
+        while (end < limit && bytes.get(end) != 0.toByte()) end++
         if (end == limit) fault("Unterminated polyglot UTF-8 address")
         return try {
             Charsets.UTF_8.newDecoder()
                 .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
                 .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
-                .decode(java.nio.ByteBuffer.wrap(bytes, start, end - start)).toString()
+                .decode(bytes.slice(start, end - start)).toString()
         } catch (_: java.nio.charset.CharacterCodingException) {
             fault("Invalid UTF-8 at the polyglot boundary")
         }
@@ -385,8 +399,8 @@ internal class ManagedAddress private constructor(
         } }
         requireRange(displacement, vectorBytes.toLong())
         val start = offset + displacement
-        owner?.let { allocation -> return allocation.accessVector(start, true, 1, false, vectorBytes) { bytes ->
-            ByteVector.fromArray(species, bytes, start.toInt())
+        owner?.let { allocation -> return allocation.accessVector(start, true, 1, false, vectorBytes) { segment ->
+            ByteVector.fromMemorySegment(species, segment, start, ByteOrder.nativeOrder())
         } }
         return ByteVector.fromArray(species,
             literalBytes ?: mutableBytes ?: fault("Null Addr# has no backing storage"), start.toInt())
@@ -402,8 +416,8 @@ internal class ManagedAddress private constructor(
         }; return }
         requireRange(displacement, vectorBytes.toLong(), writable = true)
         val start = offset + displacement
-        owner?.let { allocation -> allocation.accessVector(start, true, 1, true, vectorBytes) { bytes ->
-            vector.intoArray(bytes, start.toInt())
+        owner?.let { allocation -> allocation.accessVector(start, true, 1, true, vectorBytes) { segment ->
+            vector.intoMemorySegment(segment, start, ByteOrder.nativeOrder())
         }; return }
         vector.intoArray(mutableBytes ?: fault("Cannot write through an immutable literal Addr#"), start.toInt())
     }
@@ -421,12 +435,12 @@ internal class ManagedAddress private constructor(
     /** Keep owner checks, alias synchronization and the complete read/modify/write
      * together. This does not expose or permanently mark the backing as raw. */
     internal inline fun <T> withAtomicBytes(width: Int, writable: Boolean,
-        action: (ByteArray, Int) -> T): T {
+        action: (MemorySegment, Int) -> T): T {
         requireRange(0, width.toLong(), writable)
         if (offset % width != 0L) fault("Misaligned atomic Addr#")
         owner?.let { return it.accessAtomicByteRange(offset, width, writable, action) }
         val bytes = literalBytes ?: mutableBytes ?: fault("Atomic Addr# has no byte storage")
-        return synchronized(bytes) { action(bytes, offset.toInt()) }
+        return synchronized(bytes) { action(MemorySegment.ofArray(bytes), offset.toInt()) }
     }
 
     internal fun atomicPointer(expected: ManagedAddress?, desired: ManagedAddress): ManagedAddress {
@@ -534,7 +548,7 @@ internal class ManagedAddress private constructor(
         if (count == 0L) return@withNativeBorrow
         if (native != null) native.access { source ->
             if (destination is ManagedAllocation)
-                destination.copyBytesIn(source.asSlice(offset, count).toArray(ValueLayout.JAVA_BYTE), 0, destinationOffset, count)
+                destination.copyBytesIn(source, offset, destinationOffset, count)
             else MemorySegment.copy(source, offset, MemorySegment.ofArray(destination as ByteArray), destinationOffset, count)
         } else ManagedByteArray.copyGuest(owner ?: literalBytes ?: mutableBytes,
             offset, destination, destinationOffset, count, mutable = false)
@@ -549,9 +563,8 @@ internal class ManagedAddress private constructor(
         if (count == 0L) return@withNativeBorrow
         if (native != null) native.access { target ->
             // Managed pointer references cannot become fabricated native bits.
-            val bytes = if (source is ManagedAllocation) source.copyBytesOut(sourceOffset, count) else source as ByteArray
-            MemorySegment.copy(MemorySegment.ofArray(bytes), if (source is ManagedAllocation) 0 else sourceOffset,
-                target, offset, count)
+            if (source is ManagedAllocation) source.copyBytesTo(sourceOffset, target, offset, count)
+            else MemorySegment.copy(MemorySegment.ofArray(source as ByteArray), sourceOffset, target, offset, count)
         } else ManagedByteArray.copyGuest(source, sourceOffset, owner ?: mutableBytes,
             offset, count, mutable = false)
     }
@@ -579,21 +592,18 @@ internal class ManagedAddress private constructor(
             } }
             native != null -> native.access { source ->
                 if (destinationOwner != null) {
-                    // The target's checked JVM capacity bounds this narrow transport.
-                    val bytes = source.asSlice(offset, count).toArray(ValueLayout.JAVA_BYTE)
-                    destinationOwner.copyBytesIn(bytes, 0, destination.offset, count)
+                    destinationOwner.copyBytesIn(source, offset, destination.offset, count)
                 } else MemorySegment.copy(source, offset, MemorySegment.ofArray(destination.mutableBytes!!), destination.offset, count)
             }
             destination.native != null -> destination.native.access { target ->
-                val bytes = if (sourceOwner != null) sourceOwner.copyBytesOut(offset, count)
-                    else literalBytes ?: mutableBytes ?: fault("Null Addr# has no backing storage")
-                MemorySegment.copy(MemorySegment.ofArray(bytes), if (sourceOwner == null) offset else 0, target, destination.offset, count)
+                if (sourceOwner != null) sourceOwner.copyBytesTo(offset, target, destination.offset, count)
+                else MemorySegment.copy(MemorySegment.ofArray(literalBytes ?: mutableBytes
+                    ?: fault("Null Addr# has no backing storage")), offset, target, destination.offset, count)
             }
             sourceOwner != null && destinationOwner != null ->
                 destinationOwner.copyFrom(sourceOwner, offset, destination.offset, count)
             sourceOwner != null -> {
-                val source = sourceOwner.copyBytesOut(offset, count)
-                System.arraycopy(source, 0, destination.mutableBytes!!, destination.offset.toInt(), count.toInt())
+                sourceOwner.copyBytesTo(offset, MemorySegment.ofArray(destination.mutableBytes!!), destination.offset, count)
             }
             destinationOwner != null -> destinationOwner.copyBytesIn(
                 literalBytes ?: mutableBytes ?: fault("Null Addr# has no backing storage"),

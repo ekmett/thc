@@ -5,8 +5,14 @@ The pinned GHC coercions are `addr2Int# :: Addr# -> Int#` and
 high bit. An arbitrary integer yields an opaque address carrier: it does not
 provide permission to read process memory or call C with that pointer.
 
-Immutable literals and pointer-free immutable allocation images can acquire a
-real native copy. The current context owns a weak backing-to-image index; every
+Explicitly pinned arrays own aligned native storage from allocation. Projection
+returns that segment's real address, without copying, moving, or pinning again.
+Buffer-only interop and native pointer views share this same storage. Ordinary
+mutable and immutable heap allocations remain moving JVM arrays and reject
+numeric projection; unsafe freeze does not promote storage.
+
+Static literals can acquire their read-only native materialization. The current
+context owns a weak backing-to-image index; every
 image owns a shared FFM arena and its address is `MemorySegment.address()`,
 never an identity hash or an encoded handle. Aliases share one image and offsets.
 A live registered integer address reconstructs the original managed alias,
@@ -14,8 +20,8 @@ including its existing pointer-cell and stack-provenance identity. The native
 copy and original bytes cannot diverge through supported operations because
 both are read-only. Immutable constructors copy their input, raw-array exports
 return defensive copies, and pointer-cell installation requires mutable storage.
-Mutable array aliases keep their existing behavior and remain ineligible for
-projection, including after `unsafeFreezeByteArray#`.
+Internal buffer transport borrows a read-only view, rather than using the
+defensive-copy host export API.
 Each native allocation reserves one extra physical byte so an image's valid
 one-past address cannot coincide with another image's base. This extra byte does
 not enlarge the logical image or relax its managed access bounds.
@@ -23,19 +29,22 @@ not enlarge the logical image or relax its managed access bounds.
 Integer values do not keep the allocation alive. Managed aliases keep the weak
 backing key alive; native transport views keep both backing and image alive.
 Synchronous C calls use reachability fences until return. Dead images are cleaned
-without re-entering LLVM, and context disposal closes every surviving arena.
+without re-entering LLVM, and context disposal closes surviving literal-image
+arenas. Pinned-array automatic arenas instead follow the lifetime of their
+aliases and buffer views, including a view retained after a context closes.
 Previously issued immutable `CbitsBuffer` views have an explicit `toNative`
-transition to this same image. Mutable views have no such transition. Sulong
+transition to this same literal image. Pinned mutable views expose their existing
+native segment; moving-heap views have no such transition. Sulong
 cannot pin arbitrary JVM arrays on demand: its native-pointer conversion calls
 `toNative` and then requires `asPointer` to succeed.
 Resolution uses only the current context's live registry: a numeric address
 from another context grants no access to that context's storage.
 
-Mutable managed arrays and opaque StablePtr handles still reject numeric
-projection. Supporting mutable arrays requires native-primary storage or a
-complete coherent storage abstraction, including escaped raw array aliases,
-concurrent access, and real pointer-cell encoding. A temporary native copy or
-native identity token would not satisfy that contract. This increment does not
+Moving-heap arrays and opaque StablePtr handles still reject numeric projection.
+Pointer-bearing owned arrays retain their managed cell protections and cannot
+be exported as raw C buffers; this does not yet provide general native pointer
+cell encoding for pinned byte arrays. A temporary native copy or native identity
+token would not satisfy that contract. This increment does not
 add generic foreign-pointer ownership, arbitrary-pointer memory access, or
 native function pointers.
 
