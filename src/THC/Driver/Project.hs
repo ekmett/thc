@@ -1199,7 +1199,13 @@ readComponentMetadata selected unit context = do
   require (hasPair "-this-unit-id" (unitId unit) arguments)
     ("compiler arguments have wrong unit ID for " ++ unitId unit)
   sources <- if selected then sourcePaths value arguments else pure []
-  pure (Component value (contextGhc context) arguments sources)
+  flags <- field (unitValue unit) "flags" :: IO (Map.Map String Bool)
+  configured <- case value of
+    Object fields -> pure (Object (KeyMap.insert "thc-cabal-configuration" (object
+      ["flags" .= flags, "compiler" .= contextCompiler context,
+       "platform" .= contextPlatform context]) fields))
+    _ -> fail "Cabal component metadata must be an object"
+  pure (Component configured (contextGhc context) arguments sources)
 
 sourcePaths :: Value -> [String] -> IO [(String, FilePath)]
 sourcePaths component arguments = do

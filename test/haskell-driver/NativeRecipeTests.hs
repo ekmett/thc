@@ -5,7 +5,8 @@ module NativeRecipeTests (tests) where
 
 import Control.Exception (bracket)
 import Control.Monad (forM_)
-import Data.Aeson (Value, object, (.=))
+import Data.Aeson (Value(..), object, (.=))
+import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Either (isLeft)
 import Data.IORef
 import GHC.ResponseFile (escapeArgs, unescapeArgs)
@@ -22,6 +23,36 @@ tests = TestLabel "actual native compiler receipts" $ TestList
   [ TestCase $ do
       let args = ["-c", "cbits/a café.c", "-I/a \"quoted\" path", "-DVALUE=\\x"]
       assertEqual "GHC response quoting preserves complete arguments" args (unescapeArgs (escapeArgs args))
+  , TestCase $ withScratch $ \root -> do
+      let dist = root </> "build"
+          configured flags platform compiler = case metadata root dist of
+            Object fields -> Object (KeyMap.insert "thc-cabal-configuration" (object
+              ["flags" .= flags, "platform" .= (platform :: String),
+               "compiler" .= (compiler :: String)]) fields)
+            _ -> error "test metadata is an object"
+          flag enabled = object ["ffi" .= enabled]
+          component enabled platform compiler = configured (flag enabled) platform compiler
+      writeFile (root </> "proof.cabal") $ unlines
+        ["cabal-version: 3.0", "name: proof", "version: 0.1", "build-type: Simple",
+         "flag ffi", "  default: True", "  manual: True", "library",
+         "  exposed-modules: Proof", "  build-depends: base",
+         "  if flag(ffi) && os(linux) && arch(x86_64) && impl(ghc >= 9.14)",
+         "    c-sources: cbits/proof.c",
+         "  if os(windows)", "    c-sources: cbits/windows.c"]
+      assertEqual "disabled optional C backend is absent, despite default True" [] =<<
+        componentNativeDeclarations (component False "x86_64-linux" "ghc-9.14.1")
+      ensureNativeRecipes root dist [dist] "/unused" (component False "x86_64-linux" "ghc-9.14.1")
+        (fail "disabled native branch must not force a rebuild")
+      assertEqual "active backend remains declared" ["cbits/proof.c"] =<<
+        componentNativeDeclarations (component True "x86_64-linux" "ghc-9.14.1")
+      assertEqual "architecture condition is respected" [] =<<
+        componentNativeDeclarations (component True "aarch64-linux" "ghc-9.14.1")
+      assertEqual "compiler version condition is respected" [] =<<
+        componentNativeDeclarations (component True "x86_64-linux" "ghc-9.12.2")
+      assertEqual "OS-specific declarations use selected target" ["cbits/windows.c"] =<<
+        componentNativeDeclarations (component False "x86_64-windows" "ghc-9.14.1")
+      absent <- tryIOError (componentNativeDeclarations (configured (object []) "x86_64-linux" "ghc-9.14.1"))
+      assertBool "missing plan flags do not silently pick defaults" (isLeft absent)
   , TestCase $ do
       let args = ["-package-env=-","-c","-fPIC","-odir","/owned build","-pgmc","/usr/bin/gcc",
                   "cbits/a.c","-O2","-optc-O2","-pgmc","/selected/clang","-fforce-recomp"]

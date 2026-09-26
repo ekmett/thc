@@ -48,8 +48,14 @@ closures, initializers, destructors, global variables or additional native
 libraries. This is a bounded source-component path, not arbitrary installed
 Hackage cbits support.
 
-The selected GHC remains Cabal's native compiler. Its saved component C recipe
-must explicitly select Clang (for example with `ghc-options: -pgmc
+The selected GHC remains Cabal's native compiler. THC uses Cabal's resolved
+flags, target platform and compiler version to select active native declarations.
+Disabled optional C backends do not require native objects;
+active declarations still require successful compiler receipts. The bounded
+single-translation-unit profile applies to that configured component, not the
+union of every conditional branch.
+
+The saved native compiler recipe must explicitly select Clang (for example with `ghc-options: -pgmc
 /absolute/path/to/clang`); acquisition does not replace a configured GCC.
 Matching `llvm-link`, `opt` and `llvm-nm` must be available, or selected with
 `THC_LLVM_LINK`, `THC_LLVM_OPT` and `THC_LLVM_NM`. The producer rejects unsupported C options

@@ -8,20 +8,25 @@ module THC.Driver.NativeRecipe
 
 import Control.Monad (filterM, forM, unless, when)
 import qualified Crypto.Hash.SHA256 as SHA
-import Data.Aeson (FromJSON, ToJSON, Value, eitherDecodeStrict', encode, fromJSON, Result(..))
+import Data.Aeson (FromJSON, ToJSON, Value(..), eitherDecodeStrict', encode, fromJSON, Result(..))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.List (isPrefixOf, nub, sort)
+import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text as Text
-import Distribution.PackageDescription (buildType, BuildType(Simple), cSources, cxxSources, asmSources, cmmSources, jsSources)
+import Distribution.Compiler (unknownCompilerInfo, AbiTag(NoAbiTag))
+import Distribution.PackageDescription (buildType, BuildType(Simple), cSources, cxxSources, asmSources, cmmSources, jsSources,
+  genPackageFlags, flagName, mkFlagAssignment, mkFlagName, unFlagName)
 import Distribution.PackageDescription.Parsec (parseGenericPackageDescriptionMaybe)
-import Distribution.PackageDescription.Configuration (flattenPackageDescription)
+import Distribution.PackageDescription.Configuration (finalizePD, flattenPackageDescription)
 import Distribution.Parsec (eitherParsec)
 import Distribution.Simple.LocalBuildInfo (lookupComponent, componentBuildInfo)
 import Distribution.Types.ComponentName (ComponentName(CExeName, CLibName))
+import Distribution.Types.ComponentRequestedSpec (ComponentRequestedSpec(OneComponentRequestedSpec))
+import Distribution.Types.DependencySatisfaction (DependencySatisfaction(Satisfied))
 import Distribution.Types.LibraryName (LibraryName(LMainLibName, LSubLibName))
 import Distribution.Types.UnqualComponentName (unUnqualComponentName)
 import Distribution.Utils.Path (getSymbolicPath)
@@ -96,14 +101,14 @@ ensureNativeRecipes :: FilePath -> FilePath -> [FilePath] -> FilePath -> Value -
 ensureNativeRecipes native dist roots compiler component rebuild = do
   objects <- componentNativeObjects native dist roots component
   declarations <- componentNativeDeclarations component
-  -- The declaration union must satisfy the bounded profile before consulting
+  -- The active declarations must satisfy the bounded profile before consulting
   -- warm objects. One surviving receipt cannot conceal a second missing TU.
   unless (case declarations of
     [] -> True
     [source] -> takeExtension source == ".c" && not (isAbsolute source) &&
       ".." `notElem` splitDirectories source
     _ -> False)
-    (fail "native scalar profile requires exactly one declared relative C source; ambiguous conditional native branches are outside the profile")
+    (fail "native scalar profile requires exactly one active relative C source")
   let receipts = native </> "cache/thc/native-recipes-v1"
   missing <- filterM (\path -> maybe True (const False) <$> readNativeRecipe receipts compiler path) objects
   unless (null missing && (null declarations || any ((== ".o") . takeExtension) objects)) $ do
@@ -111,15 +116,16 @@ ensureNativeRecipes native dist roots compiler component rebuild = do
     rebuild
     rebuilt <- componentNativeObjects native dist roots component
     unless (null declarations || not (null rebuilt))
-      (fail "native declarations remain unobserved after Cabal rebuild (inactive conditional native branches are outside the scalar profile)")
+      (fail "active native declarations remain unobserved after Cabal rebuild")
     unless (all (`elem` rebuilt) missing) (fail "Cabal did not rebuild missing native recipe outputs")
     mapM_ (\path -> do
       receipt <- readNativeRecipe receipts compiler path
       unless (maybe False (const True) receipt) (fail ("Cabal native output has no compiler receipt: " ++ path))) rebuilt
 
--- This is only an absence/declaration guard. Taking the union of branches is
--- conservative: it never claims a branch is active or supplies compiler flags.
--- Actual native membership and arguments still require successful receipts.
+-- Resolve conditions using Cabal's actual plan, not the union of inactive
+-- branches (e.g. ad's optional -ffi backend). This is only the declaration
+-- guard: native membership and compiler arguments still require receipts.
+-- Callers without a resolved plan retain the conservative union behavior.
 componentNativeDeclarations :: Value -> IO [FilePath]
 componentNativeDeclarations component = do
   root <- field component "src-dir"
@@ -129,7 +135,21 @@ componentNativeDeclarations component = do
   generic <- maybe (fail "cannot parse public Cabal native declaration inventory") pure
     (parseGenericPackageDescriptionMaybe bytes)
   selected <- either fail pure (eitherParsec name)
-  let package = flattenPackageDescription generic
+  package <- case component of
+    Object fields | Just configuration <- KM.lookup "thc-cabal-configuration" fields -> do
+      flags <- field configuration "flags" :: IO (Map.Map String Bool)
+      compiler <- either fail pure . eitherParsec =<< field configuration "compiler"
+      platform <- either fail pure . eitherParsec =<< field configuration "platform"
+      unless (Map.keys flags == sort (map (unFlagName . flagName) (genPackageFlags generic)))
+        (fail "Cabal plan must provide every declared package flag exactly once")
+      let assignment = mkFlagAssignment [(mkFlagName flagText, enabled) | (flagText, enabled) <- Map.toList flags]
+      -- Dependencies have already been solved by Cabal. Fixed flags prevent
+      -- finalizePD from exploring a different configuration here.
+      case finalizePD assignment (OneComponentRequestedSpec selected) (const Satisfied)
+             platform (unknownCompilerInfo compiler NoAbiTag) [] generic of
+        Left missing -> fail ("cannot resolve configured Cabal component: " ++ show missing)
+        Right (resolved, _) -> pure resolved
+    _ -> pure (flattenPackageDescription generic)
   configured <- maybe (fail "Cabal component absent from public package declaration") pure (lookupComponent package selected)
   let info = componentBuildInfo configured
       sources = map getSymbolicPath (cSources info) ++ map getSymbolicPath (cxxSources info) ++

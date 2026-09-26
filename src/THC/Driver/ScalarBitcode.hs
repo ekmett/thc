@@ -66,7 +66,7 @@ withScalarBitcode nativeRoot dist roots ghc packageTool unit component action = 
     sourcePath <- canonicalizePath (root </> source)
     declaredPaths <- mapM (canonicalizePath . (root </>)) declarations
     check (declaredPaths == [sourcePath])
-      "scalar cbits requires one observed C declaration; ambiguous conditional native branches are outside the profile"
+      "scalar cbits requires one observed active C declaration"
     check (recipeDirectory vanilla == root && recipeSource vanilla == sourcePath)
       "scalar cbits: native recipe source or working directory differs from its component"
     -- Dynamic copies may accompany the vanilla object; no second source,
