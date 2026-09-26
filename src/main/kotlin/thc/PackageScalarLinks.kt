@@ -50,6 +50,8 @@ internal object PackageScalarLinks {
         it.values.forEach(::text)
         check(it["namespace"] in setOf("value", "type", "data"), "name namespace")
     }
+    internal fun archiveIdentity(value: Any?): Map<*, *> = identity(value)
+    internal fun archiveType(value: Any?) = type(value)
     private fun type(value: Any?, depth: Int = 0) {
         check(value is Map<*, *>, "type record")
         val raw = value as Map<*, *>
@@ -77,7 +79,8 @@ internal object PackageScalarLinks {
             (system.startsWith("Mac") && ("-darwin" in target || "-apple-macosx" in target))), "target differs from runtime")
     }
 
-    fun read(module: Map<*, *>): PackageScalarAdmission? {
+    fun read(module: Map<*, *>, validateArchive: Boolean = true): PackageScalarAdmission? {
+        if (validateArchive) PackageNativeArchives.read(module)
         val native = module.containsKey("packageNativeLink")
         val raw = module[if (native) "packageNativeLink" else "packageScalarLink"] ?: return null
         check(!native || !module.containsKey("packageScalarLink"), "two package link profiles")
@@ -116,8 +119,8 @@ internal object PackageScalarLinks {
                 (if (native) nativeReps - setOf("ByteArray#", "MutableByteArray#") + "void" else reps), "C ABI")
             val convention = if (native) text(entry["convention"]) else "ccall"
             val safety = if (native) text(entry["safety"]) else "unsafe"
-            check(!native || convention in setOf("ccall", "capi") && (safety == "unsafe" || safety == "safe" &&
-                entry["result"] != "AddrRep" && arguments.none { it in setOf("AddrRep", "ByteArray#", "MutableByteArray#") }),
+            // Temporary safe-as-unsafe policy; declared metadata stays exact.
+            check(!native || convention in setOf("ccall", "capi") && safety in setOf("unsafe", "safe"),
                 "unsupported C calling convention/safety")
             PackageScalarSignature(name, entry["entry"] as String, arguments.map { it as String }, entry["result"] as String, convention, safety)
         }
@@ -134,7 +137,7 @@ internal object PackageScalarLinks {
             variants.map { it.arguments.map(::pointerAbi) }.distinct().size > 1 }.keys
         bySymbol.values.forEach { variants ->
             check(native || variants.size == 1, "duplicate scalar ABI symbol")
-            check(variants.map { listOf(it.convention, it.safety, it.arguments.map { rep ->
+            check(variants.map { listOf(it.convention, if (it.safety == "safe") "unsafe" else it.safety, it.arguments.map { rep ->
                 integerAbi(pointerAbi(rep)) }, it.result) }.distinct().size == 1,
                 "conflicting C ABI variants")
             check(variants.map { listOf(it.convention, it.safety, it.arguments.map { rep ->
@@ -174,6 +177,9 @@ internal object PackageScalarLinks {
         val proved = hashSetOf<String>()
         for (value in imports) {
             val item = record(value, "binder header symbol unit isFunction convention safety declaredType normalizedType normalizationRole emitted")
+            // Archive validation checks the complete original declaration. An
+            // excluded signature is never associated with an executable entry.
+            if (item["emitted"] in PackageNativeArchives.excluded(module)) continue
             val binder = identity(item["binder"])
             check(binder["unit"] == unit && binder["module"] == module["module"] && binder["namespace"] == "value" && binders.add(binder), "import binder")
             val convention = item["convention"]

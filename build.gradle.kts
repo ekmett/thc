@@ -605,6 +605,24 @@ for ((taskName, dense) in listOf("stablePtrFfiFullCoreDefault" to false, "stable
         }
     }
 }
+for ((taskName, dense) in listOf("packageNativeArchivesDefault" to false, "packageNativeArchivesDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Checks real mixed native imports and archive-only rejection before effects."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        systemProperty("thc.handoffSlabs", dense.toString())
+        inputs.files(fileTree("build/native-archive") { include("linked/**/*.json", "*.json") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.PackageNativeArchiveFullCoreTest") }
+        outputs.upToDateWhen { false }
+        doFirst {
+            check(file("build/native-archive/manifest.json").isFile) {
+                "Run cabal run exe:thc-fixtures -- package-native-archives with the selected full-Core GHC"
+            }
+        }
+    }
+}
 for ((taskName, dense) in listOf("packageNativeOriginalsDefault" to false, "packageNativeOriginalsDense" to true)) {
     tasks.register<Test>(taskName) {
         group = "verification"

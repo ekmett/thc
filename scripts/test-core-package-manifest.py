@@ -51,11 +51,50 @@ class PackageNativeVariantsTest(unittest.TestCase):
         _, partial = core_package_manifest.package_scalar_link(module)
         self.assertEqual(1, len(partial), 'one symbol does not prove both semantic variants')
 
+    def test_archive_preserves_mixed_imports_and_checks_unresolved_artifact_bytes(self):
+        import copy
+        module = self.module(['WordRep'])
+        proof = module['staticForeignImports']
+        blocked = copy.deepcopy(proof['imports'][0])
+        blocked['binder']['occurrence'] = 'blocked'
+        blocked['symbol'] = blocked['emitted']['symbol'] = 'blocked'
+        blocked['safety'] = blocked['emitted']['safety'] = 'interruptible'
+        blocked['emitted']['arguments'] = ['AddrRep', 'void']
+        proof['imports'].append(blocked)
+        module['packageNativeArchive'] = dict(schema=1, profile='thc-package-native-archive-v1', execution='not-linked',
+            unit=module['unit'], module=module['module'], unsupportedImports=[blocked['emitted']],
+            unclassifiedReason=None, unresolvedSymbols=[], artifact=None)
+        link, proved = core_package_manifest.package_scalar_link(module)
+        self.assertEqual({link['abi'][0]['entry']}, proved)
+        archive = core_package_manifest.package_native_archive(module)
+        self.assertFalse(core_package_manifest.native_archive_blocks(module, {}, archive))
+        binding = dict(foreignCall=dict(target=dict(unit=module['unit'], symbol='blocked'), convention='ccall', safety='interruptible'))
+        self.assertTrue(core_package_manifest.native_archive_blocks(module, binding, archive))
+        for key, value in [('unsupportedImports', []), ('unclassifiedReason', 'invented'), ('schema', True)]:
+            bad = copy.deepcopy(module); bad['packageNativeArchive'][key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError): core_package_manifest.package_scalar_link(bad)
+        archived = copy.deepcopy(module)
+        archived['packageNativeArchive']['artifact'] = archived.pop('packageNativeLink')
+        archived['packageNativeArchive']['unresolvedSymbols'] = ['unknown_external']
+        self.assertIsNone(core_package_manifest.package_scalar_link(archived))
+        self.assertTrue(core_package_manifest.native_archive_blocks(archived, {}, archived['packageNativeArchive']))
+        archived['packageNativeArchive']['artifact']['bitcodeHex'] = '4342'
+        with self.assertRaisesRegex(ValueError, 'bitcode digest'): core_package_manifest.package_native_archive(archived)
+
     def test_conflicts_order_duplicates_and_erased_mutability_still_reject(self):
         for reps in (['AddrRep', 'WordRep'], ['ByteArray#', 'MutableByteArray#'],
                      ['ByteArray#', 'AddrRep'], ['AddrRep', 'AddrRep']):
             with self.subTest(reps=reps), self.assertRaises(ValueError):
                 core_package_manifest.package_scalar_link(self.module(reps))
+
+    def test_safe_and_unsafe_declarations_share_c_abi_but_retain_both_adapters(self):
+        module = self.module(['AddrRep', 'AddrRep'])
+        module['packageNativeLink']['abi'][0]['safety'] = 'safe'
+        imported = module['staticForeignImports']['imports'][0]
+        imported['safety'] = imported['emitted']['safety'] = 'safe'
+        link, proved = core_package_manifest.package_scalar_link(module)
+        self.assertEqual(['safe', 'unsafe'], [entry['safety'] for entry in link['abi']])
+        self.assertEqual(2, len(proved))
 
     def test_ccall_header_is_retained_without_changing_emitted_symbol(self):
         module = self.module(['AddrRep', 'ByteArray#'])
@@ -68,7 +107,7 @@ class PackageNativeVariantsTest(unittest.TestCase):
             with self.subTest(header=malformed), self.assertRaises(ValueError):
                 core_package_manifest.package_scalar_link(module)
 
-    def test_safe_scalars_retain_safety_and_reject_pointer_or_interruptible_calls(self):
+    def test_safe_imports_retain_metadata_with_temporary_unsafe_carriers_but_reject_interruptible(self):
         def make(rep, safety, result='WordRep'):
             module = self.module([rep])
             module['packageNativeLink']['abi'][0]['safety'] = safety
@@ -81,18 +120,21 @@ class PackageNativeVariantsTest(unittest.TestCase):
         link, proved = core_package_manifest.package_scalar_link(accepted)
         self.assertEqual('safe', link['abi'][0]['safety'])
         self.assertEqual({link['abi'][0]['entry']}, proved)
-        with self.assertRaises(ValueError):
-            core_package_manifest.package_scalar_link(make('WordRep', 'safe', 'AddrRep'))
+        link, _ = core_package_manifest.package_scalar_link(make('WordRep', 'safe', 'AddrRep'))
+        self.assertEqual('AddrRep', link['abi'][0]['result'])
+        for rep in ('AddrRep', 'ByteArray#', 'MutableByteArray#'):
+            link, _ = core_package_manifest.package_scalar_link(make(rep, 'safe'))
+            self.assertEqual([rep], link['abi'][0]['arguments'])
+            self.assertEqual('safe', link['abi'][0]['safety'])
         for where in ('declaration', 'emitted'):
             altered = make('WordRep', 'safe')
             imported = altered['staticForeignImports']['imports'][0]
             (imported if where == 'declaration' else imported['emitted'])['safety'] = 'unsafe'
             with self.subTest(where=where), self.assertRaises(ValueError):
                 core_package_manifest.package_scalar_link(altered)
-        for rep, safety in (('AddrRep', 'safe'), ('ByteArray#', 'safe'),
-                            ('MutableByteArray#', 'safe'), ('WordRep', 'interruptible')):
-            with self.subTest(rep=rep, safety=safety), self.assertRaises(ValueError):
-                core_package_manifest.package_scalar_link(make(rep, safety))
+        for rep in ('AddrRep', 'ByteArray#', 'MutableByteArray#', 'WordRep'):
+            with self.subTest(rep=rep), self.assertRaises(ValueError):
+                core_package_manifest.package_scalar_link(make(rep, 'interruptible'))
 
     def test_signedness_adapters_require_headers_and_keep_integer_widths(self):
         for width in ('', '8', '16', '32', '64'):

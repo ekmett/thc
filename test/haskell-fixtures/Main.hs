@@ -75,6 +75,7 @@ import RtsDiagnosticFixtures (prepareRtsDiagnostics)
 import OriginalOpenFixtures (prepareOriginalOpen)
 import PackageScalarFixtures (preparePackageScalar)
 import PackageNativeOriginalsFixtures (preparePackageNativeOriginals)
+import PackageNativeArchiveFixtures (preparePackageNativeArchives)
 import GetEntropyFixtures (prepareGetEntropy)
 import HashableFfiFixtures (prepareHashableFfi)
 import OriginalTermiosFixtures (prepareOriginalTermios)
@@ -962,6 +963,7 @@ main = do
     ["package-scalar-cbits"] -> preparePackageScalar root
     ["stableptr-ffi"] -> prepareStablePtrFFI root
     ["package-native-originals"] -> preparePackageNativeOriginals root
+    ["package-native-archives"] -> preparePackageNativeArchives root
     ["getentropy"] -> prepareGetEntropy root
     ["hashable-ffi"] -> prepareHashableFfi root
     ["libdw-unavailable"] -> prepareLibdwUnavailable root
