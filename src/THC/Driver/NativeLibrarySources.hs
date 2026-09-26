@@ -1,6 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
-module THC.Driver.NativeLibrarySources (zlibChecksumSources, nativeMathSymbols, validateNativeMathIR) where
+module THC.Driver.NativeLibrarySources
+  ( zlibChecksumSources, nativeMathSymbols, validateNativeMathIR, validateNativeEntropyIR ) where
 
 import Control.Monad (forM_, unless)
 import qualified Crypto.Hash.SHA256 as SHA
@@ -27,6 +28,25 @@ validateNativeMathIR symbols source = forM_ symbols $ \symbol -> do
         filter (/= "noundef") (words (takeWhile (/= ')') after)) == [rep]
   unless (length declarations == 1 && all valid declarations)
     (Left ("native libm declaration has unsupported ABI: " ++ symbol))
+
+-- Linux x86_64 libc: int getentropy(void *, size_t). The caller's real C
+-- stack/native/pinned address reaches libc through Sulong; this admits no
+-- managed-heap copy or synthesized entropy implementation.
+validateNativeEntropyIR :: String -> String -> Either String ()
+validateNativeEntropyIR target source = do
+  unless (target == "x86_64-unknown-linux-gnu")
+    (Left "native getentropy provider currently requires Linux x86_64")
+  let declarations = [(before, drop (length "@getentropy(") after) |
+        line <- lines source, "declare " `isPrefixOf` line,
+        let (before,after) = break (== '@') line,
+        "@getentropy(" `isPrefixOf` after]
+      valid (before,after) = filter (/= "noundef") (words before) == ["declare","i32"] &&
+        map (filter (/= "noundef") . words) (arguments (takeWhile (/= ')') after)) == [["ptr"],["i64"]]
+      arguments text = case break (== ',') text of
+        (first,[]) -> [first]
+        (first,_:rest) -> first : arguments rest
+  unless (length declarations == 1 && all valid declarations)
+    (Left "native getentropy declaration has unsupported ABI")
 
 -- Compile the original implementation with the package's actual configured
 -- zlib header. A mismatched installed version is a specific unsupported
