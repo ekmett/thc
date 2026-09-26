@@ -13,6 +13,17 @@ tested source fix, and the staged plan below. Pure scalar and constructor Core
 were checked against native GHC on the JVM; Sulong image/FFI execution was not
 attempted because the pure image had not built.
 
+**Second-phase result:** an interpreter transition before lazy fork dispatch
+installation resolves the `Node.<init>` runtime-compilation assertion. The real
+THC image passes analysis and reaches native method compilation, but still
+fails on unprepared interop deoptimization methods; no THC executable has
+linked. The fix passes 58 thread/thunk/original lazy-fork checks across both
+handoff modes, including first-installed compiled execution. A separate minimal
+Truffle image returns different interpreter/compiled results (`42`/`43`) and
+demonstrates actual installed guest machine code. This is toolchain evidence,
+not a successful THC native image or Haskell AOT result. Source fix and detailed
+worker evidence are recorded in checkpoint `7ff52868`.
+
 ## Execution models
 
 | Product | What is fixed when built | Guest execution |
