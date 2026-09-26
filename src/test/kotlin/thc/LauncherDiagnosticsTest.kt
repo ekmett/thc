@@ -43,7 +43,8 @@ class LauncherDiagnosticsTest {
                     "fieldReps" to emptyList<List<String>>())))
     }
 
-    private fun launch(mode: String, backend: String, diagnostics: String?): String {
+    private fun launch(mode: String, backend: String, diagnostics: String?, ffi: List<String> = emptyList(),
+                       guest: List<String> = emptyList()): String {
         val source = directory.resolve("io.json").toFile()
         source.writeText(Json.stringify(module()))
         val old = listOf("thc.backend", "thc.diagnostics").associateWith(System::getProperty)
@@ -55,8 +56,9 @@ class LauncherDiagnosticsTest {
                 if (diagnostics == null) System.clearProperty("thc.diagnostics")
                 else System.setProperty("thc.diagnostics", diagnostics)
                 System.setErr(stream)
-                val args = (listOf(mode, source.path, "main") +
-                    if (mode == "--run-executable") listOf("shutdown") else emptyList()).toTypedArray()
+                val args = (ffi + listOf(mode, source.path, "main") +
+                    (if (mode == "--run-executable") listOf("shutdown") else emptyList()) +
+                    listOf("--", "program") + guest).toTypedArray()
                 // Several development executables share this Kotlin package;
                 // invoke the installed launcher class, not an ambiguous main().
                 try { Class.forName("thc.MainKt").getMethod("main", Array<String>::class.java).invoke(null, args) }
@@ -81,6 +83,21 @@ class LauncherDiagnosticsTest {
             val metrics = Json.parse(output.trim()) as Map<*, *>
             assertEquals(backend, metrics["backend"])
             assertEquals(0L, (metrics["unsupportedTraps"] as Number).toLong())
+        }
+    }
+
+    @Test fun nativeFfiOverridesAmbientModeAndPreservesGuestOptions() {
+        val old = System.getProperty("thc.ffiMode")
+        try {
+            System.setProperty("thc.ffiMode", "managed")
+            for (mode in listOf("--run-io", "--run-executable")) for (backend in listOf("ast", "bytecode")) {
+                assertEquals("", launch(mode, backend, null, listOf("--ffi", "native"),
+                    listOf("--ffi", "invalid-guest-value", "", "--")))
+                assertEquals("", launch(mode, backend, null, listOf("--ffi=managed", "--ffi=native")))
+            }
+            assertEquals("managed", System.getProperty("thc.ffiMode"), "launch does not mutate defaults")
+        } finally {
+            if (old == null) System.clearProperty("thc.ffiMode") else System.setProperty("thc.ffiMode", old)
         }
     }
 }
