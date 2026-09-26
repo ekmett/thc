@@ -10,13 +10,14 @@
 -- serialization do not link native foreign products or authorize execution.
 module THC.Interface
   ( InterfaceCore, interfaceModule, interfaceDetails, interfaceBindings, interfaceForeign
-  , InterfaceError(..), loadInterfaceCore, interfaceCoreJSON, probeInterface
+  , InterfaceError(..), loadInterfaceCore, interfaceCoreJSON, interfaceCoreJSONBytes, probeInterface
   ) where
 
 import Control.Exception (Exception, throwIO)
 import Control.Monad (unless)
 import Data.IORef (newIORef, writeIORef, readIORef, modifyIORef')
 import Data.List (sortOn)
+import qualified Data.ByteString as BS
 import qualified Data.Set as Set
 import GHC.Plugins
 import GHC.Driver.Env (hscSetFlags)
@@ -37,7 +38,7 @@ import GHC.Utils.Binary (openBinMem, putFullBinData, put_, putFS, setWriterUserD
                         mkWriterUserData, mkSomeBinaryWriter, mkWriter, simpleBindingNameWriter)
 import GHC.Utils.Fingerprint (Fingerprint)
 import System.FilePath (replaceExtension)
-import THC.Plugin (serializePostTidyCoreWithAnnotations)
+import THC.Plugin (serializePostTidyCoreWithAnnotations, serializePostTidyCoreWithAnnotationsBytes)
 
 -- | Original GHC identities, declarations, recursive groups and foreign
 -- metadata. Loading is archival: accompanying foreign build products are
@@ -192,5 +193,13 @@ loadInterfaceCore environment expected path = do
 -- This does not link dependencies or certify runtime support for the module.
 interfaceCoreJSON :: [CommandLineOption] -> InterfaceCore -> IO String
 interfaceCoreJSON options core = serializePostTidyCoreWithAnnotations (interfaceFlags core) options
+  (interfaceModule core) (typeEnvTyCons (md_types (interfaceDetails core))) (interfaceBindings core)
+  (interfaceForeign core) (md_anns (interfaceDetails core))
+
+-- | Byte-oriented version of 'interfaceCoreJSON', preserving its exact UTF-8
+-- output. Force the strict result before emitting success to retain all-or-error
+-- subprocess responses if serialization fails.
+interfaceCoreJSONBytes :: [CommandLineOption] -> InterfaceCore -> IO BS.ByteString
+interfaceCoreJSONBytes options core = serializePostTidyCoreWithAnnotationsBytes (interfaceFlags core) options
   (interfaceModule core) (typeEnvTyCons (md_types (interfaceDetails core))) (interfaceBindings core)
   (interfaceForeign core) (md_anns (interfaceDetails core))

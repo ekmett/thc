@@ -7,6 +7,7 @@ import qualified Control.Exception as Exception
 import Control.DeepSeq (force)
 import Control.Monad (forM, unless)
 import Data.Aeson (Value, FromJSON(..), object, (.=), (.:), encode, eitherDecode, withObject)
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe)
@@ -77,8 +78,8 @@ main = do
     -- Do not turn interruption/cancellation into a reusable missing-capability
     -- result. Evaluate the complete payload before emitting any stdout bytes.
     result <- Exception.tryJust synchronous $ if inventoryProbe options
-      then Just <$> probeSelected options
-      else fmap (\core -> "{\"schema\":1,\"status\":\"loaded\",\"core\":" ++ core ++ "}") <$> loadSelected options
+      then Just . Left <$> probeSelected options
+      else fmap Right <$> loadSelected options
     case result of
       Left failure -> report 1 $ object
         ["schema" .= (1 :: Int), "status" .= ("error" :: String), "category" .= ("interface" :: String),
@@ -87,13 +88,14 @@ main = do
         ["schema" .= (1 :: Int), "status" .= ("unavailable" :: String),
          "capability" .= ("complete-interface-core" :: String), "unit" .= unit options,
          "module" .= moduleName options, "way" .= way options, "interface" .= interface options]
-      Right (Just output) -> putStrLn output
+      Right (Just (Left output)) -> putStrLn output
+      Right (Just (Right output)) -> BS.hPut stdout output
   where
     synchronous failure = case Exception.fromException failure :: Maybe Exception.SomeAsyncException of
       Just _ -> Nothing
       Nothing -> Just (failure :: Exception.SomeException)
 
-loadSelected :: Options -> IO (Maybe String)
+loadSelected :: Options -> IO (Maybe BS.ByteString)
 loadSelected options = withSelected options $ \environment -> do
   expected <- case homeInterfaces options of
     Nothing -> resolveModule environment (unit options) (moduleName options)
@@ -105,9 +107,9 @@ loadSelected options = withSelected options $ \environment -> do
   case loaded of
     Nothing -> pure Nothing
     Just core -> do
-      rendered <- interfaceCoreJSON (["unit-qualified"] ++ ["source-notes" | sourceNotes options]) core
-      _ <- Exception.evaluate (force rendered)
-      pure (Just rendered)
+      rendered <- interfaceCoreJSONBytes (["unit-qualified"] ++ ["source-notes" | sourceNotes options]) core
+      output <- Exception.evaluate (BS.concat ["{\"schema\":1,\"status\":\"loaded\",\"core\":", rendered, "}\n"])
+      pure (Just output)
 
 -- Private, versioned batch protocol used by the installed-bundle cache. Each
 -- entry is checked using the same selected package state as ordinary loading.

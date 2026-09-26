@@ -404,6 +404,7 @@ library
     THC.ForeignExports
     THC.ForeignExportProvenance
     THC.ForeignImportProvenance
+    THC.JSON
     THC.Sources
     THC.Wired
   build-depends:
@@ -415,6 +416,21 @@ library
     ghc == 9.14.1,
     ghc-boot == 9.14.1
   default-language: Haskell2010
+  if flag(development)
+    ghc-options: -Werror
+
+test-suite interface-json
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  hs-source-dirs: test/interface-json, compiler
+  other-modules: THC.JSON
+  build-depends:
+    base >= 4.22 && < 4.23,
+    bytestring >= 0.12.2 && < 0.13,
+    HUnit >= 1.6 && < 1.7,
+    text >= 2.1 && < 2.2
+  default-language: Haskell2010
+  ghc-options: -Wall
   if flag(development)
     ghc-options: -Werror
 
