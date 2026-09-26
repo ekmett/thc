@@ -86,6 +86,7 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     polyglotDemoRuntime("org.graalvm.polyglot:js:$graalVersion")
 }
+apply(from = "gradle/bytecode-metadata.gradle.kts")
 kotlin {
     jvmToolchain(25)
     // Kotlin's generated null-check failures inline stack-trace sanitization into
