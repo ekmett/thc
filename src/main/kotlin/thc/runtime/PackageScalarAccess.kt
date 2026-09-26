@@ -14,6 +14,7 @@ import com.oracle.truffle.api.nodes.ExplodeLoop
 import com.oracle.truffle.api.nodes.Node
 import thc.Language
 import java.lang.ref.Reference
+import java.util.IdentityHashMap
 import java.util.function.LongSupplier
 import java.util.function.Supplier
 
@@ -110,6 +111,34 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
             val converted = arguments.copyOf()
             val lease = PackagePointerLease()
             try {
+                // One base object per allocation: Sulong compares allocation
+                // identity plus its own pointer offset, not buffer contents.
+                // Validate all views before exposing any pointer to guest C.
+                val buffers = IdentityHashMap<Any, PackagePointerBuffer>()
+                val views = IdentityHashMap<ManagedAddress, PackagePointerBuffer>()
+                for ((index, address) in addresses) {
+                    if (address === ManagedAddress.nullAddress()) continue
+                    if (address.nativeAllocation() != null) {
+                        address.requireByteRegion(0)
+                        continue
+                    }
+                    address.requireByteRegion(0, argumentReps[index] == "MutableByteArray#")
+                    val writable = argumentReps[index] != "ByteArray#" && address.cbitsWritable()
+                    val key = address.nativeImageKey() ?: address.cbitsBacking()
+                    val buffer = buffers.getOrPut(key) { PackagePointerBuffer(address, writable) }
+                    if (buffer.address.cbitsOwner() == null && address.cbitsOwner() != null) buffer.address = address
+                    buffer.writable = buffer.writable || writable
+                    views[address] = buffer
+                }
+                for (buffer in buffers.values) {
+                    val address = buffer.address
+                    val nativeImage = if (address.nativeImageKey() == null) null else Supplier {
+                        entry.owner.nativeAddresses.project(address)
+                        entry.owner.nativeAddresses.transport(address) ?: fault("Missing immutable C pointer image")
+                    }
+                    buffer.transport = CbitsBuffer(address.cbitsBacking(), buffer.writable,
+                        LongSupplier { address.cbitsSize() }, 0, nativeImage)
+                }
                 for ((index, address) in addresses) {
                     converted[index] = when {
                         address === ManagedAddress.nullAddress() -> PackageNativePointer(0L, lease)
@@ -117,17 +146,7 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
                             address.requireByteRegion(0)
                             PackageNativePointer(address.toNativeBits(), lease)
                         }
-                        else -> {
-                            val mutable = argumentReps[index] == "MutableByteArray#"
-                            address.requireByteRegion(0, mutable)
-                            val writable = argumentReps[index] != "ByteArray#" && address.cbitsWritable()
-                            val nativeImage = if (address.nativeImageKey() == null) null else Supplier {
-                                entry.owner.nativeAddresses.project(address)
-                                entry.owner.nativeAddresses.transport(address) ?: fault("Missing immutable C pointer image")
-                            }
-                            CbitsBuffer(address.cbitsBacking(), writable, LongSupplier { address.cbitsSize() },
-                                address.cbitsOffset(), nativeImage)
-                        }
+                        else -> entry.owner.packageCbits.pointer(views.getValue(address).transport!!, address.cbitsOffset())
                     }
                 }
                 Calls.interop(calls, entry.receiver, converted)
@@ -188,6 +207,10 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
         if (call.result != "void") fault("Package C result is not void")
         invoke(prepare(arguments, state), arguments)
     }
+}
+
+private class PackagePointerBuffer(var address: ManagedAddress, var writable: Boolean) {
+    var transport: CbitsBuffer? = null
 }
 
 /** Native pointers cannot outlive the synchronous call's allocation borrows. */

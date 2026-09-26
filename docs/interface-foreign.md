@@ -117,9 +117,14 @@ remain shared across calls rather than being copied per invocation. Owned
 native addresses are borrowed through synchronous return. This first slice
 does not support safe/interruptible calls, pointer results, retained pointers,
 callbacks, foreign exports, initialization/finalization or arbitrary extra
-native libraries. Managed pointer identity/interior-offset controls and the
-original Hashable XXH3 end-to-end fixture remain integration work; the focused
-C buffer tests alone are not evidence that Hashable or Pandoc runs.
+native libraries. Within one call, aliases share their allocation transport and
+a small C bridge produces Sulong's allocation-relative pointer, preserving C
+pointer equality, distances, and backward access from an interior address.
+Read-only and writable arguments to the same allocation share identity; a
+permitted writable alias permits writes to that shared storage, while genuinely
+immutable allocations remain read-only. The original Hashable XXH3 end-to-end
+fixture remains integration work; focused C buffer tests alone are not evidence
+that Hashable or Pandoc runs.
 
 ## Why compiling the stubs through Sulong is insufficient
 
