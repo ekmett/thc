@@ -28,7 +28,7 @@ import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import THC.Driver.ScalarBitcode (parseDependencies, sulongScalarTarget)
-import THC.Driver.NativeLibrarySources (zlibChecksumSources, nativeMathSymbols, validateNativeMathIR)
+import THC.Driver.NativeLibrarySources (zlibChecksumSources, nativeMathSymbols, validateNativeMathIR, validateNativeEntropyIR)
 
 -- (original emitted symbol, convention, safety, semantic carriers, result)
 type Signature = (String, String, String, [String], String)
@@ -399,25 +399,31 @@ finishPackageNative pieces directory unit currentObjects modules = do
       _ <- trim resolved
       pure ()
     externals <- unresolved
-    -- Memory operations are supplied by Sulong/libc. Scalar native libm is an
-    -- explicit embedded-LLVM provider, never a managed-pointer native fallback.
-    check (all (\name -> name `elem` (["memcpy","memmove","memset","memcmp","bcmp"] ++ nativeMathSymbols) || "llvm." `isPrefixOf` name) externals)
+    -- Explicit native providers retain LLVM execution and actual C ABI checks.
+    -- getentropy requires a genuine native address, never a managed heap copy.
+    check (all (\name -> name `elem` (["memcpy","memmove","memset","memcmp","bcmp","getentropy"] ++ nativeMathSymbols) || "llvm." `isPrefixOf` name) externals)
       ("package native unresolved dependencies: " ++ show externals)
     let math = filter (`elem` nativeMathSymbols) externals
+        entropy = "getentropy" `elem` externals
         finalIR = directory </> "native/final.ll"
     _ <- command directory opt ["-S","-passes=verify",final,"-o",finalIR]
     ir <- readFile finalIR
     either fail pure (validateNativeIR ir)
-    (artifact,format,libraries) <- if null math then pure (final,"llvm-bitcode",[]) else do
-      check ("-linux-gnu" `isSuffixOf` target) "native scalar libm provider currently requires Linux"
-      either fail pure (validateNativeMathIR math ir)
+    (artifact,format,libraries) <- if null math && not entropy then pure (final,"llvm-bitcode",[]) else do
+      unless (null math) $ do
+        check ("-linux-gnu" `isSuffixOf` target) "native scalar libm provider currently requires Linux"
+        either fail pure (validateNativeMathIR math ir)
+      when entropy (either fail pure (validateNativeEntropyIR target ir))
       clang <- tool "THC_CLANG" "clang"
       let container = directory </> "native/final.so"
-          arguments = ["--target=" ++ target,"-fembed-bitcode","-shared","-fPIC",final,"-lm","-o",container]
+          arguments = ["--target=" ++ target,"-fembed-bitcode","-shared","-fPIC",final] ++
+            ["-lm" | not (null math)] ++ ["-lc" | entropy] ++ ["-o",container]
       _ <- command directory clang arguments
       compilerHash <- sha <$> BS.readFile clang
-      pure (container,"llvm-embedded-elf",[object ["provider" .= ("native-libm-scalars-v1"::String),
-        "symbols" .= math,"compiler" .= clang,"compilerSha256" .= compilerHash,"arguments" .= arguments]])
+      pure (container,"llvm-embedded-elf",[object ["provider" .= provider,
+        "symbols" .= symbols,"compiler" .= clang,"compilerSha256" .= compilerHash,"arguments" .= arguments] |
+        (provider,symbols) <- [("native-libm-scalars-v1"::String,math) | not (null math)] ++
+          [("native-libc-getentropy-v1",["getentropy"]) | entropy]])
     bytes <- BS.readFile artifact
     component <- get record "componentSha256" :: IO String
     providerInputs <- mapM (\value -> get value "inputs") providers

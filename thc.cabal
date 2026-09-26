@@ -775,6 +775,7 @@ executable thc-fixtures
     PackageScalarFixtures
     StablePtrFFIFixtures
     PackageNativeOriginalsFixtures
+    GetEntropyFixtures
     HashableFfiFixtures
     OriginalTermiosFixtures
     OriginalTcsetattrFixtures

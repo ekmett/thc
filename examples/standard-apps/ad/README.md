@@ -51,6 +51,8 @@ tests cover compiled execution.
 That guest result is distinct from the native 89-test upstream baseline.
 Fresh acquisition and guest execution of the unchanged `ad-regression` suite
 remain under investigation. Disabled conditional C sources and the original
-safe `erf` imports no longer block acquisition. Its current frontier is the
-original `splitmix` initializer's `getentropy` native dependency; no upstream
-tests or strict audits have been bypassed.
+safe `erf` imports no longer block acquisition. The original `splitmix`
+initializer's `getentropy` dependency now has a tested native-libc provider,
+including actual original Core execution on both backends. The complete
+upstream guest suite still needs a fresh run; no upstream tests or strict
+audits have been bypassed.
