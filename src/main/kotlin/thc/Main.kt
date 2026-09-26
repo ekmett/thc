@@ -4,6 +4,7 @@
 package thc
 
 import org.graalvm.polyglot.Context
+import org.graalvm.polyglot.EnvironmentAccess
 import org.graalvm.polyglot.PolyglotException
 import org.graalvm.polyglot.Value
 import org.graalvm.polyglot.io.IOAccess
@@ -24,7 +25,8 @@ internal fun Context.Builder.withContextProfile(profile: ContextProfile): Contex
         .option("engine.MultiTier", "false")
         .option("engine.CompilationFailureAction", "Throw")
     if (profile == ContextProfile.SYNCHRONOUS_TEST) return this
-    return option("engine.TraceCompilation", System.getProperty("thc.traceCompilation", "false"))
+    return allowEnvironmentAccess(EnvironmentAccess.INHERIT)
+        .option("engine.TraceCompilation", System.getProperty("thc.traceCompilation", "false"))
         .option("engine.SingleTierCompilationThreshold", "10000")
         .option("compiler.CompilationTimeout", "30")
         .option("compiler.MaximumGraalGraphSize", "100000")

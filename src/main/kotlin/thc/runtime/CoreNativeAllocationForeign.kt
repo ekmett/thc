@@ -3,9 +3,10 @@
 
 package thc.runtime
 
-/** Exact GHC 9.14.1 Foreign.Marshal.Alloc malloc/free declarations. */
+/** Exact GHC 9.14.1 Foreign.Marshal.Alloc allocation declarations. */
 internal enum class NativeAllocationOp(val symbol: String, val arguments: List<String?>, val result: String?) {
     MALLOC("malloc", listOf("Word64Rep", null), "AddrRep"),
+    REALLOC("realloc", listOf("AddrRep", "Word64Rep", null), "AddrRep"),
     FREE("free", listOf("AddrRep", null), null);
 }
 

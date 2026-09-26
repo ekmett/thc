@@ -204,6 +204,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         CoreMainThreadForeign.validateHeads(bindings)
         CoreBoundThreadForeign.validateHeads(bindings)
         CoreStringRtsForeign.validateHeads(bindings)
+        CoreEnvironmentForeign.validateHeads(bindings)
         CoreRtsDiagnosticForeign.validateHeads(bindings)
         CoreRtsArgumentsForeign.validateHeads(bindings)
         CoreManagedFiles.validateHeads(bindings)
@@ -1447,6 +1448,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val stringRts = CoreStringRtsForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val environment = CoreEnvironmentForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val rtsDiagnostic = CoreRtsDiagnosticForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val rtsArguments = CoreRtsArgumentsForeign.validate(foreignMetadata,
@@ -1468,7 +1471,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
@@ -1746,6 +1749,27 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     state.emit(e)
                     e.builder.endBoundThreadSupport()
                 }
+            } else if (environment != null) {
+                CoreEnvironmentForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreEnvironmentForeign.validateOperand(environment, index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    when (environment) {
+                        EnvironmentOp.GET -> e.builder.beginEnvironmentGet(destination.single())
+                        EnvironmentOp.PUT, EnvironmentOp.UNSET -> e.builder.beginEnvironmentChange(environment, destination.single())
+                        EnvironmentOp.ENUMERATE -> e.builder.beginEnvironmentEnumerate(destination.single())
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (environment) {
+                        EnvironmentOp.GET -> e.builder.endEnvironmentGet()
+                        EnvironmentOp.PUT, EnvironmentOp.UNSET -> e.builder.endEnvironmentChange()
+                        EnvironmentOp.ENUMERATE -> e.builder.endEnvironmentEnumerate()
+                    }
+                }
             } else if (stringRts != null) {
                 CoreStringRtsForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
@@ -1846,12 +1870,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 }
                 tupleExpression(tupleProof) { e, destination ->
                     if (nativeAllocation == NativeAllocationOp.MALLOC) e.builder.beginNativeMalloc(destination.single())
+                    else if (nativeAllocation == NativeAllocationOp.REALLOC) e.builder.beginNativeRealloc(destination.single())
                     else {
                         if (destination.isNotEmpty()) fault("Native free has no result field")
                         e.builder.beginNativeFree()
                     }
                     operands.forEach { it.emit(e) }
                     if (nativeAllocation == NativeAllocationOp.MALLOC) e.builder.endNativeMalloc()
+                    else if (nativeAllocation == NativeAllocationOp.REALLOC) e.builder.endNativeRealloc()
                     else e.builder.endNativeFree()
                 }
             } else if (memmove) {

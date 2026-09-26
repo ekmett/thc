@@ -1,0 +1,12 @@
+cabal-version: 3.0
+name: run-environment
+version: 0.1.0.0
+build-type: Simple
+license: BSD-3-Clause
+
+executable environment
+  main-is: Main.hs
+  hs-source-dirs: app
+  build-depends: base >= 4.22 && < 4.23
+  default-language: Haskell2010
+  ghc-options: -O1

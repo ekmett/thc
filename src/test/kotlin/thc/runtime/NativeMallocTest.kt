@@ -28,8 +28,9 @@ class NativeMallocTest {
     private fun declarations() = Json.parse(javaClass.getResource("/core/original-malloc-descriptors.json")!!.readText())
         as List<Map<String, Any?>>
     private fun symbol(call: Map<String, Any?>) = (call.getValue("target") as Map<String, Any?>).getValue("symbol") as String
-    private fun module(mutate: (MutableMap<String, Any?>) -> Unit = {}): Map<String, Any?> {
-        val bindings = declarations().map { declaration ->
+    private fun module(calls: List<Map<String, Any?>> = declarations(),
+        mutate: (MutableMap<String, Any?>) -> Unit = {}): Map<String, Any?> {
+        val bindings = calls.map { declaration ->
             val name = symbol(declaration)
             val tuple = declaration.getValue("resultRep") as Map<String, Any?>
             val components = tuple.getValue("components") as List<Map<String, Any?>>
@@ -98,6 +99,58 @@ class NativeMallocTest {
             context.initialize("thc"); context.enter()
             try { body(TruffleLanguage.LanguageReference.create(Language::class.java).get(null)) }
             finally { context.leave() }
+        }
+    }
+
+    @Test fun reallocPreservesPrefixAndInvalidatesOldAliasesOnBothInstalledBackends() {
+        // Synthetic consumer; EnvironmentFullCore audits and executes the real
+        // installed GHC realloc declaration through System.Environment.setEnv.
+        val originals = declarations()
+        val declaration = originals.first() + mapOf("target" to
+            ((originals.first().getValue("target") as Map<String, Any?>) + ("symbol" to "realloc")),
+            "arity" to 3, "suppliedArity" to 3, "argumentReps" to
+                listOf((originals.last().getValue("argumentReps") as List<*>).first()) +
+                (originals.first().getValue("argumentReps") as List<*>))
+        for (backend in listOf("ast", "bytecode")) inside { language ->
+            val registry = Language.currentState().nativeAllocations
+            val program = load(language, backend, module(listOf(declaration)))
+            val target = program.entryTarget("realloc")
+            var compiled = false
+            fun resize(address: ManagedAddress, size: Long): ManagedAddress {
+                val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                val result = Calls.target(target, arrayOf(0L, address, size, Unit)) as ManagedAddress
+                assertEquals(before + if (compiled) 1 else 0,
+                    (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                if (compiled) valid(target)
+                released(language)
+                return result
+            }
+            fun exercise() {
+                val original = resize(ManagedAddress.nullAddress(), 8)
+                for (index in 0L until 8) original.writeWord8(index, index + 17)
+                val grown = resize(original, 32)
+                assertThrows(RuntimeFault::class.java) { original.readWord8(0) }
+                assertEquals((17L until 25).toList(), (0L until 8).map(grown::readWord8))
+                val shrunk = resize(grown, 3)
+                assertThrows(RuntimeFault::class.java) { grown.readWord8(0) }
+                assertEquals(listOf(17L, 18L, 19L), (0L until 3).map(shrunk::readWord8))
+                assertSame(ManagedAddress.nullAddress(), resize(shrunk, Long.MAX_VALUE))
+                assertEquals(18L, shrunk.readWord8(1))
+                assertEquals(1, registry.liveCount())
+                assertSame(ManagedAddress.nullAddress(), resize(shrunk, 0))
+                assertThrows(RuntimeFault::class.java) { shrunk.readWord8(0) }
+                assertEquals(0, registry.liveCount())
+            }
+            exercise()
+            target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+            valid(target); compiled = true
+            exercise()
+            val live = registry.malloc(8)
+            for (bad in listOf(live.plus(1), ManagedAddress.fromHex("41"), ManagedAddress.unownedNumeric(live.toNativeBits())))
+                assertThrows(RuntimeFault::class.java) { registry.realloc(bad, 16) }
+            assertThrows(RuntimeFault::class.java) { registry.realloc(live, -1) }
+            live.withNativeBorrow { assertThrows(RuntimeFault::class.java) { registry.realloc(live, 16) } }
+            registry.free(live)
         }
     }
 

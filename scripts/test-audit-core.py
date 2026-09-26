@@ -1689,8 +1689,24 @@ class NativeMallocDeclarationTest(unittest.TestCase):
                 result = fixture.audit(wrong)
                 self.assertFalse(result['accepted'], result)
                 self.assertEqual([], result['foreignCalls'])
-        for symbol in ('calloc', 'realloc', 'prefixmalloc', 'free2'):
+        for symbol in ('calloc', 'prefixmalloc', 'free2'):
             self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
+
+    def test_realloc_exact_abi_and_capability_gate(self):
+        # Synthetic ABI consumer; EnvironmentFullCore independently audits the
+        # genuine original declaration in Foreign.Marshal.Alloc.$wreallocBytes.
+        declarations = json.loads((ROOT.parent / 'src/test/resources/core/original-malloc-descriptors.json').read_text())
+        declaration = copy.deepcopy(declarations[0])
+        declaration['target']['symbol'] = 'realloc'
+        declaration['argumentReps'].insert(0, copy.deepcopy(declarations[1]['argumentReps'][0]))
+        declaration['arity'] = declaration['suppliedArity'] = 3
+        fixture = LibdwUnavailableAuditTest()
+        self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'])
+        disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != 'realloc'])
+        self.assertFalse(fixture.audit(fixture.fixture(declaration), disabled)['accepted'])
+        for key, value in [('safety', 'safe'), ('arity', 2), ('convention', 'capi'), ('schema', 1.0)]:
+            wrong = copy.deepcopy(declaration); wrong[key] = value
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
 
 
 class OriginalMemmoveDeclarationTest(unittest.TestCase):
@@ -1813,6 +1829,33 @@ class OriginalStringRtsDeclarationTest(unittest.TestCase):
                 wrong = fixture.fixture(declaration)
                 wrong['bindings'][0]['expr'][1][index]['rep'] = LONG
                 self.assertFalse(fixture.audit(wrong)['accepted'])
+
+
+class OriginalEnvironmentDeclarationTest(unittest.TestCase):
+    def test_environment_abi_and_capability_controls(self):
+        fixture = LibdwUnavailableAuditTest()
+        scalar = lambda rep, evaluated=True: dict(kind=core_original_foreign.scalar_kind(rep),
+            primReps=[] if rep is None else [rep], evaluated=evaluated)
+        for symbol, arguments, output in (
+                ('getenv', ('AddrRep', None), 'AddrRep'),
+                ('putenv', ('AddrRep', None), 'Int32Rep'),
+                ('__hsbase_unsetenv', ('AddrRep', None), 'Int32Rep'),
+                ('__hscore_environ', (None,), 'AddrRep')):
+            declaration = dict(schema=1, target=dict(kind='static', symbol=symbol,
+                unit='ghc-internal', isFunction=True), convention='ccall', safety='unsafe',
+                arity=len(arguments), suppliedArity=len(arguments),
+                argumentReps=[scalar(rep, False) for rep in arguments],
+                resultRep=dict(kind='unknown', primReps=[output], evaluated=False,
+                    aggregate='unboxed-tuple', components=[scalar(None), scalar(output)]))
+            module = fixture.fixture(declaration)
+            self.assertTrue(fixture.audit(module)['accepted'])
+            disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != symbol])
+            self.assertFalse(fixture.audit(module, disabled)['accepted'])
+            for key, value in (('safety', 'safe'), ('arity', 0), ('resultRep', LONG)):
+                wrong = copy.deepcopy(declaration); wrong[key] = value
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+            wrong = copy.deepcopy(declaration); wrong['target']['unit'] = 'other'
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
 
 
 class OriginalStackInfoAuditTest(unittest.TestCase):
