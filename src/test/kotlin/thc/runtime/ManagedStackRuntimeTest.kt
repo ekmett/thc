@@ -253,6 +253,9 @@ class ManagedStackRuntimeTest {
             snapshot = capture(language)
             val words = snapshot.frames.indices.map { offset ->
                 val (standard, key) = ManagedStackRuntime.frameInfo(snapshot, offset.toLong(), layout)
+                assertEquals(layout.offset("infoTableBytes").toLong(), standard.availableBytes())
+                assertFalse(standard.cbitsWritable())
+                assertThrows(RuntimeFault::class.java) { standard.writeWord8(0, 0) }
                 val word = ManagedStackRuntime.word(snapshot, offset.toLong(), layout)
                 assertNotEquals(0L, word)
                 assertEquals(key.toNativeBits(), word)

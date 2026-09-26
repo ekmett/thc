@@ -104,7 +104,7 @@ internal class ManagedStackRegistry {
             return it
         }
         fun address(image: ManagedStackInfoImage) =
-            ManagedAddress.fromAllocation(ManagedAllocation.immutable(image.copyBytes(), layout.wordBytes))
+            ManagedAddress.fromStaticBytes(image.copyBytes(), layout.wordBytes)
         val frames = snapshot.frames.map { frame ->
             val standard = address(ManagedStackInfoImage.frame(layout))
             FrameInfo(standard, standard.plus(layout.offset("infoTableBytes").toLong()), Provenance(frame, layout))

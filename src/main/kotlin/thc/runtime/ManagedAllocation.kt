@@ -14,7 +14,8 @@ import java.lang.foreign.ValueLayout
  */
 internal class ManagedAllocation private constructor(
     private val bytes: ByteArray?, private val segment: MemorySegment,
-    private val writable: Boolean, private val pointerBytes: Int
+    private val writable: Boolean, private val pointerBytes: Int,
+    internal val isStaticImage: Boolean = false
 ) {
     init { if (pointerBytes != 4 && pointerBytes != 8) fault("Unsupported target pointer width") }
     // Pointer-free pinned arrays pay for the owner, not a per-cell map.
@@ -436,9 +437,9 @@ internal class ManagedAllocation private constructor(
             val bytes = ByteArray(size.toInt())
             return ManagedAllocation(bytes, MemorySegment.ofArray(bytes), true, pointerBytes)
         }
-        fun immutable(bytes: ByteArray, pointerBytes: Int): ManagedAllocation {
+        fun immutable(bytes: ByteArray, pointerBytes: Int, staticImage: Boolean = false): ManagedAllocation {
             val copy = bytes.copyOf()
-            return ManagedAllocation(copy, MemorySegment.ofArray(copy), false, pointerBytes)
+            return ManagedAllocation(copy, MemorySegment.ofArray(copy), false, pointerBytes, staticImage)
         }
     }
 }
