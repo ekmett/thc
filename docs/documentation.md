@@ -13,12 +13,12 @@ generation:
 
 | Command | Output |
 | --- | --- |
-| `make docs-haskell` | Haddock for `lib:thc` under `build/docs/haskell/` |
+| `make docs-haskell` | Compiler `lib:thc` Haddock under `build/docs/haskell/`, public `lib:runtime` Haddock under `build/docs/runtime/` |
 | `make docs-jvm` | Mixed Java/Kotlin Dokka under `build/docs/jvm/` |
-| `make docs` | Both references, eleven curated guides and one navigable site in `build/site/` |
+| `make docs` | Three references, twelve curated guides and one navigable site in `build/site/` |
 | `make docs-check` | Recheck the assembled site's links, fragments, assets and revision |
 
-`docs` runs the two generators sequentially, with at most two compiler workers.
+`docs` runs Haddock for the two libraries and Dokka sequentially, with at most two compiler workers.
 Use the normal `GHC`, `CABAL`, `CABAL_FLAGS`, `GRADLE_FLAGS`, `JAVA_HOME`, and
 `GRADLE_USER_HOME` overrides. Cabal documentation and the small Haskell site tool
 use a separate `build/docs/cabal` build tree. A full-Core GHC installation is not
@@ -27,11 +27,12 @@ rebuilt or hashed by this workflow.
 
 Serve `build/site/` with any static HTTP server. Dokka expects HTTP serving for
 its search and navigation scripts. `index.html` keeps a persistent left rail;
-the selected guide, Haddock page, or Runtime page appears in a titled,
+the selected guide, Haskell API page, or JVM-internals page appears in a titled,
 same-origin frame. The shell accepts only HTML paths in the generated page
 inventory, including generator search queries and symbol fragments on those
 pages. Navigation updates the URL and browser history, so a copied
-`?page=api/haskell/THC-Plugin.html` link opens the same view. The rail's
+`?page=api/runtime/THC-Memory.html` link opens the same view. Existing
+`api/haskell/` compiler-reference URLs are preserved. The rail's
 System/Light/Dark control follows the comonad.com palette in the shell and
 content; a direct API URL follows the saved choice or system preference. Direct guide and
 API URLs remain usable outside the shell with their native anchors, search,
@@ -54,14 +55,22 @@ compiler is the project's Kotlin compiler.
 Haddock comes from GHC 9.14.1. Use a compiler installation with its dependency
 Haddock interfaces for cross-package API links; a custom `--docs=none` GHC can
 still generate THC's reference but reports unresolved external type links.
-Only `THC.Plugin` and `THC.Interface` are exposed
-library modules. Driver executables and fixtures are not published as library
-API. Missing documentation warnings remain visible; there is no blanket
+`lib:thc` exposes `THC.Plugin` and `THC.Interface`; its reference is published at
+`api/haskell/`. The public `thc:runtime` library is documented separately at
+`api/runtime/`: `THC`, `THC.Runtime`, `THC.Thread`, `THC.Memory`, `THC.GC`,
+`THC.Trace`, and `THC.Internal.JIT`. The [runtime services guide](runtime-services.md)
+explains scope, availability and native-GHC fallbacks. `.Internal` marks an
+intentionally unstable interface: `THC.Internal.JIT` exposes version-sensitive
+Graal diagnostics and is explicitly `Unsafe` for Safe Haskell.
+Driver executables and fixtures are not published as library API.
+Missing documentation warnings remain visible; there is no blanket
 warnings-as-errors policy for the JVM implementation's public declarations.
 
 The persistent rail shows the source revision and toolchain. Every generated
 HTML document retains revision metadata. Dokka and
-Haddock declaration source links use the full Git commit ID. Each partial build
+Haddock declaration source links use the full Git commit ID. The two Haddock
+invocations use their actual `compiler/` and `runtime/` source roots; neither
+library's links are redirected into the other. Each of the three partial builds
 records that ID, and assembly refuses references from a different revision.
 Commit edits before producing a publishable site: a local dirty build is useful
 for preview but its GitHub links necessarily describe the committed source.
@@ -75,7 +84,7 @@ exact revision in the public repository. There is no recursive `docs/` copy;
 large graphs, logs, fixture data and generated DSL dumps stay out of Pages.
 
 The same tool checks every HTML `href` and `src`, local target existence and
-fragment IDs, required API/guide pages, mixed-language reference presence, shared
+fragment IDs, required API/guide pages (including every public runtime module), mixed-language reference presence, shared
 navigation and revision. Root-relative and local filesystem URLs fail validation.
 It does not make live HTTP requests to external sites or prove JavaScript
 behavior in every browser.
