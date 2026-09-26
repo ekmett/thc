@@ -7,6 +7,8 @@
 Use --export-only for pre-Tidy Core and model on hosts without native GHC SIMD
 code generation. A full run requires an x86 GHC9.14.1 host able to execute the
 selected fixed 512-bit instructions; explicit --ghc-option flags are recorded.
+Floating extrema rows use finite inputs without mixed-zero ties; their Java
+NaN/infinity/zero edges are checked separately by the Kotlin smoke consumer.
 """
 import argparse
 from collections import Counter

@@ -53,6 +53,9 @@ public final class FloatX4 {
     public static FloatX4 multiply(FloatX4 a, FloatX4 b) { return new FloatX4(a.vector.mul(b.vector)); }
     public static FloatX4 negate(FloatX4 a) { return new FloatX4(a.vector.neg()); }
     public static FloatX4 divide(FloatX4 a, FloatX4 b) { return new FloatX4(a.vector.div(b.vector)); }
+    /** Java Math extrema: propagate NaN; negative zero orders below positive zero. */
+    public static FloatX4 min(FloatX4 a, FloatX4 b) { return new FloatX4(a.vector.min(b.vector)); }
+    public static FloatX4 max(FloatX4 a, FloatX4 b) { return new FloatX4(a.vector.max(b.vector)); }
     /** GHC VecFM{Add,Sub}/VecFNM{Add,Sub}: negate inputs before the single rounding.
      * In particular, negating a rounded result would change cancellation's signed zero. */
     public static FloatX4 fused(int operation, FloatX4 a, FloatX4 b, FloatX4 c) {

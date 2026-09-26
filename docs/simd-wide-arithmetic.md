@@ -7,8 +7,9 @@ shapes have divide. The table also includes Int16X16 and Word16X16, with pack, u
 minus, times, insertion and signed negate. Signed min/max use the existing
 Int8X16, Int16X8, Int32X4, Int32X8, Int64X2, Int64X4 and Int64X8 carriers;
 unsigned min/max use Word8X16,
-Word16X8, Word32X4, Word32X8 and Word64X2/X4/X8. The table contains 136 arithmetic names and 24 `insert`
-operations, for 160 names. These remain partial entries
+Word16X8, Word32X4, Word32X8 and Word64X2/X4/X8. Floating min/max now cover
+FloatX4/X8/X16 and DoubleX2/X4/X8 with a separate [Java-semantics contract](floating-vector-minmax.md).
+The table contains 180 operations, including 24 `insert` names. These remain partial entries
 in the primop checklist.
 
 The shared generator emits Kotlin carriers with final primitive lane fields,
@@ -28,19 +29,19 @@ legacy integer fields and FloatX4/DoubleX2 `pack`/`lane` APIs, preserving each
 carrier representation. Indices outside the shape's lane range raise a runtime fault before any narrowing. Insertion covers
 all currently represented vector shapes.
 
-The capability smoke uses thirteen operation/lane drivers containing all 160
+The capability smoke uses fifteen operation/lane drivers containing all 180
 generated operations. Each driver contains whole arithmetic families, with at
-most 112 lane-operation pairs to bound compiled code size. It checks 4,962
-cases interpreted and after explicit compilation on both backends, observes
-every lane, includes integer
-sign/overflow edges, and checks retained compiled targets and released handoff
+most 112 lane-operation pairs to bound compiled code size. The current fixture has
+5,430 native scalar observations and 1,848 Java floating-extrema edge requests.
+Its JVM checks run interpreted and after explicit compilation on both backends,
+observe every lane, include integer sign/overflow edges, and check retained compiled targets and released handoff
 state. Every insertion index is observed through every result lane, with integer
 boundaries, signed zero, subnormals and quiet NaN payloads. There are no spin
 warmup loops. Native expectations come from Haskell
 scalar primops; the default oracle requires no SIMD instruction set. Optional
 native vector comparison requires a host capable of the selected 512-bit ISA.
 
-All 160 names and 4,962 cases have passed GHC signature checks, native scalar
+The previously recorded 160 names and 4,962 cases passed GHC signature checks, native scalar
 comparisons, strict Core audits, and interpreted/compiled AST and bytecode checks
 in both handoff modes. Word64X2/X4/X8 min/max add 76 cases; the previous 4,886
 expectations are unchanged. The optional native vector comparison has not

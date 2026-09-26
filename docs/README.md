@@ -83,6 +83,8 @@ native/model checks and separate graph evidence.
 
 The [generated wide arithmetic families](simd-wide-arithmetic.md) share exact
 lane contracts and finite scalar-entry Haskell oracles/compiled JVM drivers.
+The [floating vector min/max operations](floating-vector-minmax.md) use Java
+NaN and signed-zero rules with separate native finite-input comparisons.
 The [512-bit floating fused operations](wide-floating-fma.md) use genuine wide
 Core and native scalar-lane expectations; native wide instruction parity remains
 unproved.

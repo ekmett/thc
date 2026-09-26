@@ -46,6 +46,9 @@ def inputs(generator):
             one, two, sign = ((0x3f800000, 0x40000000, 1 << 31) if rep == 'FloatRep'
                              else (0x3ff0000000000000, 0x4000000000000000, 1 << 63))
             pairs = ((one, two), (one | sign, two), (sign, one))
+            if operation in ('min', 'max'):
+                pairs = ((one, two), (two, one), (one, one), (one | sign, two),
+                         (two, one | sign), (sign, one), (one, sign), (1, 3), (3, 1))
             if operation == 'insert':
                 nan = (0x7fc01234 if rep == 'FloatRep' else 0x7ff8000000001234)
                 pairs = ((one, two), (one, sign), (sign, one), (one, one | sign),
@@ -129,6 +132,9 @@ def main():
                     ghcVersion='9.14.1', rows=len(actual.splitlines()), names=list(groups),
                     nativeOracle='scalar-and-vector' if args.native_vector else 'scalar',
                     ghcOptions=args.ghc_option, operations=sorted(contracts),
+                    selectors={str(index): operation + family['name'] + '#'
+                               for index, (family, operation) in enumerate(generator.smoke_entries(generator.families()))},
+                    floatingExtrema='java-math', nativeFloatingExtrema='finite-without-mixed-zero-ties',
                     inputs=[record(path) for path in sources],
                     artifacts=[record(path) for path in (core, audits_path, cases, binary)])
     (OUT / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')

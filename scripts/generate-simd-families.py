@@ -492,9 +492,12 @@ def smoke_sources(fs):
         if op == 'insert':
             scalar.append(f'  {index}# -> case ({lane}) ==# ({inserted}) of {{ 1# -> {observe(rep, convert[rep]("b"), True)}; _ -> {observe(rep, left, True)} }}')
         elif op in ('min', 'max'):
-            # GHC has vector extrema but no corresponding scalar min/max primops.
+            # The native oracle compares scalar lanes. Floating extrema requests
+            # are finite and exclude ambiguous zero ties; Java-only edges are
+            # tested separately by the Kotlin consumer of genuine vector Core.
             first, second = (left, right) if op == 'min' else (right, left)
-            scalar.append(f'  {index}# -> case lt{stem}# ({left}) ({right}) of {{ 1# -> {observe(rep, first)}; _ -> {observe(rep, second)} }}')
+            comparison = '(<##)' if rep == 'DoubleRep' else f'lt{stem}#'
+            scalar.append(f'  {index}# -> case {comparison} ({left}) ({right}) of {{ 1# -> ({observe(rep, first)}); _ -> ({observe(rep, second)}) }}')
         else:
             value = left if op == 'broadcast' else f'{primitive} ({left})' + (f' ({right})' if op in BINARY else '')
             scalar.append(f'  {index}# -> {observe(rep, value)}')
