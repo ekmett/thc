@@ -72,3 +72,17 @@ internal class IntToAddress(@field:Child private var bits: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any = executeAddress(frame)
     override fun executeAddress(frame: VirtualFrame): ManagedAddress = NativeAddresses.current(this).recover(bits.executeRequiredLong(frame))
 }
+
+internal class SubtractManagedAddress(@field:Child private var left: Expr,
+    @field:Child private var right: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Long = executeLong(frame)
+    override fun executeLong(frame: VirtualFrame): Long =
+        left.executeRequiredAddress(frame).difference(right.executeRequiredAddress(frame))
+}
+
+internal class RemainderManagedAddress(@field:Child private var address: Expr,
+    @field:Child private var divisor: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Long = executeLong(frame)
+    override fun executeLong(frame: VirtualFrame): Long =
+        address.executeRequiredAddress(frame).remainder(divisor.executeRequiredLong(frame))
+}

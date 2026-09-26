@@ -32,7 +32,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         this(language, moduleData, null, enableAsync)
     internal constructor(language: Language, moduleData: Map<String, Any?>, checkpoint: BytecodeCheckpoint) :
         this(language, moduleData, checkpoint, false)
-    private val resumable = checkpoint != null || enableAsync
+    private val delimited = DelimitedControl.contains(moduleData["bindings"])
+    private val resumable = checkpoint != null || enableAsync || delimited
     private val stackTargetLayout = moduleData["targetLayout"]
     private val callDemandsEnabled = java.lang.Boolean.getBoolean(CALL_DEMANDS_PROPERTY)
     private val sources = CoreSources(moduleData)
@@ -2007,6 +2008,52 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (destination != null) b.endStoreLocal()
                     b.endBlock()
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && (fn[1] in setOf("newPromptTag#", "prompt#", "control0#") ||
+                    delimited && fn[1] in setOf("catch#", "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#"))) {
+                val name = fn[1] as String
+                if (name in setOf("newPromptTag#", "prompt#", "control0#"))
+                    DelimitedControl.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                else CoreSynchronousExceptions.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                val shape = TupleShape(tupleProof, language)
+                tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    val slots = tupleSlots(shape, destination)
+                    when (name) {
+                        "newPromptTag#" -> {
+                            b.beginStoreLocal(destination.single())
+                            b.beginNewPromptTag(); operands.single().emit(e); b.endNewPromptTag()
+                            b.endStoreLocal()
+                        }
+                        "control0#" -> {
+                            b.beginConsumeDelimited(slots)
+                            b.beginYield()
+                            b.beginCaptureDelimited(shape); operands.forEach { it.emit(e) }; b.endCaptureDelimited()
+                            b.endYield()
+                            b.endConsumeDelimited()
+                        }
+                        else -> {
+                            b.beginBlock()
+                            val result = b.createLocal("delimited boundary result", null)
+                            b.beginTryCatch()
+                            b.beginStoreLocal(result)
+                            b.beginDelimitedBoundary(name, shape, language, metrics)
+                            operands[0].emit(e)
+                            if (operands.size == 3) operands[1].emit(e) else b.emitLoadNull()
+                            operands.last().emit(e)
+                            b.endDelimitedBoundary()
+                            b.endStoreLocal()
+                            b.beginBlock()
+                            b.beginStoreLocal(result)
+                            b.beginYield(); b.beginDelimitedOnly(); b.emitLoadException(); b.endDelimitedOnly(); b.endYield()
+                            b.endStoreLocal()
+                            b.endBlock()
+                            b.endTryCatch()
+                            b.beginConsumeDelimited(slots); b.emitLoadLocal(result); b.endConsumeDelimited()
+                            b.endBlock()
+                        }
+                    }
+                }
             } else if (fn[0] == "prim" && fn[1] in setOf("raiseIO#", "catch#", "getMaskingState#",
                     "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#")) {
                 val name = fn[1] as String
@@ -2554,6 +2601,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 } else ProvenExpression(Expression { e ->
                     when (operation) {
                         SmallArrayOp.WRITE -> e.builder.beginWriteSmallArray()
+                        SmallArrayOp.SHRINK -> e.builder.beginShrinkSmallArray()
                         SmallArrayOp.CLONE -> e.builder.beginCloneSmallArray()
                         SmallArrayOp.COPY, SmallArrayOp.COPY_MUTABLE -> e.builder.beginTransferSmallArray(operation == SmallArrayOp.COPY_MUTABLE)
                         else -> e.builder.beginSizeSmallArray()
@@ -2561,15 +2609,16 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     operands.forEach { it.emit(e) }
                     when (operation) {
                         SmallArrayOp.WRITE -> e.builder.endWriteSmallArray()
+                        SmallArrayOp.SHRINK -> e.builder.endShrinkSmallArray()
                         SmallArrayOp.CLONE -> e.builder.endCloneSmallArray()
                         SmallArrayOp.COPY, SmallArrayOp.COPY_MUTABLE -> e.builder.endTransferSmallArray()
                         else -> e.builder.endSizeSmallArray()
                     }
                 }, tupleProof.copy(evaluated = true))
-            } else if (fn[0] == "prim" && VectorByteArrayOp.named(fn[1] as String) != null) {
-                val operation = VectorByteArrayOp.named(fn[1] as String)!!
+            } else if (fn[0] == "prim" && VectorMemoryOp.named(fn[1] as String) != null) {
+                val operation = VectorMemoryOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
-                vectorByteArray(operation, args.map { compile(it, scope, false) })
+                vectorMemory(operation, args.map { compile(it, scope, false) })
             } else if (fn[0] == "prim" && fn[1] in prefetchArities) {
                 if (args.size != prefetchArities[fn[1]]) fault("Wrong prefetch arity")
                 val value = argument(args[0], scope, flags[0] as Boolean)
@@ -2753,6 +2802,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.COPY_ADDR_NON_OVERLAPPING -> e.builder.beginAddressWrite(false)
                         PinnedMemoryOp.WRITE_ADDR_ARRAY -> e.builder.beginWriteAddrArray(byteOffset)
                         PinnedMemoryOp.WRITE_INT16, PinnedMemoryOp.WRITE_WORD16 -> e.builder.beginWriteWord16OffAddr(byteOffset)
+                        PinnedMemoryOp.COPY_ADDR -> e.builder.beginMoveAddress()
+                        PinnedMemoryOp.SET_ADDR -> e.builder.beginFillAddress()
                         PinnedMemoryOp.WRITE_INT32, PinnedMemoryOp.WRITE_WORD32,
                         PinnedMemoryOp.WRITE_WIDE_CHAR -> e.builder.beginWriteNativeScalarOffAddr(4, byteOffset)
                         PinnedMemoryOp.WRITE_INT, PinnedMemoryOp.WRITE_WORD,
@@ -2771,6 +2822,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.CONTENTS, PinnedMemoryOp.MUTABLE_CONTENTS -> e.builder.endByteArrayContents()
                         PinnedMemoryOp.WRITE_ADDR -> e.builder.endAddressWrite()
                         PinnedMemoryOp.COPY_ADDR_NON_OVERLAPPING -> e.builder.endAddressWrite()
+                        PinnedMemoryOp.COPY_ADDR -> e.builder.endMoveAddress()
+                        PinnedMemoryOp.SET_ADDR -> e.builder.endFillAddress()
                         PinnedMemoryOp.WRITE_ADDR_ARRAY -> e.builder.endWriteAddrArray()
                         PinnedMemoryOp.WRITE_INT16, PinnedMemoryOp.WRITE_WORD16 -> e.builder.endWriteWord16OffAddr()
                         PinnedMemoryOp.WRITE_INT32, PinnedMemoryOp.WRITE_WORD32, PinnedMemoryOp.WRITE_WIDE_CHAR,
@@ -2812,7 +2865,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.NEW -> e.builder.beginNewByteArray(destination[0])
                         ByteArrayOp.RESIZE -> e.builder.beginResizeByteArray(false, destination[0])
                         ByteArrayOp.GET_SIZE_MUTABLE -> e.builder.beginGetSizeMutableByteArray(destination[0])
-                        ByteArrayOp.FREEZE -> e.builder.beginFreezeByteArray(destination[0])
+                        ByteArrayOp.FREEZE, ByteArrayOp.UNSAFE_THAW -> e.builder.beginFreezeByteArray(destination[0])
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD,
                         ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64 -> e.builder.beginIntArrayAccess(byteOffset, destination[0])
                         ByteArrayOp.READ_DOUBLE, ByteArrayOp.READ_WORD8_AS_DOUBLE ->
@@ -2840,7 +2893,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.NEW -> e.builder.endNewByteArray()
                         ByteArrayOp.RESIZE -> e.builder.endResizeByteArray()
                         ByteArrayOp.GET_SIZE_MUTABLE -> e.builder.endGetSizeMutableByteArray()
-                        ByteArrayOp.FREEZE -> e.builder.endFreezeByteArray()
+                        ByteArrayOp.FREEZE, ByteArrayOp.UNSAFE_THAW -> e.builder.endFreezeByteArray()
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD,
                         ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64 -> e.builder.endIntArrayAccess()
                         ByteArrayOp.READ_DOUBLE, ByteArrayOp.READ_WORD8_AS_DOUBLE -> e.builder.endReadDoubleArray()
@@ -2865,6 +2918,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                             e.builder.beginCopyMutableByteArray(operation == ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING)
                         ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8, ByteArrayOp.WRITE_CHAR -> e.builder.beginWriteByteArray()
                         ByteArrayOp.SIZE, ByteArrayOp.SIZE_MUTABLE -> e.builder.beginSizeByteArray()
+                        ByteArrayOp.IS_PINNED, ByteArrayOp.IS_MUTABLE_PINNED,
+                        ByteArrayOp.IS_WEAKLY_PINNED, ByteArrayOp.IS_MUTABLE_WEAKLY_PINNED -> e.builder.beginPinnedByteArray()
                         ByteArrayOp.INDEX, ByteArrayOp.INDEX_CHAR -> e.builder.beginIndexByteArray()
                         ByteArrayOp.INDEX_INT8 -> e.builder.beginIndexSignedByteArray()
                         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD,
@@ -2912,6 +2967,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.COPY_MUTABLE, ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING -> e.builder.endCopyMutableByteArray()
                         ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8, ByteArrayOp.WRITE_CHAR -> e.builder.endWriteByteArray()
                         ByteArrayOp.SIZE, ByteArrayOp.SIZE_MUTABLE -> e.builder.endSizeByteArray()
+                        ByteArrayOp.IS_PINNED, ByteArrayOp.IS_MUTABLE_PINNED,
+                        ByteArrayOp.IS_WEAKLY_PINNED, ByteArrayOp.IS_MUTABLE_WEAKLY_PINNED -> e.builder.endPinnedByteArray()
                         ByteArrayOp.INDEX, ByteArrayOp.INDEX_CHAR -> e.builder.endIndexByteArray()
                         ByteArrayOp.INDEX_INT8 -> e.builder.endIndexSignedByteArray()
                         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD,
@@ -3845,59 +3902,83 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             fields.forEach { e.locals.remove(it.id) }
         }, result.copy(evaluated = arms.all { it.body.proof.evaluated }))
     }
-    private fun vectorByteArray(operation: VectorByteArrayOp, operands: List<Expression>): Expression =
+    private fun vectorMemory(operation: VectorMemoryOp, operands: List<Expression>): Expression =
         ProvenExpression(Expression { e ->
             val b = e.builder
             when (operation.family) {
-                VectorMemoryFamily.INT8, VectorMemoryFamily.WORD8 -> when {
-                    operation.isWrite -> b.beginWriteVectorByteArray(operation.scalarOffset)
-                    operation.isRead -> b.beginReadVectorByteArray(operation.scalarOffset)
-                    else -> b.beginIndexVectorByteArray(operation.scalarOffset)
+                VectorMemoryFamily.INT8, VectorMemoryFamily.WORD8 -> if (operation.isAddress) when {
+                    operation.isWrite -> b.beginWriteVectorByteAddress(operation.scalarOffset)
+                    operation.isRead -> b.beginReadVectorByteAddress(operation.scalarOffset)
+                    else -> b.beginIndexVectorByteAddress(operation.scalarOffset)
+                } else when {
+                    operation.isWrite -> b.beginWriteVectorByteArray(operation.scalarOffset, operation.vectorBytes)
+                    operation.isRead -> b.beginReadVectorByteArray(operation.scalarOffset, operation.vectorBytes)
+                    else -> b.beginIndexVectorByteArray(operation.scalarOffset, operation.vectorBytes)
                 }
-                VectorMemoryFamily.INT16, VectorMemoryFamily.WORD16 -> when {
-                    operation.isWrite -> b.beginWriteVectorShortArray(operation.scalarOffset)
-                    operation.isRead -> b.beginReadVectorShortArray(operation.scalarOffset)
-                    else -> b.beginIndexVectorShortArray(operation.scalarOffset)
+                VectorMemoryFamily.INT16, VectorMemoryFamily.WORD16 -> if (operation.isAddress) when {
+                    operation.isWrite -> b.beginWriteVectorShortAddress(operation.scalarOffset)
+                    operation.isRead -> b.beginReadVectorShortAddress(operation.scalarOffset)
+                    else -> b.beginIndexVectorShortAddress(operation.scalarOffset)
+                } else when {
+                    operation.isWrite -> b.beginWriteVectorShortArray(operation.scalarOffset, operation.vectorBytes)
+                    operation.isRead -> b.beginReadVectorShortArray(operation.scalarOffset, operation.vectorBytes)
+                    else -> b.beginIndexVectorShortArray(operation.scalarOffset, operation.vectorBytes)
                 }
-                VectorMemoryFamily.INT64, VectorMemoryFamily.WORD64 -> when {
-                    operation.isWrite -> b.beginWriteVectorLongArray(operation.scalarOffset)
-                    operation.isRead -> b.beginReadVectorLongArray(operation.scalarOffset)
-                    else -> b.beginIndexVectorLongArray(operation.scalarOffset)
+                VectorMemoryFamily.INT64, VectorMemoryFamily.WORD64 -> if (operation.isAddress) when {
+                    operation.isWrite -> b.beginWriteVectorLongAddress(operation.scalarOffset)
+                    operation.isRead -> b.beginReadVectorLongAddress(operation.scalarOffset)
+                    else -> b.beginIndexVectorLongAddress(operation.scalarOffset)
+                } else when {
+                    operation.isWrite -> b.beginWriteVectorLongArray(operation.scalarOffset, operation.vectorBytes)
+                    operation.isRead -> b.beginReadVectorLongArray(operation.scalarOffset, operation.vectorBytes)
+                    else -> b.beginIndexVectorLongArray(operation.scalarOffset, operation.vectorBytes)
                 }
                 VectorMemoryFamily.INT32 -> when {
-                    operation.isWrite -> b.beginWriteVector32Array(operation.scalarOffset)
-                    operation.isRead -> b.beginReadVector32Array(operation.scalarOffset)
-                    else -> b.beginIndexVector32Array(operation.scalarOffset)
+                    operation.isWrite -> b.beginWriteVector32Array(operation.scalarOffset, operation.vectorBytes)
+                    operation.isRead -> b.beginReadVector32Array(operation.scalarOffset, operation.vectorBytes)
+                    else -> b.beginIndexVector32Array(operation.scalarOffset, operation.vectorBytes)
                 }
                 VectorMemoryFamily.WORD32 -> when {
-                    operation.isWrite -> b.beginWriteVectorWord32Array(operation.scalarOffset)
-                    operation.isRead -> b.beginReadVectorWord32Array(operation.scalarOffset)
-                    else -> b.beginIndexVectorWord32Array(operation.scalarOffset)
+                    operation.isWrite -> b.beginWriteVectorWord32Array(operation.scalarOffset, operation.vectorBytes)
+                    operation.isRead -> b.beginReadVectorWord32Array(operation.scalarOffset, operation.vectorBytes)
+                    else -> b.beginIndexVectorWord32Array(operation.scalarOffset, operation.vectorBytes)
                 }
                 VectorMemoryFamily.FLOAT32 -> when {
-                    operation.isWrite -> b.beginWriteVectorFloatArray(operation.scalarOffset)
-                    operation.isRead -> b.beginReadVectorFloatArray(operation.scalarOffset)
-                    else -> b.beginIndexVectorFloatArray(operation.scalarOffset)
+                    operation.isWrite -> b.beginWriteVectorFloatArray(operation.scalarOffset, operation.vectorBytes)
+                    operation.isRead -> b.beginReadVectorFloatArray(operation.scalarOffset, operation.vectorBytes)
+                    else -> b.beginIndexVectorFloatArray(operation.scalarOffset, operation.vectorBytes)
                 }
                 VectorMemoryFamily.DOUBLE64 -> when {
-                    operation.isWrite -> b.beginWriteVectorDoubleArray(operation.scalarOffset)
-                    operation.isRead -> b.beginReadVectorDoubleArray(operation.scalarOffset)
-                    else -> b.beginIndexVectorDoubleArray(operation.scalarOffset)
+                    operation.isWrite -> b.beginWriteVectorDoubleArray(operation.scalarOffset, operation.vectorBytes)
+                    operation.isRead -> b.beginReadVectorDoubleArray(operation.scalarOffset, operation.vectorBytes)
+                    else -> b.beginIndexVectorDoubleArray(operation.scalarOffset, operation.vectorBytes)
                 }
             }
             operands.forEach { it.emit(e) }
             when (operation.family) {
-                VectorMemoryFamily.INT8, VectorMemoryFamily.WORD8 -> when {
+                VectorMemoryFamily.INT8, VectorMemoryFamily.WORD8 -> if (operation.isAddress) when {
+                    operation.isWrite -> b.endWriteVectorByteAddress()
+                    operation.isRead -> b.endReadVectorByteAddress()
+                    else -> b.endIndexVectorByteAddress()
+                } else when {
                     operation.isWrite -> b.endWriteVectorByteArray()
                     operation.isRead -> b.endReadVectorByteArray()
                     else -> b.endIndexVectorByteArray()
                 }
-                VectorMemoryFamily.INT16, VectorMemoryFamily.WORD16 -> when {
+                VectorMemoryFamily.INT16, VectorMemoryFamily.WORD16 -> if (operation.isAddress) when {
+                    operation.isWrite -> b.endWriteVectorShortAddress()
+                    operation.isRead -> b.endReadVectorShortAddress()
+                    else -> b.endIndexVectorShortAddress()
+                } else when {
                     operation.isWrite -> b.endWriteVectorShortArray()
                     operation.isRead -> b.endReadVectorShortArray()
                     else -> b.endIndexVectorShortArray()
                 }
-                VectorMemoryFamily.INT64, VectorMemoryFamily.WORD64 -> when {
+                VectorMemoryFamily.INT64, VectorMemoryFamily.WORD64 -> if (operation.isAddress) when {
+                    operation.isWrite -> b.endWriteVectorLongAddress()
+                    operation.isRead -> b.endReadVectorLongAddress()
+                    else -> b.endIndexVectorLongAddress()
+                } else when {
                     operation.isWrite -> b.endWriteVectorLongArray()
                     operation.isRead -> b.endReadVectorLongArray()
                     else -> b.endIndexVectorLongArray()
@@ -3926,7 +4007,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         }, if (operation.isWrite) CoreVectorMemory.stateProof else operation.vectorProof)
     private fun vectorReadCase(read: VectorReadCase, scope: Scope, tail: Boolean): Expression {
         val operands = read.arguments.map { compile(it, scope, false) }
-        val value = vectorByteArray(read.operation, operands)
+        val value = vectorMemory(read.operation, operands)
         val local = scope.child()
         local.bindVoid(read.stateBinder, CoreVectorMemory.stateProof)
         val vectorProof = read.operation.vectorProof
@@ -4391,6 +4472,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "addr2Int#" -> "AddressToInt"
             "int2Addr#" -> "IntToAddress"
             "plusAddr#" -> "AddressPlus"
+            "minusAddr#" -> "AddressMinus"
+            "remAddr#" -> "AddressRemainder"
             "eqAddr#" -> "AddressEqual"
             "neAddr#" -> "AddressNotEqual"
             "ltAddr#", "leAddr#", "gtAddr#", "geAddr#" -> "AddressOrder"
@@ -4465,6 +4548,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "NarrowWord" -> b.beginNarrowWord(wordMask)
                 "AddressToInt" -> b.beginAddressToInt(); "IntToAddress" -> b.beginIntToAddress()
                 "Raise" -> b.beginRaise(); "AddressPlus" -> b.beginAddressPlus()
+                "AddressMinus" -> b.beginAddressMinus(); "AddressRemainder" -> b.beginAddressRemainder()
                 "AddressIndexByte" -> b.beginAddressIndexByte(name == "indexInt8OffAddr#")
                 "AddressIndexManagedScalar" -> b.beginAddressIndexManagedScalar(
                     if (name == "indexInt16OffAddr#") ManagedAddressRead.INT16 else ManagedAddressRead.WORD16)
@@ -4535,6 +4619,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "NarrowWord" -> b.endNarrowWord()
                 "AddressToInt" -> b.endAddressToInt(); "IntToAddress" -> b.endIntToAddress()
                 "Raise" -> b.endRaise(); "AddressPlus" -> b.endAddressPlus(); "AddressIndexByte" -> b.endAddressIndexByte()
+                "AddressMinus" -> b.endAddressMinus(); "AddressRemainder" -> b.endAddressRemainder()
                 "AddressIndexManagedScalar" -> b.endAddressIndexManagedScalar()
                 "AddressEqual" -> b.endAddressEqual(); "AddressNotEqual" -> b.endAddressNotEqual()
                 "AddressOrder" -> b.endAddressOrder()

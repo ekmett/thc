@@ -286,38 +286,38 @@ internal object ManagedByteArray {
     @JvmStatic fun allocateGuest(size: Long): ManagedAllocation =
         ManagedAllocation.mutable(size, ValueLayout.ADDRESS.byteSize().toInt())
     private inline fun <T> vectorGuest(value: Any?, index: Long, scalarOffset: Boolean,
-        scalarWidth: Int, writable: Boolean, action: (ByteArray) -> T): T =
+        scalarWidth: Int, writable: Boolean, vectorBytes: Int, action: (ByteArray) -> T): T =
         if (value is ManagedAllocation)
-            value.accessVector(index, scalarOffset, scalarWidth, writable, action)
+            value.accessVector(index, scalarOffset, scalarWidth, writable, vectorBytes, action)
         else action(require(value))
-    @JvmStatic fun readByteVectorGuest(value: Any?, index: Long, scalarOffset: Boolean): ByteVector =
-        vectorGuest(value, index, scalarOffset, 1, false) { readByteVectorArray(it, index, scalarOffset) }
-    @JvmStatic fun writeByteVectorGuest(value: Any?, index: Long, vector: ByteVector, scalarOffset: Boolean) =
-        vectorGuest(value, index, scalarOffset, 1, true) { writeByteVectorArray(it, index, vector, scalarOffset) }
-    @JvmStatic fun readShortVectorGuest(value: Any?, index: Long, scalarOffset: Boolean): ShortVector =
-        vectorGuest(value, index, scalarOffset, 2, false) { readShortVectorArray(it, index, scalarOffset) }
-    @JvmStatic fun writeShortVectorGuest(value: Any?, index: Long, vector: ShortVector, scalarOffset: Boolean) =
-        vectorGuest(value, index, scalarOffset, 2, true) { writeShortVectorArray(it, index, vector, scalarOffset) }
-    @JvmStatic fun readLongVectorGuest(value: Any?, index: Long, scalarOffset: Boolean): LongVector =
-        vectorGuest(value, index, scalarOffset, 8, false) { readLongVectorArray(it, index, scalarOffset) }
-    @JvmStatic fun writeLongVectorGuest(value: Any?, index: Long, vector: LongVector, scalarOffset: Boolean) =
-        vectorGuest(value, index, scalarOffset, 8, true) { writeLongVectorArray(it, index, vector, scalarOffset) }
-    @JvmStatic fun readInt32VectorGuest(value: Any?, index: Long, scalarOffset: Boolean): IntVector =
-        vectorGuest(value, index, scalarOffset, 4, false) { readIntVectorArray(it, index, scalarOffset, "Int32X4") }
-    @JvmStatic fun writeInt32VectorGuest(value: Any?, index: Long, vector: IntVector, scalarOffset: Boolean) =
-        vectorGuest(value, index, scalarOffset, 4, true) { writeIntVectorArray(it, index, vector, scalarOffset, "Int32X4") }
-    @JvmStatic fun readWord32VectorGuest(value: Any?, index: Long, scalarOffset: Boolean): IntVector =
-        vectorGuest(value, index, scalarOffset, 4, false) { readIntVectorArray(it, index, scalarOffset, "Word32X4") }
-    @JvmStatic fun writeWord32VectorGuest(value: Any?, index: Long, vector: IntVector, scalarOffset: Boolean) =
-        vectorGuest(value, index, scalarOffset, 4, true) { writeIntVectorArray(it, index, vector, scalarOffset, "Word32X4") }
-    @JvmStatic fun readFloatVectorGuest(value: Any?, index: Long, scalarOffset: Boolean): FloatVector =
-        vectorGuest(value, index, scalarOffset, 4, false) { readFloatVectorArray(it, index, scalarOffset) }
-    @JvmStatic fun writeFloatVectorGuest(value: Any?, index: Long, vector: FloatVector, scalarOffset: Boolean) =
-        vectorGuest(value, index, scalarOffset, 4, true) { writeFloatVectorArray(it, index, vector, scalarOffset) }
-    @JvmStatic fun readDoubleVectorGuest(value: Any?, index: Long, scalarOffset: Boolean): DoubleVector =
-        vectorGuest(value, index, scalarOffset, 8, false) { readDoubleVectorArray(it, index, scalarOffset) }
-    @JvmStatic fun writeDoubleVectorGuest(value: Any?, index: Long, vector: DoubleVector, scalarOffset: Boolean) =
-        vectorGuest(value, index, scalarOffset, 8, true) { writeDoubleVectorArray(it, index, vector, scalarOffset) }
+    @JvmStatic @JvmOverloads fun readByteVectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): ByteVector =
+        vectorGuest(value, index, scalarOffset, 1, false, vectorBytes) { readByteVectorArray(it, index, scalarOffset, vectorBytes) }
+    @JvmStatic @JvmOverloads fun writeByteVectorGuest(value: Any?, index: Long, vector: ByteVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
+        vectorGuest(value, index, scalarOffset, 1, true, vectorBytes) { writeByteVectorArray(it, index, vector, scalarOffset, vectorBytes) }
+    @JvmStatic @JvmOverloads fun readShortVectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): ShortVector =
+        vectorGuest(value, index, scalarOffset, 2, false, vectorBytes) { readShortVectorArray(it, index, scalarOffset, vectorBytes) }
+    @JvmStatic @JvmOverloads fun writeShortVectorGuest(value: Any?, index: Long, vector: ShortVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
+        vectorGuest(value, index, scalarOffset, 2, true, vectorBytes) { writeShortVectorArray(it, index, vector, scalarOffset, vectorBytes) }
+    @JvmStatic @JvmOverloads fun readLongVectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): LongVector =
+        vectorGuest(value, index, scalarOffset, 8, false, vectorBytes) { readLongVectorArray(it, index, scalarOffset, vectorBytes) }
+    @JvmStatic @JvmOverloads fun writeLongVectorGuest(value: Any?, index: Long, vector: LongVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
+        vectorGuest(value, index, scalarOffset, 8, true, vectorBytes) { writeLongVectorArray(it, index, vector, scalarOffset, vectorBytes) }
+    @JvmStatic @JvmOverloads fun readInt32VectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): IntVector =
+        vectorGuest(value, index, scalarOffset, 4, false, vectorBytes) { readIntVectorArray(it, index, scalarOffset, "Int32X4", vectorBytes) }
+    @JvmStatic @JvmOverloads fun writeInt32VectorGuest(value: Any?, index: Long, vector: IntVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
+        vectorGuest(value, index, scalarOffset, 4, true, vectorBytes) { writeIntVectorArray(it, index, vector, scalarOffset, "Int32X4", vectorBytes) }
+    @JvmStatic @JvmOverloads fun readWord32VectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): IntVector =
+        vectorGuest(value, index, scalarOffset, 4, false, vectorBytes) { readIntVectorArray(it, index, scalarOffset, "Word32X4", vectorBytes) }
+    @JvmStatic @JvmOverloads fun writeWord32VectorGuest(value: Any?, index: Long, vector: IntVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
+        vectorGuest(value, index, scalarOffset, 4, true, vectorBytes) { writeIntVectorArray(it, index, vector, scalarOffset, "Word32X4", vectorBytes) }
+    @JvmStatic @JvmOverloads fun readFloatVectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): FloatVector =
+        vectorGuest(value, index, scalarOffset, 4, false, vectorBytes) { readFloatVectorArray(it, index, scalarOffset, vectorBytes) }
+    @JvmStatic @JvmOverloads fun writeFloatVectorGuest(value: Any?, index: Long, vector: FloatVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
+        vectorGuest(value, index, scalarOffset, 4, true, vectorBytes) { writeFloatVectorArray(it, index, vector, scalarOffset, vectorBytes) }
+    @JvmStatic @JvmOverloads fun readDoubleVectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): DoubleVector =
+        vectorGuest(value, index, scalarOffset, 8, false, vectorBytes) { readDoubleVectorArray(it, index, scalarOffset, vectorBytes) }
+    @JvmStatic @JvmOverloads fun writeDoubleVectorGuest(value: Any?, index: Long, vector: DoubleVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
+        vectorGuest(value, index, scalarOffset, 8, true, vectorBytes) { writeDoubleVectorArray(it, index, vector, scalarOffset, vectorBytes) }
     @JvmStatic fun require(value: Any?): ByteArray = when (value) {
         is ByteArray -> value
         is ManagedAllocation -> value.wholeBytesForPrimitive()
@@ -327,6 +327,17 @@ internal object ManagedByteArray {
 }
 
 private const val BYTE_ARRAY_REP = "BoxedRep (Just Unlifted)"
+
+/** No compact-region or RTS-large-object allocation mode exists here. Explicit
+ * logical pinning supplies both guarantees; ordinary allocations promise neither. */
+private class PinnedByteArrayExpression(@field:Child private var array: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Long = executeLong(frame)
+    override fun executeLong(frame: VirtualFrame): Long = when (val value = array.execute(frame)) {
+        is ManagedAllocation -> if (value.isPinned) 1L else 0L
+        is ByteArray -> 0L
+        else -> fault("Expected a managed ByteArray#")
+    }
+}
 
 /** Exact primitive representation contracts, including the logical State# slot. */
 internal enum class ByteArrayOp(val primitive: String, private val arguments: List<List<String>>, val tuple: Boolean = false) {
@@ -345,6 +356,11 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
     COMPARE("compareByteArrays#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf(BYTE_ARRAY_REP),
         listOf("IntRep"), listOf("IntRep"))),
     FREEZE("unsafeFreezeByteArray#", listOf(listOf(BYTE_ARRAY_REP), emptyList()), true),
+    UNSAFE_THAW("unsafeThawByteArray#", listOf(listOf(BYTE_ARRAY_REP), emptyList()), true),
+    IS_PINNED("isByteArrayPinned#", listOf(listOf(BYTE_ARRAY_REP))),
+    IS_MUTABLE_PINNED("isMutableByteArrayPinned#", listOf(listOf(BYTE_ARRAY_REP))),
+    IS_WEAKLY_PINNED("isByteArrayWeaklyPinned#", listOf(listOf(BYTE_ARRAY_REP))),
+    IS_MUTABLE_WEAKLY_PINNED("isMutableByteArrayWeaklyPinned#", listOf(listOf(BYTE_ARRAY_REP))),
     SIZE("sizeofByteArray#", listOf(listOf(BYTE_ARRAY_REP))),
     SIZE_MUTABLE("sizeofMutableByteArray#", listOf(listOf(BYTE_ARRAY_REP))),
     GET_SIZE_MUTABLE("getSizeofMutableByteArray#", listOf(listOf(BYTE_ARRAY_REP), emptyList()), true),
@@ -429,7 +445,8 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
             WRITE, WRITE_CHAR, WRITE_INT, WRITE_DOUBLE, WRITE_INT32, WRITE_WORD32, WRITE_WORD8_AS_INT32, WRITE_WORD8_AS_WORD32, WRITE_FLOAT, WRITE_WORD,
             WRITE_WORD8_AS_DOUBLE, WRITE_WORD8_AS_FLOAT, WRITE_INT64, WRITE_WORD64, COPY, SET, COPY_MUTABLE, COPY_MUTABLE_NON_OVERLAPPING,
             SHRINK -> emptyList()
-            SIZE, SIZE_MUTABLE, INDEX_INT, COMPARE -> listOf("IntRep")
+            SIZE, SIZE_MUTABLE, INDEX_INT, COMPARE, IS_PINNED, IS_MUTABLE_PINNED,
+            IS_WEAKLY_PINNED, IS_MUTABLE_WEAKLY_PINNED -> listOf("IntRep")
             INDEX_INT8 -> listOf("Int8Rep")
             INDEX_INT16, INDEX_WORD8_AS_INT16 -> listOf("Int16Rep")
             INDEX_WORD16, INDEX_WORD8_AS_WORD16 -> listOf("Word16Rep")
@@ -465,7 +482,9 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
         ByteArrayOp.NEW -> NewByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.RESIZE -> ResizeByteArrayExpression(operands[0], operands[1], operands[2])
         ByteArrayOp.SHRINK -> ShrinkByteArrayExpression(operands[0], operands[1], operands[2])
-        ByteArrayOp.FREEZE -> FreezeByteArrayExpression(operands[0], operands[1])
+        ByteArrayOp.FREEZE, ByteArrayOp.UNSAFE_THAW -> FreezeByteArrayExpression(operands[0], operands[1])
+        ByteArrayOp.IS_PINNED, ByteArrayOp.IS_MUTABLE_PINNED,
+        ByteArrayOp.IS_WEAKLY_PINNED, ByteArrayOp.IS_MUTABLE_WEAKLY_PINNED -> PinnedByteArrayExpression(operands[0])
         ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8, ByteArrayOp.WRITE_CHAR -> WriteByteArrayExpression(operands[0], operands[1], operands[2], operands[3])
         ByteArrayOp.COPY -> CopyByteArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4], operands[5])
         ByteArrayOp.SET -> SetByteArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4])

@@ -13,7 +13,8 @@ carriers and native byte order. Scalar unpacking supplies sign/zero extension;
 signed and unsigned stores move the same bits. Owned allocations retain their
 monitor, logical shrink bounds and pointer-cell protections. Host byte arrays
 retain physical bounds checks. Invalid offsets cannot wrap into valid storage.
-This batch does not implement Addr memory or promise allocation-free execution.
+The [Addr# counterparts](simd128-address-memory.md) use the same vector carriers.
+Neither API promises allocation-free execution.
 
 `Simd128ArrayAudit.hs` is ordinary Haskell using all 36 primops, with every
 byte initialized before access. Its Haskell producer preserves original Core,

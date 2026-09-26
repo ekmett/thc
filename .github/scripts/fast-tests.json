@@ -40,6 +40,10 @@
       "junit": ["thc.runtime.AtomicAddressTest"],
       "python": []
     },
+    "src/main/kotlin/thc/runtime/VectorAddresses.kt": {
+      "junit": ["thc.runtime.Simd128AddressTest", "thc.runtime.Simd128AddressNativeTest"],
+      "python": ["scripts/test-core-vector-memory.py"]
+    },
     "src/main/kotlin/thc/runtime/ManagedNativeAllocations.kt": {
       "junit": ["thc.runtime.NativeFileBuffersTest", "thc.runtime.NativeMallocTest", "thc.runtime.AtomicAddressTest"],
       "python": []
@@ -86,11 +90,11 @@
       "python": []
     },
     "src/main/kotlin/thc/runtime/ManagedSmallArrays.kt": {
-      "junit": ["thc.runtime.SmallArrayTest", "thc.runtime.BoxedCasTest"],
+      "junit": ["thc.runtime.SmallArrayTest", "thc.runtime.BoxedCasTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/AddressIdentity.kt": {
-      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest"],
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/BitPrimitives.kt": {
@@ -186,6 +190,10 @@
     },
     "src/main/kotlin/thc/runtime/IntegerVectorPrimitives.kt": {
       "junit": [
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
         "thc.runtime.Simd128ArrayNativeTest",
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
@@ -217,6 +225,8 @@
     },
     "src/main/kotlin/thc/runtime/FloatingVectorPrimitives.kt": {
       "junit": [
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
         "thc.runtime.DoubleVectorMemoryProofTest",
         "thc.runtime.DoubleVectorStorageTest",
         "thc.runtime.FloatVectorMemoryProofTest",
@@ -310,8 +320,17 @@
       ],
       "python": []
     },
+    "examples/DelimitedContinuations.hs": {
+      "junit": ["thc.runtime.DelimitedContinuationsTest"], "python": []
+    },
+    "compiler/test-fixtures/DelimitedContinuationsNative.hs": {
+      "junit": ["thc.runtime.DelimitedContinuationsTest"], "python": []
+    },
+    "test/haskell-fixtures/DelimitedContinuationsFixtures.hs": {
+      "junit": ["thc.runtime.DelimitedContinuationsTest"], "python": []
+    },
     "src/test/kotlin/thc/runtime/ThreadInventoryCoreEvidence.kt": {
-      "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
+      "junit": ["thc.runtime.ThreadInventoryNativeTest", "thc.runtime.DelimitedContinuationsTest"], "python": []
     },
     "test/haskell-fixtures/HintTraceFixtures.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
     "compiler/test-fixtures/HintTraceAudit.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
@@ -897,6 +916,18 @@
       "junit": ["thc.runtime.SmallArrayTest"],
       "python": []
     },
+    "compiler/test-fixtures/ScalarMemoryUtilities.hs": {
+      "junit": ["thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/ScalarMemoryUtilitiesNative.hs": {
+      "junit": ["thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/ScalarMemoryUtilitiesFixtures.hs": {
+      "junit": ["thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
     "scripts/prepare-address-identity.sh": {
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "python": []
@@ -923,6 +954,7 @@
       "junit": [
         "thc.runtime.AtomicAddressTest",
         "thc.runtime.AtomicIntArrayTest",
+        "thc.runtime.DelimitedContinuationsTest",
         "thc.runtime.ThreadInventoryNativeTest",
         "thc.runtime.AlignedScalarMemoryTest",
         "thc.runtime.IntegerCompletionTest",
@@ -1270,6 +1302,8 @@
     },
     "scripts/simd-families.json": {
       "junit": [
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.Simd128AddressNativeTest",
         "thc.runtime.Simd128ArrayNativeTest",
         "thc.runtime.SimdCapabilitySmokeTest"
       ],
@@ -1282,6 +1316,10 @@
       "python": [
         "scripts/test-simd-families.py"
       ]
+    },
+    "src/test/kotlin/thc/runtime/Simd128ArrayProofTest.kt": {
+      "junit": ["thc.runtime.Simd128ArrayProofTest", "thc.runtime.SimdWideArrayProofTest"],
+      "python": []
     },
     "src/test/kotlin/thc/PrimopTestContext.kt": {
       "junit": [
@@ -1311,6 +1349,7 @@
         "thc.runtime.PinnedAddressTest",
         "thc.runtime.AddressArrayCopyTest",
         "thc.runtime.HintTraceTest",
+        "thc.runtime.DelimitedContinuationsTest",
         "thc.runtime.BigNatLiteralTest",
         "thc.runtime.FloatDecodeTest",
         "thc.runtime.ScalarBitCastTest",
@@ -1352,6 +1391,7 @@
         "thc.runtime.MaskFunctionNativeTest",
         "thc.runtime.InterfaceCoreNativeTest",
         "thc.runtime.SmallArrayTest",
+        "thc.runtime.ScalarMemoryUtilitiesTest",
         "thc.runtime.PinnedPointerCellsTest",
         "thc.runtime.WideCharAddressTest",
         "thc.runtime.OriginalStdioNativeTest",

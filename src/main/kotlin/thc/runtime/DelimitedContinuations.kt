@@ -1,0 +1,296 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+package thc.runtime
+
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
+import com.oracle.truffle.api.Truffle
+import com.oracle.truffle.api.bytecode.ContinuationResult
+import com.oracle.truffle.api.exception.AbstractTruffleException
+import com.oracle.truffle.api.frame.FrameDescriptor
+import com.oracle.truffle.api.frame.MaterializedFrame
+import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.nodes.Node
+import thc.Language
+import java.util.IdentityHashMap
+
+/** Prompt identity is opaque and belongs to one guest context, not one carrier thread. */
+internal class PromptTag(val owner: Language.State)
+
+/** A resumption can throw at the suspended call, so captured catch frames still apply. */
+internal class DelimitedResume(val value: Any?, val failure: GuestException? = null) {
+    fun get(): Any? { failure?.let { throw it }; return value }
+}
+
+internal interface DelimitedStep {
+    fun resume(frame: MaterializedFrame, input: DelimitedResume, ambient: MaskingState,
+               outerMask: DelimitedStep?): Any?
+}
+
+internal class DelimitedFrame(val frame: MaterializedFrame, val step: DelimitedStep)
+
+/** The exception only transports saved suffixes. It is never the continuation itself. */
+internal class DelimitedCut(val tag: PromptTag, val handler: Any?, val inputShape: TupleShape,
+                           val capturedMask: MaskingState, node: Node) :
+    AbstractTruffleException("Internal delimited continuation capture", null, 0, node) {
+    val frames = ArrayList<DelimitedFrame>()
+    fun append(frame: VirtualFrame, step: DelimitedStep): DelimitedCut {
+        frames.add(DelimitedFrame(frame.materialize(), step))
+        return this
+    }
+}
+
+/** Copy control locals, never the guest heap. In particular, MutVars and captured
+ * closure environments remain shared across distinct invocations, as in GHC. */
+@TruffleBoundary
+internal fun copyContinuationFrame(frame: MaterializedFrame): MaterializedFrame {
+    val descriptor = frame.frameDescriptor
+    val copy = Truffle.getRuntime().createMaterializedFrame(frame.arguments.copyOf(), descriptor)
+    frame.copyTo(0, copy, 0, descriptor.numberOfSlots)
+    for (index in 0 until descriptor.numberOfAuxiliarySlots)
+        copy.setAuxiliarySlot(index, frame.getAuxiliarySlot(index))
+    return copy
+}
+
+internal class DelimitedBytecodeStep(private val saved: ContinuationResult,
+                                   private val shape: TupleShape?) : DelimitedStep {
+    override fun resume(frame: MaterializedFrame, input: DelimitedResume, ambient: MaskingState,
+                        outerMask: DelimitedStep?): Any? {
+        val answer = ContinuationResult.create(saved.continuationRootNode, frame, saved.result).continueWith(input)
+        DelimitedControl.captureBytecode(answer, shape)
+        return if (shape == null) answer else ownedTupleResult(answer, shape)
+    }
+}
+
+internal class DelimitedTupleStep(private val destination: TupleDestination, private val node: Node) : DelimitedStep {
+    override fun resume(frame: MaterializedFrame, input: DelimitedResume, ambient: MaskingState,
+                        outerMask: DelimitedStep?): Any? {
+        destination.consume(frame, node, input.get())
+        return null
+    }
+}
+
+internal class DelimitedMaskStep(private val node: Node, private val prior: MaskingState) : DelimitedStep {
+    fun unwind(ambient: MaskingState, outerMask: DelimitedStep?) =
+        SynchronousMasking.set(node, if (this === outerMask) ambient else prior)
+    override fun resume(frame: MaterializedFrame, input: DelimitedResume, ambient: MaskingState,
+                        outerMask: DelimitedStep?): Any? {
+        unwind(ambient, outerMask)
+        return input.get()
+    }
+}
+
+internal class DelimitedPromptStep(val tag: PromptTag, val site: DelimitedActionSite,
+                                  val shape: TupleShape) : DelimitedStep {
+    override fun resume(frame: MaterializedFrame, input: DelimitedResume, ambient: MaskingState,
+                        outerMask: DelimitedStep?): Any? = input.get()
+    fun handle(frame: MaterializedFrame, cut: DelimitedCut): Any? =
+        site.handle(frame, cut, shape)
+}
+
+internal class DelimitedCatchStep(private val site: DelimitedActionSite, private val handler: Any?,
+                                 private val shape: TupleShape) : DelimitedStep {
+    override fun resume(frame: MaterializedFrame, input: DelimitedResume, ambient: MaskingState,
+                        outerMask: DelimitedStep?): Any? = if (input.failure == null) input.value
+        else site.handleException(frame, handler, input.failure, shape)
+}
+
+/** Immutable multi-shot stack image. A fresh frame graph belongs to each invocation. */
+internal class DelimitedStack(cut: DelimitedCut, private val outputShape: TupleShape) {
+    private val owner = cut.tag.owner
+    private val inputShape = cut.inputShape
+    private val initialMask = cut.capturedMask
+    private val frames: List<DelimitedFrame>
+    init {
+        val copies = IdentityHashMap<MaterializedFrame, MaterializedFrame>()
+        frames = cut.frames.map { DelimitedFrame(copies.getOrPut(it.frame) { copyContinuationFrame(it.frame) }, it.step) }
+    }
+
+    fun resume(site: DelimitedActionSite, frame: VirtualFrame, action: Any?): Any? {
+        if (Language.currentState(site) !== owner) fault("Continuation belongs to another context")
+        val ambient = SynchronousMasking.current(site)
+        val copies = IdentityHashMap<MaterializedFrame, MaterializedFrame>()
+        val active = frames.map { DelimitedFrame(copies.getOrPut(it.frame) { copyContinuationFrame(it.frame) }, it.step) }
+        val outerMask = active.lastOrNull { it.step is DelimitedMaskStep }?.step
+        try {
+            if (outerMask != null) SynchronousMasking.set(site, initialMask)
+            val input = try { DelimitedResume(site.invoke(frame, action, arrayOf(Unit), inputShape)) }
+            catch (failure: GuestException) { DelimitedResume(null, failure) }
+            catch (cut: DelimitedCut) { return transfer(site, cut, active, ambient, outerMask) }
+            return run(site, active, input, ambient, outerMask)
+        } finally { SynchronousMasking.set(site, ambient) }
+    }
+
+    private fun run(site: DelimitedActionSite, active: List<DelimitedFrame>, initial: DelimitedResume,
+                    ambient: MaskingState, outerMask: DelimitedStep?): Any? {
+        var input = initial
+        active.forEachIndexed { index, entry ->
+            input = try { DelimitedResume(entry.step.resume(entry.frame, input, ambient, outerMask)) }
+            catch (failure: GuestException) { DelimitedResume(null, failure) }
+            catch (cut: DelimitedCut) { return transfer(site, cut, active.drop(index + 1), ambient, outerMask) }
+        }
+        return input.get()
+    }
+
+    private fun transfer(site: DelimitedActionSite, cut: DelimitedCut, remaining: List<DelimitedFrame>,
+                         ambient: MaskingState, outerMask: DelimitedStep?): Any? {
+        remaining.forEachIndexed { index, entry ->
+            val step = entry.step
+            if (step is DelimitedPromptStep && step.tag === cut.tag) {
+                val input = try { DelimitedResume(step.handle(entry.frame, cut)) }
+                catch (failure: GuestException) { DelimitedResume(null, failure) }
+                catch (next: DelimitedCut) { return transfer(site, next, remaining.drop(index + 1), ambient, outerMask) }
+                return run(site, remaining.drop(index + 1), input, ambient, outerMask)
+            }
+            cut.frames.add(entry)
+            if (step is DelimitedMaskStep) step.unwind(ambient, outerMask)
+        }
+        throw cut
+    }
+
+    @TruffleBoundary fun closure(language: Language, metrics: Metrics): Closure =
+        Closure(null, arity = 2, target = DelimitedContinuationRoot(language, this, outputShape, metrics).callTarget)
+}
+
+private class DelimitedContinuationRoot(language: Language, private val stack: DelimitedStack,
+                                       shape: TupleShape, metrics: Metrics) :
+    GuestRoot(language, FrameDescriptor.newBuilder().build()) {
+    @Child private var site = DelimitedActionSite(language, metrics)
+    init { configureEntry(booleanArrayOf(false, false), false); configureTupleResult(shape) }
+    override fun bloom(frame: VirtualFrame): Long = frame.arguments[0] as Long or mask
+    override fun execute(frame: VirtualFrame): Any? {
+        requireVoidCarrier(frame.arguments[2])
+        return stack.resume(site, frame, frame.arguments[1])
+    }
+}
+
+/** Shared real IO call boundary for prompts and restored catch/mask frames. */
+internal class DelimitedActionSite(private val language: Language, private val metrics: Metrics) : Node() {
+    @Child private var one = Dispatch.create(1, false, metrics)
+    @Child private var two = Dispatch.create(2, false, metrics)
+    @Child private var force = Force(metrics)
+    fun invoke(frame: VirtualFrame, action: Any?, arguments: Array<Any?>, shape: TupleShape): Any? {
+        val closure = requireClosure(force.execute(frame, action))
+        val result = (if (arguments.size == 1) one else two).execute(frame, closure, arguments)
+        DelimitedControl.captureBytecode(result, shape)
+        return ownedTupleResult(result, shape)
+    }
+    fun handle(frame: VirtualFrame, cut: DelimitedCut, shape: TupleShape): Any? {
+        val continuation = DelimitedStack(cut, shape).closure(language, metrics)
+        return invoke(frame, cut.handler, arrayOf(continuation, Unit), shape)
+    }
+    fun prompt(frame: VirtualFrame, tag: Any?, action: Any?, state: Any?, shape: TupleShape): Any? {
+        requireVoidCarrier(state)
+        val identity = DelimitedControl.tag(this, tag)
+        return try { invoke(frame, action, arrayOf(Unit), shape) }
+        catch (cut: DelimitedCut) {
+            if (cut.tag === identity) handle(frame, cut, shape)
+            else throw cut.append(frame, DelimitedPromptStep(identity, this, shape))
+        }
+    }
+    fun handleException(frame: VirtualFrame, handler: Any?, failure: GuestException, shape: TupleShape): Any? {
+        val prior = SynchronousMasking.current(this)
+        if (prior == MaskingState.UNMASKED) SynchronousMasking.set(this, MaskingState.MASKED_INTERRUPTIBLE)
+        return try { invoke(frame, handler, arrayOf(failure.payload, Unit), shape) }
+        catch (cut: DelimitedCut) { throw cut.append(frame, DelimitedMaskStep(this, prior)) }
+        finally { SynchronousMasking.set(this, prior) }
+    }
+    fun caught(frame: VirtualFrame, action: Any?, handler: Any?, state: Any?, shape: TupleShape): Any? {
+        requireVoidCarrier(state)
+        return try { invoke(frame, action, arrayOf(Unit), shape) }
+        catch (failure: GuestException) { handleException(frame, handler, failure, shape) }
+        catch (cut: DelimitedCut) { throw cut.append(frame, DelimitedCatchStep(this, handler, shape)) }
+    }
+    fun masked(frame: VirtualFrame, action: Any?, state: Any?, shape: TupleShape, target: MaskingState): Any? {
+        requireVoidCarrier(state)
+        val prior = SynchronousMasking.current(this)
+        SynchronousMasking.set(this, target)
+        return try { invoke(frame, action, arrayOf(Unit), shape) }
+        catch (cut: DelimitedCut) { throw cut.append(frame, DelimitedMaskStep(this, prior)) }
+        finally { SynchronousMasking.set(this, prior) }
+    }
+}
+
+internal object DelimitedControl {
+    fun contains(value: Any?): Boolean = when (value) {
+        is Map<*, *> -> value.values.any(::contains)
+        is List<*> -> value.take(2) in listOf(listOf("prim", "prompt#"), listOf("prim", "control0#")) || value.any(::contains)
+        else -> false
+    }
+    fun validate(name: String, arguments: List<CoreRepresentation>, flags: List<*>, result: CoreRepresentation) {
+        fun state(proof: CoreRepresentation) = proof.kind == CoreKind.VOID && !proof.isAggregate && !proof.isVector
+        val fields = result.components
+        val arity = if (name == "newPromptTag#") 1 else 3
+        if (arguments.size != arity || flags != (if (arity == 1) listOf(false) else listOf(false, true, false)) ||
+            !state(arguments.last()) || !result.isTuple || fields?.size != 2 || !state(fields[0]) ||
+            (arity == 3 && (arguments[0].kind != CoreKind.OBJECT || arguments[1].kind != CoreKind.CLOSURE)) ||
+            (name == "newPromptTag#" && fields[1].kind != CoreKind.OBJECT))
+            throw RuntimeFault("$name: expected prompt identity, action, State# and tuple carriers")
+        TupleShape.validate(result)
+    }
+    @JvmStatic fun tag(node: Node, value: Any?): PromptTag {
+        val tag = value as? PromptTag ?: fault("Expected PromptTag# carrier")
+        if (Language.currentState(node) !== tag.owner) fault("Prompt tag belongs to another context")
+        return tag
+    }
+    @JvmStatic fun captureBytecode(result: Any?, shape: TupleShape?) {
+        val saved = when (result) { is TailYield -> result.continuation; is ContinuationResult -> result; else -> return }
+        val cut = saved.result as? DelimitedCut ?: return
+        cut.append(saved.frame, DelimitedBytecodeStep(saved, shape))
+        throw cut
+    }
+}
+
+internal class DelimitedPrimitive(private val name: String, private val shape: TupleShape,
+                                 @field:Children private var operands: Array<Expr>,
+                                 language: Language, metrics: Metrics) : Expr() {
+    @Child private var site = DelimitedActionSite(language, metrics)
+    init { representation = shape.proof.copy(evaluated = true) }
+    override fun execute(frame: VirtualFrame): Nothing = fault("$name requires a tuple destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        if (name == "newPromptTag#") {
+            requireVoidCarrier(operands[0].execute(frame))
+            FrameAccess.write(frame, slots[offset], PromptTag(Language.currentState(this)))
+            return null
+        }
+        val tag = operands[0].execute(frame)
+        val action = operands[1].execute(frame)
+        val state = operands[2].execute(frame)
+        if (name == "prompt#") {
+            val result = try { site.prompt(frame, tag, action, state, shape) }
+            catch (cut: DelimitedCut) {
+                throw cut.append(frame, DelimitedTupleStep(AstTupleDestination(shape, slots, offset), this))
+            }
+            shape.consume(frame, result, slots, offset)
+            return null
+        }
+        requireVoidCarrier(state)
+        throw DelimitedCut(DelimitedControl.tag(this, tag), action, shape, SynchronousMasking.current(this), this)
+            .append(frame, DelimitedTupleStep(AstTupleDestination(shape, slots, offset), this))
+    }
+}
+
+internal class DelimitedIOBoundary(private val name: String, private val shape: TupleShape,
+                                  @field:Children private var operands: Array<Expr>,
+                                  language: Language, metrics: Metrics) : Expr() {
+    @Child private var site = DelimitedActionSite(language, metrics)
+    init { representation = shape.proof.copy(evaluated = true) }
+    override fun execute(frame: VirtualFrame): Nothing = fault("$name requires a tuple destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val action = operands[0].execute(frame)
+        val handler = if (name == "catch#") operands[1].execute(frame) else null
+        val state = operands.last().execute(frame)
+        val result = try {
+            if (name == "catch#") site.caught(frame, action, handler, state, shape)
+            else site.masked(frame, action, state, shape, when (name) {
+                "maskAsyncExceptions#" -> MaskingState.MASKED_INTERRUPTIBLE
+                "maskUninterruptible#" -> MaskingState.MASKED_UNINTERRUPTIBLE
+                else -> MaskingState.UNMASKED
+            })
+        } catch (cut: DelimitedCut) {
+            throw cut.append(frame, DelimitedTupleStep(AstTupleDestination(shape, slots, offset), this))
+        }
+        shape.consume(frame, result, slots, offset)
+        return null
+    }
+}

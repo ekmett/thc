@@ -13,7 +13,7 @@ internal object PinnedMemory {
         // address-to-integer/native-pointer operation is provided by this slice.
         if (alignment <= 0 || alignment and (alignment - 1) != 0L)
             fault("Pinned ByteArray# alignment must be a positive power of two")
-        return ManagedAllocation.mutable(size, ValueLayout.ADDRESS.byteSize().toInt())
+        return ManagedAllocation.mutable(size, ValueLayout.ADDRESS.byteSize().toInt(), pinned = true)
     }
 
     private fun pointerArray(value: Any?): ManagedAllocation = value as? ManagedAllocation
@@ -85,16 +85,20 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
     WRITE_ADDR_ARRAY("writeAddrArray#", listOf(listOf("BoxedRep (Just Unlifted)"), listOf("IntRep"),
         listOf("AddrRep"), emptyList()), false),
     COPY_ADDR_NON_OVERLAPPING("copyAddrToAddrNonOverlapping#",
-        listOf(listOf("AddrRep"), listOf("AddrRep"), listOf("IntRep"), emptyList()), false);
+        listOf(listOf("AddrRep"), listOf("AddrRep"), listOf("IntRep"), emptyList()), false),
+    COPY_ADDR("copyAddrToAddr#",
+        listOf(listOf("AddrRep"), listOf("AddrRep"), listOf("IntRep"), emptyList()), false),
+    SET_ADDR("setAddrRange#",
+        listOf(listOf("AddrRep"), listOf("IntRep"), listOf("IntRep"), emptyList()), false);
 
     fun validate(actual: List<CoreRepresentation>, flags: List<*>, result: CoreRepresentation) {
         fun exact(proof: CoreRepresentation, reps: List<String>): Boolean = !proof.isAggregate && !proof.isVector &&
-            (proof.kind == CoreKind.LONG || proof.primReps == reps) && proof.kind == when (reps.singleOrNull()) {
+            proof.kind == when (reps.singleOrNull()) {
                 null -> CoreKind.VOID
                 "BoxedRep (Just Unlifted)" -> CoreKind.OBJECT
                 "AddrRep" -> CoreKind.ADDRESS
                 else -> CoreKind.LONG
-            }
+            } && (reps.singleOrNull() !in setOf(null, "BoxedRep (Just Unlifted)", "AddrRep") || proof.primReps == reps)
         if (actual.size != arguments.size || flags != List(arguments.size) { false } ||
             actual.indices.any { !exact(actual[it], arguments[it]) })
             throw RuntimeFault("Pinned memory argument representation mismatch: $primitive")
@@ -267,12 +271,21 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
             address.writeAddressElementIndex(offset, value, byteOffset)
             Unit
         }
-        operation == PinnedMemoryOp.COPY_ADDR_NON_OVERLAPPING -> {
+        operation == PinnedMemoryOp.COPY_ADDR_NON_OVERLAPPING || operation == PinnedMemoryOp.COPY_ADDR -> {
             val source = operands[0].executeRequiredAddress(frame)
             val destination = operands[1].executeRequiredAddress(frame)
             val count = operands[2].executeRequiredLong(frame)
             ManagedByteArray.requireState(operands[3].execute(frame))
-            source.copyNonOverlappingTo(destination, count)
+            if (operation == PinnedMemoryOp.COPY_ADDR) source.moveTo(destination, count)
+            else source.copyNonOverlappingTo(destination, count)
+            Unit
+        }
+        operation == PinnedMemoryOp.SET_ADDR -> {
+            val destination = operands[0].executeRequiredAddress(frame)
+            val count = operands[1].executeRequiredLong(frame)
+            val value = operands[2].executeRequiredLong(frame)
+            ManagedByteArray.requireState(operands[3].execute(frame))
+            destination.fill(count, value)
             Unit
         }
         else -> fault("Pinned memory tuple operation requires a destination")

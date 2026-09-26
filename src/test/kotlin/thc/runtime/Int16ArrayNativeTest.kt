@@ -632,7 +632,13 @@ class Int16ArrayNativeTest {
                             } else metadata["rep"] = payload
                         }
                     }
-                    if (diagnostic && mutation == 18 && operation.tuple) {
+                    // A changed tuple payload still contradicts the untouched
+                    // case binder's aggregate metadata; scalar Long aliases do not.
+                    val sameCarrier = mutation == 6 || (!operation.tuple && (mutation == 7 || mutation in 10..17))
+                    if (sameCarrier) assertDoesNotThrow({
+                        program(language, module + ("diagnosticUnsupported" to diagnostic), backend)
+                    }, "$backend/$operation/mutation$mutation/$diagnostic")
+                    else if (diagnostic && mutation == 18 && operation.tuple) {
                         // Unknown tuple leaves retain the existing diagnostic frontier.
                         val p = program(language, module + mapOf("diagnosticUnsupported" to true, "instrument" to true), backend)
                         val reason = "Unsupported Core aggregate representation: unboxed-tuple has unsupported fields"

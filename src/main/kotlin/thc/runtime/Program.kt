@@ -14,6 +14,7 @@ import com.oracle.truffle.api.TruffleSafepoint
 import com.oracle.truffle.api.bytecode.ContinuationResult
 import com.oracle.truffle.api.frame.FrameDescriptor
 import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.frame.MaterializedFrame
 import com.oracle.truffle.api.nodes.*
 import com.oracle.truffle.api.profiles.BranchProfile
 import com.oracle.truffle.api.profiles.CountingConditionProfile
@@ -758,6 +759,8 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
             val result = if (returned is TailYield) returned.continuation else returned
             val saved = savedGuestContinuation(result)
             if (saved != null) {
+                if (saved.yielded is DelimitedCut)
+                    fault("control0# cannot capture across a thunk update")
                 val expectedRoot = continuation?.sourceRoot
                     ?: thunk.target?.rootNode
                 if (returned !is TailYield && !sameContinuationBody(saved.sourceRoot, expectedRoot))
@@ -776,6 +779,10 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 thunk.monitor.notifyAll()
             }
             return result
+        } catch (e: DelimitedCut) {
+            val failure = RuntimeFault("control0# cannot capture across a thunk update")
+            publishFailure(thunk, failure)
+            throw failure
         } catch (e: ThunkSuspended) {
             // Without a captured caller segment, the outer update frame cannot
             // resume after this child. Release its owner and fail closed.
@@ -1417,6 +1424,15 @@ private class FunctionBody(expression: Expr, metrics: Metrics, result: CoreRepre
         val shape = tuple
         if (shape != null) {
             try { value.executeTuple(frame, tupleSlots, 0) }
+            catch (cut: DelimitedCut) {
+                throw cut.append(frame, object : DelimitedStep {
+                    override fun resume(frame: MaterializedFrame, input: DelimitedResume,
+                                        ambient: MaskingState, outerMask: DelimitedStep?): Any? {
+                        input.get()
+                        return ownedTupleResult(shape.finish(frame, tupleSlots), shape)
+                    }
+                })
+            }
             catch (cut: AstCapture) {
                 throw cut.append(object : AstResumeStep {
                     override fun resume(frame: VirtualFrame, input: Any?): Any? {
@@ -1735,6 +1751,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val stackTargetLayout = moduleData["targetLayout"]
     private val callDemandsEnabled = java.lang.Boolean.getBoolean(CALL_DEMANDS_PROPERTY)
     private val metrics = Metrics(moduleData["instrument"] != false)
+    private val delimited = DelimitedControl.contains(moduleData["bindings"])
     private val sources = CoreSources(moduleData)
     private var currentSource: CoreSourceLocation? = null
     private var attachedRootCount = 0
@@ -2259,6 +2276,12 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 PolyglotExpression(polyglot, args.mapIndexed { index, value ->
                     argument(value, scope, flags[index] as Boolean)
                 }.toTypedArray()).proven(tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && fn[1] in setOf("newPromptTag#", "prompt#", "control0#")) {
+                val name = fn[1] as String
+                DelimitedControl.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                DelimitedPrimitive(name, TupleShape(tupleProof, language as thc.Language),
+                    args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }.toTypedArray(),
+                    language as thc.Language, metrics)
             } else if (fn[0] == "prim" && fn[1] == "tagToEnum#") {
                 if (args.size != 1) throw RuntimeFault("tagToEnum#: Exactly one operand required")
                 val operand = compile(args[0], scope, false)
@@ -2324,6 +2347,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 CoreSynchronousExceptions.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
                 if (name == "raiseIO#") RaiseIOException(operands[0], operands[1], tupleProof)
+                else if (delimited && name != "getMaskingState#") DelimitedIOBoundary(name,
+                    TupleShape(tupleProof, language as thc.Language), operands.toTypedArray(), language as thc.Language, metrics)
                 else if (name == "catch#") CatchException(TupleShape(tupleProof, language as thc.Language),
                     operands[0], operands[1], operands[2], metrics)
                 else if (name == "getMaskingState#") GetMaskingState(operands[0], tupleProof)
@@ -2424,10 +2449,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 smallArrayExpression(operation, tupleProof,
                     args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }.toTypedArray())
-            } else if (fn[0] == "prim" && VectorByteArrayOp.named(fn[1] as String) != null) {
-                val operation = VectorByteArrayOp.named(fn[1] as String)!!
+            } else if (fn[0] == "prim" && VectorMemoryOp.named(fn[1] as String) != null) {
+                val operation = VectorMemoryOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
-                VectorByteArrayExpression(operation, args.map { compile(it, scope, false) }.toTypedArray())
+                if (operation.isAddress) VectorAddressExpression(operation, args.map { compile(it, scope, false) }.toTypedArray())
+                else VectorByteArrayExpression(operation, args.map { compile(it, scope, false) }.toTypedArray())
             } else if (fn[0] == "prim" && fn[1] in prefetchArities) {
                 if (args.size != prefetchArities[fn[1]]) fault("Wrong prefetch arity")
                 PrefetchExpression(argument(args[0], scope, flags[0] as Boolean),
@@ -2795,7 +2821,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val lanes = IntArray(TupleShape.flatten(vectorProof).size) { local.layout.bind("<vector read lane $it>") }
         local.bindTuple(read.vectorBinder, vectorProof, lanes)
         val operands = read.arguments.map { compile(it, scope, false) }.toTypedArray()
-        val value = VectorByteArrayExpression(read.operation, operands).located(currentSource)
+        val value = (if (read.operation.isAddress) VectorAddressExpression(read.operation, operands)
+            else VectorByteArrayExpression(read.operation, operands)).located(currentSource)
         val body = compile(read.body, local, tail)
         // The whole tuple binder is deliberately absent from local scope.
         // Store the vector only after all operand/State checks and the load finish.
@@ -2972,6 +2999,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 "gtAddr#" -> ManagedAddressOrder.GT
                 else -> ManagedAddressOrder.GE
             })
+        }
+        "minusAddr#", "remAddr#" -> {
+            if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
+            if (name == "minusAddr#") SubtractManagedAddress(args[0], args[1])
+            else RemainderManagedAddress(args[0], args[1])
         }
         "plusAddr#", "indexCharOffAddr#", "indexWord8OffAddr#", "indexInt8OffAddr#" -> {
             if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")

@@ -23,6 +23,7 @@ are different claims; each report identifies which it establishes.
 | Locale and iconv | [Original native glibc/Sulong imports](original-iconv.md); explicit full-Core proof group, not complete Handle/IO |
 | Native file ownership | [Opened-resource provider and original fstat](native-file-provider.md); Linux x86_64 `--run-io` uses it, RTS locking remains separate |
 | Threads | [Asynchronous exceptions and resumable thunk evaluation](async-exceptions.md); [thread snapshots and boundness](thread-inventory.md); Java thread identities, masking and interruptible MVar waits |
+| Delimited continuations | [Initial synchronous multi-shot slice](delimited-continuations.md); prompt identity, saved suffixes, shared effects, and catch/mask restoration |
 | ShortByteString | [Pack, length, unpack, uncons, comparison, prefix and suffix](bytearrays.md); [public slicing](library-coverage.md) |
 | Boxed arrays | [Public fixed-bounds STArray and lazy elements](core-evidence.md#lifted-boxed-array-storage); [clone, freeze and thaw slices](array-slices.md) |
 | Numeric arrays | [Int](int-arrays.md), [Double](double-arrays.md), [Float and machine Word](float-word-arrays.md), [Int32/Word32](int32-arrays.md), [Int16/Word16](int16-arrays.md), [Int8/Word8](int8-arrays.md) |
@@ -47,7 +48,7 @@ is the machine-readable declaration used by the auditor.
 | Tuple arithmetic | [Quotient/remainder, overflow and carry results](tuple-arithmetic.md) |
 | Remaining scalar integer operations | [Narrow division, logical shifts, double-word division and overflow](integer-completion.md) |
 | Constructors | [Concrete tagToEnum families](tag-to-enum.md); [constructor-to-tag families and precise address fields](core-evidence.md) |
-| Managed byte storage | [Allocation, reads, writes and copies](bytearrays.md), [fill and mutable copies](mutable-bytearray-ops.md), [address/array copies](address-array-copy.md), [resize](resize-bytearrays.md), [mutable size queries](mutable-bytearray-size.md), [atomic integer reads, writes, fetch and CAS](atomic-int-arrays.md) |
+| Managed byte storage | [Allocation, reads, writes and copies](bytearrays.md), [fill and mutable copies](mutable-bytearray-ops.md), [address/array copies](address-array-copy.md), [resize](resize-bytearrays.md), [mutable size queries](mutable-bytearray-size.md), [address utilities, pinning, unsafe thaw and small-array shrink](scalar-memory-utilities.md), [atomic integer reads, writes, fetch and CAS](atomic-int-arrays.md) |
 | Address atomics | [Word and pointer atomic reads, writes, exchange, CAS and fetch operations](atomic-address.md) |
 | Aligned pointer/character storage | [Opaque StablePtr cells and four-byte WideChar slots](aligned-scalar-memory.md) |
 | Type erasure | [Unsafe-equality cases](unsafe-equality-cases.md) |
@@ -82,19 +83,21 @@ current APIs.
 
 | GHC vector shape | Local arithmetic | Managed byte-array memory |
 | --- | --- | --- |
-| Int64X2 | [Foundation](simd.md) | [128-bit integer memory](simd128-array-memory.md) |
-| Word64X2 | [Generated arithmetic](simd-wide-arithmetic.md) | [128-bit integer memory](simd128-array-memory.md) |
+| Int64X2 | [Foundation](simd.md) | [ByteArray](simd128-array-memory.md), [Addr#](simd128-address-memory.md) |
+| Word64X2 | [Generated arithmetic](simd-wide-arithmetic.md) | [ByteArray](simd128-array-memory.md), [Addr#](simd128-address-memory.md) |
 | Int32X4 | [Foundation](simd.md), [wrapping multiplication](int32x4-multiply.md) | [Signed packed memory](int32x4-bytearray.md) |
-| Int16X8 | [Foundation](int16x8.md) | [128-bit integer memory](simd128-array-memory.md) |
-| Int8X16 | [Foundation](int8x16.md) | [128-bit integer memory](simd128-array-memory.md) |
-| Word8X16 | [Foundation](word8x16.md) | [128-bit integer memory](simd128-array-memory.md) |
-| Word16X8 | [Foundation](word16x8.md) | [128-bit integer memory](simd128-array-memory.md) |
+| Int16X8 | [Foundation](int16x8.md) | [ByteArray](simd128-array-memory.md), [Addr#](simd128-address-memory.md) |
+| Int8X16 | [Foundation](int8x16.md) | [ByteArray](simd128-array-memory.md), [Addr#](simd128-address-memory.md) |
+| Word8X16 | [Foundation](word8x16.md) | [ByteArray](simd128-array-memory.md), [Addr#](simd128-address-memory.md) |
+| Word16X8 | [Foundation](word16x8.md) | [ByteArray](simd128-array-memory.md), [Addr#](simd128-address-memory.md) |
 | Word32X4 | [Foundation](word32x4.md) | [Unsigned packed memory](word32x4-bytearray.md) |
 | FloatX4 | [Foundation](floatx4.md) | [Raw-bit packed memory](floatx4-bytearray.md) |
 | DoubleX2 | [Foundation](doublex2.md) | [Raw-bit packed memory](doublex2-bytearray.md) |
 
 The [generated wide arithmetic families](simd-wide-arithmetic.md) share exact
 lane contracts and finite scalar-entry Haskell oracles/compiled JVM drivers.
+All fourteen admitted wide shapes also support [packed and scalar-offset
+byte-array memory](simd-wide-array-memory.md).
 The [floating vector min/max operations](floating-vector-minmax.md) use Java
 NaN and signed-zero rules with separate native finite-input comparisons.
 The [512-bit floating fused operations](wide-floating-fma.md) use genuine wide

@@ -58,6 +58,7 @@ fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
 "$fixture_bin" compare-byte-arrays
 python3 scripts/prepare-boxed-arrays.py
 "$fixture_bin" small-arrays
+"$fixture_bin" scalar-memory-utilities
 python3 scripts/prepare-array-slices.py
 python3 scripts/prepare-address-fields.py
 python3 scripts/prepare-data-to-tag.py
@@ -75,6 +76,7 @@ python3 scripts/prepare-synchronous-exceptions.py
 "$fixture_bin" thread-async
 "$fixture_bin" thread-status
 "$fixture_bin" thread-inventory
+"$fixture_bin" delimited-continuations
 "$fixture_bin" thread-label
 "$fixture_bin" hint-trace
 "$fixture_bin" uncaught-self
@@ -135,7 +137,9 @@ esac
 python3 scripts/prepare-simd-capability-smoke.py
 "$fixture_bin" tuple-arithmetic
 "$fixture_bin" integer-completion
+"$fixture_bin" simd128-addresses
 "$fixture_bin" simd128-arrays
+"$fixture_bin" simd-wide-arrays
 case "$(uname -m)" in
   arm64|aarch64) python3 scripts/prepare-int16x8-audit.py --export-only ;;
   *) python3 scripts/prepare-int16x8-audit.py ;;

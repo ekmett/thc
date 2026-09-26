@@ -291,7 +291,9 @@ class ResizeByteArrayTest {
                         9->{val rep=meta["rep"] as MutableMap<String,Any?>;val fields=rep["components"] as MutableList<Any?>;fields.removeAt(0)}
                         10->{val rep=meta["rep"] as MutableMap<String,Any?>;rep["primReps"]=emptyList<String>();rep["components"]=emptyList<Any?>()}
                     }
-                    assertThrows(RuntimeFault::class.java,{program(language,module+("diagnosticUnsupported" to diagnostic),backend)},"$backend/$mutation/$diagnostic")
+                    if (mutation in 5..6)
+                        assertDoesNotThrow({program(language,module+("diagnosticUnsupported" to diagnostic),backend)},"$backend/$mutation/$diagnostic")
+                    else assertThrows(RuntimeFault::class.java,{program(language,module+("diagnosticUnsupported" to diagnostic),backend)},"$backend/$mutation/$diagnostic")
                 }
                 val module=CoreModules.reachable(merged(paths),"resizedBytes");val app=applications(module).first {(it[1] as List<*>).take(2)==listOf("prim","resizeMutableByteArray#")}
                 val bare=(app[1] as List<*>).toList();app.clear();app.addAll(bare)

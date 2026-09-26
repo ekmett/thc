@@ -14,6 +14,9 @@ description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/G
 extra-source-files:
   examples/THC/GraphWorkload.hs
   examples/LibraryOracle.hs
+  compiler/test-fixtures/ScalarMemoryUtilities.hs
+  compiler/test-fixtures/ScalarMemoryUtilitiesNative.hs
+  docs/scalar-memory-utilities.md
   examples/ThreadInventory.hs
   compiler/test-fixtures/ThreadInventoryNative.hs
   docs/thread-inventory.md
@@ -452,10 +455,12 @@ executable thc-fixtures
     GraphFixtures
     IntegerCompletionFixtures
     ContinuationFixtures
+    DelimitedContinuationsFixtures
     LiveAsyncFixtures
     ThreadLabelFixtures
     ThreadStatusFixtures
     ThreadInventoryFixtures
+    ScalarMemoryUtilitiesFixtures
     ThreadAsyncFixtures
     UncaughtSelfFixtures
     ArithmeticExceptionFixtures
@@ -478,7 +483,9 @@ executable thc-fixtures
     Explicit64ArrayFixtures
     FusedFloatingFixtures
     SimdCallFixtures
+    Simd128AddressFixtures
     Simd128ArrayFixtures
+    SimdWideArrayFixtures
     SimdFloatFmaFixtures
     SimdWideFloatFmaFixtures
     SqrtFixtures

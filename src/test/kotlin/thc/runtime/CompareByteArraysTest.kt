@@ -248,7 +248,11 @@ class CompareByteArraysTest {
                             }
                         }
                     }
-                    assertThrows(RuntimeException::class.java, { program(language, m, backend) }, "$backend/$mutation")
+                    // Integral spellings share the lowered Long carrier; levity,
+                    // missing metadata and actual Double carriers still reject.
+                    val sameCarrier = mutation == "result" || mutation in listOf("wrong-1", "wrong-3", "wrong-4")
+                    if (sameCarrier) assertDoesNotThrow({ program(language, m, backend) }, "$backend/$mutation")
+                    else assertThrows(RuntimeException::class.java, { program(language, m, backend) }, "$backend/$mutation")
                 }
             } finally { context.leave() }
         }

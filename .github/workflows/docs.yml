@@ -7,10 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Pages is latest-only: obsolete documentation does not delay the next revision.
+# Let active publications finish; newer runs may replace pending work.
 concurrency:
   group: docs-pages-${{ github.repository }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -22,9 +22,8 @@ jobs:
     timeout-minutes: 30
     env:
       GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-user-home
-      # Publish the verified raw-SIMD documentation without merging the pending
-      # runtime checkpoint. Restore github.sha when that checkpoint integrates.
-      DOCS_REVISION: f53d0be7c17a55fc31ec2b5a58e6086f13e0d6c3
+      # Build, link-check and publish the exact main revision that triggered this run.
+      DOCS_REVISION: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:

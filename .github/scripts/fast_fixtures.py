@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "188951ed0791ef333ee39589395744247144c77194faaf517f0f59073a9a603a"
+FULL_PREPARATION_PLAN = "0a0b99c2c0cc610c6a6fa607853074c5dc7fa8b533eac8eb506057793a89e5af"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/address-array-copy", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -34,6 +34,7 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
     "build/original-fd-ready", "build/simd-calls",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    *fast_inputs.DELIMITED_OUTPUTS,
     *fast_inputs.THREAD_INVENTORY_OUTPUTS,
     "build/aligned-scalar-memory/manifest.json", "build/aligned-scalar-memory/oracle.tsv",
     *[f"build/aligned-scalar-memory/{stage}/{file}" for stage in ("pre", "post")
@@ -42,6 +43,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     *[f"build/hint-trace/{stage}/{suffix}" for stage in ("pre", "post")
       for suffix in ("core/HintTraceAudit.json", "hints.audit.json", "traces.audit.json",
                      "event.audit.json", "marker.audit.json", "binary.audit.json", "addressHints.audit.json")],
+    *fast_inputs.SCALAR_MEMORY_OUTPUTS,
     "build/native-malloc/oracle.txt",
     "build/simd-calls/manifest.json", "build/simd-calls/pre-core/SimdCallAudit.json",
     "build/simd-calls/pre-audit.json",
@@ -314,6 +316,14 @@ def cache_key(root, group_id, group, toolchain):
 
 
 def _output_hashes(root, group):
+    if group["outputs"] == ["build/scalar-memory-utilities"]:
+        name = "build/scalar-memory-utilities/manifest.json"
+        expected = fast_inputs.scalar_memory_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
+    if group["outputs"] == ["build/delimited-continuations"]:
+        name = "build/delimited-continuations/manifest.json"
+        expected = fast_inputs.delimited_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/thread-inventory"]:
         name = "build/thread-inventory/manifest.json"
         expected = fast_inputs.thread_inventory_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))

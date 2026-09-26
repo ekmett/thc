@@ -900,7 +900,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
         self.assertEqual({"AddressIdentity", "AtomicAddresses", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArrays", "ManagedMutVars", "ManagedNativeAllocations", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
-                         "IntegerVectorPrimitives", "FloatingVectorPrimitives", "FloatDecodePrimitives", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopy", "AtomicIntArrays", "ThreadObservation", "ManagedSTM", "STMPrimops", "HintTracePrimops"},
+                         "VectorAddresses", "IntegerVectorPrimitives", "FloatingVectorPrimitives", "FloatDecodePrimitives", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopy", "AtomicIntArrays", "ThreadObservation", "ManagedSTM", "STMPrimops", "HintTracePrimops"},
                          {Path(path).stem for path in self.families})
         for path, group in self.families.items():
             with self.subTest(path=path):
@@ -1011,7 +1011,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             source = path.read_text()
             if path.name != "ArrayCoreEvidence.kt" and "ArrayCoreEvidence(" in source:
                 consumers.update(select.junit_info(source)[0])
-        self.assertEqual(16, len(consumers))
+        self.assertEqual(17, len(consumers))
         self.assertIn("thc.runtime.UnalignedScalarMemoryTest", consumers)
         self.assertIn("thc.runtime.AlignedScalarMemoryTest", consumers)
         self.assertIn("thc.runtime.IntegerCompletionTest", consumers)
@@ -1122,10 +1122,13 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                 "SimdWord8VectorTest", "SimdWord16VectorTest", "SimdInt32VectorTest", "SimdInt32MultiplyTest",
                 "SimdInt32ByteArrayTest", "Int32VectorMemoryProofTest", "Int32VectorStorageTest",
                 "SimdWord32VectorTest", "SimdWord32ByteArrayTest", "Word32VectorMemoryProofTest",
-                "Word32VectorStorageTest", "Simd128ArrayNativeTest", "Simd128ArrayProofTest"],
+                "Word32VectorStorageTest", "Simd128ArrayNativeTest", "Simd128ArrayProofTest",
+                "SimdWideArrayNativeTest", "SimdWideArrayProofTest",
+                "Simd128AddressNativeTest", "Simd128AddressTest"],
             "FloatingVectorPrimitives": ["SimdFloatVectorTest", "SimdFloatFmaTest", "SimdWideFloatFmaTest", "SimdFloatByteArrayTest",
                 "FloatVectorMemoryProofTest", "FloatVectorStorageTest", "SimdDoubleVectorTest",
-                "SimdDoubleByteArrayTest", "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest"],
+                "SimdDoubleByteArrayTest", "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest",
+                "SimdWideArrayNativeTest", "SimdWideArrayProofTest"],
         }
         python = {
             "IntegerVectorPrimitives": ["core-vector-memory", "core-vectors", "core-word32-vector-memory",

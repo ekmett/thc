@@ -35,7 +35,7 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 # preparers. An additional recorded runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
-MANIFEST_DIRS = """simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
+MANIFEST_DIRS = """simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 thread-status thread-label hint-trace thread-inventory boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
@@ -43,6 +43,23 @@ narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-
 show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
 THREAD_INVENTORY_ENTRIES = ("selfInventory", "boundQuery", "snapshotSize", "forkSnapshot",
                             "lazyFork", "forkMasks", "selfKilledStatus", "parkedFork")
+SCALAR_MEMORY_ENTRIES = ("memoryCase", "pinCase", "thawCase", "shrinkCase", "differenceCase",
+                         "remainderCase", "numericDifference", "numericRemainder")
+SCALAR_MEMORY_OUTPUTS = frozenset("build/scalar-memory-utilities/" + name for name in (
+    "manifest.json", "oracle.tsv", "native/oracle",
+    *(f"{stage}/{suffix}" for stage in ("pre", "post")
+      for suffix in ("core/ScalarMemoryUtilities.json", "audit.json")),
+    *(f"commands/{command}.{suffix}" for command in ("native-build", "native-oracle", "pre-export", "post-export", "pre-audit", "post-audit")
+      for suffix in ("stdout", "stderr", "command.json"))))
+DELIMITED_ENTRIES = ("promptPure", "abortSuffix", "resumeTwice", "nestedPrompts", "sameTagNearest",
+                     "capturedCatch", "capturedMask", "escapedResume", "ambientMask")
+DELIMITED_COMMANDS = ("ghc-version", "native-build", "native-run",
+                      *(f"{stage}-export" for stage in ("pre", "post")),
+                      *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in DELIMITED_ENTRIES))
+DELIMITED_OUTPUTS = frozenset("build/delimited-continuations/" + name for name in (
+    "manifest.json", *(f"{stage}/{suffix}" for stage in ("pre", "post")
+        for suffix in ("core/DelimitedContinuations.json", *(f"{entry}-audit.json" for entry in DELIMITED_ENTRIES))),
+    *(f"commands/{command}.{suffix}" for command in DELIMITED_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 THREAD_INVENTORY_OUTPUTS = frozenset("build/thread-inventory/" + name for name in (
     "manifest.json", "oracle.txt", *(f"{stage}/{suffix}" for stage in ("pre", "post")
         for suffix in ("core/ThreadInventory.json", *(f"{entry}-audit.json" for entry in THREAD_INVENTORY_ENTRIES)))))
@@ -104,6 +121,16 @@ HINT_TRACE_OUTPUTS = frozenset("build/hint-trace/" + name for name in (
     *(f"{stage}/{suffix}" for stage in ("pre", "post")
       for suffix in ("core/HintTraceAudit.json", "hints.audit.json", "traces.audit.json",
                      "event.audit.json", "marker.audit.json", "binary.audit.json", "addressHints.audit.json"))))
+SIMD_WIDE_ARRAY_ENTRIES = tuple(shape + operation + mode
+    for shape in ("int16X16","word16X16","int32X8","word32X8","int32X16","word32X16","int64X4","word64X4","int64X8","word64X8","floatX8","floatX16","doubleX4","doubleX8")
+    for operation in ("Index", "Read", "Write") for mode in ("Packed", "Scalar"))
+SIMD_WIDE_ARRAY_COMMANDS = ("ghc-version", "native-build", "native-oracle", "pre-export",
+    *("pre-" + name + "-audit" for name in SIMD_WIDE_ARRAY_ENTRIES))
+SIMD_WIDE_ARRAY_OUTPUTS = frozenset("build/simd-wide-arrays/" + name for name in (
+    "manifest.json", "inputs.tsv", "oracle.tsv", "native/oracle", "pre-core/SimdWideArrayAudit.json",
+    *("pre-" + name + "-audit.json" for name in SIMD_WIDE_ARRAY_ENTRIES),
+    *("commands/" + command + "." + suffix for command in SIMD_WIDE_ARRAY_COMMANDS
+      for suffix in ("stdout", "stderr", "command.json"))))
 SIMD128_ARRAY_ENTRIES = tuple(shape + operation + mode
     for shape in ("int8X16", "word8X16", "int16X8", "word16X8", "int64X2", "word64X2")
     for operation in ("Index", "Read", "Write") for mode in ("Packed", "Scalar"))
@@ -116,6 +143,8 @@ SIMD128_ARRAY_OUTPUTS = frozenset("build/simd128-arrays/" + name for name in (
     *(stage + "-" + name + "-audit.json" for stage in ("pre", "post") for name in SIMD128_ARRAY_ENTRIES),
     *("commands/" + command + "." + suffix for command in SIMD128_ARRAY_COMMANDS
       for suffix in ("stdout", "stderr", "command.json"))))
+SIMD128_ADDRESS_OUTPUTS = frozenset(path.replace("simd128-arrays", "simd128-addresses")
+    .replace("Simd128ArrayAudit", "Simd128AddressAudit") for path in SIMD128_ARRAY_OUTPUTS)
 BIGNAT_ENTRIES = ("integerRoundTrip", "naturalRoundTrip", "integerLiteral", "naturalLiteral",
                   "magnitudeSize", "magnitudeByte", "magnitudeWord", "magnitudeSign")
 BIGNAT_AUDITS = (*BIGNAT_ENTRIES, "integerAddFrontier", "naturalAddFrontier", "missing-source")
@@ -320,7 +349,10 @@ NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate", "build/fl
     "build/pinned-addresses/native/pinned-address-oracle",
     "build/integer-completion/native/integer-completion-oracle",
     "build/hint-trace/native/oracle",
+    "build/simd-wide-arrays/native/oracle",
+    "build/simd128-addresses/native/oracle",
     "build/simd128-arrays/native/oracle",
+    "build/scalar-memory-utilities/native/oracle",
     "build/simd-capability-smoke/native/simd-smoke-oracle",
     "build/original-stdio/native/original-stdio-oracle",
     "build/original-stdio-read/native/original-stdio-read-oracle",
@@ -1113,6 +1145,32 @@ def bytearray_artifact_hashes(family, manifest):
     return records
 
 
+def scalar_memory_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
+            manifest.get("ghc") == "9.14.1" and manifest.get("entries") == list(SCALAR_MEMORY_ENTRIES) and
+            manifest.get("stages") == ["pre", "post"] and type(manifest.get("nativeRows")) is int and
+            manifest["nativeRows"] == 271, "Invalid scalar memory utilities provenance")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) == SCALAR_MEMORY_OUTPUTS - {"build/scalar-memory-utilities/manifest.json"},
+            "Incomplete scalar memory utilities artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid scalar memory utilities hash")
+    return artifacts
+
+
+def delimited_artifact_hashes(manifest):
+    require(type(manifest.get("schema")) is int and manifest["schema"] == 1 and manifest.get("ghc") == "9.14.1",
+            "Invalid delimited-continuation manifest")
+    require(manifest.get("entries") == list(DELIMITED_ENTRIES) and manifest.get("stages") == ["pre", "post"] and
+            manifest.get("arguments") == [-2, 0, 7] and isinstance(manifest.get("native"), list) and
+            len(manifest["native"]) == 27 and all(type(value) is int for value in manifest["native"]),
+            "Invalid delimited-continuation provenance")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) == DELIMITED_OUTPUTS - {"build/delimited-continuations/manifest.json"},
+            "Incomplete delimited-continuation artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid delimited-continuation artifact hash")
+    return artifacts
 def thread_inventory_artifact_hashes(manifest):
     require(type(manifest.get("schema")) is int and manifest["schema"] == 1 and manifest.get("ghc") == "9.14.1",
             "Invalid thread inventory manifest")
@@ -1152,6 +1210,10 @@ def allowed_payload(name, pins):
         return name in THREAD_INVENTORY_OUTPUTS
     if parts[1] == "hint-trace":
         return name in HINT_TRACE_OUTPUTS
+    if parts[1] == "scalar-memory-utilities":
+        return name in SCALAR_MEMORY_OUTPUTS
+    if parts[1] == "delimited-continuations":
+        return name in DELIMITED_OUTPUTS
     if parts[1] == "bignat-literals":
         return name in BIGNAT_OUTPUTS
     if parts[1] in BYTEARRAY_OUTPUTS:
@@ -1187,6 +1249,10 @@ def allowed_payload(name, pins):
         return name in ("build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json", "build/libdw-unavailable/foreign-labels.json")
     if parts[1] == "native-addresses":
         return name in ("build/native-addresses/manifest.json", "build/native-addresses/oracle.json")
+    if parts[1] == "simd-wide-arrays":
+        return name in SIMD_WIDE_ARRAY_OUTPUTS
+    if parts[1] == "simd128-addresses":
+        return name in SIMD128_ADDRESS_OUTPUTS
     if parts[1] == "simd128-arrays":
         return name in SIMD128_ARRAY_OUTPUTS
     if parts[1] == "native-malloc":
@@ -1335,6 +1401,10 @@ def inventory(root, current, read, core_files, verified=None):
         memory_directory = PurePosixPath(name).parent.name
         if name == f"build/{memory_directory}/manifest.json" and memory_directory in MEMORY_FIXTURE_OUTPUTS:
             memory_artifact_hashes(memory_directory, doc)
+        if name == "build/scalar-memory-utilities/manifest.json":
+            scalar_memory_artifact_hashes(doc)
+        if name == "build/delimited-continuations/manifest.json":
+            delimited_artifact_hashes(doc)
         if name == "build/bignat-literals/manifest.json":
             bignat_artifact_hashes(doc)
         if name == "build/pinned-addresses/manifest.json":

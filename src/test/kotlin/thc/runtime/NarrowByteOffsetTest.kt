@@ -100,7 +100,7 @@ class NarrowByteOffsetTest {
         assertDoesNotThrow {
             ByteArrayOp.INDEX_WORD8_AS_WORD16.validate(listOf(array, offset), listOf(false, false), signed)
         }
-        assertDoesNotThrow {
+        assertThrows(RuntimeFault::class.java) {
             ByteArrayOp.INDEX_WORD8_AS_INT16.validate(listOf(array, offset), listOf(false, true), signed)
         }
     }
