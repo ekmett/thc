@@ -193,6 +193,29 @@ class FixturePreparationTest(unittest.TestCase):
         (self.root / 'build/thread-inventory/pre/core/ThreadInventory.json').write_text('mutated')
         with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
 
+    def test_thread_scheduling_has_closed_outputs_and_native_rts_provenance(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        cache = fast_fixtures.fast_inputs
+        group = manifest['groups']['thread-scheduling']
+        self.assertEqual('thread-scheduling', owners['thc.runtime.ThreadSchedulingTest'])
+        self.assertTrue(cache.THREAD_SCHEDULING_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        name = 'build/thread-scheduling/manifest.json'
+        artifacts = {}
+        for item in cache.THREAD_SCHEDULING_OUTPUTS - {name}:
+            path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
+            self.assertTrue(cache.allowed_payload(item, {}))
+        receipt = dict(schema=1, ghc='9.14.1', entries=list(cache.THREAD_SCHEDULING_ENTRIES), stages=['pre', 'post'],
+                       nativeRTS='non-threaded: direct delay# uses the POSIX I/O manager', artifactHashes=artifacts)
+        (self.root / name).write_text(json.dumps(receipt))
+        self.assertEqual(cache.THREAD_SCHEDULING_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+        for bad in (dict(receipt, schema=True), dict(receipt, entries=[]), dict(receipt, stages=['pre']),
+                    dict(receipt, nativeRTS='threaded'), dict(receipt, artifactHashes={})):
+            with self.assertRaises(cache.CacheMiss): cache.thread_scheduling_artifact_hashes(bad)
+        self.assertFalse(cache.allowed_payload('build/thread-scheduling/native/oracle', {}))
+
     def test_integer_completion_has_owned_native_inputs_and_cache_registration(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

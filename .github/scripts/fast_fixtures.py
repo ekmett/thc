@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "93b7476c81373bca2f12c0232e3a25f4e75250ceffd9ab857d20d4e88f7325b1"
+FULL_PREPARATION_PLAN = "d12a093bc5da1fb81cb89a2507db122fb0de3fbb377764f60d4ad141d94d0e99"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/address-array-copy", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -37,6 +37,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     *fast_inputs.STABLE_NAME_OUTPUTS,
     *fast_inputs.DELIMITED_OUTPUTS,
     *fast_inputs.THREAD_INVENTORY_OUTPUTS,
+    *fast_inputs.THREAD_SCHEDULING_OUTPUTS,
     "build/aligned-scalar-memory/manifest.json", "build/aligned-scalar-memory/oracle.tsv",
     *[f"build/aligned-scalar-memory/{stage}/{file}" for stage in ("pre", "post")
       for file in ("audit.json", "core/AlignedScalarMemoryAudit.json")],
@@ -318,6 +319,10 @@ def cache_key(root, group_id, group, toolchain):
 
 
 def _output_hashes(root, group):
+    if group["outputs"] == ["build/thread-scheduling"]:
+        name = "build/thread-scheduling/manifest.json"
+        expected = fast_inputs.thread_scheduling_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/simd-address-families"]:
         name = "build/simd-address-families/manifest.json"
         expected = fast_inputs.simd_address_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))

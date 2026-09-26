@@ -915,7 +915,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                     self.assertTrue(select.python_test(test), test)
 
     def test_bound_thread_query_leaf_keeps_structural_and_foreign_audit_controls(self):
-        self.assertEqual({"junit": ["thc.runtime.CoreBoundThreadForeignTest"],
+        self.assertEqual({"junit": ["thc.runtime.CoreBoundThreadForeignTest", "thc.runtime.ThreadSchedulingTest"],
                           "python": ["scripts/test-audit-core.py"]},
                          self.family("CoreBoundThreadForeign"))
 

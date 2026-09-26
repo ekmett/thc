@@ -43,6 +43,7 @@ import LiveAsyncFixtures (prepareLiveAsync)
 import ThreadLabelFixtures (prepareThreadLabel)
 import ThreadStatusFixtures (prepareThreadStatus)
 import ThreadInventoryFixtures (prepareThreadInventory)
+import ThreadSchedulingFixtures (prepareThreadScheduling)
 import ScalarMemoryUtilitiesFixtures (prepareScalarMemoryUtilities)
 import ThreadAsyncFixtures (prepareThreadAsync)
 import UncaughtSelfFixtures (prepareUncaughtSelf)
@@ -999,6 +1000,7 @@ main = do
     ["thread-status"] -> prepareThreadStatus root
     ["compact-regions"] -> prepareCompactRegions root
     ["thread-inventory"] -> prepareThreadInventory root
+    ["thread-scheduling"] -> prepareThreadScheduling root
     ["scalar-memory-utilities"] -> prepareScalarMemoryUtilities root
     ["thread-async"] -> prepareThreadAsync root
     ["uncaught-self"] -> prepareUncaughtSelf root

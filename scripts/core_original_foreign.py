@@ -87,6 +87,7 @@ OPERATIONS = {
     **{symbol: ('capi', 'unsafe', arguments, output)
        for symbol, (arguments, output) in SIGSET_OPERATIONS.items()},
     'rtsSupportsBoundThreads': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
+    'stg_getThreadAllocationCounterzh': ('prim', 'safe', (None,), (None, 'Int64Rep')),
     'rts_isThreaded': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
     'reportStackOverflow': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', None), (None,)),
     'reportHeapOverflow': ('ccall', 'unsafe', (None,), (None,)),

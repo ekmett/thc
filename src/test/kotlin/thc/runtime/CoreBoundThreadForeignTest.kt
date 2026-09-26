@@ -76,6 +76,22 @@ class CoreBoundThreadForeignTest {
         }
     }
 
+    @Test fun originalAllocationGetterKeepsItsDistinctPrimAndInt64Abi() {
+        val result = tuple() + mapOf("primReps" to listOf("Int64Rep"),
+            "components" to listOf(state, scalar("long", "Int64Rep")))
+        val call = descriptor() + mapOf("target" to mapOf("kind" to "static",
+            "symbol" to "stg_getThreadAllocationCounterzh", "unit" to "ghc-internal", "isFunction" to true),
+            "convention" to "prim", "safety" to "safe", "resultRep" to result)
+        val proof = mapOf("rep" to result, "foreignCall" to call)
+        assertTrue(CoreBoundThreadForeign.validate(proof, listOf(state), listOf(false), result, true))
+        assertFalse(CoreBoundThreadForeign.validate(proof, listOf(state), listOf(false), result))
+        for ((field, wrong) in listOf("convention" to "ccall", "safety" to "unsafe", "resultRep" to tuple()))
+            assertThrows(RuntimeFault::class.java) {
+                CoreBoundThreadForeign.validate(proof + ("foreignCall" to (call + (field to wrong))),
+                    listOf(state), listOf(false), result, true)
+            }
+    }
+
     @Test fun bothLoadersCheckStoredStateAndRuntimeCarrierBeforeWritingTypedZero() {
         for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
             context.initialize("thc"); context.enter()

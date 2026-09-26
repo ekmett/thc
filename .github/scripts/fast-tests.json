@@ -81,7 +81,7 @@
     },
     "src/main/kotlin/thc/runtime/CoreRtsShutdown.kt": {"junit": ["thc.runtime.RtsShutdownTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/kotlin/thc/runtime/CoreBoundThreadForeign.kt": {
-      "junit": ["thc.runtime.CoreBoundThreadForeignTest"],
+      "junit": ["thc.runtime.CoreBoundThreadForeignTest", "thc.runtime.ThreadSchedulingTest"],
       "python": ["scripts/test-audit-core.py"]
     },
     "src/main/kotlin/thc/runtime/FileWaitPrimitives.kt": {
@@ -381,6 +381,12 @@
     "test/haskell-fixtures/ThreadInventoryFixtures.hs": {
       "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
     },
+    "test/haskell-fixtures/ThreadSchedulingFixtures.hs": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
+    "examples/ThreadScheduling.hs": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
+    "compiler/test-fixtures/ThreadSchedulingNative.hs": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
+    "src/main/kotlin/thc/runtime/ThreadScheduling.kt": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/kotlin/thc/runtime/ThreadDelay.kt": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
+    "src/main/kotlin/thc/runtime/GuestAllocationAccounting.kt": {"junit": ["thc.runtime.ThreadSchedulingTest", "thc.runtime.GuestThreadsTest"], "python": []},
     "examples/StableWideCells.hs": {
       "junit": ["thc.runtime.AlignedScalarMemoryTest"],
       "python": []
@@ -1378,6 +1384,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.ThreadSchedulingTest",
         "thc.runtime.SimdAddressFamiliesTest",
         "thc.runtime.StableNamesTest",
         "thc.runtime.FloatingRemainderTest",

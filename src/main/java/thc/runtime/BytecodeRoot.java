@@ -572,7 +572,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
-    public enum ThreadPrimitiveKind { MY, FORK, BEGIN_KILL, FINISH_KILL }
+    public enum ThreadPrimitiveKind { MY, FORK, FORK_ON, BEGIN_KILL, FINISH_KILL }
 
     /** One cold instruction keeps the generated interpreter below its partition limit. */
     @Operation
@@ -590,6 +590,11 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                     // A lifted fork action may still be a thunk. Only the new
                     // child may enter it; the parent must return after registration.
                     yield GuestThreadOps.fork(node, first, true);
+                }
+                case FORK_ON -> {
+                    TupleResultsKt.requireVoidCarrier(third);
+                    if (!(first instanceof Long capability)) throw fail("forkOn# requires Int#");
+                    yield GuestThreadOps.fork(node, second, true, capability);
                 }
                 case BEGIN_KILL -> {
                     TupleResultsKt.requireVoidCarrier(third);
@@ -2746,6 +2751,30 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation public static final class PrepareThreadDelay {
+        @Specialization public static ThreadDelayToken prepare(long microseconds, Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            return new ThreadDelayToken(GuestThreads.current(node), microseconds);
+        }
+    }
+
+    @Operation @ConstantOperand(type = boolean.class, name = "async")
+    public static final class AwaitThreadDelay {
+        @Specialization public static void await(boolean async, ThreadDelayToken token, @Bind Node node) {
+            token.await(node, async, CompilerDirectives.inCompiledCode());
+        }
+    }
+
+    @Operation @ConstantOperand(type = boolean.class, name = "other")
+    public static final class SetThreadAllocationCounter {
+        @Specialization public static void set(boolean other, long value, Object target, Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            GuestThreads threads = GuestThreads.current(node);
+            if (other && !(target instanceof GuestThreadId)) throw fail("Allocation counter requires ThreadId#");
+            threads.setAllocationCounter(value, other ? (GuestThreadId) target : threads.currentIdentity());
+        }
+    }
+
     @Operation
     @ConstantOperand(type = boolean.class, name = "writing")
     public static final class PrepareFileWait {
@@ -3077,14 +3106,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             throw fail("Expected managed Addr# for RTS shared CAF store");
         }
     }
-    /** Capability query only. HsBool is StgInt; THC has no bound-thread/TLS ABI. */
+    /** Original thread queries. Neither capability support nor accounting enforces a limit. */
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = boolean.class, name = "allocationCounter")
     public static final class BoundThreadSupport {
-        @Specialization public static void query(VirtualFrame frame, LocalAccessor destination,
+        @Specialization public static void query(VirtualFrame frame, LocalAccessor destination, boolean allocationCounter,
                 Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, 0L);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    allocationCounter ? GuestThreads.current(node).allocationCounter() : 0L);
         }
     }
     @Operation

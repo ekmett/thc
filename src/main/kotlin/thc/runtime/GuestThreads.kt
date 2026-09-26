@@ -15,10 +15,14 @@ import java.lang.ref.WeakReference
 
 /** An unlifted ThreadId# is the actual JVM thread ID scoped to its owning context. */
 internal class GuestThreadId(val javaId: Long, val owner: GuestThreads, val capability: Long,
-                             carrier: Thread, internal val forked: Boolean) {
+                             carrier: Thread, internal val forked: Boolean, internal val capabilityLocked: Boolean = false) {
     internal val carrier = WeakReference(carrier)
     @Volatile internal var status = GuestThreadStatus.RUNNING
     @Volatile internal var lastOutcome = GuestThreadStatus.FINISHED
+    // Guarded by owner; host work outside outer guest entries is not charged.
+    internal var allocationRemaining = 0L
+    internal var allocationBaseline = -1L
+    internal var allocationUnavailable = false
     override fun equals(other: Any?): Boolean =
         other is GuestThreadId && owner === other.owner && javaId == other.javaId
     override fun hashCode(): Int = 31 * System.identityHashCode(owner) + javaId.hashCode()
@@ -26,7 +30,7 @@ internal class GuestThreadId(val javaId: Long, val owner: GuestThreads, val capa
 
 /** GHC 9.14.1 Constants.h why_blocked codes and PrimOps.cmm terminal overrides. */
 internal enum class GuestThreadStatus(val code: Long) {
-    RUNNING(0), MVAR(1), BLACK_HOLE(2), READ(3), WRITE(4), STM(6), FOREIGN(10), THROW_TO(12), MVAR_READ(14),
+    RUNNING(0), MVAR(1), BLACK_HOLE(2), READ(3), WRITE(4), DELAY(5), STM(6), FOREIGN(10), THROW_TO(12), MVAR_READ(14),
     FINISHED(16), DIED(17), RUNTIME_FAILURE(-1);
 
     val terminal: Boolean get() = this == FINISHED || this == DIED || this == RUNTIME_FAILURE
@@ -151,7 +155,7 @@ internal class GuestThreads internal constructor(
     }
 
     @TruffleBoundary @Synchronized fun enterCurrent(inheritedMask: MaskingState? = null, forked: Boolean = false,
-                                                   externalAsync: Boolean = true): Long {
+                                                   externalAsync: Boolean = true, capability: Long? = null): Long {
         check(!closed) { "Guest context has closed" }
         val current = Thread.currentThread()
         val id = current.threadId()
@@ -159,11 +163,17 @@ internal class GuestThreads internal constructor(
         check(prior == null || prior.thread === current) { "Java thread ID was reused before guest completion" }
         if (prior == null && inheritedMask != null) maskingState.set(inheritedMask)
         val identity = identities.getOrPut(current) {
-            GuestThreadId(id, this, allocatedCapabilities++, current, forked).also { knownThreads[it] = Unit }
+            val selected = if (capability == null) allocatedCapabilities++
+                else Math.floorMod(capability, allocatedCapabilities.coerceAtLeast(1L))
+            GuestThreadId(id, this, selected, current, forked, capability != null).also { knownThreads[it] = Unit }
         }
         check(!identity.status.terminal) { "Terminated guest Java thread re-entered" }
         // Re-entry cannot turn a nonresumable fork into an async receiver.
         val slot = prior ?: GuestThread(current, identity, externalAsync).also { threads[id] = it }
+        if (slot.entries == 0) {
+            identity.allocationBaseline = GuestAllocationAccounting.sample(id)
+            if (identity.allocationBaseline < 0L) identity.allocationUnavailable = true
+        }
         slot.entriesPrevious.addLast(GuestEntry(activeIdentity.get(), slot.identity.status))
         slot.identity.status = GuestThreadStatus.RUNNING
         activeIdentity.set(slot.identity)
@@ -180,6 +190,30 @@ internal class GuestThreads internal constructor(
 
     fun currentIdentity(): GuestThreadId = currentSlot.get()?.takeIf { it.entries > 0 }?.identity
         ?: fault("Current Java thread has not entered this guest context")
+
+    @TruffleBoundary @Synchronized fun allocationCounter(): Long {
+        if (closed) fault("Guest context has closed")
+        val identity = currentIdentity()
+        if (identity.allocationUnavailable || identity.allocationBaseline < 0L)
+            fault("Thread allocation accounting was unavailable during this guest lifetime; reset it before reading")
+        val allocated = GuestAllocationAccounting.sample(identity.javaId)
+        if (allocated < 0L) {
+            identity.allocationUnavailable = true
+            fault("Thread allocation accounting is unavailable for this carrier")
+        }
+        return identity.allocationRemaining - (allocated - identity.allocationBaseline)
+    }
+
+    @TruffleBoundary @Synchronized fun setAllocationCounter(value: Long, identity: GuestThreadId = currentIdentity()) {
+        if (closed) fault("Guest context has closed")
+        if (identity.owner !== this || !knownThreads.containsKey(identity))
+            fault("ThreadId# belongs to another guest context")
+        // A completed or currently foreign-only carrier has no active allocation extent.
+        if (threads[identity.javaId]?.identity === identity)
+            identity.allocationBaseline = GuestAllocationAccounting.bytes(identity.javaId)
+        identity.allocationRemaining = value
+        identity.allocationUnavailable = false
+    }
 
     /** Independent Array# snapshot including retained completed identities.
      * Registry mutation and weak-key expunging share this lock. No guest code
@@ -328,6 +362,11 @@ internal class GuestThreads internal constructor(
                 if (!closed) target.identity.status = previous.status
                 return@synchronized emptyList<AsyncRequest>()
             }
+            val allocationEnd = GuestAllocationAccounting.sample(current.threadId())
+            if (allocationEnd >= 0L && target.identity.allocationBaseline >= 0L)
+                target.identity.allocationRemaining -= allocationEnd - target.identity.allocationBaseline
+            else target.identity.allocationUnavailable = true
+            target.identity.allocationBaseline = -1L
             target.identity.lastOutcome = outcome
             if (!closed) target.identity.status = if (target.identity.forked) outcome else GuestThreadStatus.FOREIGN
             threads.remove(current.threadId())

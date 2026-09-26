@@ -6,12 +6,12 @@ GHC 9.14.1 exposes **1491 primops** on the pinned 64-bit target. This list is
 generated from `allThePrimOps`, the [runtime capabilities](../scripts/core-capabilities.json)
 and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signatures.json).
 
-**Implementation coverage: 1468 / 1491 (98.5%).**
+**Implementation coverage: 1476 / 1491 (99.0%).**
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Implemented | 1468 | A runtime implementation is registered in the capability inventory. |
-| Missing | 23 | No runtime implementation is registered. |
+| Implemented | 1476 | A runtime implementation is registered in the capability inventory. |
+| Missing | 15 | No runtime implementation is registered. |
 
 Implemented means translating the GHC operation to a sensible runtime implementation and
 checking it with ordinary tests. It does not require formal proof or exhaustive input testing.
@@ -67,7 +67,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - Original ghc-internal memcpy has the same exact Addr#/Addr#/Word64#/State# declaration and checked storage transport as memmove, but rejects overlapping nonempty ranges before mutation. Adjacent and empty checked regions are permitted; the returned Addr# is the original destination carrier.
 - Original ghc-internal strlen scans only live, bounded managed or owned native Addr# bytes through the first NUL and returns the exact Int# length. Unterminated storage, pointer-cell byte exposure, opaque labels, unowned numeric addresses and freed native allocations reject. rts_isThreaded reports the nonthreaded RTS mode used by THC's admitted original FD and wait path; it does not report the number of Java guest threads or offer GHC's threaded RTS ABI.
 - labelThread#/threadLabel# retain and observe the exact UTF-8 ByteArray# on context-owned Java thread identities, including finished threads; empty labels are present and host Java thread names are unchanged. Labels are released with their identities or context disposal. No RTS eventlog emission is claimed.
-- listThreads# returns independent Array# snapshots of context-owned guest identities, including retained completed threads, with unspecified order and weak registry retention. Array#/SmallArray# operations transport either known boxed levity without forcing elements; boxed CAS uses full-memory-order pointer identity and returns the replacement on success or the observed witness on failure. isCurrentThreadBound# observes THC's admitted unbound-only runtime and returns zero for registered guest entries, not a claim of forkOS/TLS support. par#/spark#/getSpark#/numSparks#/forkOn# remain unsupported: safe speculative cancellation and a capability scheduler are not provided.
+- listThreads# returns independent Array# snapshots of context-owned guest identities, including retained completed threads, with unspecified order and weak registry retention. Array#/SmallArray# operations transport either known boxed levity without forcing elements; boxed CAS uses full-memory-order pointer identity and returns the replacement on success or the observed witness on failure. isCurrentThreadBound# returns zero: forkOn# locks a logical context capability, not an OS processor or bound foreign TLS. Spark hints are discarded without forcing: par# returns one, spark# retains its argument, numSparks# returns zero and getSpark# returns zero with boxed False. delay# uses an interruptible monotonic deadline. Allocation setters and the original counter getter measure actual JVM thread heap allocations during guest entries, including runtime bookkeeping but not native/Sulong allocations; no allocation-limit enforcement is claimed.
 - threadStatus# returns the exact State#/Int#/Int#/Int# tuple for context-owned Java thread identities. Logical capabilities are monotonically allocated per Java carrier, not physical CPU numbers; forkOn/count/affinity APIs remain unsupported. Registered MVar, black-hole, throwTo and foreign boundaries report their actual managed states. Forked threads retain normal/uncaught-guest completion; a live host carrier outside guest entry remains foreign and keeps its identity on re-entry. Existing throwTo mailboxes are scoped to active guest invocations and do not queue across separate host calls.
 - The public AST killThread# path preserves exact asynchronous self-delivery through catch# and Haskell masks. It rejects an external target before enqueueing because ordinary AST callers have no saved sender continuation. Only the restricted, explicitly admitted captured AST route can suspend and resume an external send; bytecode remains the general thread-primitive backend.
 - The enabled_capabilities RTS data label is a context-owned, live Word32 cell containing at least one logical Java carrier. Only readWord32OffAddr# at offset zero is supported; writes, other widths, offsets and native projection reject. This does not provide physical GHC -N semantics, capability resizing, event-manager reconfiguration or arbitrary RTS data symbols.
@@ -243,6 +243,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `decodeDouble_2Int#` — arity 1 — Scalar tuple result
 - [x] `decodeDouble_Int64#` — arity 1 — Scalar tuple result
 - [x] `decodeFloat_Int#` — arity 1 — Scalar tuple result
+- [x] `delay#` — arity 2 — Thread operation
 - [x] `divideDoubleX2#` — arity 2 — Specialized lowering
 - [x] `divideDoubleX4#` — arity 2 — Specialized lowering
 - [x] `divideDoubleX8#` — arity 2 — Specialized lowering
@@ -319,6 +320,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `fnmsubFloatX4#` — arity 3 — Specialized lowering
 - [x] `fnmsubFloatX8#` — arity 3 — Specialized lowering
 - [x] `fork#` — arity 2 — Thread operation
+- [x] `forkOn#` — arity 3 — Thread operation
 - [x] `freezeArray#` — arity 4 — Boxed-array operation
 - [x] `freezeSmallArray#` — arity 4 — Boxed-array operation
 - [x] `geAddr#` — arity 2 — Pointer scalar signature
@@ -337,6 +339,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `getMaskingState#` — arity 1 — Specialized lowering
 - [x] `getSizeofMutableByteArray#` — arity 2 — Byte-array operation
 - [x] `getSizeofSmallMutableArray#` — arity 2 — Boxed-array operation
+- [x] `getSpark#` — arity 1 — Thread operation
 - [x] `gtAddr#` — arity 2 — Pointer scalar signature
 - [x] `gtChar#` — arity 2 — Numeric scalar signature
 - [x] `gtFloat#` — arity 2 — Numeric scalar signature
@@ -780,6 +783,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `notWord16#` — arity 1 — Numeric scalar signature
 - [x] `notWord32#` — arity 1 — Numeric scalar signature
 - [x] `notWord8#` — arity 1 — Numeric scalar signature
+- [x] `numSparks#` — arity 1 — Thread operation
 - [x] `or#` — arity 2 — Numeric scalar signature
 - [x] `or64#` — arity 2 — Numeric scalar signature
 - [x] `orI#` — arity 2 — Numeric scalar signature
@@ -817,6 +821,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `packWord8X16#` — arity 1 — Specialized lowering
 - [x] `packWord8X32#` — arity 1 — Specialized lowering
 - [x] `packWord8X64#` — arity 1 — Specialized lowering
+- [x] `par#` — arity 1 — Thread operation
 - [x] `pdep#` — arity 2 — Numeric scalar signature
 - [x] `pdep16#` — arity 2 — Numeric scalar signature
 - [x] `pdep32#` — arity 2 — Numeric scalar signature
@@ -1167,6 +1172,8 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `retry#` — arity 1 — STM operation
 - [x] `setAddrRange#` — arity 4 — Byte-array operation
 - [x] `setByteArray#` — arity 5 — Byte-array operation
+- [x] `setOtherThreadAllocationCounter#` — arity 3 — Thread operation
+- [x] `setThreadAllocationCounter#` — arity 2 — Thread operation
 - [x] `shrinkMutableByteArray#` — arity 3 — Byte-array operation
 - [x] `shrinkSmallMutableArray#` — arity 3 — Boxed-array operation
 - [x] `shuffleDoubleX2#` — arity 3 — Specialized lowering
@@ -1209,6 +1216,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `sizeofMutableByteArray#` — arity 1 — Byte-array operation
 - [x] `sizeofSmallArray#` — arity 1 — Boxed-array operation
 - [x] `sizeofSmallMutableArray#` — arity 1 — Boxed-array operation
+- [x] `spark#` — arity 2 — Thread operation
 - [x] `sqrtDouble#` — arity 1 — Numeric scalar signature
 - [x] `sqrtFloat#` — arity 1 — Numeric scalar signature
 - [x] `stableNameToInt#` — arity 1 — Stable-name operation
@@ -1566,18 +1574,10 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `compactFixupPointers#` — arity 3
 - [ ] `compactGetFirstBlock#` — arity 2
 - [ ] `compactGetNextBlock#` — arity 3
-- [ ] `delay#` — arity 2
-- [ ] `forkOn#` — arity 3
 - [ ] `getApStackVal#` — arity 2
 - [ ] `getCCSOf#` — arity 2
-- [ ] `getSpark#` — arity 1
 - [ ] `mkApUpd0#` — arity 1
 - [ ] `newBCO#` — arity 6
-- [ ] `numSparks#` — arity 1
-- [ ] `par#` — arity 1
-- [ ] `setOtherThreadAllocationCounter#` — arity 3
-- [ ] `setThreadAllocationCounter#` — arity 2
-- [ ] `spark#` — arity 2
 - [ ] `unpackClosure#` — arity 1
 - [ ] `whereFrom#` — arity 3
 
