@@ -46,4 +46,4 @@ runtimeCapabilities :: IO RuntimeCapabilities
 runtimeCapabilities = RuntimeCapabilities
   <$> queryEnum 2 [(0, False), (1, True)]
   <*> queryEnum 3 [(0, False), (1, True)]
-  <*> query 4 0 0
+  <*> queryInt 4 0 0

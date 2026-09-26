@@ -9,17 +9,18 @@ The declarations moved from `THC` to `THC.Thread` with the wider runtime API.
 Both retained descriptor objects were compared against the fresh module export
 and are unchanged; `THC` re-exports the same public affinity functions.
 
-Source SHA-256: `1c929b48f12bf5c094d1d3963ab282fbeafd59d6dbda6498c6798fff29f36260`.
-Original complete Core SHA-256:
-`8f500f032e8d6f4db7ca914485ddb24c86e178ce83c620279ade20c6d2a27a11`.
+Source SHA-256: `49e68ceb577e9d50f1c4b84f811d6a1d502a9ed8f3a7b9dcb97d499ed6b1367e`.
+Fresh complete Core SHA-256:
+`79011212348b7db3163702ca1956b044c5a8070422577996a9d8595b1084d744`.
 
 Regenerate with the pinned compiler:
 
 ```sh
-THC_CORE_OUT="$PWD/build/cpu-affinity-api/core" \
-THC_GHC_OUT="$PWD/build/cpu-affinity-api/ghc" \
+THC_CORE_OUT="$PWD/build/runtime-services-export-concrete/core" \
+THC_GHC_OUT="$PWD/build/runtime-services-export-concrete/ghc" \
   compiler/export.sh -XHaskell2010 -iruntime \
-    -fplugin-opt=THC.Plugin:post-tidy runtime/THC/Thread.hs
+    -fplugin-opt=THC.Plugin:post-tidy \
+    examples/THC/RuntimeServices.hs runtime/THC/Internal/JIT.hs
 ```
 
 The source is also compiled and linked natively by `cabal test cpu-affinity-api

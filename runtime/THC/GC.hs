@@ -30,4 +30,4 @@ collectors = do
     Unavailable -> pure Unavailable
   where
     readCollector index = CollectorStats
-      <$> queryText 301 index <*> query 302 index 0 <*> query 303 index 0
+      <$> queryText 301 index <*> queryWord64 302 index 0 <*> queryWord64 303 index 0

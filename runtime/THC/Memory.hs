@@ -37,8 +37,8 @@ nonHeapUsage = memoryUsage 204
 
 memoryUsage :: Int -> IO MemoryUsage
 memoryUsage selector = MemoryUsage
-  <$> query selector 0 0 <*> query (selector + 1) 0 0
-  <*> query (selector + 2) 0 0 <*> query (selector + 3) 0 0
+  <$> queryWord64 selector 0 0 <*> queryWord64 (selector + 1) 0 0
+  <*> queryWord64 (selector + 2) 0 0 <*> queryWord64 (selector + 3) 0 0
 
 nativeAllocationUsage :: IO NativeAllocationUsage
-nativeAllocationUsage = NativeAllocationUsage <$> query 208 0 0 <*> query 209 0 0
+nativeAllocationUsage = NativeAllocationUsage <$> queryWord64 208 0 0 <*> queryWord64 209 0 0

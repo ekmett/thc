@@ -5,12 +5,12 @@
 -- | Private versioned FFI boundary. Raw selectors and pointers are hazardous;
 -- applications should use the typed service modules, not this implementation.
 module THC.Internal.RuntimeABI
-  ( Availability(..), query, queryEnum, queryText, control, traceCall
+  ( Availability(..), query, queryInt, queryWord64, queryEnum, queryText, control, traceCall
   ) where
 
 import Data.Char (chr)
 import Data.Int (Int64)
-import Data.Word (Word8)
+import Data.Word (Word8, Word64)
 import Foreign.C.Types (CInt(..), CLLong(..))
 import Foreign.Ptr (Ptr)
 import THC.Runtime.Types (Availability(..))
@@ -31,9 +31,17 @@ decode value = case value of
   _ | value >= 0 -> pure (Available (fromIntegral value))
     | otherwise -> fail "THC runtime service returned an invalid status"
 
-query :: Integral a => Int -> Int64 -> Int64 -> IO (Availability a)
-query selector index detail = fmap (fmap fromIntegral) $
+-- Keep the primitive result concrete. An Integral dictionary would retain
+-- unrelated Real/toRational/Integer machinery in an application's Core closure.
+query :: Int -> Int64 -> Int64 -> IO (Availability Int64)
+query selector index detail =
   queryCode (fromIntegral selector) (fromIntegral index) (fromIntegral detail) >>= decode
+
+queryInt :: Int -> Int64 -> Int64 -> IO (Availability Int)
+queryInt selector index detail = fmap (fmap fromIntegral) (query selector index detail)
+
+queryWord64 :: Int -> Int64 -> Int64 -> IO (Availability Word64)
+queryWord64 selector index detail = fmap (fmap fromIntegral) (query selector index detail)
 
 queryEnum :: Int -> [(Int64, a)] -> IO (Availability a)
 queryEnum selector choices = do
@@ -61,7 +69,7 @@ queryText selector index = do
     readCharacters offset count reversed
       | offset == count = pure (Available (reverse reversed))
       | otherwise = do
-          result <- query selector index offset
+          result <- queryInt selector index offset
           case result of
             Available point
               | point <= 0x10ffff && not (point >= 0xd800 && point <= 0xdfff) ->

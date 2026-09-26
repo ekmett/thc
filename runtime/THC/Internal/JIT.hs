@@ -40,5 +40,5 @@ setJitTelemetryEnabled enabled = control 400 (if enabled then 1 else 0)
 
 jitSnapshot :: IO JitSnapshot
 jitSnapshot = JitSnapshot
-  <$> query 401 0 0 <*> query 402 0 0 <*> query 403 0 0
-  <*> query 404 0 0 <*> query 405 0 0 <*> query 406 0 0
+  <$> queryWord64 401 0 0 <*> queryWord64 402 0 0 <*> queryWord64 403 0 0
+  <*> queryWord64 404 0 0 <*> queryWord64 405 0 0 <*> queryWord64 406 0 0
