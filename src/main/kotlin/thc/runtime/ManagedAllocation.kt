@@ -232,23 +232,23 @@ internal class ManagedAllocation private constructor(
             fault("Scalar read overlaps a managed pointer cell")
     }
 
-    /** Vector indices count either full 16-byte vectors or scalar lanes. Keep
+    /** Vector indices count either full vectors or scalar lanes. Keep
      * the checked operation inside the owner monitor without a callback object. */
     internal inline fun <T> accessVector(index: Long, scalarOffset: Boolean, scalarWidth: Int,
-        writable: Boolean, action: (ByteArray) -> T): T = synchronized(this) {
-        prepareVector(index, scalarOffset, scalarWidth, writable)
+        writable: Boolean, vectorBytes: Int = 16, action: (ByteArray) -> T): T = synchronized(this) {
+        prepareVector(index, scalarOffset, scalarWidth, writable, vectorBytes)
         action(bytes)
     }
 
-    private fun prepareVector(index: Long, scalarOffset: Boolean, scalarWidth: Int, writable: Boolean) {
-        val stride = if (scalarOffset) scalarWidth else 16
+    private fun prepareVector(index: Long, scalarOffset: Boolean, scalarWidth: Int, writable: Boolean, vectorBytes: Int) {
+        val stride = if (scalarOffset) scalarWidth else vectorBytes
         if (index < 0 || index > Long.MAX_VALUE / stride)
             fault("Vector index outside managed allocation")
-        val start = range(index * stride, 16)
+        val start = range(index * stride, vectorBytes.toLong())
         if (writable) {
             mutable()
-            if (pointerCapable) invalidate(start, 16)
-        } else if (intersectsPointer(start, 16))
+            if (pointerCapable) invalidate(start, vectorBytes)
+        } else if (intersectsPointer(start, vectorBytes))
             fault("Vector read overlaps a managed pointer cell")
     }
 

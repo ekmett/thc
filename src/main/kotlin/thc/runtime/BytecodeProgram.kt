@@ -3907,39 +3907,39 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             when (operation.family) {
                 VectorMemoryFamily.INT8, VectorMemoryFamily.WORD8 -> when {
-                    operation.isWrite -> b.beginWriteVectorByteArray(operation.scalarOffset)
-                    operation.isRead -> b.beginReadVectorByteArray(operation.scalarOffset)
-                    else -> b.beginIndexVectorByteArray(operation.scalarOffset)
+                    operation.isWrite -> b.beginWriteVectorByteArray(operation.scalarOffset, operation.vectorBytes)
+                    operation.isRead -> b.beginReadVectorByteArray(operation.scalarOffset, operation.vectorBytes)
+                    else -> b.beginIndexVectorByteArray(operation.scalarOffset, operation.vectorBytes)
                 }
                 VectorMemoryFamily.INT16, VectorMemoryFamily.WORD16 -> when {
-                    operation.isWrite -> b.beginWriteVectorShortArray(operation.scalarOffset)
-                    operation.isRead -> b.beginReadVectorShortArray(operation.scalarOffset)
-                    else -> b.beginIndexVectorShortArray(operation.scalarOffset)
+                    operation.isWrite -> b.beginWriteVectorShortArray(operation.scalarOffset, operation.vectorBytes)
+                    operation.isRead -> b.beginReadVectorShortArray(operation.scalarOffset, operation.vectorBytes)
+                    else -> b.beginIndexVectorShortArray(operation.scalarOffset, operation.vectorBytes)
                 }
                 VectorMemoryFamily.INT64, VectorMemoryFamily.WORD64 -> when {
-                    operation.isWrite -> b.beginWriteVectorLongArray(operation.scalarOffset)
-                    operation.isRead -> b.beginReadVectorLongArray(operation.scalarOffset)
-                    else -> b.beginIndexVectorLongArray(operation.scalarOffset)
+                    operation.isWrite -> b.beginWriteVectorLongArray(operation.scalarOffset, operation.vectorBytes)
+                    operation.isRead -> b.beginReadVectorLongArray(operation.scalarOffset, operation.vectorBytes)
+                    else -> b.beginIndexVectorLongArray(operation.scalarOffset, operation.vectorBytes)
                 }
                 VectorMemoryFamily.INT32 -> when {
-                    operation.isWrite -> b.beginWriteVector32Array(operation.scalarOffset)
-                    operation.isRead -> b.beginReadVector32Array(operation.scalarOffset)
-                    else -> b.beginIndexVector32Array(operation.scalarOffset)
+                    operation.isWrite -> b.beginWriteVector32Array(operation.scalarOffset, operation.vectorBytes)
+                    operation.isRead -> b.beginReadVector32Array(operation.scalarOffset, operation.vectorBytes)
+                    else -> b.beginIndexVector32Array(operation.scalarOffset, operation.vectorBytes)
                 }
                 VectorMemoryFamily.WORD32 -> when {
-                    operation.isWrite -> b.beginWriteVectorWord32Array(operation.scalarOffset)
-                    operation.isRead -> b.beginReadVectorWord32Array(operation.scalarOffset)
-                    else -> b.beginIndexVectorWord32Array(operation.scalarOffset)
+                    operation.isWrite -> b.beginWriteVectorWord32Array(operation.scalarOffset, operation.vectorBytes)
+                    operation.isRead -> b.beginReadVectorWord32Array(operation.scalarOffset, operation.vectorBytes)
+                    else -> b.beginIndexVectorWord32Array(operation.scalarOffset, operation.vectorBytes)
                 }
                 VectorMemoryFamily.FLOAT32 -> when {
-                    operation.isWrite -> b.beginWriteVectorFloatArray(operation.scalarOffset)
-                    operation.isRead -> b.beginReadVectorFloatArray(operation.scalarOffset)
-                    else -> b.beginIndexVectorFloatArray(operation.scalarOffset)
+                    operation.isWrite -> b.beginWriteVectorFloatArray(operation.scalarOffset, operation.vectorBytes)
+                    operation.isRead -> b.beginReadVectorFloatArray(operation.scalarOffset, operation.vectorBytes)
+                    else -> b.beginIndexVectorFloatArray(operation.scalarOffset, operation.vectorBytes)
                 }
                 VectorMemoryFamily.DOUBLE64 -> when {
-                    operation.isWrite -> b.beginWriteVectorDoubleArray(operation.scalarOffset)
-                    operation.isRead -> b.beginReadVectorDoubleArray(operation.scalarOffset)
-                    else -> b.beginIndexVectorDoubleArray(operation.scalarOffset)
+                    operation.isWrite -> b.beginWriteVectorDoubleArray(operation.scalarOffset, operation.vectorBytes)
+                    operation.isRead -> b.beginReadVectorDoubleArray(operation.scalarOffset, operation.vectorBytes)
+                    else -> b.beginIndexVectorDoubleArray(operation.scalarOffset, operation.vectorBytes)
                 }
             }
             operands.forEach { it.emit(e) }

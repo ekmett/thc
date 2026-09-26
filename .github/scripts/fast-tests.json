@@ -186,6 +186,8 @@
     },
     "src/main/kotlin/thc/runtime/IntegerVectorPrimitives.kt": {
       "junit": [
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
         "thc.runtime.Simd128ArrayNativeTest",
         "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
@@ -217,6 +219,8 @@
     },
     "src/main/kotlin/thc/runtime/FloatingVectorPrimitives.kt": {
       "junit": [
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
         "thc.runtime.DoubleVectorMemoryProofTest",
         "thc.runtime.DoubleVectorStorageTest",
         "thc.runtime.FloatVectorMemoryProofTest",
@@ -1292,6 +1296,7 @@
     },
     "scripts/simd-families.json": {
       "junit": [
+        "thc.runtime.SimdWideArrayNativeTest",
         "thc.runtime.Simd128ArrayNativeTest",
         "thc.runtime.SimdCapabilitySmokeTest"
       ],
@@ -1304,6 +1309,10 @@
       "python": [
         "scripts/test-simd-families.py"
       ]
+    },
+    "src/test/kotlin/thc/runtime/Simd128ArrayProofTest.kt": {
+      "junit": ["thc.runtime.Simd128ArrayProofTest", "thc.runtime.SimdWideArrayProofTest"],
+      "python": []
     },
     "src/test/kotlin/thc/PrimopTestContext.kt": {
       "junit": [
