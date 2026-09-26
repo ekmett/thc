@@ -4,7 +4,7 @@ package thc.runtime
 
 import com.oracle.truffle.api.frame.VirtualFrame
 
-/** Exact original ghc-internal memory-copy FCallIds, not an arbitrary libc symbol bridge. */
+/** Original ghc-internal address copies and array's byte-array memcpy declaration. */
 internal object CoreMemmoveForeign : CoreMemoryCopyForeign("memmove")
 internal object CoreMemcpyForeign : CoreMemoryCopyForeign("memcpy")
 
@@ -13,6 +13,13 @@ internal sealed class CoreMemoryCopyForeign(private val symbol: String) {
     private val tupleKeys = scalarKeys + setOf("aggregate", "components")
     private val descriptorKeys = setOf("schema", "target", "convention", "safety", "arity", "suppliedArity", "argumentReps", "resultRep")
     private val argumentReps = listOf("AddrRep", "AddrRep", "Word64Rep", null)
+    private val arrayArgumentReps = listOf("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "Word64Rep", null)
+
+    fun byteArrays(metadata: Any?): Boolean {
+        val descriptor = (metadata as? Map<*, *>)?.get("foreignCall") as? Map<*, *>
+        val target = descriptor?.get("target") as? Map<*, *>
+        return symbol == "memcpy" && target?.get("unit") == "array-0.5.8.0-inplace"
+    }
 
     private fun requireProof(valid: Boolean, detail: String) {
         if (!valid) fault("Invalid original $symbol call: $detail")
@@ -20,7 +27,7 @@ internal sealed class CoreMemoryCopyForeign(private val symbol: String) {
     private fun exactInteger(value: Any?, expected: Int): Boolean =
         (value is Int || value is Long) && (value as Number).toLong() == expected.toLong()
     private fun kind(rep: String?): String = when (rep) {
-        null -> "void"; "AddrRep" -> "address"; else -> "long"
+        null -> "void"; "AddrRep" -> "address"; "BoxedRep (Just Unlifted)" -> "object"; else -> "long"
     }
     private fun scalar(raw: Any?, rep: String?, evaluated: Boolean? = null): Boolean {
         val proof = raw as? Map<*, *> ?: return false
@@ -60,8 +67,8 @@ internal sealed class CoreMemoryCopyForeign(private val symbol: String) {
         }
     }
 
-    fun validateOperand(index: Int, lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        val rep = argumentReps[index]
+    fun validateOperand(index: Int, lowered: CoreRepresentation, stored: CoreRepresentation?, byteArrays: Boolean = false) {
+        val rep = (if (byteArrays) arrayArgumentReps else argumentReps)[index]
         requireProof(lowered.present && !lowered.isAggregate && !lowered.isVector &&
             lowered.kind.name.lowercase() == kind(rep) && lowered.primReps == listOfNotNull(rep),
             "lowered operand $index")
@@ -76,14 +83,16 @@ internal sealed class CoreMemoryCopyForeign(private val symbol: String) {
         val descriptor = meta["foreignCall"] as? Map<*, *> ?: return false
         val target = descriptor["target"] as? Map<*, *> ?: return false
         if (target["symbol"] != symbol) return false
+        val arrays = byteArrays(metadata)
+        val expected = if (arrays) arrayArgumentReps else argumentReps
         requireProof(descriptor.keys == descriptorKeys && exactInteger(descriptor["schema"], 1), "descriptor schema")
         requireProof(target.keys == setOf("kind", "symbol", "unit", "isFunction") && target["kind"] == "static" &&
-            target["unit"] == "ghc-internal" && target["isFunction"] == true, "exact installed GHC target")
+            (target["unit"] == "ghc-internal" || arrays) && target["isFunction"] == true, "exact installed GHC target")
         requireProof(descriptor["convention"] == "ccall" && descriptor["safety"] == "unsafe" &&
             exactInteger(descriptor["arity"], 4) && exactInteger(descriptor["suppliedArity"], 4), "convention, safety or arity")
         val declared = descriptor["argumentReps"] as? List<*>
-        requireProof(declared?.size == 4 && argumentReps.indices.all { scalar(declared[it], argumentReps[it], false) } &&
-            arguments.size == 4 && argumentReps.indices.all { scalar(arguments[it], argumentReps[it]) } &&
+        requireProof(declared?.size == 4 && expected.indices.all { scalar(declared[it], expected[it], false) } &&
+            arguments.size == 4 && expected.indices.all { scalar(arguments[it], expected[it]) } &&
             flags == listOf(false, false, false, false), "argument representations and flags")
         requireProof(result(descriptor["resultRep"], true) && result(meta["rep"]) && result(resultProof),
             "State#/Addr# tuple result")
@@ -104,12 +113,15 @@ internal class MemmoveExpression(@field:Children private var operands: Array<Exp
     }
 }
 
-internal class MemcpyExpression(@field:Children private var operands: Array<Expr>, proof: CoreRepresentation) : Expr() {
+internal class MemcpyExpression(@field:Children private var operands: Array<Expr>, proof: CoreRepresentation,
+    private val byteArrays: Boolean = false) : Expr() {
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("memcpy requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        val destination = operands[0].executeRequiredAddress(frame)
-        val source = operands[1].executeRequiredAddress(frame)
+        val destination = if (byteArrays) ManagedAddress.fromGuestByteArray(operands[0].execute(frame))
+            else operands[0].executeRequiredAddress(frame)
+        val source = if (byteArrays) ManagedAddress.fromGuestByteArray(operands[1].execute(frame))
+            else operands[1].executeRequiredAddress(frame)
         val count = operands[2].executeRequiredLong(frame)
         requireVoidCarrier(operands[3].execute(frame))
         source.copyNonOverlappingTo(destination, count)

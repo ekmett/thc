@@ -77,16 +77,18 @@ class ManagedAddressStorageTest {
             val before = bytes.copyOf()
             val address = ManagedAddress.fromByteArray(bytes).plus(base.toLong())
             val label = "size=$size/base=$base/displacement=$displacement"
-            val arithmetic = position(size, base, displacement, true)
-            if (arithmetic == null) {
+            val sum = BigInteger.valueOf(base.toLong()).add(BigInteger.valueOf(displacement))
+            if (sum < BigInteger.valueOf(Long.MIN_VALUE) || sum > BigInteger.valueOf(Long.MAX_VALUE)) {
                 assertThrows(RuntimeFault::class.java, { address.plus(displacement) }, label)
             } else {
                 val shifted = address.plus(displacement)
                 if (displacement == 0L) assertSame(address, shifted, label)
-                if (arithmetic < size)
+                val arithmetic = position(size, base, displacement, false)
+                if (arithmetic != null)
                     assertEquals(before[arithmetic].toLong() and 255L, shifted.readWord8(0), label)
-                else assertThrows(RuntimeFault::class.java, { shifted.readWord8(0) }, "one past $label")
-                if (size > 0) assertEquals(before[0].toLong() and 255L, shifted.readWord8(-arithmetic.toLong()), label)
+                else assertThrows(RuntimeFault::class.java, { shifted.readWord8(0) }, "outside $label")
+                if (size > 0 && sum != BigInteger.valueOf(Long.MIN_VALUE))
+                    assertEquals(before[0].toLong() and 255L, shifted.readWord8(-sum.toLong()), label)
             }
             assertArrayEquals(before, bytes, "arithmetic preserved backing $label")
             val access = position(size, base, displacement, false)
@@ -158,8 +160,8 @@ class ManagedAddressStorageTest {
                 assertThrows(RuntimeFault::class.java) { address.writeWord8(displacement, -1) }
             }
         }
-        assertThrows(RuntimeFault::class.java) { literal.plus(-1) }
-        assertThrows(RuntimeFault::class.java) { literal.plus(expected.size.toLong() + 1) }
+        assertThrows(RuntimeFault::class.java) { literal.plus(-1).readWord8(0) }
+        assertThrows(RuntimeFault::class.java) { literal.plus(expected.size.toLong() + 1).readWord8(0) }
         for (malformed in listOf("0", "000", "xz", "0G", "-1", " 0", "é0"))
             assertThrows(RuntimeFault::class.java, { ManagedAddress.fromHex(malformed) }, malformed)
         val emptyLiteral = ManagedAddress.fromHex("")
@@ -169,8 +171,30 @@ class ManagedAddressStorageTest {
         assertSame(emptyArray, emptyArray.plus(0))
         assertThrows(RuntimeFault::class.java) { emptyArray.readWord8(0) }
         assertThrows(RuntimeFault::class.java) { emptyArray.writeWord8(0, 0) }
-        assertThrows(RuntimeFault::class.java) { emptyArray.plus(1) }
-        assertThrows(RuntimeFault::class.java) { emptyArray.plus(-1) }
+        assertThrows(RuntimeFault::class.java) { emptyArray.plus(1).readWord8(0) }
+        assertThrows(RuntimeFault::class.java) { emptyArray.plus(-1).readWord8(0) }
+    }
+
+    @Test fun outOfRangeSentinelsRetainIdentityButGrantNoMemoryAccess() {
+        val base = ManagedAddress.fromByteArray(byteArrayOf(65, 0))
+        val before = base.plus(-1)
+        val after = base.plus(3)
+        assertEquals(-1L, before.difference(base))
+        assertTrue(before.plus(1).sameLocation(base))
+        assertEquals(65L, before.readWord8(1))
+        for (address in listOf(before, after, base.plus(Long.MIN_VALUE), base.plus(Long.MAX_VALUE),
+            base.plus(1L shl 32))) {
+            assertThrows(RuntimeFault::class.java) { address.readWord8(0) }
+            assertThrows(RuntimeFault::class.java) { address.writeWord8(0, 12) }
+            assertThrows(RuntimeFault::class.java) { address.requireRange(0, 0) }
+            assertThrows(RuntimeFault::class.java) { address.cStringLength() }
+            assertThrows(RuntimeFault::class.java) { address.utf8() }
+            assertThrows(RuntimeFault::class.java) { address.copyNonOverlappingTo(base, 0) }
+        }
+        assertThrows(RuntimeFault::class.java) { before.plus(Long.MIN_VALUE) }
+        assertThrows(RuntimeFault::class.java) { base.plus(Long.MAX_VALUE).plus(1) }
+        assertThrows(RuntimeFault::class.java) { base.plus(Long.MIN_VALUE).readWord8(Long.MIN_VALUE) }
+        assertEquals(65L, base.readWord8(0))
     }
 
     @Test fun finalBackingReferencesSeparateMutableStorageFromLiteralCompilationConstants() {

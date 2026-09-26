@@ -184,8 +184,13 @@ class NativeMallocTest {
             assertThrows(RuntimeFault::class.java) { registry.free(bad) }
             assertEquals(1, registry.liveCount())
         }
-        assertThrows(RuntimeFault::class.java) { base.plus(Long.MAX_VALUE) }
-        assertThrows(RuntimeFault::class.java) { alias.plus(Long.MIN_VALUE) }
+        val sentinel = base.plus(-1)
+        assertTrue(sentinel.plus(1).sameLocation(base))
+        assertEquals(-1L, sentinel.difference(base))
+        assertThrows(RuntimeFault::class.java) { sentinel.readWord8(0) }
+        assertThrows(RuntimeFault::class.java) { sentinel.writeWord8(0, 0) }
+        assertThrows(RuntimeFault::class.java) { base.plus(Long.MAX_VALUE).readWord8(0) }
+        assertThrows(RuntimeFault::class.java) { alias.plus(Long.MIN_VALUE).readWord8(0) }
         assertThrows(RuntimeFault::class.java) { base.writeNativeScalar(Long.MAX_VALUE, 8, 0) }
         assertThrows(RuntimeFault::class.java) { base.plus(64).readWord8(0) }
         assertThrows(RuntimeFault::class.java) { base.rawBacking() }
@@ -195,6 +200,7 @@ class NativeMallocTest {
         assertThrows(RuntimeFault::class.java) { registry.free(base) }
         assertThrows(RuntimeFault::class.java) { alias.toNativeBits() }
         assertThrows(RuntimeFault::class.java) { alias.writeWord8(0, 1) }
+        assertThrows(RuntimeFault::class.java) { sentinel.plus(1) }
         val zero = registry.malloc(0)
         if (zero !== ManagedAddress.nullAddress()) {
             zero.requireRange(0, 0)

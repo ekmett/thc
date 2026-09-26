@@ -2236,13 +2236,14 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 MemmoveExpression(operands.toTypedArray(), tupleProof)
             } else if (memcpy) {
                 CoreMemcpyForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val byteArrays = CoreMemcpyForeign.byteArrays(foreignMetadata)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         CoreMemcpyForeign.validateOperand(index, operand.representation,
-                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null, byteArrays)
                     }
                 }
-                MemcpyExpression(operands.toTypedArray(), tupleProof)
+                MemcpyExpression(operands.toTypedArray(), tupleProof, byteArrays)
             } else if (libdw != null) {
                 CoreLibdwForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->

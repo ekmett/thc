@@ -54,6 +54,13 @@ signal startup is not supported. This is not an AST executable-lifecycle claim.
 The low-level launchers retain their previous no-argument syntax;
 their optional suffix is `-- PROGRAM_NAME ARG...`.
 
+Reproducible [standard application inputs](../examples/standard-apps/README.md)
+cover Alex, Happy, HsColour and doctest, distinguishing native baselines from
+actual guest execution and reporting original-package closure blockers.
+`cabal test library-memory-full-core -ffull-core-tests` exercises the original
+`array` freeze/thaw and `bytestring` CString paths exposed by these applications,
+using the same full-Core environment and backend/startup distinction above.
+
 ## Build and exercise
 
 Use GHC 9.14.1 with its bundled Cabal/Cabal-syntax 3.16. The API bounds are narrow

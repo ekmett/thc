@@ -172,6 +172,22 @@ SCALAR_KEYS = {'kind', 'primReps', 'evaluated'}
 TUPLE_KEYS = SCALAR_KEYS | {'aggregate', 'components'}
 DESCRIPTOR_KEYS = {'schema', 'target', 'convention', 'safety', 'arity', 'suppliedArity', 'argumentReps', 'resultRep'}
 
+# Original installed library declarations observed in real Alex/Unix closures.
+# Same libc symbols, but different physical operands or result ABI from the
+# ghc-internal declarations above. Do not infer these from caller binding names.
+LIBRARY_OPERATIONS = {
+    ('array-0.5.8.0-inplace', 'memcpy'):
+        ('ccall', 'unsafe', (GMP_ARRAY, GMP_ARRAY, 'Word64Rep', None), (None, 'AddrRep')),
+    ('bytestring-0.12.2.0-inplace', 'strlen'):
+        ('ccall', 'unsafe', ('AddrRep', None), (None, 'Word64Rep')),
+}
+
+
+def operation(target):
+    unit, symbol = target.get('unit'), target['symbol']
+    return (LIBRARY_OPERATIONS.get((unit, symbol), OPERATIONS[symbol])
+            if isinstance(unit, str) else OPERATIONS[symbol])
+
 
 def require(condition, detail):
     if not condition:
@@ -252,12 +268,14 @@ def validate(metadata, argument_reps, flags, result_rep):
     symbol = target['symbol']
     if symbol not in OPERATIONS:
         return None
-    convention, safety, expected, output = OPERATIONS[symbol]
+    convention, safety, expected, output = operation(target)
     require(descriptor.keys() == DESCRIPTOR_KEYS and type(descriptor.get('schema')) is int and descriptor['schema'] == 1,
             'descriptor schema')
     require(target.keys() == {'kind', 'symbol', 'unit', 'isFunction'} and target.get('kind') == 'static'
-            and target.get('isFunction') is True and target.get('unit') == 'ghc-internal',
-            'static ghc-internal function target')
+            and target.get('isFunction') is True
+            and (target.get('unit') == 'ghc-internal' or
+                 isinstance(target.get('unit'), str) and (target['unit'], symbol) in LIBRARY_OPERATIONS),
+            'static supported installed-library function target')
     allowed_safety = safety if isinstance(safety, tuple) else (safety,)
     require(descriptor.get('convention') == convention and descriptor.get('safety') in allowed_safety, 'calling convention/safety')
     require(all(type(descriptor.get(k)) is int and descriptor[k] == len(expected) for k in ('arity', 'suppliedArity')),
