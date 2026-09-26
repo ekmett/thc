@@ -33,6 +33,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     // Internal protocol-test seam; the production notifier is only eventfd IO.
     private val signalReadinessClose: (NativeFdWait) -> Unit = { it.descriptorClosed() }) {
     private enum class Readiness { REGULAR_FILE, UNAVAILABLE, NATIVE_UNCLASSIFIED }
+    private enum class AnonymousKind { PIPE, EVENT, EPOLL }
     private data class FileIdentity(val device: Long, val inode: Long)
     private class OpenClaim(var identity: FileIdentity?, val writable: Boolean, val reserved: Long? = null) {
         val owner: Thread = Thread.currentThread()
@@ -43,6 +44,8 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         val output: OutputStream? = null,
         val channel: SeekableByteChannel? = null,
         val native: NativeFileResource? = null,
+        val epoll: NativeEpoll? = null,
+        val anonymousKind: AnonymousKind? = null,
         val identity: FileIdentity? = null,
         val readable: Boolean = false,
         val writable: Boolean = false,
@@ -54,11 +57,13 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         // share this monitor; the registry never waits for it while locked.
         var references = 1L
         var closed = false
+        val epollRegistrations = linkedSetOf<NativeEpoll.Registration>()
     }
     private class Descriptor(val owner: OpenDescription) {
         // Protected by the registry, independently of the shared IO lifetime.
         var closed = false
         val readinessWaits = linkedSetOf<NativeFdWait>()
+        val eventWaits = linkedSetOf<NativeEventWait.Watch>()
     }
     private data class Failure(val kind: Long, val message: String, val nativeErrno: Long = 0)
     private class FileFailure(val kind: Long, message: String) : IOException(message)
@@ -74,6 +79,9 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     private var nextDescriptor = 3L // Preserve the private open API's non-reuse guarantee.
     private var disposed = false
     private var nativeProvider: NativeFileProvider? = null
+    // -1 is the eventfd wake slot, -2 the timer pipe, nonnegative keys are
+    // capability control pipes. Values retain logical identity, never fd numbers.
+    private val eventControls = linkedMapOf<Long, Descriptor>()
     private val nativeAbi by lazy { StdioHostAbi.load() }
 
     init { require(descriptorLimit in 3L..(Int.MAX_VALUE.toLong() + 1)) }
@@ -96,8 +104,11 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     // owner or publishing a reused number; aliases have distinct wait sets.
     private fun invalidate(entry: Descriptor): Throwable? {
         entry.closed = true
+        eventControls.values.removeAll { it === entry }
         var failure: Throwable? = null
         for (request in entry.readinessWaits) try { signalReadinessClose(request) }
+            catch (error: Throwable) { failure = combineFailures(failure, error) }
+        for (request in entry.eventWaits) try { request.descriptorClosed() }
             catch (error: Throwable) { failure = combineFailures(failure, error) }
         // A wake failure must not interrupt registry/refcount mutation or skip
         // other waiters. Callers finish retirement before surfacing this error.
@@ -133,10 +144,19 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     private fun retire(owner: OpenDescription) = synchronized(owner) {
         if (!owner.closed) {
             owner.closed = true
+            var failure: Throwable? = null
             try {
-                owner.channel?.close()
-                owner.output?.flush() // Embedding streams are never closed.
+                // Internal epoll duplicates must not prolong a registration
+                // after the final guest alias closes its open description.
+                val registrations = synchronized(this) { owner.epollRegistrations.toList() }
+                for (registration in registrations) try { registration.close() }
+                    catch (error: Throwable) { failure = combineFailures(failure, error) }
+                try { owner.epoll?.close() } catch (error: Throwable) { failure = combineFailures(failure, error) }
+                try { owner.channel?.close() } catch (error: Throwable) { failure = combineFailures(failure, error) }
+                try { owner.output?.flush() } // Embedding streams are never closed.
+                    catch (error: Throwable) { failure = combineFailures(failure, error) }
             } finally { synchronized(this) { owners.remove(owner) } }
+            failure?.let { throw it }
         }
     }
 
@@ -391,8 +411,9 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     /** Anonymous kernel descriptors use the same namespace, aliases and close
      * protocol as original open. Reserve every result before native acquisition;
      * partial acquisition and failed publication close every acquired lease. */
-    private fun anonymousDescriptors(pipe: Boolean, initial: Int, flags: Int,
+    private fun anonymousDescriptors(kind: AnonymousKind, initial: Int, flags: Int,
                                      publish: (LongArray) -> Unit): LongArray {
+        val pipe = kind == AnonymousKind.PIPE
         val claims = mutableListOf<OpenClaim>()
         val provider = synchronized(this) {
             if (disposed) fail(4, "THC file context is closed")
@@ -409,11 +430,16 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
             provider
         }
         var acquired = emptyList<NativeFileResource>()
+        val epolls = mutableListOf<NativeEpoll>()
         try {
             acquired = if (pipe) provider.pipe().let { listOf(it.first, it.second) }
+                else if (kind == AnonymousKind.EPOLL) listOf(provider.epoll(initial))
                 else listOf(provider.eventfd(initial, flags))
             val owners = acquired.mapIndexed { index, resource -> OpenDescription(channel = resource,
-                native = resource, readable = !pipe || index == 0, writable = !pipe || index == 1,
+                native = resource, anonymousKind = kind,
+                epoll = if (kind == AnonymousKind.EPOLL) NativeEpoll(resource.duplicateDescriptor()).also(epolls::add) else null,
+                readable = kind != AnonymousKind.EPOLL && (!pipe || index == 0),
+                writable = kind != AnonymousKind.EPOLL && (!pipe || index == 1),
                 canExtend = false, readiness = Readiness.NATIVE_UNCLASSIFIED) }
             val fds = claims.map { it.reserved!! }.toLongArray()
             synchronized(this) {
@@ -425,8 +451,10 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
                 }
             }
             acquired = emptyList()
+            epolls.clear()
             return fds
         } catch (failure: Throwable) {
+            epolls.forEach { try { it.close() } catch (closing: Throwable) { failure.addSuppressed(closing) } }
             acquired.forEach { try { it.close() } catch (closing: Throwable) { failure.addSuppressed(closing) } }
             throw failure
         } finally {
@@ -436,14 +464,18 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     }
 
     @TruffleBoundary internal fun eventfd(initial: Int, flags: Int): Long = result {
-        anonymousDescriptors(false, initial, flags) {}.single()
+        anonymousDescriptors(AnonymousKind.EVENT, initial, flags) {}.single()
+    }
+
+    @TruffleBoundary internal fun epollCreate(size: Int): Long = result {
+        anonymousDescriptors(AnonymousKind.EPOLL, size, 0) {}.single()
     }
 
     @TruffleBoundary internal fun pipe(destination: ManagedAddress): Long {
         destination.requireByteRegion(8, writable = true)
         fun acquire(): Long = result {
             destination.requireByteRegion(8, writable = true)
-            anonymousDescriptors(true, 0, 0) { fds ->
+            anonymousDescriptors(AnonymousKind.PIPE, 0, 0) { fds ->
                 for (index in fds.indices) for (byte in 0..3)
                     destination.writeWord8((index * 4 + byte).toLong(), fds[index] ushr (byte * 8))
             }
@@ -460,6 +492,157 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         withDescriptor(fd) { entry ->
             val resource = entry.native ?: fail(7, "THC descriptor has no native event capability: $fd")
             resource.writeEvent(value)
+        }
+    }
+
+    @TruffleBoundary internal fun controlFd(slot: Long, fd: Long) {
+        if (fd == -1L) { synchronized(this) { eventControls.remove(slot) }; return }
+        val entry = synchronized(this) { descriptors[fd] }
+            ?: fault("Event-manager control requires a live context descriptor")
+        synchronized(entry.owner) {
+            val owner = entry.owner
+            val expected = if (slot == -1L) AnonymousKind.EVENT else AnonymousKind.PIPE
+            val native = owner.native
+            if (!owner.writable || owner.anonymousKind != expected || native == null)
+                fault("Event-manager control requires an owned native ${if (slot == -1L) "eventfd" else "pipe writer"}")
+            if (native.statusFlags() and nativeAbi.flagConstant(OriginalStdioOp.O_NONBLOCK) == 0L)
+                fault("Event-manager control requires a nonblocking descriptor")
+            synchronized(this) {
+                if (disposed || entry.closed || descriptors[fd] !== entry)
+                    fault("Event-manager control descriptor closed during registration")
+                eventControls[slot] = entry
+            }
+        }
+    }
+
+    /** Shutdown writes the original GHC protocol through authenticated leases.
+     * Retiring a guest descriptor unregisters it before numeric reuse. */
+    @TruffleBoundary internal fun shutdownEventManagers() {
+        val registrations = synchronized(this) { eventControls.toMap().also { eventControls.clear() } }
+        var failure: Throwable? = null
+        for ((slot, entry) in registrations) try {
+            synchronized(entry.owner) {
+                if (synchronized(this) { entry.closed } || entry.owner.closed) return@synchronized
+                val resource = entry.owner.native!!
+                // A guest can change O_NONBLOCK after registration. Never block
+                // context teardown on such an invalidated protocol endpoint.
+                if (resource.statusFlags() and nativeAbi.flagConstant(OriginalStdioOp.O_NONBLOCK) == 0L)
+                    fault("Event-manager control descriptor is no longer nonblocking")
+                try {
+                    if (slot == -1L) resource.writeEvent(0xff)
+                    else resource.write(ByteBuffer.wrap(byteArrayOf(0xfe.toByte())))
+                } catch (error: NativeFileException) {
+                    // A full control pipe/eventfd is already readable.
+                    if (error.errno != 11) throw error
+                }
+            }
+        } catch (error: Throwable) { failure = combineFailures(failure, error) }
+        failure?.let { throw it }
+    }
+
+    /** The native poll image is private: guest integers are resolved only by
+     * this registry, and only revents are copied back to the original image. */
+    @TruffleBoundary internal fun poll(address: ManagedAddress, count: Long, timeout: Int, node: Node?): Long {
+        if (count < 0 || count > Int.MAX_VALUE / 8) fault("poll descriptor image exceeds managed capacity")
+        if (count != 0L) address.requireByteRegion(count * 8, writable = true)
+        return address.withNativeBorrow { result {
+            fun integer(offset: Long, width: Int): Long = (0 until width).fold(0L) { value, byte ->
+                value or (address.readWord8(offset + byte) shl (byte * 8))
+            }
+            val fds = LongArray(count.toInt()) { integer(it * 8L, 4).toInt().toLong() }
+            val events = ShortArray(fds.size) { integer(it * 8L + 4, 2).toShort() }
+            val entries = synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                if (nativeProvider == null) fail(7, "poll requires the explicit NativeIO context")
+                fds.map { descriptors[it] }
+            }
+            val invalid = BooleanArray(fds.size) { fds[it] >= 0 && entries[it] == null }
+            val duplicates = IntArray(fds.size) { -1 }
+            try {
+                for (index in fds.indices) {
+                    val entry = entries[index] ?: continue
+                    val native = entry.owner.native ?: fail(7, "THC stream has no native poll capability: ${fds[index]}")
+                    try { duplicates[index] = native.duplicateDescriptor() }
+                    catch (_: ClosedChannelException) { invalid[index] = true }
+                }
+            } catch (failure: Throwable) {
+                for (fd in duplicates) if (fd >= 0) try { NativePollApi.close(fd) }
+                    catch (closing: Throwable) { failure.addSuppressed(closing) }
+                throw failure
+            }
+            NativeEventWait.acquire(duplicates, events, invalid).use { request ->
+                try {
+                    synchronized(this) {
+                        for (index in entries.indices) entries[index]?.let { entry ->
+                            if (disposed || entry.closed || descriptors[fds[index]] !== entry)
+                                request.watches[index].descriptorClosed()
+                            else entry.eventWaits.add(request.watches[index])
+                        }
+                    }
+                    val ready = request.await(node, timeout)
+                    if (count != 0L) address.requireByteRegion(count * 8, writable = true)
+                    for (index in ready.indices) {
+                        address.writeWord8(index * 8L + 6, ready[index].toLong())
+                        address.writeWord8(index * 8L + 7, ready[index].toLong() ushr 8)
+                    }
+                    ready.count { it.toInt() != 0 }.toLong()
+                } finally {
+                    synchronized(this) { for (index in entries.indices)
+                        entries[index]?.eventWaits?.remove(request.watches[index]) }
+                }
+            }
+        } }
+    }
+
+    @TruffleBoundary internal fun epollControl(fd: Long, operation: Int, targetFd: Long, event: ManagedAddress): Long = result {
+        val selected = descriptor(fd)
+        val target = descriptor(targetFd)
+        val epoll = selected.owner.epoll ?: throw NativeFileException("epoll_ctl", 22)
+        if (selected.owner === target.owner) throw NativeFileException("epoll_ctl", 22)
+        val native = target.owner.native ?: fail(7, "THC stream has no native epoll capability: $targetFd")
+        val bytes = if (operation == 2) null else {
+            event.requireByteRegion(12)
+            event.withNativeBorrow { ByteArray(12) { event.readWord8(it.toLong()).toByte() } }
+        }
+        synchronized(this) {
+            if (selected.closed || target.closed || descriptors[fd] !== selected || descriptors[targetFd] !== target)
+                throw NativeFileException("epoll_ctl", 9)
+        }
+        epoll.control(operation, target, native, bytes, { registration ->
+            synchronized(this) {
+                if (disposed || target.owner.references == 0L)
+                    throw NativeFileException("epoll_ctl", 9)
+                target.owner.epollRegistrations.add(registration)
+            }
+        }, { registration -> synchronized(this) { target.owner.epollRegistrations.remove(registration) }; Unit })
+        0L
+    }
+
+    @TruffleBoundary internal fun epollWait(fd: Long, destination: ManagedAddress, maximum: Int,
+        timeout: Int, node: Node?): Long = result {
+        if (maximum <= 0) throw NativeFileException("epoll_wait", 22)
+        if (maximum > Int.MAX_VALUE / 12) fault("epoll output image exceeds managed capacity")
+        destination.requireByteRegion(maximum * 12L, writable = true)
+        val selected = descriptor(fd)
+        val epoll = selected.owner.epoll ?: throw NativeFileException("epoll_wait", 22)
+        val started = System.nanoTime()
+        fun remaining(): Long = if (timeout < 0) -1 else
+            (timeout.toLong() - (System.nanoTime() - started).coerceAtLeast(0) / 1_000_000).coerceAtLeast(0)
+        destination.withNativeBorrow {
+            while (true) {
+                synchronized(this) {
+                    if (disposed || selected.closed || descriptors[fd] !== selected)
+                        throw NativeFileException("epoll_wait", 9)
+                }
+                val count = epoll.ready(destination, maximum)
+                if (count != 0 || timeout == 0 || timeout > 0 && remaining() == 0L)
+                    return@withNativeBorrow count.toLong()
+                if (awaitReady(selected, fd, false, remaining(), node) == -2)
+                    throw NativeFileException("epoll_wait", 9)
+                // Another consumer can drain the same set after readiness. The
+                // next real epoll_wait probes again, preserving the deadline.
+            }
+            @Suppress("UNREACHABLE_CODE") 0L
         }
     }
 
@@ -698,6 +881,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
 
     /** Test observer only; guest execution does not wait by polling this count. */
     @Synchronized internal fun pendingReadiness(fd: Long): Int = descriptors[fd]?.readinessWaits?.size ?: 0
+    @Synchronized internal fun pendingEventWaits(fd: Long): Int = descriptors[fd]?.eventWaits?.size ?: 0
 
     /** The pinned POSIX fdReady reports any poll event, including POLLNVAL,
      * as ready. Regular files are ready in either direction, even at EOF or

@@ -87,6 +87,55 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return result
     }
 
+    @TruffleBoundary fun poll(address: ManagedAddress, count: Long, timeout: Long, node: com.oracle.truffle.api.nodes.Node?): Long {
+        val abi = hostAbi
+        if (timeout != timeout.toInt().toLong()) fault("Original poll requires a canonical CInt timeout")
+        val result = files.poll(address, count, timeout.toInt(), node)
+        if (result < 0) lastError.set(fileError(abi))
+        return result
+    }
+
+    @TruffleBoundary fun controlFd(operation: OriginalStdioOp, first: Long, second: Long) {
+        hostAbi
+        val fd = if (operation == OriginalStdioOp.IO_CONTROL_FD) second else first
+        if (fd != fd.toInt().toLong() || fd < -1)
+            fault("Event-manager control requires a canonical CInt descriptor or -1")
+        val slot = if (operation == OriginalStdioOp.IO_CONTROL_FD) {
+            if (first !in 0L..0xffff_ffffL) fault("Event-manager capability requires a canonical CUInt")
+            first
+        } else if (operation == OriginalStdioOp.IO_WAKEUP_FD) -1L
+        else if (operation == OriginalStdioOp.TIMER_CONTROL_FD) -2L
+        else fault("Invalid event-manager control operation")
+        files.controlFd(slot, fd)
+    }
+
+    @TruffleBoundary fun epollCreate(size: Long): Long {
+        val abi = hostAbi
+        if (size != size.toInt().toLong()) fault("Original epoll_create requires a canonical CInt size")
+        val result = files.epollCreate(size.toInt())
+        if (result < 0) lastError.set(fileError(abi))
+        return result
+    }
+
+    @TruffleBoundary fun epollControl(fd: Long, operation: Long, target: Long, event: ManagedAddress): Long {
+        val abi = hostAbi
+        if (fd != fd.toInt().toLong() || operation != operation.toInt().toLong() || target != target.toInt().toLong())
+            fault("Original epoll_ctl requires canonical CInt operands")
+        val result = files.epollControl(fd, operation.toInt(), target, event)
+        if (result < 0) lastError.set(fileError(abi))
+        return result
+    }
+
+    @TruffleBoundary fun epollWait(fd: Long, events: ManagedAddress, maximum: Long, timeout: Long,
+        node: com.oracle.truffle.api.nodes.Node?): Long {
+        val abi = hostAbi
+        if (fd != fd.toInt().toLong() || maximum != maximum.toInt().toLong() || timeout != timeout.toInt().toLong())
+            fault("Original epoll_wait requires canonical CInt operands")
+        val result = files.epollWait(fd, events, maximum.toInt(), timeout.toInt(), node)
+        if (result < 0) lastError.set(fileError(abi))
+        return result
+    }
+
     @TruffleBoundary fun fcntl(fd: Long, command: Long, argument: Long, write: Boolean): Long {
         val abi = hostAbi
         if (fd != fd.toInt().toLong() || command != command.toInt().toLong())

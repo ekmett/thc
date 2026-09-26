@@ -261,6 +261,10 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
         result("eventfd", lease, initial, flags)
     }
 
+    internal fun epoll(size: Int): NativeFileResource = acquire(false, false) { lease ->
+        result("epoll_create", lease, size)
+    }
+
     internal fun pipe(): Pair<NativeFileResource, NativeFileResource> {
         var writer: NativeFileResource? = null
         try {
@@ -346,6 +350,7 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
             if (!writable) throw NonWritableChannelException()
             result("eventfd_write", lease, value)
         }
+        override fun duplicateDescriptor(): Int = lease.duplicateForWait()
         override fun read(destination: ByteBuffer): Int = live {
             if (!readable) throw NonReadableChannelException()
             if (destination.isReadOnly) throw ReadOnlyBufferException()

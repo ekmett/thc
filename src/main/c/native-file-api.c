@@ -5,9 +5,12 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <stddef.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/eventfd.h>
+#include <sys/epoll.h>
+#include <poll.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -17,6 +20,9 @@
 // acquisition and the slot store has not been proved safe by this checkpoint.
 _Static_assert(sizeof(int) == 4 && sizeof(off_t) == 8 && sizeof(size_t) == 8 && sizeof(mode_t) == 4,
                "native files require the Linux LP64 ABI");
+_Static_assert(sizeof(struct epoll_event) == 12 && offsetof(struct epoll_event, data) == 4 &&
+               sizeof(struct pollfd) == 8 && offsetof(struct pollfd, revents) == 6,
+               "native event images require the Linux x86_64 ABI");
 
 int64_t thc_file_stat_size(void) { return sizeof(struct stat); }
 int64_t thc_file_termios_size(void) { return sizeof(struct termios); }
@@ -25,6 +31,13 @@ int64_t thc_file_termios_size(void) { return sizeof(struct termios); }
 // call returns. Guest descriptor numbers are assigned separately by the context.
 int64_t thc_file_eventfd(int *lease, uint32_t initial, int flags, int64_t *error) {
   int fd = eventfd(initial, flags);
+  *error = fd < 0 ? errno : 0;
+  if (fd >= 0) *lease = fd;
+  return fd < 0 ? -1 : 0;
+}
+
+int64_t thc_file_epoll_create(int *lease, int size, int64_t *error) {
+  int fd = epoll_create(size);
   *error = fd < 0 ? errno : 0;
   if (fd >= 0) *lease = fd;
   return fd < 0 ? -1 : 0;

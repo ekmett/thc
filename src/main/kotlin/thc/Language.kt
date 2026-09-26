@@ -495,13 +495,16 @@ class Language : TruffleLanguage<Language.State>() {
     override fun getScope(context: State): Any = context.managedExports.scope
     override fun isThreadAccessAllowed(thread: Thread, singleThreaded: Boolean): Boolean = true
     override fun exitContext(context: State, exitMode: ExitMode, exitCode: Int) {
-        context.signals.requestStop()
-        // LLVM calls are still permitted during exit notification, before hard
-        // exit starts unwinding all contexts. dispose() is idempotent.
-        context.iconv.dispose()
+        try { context.files.shutdownEventManagers() } finally {
+            context.signals.requestStop()
+            // LLVM calls are still permitted during exit notification, before hard
+            // exit starts unwinding all contexts. dispose() is idempotent.
+            context.iconv.dispose()
+        }
     }
     override fun finalizeContext(context: State) {
-        try { context.signals.close() } finally { context.iconv.dispose() }
+        try { context.files.shutdownEventManagers() }
+        finally { try { context.signals.close() } finally { context.iconv.dispose() } }
     }
     override fun disposeContext(context: State) {
         context.compilerRts.close()

@@ -72,6 +72,15 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     EVENTFD("eventfd", "ccall", "unsafe", listOf("Int32Rep", "Int32Rep", null), "Int32Rep"),
     EVENTFD_WRITE("eventfd_write", "ccall", "unsafe", listOf("Int32Rep", "Word64Rep", null), "Int32Rep"),
     PIPE("pipe", "ccall", "unsafe", listOf("AddrRep", null), "Int32Rep"),
+    EPOLL_CREATE("epoll_create", "ccall", "unsafe", listOf("Int32Rep", null), "Int32Rep"),
+    EPOLL_CTL("epoll_ctl", "ccall", "unsafe", listOf("Int32Rep", "Int32Rep", "Int32Rep", "AddrRep", null), "Int32Rep"),
+    EPOLL_WAIT_SAFE("epoll_wait", "ccall", "safe", listOf("Int32Rep", "AddrRep", "Int32Rep", "Int32Rep", null), "Int32Rep"),
+    EPOLL_WAIT_UNSAFE("epoll_wait", "ccall", "unsafe", listOf("Int32Rep", "AddrRep", "Int32Rep", "Int32Rep", null), "Int32Rep"),
+    POLL_SAFE("poll", "ccall", "safe", listOf("AddrRep", "Word64Rep", "Int32Rep", null), "Int32Rep"),
+    POLL_UNSAFE("poll", "ccall", "unsafe", listOf("AddrRep", "Word64Rep", "Int32Rep", null), "Int32Rep"),
+    IO_WAKEUP_FD("setIOManagerWakeupFd", "ccall", "unsafe", listOf("Int32Rep", null), null),
+    IO_CONTROL_FD("setIOManagerControlFd", "ccall", "unsafe", listOf("Word32Rep", "Int32Rep", null), null),
+    TIMER_CONTROL_FD("setTimerManagerControlFd", "ccall", "unsafe", listOf("Int32Rep", null), null),
     UNLINK("unlink", "ccall", "unsafe", listOf("AddrRep", null), "Int32Rep"),
     OPEN("__hscore_open", "ccall", "unsafe", listOf("AddrRep", "Int32Rep", "Word32Rep", null), "Int32Rep"),
     OPEN_SAFE("__hscore_open", "ccall", "safe", listOf("AddrRep", "Int32Rep", "Word32Rep", null), "Int32Rep"),
@@ -116,7 +125,11 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
         this == F_GETFL || this == F_SETFL || this == F_SETFD || this == FD_CLOEXEC
     val fcntl: Boolean get() = this == FCNTL_READ || this == FCNTL_WRITE
     val eventPair: Boolean get() = this == EVENTFD || this == EVENTFD_WRITE
-    val eventDescriptor: Boolean get() = eventPair || this == PIPE
+    val poll: Boolean get() = this == POLL_SAFE || this == POLL_UNSAFE
+    val epollWait: Boolean get() = this == EPOLL_WAIT_SAFE || this == EPOLL_WAIT_UNSAFE
+    val controlFd: Boolean get() = this == IO_WAKEUP_FD || this == IO_CONTROL_FD || this == TIMER_CONTROL_FD
+    val eventManager: Boolean get() = poll || epollWait || controlFd || this == EPOLL_CREATE || this == EPOLL_CTL
+    val eventDescriptor: Boolean get() = eventPair || this == PIPE || eventManager
     val seekConstant: Boolean get() = this == SEEK_SET || this == SEEK_CUR || this == SEEK_END
     val stat: Boolean get() = this == SIZEOF_STAT || statField ||
         this == IS_REG || this == IS_CHR || this == IS_BLK || this == IS_DIR || this == IS_FIFO || this == IS_SOCK

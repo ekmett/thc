@@ -105,3 +105,84 @@ originalPipeCycle create read write close fcntl setfd cloexec x = runRW# (\s ->
 nativePipeCycle :: PipeCreate -> NativeBytes -> NativeBytes -> NativeClose -> FcntlWrite -> Setfd -> Cloexec -> Int -> IO Int
 nativePipeCycle create read write close fcntl setfd cloexec (I# x) = IO (\s ->
   case pipeCycle create read write close fcntl setfd cloexec x s of (# next, result #) -> (# next, I# result #))
+
+type EpollCreate = Int32# -> State# RealWorld -> (# State# RealWorld, Int32# #)
+type EpollControl = Int32# -> Int32# -> Int32# -> Addr# -> State# RealWorld -> (# State# RealWorld, Int32# #)
+type EpollWait = Int32# -> Addr# -> Int32# -> Int32# -> State# RealWorld -> (# State# RealWorld, Int32# #)
+type Poll = Addr# -> Word64# -> Int32# -> State# RealWorld -> (# State# RealWorld, Int32# #)
+type ControlFd = Int32# -> State# RealWorld -> (# State# RealWorld #)
+type CapabilityFd = Word32# -> Int32# -> State# RealWorld -> (# State# RealWorld #)
+
+{-# INLINE epollCycle #-}
+epollCycle :: EpollCreate -> EpollControl -> EpollWait -> EventCreate -> NativeClose
+           -> Int# -> State# RealWorld -> (# State# RealWorld, Int# #)
+epollCycle create control wait eventfd close x s0 = case newPinnedByteArray# 12# s0 of
+  (# s1, image #) -> case create (intToInt32# 1#) s1 of
+    (# s2, ep #) -> case eventfd (intToInt32# 1#) (intToInt32# 0#) s2 of
+      (# s3, fd #) -> case writeWord32Array# image 0# (wordToWord32# 1##) s3 of
+        s4 -> case writeWord64OffAddr# (plusAddr# (mutableByteArrayContents# image) 4#) 0# (wordToWord64# (int2Word# (x +# 31#))) s4 of
+          s5 -> case control ep (intToInt32# 1#) fd (mutableByteArrayContents# image) s5 of
+            (# s6, added #) -> case wait ep (mutableByteArrayContents# image) (intToInt32# 1#) (intToInt32# 0#) s6 of
+              (# s7, ready #) -> case readWord64OffAddr# (plusAddr# (mutableByteArrayContents# image) 4#) 0# s7 of
+                (# s8, value #) -> case control ep (intToInt32# 2#) fd nullAddr# s8 of
+                  (# s9, deleted #) -> case wait ep (mutableByteArrayContents# image) (intToInt32# 1#) (intToInt32# 0#) s9 of
+                    (# s10, empty #) -> case close fd s10 of
+                      (# s11, closed #) -> case close ep s11 of
+                        (# s12, finished #) -> (# s12, word2Int# (word64ToWord# value) +# int32ToInt# added
+                          +# int32ToInt# ready +# int32ToInt# deleted +# int32ToInt# empty
+                          +# int32ToInt# closed +# int32ToInt# finished -# 1# #)
+
+originalEpollCycle :: EpollCreate -> EpollControl -> EpollWait -> EventCreate -> NativeClose -> Int# -> Int#
+originalEpollCycle create control wait eventfd close x = runRW# (\s ->
+  case epollCycle create control wait eventfd close x s of (# _, result #) -> result)
+nativeEpollCycle :: EpollCreate -> EpollControl -> EpollWait -> EventCreate -> NativeClose -> Int -> IO Int
+nativeEpollCycle create control wait eventfd close (I# x) = IO (\s ->
+  case epollCycle create control wait eventfd close x s of (# next, result #) -> (# next, I# result #))
+
+{-# INLINE pollCycle #-}
+pollCycle :: Poll -> EventCreate -> NativeClose -> Int# -> State# RealWorld -> (# State# RealWorld, Int# #)
+pollCycle poll create close x s0 = case newPinnedByteArray# 8# s0 of
+  (# s1, image #) -> case create (intToInt32# 1#) (intToInt32# 0#) s1 of
+    (# s2, fd #) -> case writeInt32Array# image 0# fd s2 of
+      s3 -> case writeWord16Array# image 2# (wordToWord16# 1##) s3 of
+        s4 -> case poll (mutableByteArrayContents# image) (wordToWord64# 1##) (intToInt32# 0#) s4 of
+          (# s5, ready #) -> case readWord16Array# image 3# s5 of
+            (# s6, events #) -> case poll nullAddr# (wordToWord64# 0##) (intToInt32# 0#) s6 of
+              (# s7, empty #) -> case close fd s7 of
+                (# s8, closed #) -> (# s8, x +# 17# +# int32ToInt# ready +# word2Int# (word16ToWord# events)
+                  +# int32ToInt# empty +# int32ToInt# closed -# 2# #)
+
+originalPollCycle :: Poll -> EventCreate -> NativeClose -> Int# -> Int#
+originalPollCycle poll create close x = runRW# (\s -> case pollCycle poll create close x s of (# _, result #) -> result)
+nativePollCycle :: Poll -> EventCreate -> NativeClose -> Int -> IO Int
+nativePollCycle poll create close (I# x) = IO (\s -> case pollCycle poll create close x s of (# next, result #) -> (# next, I# result #))
+
+{-# INLINE controlCycle #-}
+controlCycle :: ControlFd -> CapabilityFd -> ControlFd -> EventCreate -> PipeCreate -> FcntlWrite -> Setfd -> Setfd -> NativeClose
+             -> Int# -> State# RealWorld -> (# State# RealWorld, Int# #)
+controlCycle wake manager timer eventfd pipe fcntl setfl nonblock close x s0 = case newPinnedByteArray# 8# s0 of
+  (# s1, image #) -> case nonblock s1 of
+    (# s2, flags #) -> case eventfd (intToInt32# 0#) flags s2 of
+      (# s3, ev #) -> case pipe (mutableByteArrayContents# image) s3 of
+        (# s4, created #) -> case readInt32Array# image 0# s4 of
+          (# s5, rd #) -> case readInt32Array# image 1# s5 of
+            (# s6, wr #) -> case setfl s6 of
+              (# s7, command #) -> case fcntl wr command (intToInt64# (int32ToInt# flags)) s7 of
+                (# s8, changed #) -> case wake ev s8 of
+                  (# s9 #) -> case manager (wordToWord32# 0##) wr s9 of
+                    (# s10 #) -> case timer wr s10 of
+                      (# s11 #) -> case wake (intToInt32# -1#) s11 of
+                        (# s12 #) -> case manager (wordToWord32# 0##) (intToInt32# -1#) s12 of
+                          (# s13 #) -> case timer (intToInt32# -1#) s13 of
+                            (# s14 #) -> case close ev s14 of
+                              (# s15, a #) -> case close rd s15 of
+                                (# s16, b #) -> case close wr s16 of
+                                  (# s17, c #) -> (# s17, x +# int32ToInt# created +# int32ToInt# changed
+                                    +# int32ToInt# a +# int32ToInt# b +# int32ToInt# c #)
+
+originalControlCycle :: ControlFd -> CapabilityFd -> ControlFd -> EventCreate -> PipeCreate -> FcntlWrite -> Setfd -> Setfd -> NativeClose -> Int# -> Int#
+originalControlCycle wake manager timer eventfd pipe fcntl setfl nonblock close x = runRW# (\s ->
+  case controlCycle wake manager timer eventfd pipe fcntl setfl nonblock close x s of (# _, result #) -> result)
+nativeControlCycle :: ControlFd -> CapabilityFd -> ControlFd -> EventCreate -> PipeCreate -> FcntlWrite -> Setfd -> Setfd -> NativeClose -> Int -> IO Int
+nativeControlCycle wake manager timer eventfd pipe fcntl setfl nonblock close (I# x) = IO (\s ->
+  case controlCycle wake manager timer eventfd pipe fcntl setfl nonblock close x s of (# next, result #) -> (# next, I# result #))

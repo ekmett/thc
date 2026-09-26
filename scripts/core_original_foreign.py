@@ -187,6 +187,13 @@ OPERATIONS = {
     'eventfd': ('ccall', 'unsafe', ('Int32Rep', 'Int32Rep', None), (None, 'Int32Rep')),
     'eventfd_write': ('ccall', 'unsafe', ('Int32Rep', 'Word64Rep', None), (None, 'Int32Rep')),
     'pipe': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Int32Rep')),
+    'epoll_create': ('ccall', 'unsafe', ('Int32Rep', None), (None, 'Int32Rep')),
+    'epoll_ctl': ('ccall', 'unsafe', ('Int32Rep', 'Int32Rep', 'Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),
+    'epoll_wait': ('ccall', ('safe', 'unsafe'), ('Int32Rep', 'AddrRep', 'Int32Rep', 'Int32Rep', None), (None, 'Int32Rep')),
+    'poll': ('ccall', ('safe', 'unsafe'), ('AddrRep', 'Word64Rep', 'Int32Rep', None), (None, 'Int32Rep')),
+    'setIOManagerWakeupFd': ('ccall', 'unsafe', ('Int32Rep', None), (None,)),
+    'setIOManagerControlFd': ('ccall', 'unsafe', ('Word32Rep', 'Int32Rep', None), (None,)),
+    'setTimerManagerControlFd': ('ccall', 'unsafe', ('Int32Rep', None), (None,)),
     'dup': ('ccall', 'unsafe', ('Int32Rep', None), (None, 'Int32Rep')),
     'dup2': ('ccall', 'unsafe', ('Int32Rep', 'Int32Rep', None), (None, 'Int32Rep')),
     'ghczuwrapperZC19ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZClseek':

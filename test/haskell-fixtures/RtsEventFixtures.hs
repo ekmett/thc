@@ -24,8 +24,8 @@ import GHC.Types.Avail (availName)
 import qualified GHC.Types.ForeignCall as F
 import GHC.Unit.Module.WholeCoreBindings (emptyIfaceForeign)
 import System.Directory (createDirectoryIfMissing)
-import System.Environment (lookupEnv)
-import System.Exit (die)
+import System.Environment (lookupEnv, getExecutablePath)
+import System.Exit (die, exitSuccess)
 import System.FilePath ((</>))
 import Text.Read (readMaybe)
 import THC.Interface (loadInterfaceCore, interfaceBindings)
@@ -43,7 +43,13 @@ calls = [("processors","getNumberOfProcessors","Processors"), ("capabilities","s
 descriptorCalls :: [(String,[String],String)]
 descriptorCalls =
   [("eventfdCycle", ["eventfd","eventfd_write",readCall,"close"], "EventfdCycle"),
-   ("pipeCycle", ["pipe",readCall,writeCall,"close",fcntlCall,"__hscore_f_setfd","__hscore_fd_cloexec"], "PipeCycle")]
+   ("pipeCycle", ["pipe",readCall,writeCall,"close",fcntlCall,"__hscore_f_setfd","__hscore_fd_cloexec"], "PipeCycle"),
+   ("epollCycle", ["epoll_create","epoll_ctl","epoll_wait","eventfd","close"], "EpollCycle"),
+   ("epollSafeCycle", ["epoll_create","epoll_ctl","epoll_wait/safe","eventfd","close"], "EpollCycle"),
+   ("pollCycle", ["poll","eventfd","close"], "PollCycle"),
+   ("pollSafeCycle", ["poll/safe","eventfd","close"], "PollCycle"),
+   ("controlCycle", ["setIOManagerWakeupFd","setIOManagerControlFd","setTimerManagerControlFd",
+      "eventfd","pipe",fcntlCall,"__hscore_f_setfl","__hscore_o_nonblock","close"], "ControlCycle")]
   where
     readCall = "ghczuwrapperZC23ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread"
     writeCall = "ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite"
@@ -55,9 +61,11 @@ targets = nub ([s | (_,s,_) <- calls] ++ concat [ss | (_,ss,_) <- descriptorCall
 symbol :: Id -> Maybe String
 symbol v = case isFCallId_maybe v of
   Just (F.CCall (F.CCallSpec (F.StaticTarget _ name (Just unit) True) convention safety))
-    | unitString unit == "ghc-internal", unpackFS name `elem` targets,
+    | let key = unpackFS name ++ if unpackFS name `elem` ["poll","epoll_wait"] && safety == F.PlaySafe then "/safe" else "",
+      unitString unit == "ghc-internal", key `elem` targets,
       convention == (if "ghczuwrapper" `T.isPrefixOf` T.pack (unpackFS name) then F.CApiConv else F.CCallConv),
-      safety == if unpackFS name `elem` ["setNumCapabilities","__hscore_sizeof_siginfo_t"] then F.PlaySafe else F.PlayRisky -> Just (unpackFS name)
+      safety == if unpackFS name `elem` ["setNumCapabilities","__hscore_sizeof_siginfo_t"] || "/safe" `T.isSuffixOf` T.pack key
+        then F.PlaySafe else F.PlayRisky -> Just key
   _ -> Nothing
 
 variables :: CoreExpr -> [Id]
@@ -82,6 +90,8 @@ prepareRtsEvent root = do
   createDirectoryIfMissing True (root </> directory </> "ghc")
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   pkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
+  executable <- getExecutablePath
+  nativeChild <- lookupEnv "THC_RTS_EVENT_NATIVE_CONTROL"
   version <- execute "version" [] ghc ["--numeric-version"]
   unless (oneLine version == "9.14.1") (die "RTS event fixtures require GHC9.14.1")
   info <- execute "info" [] ghc ["--info"]
@@ -92,7 +102,8 @@ prepareRtsEvent root = do
   imports <- execute "imports" [] pkg ["field","ghc-internal","import-dirs","--simple-output"]
   let interfaces = map (oneLine imports </>)
         ["GHC/Internal/Conc/Sync.hi","GHC/Internal/Event/Thread.hi",
-         "GHC/Internal/Event/Control.hi","GHC/Internal/System/Posix/Internals.hi"]
+         "GHC/Internal/Event/Control.hi","GHC/Internal/Event/EPoll.hi","GHC/Internal/Event/Poll.hi",
+         "GHC/Internal/System/Posix/Internals.hi"]
   (rows, descriptorRows, signatures) <- runGhc (Just (oneLine library)) $ do
     initial <- getSessionDynFlags
     env0 <- getSession
@@ -136,6 +147,20 @@ prepareRtsEvent root = do
             in (setIdArity (setIdType (setIdInfo v vanillaIdInfo) (exprType applied)) (exprArity applied), applied)
           _ -> error ("Missing original RTS event consumer " ++ prefix ++ consumer)
         specialize prefix (_,target,consumer) = specializeMany prefix consumer [target]
+    -- These original setters alter process-global RTS slots. Execute their
+    -- native consumer in a disposable producer subprocess, never in this RTS.
+    liftIO $ case nativeChild of
+      Nothing -> pure ()
+      Just inputText -> case readMaybe inputText :: Maybe Int of
+        Nothing -> die "Invalid isolated native control input"
+        Just input -> do
+          let (_, selected, consumer) = last descriptorCalls
+              (_, body) = specializeMany "native" consumer selected
+          (value,_,_) <- hscCompileCoreExpr current noSrcSpan (mkLets (mg_binds optimized) body)
+          function <- wormhole (hscInterp current) value
+          result <- (unsafeCoerce function :: Int -> IO Int) input
+          print result
+          exitSuccess
     -- Separate exports avoid assigning a shared consumer binder to three RTS slots.
     _ <- liftIO $ forM ([(entry,[target],consumer) | (entry,target,consumer) <- calls] ++ descriptorCalls) $ \(entry,selected,consumer) -> do
       let (v,body) = specializeMany "original" consumer selected
@@ -166,8 +191,19 @@ prepareRtsEvent root = do
       function <- wormhole (hscInterp current) value
       let invoke = unsafeCoerce function :: Int -> IO Int
       forM [1,2,4] $ \input -> do
-        result <- invoke input
-        unless (result == if entry == "eventfdCycle" then 2 * input + 5 else input + 13)
+        result <- if entry == "controlCycle" then do
+          observed <- execute (entry ++ "-native-" ++ show input)
+            [("THC_RTS_EVENT_NATIVE_CONTROL",show input)] executable ["rts-event"]
+          maybe (die "Invalid isolated native control result") pure (readMaybe (oneLine observed))
+          else invoke input
+        let expected = case consumer of
+              "EventfdCycle" -> 2 * input + 5
+              "PipeCycle" -> input + 13
+              "EpollCycle" -> input + 31
+              "PollCycle" -> input + 17
+              "ControlCycle" -> input
+              _ -> error "Unknown descriptor consumer"
+        unless (result == expected)
           (die ("Unexpected native descriptor lifecycle result: " ++ show (entry,input,result)))
         pure (entry,input,result)
     pure (concat observations, concat descriptorObservations,
@@ -189,4 +225,4 @@ prepareRtsEvent root = do
     ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),"entries" .= entries,"descriptorEntries" .= descriptorEntries,
      "signatures" .= signatures,"interfaceHashes" .= interfaceHashes,"inputHashes" .= inputHashes,
      "artifactHashes" .= artifactHashes]
-  putStrLn "rts-event: eight RTS prerequisites plus native pipe/eventfd lifecycles, 30 native rows, pre/post strict audits"
+  putStrLn "rts-event: eight RTS prerequisites and seven descriptor/control lifecycles, 45 native rows, 30 pre/post strict audits"

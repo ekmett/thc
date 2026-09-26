@@ -55,6 +55,8 @@ internal interface NativeFileResource : SeekableByteChannel {
     fun setStatusFlags(flags: Long): Long
     fun setDescriptorFlags(flags: Long): Long
     fun writeEvent(value: Long): Long
+    /** Private owned duplicate; never a guest descriptor number. */
+    fun duplicateDescriptor(): Int
     fun requireLive()
     fun readinessWait(): NativeFdWait
 }
@@ -71,6 +73,7 @@ internal class OpenedNativeFile(private val channel: SeekableByteChannel,
     override fun setStatusFlags(flags: Long): Long = metadata.setStatusFlags(flags)
     override fun setDescriptorFlags(flags: Long): Long = metadata.setDescriptorFlags(flags)
     override fun writeEvent(value: Long): Long = metadata.writeEvent(value)
+    override fun duplicateDescriptor(): Int = metadata.duplicateDescriptor()
     override fun requireLive() = metadata.requireLive()
     override fun readinessWait(): NativeFdWait = metadata.readinessWait()
     override fun close() {
