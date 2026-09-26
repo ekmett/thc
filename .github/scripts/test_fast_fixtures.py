@@ -19,6 +19,20 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_original_memory_search_registration_and_closed_cache(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        self.assertEqual('original-memory-search', owners['thc.runtime.OriginalMemorySearchTest'])
+        group = manifest['groups']['original-memory-search']
+        self.assertEqual(['build/original-memory-search'], group['outputs'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-memory-search']}], group['commands'])
+        self.assertTrue(all((project / path).is_file() for path in group['sources']))
+        self.assertIn('"$fixture_bin" original-memory-search', (project / 'scripts/prepare-tests.sh').read_text())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertTrue(fast_fixtures.fast_inputs.MEMORY_SEARCH_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
+        self.assertIn('build/original-memory-search', fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertIn('"original-memory-search/**/*.json"', (project / 'build.gradle.kts').read_text())
+
     def test_rubbish_native_fixture_owns_complete_bounded_outputs(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

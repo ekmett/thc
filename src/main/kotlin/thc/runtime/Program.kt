@@ -2395,9 +2395,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val memcpy = CoreMemcpyForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val memorySearch = CoreMemorySearchForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (runtimeService != null) {
@@ -2565,6 +2567,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     }
                 }
                 NativeAllocationExpression(nativeAllocation, operands.toTypedArray(), tupleProof)
+            } else if (memorySearch != null) {
+                CoreMemorySearchForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreMemorySearchForeign.validateOperand(memorySearch, index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                MemorySearchExpression(memorySearch, operands.toTypedArray(), tupleProof)
             } else if (memmove) {
                 CoreMemmoveForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->

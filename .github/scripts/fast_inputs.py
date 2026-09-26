@@ -36,7 +36,7 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
 MANIFEST_DIRS = """rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
-thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
+original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
 narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
@@ -438,6 +438,7 @@ NATIVE_EXECUTABLES = frozenset({"build/simd-arithmetic/native/oracle", "build/un
     "build/original-handle-readiness/native/oracle",
     "build/original-posix-stat/native/oracle",
     "build/original-gmp/native/oracle",
+    "build/original-memory-search/native/oracle",
     *(f"build/{name}/native/{name}" for name in
       ("state-tuple", "tuple-input", "tuple-return", "empty-tuple-input"))})
 # The original stdio manifest fingerprints its commands, raw streams and numeric
@@ -490,7 +491,9 @@ ORIGINAL_HANDLE_READINESS_OUTPUTS = frozenset("build/original-handle-readiness/"
 # The exposed registration is evidence only: no package-db directory is cached.
 ORIGINAL_GMP_ENTRIES = ("originalAdd", "originalAddWord", "originalCmp", "originalDivWord",
                         "originalModWord", "originalMul", "originalMulWord", "originalSub",
-                        "originalQuotRem", "originalQuot", "originalRem")
+                        "originalQuotRem", "originalQuot", "originalRem", "originalRShift", "originalRShiftNegative",
+                        "originalGetDouble", "originalEncodeDouble", "originalGcdWords", "originalGcdWord", "originalGcd",
+                        "originalLShift", "originalAnd", "originalAndNot", "originalOr", "originalXor", "originalPopCount")
 ORIGINAL_GMP_OUTPUTS = frozenset("build/original-gmp/" + name for name in (
     "manifest.json", "oracle.json", "native/oracle", "exposed-ghc-internal.conf",
     *(f"logs/{label}.{suffix}" for label in (
@@ -502,6 +505,16 @@ ORIGINAL_GMP_OUTPUTS = frozenset("build/original-gmp/" + name for name in (
         "core/OriginalGmpAudit.json", "core/THC.InterfaceClosure.json",
         *(f"{entry}.audit.json" for entry in ORIGINAL_GMP_ENTRIES))),
 ))
+
+MEMORY_SEARCH_OUTPUTS = frozenset("build/original-memory-search/" + name for name in (
+    "manifest.json", "oracle.json", "native/oracle",
+    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
+        "core/OriginalMemorySearchAudit.json", "core/THC.InterfaceClosure.json",
+        "originalCompare.audit.json", "originalFind.audit.json")),
+    *(f"logs/{label}.{suffix}" for label in (
+        "version", "native-build", "native-observations", "pre-export", "post-export",
+        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ("originalCompare", "originalFind")))
+      for suffix in ("stdout", "stderr", "command.json"))))
 
 RTS_DIAGNOSTIC_OUTPUTS = frozenset("build/rts-diagnostics/" + name for name in (
     "manifest.json", "oracle.json",
@@ -1071,6 +1084,20 @@ def gmp_artifact_hashes(manifest):
     return artifacts
 
 
+def memory_search_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and manifest.get("schema") == 1 and
+            manifest.get("strictAccepted") is True and manifest.get("runtimeVerified") is False and
+            manifest.get("nativeRows") == 392 and manifest.get("entries") == ["originalCompare", "originalFind"],
+            "Invalid original memory search fixture receipt")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) ==
+            MEMORY_SEARCH_OUTPUTS - {"build/original-memory-search/manifest.json"},
+            "Incomplete/unreviewed memory search artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid memory search artifact hash")
+    return artifacts
+
+
 def command(argv, root):
     return subprocess.check_output(list(map(str, argv)), cwd=root, text=True).strip()
 
@@ -1330,6 +1357,8 @@ def allowed_payload(name, pins):
             bool(re.fullmatch(r"libHSthc-[\w.-]+\.(so|dylib)", parts[2])))
     if parts[1] == "original-stdio":
         return name in ORIGINAL_STDIO_OUTPUTS
+    if parts[1] == "original-memory-search":
+        return name in MEMORY_SEARCH_OUTPUTS
     if parts[1] == "thread-inventory":
         return name in THREAD_INVENTORY_OUTPUTS
     if parts[1] == "thread-scheduling":
@@ -1565,6 +1594,8 @@ def inventory(root, current, read, core_files, verified=None):
             formatter_artifact_hashes(root, doc)
         if name == "build/original-gmp/manifest.json":
             gmp_artifact_hashes(doc)
+        if name == "build/original-memory-search/manifest.json":
+            memory_search_artifact_hashes(doc)
         if name == "build/rts-diagnostics/manifest.json":
             rts_diagnostic_artifact_hashes(doc)
         if name == "build/rts-shutdown/manifest.json":

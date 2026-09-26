@@ -65,6 +65,7 @@ import ProcessSignalFixtures (prepareProcessSignals)
 import SignalDispatchFixtures (prepareSignalDispatch)
 import RtsShutdownFixtures (prepareRtsShutdown)
 import OriginalGmpFixtures (prepareOriginalGmp)
+import MemorySearchFixtures (prepareMemorySearch)
 import OriginalFdReadyFixtures (prepareOriginalFdReady)
 import FileWaitFixtures (prepareFileWait)
 import OriginalRtsLocksFixtures (prepareOriginalRtsLocks)
@@ -975,6 +976,7 @@ main = do
     ["signal-dispatch"] -> prepareSignalDispatch root
     ["rts-shutdown"] -> prepareRtsShutdown root
     ["original-gmp"] -> prepareOriginalGmp root False
+    ["original-memory-search"] -> prepareMemorySearch root
     ["original-gmp", "--require-supported"] -> prepareOriginalGmp root True
     ["original-fd-ready"] -> prepareOriginalFdReady root
     ["file-wait"] -> prepareFileWait root

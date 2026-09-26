@@ -1941,6 +1941,31 @@ class OriginalMemmoveDeclarationTest(unittest.TestCase):
             self.assertFalse(fixture.audit(wrong)['accepted'])
 
 
+class OriginalMemorySearchDeclarationTest(unittest.TestCase):
+    def test_exact_cint_csize_and_address_result_contracts(self):
+        fixture = LibdwUnavailableAuditTest()
+        def scalar(rep, evaluated=False):
+            kind = 'void' if rep is None else 'address' if rep == 'AddrRep' else 'long'
+            return dict(kind=kind, primReps=[] if rep is None else [rep], evaluated=evaluated)
+        for symbol, second, result in [('memcmp', 'AddrRep', 'Int32Rep'), ('memchr', 'Int32Rep', 'AddrRep')]:
+            output = dict(kind='unknown', primReps=[result], evaluated=False, aggregate='unboxed-tuple',
+                          components=[scalar(None, True), scalar(result, True)])
+            declaration = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='bytestring-0.12.2.0-inplace', isFunction=True),
+                convention='ccall', safety='unsafe', arity=4, suppliedArity=4,
+                argumentReps=list(map(scalar, ['AddrRep', second, 'Word64Rep', None])), resultRep=output)
+            self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'])
+            disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != symbol])
+            self.assertFalse(fixture.audit(fixture.fixture(declaration), disabled)['accepted'])
+            for key, value in [('safety', 'safe'), ('convention', 'capi'), ('arity', 3), ('schema', True)]:
+                bad = copy.deepcopy(declaration); bad[key] = value
+                self.assertFalse(fixture.audit(fixture.fixture(bad))['accepted'])
+            for unit in ['foreign', 'ghc-internal']:
+                bad = copy.deepcopy(declaration); bad['target']['unit'] = unit
+                self.assertEqual(unit == 'ghc-internal' and symbol == 'memcmp', fixture.audit(fixture.fixture(bad))['accepted'])
+            bad = copy.deepcopy(declaration); bad['argumentReps'][2] = scalar('WordRep')
+            self.assertFalse(fixture.audit(fixture.fixture(bad))['accepted'])
+
+
 class OriginalLibraryMemoryDeclarationTest(unittest.TestCase):
     def test_original_library_carriers_and_abis_remain_distinct(self):
         fixture = LibdwUnavailableAuditTest()

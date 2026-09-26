@@ -759,6 +759,7 @@ executable thc-fixtures
     OriginalHandleReadinessFixtures
     OriginalPosixStatFixtures
     OriginalGmpFixtures
+    MemorySearchFixtures
     LibdwUnavailableFixtures
     NativeAddressFixtures
     ProcessSignalFixtures

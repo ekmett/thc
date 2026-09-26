@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "7838e7fc408bb59852b09e734ebe184a7295bc8aca62954405c48b9f0de0c7f6"
+FULL_PREPARATION_PLAN = "5842758176a5cabb818c7a522af4d6743698ab6b6350b557009b02612066c7c6"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/address-array-copy", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -34,6 +34,7 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
     "build/original-fd-ready", "build/simd-calls", "build/sum-join", "build/record-fields",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    *fast_inputs.MEMORY_SEARCH_OUTPUTS,
     *fast_inputs.RUBBISH_OUTPUTS,
     "build/sum-join/manifest.json", "build/sum-join/oracle.tsv", "build/sum-join/native/oracle",
     *[f"build/sum-join/{stage}/{suffix}" for stage in ("pre", "post")
@@ -405,6 +406,10 @@ def _output_hashes(root, group):
         return _formatter_output_hashes(root)
     if group["outputs"] == ["build/original-gmp"]:
         return _gmp_output_hashes(root)
+    if group["outputs"] == ["build/original-memory-search"]:
+        name = "build/original-memory-search/manifest.json"
+        expected = fast_inputs.memory_search_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/rts-diagnostics"]:
         name = "build/rts-diagnostics/manifest.json"
         expected = fast_inputs.rts_diagnostic_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
@@ -569,6 +574,9 @@ def _full_output_hashes(root):
         if name == "build/original-gmp":
             if fast_inputs.GMP_NATIVE_HOST:
                 files.update(_gmp_output_hashes(root))
+            continue
+        if name == "build/original-memory-search":
+            files.update(_output_hashes(root, {"outputs": [name]}))
             continue
         if name.removeprefix("build/") in (fast_inputs.BYTEARRAY_FAMILIES | fast_inputs.SIMD_BYTEARRAY_FAMILIES) or name in ("build/float-decode", "build/pinned-addresses", "build/bignat-literals", "build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-open", "build/original-fcntl", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr", "build/original-sigprocmask", "build/original-sigset"):
             files.update(_output_hashes(root, {"outputs": [name]}))

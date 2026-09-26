@@ -21,6 +21,25 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def test_memory_search_closed_receipt(self):
+        manifest_path = 'build/original-memory-search/manifest.json'
+        outputs = cache.MEMORY_SEARCH_OUTPUTS
+        self.assertEqual(38, len(outputs))
+        self.assertIn(manifest_path, DECLARED_REQUIRED)
+        artifacts = {name: 'a' * 64 for name in outputs - {manifest_path}}
+        good = dict(schema=1, entries=['originalCompare', 'originalFind'], nativeRows=392,
+                    strictAccepted=True, runtimeVerified=False, artifactHashes=artifacts)
+        self.assertEqual(artifacts, cache.memory_search_artifact_hashes(good))
+        for path in outputs:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+        for changes in (dict(nativeRows=391), dict(strictAccepted=False), dict(runtimeVerified=True),
+                        dict(entries=['originalFind']), dict(artifactHashes={}),
+                        dict(artifactHashes=dict(artifacts, unknown='a' * 64))):
+            with self.assertRaises(cache.CacheMiss):
+                cache.memory_search_artifact_hashes(dict(good, **changes))
+        for path in ('native/OriginalMemorySearchNative.o', 'native/other-oracle', 'unreviewed.json'):
+            self.assertFalse(cache.allowed_payload('build/original-memory-search/' + path, {}))
+
     def test_simd_memory_closed_receipts_and_export_only_archives(self):
         counts = {"simd-int32x4-bytearray": (259, 386), "simd-word32x4-bytearray": (259, 386),
                   "simd-floatx4-bytearray": (446, 647), "simd-doublex2-bytearray": (536, 767)}
@@ -816,7 +835,7 @@ class FastInputTests(unittest.TestCase):
         return manifest_path, artifacts, manifest
 
     def test_gmp_exact_payload_and_executable_scope(self):
-        self.assertEqual(123, len(cache.ORIGINAL_GMP_OUTPUTS))
+        self.assertEqual(227, len(cache.ORIGINAL_GMP_OUTPUTS))
         self.assertEqual(cache.GMP_NATIVE_HOST, 'build/original-gmp/manifest.json' in DECLARED_REQUIRED)
         self.assertIn('original-gmp', cache.BUILD_DIRS)
         for name in cache.ORIGINAL_GMP_OUTPUTS:
