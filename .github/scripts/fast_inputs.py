@@ -36,7 +36,7 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
 MANIFEST_DIRS = """stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
-thread-status thread-label hint-trace thread-inventory boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
+thread-status thread-label hint-trace closure-inspection thread-inventory boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
 narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
@@ -130,6 +130,10 @@ HINT_TRACE_OUTPUTS = frozenset("build/hint-trace/" + name for name in (
     *(f"{stage}/{suffix}" for stage in ("pre", "post")
       for suffix in ("core/HintTraceAudit.json", "hints.audit.json", "traces.audit.json",
                      "event.audit.json", "marker.audit.json", "binary.audit.json", "addressHints.audit.json"))))
+CLOSURE_INSPECTION_OUTPUTS = frozenset("build/closure-inspection/" + name for name in (
+    "manifest.json", "oracle.tsv", "native/oracle", "core/ClosureInspectionAudit.json",
+    *(name + ".audit.json" for name in ("payload", "sizeConsistent", "pointerCount", "notStack",
+                                       "noCCS", "noProvenance", "cleared"))))
 SIMD_WIDE_ARRAY_ENTRIES = tuple(shape + operation + mode
     for shape in ("int8X32","word8X32","int8X64","word8X64","int16X32","word16X32",
                   "int16X16","word16X16","int32X8","word32X8","int32X16","word32X16","int64X4","word64X4","int64X8","word64X8","floatX8","floatX16","doubleX4","doubleX8")
@@ -376,6 +380,7 @@ NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate", "build/fl
     "build/pinned-addresses/native/pinned-address-oracle",
     "build/integer-completion/native/integer-completion-oracle",
     "build/hint-trace/native/oracle",
+    "build/closure-inspection/native/oracle",
     "build/simd-wide-arrays/native/oracle",
     "build/simd128-addresses/native/oracle",
     "build/simd128-arrays/native/oracle",
@@ -1267,6 +1272,8 @@ def allowed_payload(name, pins):
         return name in THREAD_INVENTORY_OUTPUTS
     if parts[1] == "hint-trace":
         return name in HINT_TRACE_OUTPUTS
+    if parts[1] == "closure-inspection":
+        return name in CLOSURE_INSPECTION_OUTPUTS
     if parts[1] == "scalar-memory-utilities":
         return name in SCALAR_MEMORY_OUTPUTS
     if parts[1] == "stable-names":

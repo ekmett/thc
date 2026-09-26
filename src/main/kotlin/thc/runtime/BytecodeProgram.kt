@@ -2305,6 +2305,44 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.endBlock()
                     }
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && fn[1] == "clearCCS#") {
+                CoreProfileAction.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val state = compile(args[1], scope, false)
+                val checked = ProvenExpression(Expression { e ->
+                    e.builder.beginBlock()
+                    e.builder.beginRequireIOState(); state.emit(e); e.builder.endRequireIOState()
+                    e.builder.emitLoadConstant(Unit)
+                    e.builder.endBlock()
+                }, state.proof.copy(evaluated = true))
+                tupleApplication(TupleShape(tupleProof, language), argument(args[0], scope, true), listOf(checked), scope, tail)
+            } else if (fn[0] == "prim" && ClosureInspectOp.named(fn[1] as String) != null) {
+                val operation = ClosureInspectOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, index == 0) }
+                if (operation == ClosureInspectOp.SIZE) ProvenExpression(Expression { e ->
+                    e.builder.beginClosureSize(); operands[0].emit(e); e.builder.endClosureSize()
+                }, tupleProof.copy(evaluated = true))
+                else tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    when (operation) {
+                        ClosureInspectOp.UNPACK -> {
+                            b.beginUnpackClosure(destination[0], destination[1], destination[2])
+                            operands[0].emit(e); b.endUnpackClosure()
+                        }
+                        ClosureInspectOp.AP_STACK -> {
+                            b.beginGetApStackVal(destination[0], destination[1])
+                            operands[0].emit(e); operands[1].emit(e); b.endGetApStackVal()
+                        }
+                        ClosureInspectOp.CCS -> {
+                            b.beginGetCurrentCCS(destination[0]); operands[1].emit(e); b.endGetCurrentCCS()
+                        }
+                        ClosureInspectOp.WHERE -> {
+                            b.beginWhereFrom(destination[0])
+                            operands[1].emit(e); operands[2].emit(e); b.endWhereFrom()
+                        }
+                        ClosureInspectOp.SIZE -> error("Scalar closureSize#")
+                    }
+                }
             } else if (fn[0] == "prim" && fn[1] == "getCurrentCCS#") {
                 CoreCurrentCCS.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 argument(args[0], scope, true) // Compile/prove the lifted dummy, never enter it.

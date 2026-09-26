@@ -2466,6 +2466,18 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     "killThread#" -> KillThread(operands[0], operands[1], operands[2], enableAsync, tupleProof)
                     else -> LabelThread(operands[0], operands[1], operands[2], tupleProof)
                 }
+            } else if (fn[0] == "prim" && fn[1] == "clearCCS#") {
+                CoreProfileAction.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                // There is no profiling CCS on this target. Invoke the action,
+                // preserving its lazy result and ordinary continuation machinery.
+                TupleApplication(language as thc.Language, TupleShape(tupleProof, language),
+                    argument(args[0], scope, true), arrayOf(InspectionState(compile(args[1], scope, false))),
+                    tail, metrics).proven(tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && ClosureInspectOp.named(fn[1] as String) != null) {
+                val operation = ClosureInspectOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                ClosureInspectExpression(operation,
+                    args.mapIndexed { index, value -> argument(value, scope, index == 0) }.toTypedArray(), tupleProof)
             } else if (fn[0] == "prim" && fn[1] == "getCurrentCCS#") {
                 CoreCurrentCCS.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 GetCurrentCCS(argument(args[0], scope, true), argument(args[1], scope, false), tupleProof)

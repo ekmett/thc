@@ -153,6 +153,7 @@ tasks.withType<Test>().configureEach {
             "delimited-continuations/**/*.json", "delimited-continuations/commands/**",
             "thread-label/**/*.json", "thread-label/oracle.txt",
             "hint-trace/**/*.json", "hint-trace/oracle.tsv", "hint-trace/native/**",
+            "closure-inspection/**/*.json", "closure-inspection/oracle.tsv", "closure-inspection/native/oracle",
             "uncaught-self/**/*.json", "uncaught-self/native/oracle",
             "mask-functions/**/*.json", "mask-functions/logs/*.stdout", "mask-functions/logs/*.stderr",
             "mask-functions/native/oracle",

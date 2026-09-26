@@ -6,12 +6,12 @@ GHC 9.14.1 exposes **1491 primops** on the pinned 64-bit target. This list is
 generated from `allThePrimOps`, the [runtime capabilities](../scripts/core-capabilities.json)
 and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signatures.json).
 
-**Implementation coverage: 1383 / 1491 (92.8%).**
+**Implementation coverage: 1389 / 1491 (93.2%).**
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Implemented | 1383 | A runtime implementation is registered in the capability inventory. |
-| Missing | 108 | No runtime implementation is registered. |
+| Implemented | 1389 | A runtime implementation is registered in the capability inventory. |
+| Missing | 102 | No runtime implementation is registered. |
 
 Implemented means translating the GHC operation to a sensible runtime implementation and
 checking it with ordinary tests. It does not require formal proof or exhaustive input testing.
@@ -196,10 +196,12 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `catchRetry#` — arity 3 — STM operation
 - [x] `catchSTM#` — arity 3 — STM operation
 - [x] `chr#` — arity 1 — Numeric scalar signature
+- [x] `clearCCS#` — arity 2 — Specialized lowering
 - [x] `cloneArray#` — arity 3 — Boxed-array operation
 - [x] `cloneMutableArray#` — arity 4 — Boxed-array operation
 - [x] `cloneSmallArray#` — arity 3 — Boxed-array operation
 - [x] `cloneSmallMutableArray#` — arity 4 — Boxed-array operation
+- [x] `closureSize#` — arity 1 — Specialized lowering
 - [x] `clz#` — arity 1 — Numeric scalar signature
 - [x] `clz16#` — arity 1 — Numeric scalar signature
 - [x] `clz32#` — arity 1 — Numeric scalar signature
@@ -325,6 +327,8 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `geWord32#` — arity 2 — Numeric scalar signature
 - [x] `geWord64#` — arity 2 — Numeric scalar signature
 - [x] `geWord8#` — arity 2 — Numeric scalar signature
+- [x] `getApStackVal#` — arity 2 — Specialized lowering
+- [x] `getCCSOf#` — arity 2 — Specialized lowering
 - [x] `getCurrentCCS#` — arity 2 — Specialized lowering
 - [x] `getMaskingState#` — arity 1 — Specialized lowering
 - [x] `getSizeofMutableByteArray#` — arity 2 — Byte-array operation
@@ -1221,6 +1225,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `uncheckedShiftRLWord32#` — arity 2 — Numeric scalar signature
 - [x] `uncheckedShiftRLWord8#` — arity 2 — Numeric scalar signature
 - [x] `unmaskAsyncExceptions#` — arity 2 — Specialized lowering
+- [x] `unpackClosure#` — arity 1 — Specialized lowering
 - [x] `unpackDoubleX2#` — arity 1 — Specialized lowering
 - [x] `unpackDoubleX4#` — arity 1 — Specialized lowering
 - [x] `unpackDoubleX8#` — arity 1 — Specialized lowering
@@ -1259,6 +1264,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `unsafeThawSmallArray#` — arity 2 — Boxed-array operation
 - [x] `waitRead#` — arity 2 — Specialized lowering
 - [x] `waitWrite#` — arity 2 — Specialized lowering
+- [x] `whereFrom#` — arity 3 — Specialized lowering
 - [x] `word16ToInt16#` — arity 1 — Numeric scalar signature
 - [x] `word16ToWord#` — arity 1 — Numeric scalar signature
 - [x] `word2Double#` — arity 1 — Numeric scalar signature
@@ -1474,8 +1480,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `addrToAny#` — arity 1
 - [ ] `annotateStack#` — arity 3
 - [ ] `anyToAddr#` — arity 2
-- [ ] `clearCCS#` — arity 2
-- [ ] `closureSize#` — arity 1
 - [ ] `compactAdd#` — arity 3
 - [ ] `compactAddWithSharing#` — arity 3
 - [ ] `compactAllocateBlock#` — arity 3
@@ -1489,8 +1493,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `compactSize#` — arity 2
 - [ ] `delay#` — arity 2
 - [ ] `forkOn#` — arity 3
-- [ ] `getApStackVal#` — arity 2
-- [ ] `getCCSOf#` — arity 2
 - [ ] `getSpark#` — arity 1
 - [ ] `mkApUpd0#` — arity 1
 - [ ] `newBCO#` — arity 6
@@ -1577,7 +1579,5 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `shuffleWord8X32#` — arity 3
 - [ ] `shuffleWord8X64#` — arity 3
 - [ ] `spark#` — arity 2
-- [ ] `unpackClosure#` — arity 1
-- [ ] `whereFrom#` — arity 3
 
 </details>

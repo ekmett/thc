@@ -278,6 +278,11 @@ class CaptureLayout private constructor(language: TruffleLanguage<*>, primitiveE
     /** The call site's constant layout lets Graal fold StaticProperty offsets. */
     fun read(environment: CapturedFrame, index: Int): Any? = checkedField(environment, index).read(environment)
 
+    internal fun inspect(environment: CapturedFrame, index: Int): Any? {
+        val field = checkedField(environment, index)
+        return field.vector?.restoreRaw(environment) ?: field.read(environment)
+    }
+
     /** Primitive reads and writes stay together so temporary boxes can disappear. */
     fun restore(environment: CapturedFrame, index: Int, frame: Frame, slot: Int) {
         checkedField(environment, index).restore(environment, frame, slot)

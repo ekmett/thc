@@ -239,6 +239,10 @@ class DataLayout private constructor(
         return fields[index].read(value)
     }
 
+    /** Cold closure inspection preserves a raw vector field instead of entering it. */
+    internal fun inspect(value: DataValue, index: Int): Any? =
+        if (isVector(index)) checkedVector(value, index).restoreRaw(value) else read(value, index)
+
     /** The RTS selector in atomicModifyMutVar2# requires a lifted first field. */
     internal fun readFirstLifted(value: DataValue): Any? {
         if (fields.firstOrNull()?.isLifted != true)

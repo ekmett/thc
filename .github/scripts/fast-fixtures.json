@@ -141,6 +141,14 @@
         "test/haskell-fixtures/ThreadInventoryFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
+    "closure-inspection": {
+      "junit": ["thc.runtime.ClosureInspectionTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "closure-inspection"]}],
+      "outputs": ["build/closure-inspection"],
+      "sources": ["compiler/test-fixtures/ClosureInspectionAudit.hs", "compiler/test-fixtures/ClosureInspectionNative.hs",
+        "test/haskell-fixtures/ClosureInspectionFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "hint-trace": {
       "junit": ["thc.runtime.HintTraceTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "hint-trace"]}],
