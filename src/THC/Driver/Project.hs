@@ -40,6 +40,7 @@ import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, wa
 import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.ForeignBitcode (linkClockGetTime)
+import THC.Driver.GhcProxy (ghcProxyCommand)
 import THC.Driver.NativeRecipe (componentRoots, ensureNativeRecipes)
 import THC.Driver.ScalarBitcode (ScalarBitcode, withScalarBitcode, scalarBuildInputs, linkScalarBitcode)
 import THC.Driver.Installed
@@ -182,7 +183,7 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
       nativeArguments = cabalArgs ++ ["--with-compiler", proxy, "--with-hc-pkg", packageTool]
   createDirectoryIfMissing True (takeDirectory proxy)
   let wrapper = "#!/bin/sh\n# compiler " ++ shaHex (BL.toStrict (encode (ghc, packageTool))) ++
-        "\nexec \"$THC_PROXY_DRIVER\" ghc-proxy \"$@\"\n"
+        "\n" ++ ghcProxyCommand
   exists <- doesFileExist proxy
   unchanged <- if exists then (== wrapper) <$> readFile proxy else pure False
   unless unchanged (writeFile proxy wrapper)
@@ -789,7 +790,7 @@ captureGlobalUnits context project target requested missing = do
                      "--enable-build-info", "--project-file", "cabal.project",
                      "--builddir", dist, "--with-compiler", wrapper] ++
                     maybe [] (\path -> ["--with-hc-pkg", path]) (contextGhcPkg context)
-    writeFile wrapper "#!/bin/sh\nexec \"$THC_PROXY_DRIVER\" ghc-proxy \"$@\"\n"
+    writeFile wrapper ("#!/bin/sh\n" ++ ghcProxyCommand)
     permissions <- getPermissions wrapper
     setPermissions wrapper (permissions {Directory.executable = True})
     inherited <- getEnvironment
