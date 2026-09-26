@@ -196,7 +196,7 @@ enum class MaskingState(val tag: Long) {
 }
 
 object SynchronousMasking {
-    @JvmStatic @TruffleBoundary fun current(node: Node): MaskingState = Language.currentState(node).maskingState.get()
+    @JvmStatic fun current(node: Node): MaskingState = Language.currentState(node).threadMaskingState.get().value
     @JvmStatic @TruffleBoundary fun set(node: Node, state: MaskingState) {
         Language.currentState(node).maskingState.set(state)
     }

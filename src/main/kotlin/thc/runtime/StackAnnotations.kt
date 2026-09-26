@@ -69,8 +69,8 @@ internal object StackAnnotations {
             fault("annotateStack#: expected a lazy lifted annotation and State action")
         CoreProfileAction.validate(arguments.drop(1), flags.drop(1), result)
     }
-    @JvmStatic @TruffleBoundary fun current(node: Node?): StackAnnotationState =
-        Language.currentState(node).stackAnnotations.get()
+    @JvmStatic fun current(node: Node?): StackAnnotationState =
+        Language.currentState(node).threadAnnotations.get().value
     @JvmStatic @TruffleBoundary fun set(node: Node?, state: StackAnnotationState) {
         Language.currentState(node).stackAnnotations.set(state)
     }

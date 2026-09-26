@@ -39,6 +39,22 @@ the child and releases the sender. At a public host entry, an uncaught delivery
 becomes a guest exception with the original payload. A completed target is a successful no-op.
 Only one request is claimed at a time; queued requests retain their order.
 
+The ordinary bytecode poll reads a Truffle context-thread-local cell and the
+target's volatile pending flag. The cell follows nested guest entry and is
+cleared when the carrier leaves its final guest entry. Claiming remains a cold
+locked operation that rechecks ownership, foreign-call permission, masking and
+FIFO state. This keeps Java `ThreadLocal` initialization and map maintenance out
+of compiled guest loops without disabling asynchronous delivery. See the
+[September 26 investigation](../bench/results/performance-regressions-20260926/README.md)
+for the graph regression and native-result checks.
+
+Masking and stack-annotation reads likewise use context-thread-local mutable
+cells. Boundary setters and the thread registry's legacy `ThreadLocal` interface
+update those same cells; they are not cached copies of guest state. Leaving a
+carrier resets its masking cell, and different contexts/carriers do not share
+cells. This keeps root-entry snapshots and continuation checks from crossing a
+boundary into Java thread-local map lookups on ordinary calls.
+
 ## Saved evaluation
 
 A bytecode Yield or AST capture materializes the frame on the interruption

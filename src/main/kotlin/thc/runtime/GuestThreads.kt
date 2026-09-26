@@ -76,7 +76,7 @@ internal class GuestThreads internal constructor(
         }
     )
 
-    private class GuestThread(val thread: Thread, val identity: GuestThreadId, val externalAsync: Boolean) {
+    internal class GuestThread(val thread: Thread, val identity: GuestThreadId, val externalAsync: Boolean) {
         val entriesPrevious = ArrayDeque<GuestEntry>()
         val queue = ArrayDeque<AsyncRequest>()
         var claimed: AsyncRequest? = null
@@ -84,7 +84,12 @@ internal class GuestThreads internal constructor(
         @Volatile var pending = false
     }
 
-    private class GuestEntry(val active: GuestThreadId?, val status: GuestThreadStatus)
+    internal class GuestEntry(val active: GuestThreadId?, val status: GuestThreadStatus)
+    /** Stable per-context/carrier cell, including between nested guest entries. */
+    internal class PollState { internal var current: GuestThread? = null }
+    private val pollStates = WeakHashMap<Thread, PollState>()
+    @TruffleBoundary @Synchronized internal fun pollState(thread: Thread): PollState =
+        pollStates.getOrPut(thread) { PollState() }
     private val threads = HashMap<Long, GuestThread>()
     // Weak keys release dead Java carriers; retained IDs keep their assigned
     // capability, which other carriers may also use.
@@ -183,6 +188,7 @@ internal class GuestThreads internal constructor(
         activeIdentity.set(slot.identity)
         slot.entries++
         currentSlot.set(slot)
+        pollState(current).current = slot
         enterGuestPermission()
         return id
     }
@@ -309,8 +315,14 @@ internal class GuestThreads internal constructor(
     /** Called only at a real continuation cut; masked requests stay queued in FIFO order. */
     fun poll(node: Node, interruptible: Boolean = false): AsyncRequest? {
         val slot = currentSlot.get() ?: return null
+        return poll(slot, node, interruptible)
+    }
+
+    private fun poll(slot: GuestThread, node: Node, interruptible: Boolean): AsyncRequest? {
         if (!slot.pending) return null
-        if (delivery.get()?.permission != DeliveryPermission.GUEST) return null
+        // claim rechecks ownership, permission, masking and queue state under
+        // the registry lock. Keep the ThreadLocal delivery lookup on that cold
+        // boundary; its initialization/cleanup must not expand every guest loop.
         return claim(slot, node, interruptible)
     }
 
@@ -379,6 +391,7 @@ internal class GuestThreads internal constructor(
         }
         if (currentSlot.get()?.entries == 0) {
             currentSlot.remove()
+            pollState(Thread.currentThread()).current = null
             maskingState.remove()
         }
         finished.forEach { it.finish(AsyncRequestState.TARGET_FINISHED) }
@@ -389,6 +402,8 @@ internal class GuestThreads internal constructor(
     @TruffleBoundary fun close() {
         val remaining = synchronized(this) {
             closed = true
+            pollStates.values.forEach { it.current = null }
+            pollStates.clear()
             mainThreadWeak = null
             labels.clear()
             knownThreads.clear()
@@ -471,8 +486,11 @@ internal class GuestThreads internal constructor(
         internal fun blocking(status: GuestThreadStatus): GuestThreadExtent = enterStatus(activeIdentity.get(), status)
 
         /** Java-callable poll for bytecode roots; it never delivers from a wake action. */
-        @JvmStatic fun pollCurrent(node: Node, interruptible: Boolean): AsyncRequest? =
-            Language.currentState(node).threads.poll(node, interruptible)
+        @JvmStatic fun pollCurrent(node: Node, interruptible: Boolean): AsyncRequest? {
+            val context = Language.currentState(node)
+            val slot = context.threadPollState.get().current ?: return null
+            return context.threads.poll(slot, node, interruptible)
+        }
     }
 }
 

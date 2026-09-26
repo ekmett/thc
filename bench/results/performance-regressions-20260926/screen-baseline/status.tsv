@@ -1,0 +1,16 @@
+scalar-bytecode-false-reference	0
+scalar-bytecode-false-baseline	0
+scalar-bytecode-true-reference	0
+scalar-bytecode-true-baseline	0
+scalar-ast-false-reference	0
+scalar-ast-false-baseline	0
+scalar-ast-true-reference	0
+scalar-ast-true-baseline	0
+map-bytecode-false-reference	0
+map-bytecode-false-baseline	1
+map-bytecode-true-reference	0
+map-bytecode-true-baseline	1
+map-ast-false-reference	0
+map-ast-false-baseline	0
+map-ast-true-reference	0
+map-ast-true-baseline	0

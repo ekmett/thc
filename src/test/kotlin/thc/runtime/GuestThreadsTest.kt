@@ -20,6 +20,40 @@ import java.util.concurrent.atomic.AtomicReference
 class GuestThreadsTest {
     private val node = object : Node() {}
 
+    @Test fun pollCellRetainsNestedEntriesButSeparatesContextsAndClearsCompletedTargets() {
+        val outer = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }) { }
+        val inner = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }) { }
+        val carrier = Thread.currentThread()
+        val outerCell = outer.pollState(carrier)
+        val innerCell = inner.pollState(carrier)
+        assertFalse(outerCell === innerCell)
+        assertNull(outerCell.current)
+        outer.enterCurrent()
+        val original = outerCell.current!!
+        try {
+            assertSame(outerCell, outer.pollState(carrier))
+            outer.enterCurrent()
+            try { assertSame(original, outerCell.current) }
+            finally { outer.leaveCurrent() }
+            assertSame(original, outerCell.current)
+            inner.enterCurrent()
+            try {
+                assertFalse(original === innerCell.current)
+                assertSame(original, outerCell.current)
+            } finally { inner.leaveCurrent() }
+            assertNull(innerCell.current)
+        } finally { outer.leaveCurrent() }
+        assertNull(outerCell.current)
+        outer.enterCurrent()
+        try {
+            assertSame(outerCell, outer.pollState(carrier))
+            assertFalse(original === outerCell.current)
+        } finally { outer.leaveCurrent() }
+        assertNull(outerCell.current)
+        outer.close()
+        inner.close()
+    }
+
     @Test fun nonresumableForkRejectsExternalSendBeforeWakeButAllowsSelfAndDeadTargets() {
         val masks = ThreadLocal.withInitial { MaskingState.UNMASKED }
         val wakes = AtomicInteger()

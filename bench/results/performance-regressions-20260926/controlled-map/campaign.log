@@ -1,0 +1,48 @@
+map-check	bytecode-false	0
+map-phases	bytecode-false	0
+map-check	bytecode-true	0
+map-phases	bytecode-true	0
+map-check	ast-false	0
+map-phases	ast-false	0
+map-check	ast-true	0
+map-phases	ast-true	0
+1-bytecode-false-baseline	0
+1-bytecode-false-fast-state	0
+1-bytecode-true-baseline	0
+1-bytecode-true-fast-state	0
+1-ast-false-baseline	0
+1-ast-false-fast-state	0
+1-ast-true-baseline	0
+1-ast-true-fast-state	0
+2-bytecode-false-fast-state	0
+2-bytecode-false-baseline	0
+2-bytecode-true-fast-state	0
+2-bytecode-true-baseline	0
+2-ast-false-fast-state	0
+2-ast-false-baseline	0
+2-ast-true-fast-state	0
+2-ast-true-baseline	0
+3-bytecode-false-baseline	0
+3-bytecode-false-fast-state	0
+3-bytecode-true-baseline	0
+3-bytecode-true-fast-state	0
+3-ast-false-baseline	0
+3-ast-false-fast-state	0
+3-ast-true-baseline	0
+3-ast-true-fast-state	0
+4-bytecode-false-fast-state	0
+4-bytecode-false-baseline	0
+4-bytecode-true-fast-state	0
+4-bytecode-true-baseline	0
+4-ast-false-fast-state	0
+4-ast-false-baseline	0
+4-ast-true-fast-state	0
+4-ast-true-baseline	0
+Fork 1/3, position 1/3: baseline starting
+Fork 1/3: baseline validated; 1,601,344.7 ns/call; process 37.9s
+Fork 1/3, position 2/3: candidate starting
+Fork 1/3: candidate validated; 2,851,561.0 ns/call; process 55.5s
+Fork 1/3, position 3/3: native starting
+Fork 1/3: native validated; 1,344,412.0 ns/call; process 11.4s
+Fork 2/3, position 1/3: candidate starting
+Comparison failed: Command '['/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java', '-XX:+UseCompactObjectHeaders', '-Xmx4g', '-Dthc.handoffSlabs=false', '--add-modules=jdk.incubator.vector', '--enable-native-access=ALL-UNNAMED', '-Xss2m', '-Dthc.traceCompilation=true', '-Dthc.diagnosticUnsupported=true', '-Dthc.minimumWarmCalls=12000', '-Dthc.backend=bytecode', '-cp', '/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/annotations-13.0.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/antlr4-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/collections-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/jniutils-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/llvm-api-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/llvm-language-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/llvm-language-native-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/llvm-language-native-resources-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/llvm-language-nfi-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/nativeimage-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/polyglot-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/thc-0.1-experiment.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/truffle-api-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/truffle-nfi-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/truffle-nfi-libffi-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/truffle-nfi-panama-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/lib/word-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/fast-state/thc-tools.jar', 'thc.ProbeKt', '/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.BitUtil.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.BitQueue.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.Prelude.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.PtrEquality.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.StrictMaybe.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.StrictPair.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.EqOrdUtil.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Set.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Internal.Debug.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Strict.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Strict.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/THC.MapWorkload.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/THC.InterfaceClosure.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.Internal.CString.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.Internal.Err.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.InterfaceClosure.json', 'mapAggregate', '--steady', '15', '2', '5', '10000']' returned non-zero exit status 1.
