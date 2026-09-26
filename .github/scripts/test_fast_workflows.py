@@ -28,6 +28,23 @@ def embedded_python(delimiter):
 
 
 class FastWorkflowGuardsTest(unittest.TestCase):
+    def test_windows_ci_covers_direct_main_pushes_and_preserves_evidence(self):
+        workflow = (WORKFLOW.parent / "windows.yml").read_text()
+        self.assertIn("  push:\n    branches: [main]", workflow)
+        self.assertIn("  pull_request:\n    branches: [main]", workflow)
+        self.assertIn("  workflow_dispatch:", workflow)
+        self.assertIn("runs-on: windows-2025", workflow)
+        self.assertIn("  contents: read", workflow)
+        self.assertIn("persist-credentials: false", workflow)
+        self.assertIn("group: native-windows-${{ github.event.pull_request.number || github.ref }}", workflow)
+        self.assertIn("cancel-in-progress: false", workflow)
+        self.assertIn("scripts/windows.ps1 -Action Test -Jobs 4", workflow)
+        self.assertIn("} *>&1 | Tee-Object build/windows-ci.log", workflow)
+        self.assertIn("if: always()", workflow)
+        self.assertIn("build/test-results/windows*SmokeTest/", workflow)
+        self.assertNotIn("pull_request_target:", workflow)
+        self.assertNotIn("continue-on-error:", workflow)
+
     def test_stdio_checks_use_haskell_and_kotlin_not_a_python_test_family(self):
         workflow = (WORKFLOW.parent / "build.yml").read_text()
         block = workflow.split("name: Check merged fixture and runtime recipes with and without assertions", 1)[1].split("      - name:", 1)[0]

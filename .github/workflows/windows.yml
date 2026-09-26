@@ -2,11 +2,18 @@
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 name: Native Windows smoke
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: native-windows-${{ github.event.pull_request.number || github.ref }}
+  # Let an active run finish even while manual integrations keep main moving.
+  # GitHub retains the newest pending run for the same branch/PR.
+  cancel-in-progress: false
 jobs:
   windows:
     runs-on: windows-2025
@@ -23,10 +30,12 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $env:THC_PYTHON = (Get-Command python.exe).Source
-          . ./scripts/bootstrap-windows.ps1 -Prefix "$env:RUNNER_TEMP/thc-tools"
-          Invoke-ThcTool $env:CABAL @('update')
           New-Item -ItemType Directory -Force build | Out-Null
-          & ./scripts/windows.ps1 -Action Test -Jobs 4 *>&1 | Tee-Object build/windows-ci.log
+          & {
+            . ./scripts/bootstrap-windows.ps1 -Prefix "$env:RUNNER_TEMP/thc-tools"
+            Invoke-ThcTool $env:CABAL @('update')
+            & ./scripts/windows.ps1 -Action Test -Jobs 4
+          } *>&1 | Tee-Object build/windows-ci.log
       - name: Preserve native evidence
         if: always()
         uses: actions/upload-artifact@v7.0.1

@@ -98,6 +98,11 @@ artifact hashes), build/managed-md5-native (old attempts retained),
 build/windows-launcher, build/windows-driver, build/test-results, and build/reports/tests. Fixture
 provenance is checked by the JVM tests. The separate Native Windows smoke CI
 workflow uses this same command and uploads evidence on failure as well as success.
+It runs on pushes to `main`, pull requests targeting `main`, and manual dispatch.
+Runs use GitHub-hosted `windows-2025` machines with the pinned toolchain; no
+Windows runner service or secrets are required on a development PC. An active
+run finishes while newer commits wait, avoiding cancellation starvation during
+frequent integrations. The CI result is informative, not a manual-merge gate.
 
 ## Current boundaries
 
