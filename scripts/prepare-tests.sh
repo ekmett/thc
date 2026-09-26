@@ -86,6 +86,7 @@ python3 scripts/prepare-synchronous-exceptions.py
 "$fixture_bin" uncaught-self
 "$fixture_bin" mask-functions
 "$fixture_bin" interface-core
+"$fixture_bin" record-fields
 python3 scripts/prepare-managed-md5.py
 "$fixture_bin" original-stdio --require-supported
 "$fixture_bin" original-stdio-read
