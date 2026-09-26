@@ -61,7 +61,7 @@ class Audit:
         self.literals = {}
         self.used_constructors = {}
         self.reachable = []
-        self.chains = {}
+        self.predecessors = {}
         self.queue = deque()
         self.linked_foreign = {}
         self.package_scalar_links = {}
@@ -159,6 +159,16 @@ class Audit:
 
     def location(self, owner, path):
         return dict(owner=owner, path=path)
+
+    def reachable_via(self, key):
+        # Discovery records a forest, even when the dependency graph has cycles.
+        # Expand a witness only for a diagnostic, not for every reached binding.
+        chain = []
+        while key is not None:
+            chain.append(key)
+            key = self.predecessors[key]
+        chain.reverse()
+        return chain
 
     def representation(self, rep, owner, path):
         if not isinstance(rep, dict):
@@ -288,8 +298,8 @@ class Audit:
         location = self.location(owner, path)
         self.edges.append(dict(caller=owner, dependency=key, path=path))
         if key in self.bindings:
-            if key not in self.chains:
-                self.chains[key] = self.chains[owner] + [key]
+            if key not in self.predecessors:
+                self.predecessors[key] = owner
                 self.queue.append(key)
         elif key not in self.cap.get('externalBindings', []):
             self.missing.setdefault(key, []).append(location)
@@ -2155,14 +2165,14 @@ class Audit:
                         self.issue('aggregate-boundary', key, '/entry', 'unboxed-tuple host result')
                 if is_sum(self.known_result(expression)) or is_sum(self.bindings[key].get('rep')):
                     self.issue('aggregate-boundary', key, '/entry', 'unboxed-sum host result')
-                if key not in self.chains:
-                    self.chains[key] = [key]
+                if key not in self.predecessors:
+                    self.predecessors[key] = None
                     self.queue.append(key)
         # Retention does not call an export. The current backends must still
         # lower its closure body, so unsupported retained bodies remain gaps.
         for key in self.retained_exports:
-            if key not in self.chains:
-                self.chains[key] = [key]
+            if key not in self.predecessors:
+                self.predecessors[key] = None
                 self.queue.append(key)
         reported_archives = set()
         while self.queue:
@@ -2181,15 +2191,15 @@ class Audit:
                 self.issue('unknown-binder-levity', key, '/binding', key)
             self.walk(binding.get('expr'), {}, key, '/expr', join_prefix=binding.get('joinValueArity', 0))
         for issue in self.issues:
-            if issue['owner'] in self.chains:
-                issue['reachableVia'] = self.chains[issue['owner']]
-        missing = [dict(id=key, reachableVia=self.chains[uses[0]['owner']] + [key], references=uses)
+            if issue['owner'] in self.predecessors:
+                issue['reachableVia'] = self.reachable_via(issue['owner'])
+        missing = [dict(id=key, reachableVia=self.reachable_via(uses[0]['owner']) + [key], references=uses)
                    for key, uses in sorted(self.missing.items())]
-        return dict(schema=1, audit='syntactic-reachable-core', roots=roots, retainedExports=self.retained_exports,
+        return dict(schema=2, audit='syntactic-reachable-core', roots=roots, retainedExports=self.retained_exports,
                     capabilityProfile=self.cap.get('name'), accepted=not self.issues and not missing,
                     summary=dict(suppliedBindings=len(self.bindings), reachableBindings=len(self.reachable),
                                  missingGlobals=len(missing), issues=len(self.issues)),
-                    reachableBindings=[dict(id=k, source=self.sources[k], reachableVia=self.chains[k]) for k in self.reachable],
+                    reachableBindings=[dict(id=k, source=self.sources[k], predecessor=self.predecessors[k]) for k in self.reachable],
                     dependencies=self.edges, missingGlobals=missing,
                     runtimeExternals=[dict(id=key, uses=[edge for edge in self.edges if edge['dependency'] == key])
                                       for key in sorted((set(self.cap.get('externalBindings', [])) - self.bindings.keys()) & {edge['dependency'] for edge in self.edges})],

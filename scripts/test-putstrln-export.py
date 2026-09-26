@@ -90,6 +90,24 @@ class RecipeTests(unittest.TestCase):
         self.assertEqual(available["unsupportedPrimitives"], ["takeMVar#"])
         self.assertEqual(available["addressAndUnsupportedLiterals"][0]["value"], "&enabled_capabilities")
 
+    def test_inventory_reconstructs_compact_paths_and_reads_historical_reports(self):
+        core = {"bindings": [{"id": "leaf", "expr": [
+            {"foreignCall": {"symbol": "fdReady", "safety": "safe"}}]}]}
+        base = {"summary": {}, "issues": [], "missingGlobals": []}
+        compact = dict(base, schema=2, reachableBindings=[
+            {"id": "root", "predecessor": None}, {"id": "middle", "predecessor": "root"},
+            {"id": "leaf", "predecessor": "middle"}])
+        historical = dict(base, schema=1, reachableBindings=[
+            {"id": key, "reachableVia": ["root", "middle", "leaf"][:index + 1]}
+            for index, key in enumerate(("root", "middle", "leaf"))])
+        result = inventory(core, compact, True)
+        self.assertEqual(inventory(core, historical, True), result)
+        self.assertEqual(["root", "middle", "leaf"], result["foreignDeclarations"][0]["exampleChain"])
+        for invalid in ("absent", "leaf"):
+            compact["reachableBindings"][1]["predecessor"] = invalid
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(ValueError, "reachability predecessor"):
+                inventory(core, compact, True)
+
     def test_generated_sources_reject_failure_and_tampering(self):
         module = "GHC.Internal.Heap.Constants"
         original = self.root / "libraries/ghc-internal/src/GHC/Internal/Heap/Constants.hsc"

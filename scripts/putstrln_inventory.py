@@ -12,7 +12,21 @@ from putstrln_export import ROOT, digest, read, recipe_hashes, require, verify_h
 
 
 def inventory(core, audit, metadata_available):
-    reachable = {b["id"]: b["reachableVia"] for b in audit["reachableBindings"]}
+    reachable = {b["id"]: b for b in audit["reachableBindings"]}
+
+    def example_chain(owner):
+        # Historical reports carry expanded paths; schema 2 shares prefixes
+        # through predecessor references. Only requested examples need expansion.
+        chain, seen = [], set()
+        while owner is not None:
+            require(owner in reachable and owner not in seen, "Invalid audit reachability predecessor")
+            seen.add(owner)
+            binding = reachable[owner]
+            if "reachableVia" in binding:
+                return binding["reachableVia"] + list(reversed(chain))
+            chain.append(owner)
+            owner = binding["predecessor"]
+        return list(reversed(chain))
     declarations, literals = {}, defaultdict(set)
 
     def walk(value, owner):
@@ -37,7 +51,7 @@ def inventory(core, audit, metadata_available):
     foreign = []
     for _, record in sorted(declarations.items()):
         record["owners"] = sorted(record["owners"])
-        record["exampleChain"] = reachable[record["owners"][0]]
+        record["exampleChain"] = example_chain(record["owners"][0])
         foreign.append(record)
     return {"summary": audit["summary"],
             "issueCounts": dict(Counter(i["code"] for i in audit["issues"])),
