@@ -77,7 +77,34 @@ thc run . --exe lens-thc-check:exe:lens-properties \
   -- --num-threads=1 --color=never --quickcheck-replay=20260926
 ```
 
-Guest execution is being checked. Native success alone is not a THC success
-claim; preserve `audit.json`, `packages.json`, native receipts and Core ZIPs
-when investigating an acquisition, admission or runtime failure. The ordinary
-driver executes IO entries in the interpreter, not as a compiled-entry proof.
+## Verified guest public-API workload
+
+On Linux x86-64, runtime `16d4aafe` runs the unchanged `LensExamples.hs` and
+original `lens` library with full executable startup/shutdown in both backends
+and both handoff modes. All four runs match the independent native stdout:
+`lens-public-api: 14 checks passed`. A fresh strict audit of the retained package
+capture accepts 139,723 supplied bindings and 2,155 reachable bindings, with
+zero missing globals and zero issues. No source or capture was rewritten to
+obtain this result, and no dependencies were re-exported for the replay.
+
+AST full startup requires explicit asynchronous-exception support. After the
+`lens-public-api` acquisition above, its original generated main and shutdown
+can be launched from the cached manifest:
+
+```sh
+THC_BACKEND=ast THC_OPTS='-Dthc.asyncExceptions=true -Dthc.handoffSlabs=false' \
+  "$THC_ROOT/build/install/thc/bin/thc" \
+  --run-executable "@$THC_ROOT/build/lens/public-api/packages.json" \
+  main::Main.main ghc-internal:GHC.Internal.TopHandler.flushStdHandles -- \
+  lens-public-api
+```
+
+`-Dthc.handoffSlabs=true` also passes. The tested Linux launcher supplies
+`-Xrs` for its original GHC signal registrations. These are application
+execution/result checks, not a whole-program JIT-retention proof.
+
+The 55 upstream HUnit tests, 25 upstream properties and template suite still
+have only the native results recorded above; this checkpoint does not claim
+their guest execution. Preserve `audit.json`, `packages.json`, native receipts
+and Core ZIPs when investigating further acquisition, admission or runtime
+failures.

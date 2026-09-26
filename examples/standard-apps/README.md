@@ -8,7 +8,9 @@ baselines, never evidence that the application ran under THC.
 The [lens recipe](lens/README.md) adds public-API traversal, prism and state
 examples plus the unchanged upstream HUnit, property and Template Haskell
 tests. Its native baseline passes 14 example checks, 55 unit tests and 25
-properties; guest results are recorded separately in that recipe.
+properties. The 14 public-API checks also pass actual THC full startup/shutdown
+in both backends and handoff modes; the exact opt-in and remaining upstream
+guest-suite limits are recorded separately in that recipe.
 
 ## Recorded baseline
 
