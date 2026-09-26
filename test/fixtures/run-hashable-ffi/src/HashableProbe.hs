@@ -30,11 +30,15 @@ lengthFor choice = case choice of
   10 -> 4097
   _ -> 79
 
+-- Keep input construction at a separate genuine Core call boundary. The
+-- runtime compiler may still choose to inline that call independently of GHC.
+{-# NOINLINE bytesFor #-}
 bytesFor :: Int -> B.ByteString
 bytesFor choice =
   let source = B.pack (take (lengthFor choice + 23) (cycle [0,255,1,127,128,65,240,159,154,128,10]))
   in B.take (lengthFor choice) (B.drop (if choice == 11 then 13 else 0) source)
 
+{-# NOINLINE textFor #-}
 textFor :: Int -> T.Text
 textFor choice =
   let source = T.pack (take (lengthFor choice + 23) (cycle "a\0\x3bb\x1f680\x4e2d\x301\n"))

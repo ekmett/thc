@@ -529,7 +529,8 @@ for ((taskName, dense) in listOf("hashableFfiFullCoreDefault" to false, "hashabl
     tasks.register<Test>(taskName) {
         group = "verification"
         description = "Tests original Hashable byte-backed instances against native GHC, including first compiled entries."
-        maxHeapSize = "4g"
+        // The genuine manifest includes full original boot-library Core.
+        maxHeapSize = "8g"
         testClassesDirs = fullCoreTests.output.classesDirs
         classpath = fullCoreTests.runtimeClasspath
         inputs.files(fileTree("build/hashable-ffi") { include("**/*.json", "bundles/*.zip", "logs/*.stdout", "logs/*.stderr") })

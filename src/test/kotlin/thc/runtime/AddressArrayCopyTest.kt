@@ -248,13 +248,34 @@ class AddressArrayCopyTest {
             assertThrows(RuntimeFault::class.java) { literal.copyToByteArray(immutable, 0, count) }
             assertThrows(RuntimeFault::class.java) { ManagedAddress.fromAllocation(immutable).copyFromByteArray(destination, 0, count) }
             for (address in listOf(ManagedAddress.nullAddress(), ManagedAddress.unownedNumeric(12345))) {
-                assertThrows(RuntimeFault::class.java) { address.copyToByteArray(destination, 0, count) }
+                if (count != 0L || address !== ManagedAddress.nullAddress())
+                    assertThrows(RuntimeFault::class.java) { address.copyToByteArray(destination, 0, count) }
                 assertThrows(RuntimeFault::class.java) { address.copyFromByteArray(destination, 0, count) }
             }
         }
         owner.shrink(4)
         assertThrows(RuntimeFault::class.java) { ManagedAddress.fromAllocation(owner).copyToByteArray(destination, 0, 5) }
         assertThrows(RuntimeFault::class.java) { ManagedAddress.fromByteArray(destination).copyFromByteArray(owner, 4, 1) }
+    }
+
+    @Test fun emptyNullAddressSourceNeedsNoBackingButStillChecksItsDestination() {
+        val source = ManagedAddress.nullAddress()
+        for (owned in listOf(false, true)) for (size in listOf(0, 8)) {
+            val expected = ByteArray(size) { (it + 71).toByte() }
+            val destination = storage(expected, owned)
+            for (offset in 0..size) source.copyToByteArray(destination, offset.toLong(), 0)
+            assertArrayEquals(expected, bytes(destination))
+            for (offset in listOf(-1L, size + 1L, Long.MIN_VALUE, Long.MAX_VALUE))
+                assertThrows(RuntimeFault::class.java) { source.copyToByteArray(destination, offset, 0) }
+            for (count in listOf(-1L, 1L, Long.MIN_VALUE, Long.MAX_VALUE))
+                assertThrows(RuntimeFault::class.java) { source.copyToByteArray(destination, 0, count) }
+            assertArrayEquals(expected, bytes(destination))
+        }
+        assertThrows(RuntimeFault::class.java) { source.copyToByteArray(Any(), 0, 0) }
+        assertThrows(RuntimeFault::class.java) {
+            source.copyToByteArray(ManagedAllocation.immutable(byteArrayOf(), 8), 0, 0)
+        }
+        assertThrows(RuntimeFault::class.java) { ManagedAddress.unownedNumeric(12345).copyToByteArray(ByteArray(0), 0, 0) }
     }
 
     @Test fun pointerCellsStayReferencesAndPartialRawCopiesFailBeforeEffects() {

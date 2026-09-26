@@ -519,7 +519,10 @@ internal class ManagedAddress private constructor(
     /** Keep native lifetime and pointer-cell transport inside the existing
      * storage boundaries; no temporary Addr# view or raw owner alias escapes. */
     fun copyToByteArray(destination: Any?, destinationOffset: Long, count: Long) = withNativeBorrow {
-        requireRange(0, count)
+        // Empty ByteString uses nullAddr#. Its ordinary toShort path still
+        // emits a zero-byte copy, which does not read or need source storage.
+        // Retain all destination checks and every nonempty source check.
+        if (this !== NULL || count != 0L) requireRange(0, count)
         requireDistinctArray(destination)
         val destinationSize = ManagedByteArray.sizeGuest(destination)
         if (destinationOffset < 0 || destinationOffset > destinationSize || count > destinationSize - destinationOffset)

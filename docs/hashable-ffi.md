@@ -41,6 +41,9 @@ byte-array and pointer arguments. After interpreted comparisons, it requests
 compilation and checks the very next invocation and every remaining compiled
 comparison, with no settling call, retry or recompile. Native permission is
 explicit. Both handoff modes also check scratch storage is released.
+Each backend/instance pair is an independent dynamic test, so one missing
+dependency does not suppress the other instances. The full original boot-Core
+manifest needs an 8 GiB test heap; 4 GiB exhausted the heap during loading.
 
 These tests require the general `thc-package-c-ffi-v1` acquisition/runtime
 implementation. A native-only oracle run or a successful Kotlin compilation
