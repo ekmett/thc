@@ -99,6 +99,10 @@ class AddressArrayCopyTest {
             assertEquals(false, state["lifted"])
             assertEquals("void", (state["rep"] as Map<*, *>)["kind"])
             assertEquals(1, (stateCall[2] as List<*>).size)
+            val stateArgument = (stateCall[2] as List<List<Any?>>).single()
+            assertEquals("void", stateArgument[0])
+            assertEquals(state["rep"], (stateArgument.last() as Map<*, *>)["rep"])
+            assertEquals(listOf(false), stateCall[3])
             val report = Json.parse(File(root, "$directory/$stage-$name-audit.json").readText()) as Map<*, *>
             assertEquals(true, report["accepted"]); assertEquals(emptyList<Any>(), report["issues"])
             assertEquals(emptyList<Any>(), report["missingGlobals"])
@@ -163,12 +167,14 @@ class AddressArrayCopyTest {
                             val before = count(p)
                             val label = "$stage/$backend/$name/${row.arguments}/$field/inlining=$inlining"
                             assertEquals(byte, function.execute(*(row.arguments + field.toLong()).toTypedArray()).asLong(), label)
-                            if (installed) assertEquals(before + 2L, count(p), "$label exact entry and runRW lambda")
+                            // The independently checked runRW State# beta-redex stays
+                            // in the entry frame; it does not create a second guest root.
+                            if (installed) assertEquals(before + 1L, count(p), "$label exact entry after state lowering")
                             released(language)
                         }
                     }
                     rows.getValue(name).forEach { check(it, false) }
-                    val targets = active(); assertEquals(2, targets.size, "entry and genuine runRW state lambda")
+                    val targets = active(); assertEquals(1, targets.size, "$stage/$backend/$name entry after state lowering")
                     targets.forEach(::compile)
                     assertTrue(function.invokeMember("compile").asBoolean())
                     assertEquals(targets, active()); (targets + host).forEach(::valid)
