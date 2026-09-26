@@ -22,6 +22,13 @@ internal class PackageScalarLibraries(private val env: TruffleLanguage.Env) {
     private val alive = Assumption.create("THC package C libraries are open")
     private var closed = false
     private val interop = InteropLibrary.getUncached()
+    private val pointerOffset = FutureTask {
+        val bytes = PackageScalarLibraries::class.java.getResourceAsStream("/thc/cbits/package-pointer.bc")
+            ?.use { it.readBytes() } ?: fault("Missing package pointer bridge")
+        val library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(bytes), "package-pointer.bc")
+            .build()).call()
+        interop.readMember(library, "thc_package_pointer_offset")
+    }
 
     private fun current(): Language.State {
         val owner = Language.currentState()
@@ -56,11 +63,21 @@ internal class PackageScalarLibraries(private val env: TruffleLanguage.Env) {
         await(selected.task)
     }
 
-    private fun await(task: FutureTask<Map<String, PackageScalarFunction>>): Map<String, PackageScalarFunction> = try {
+    private fun <T> await(task: FutureTask<T>): T = try {
         if (task.isDone) task.get()
         else TruffleSafepoint.setBlockedThreadInterruptibleFunction(null,
-            TruffleSafepoint.InterruptibleFunction<FutureTask<Map<String, PackageScalarFunction>>, Map<String, PackageScalarFunction>> { it.get() }, task)
+            TruffleSafepoint.InterruptibleFunction<FutureTask<T>, T> { it.get() }, task)
     } catch (failure: ExecutionException) { throw (failure.cause ?: failure) }
+
+    /** Return Sulong's pointer carrier, including its actual allocation-relative
+     * offset. No Sulong implementation classes or reflective access are needed. */
+    @TruffleBoundary
+    fun pointer(base: Any, offset: Long): Any {
+        current()
+        if (!alive.isValid) fault("Package C library registry is closed")
+        pointerOffset.run()
+        return interop.execute(await(pointerOffset), base, offset)
+    }
 
     /** Resolve only on a call site's first execution; no registry work spans the foreign call. */
     @TruffleBoundary

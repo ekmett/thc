@@ -89,7 +89,8 @@ def main():
     output = args.output.resolve() / "thc/cbits"
     output.mkdir(parents=True, exist_ok=True)
     commands = []
-    sources = {"md5": ROOT / "src/main/c/md5-api.c",
+    sources = {"package-pointer": ROOT / "src/main/c/package-pointer-api.c",
+               "md5": ROOT / "src/main/c/md5-api.c",
                "libdw-unavailable": ROOT / "src/main/c/libdw-unavailable.c"}
     # The locale scope is POSIX-specific. Windows errno/locale interoperability
     # needs its own proof; compiling strerror_s alone would not provide it.

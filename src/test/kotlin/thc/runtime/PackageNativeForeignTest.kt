@@ -26,6 +26,7 @@ class PackageNativeForeignTest {
         val bitcode = directory.resolve("native.bc")
         Files.writeString(source, """
             #include <stdint.h>
+            #include <stddef.h>
             uint64_t sum_bytes(const unsigned char *p, uint64_t n) {
               uint64_t result = 0;
               for (uint64_t i = 0; i < n; ++i) result += p[i];
@@ -40,6 +41,15 @@ class PackageNativeForeignTest {
             }
             uint32_t complement32(uint32_t value) { return ~value; }
             uint8_t complement8(uint8_t value) { return (uint8_t) ~value; }
+            uint32_t equal(const unsigned char *a, const unsigned char *b) { return a == b; }
+            uint32_t next_equal(const unsigned char *a, const unsigned char *b) { return a + 1 == b; }
+            int64_t distance(const unsigned char *a, const unsigned char *b) { return b - a; }
+            uint32_t read_before(const unsigned char *p) { return p[-1]; }
+            uint32_t mixed_alias(unsigned char *a, const unsigned char *b) {
+              if (a != b) return 0;
+              a[0] = 91;
+              return b[0];
+            }
         """.trimIndent())
         val target = if (System.getProperty("os.name") == "Linux") listOf("--target=" +
             (if (System.getProperty("os.arch") == "amd64") "x86_64" else System.getProperty("os.arch")) + "-unknown-linux-gnu") else emptyList()
@@ -54,7 +64,12 @@ class PackageNativeForeignTest {
             PackageScalarSignature("update", "update", listOf("MutableByteArray#", "ByteArray#", "Word64Rep"), "void", "capi"),
             PackageScalarSignature("alias", "alias", listOf("AddrRep", "AddrRep"), "Word32Rep"),
             PackageScalarSignature("complement32", "complement32", listOf("Word32Rep"), "Word32Rep"),
-            PackageScalarSignature("complement8", "complement8", listOf("Word8Rep"), "Word8Rep"))
+            PackageScalarSignature("complement8", "complement8", listOf("Word8Rep"), "Word8Rep"),
+            PackageScalarSignature("equal", "equal", listOf("AddrRep", "AddrRep"), "Word32Rep"),
+            PackageScalarSignature("next_equal", "next_equal", listOf("AddrRep", "AddrRep"), "Word32Rep"),
+            PackageScalarSignature("distance", "distance", listOf("AddrRep", "AddrRep"), "Int64Rep"),
+            PackageScalarSignature("read_before", "read_before", listOf("AddrRep"), "Word32Rep"),
+            PackageScalarSignature("mixed_alias", "mixed_alias", listOf("MutableByteArray#", "ByteArray#"), "Word32Rep"))
         return PackageScalarLink("native-ffi-control", "test-host", sha, sha, bytes, abi)
     }
 
@@ -90,6 +105,23 @@ class PackageNativeForeignTest {
                     val address = ManagedAddress.fromAllocation(state)
                     assertEquals(197L, functions.getValue("alias").call(address, address.plus(1)))
                     assertEquals(197L, state.readByte(1), "overlapping arguments share the original allocation")
+                    assertEquals(1L, functions.getValue("equal").call(address, address))
+                    assertEquals(1L, functions.getValue("equal").call(address, ManagedAddress.fromAllocation(state)))
+                    assertEquals(1L, functions.getValue("next_equal").call(address, address.plus(1)))
+                    assertEquals(0L, functions.getValue("equal").call(address, address.plus(1)))
+                    assertEquals(7L, functions.getValue("distance").call(address, address.plus(7)))
+                    assertEquals(-7L, functions.getValue("distance").call(address.plus(7), address))
+                    assertEquals(8L, functions.getValue("distance").call(address, address.plus(8)), "one-past pointer")
+                    assertEquals(137L, functions.getValue("read_before").call(address.plus(1)))
+                    assertEquals(91L, functions.getValue("mixed_alias").call(state, state), "const and writable views share identity")
+                    assertEquals(91L, state.readByte(0))
+                    val rawAlias = ManagedAddress.fromByteArray(state.rawBytesIfPointerFree())
+                    assertEquals(1L, functions.getValue("equal").call(address, rawAlias), "raw and owned views share identity")
+                    val literal = ManagedAddress.fromHex("6162")
+                    assertEquals(1L, functions.getValue("next_equal").call(literal, literal.plus(1)))
+                    assertEquals(97L, functions.getValue("read_before").call(literal.plus(1)))
+                    val separate = ManagedAddress.fromByteArray(byteArrayOf(91))
+                    assertEquals(0L, functions.getValue("equal").call(address, separate))
                     assertEquals(0xffff_ffffL, functions.getValue("complement32").call(0))
                     assertEquals(0L, functions.getValue("complement32").call(-1))
                     assertEquals(255L, functions.getValue("complement8").call(0.toByte()))

@@ -621,7 +621,7 @@ tasks.withType<JavaCompile>().configureEach { options.compilerArgs.addAll(listOf
 // remains an optional execution path; no native pointer is exposed to Core.
 val compileCbits by tasks.registering(Exec::class) {
     inputs.files("scripts/build-cbits.py", "src/main/c/md5-api.c", "src/main/c/iconv-api.c",
-        "src/main/c/strerror-locale.c", "src/main/c/libdw-unavailable.c",
+        "src/main/c/strerror-locale.c", "src/main/c/libdw-unavailable.c", "src/main/c/package-pointer-api.c",
         "compiler/pinned-ghc-internal/cbits/strerror.c",
         "src/main/c/gmp-api.c",
         "bench/experiments/pinned-addresses/reference/md5.c",
