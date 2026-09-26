@@ -74,6 +74,10 @@ def classify(data, capability, scalars):
         signature = signatures.get(name)
         if not row['advertised']:
             status, scope = 'missing', 'No declared lowering'
+        elif name.startswith('prefetch'):
+            status, scope = 'supported', 'Optional performance hint; JVM no-op with ordinary argument sequencing'
+        elif name in {'traceEvent#', 'traceBinaryEvent#', 'traceMarker#'}:
+            status, scope = 'supported', 'Context stderr trace records; not GHC eventlog format or RTS flags'
         elif signature and set(signature['arguments'] + [signature['result']]) <= numeric:
             status, scope = 'supported', 'Fixed scalar contract'
         else:

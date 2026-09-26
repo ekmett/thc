@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "619e2b794214700649669833fef2a3e5cd2cf299f0d0443721844edca79dc831"
+FULL_PREPARATION_PLAN = "04230d596796fc0250b019b298be08b3072866895037f375943762a247a0357f"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -34,6 +34,10 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
     "build/original-fd-ready", "build/simd-calls",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    "build/hint-trace/oracle.tsv", "build/hint-trace/native/oracle", "build/hint-trace/native/oracle.eventlog",
+    *[f"build/hint-trace/{stage}/{suffix}" for stage in ("pre", "post")
+      for suffix in ("core/HintTraceAudit.json", "hints.audit.json", "traces.audit.json",
+                     "event.audit.json", "marker.audit.json", "binary.audit.json", "addressHints.audit.json")],
     "build/native-malloc/oracle.txt",
     "build/simd-calls/manifest.json", "build/simd-calls/pre-core/SimdCallAudit.json",
     "build/simd-calls/pre-audit.json",

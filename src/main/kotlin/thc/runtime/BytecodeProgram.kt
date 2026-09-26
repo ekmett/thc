@@ -2553,6 +2553,29 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 val operation = VectorByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 vectorByteArray(operation, args.map { compile(it, scope, false) })
+            } else if (fn[0] == "prim" && fn[1] in prefetchArities) {
+                if (args.size != prefetchArities[fn[1]]) fault("Wrong prefetch arity")
+                val value = argument(args[0], scope, flags[0] as Boolean)
+                val offset = if (args.size == 3) compile(args[1], scope, false) else null
+                val state = compile(args.last(), scope, false)
+                ProvenExpression(Expression { e ->
+                    e.builder.beginPrefetch()
+                    value.emit(e)
+                    if (offset == null) e.builder.emitLoadConstant(0L) else offset.emit(e)
+                    state.emit(e)
+                    e.builder.endPrefetch()
+                }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && TraceOp.named(fn[1] as String) != null) {
+                val operation = TraceOp.named(fn[1] as String)!!
+                if (args.size != operation.arity) fault("Wrong trace arity")
+                val operands = args.map { compile(it, scope, false) }
+                ProvenExpression(Expression { e ->
+                    e.builder.beginTraceEvent(operation)
+                    operands[0].emit(e)
+                    if (operation == TraceOp.BINARY) operands[1].emit(e) else e.builder.emitLoadConstant(0L)
+                    operands.last().emit(e)
+                    e.builder.endTraceEvent()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && fn[1] == "touch#") {
                 CoreTouch.validateRaw(args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
                     CoreRepresentations.metadata(expr)?.get("rep"))

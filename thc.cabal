@@ -494,6 +494,7 @@ executable thc-fixtures
     OriginalIconvFixtures
     MutVarFixtures
     STMFixtures
+    HintTraceFixtures
     StablePointerFixtures
     WeakFixtures
     ShrinkByteArrayFixtures

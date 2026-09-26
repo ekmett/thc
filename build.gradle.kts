@@ -140,6 +140,7 @@ tasks.withType<Test>().configureEach {
             "core-continuation/**/*.json", "core-continuation/native-output.txt",
             "thread-status/**/*.json", "thread-status/oracle.txt",
             "thread-label/**/*.json", "thread-label/oracle.txt",
+            "hint-trace/**/*.json", "hint-trace/oracle.tsv", "hint-trace/native/**",
             "uncaught-self/**/*.json", "uncaught-self/native/oracle",
             "mask-functions/**/*.json", "mask-functions/logs/*.stdout", "mask-functions/logs/*.stderr",
             "mask-functions/native/oracle",

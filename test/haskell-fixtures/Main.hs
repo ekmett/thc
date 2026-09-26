@@ -58,6 +58,7 @@ import OriginalSigsetFixtures (prepareOriginalSigset)
 import OriginalIconvFixtures (prepareOriginalIconv)
 import MutVarFixtures (prepareMutVar)
 import STMFixtures (prepareSTM)
+import HintTraceFixtures (prepareHintTrace)
 import StablePointerFixtures (prepareStablePointers)
 import WeakFixtures (prepareWeaks)
 import ShrinkByteArrayFixtures (prepareShrinkByteArrays)
@@ -925,6 +926,7 @@ main = do
     ["original-iconv"] -> prepareOriginalIconv root
     ["mutvar"] -> prepareMutVar root
     ["stm"] -> prepareSTM root
+    ["hint-trace"] -> prepareHintTrace root
     ["stable-pointers"] -> prepareStablePointers root
     ["weak-explicit"] -> prepareWeaks root
     ["shrink-bytearrays"] -> prepareShrinkByteArrays root

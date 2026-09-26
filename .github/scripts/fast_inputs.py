@@ -36,7 +36,7 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
 MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
-thread-status thread-label boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
+thread-status thread-label hint-trace boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array
 narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
@@ -44,6 +44,11 @@ show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls s
 SIMD_FLOAT_FMA_OUTPUTS = frozenset("build/simd-floatx4-fma/" + name for name in (
     "manifest.json", "oracle.txt", "pre-core/SimdFloatFma.json", "post-core/SimdFloatFma.json",
     "pre-audit.json", "post-audit.json", "pre-double-audit.json", "post-double-audit.json"))
+HINT_TRACE_OUTPUTS = frozenset("build/hint-trace/" + name for name in (
+    "manifest.json", "oracle.tsv", "native/oracle", "native/oracle.eventlog",
+    *(f"{stage}/{suffix}" for stage in ("pre", "post")
+      for suffix in ("core/HintTraceAudit.json", "hints.audit.json", "traces.audit.json",
+                     "event.audit.json", "marker.audit.json", "binary.audit.json", "addressHints.audit.json"))))
 BIGNAT_ENTRIES = ("integerRoundTrip", "naturalRoundTrip", "integerLiteral", "naturalLiteral",
                   "magnitudeSize", "magnitudeByte", "magnitudeWord", "magnitudeSign")
 BIGNAT_AUDITS = (*BIGNAT_ENTRIES, "integerAddFrontier", "naturalAddFrontier", "missing-source")
@@ -106,7 +111,7 @@ MAX_FILE_BYTES = 256 * 1024 * 1024
 MAX_TOTAL_BYTES = 3 * 1024 * 1024 * 1024
 MAX_MANIFEST_BYTES = 16 * 1024 * 1024
 MAX_JSON_BYTES = 384 * 1024 * 1024
-NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate",
+NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate", "build/hint-trace/native/oracle",
     "build/simd-capability-smoke/native/simd-smoke-oracle",
     "build/original-stdio/native/original-stdio-oracle",
     "build/original-stdio-read/native/original-stdio-read-oracle",
@@ -869,6 +874,8 @@ def allowed_payload(name, pins):
             bool(re.fullmatch(r"libHSthc-[\w.-]+\.(so|dylib)", parts[2])))
     if parts[1] == "original-stdio":
         return name in ORIGINAL_STDIO_OUTPUTS
+    if parts[1] == "hint-trace":
+        return name in HINT_TRACE_OUTPUTS
     if parts[1] == "bignat-literals":
         return name in BIGNAT_OUTPUTS
     if parts[1] == "simd-capability-smoke":

@@ -1562,6 +1562,23 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** Java declarations are required by the Truffle Bytecode DSL processor. */
+    @Operation public static final class Prefetch {
+        @Specialization public static Object hint(Object ignored, long offset, Object state) {
+            TupleResultsKt.requireVoidCarrier(state);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation
+    @ConstantOperand(type = TraceOp.class, name = "operation")
+    public static final class TraceEvent {
+        @Specialization public static Object trace(TraceOp operation, ManagedAddress address,
+                long count, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            RtsDiagnostics.trace(node, operation, address, count);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
     @Operation public static final class Touch {
         @Specialization public static Object preserve(Object kept, Object state) {
             return thc.runtime.Touch.preserve(kept, state);

@@ -47,6 +47,14 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "hint-trace": {
+      "junit": ["thc.runtime.HintTraceTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "hint-trace"]}],
+      "outputs": ["build/hint-trace"],
+      "sources": ["compiler/test-fixtures/HintTraceAudit.hs", "compiler/test-fixtures/HintTraceNative.hs",
+        "test/haskell-fixtures/HintTraceFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "thread-label": {
       "junit": ["thc.runtime.ThreadLabelNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-label"]}],

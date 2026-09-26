@@ -21,6 +21,19 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def test_hint_trace_exact_native_fixture_inventory(self):
+        self.assertEqual(18, len(cache.HINT_TRACE_OUTPUTS))
+        self.assertIn('build/hint-trace/manifest.json', DECLARED_REQUIRED)
+        for name in cache.HINT_TRACE_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(name, {}), name)
+            if name == 'build/hint-trace/native/oracle':
+                self.assertEqual(0o755, cache.safe_mode(0o755, name))
+            else:
+                with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, name)
+        for suffix in ('native/other', 'native/other.eventlog', 'native/HintTraceNative.o',
+                       'test-results/TEST.xml', 'pre/unknown.audit.json', 'pre/core/Other.json'):
+            self.assertFalse(cache.allowed_payload('build/hint-trace/' + suffix, {}), suffix)
+
     def test_tcsetattr_exact_native_image_fixture_inventory(self):
         self.assertEqual(33, len(cache.ORIGINAL_TCSETATTR_OUTPUTS))
         self.assertIn('build/original-tcsetattr/manifest.json', DECLARED_REQUIRED)

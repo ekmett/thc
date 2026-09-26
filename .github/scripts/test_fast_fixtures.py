@@ -19,6 +19,17 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_hint_trace_has_native_fixture_and_complete_cache_scope(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        self.assertEqual('hint-trace', owners['thc.runtime.HintTraceTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'hint-trace']}],
+                         manifest['groups']['hint-trace']['commands'])
+        self.assertIn('"$fixture_bin" hint-trace', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('build/hint-trace/manifest.json', fast_fixtures.fast_inputs.REQUIRED)
+        self.assertEqual(18, len([path for path in fast_fixtures.FULL_REQUIRED if path.startswith('build/hint-trace/')]))
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+
     def test_stm_keeps_original_exception_proof_in_explicit_fail_closed_full_core_gate(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

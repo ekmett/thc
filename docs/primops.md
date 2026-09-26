@@ -8,9 +8,9 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Supported | 309 | Implemented fixed numeric/character scalar forms. |
+| Supported | 328 | Implemented fixed numeric/character scalar forms. |
 | Partial | 511 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 671 | No declared lowering. |
+| Missing | 652 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -287,6 +287,22 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `popCnt64#` — arity 1
 - [x] `popCnt8#` — arity 1
 - [x] `powerFloat#` — arity 2
+- [x] `prefetchAddr0#` — arity 3
+- [x] `prefetchAddr1#` — arity 3
+- [x] `prefetchAddr2#` — arity 3
+- [x] `prefetchAddr3#` — arity 3
+- [x] `prefetchByteArray0#` — arity 3
+- [x] `prefetchByteArray1#` — arity 3
+- [x] `prefetchByteArray2#` — arity 3
+- [x] `prefetchByteArray3#` — arity 3
+- [x] `prefetchMutableByteArray0#` — arity 3
+- [x] `prefetchMutableByteArray1#` — arity 3
+- [x] `prefetchMutableByteArray2#` — arity 3
+- [x] `prefetchMutableByteArray3#` — arity 3
+- [x] `prefetchValue0#` — arity 2
+- [x] `prefetchValue1#` — arity 2
+- [x] `prefetchValue2#` — arity 2
+- [x] `prefetchValue3#` — arity 2
 - [x] `quotInt#` — arity 2
 - [x] `quotInt16#` — arity 2
 - [x] `quotInt32#` — arity 2
@@ -335,6 +351,9 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `timesWord32#` — arity 2
 - [x] `timesWord64#` — arity 2
 - [x] `timesWord8#` — arity 2
+- [x] `traceBinaryEvent#` — arity 3
+- [x] `traceEvent#` — arity 2
+- [x] `traceMarker#` — arity 2
 - [x] `uncheckedIShiftL#` — arity 2
 - [x] `uncheckedIShiftL64#` — arity 2
 - [x] `uncheckedIShiftRA#` — arity 2
@@ -1165,22 +1184,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `plusWord16X32#` — arity 2
 - [ ] `plusWord8X32#` — arity 2
 - [ ] `plusWord8X64#` — arity 2
-- [ ] `prefetchAddr0#` — arity 3
-- [ ] `prefetchAddr1#` — arity 3
-- [ ] `prefetchAddr2#` — arity 3
-- [ ] `prefetchAddr3#` — arity 3
-- [ ] `prefetchByteArray0#` — arity 3
-- [ ] `prefetchByteArray1#` — arity 3
-- [ ] `prefetchByteArray2#` — arity 3
-- [ ] `prefetchByteArray3#` — arity 3
-- [ ] `prefetchMutableByteArray0#` — arity 3
-- [ ] `prefetchMutableByteArray1#` — arity 3
-- [ ] `prefetchMutableByteArray2#` — arity 3
-- [ ] `prefetchMutableByteArray3#` — arity 3
-- [ ] `prefetchValue0#` — arity 2
-- [ ] `prefetchValue1#` — arity 2
-- [ ] `prefetchValue2#` — arity 2
-- [ ] `prefetchValue3#` — arity 2
 - [ ] `prompt#` — arity 3
 - [ ] `quotInt16X16#` — arity 2
 - [ ] `quotInt16X32#` — arity 2
@@ -1417,9 +1420,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `timesWord16X32#` — arity 2
 - [ ] `timesWord8X32#` — arity 2
 - [ ] `timesWord8X64#` — arity 2
-- [ ] `traceBinaryEvent#` — arity 3
-- [ ] `traceEvent#` — arity 2
-- [ ] `traceMarker#` — arity 2
 - [ ] `uncheckedShiftRLInt16#` — arity 2
 - [ ] `uncheckedShiftRLInt32#` — arity 2
 - [ ] `uncheckedShiftRLInt8#` — arity 2

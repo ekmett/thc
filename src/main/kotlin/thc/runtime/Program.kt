@@ -2410,6 +2410,17 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val operation = VectorByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 VectorByteArrayExpression(operation, args.map { compile(it, scope, false) }.toTypedArray())
+            } else if (fn[0] == "prim" && fn[1] in prefetchArities) {
+                if (args.size != prefetchArities[fn[1]]) fault("Wrong prefetch arity")
+                PrefetchExpression(argument(args[0], scope, flags[0] as Boolean),
+                    if (args.size == 3) compile(args[1], scope, false) else null,
+                    compile(args.last(), scope, false), tupleProof)
+            } else if (fn[0] == "prim" && TraceOp.named(fn[1] as String) != null) {
+                val operation = TraceOp.named(fn[1] as String)!!
+                if (args.size != operation.arity) fault("Wrong trace arity")
+                TraceExpression(operation, compile(args[0], scope, false),
+                    if (operation == TraceOp.BINARY) compile(args[1], scope, false) else null,
+                    compile(args.last(), scope, false), tupleProof)
             } else if (fn[0] == "prim" && fn[1] == "touch#") {
                 CoreTouch.validateRaw(args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
                     CoreRepresentations.metadata(expr)?.get("rep"))
