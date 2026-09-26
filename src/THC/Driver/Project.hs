@@ -863,7 +863,8 @@ exporterIdentity context = do
                  "driverHash" .= contextDriverHash context,
                  "options" .= (["post-tidy", "unit-qualified", "source-notes",
                                 "foreign-import-provenance",
-                                "native-debug-info", "-dynamic", "-dcore-lint"] :: [String])]
+                                "native-debug-info", "-dynamic", "-dcore-lint",
+                                "-fplugin-trustworthy"] :: [String])]
 
 prepareGlobalBundles :: ExportContext -> FilePath -> String -> Map.Map String Unit -> [(Unit, Component)] -> [Unit] -> IO (Map.Map String Bundle)
 prepareGlobalBundles _ _ _ _ _ [] = pure Map.empty
@@ -1151,7 +1152,8 @@ exportConfiguredUnit context keys unit component scalar runtimeShim nativeObject
                          "driverHash" .= contextDriverHash context,
                          "options" .= (["post-tidy", "unit-qualified", "source-notes",
                                          "foreign-import-provenance",
-                                         "native-debug-info", "-dynamic", "-dcore-lint"] :: [String])] ++
+                                         "native-debug-info", "-dynamic", "-dcore-lint",
+                                         "-fplugin-trustworthy"] :: [String])] ++
                      maybe [] (\digest -> ["scalarInterfaceHelperSha256" .= digest,
                        "scalarInterfaceOptions" .= (["-fwrite-if-simplified-core", "-hisuf", "hi"] :: [String])]) helperHash
       exportKey = shaHex (BL.toStrict (encode ("thc-core-export-v1" :: String, buildKey, exporter)))
@@ -1215,11 +1217,14 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
     let objects = staging </> "objects"
         core = staging </> "core"
     createDirectoryIfMissing True objects
+    -- The known THC exporter preserves GHC safety inference, as in GhcProxy.
+    -- Without plugin trust, an inferred-safe home module becomes unsafe merely
+    -- because it is exported, so a later Safe importer fails to compile.
     let arguments = ["--make", "-no-link"] ++ componentArguments component ++
           ["-outputdir", objects, "-odir", objects, "-hidir", objects,
            "-hiedir", objects </> "hie", "-stubdir", objects,
            "-package-db", contextPluginDb context, "-plugin-package-id", contextPluginUnit context,
-           "-fplugin=THC.Plugin", "-fplugin-opt=THC.Plugin:" ++ core,
+           "-fplugin=THC.Plugin", "-fplugin-trustworthy", "-fplugin-opt=THC.Plugin:" ++ core,
            "-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:unit-qualified",
            "-fplugin-opt=THC.Plugin:source-notes",
            "-fplugin-opt=THC.Plugin:foreign-import-provenance",

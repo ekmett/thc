@@ -1,14 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-module StoreProjectTests (tests, inplaceTests, concurrentTests) where
+module StoreProjectTests (tests, inplaceTests, concurrentTests, exportSafetyTests) where
 
 import Control.Concurrent (forkFinally, killThread, newEmptyMVar, putMVar, readMVar)
 import Control.Exception (bracket, throwIO)
 import Control.Monad (forM_, unless)
 import Data.Char (isHexDigit)
 import qualified Data.ByteString as BS
-import Data.List (isPrefixOf)
+import Data.List (isPrefixOf, sort)
 import System.Directory (getModificationTime, getPermissions, removeFile,
                          removePathForcibly, setPermissions)
 import qualified System.Directory as Directory
@@ -23,7 +23,66 @@ import THC.Driver.Lock (withLock)
 
 tests :: Env -> Test
 tests env = TestList [proxyOptionsTest env, storeProjectTest env, customStoreProjectTest env,
-  inplaceTests env, concurrentTests env, nativeVariantsTest env False, nativeVariantsTest env True]
+  inplaceTests env, concurrentTests env, exportSafetyTests env, nativeVariantsTest env False, nativeVariantsTest env True]
+
+exportSafetyTests :: Env -> Test
+exportSafetyTests env = TestLabel "local export preserves inferred safety and rejects Unsafe imports" $ TestCase $
+  withFixtureNamed env "test/fixtures/run-store-project" "local safe library" $ \project ->
+  withCache (takeDirectory project </> "cache") $ do
+    let base = takeDirectory project
+        output = base </> "output"
+        source = project </> "dep-data/src/SafeDependency.hs"
+        acquire = run env base Nothing 240
+          ["acquire", "completed", "--project-dir", project, "--thc-root", thcRoot env,
+           "--dist-dir", output]
+    -- The existing store fixture has an inferred-safe helper and a Safe caller.
+    -- Keeping the dependency local exercises Project.freshExport, not GhcProxy.
+    writeText (project </> "cabal.project") "packages: app/app.cabal dep-data/dep-data.cabal\n"
+    acquired <- acquire
+    assertSuccess acquired
+    assertNoStdout acquired
+    plan <- readJson (output </> "native/cache/plan.json")
+    let dependency = one ((== "dep-data") . string . (`field` "pkg-name")) (objects plan "install-plan")
+        identifier = string (field dependency "id")
+        entry = one ((== "exe:completed") . string . (`field` "component-name")) (objects plan "install-plan")
+        bundle manifest = string $ field (field (one ((== identifier) . string . (`field` "id"))
+          (objects manifest "units")) "bundle") "path"
+    assertEqual "local dependency uses freshExport" "local" (string $ field dependency "style")
+    native <- runExe env project Nothing 60 (string $ field entry "bin-file") []
+    assertSuccess native
+    assertNoStdout native
+    manifest <- readJson (output </> "packages.json")
+    let path = bundle manifest
+    receipt <- readCore path "inplace-manifest.json"
+    assertEqual "known plugin trust participates in exporter identity" 1
+      (length $ filter (== "-fplugin-trustworthy")
+        (strings $ field (field receipt "exporter") "options"))
+    contents <- readCore path "manifest.json"
+    assertEqual "both original modules exported" ["Answer", "SafeDependency"]
+      (sort $ map (string . (`field` "name")) (objects contents "modules"))
+    stamp <- getModificationTime path
+    warm <- acquire
+    assertSuccess warm
+    assertNoStdout warm
+    repeated <- readJson (output </> "packages.json")
+    assertEqual "warm export preserves immutable bundle identity" path (bundle repeated)
+    assertEqual "warm export does not rewrite bundle" stamp =<< getModificationTime path
+    -- Trusting the exporter must not make an explicitly Unsafe source module
+    -- safe. Check real GHC both natively and with the same known THC plugin.
+    original <- readText source
+    writeText source ("{-# LANGUAGE Unsafe #-}\n" ++ original)
+    compiler <- maybe "ghc" id <$> lookupEnv "GHC"
+    plugin <- readJson (thcRoot env </> "build/compiler/plugin.json")
+    let pluginFlags = ["-package-db", string $ field plugin "packageDb",
+          "-plugin-package-id", string $ field plugin "unitId",
+          "-fplugin=THC.Plugin", "-fplugin-trustworthy"]
+    forM_ [("native", []), ("export", pluginFlags)] $ \(name, extra) -> do
+      rejected <- runExe env (project </> "dep-data") Nothing 60 compiler
+        (["--make", "-fno-code", "-fforce-recomp", "-isrc", "src/Answer.hs",
+          "-outputdir", base </> ("unsafe-" ++ name)] ++ extra)
+      assertFailure rejected
+      assertContains "SafeDependency: Can't be safely imported!" (err rejected)
+      assertContains "The module itself isn't safe." (err rejected)
 
 concurrentTests :: Env -> Test
 concurrentTests env = TestLabel "overlapping project captures share immutable cache publications" $ TestCase $

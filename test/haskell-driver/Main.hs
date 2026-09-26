@@ -43,6 +43,7 @@ runTests arguments = do
     ["--run-ffi-only"] -> pure [RunOptionsTests.tests env, RunTests.tests env]
     ["--store-inventory-only"] -> pure [EmptyStoreProjectTests.tests env]
     ["--store-projects-only"] -> pure [StoreProjectTests.tests env]
+    ["--export-safety-only"] -> pure [StoreProjectTests.exportSafetyTests env]
     ["--inplace-store-only"] -> pure [StoreProjectTests.inplaceTests env]
     ["--concurrent-store-only"] -> pure [StoreProjectTests.concurrentTests env]
     ["--package-native-only"] -> pure [PackageNativeTests.tests]
@@ -64,6 +65,6 @@ runTests arguments = do
       , StoreProjectTests.tests env
       , EmptyStoreProjectTests.tests env
       ]
-    _ -> die "Usage: driver-tests [--runnable-targets-only|--acquire-project-only|--run-options-only|--run-ffi-only|--store-inventory-only|--store-projects-only|--inplace-store-only|--concurrent-store-only|--installed-hydration-only|--installed-foreign-source-only|--package-native-only]"
+    _ -> die "Usage: driver-tests [--runnable-targets-only|--acquire-project-only|--run-options-only|--run-ffi-only|--store-inventory-only|--store-projects-only|--export-safety-only|--inplace-store-only|--concurrent-store-only|--installed-hydration-only|--installed-foreign-source-only|--package-native-only]"
   counts <- runTestTT $ TestList selected
   if errors counts + failures counts == 0 then pure () else exitFailure
