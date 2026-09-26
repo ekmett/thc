@@ -690,6 +690,7 @@ executable thc-fixtures
     RtsDiagnosticFixtures
     OriginalOpenFixtures
     PackageScalarFixtures
+    HashableFfiFixtures
     OriginalTermiosFixtures
     OriginalTcsetattrFixtures
     OriginalTcgetattrFixtures
@@ -722,6 +723,7 @@ executable thc-fixtures
     THC.Driver.ScalarBitcode
     THC.Driver.Installed
     THC.Driver.InstalledForeign
+    THC.Driver.GhcProxy
     THC.Driver.Lock
     THC.Driver.Json
     THC.Driver.Project
