@@ -85,7 +85,9 @@ shutdown. Select `--installed-core required --ghc-source /path/to/ghc-source`
 on the project-directory path; the [driver guide](docs/driver.md) describes the
 current Linux configuration and cache. A file-lifecycle test also matches native
 GHC on UTF-8 reads and writes, append, seeking, EOF, caught missing-file errors,
-and shutdown flushing. General file IO remains incomplete.
+and shutdown flushing. Binary `hPutBuf`/`hGetBuf` tests match native GHC on
+offset buffers, short reads, EOF, and cleanup after exceptions. General file IO
+remains incomplete.
 The independent single-package `.cabal` path still excludes
 internal library and build-tool dependencies; use a `cabal.project` directory
 for the tested multi-package path. `thc build` and `thc repl` are future commands.
