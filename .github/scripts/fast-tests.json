@@ -774,7 +774,8 @@
         "thc.runtime.Int16ArrayNativeTest",
         "thc.runtime.Int32ArrayNativeTest",
         "thc.runtime.DoubleArrayNativeTest",
-        "thc.runtime.FloatWordArrayNativeTest"
+        "thc.runtime.FloatWordArrayNativeTest",
+        "thc.runtime.PinnedPointerCellsTest"
       ],
       "python": []
     },

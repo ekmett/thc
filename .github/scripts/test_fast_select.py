@@ -1003,7 +1003,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             source = path.read_text()
             if path.name != "ArrayCoreEvidence.kt" and "ArrayCoreEvidence(" in source:
                 consumers.update(select.junit_info(source)[0])
-        self.assertEqual(8, len(consumers))
+        self.assertEqual(9, len(consumers))
         self.assertEqual(consumers, set(group["junit"]))
         self.assertEqual([], group["python"])
 
