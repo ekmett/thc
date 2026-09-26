@@ -18,6 +18,8 @@ internal class TypedInputLayout(val language: Language, val logical: ArgumentLay
     val header = if (hasEnvironment) 2 else 1
     @field:CompilationFinal(dimensions = 1)
     val leaves = logical.physicalProofs
+    @field:CompilationFinal(dimensions = 1)
+    private val selfVectors = leaves.map { if (it.isVector) VectorLayout(it) else null }.toTypedArray()
     private val reps = logical.physicalStorageReps
     val packet = language.handoffLayouts.intern(listOf("WordRep") +
         (if (hasEnvironment) listOf("BoxedRep (Just Unlifted)") else emptyList()) + reps)
@@ -27,6 +29,21 @@ internal class TypedInputLayout(val language: Language, val logical: ArgumentLay
     }
     fun state(): HandoffState = language.handoffState.get()
     fun prefix(count: Int): HandoffLayout = prefixes[count]
+    /** Preserve ingress checks, including unused inputs, before replacing any local.
+     * The source consists entirely of already evaluated, disjoint temporaries. */
+    @ExplodeLoop fun validateSelfSource(source: InputSource, frame: VirtualFrame, node: Node) {
+        ArgumentLayout.validate(logical, 0, source.layout, 0, logical.logicalArity)
+        for (i in leaves.indices) {
+            if (packet.isLong(header + i)) source.long(frame, node, null, i)
+            else if (packet.isFloat(header + i)) source.float(frame, node, null, i)
+            else if (packet.isDouble(header + i)) source.double(frame, node, null, i)
+            else {
+                val vector = selfVectors[i]
+                if (vector != null) source.setReference(frame, node, null, i,
+                    vector.require(source.reference(frame, node, null, i)))
+            }
+        }
+    }
     fun take(arguments: Array<Any?>): HandoffStorage {
         if (arguments.size != 1) fault("Tuple input entry requires one typed carrier")
         val input = arguments[0] as? HandoffStorage ?: fault("Tuple input entry requires a typed carrier")
@@ -169,6 +186,12 @@ internal class BytecodeInputSource(layout: ArgumentLayout,
 internal fun writeInputReference(frame: VirtualFrame, slot: Int, value: Any?) {
     FrameAccess.writeObject(frame, slot, value)
 }
+
+/** A local transfer cannot perform a resumable strict force after replacing locals.
+ * Other entry contracts continue through the ordinary typed dispatch. */
+internal fun supportsTypedSelf(formal: ArgumentLayout?, strict: BooleanArray, actual: ArgumentLayout): Boolean =
+    formal?.requiresTyped == true && formal.logicalArity == actual.logicalArity &&
+        strict.indices.all { !strict[it] || formal.isTuple(it) || formal.isVector(it) || actual.proof(it).evaluated }
 
 /** Copies between separately owned typed storage; logical compatibility is checked before this operation. */
 @ExplodeLoop
@@ -508,9 +531,11 @@ internal class AstInputOperands(arguments: Array<Expr>, frameLayout: FrameLayout
 }
 
 internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frameLayout: FrameLayout,
-    private val tail: Boolean, private val metrics: Metrics, private val shape: TupleShape? = null) : Expr() {
+    private val tail: Boolean, private val metrics: Metrics, private val shape: TupleShape? = null,
+    private val selfTransfer: Boolean = false) : Expr() {
     @Child private var function = Evaluate(function, metrics)
     @Child private var operands = AstInputOperands(arguments, frameLayout)
+    @Child private var selfTarget: AstSelfTarget? = if (selfTransfer) AstSelfTarget() else null
     @Child @Volatile private var dispatch: InputDispatch? = if (shape == null)
         InputDispatch(operands.source, arguments.size, tail, metrics) else null
     @field:CompilationFinal(dimensions = 1) private var destinationSlots: IntArray? = null
@@ -527,7 +552,11 @@ internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frame
         }
         if (shape != null) fault("Aggregate value requires a typed destination")
         val closure = function.executeRequiredClosure(frame)
-        try { operands.evaluate(frame); return dispatch!!.execute(frame, closure) }
+        try {
+            operands.evaluate(frame)
+            transferSelf(frame, closure)
+            return dispatch!!.execute(frame, closure)
+        }
         finally { operands.source.clear(frame) }
     }
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
@@ -541,6 +570,7 @@ internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frame
         val closure = function.executeRequiredClosure(frame)
         try {
             operands.evaluate(frame)
+            transferSelf(frame, closure)
             val child = dispatch ?: run {
                 CompilerDirectives.transferToInterpreterAndInvalidate()
                 atomic(Callable {
@@ -556,5 +586,12 @@ internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frame
             child.execute(frame, closure)
             return null
         } finally { operands.source.clear(frame) }
+    }
+    private fun transferSelf(frame: VirtualFrame, function: Closure) {
+        if (selfTransfer && function.arity == operands.layout.logicalArity && function.suppliedCount == 0 &&
+            function.supplied.isEmpty() && function.typedSupplied == null && selfTarget!!.matches(function.target)) {
+            (rootNode as FunctionRoot).transferTypedSelf(frame, function, operands.source, this)
+            throw AstSelfCall
+        }
     }
 }

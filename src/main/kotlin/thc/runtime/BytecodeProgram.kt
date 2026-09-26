@@ -846,7 +846,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
 
     /** Aggregate operands are written directly into replay-local typed slots. */
     private fun typedArguments(e: Emission, function: Expression, arguments: List<Expression>,
-                               layout: ArgumentLayout, tail: Boolean, destination: BytecodeTupleSlots? = null) {
+                               layout: ArgumentLayout, tail: Boolean, destination: BytecodeTupleSlots? = null,
+                               selfTransfer: Boolean = false) {
         val b = e.builder
         b.beginBlock()
         val fn = b.createLocal("typed function", null)
@@ -860,6 +861,15 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             }
         }
         val source = BytecodeInputSource(layout, values.map(LocalAccessor::constantOf).toTypedArray())
+        if (selfTransfer) {
+            b.beginConditional()
+            b.beginIsTypedSelf(layout.logicalArity); b.emitLoadLocal(fn); b.endIsTypedSelf()
+            b.beginBlock()
+            b.beginTransferTypedSelf(e.typedInputSlots!!, source, metrics); b.emitLoadLocal(fn); b.endTransferTypedSelf()
+            b.emitBranch(e.continueLabel!!)
+            b.emitLoadConstant(Unit) // Unreachable Conditional value.
+            b.endBlock()
+        }
         if (destination == null) {
             b.beginApplyTypedInput(source, tail, metrics)
             b.emitLoadLocal(fn); b.endApplyTypedInput()
@@ -867,6 +877,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             b.beginApplyTypedInputTuple(source, destination, tail, metrics)
             b.emitLoadLocal(fn); b.endApplyTypedInputTuple()
         }
+        if (selfTransfer) b.endConditional()
         b.endBlock()
     }
 
@@ -1107,7 +1118,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             if (resumable && !loop) {
                 checkpointedApplication(e, function, arguments, evaluatedArguments, inputLayout, tail)
             } else if (inputLayout?.requiresTyped == true) {
-                typedArguments(e, function, arguments, inputLayout, tail)
+                typedArguments(e, function, arguments, inputLayout, tail,
+                    selfTransfer = tail && !resumable && supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout))
             } else if (inputLayout != null) {
                 compactArguments(e, function, arguments, inputLayout) { fn, values ->
                     b.beginApplyCompact(inputLayout, tail, metrics, evaluatedArguments)
@@ -3196,7 +3208,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 if (resumable) {
                     checkpointedTupleApplication(e, shape, function, arguments, inputLayout, destination, true)
                 } else if (inputLayout?.requiresTyped == true) {
-                    typedArguments(e, function, arguments, inputLayout, true, tupleSlots(shape, destination))
+                    typedArguments(e, function, arguments, inputLayout, true, tupleSlots(shape, destination),
+                        selfTransfer = supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout))
                 } else if (inputLayout == null) {
                     b.beginTailApplyTuple(tupleSlots(shape, destination), arguments.size, metrics)
                     requireClosure(function).emit(e); arguments.forEach { it.emit(e) }; b.endTailApplyTuple()

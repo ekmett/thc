@@ -1462,6 +1462,41 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** Exact zero-prefix self classification; cloned roots retain the same body identity. */
+    @Operation
+    @ConstantOperand(type = int.class, name = "arity")
+    public static final class IsTypedSelf {
+        @Specialization(guards = "function.target == cachedTarget", limit = "3")
+        public static boolean cached(int arity, Closure function, @Bind("$node") Node node,
+                @Cached("function.target") RootCallTarget cachedTarget,
+                @Cached("isSelf(node, cachedTarget)") boolean cachedSelf) {
+            return cachedSelf && exact(arity, function);
+        }
+        @Specialization(replaces = "cached")
+        public static boolean generic(int arity, Closure function, @Bind("$node") Node node) {
+            return exact(arity, function) && IsSelf.isSelf(node, function.target);
+        }
+        public static boolean exact(int arity, Closure function) {
+            return function.arity == arity && function.suppliedCount == 0 &&
+                    function.supplied.length == 0 && function.typedSupplied == null;
+        }
+        public static boolean isSelf(Node node, RootCallTarget target) {
+            return IsSelf.isSelf(node, target);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = BytecodeTypedInputSlots.class, name = "slots")
+    @ConstantOperand(type = BytecodeInputSource.class, name = "source")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class TransferTypedSelf {
+        @Specialization public static void transfer(VirtualFrame frame, BytecodeTypedInputSlots slots,
+                BytecodeInputSource source, Metrics metrics, Closure function, @Bind("$node") Node node) {
+            slots.self(frame, (BytecodeRoot) node.getRootNode(), source, function);
+            if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
+        }
+    }
+
     /** Only the function is a stack operand; aggregate fields stay in typed locals. */
     @Operation
     @ConstantOperand(type = BytecodeInputSource.class, name = "source")

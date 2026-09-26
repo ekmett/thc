@@ -1537,6 +1537,24 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             buildFrame(transfer.args, frame)
         }
     }
+    @ExplodeLoop internal fun transferTypedSelf(frame: VirtualFrame, function: Closure, source: AstInputSource, node: Node) {
+        val entry = typedInput ?: fault("Target does not support typed tuple inputs")
+        entry.validateSelfSource(source, frame, node)
+        for (i in argumentSlots.indices) {
+            val from = argumentIndices[i]
+            val to = argumentSlots[i]
+            if (entry.packet.isLong(entry.header + from)) FrameAccess.writeLong(frame, to, source.long(frame, node, null, from))
+            else if (entry.packet.isFloat(entry.header + from)) FrameAccess.writeFloat(frame, to, source.float(frame, node, null, from))
+            else if (entry.packet.isDouble(entry.header + from)) FrameAccess.writeDouble(frame, to, source.double(frame, node, null, from))
+            else {
+                val value = source.reference(frame, node, null, from)
+                val expected = argumentReferences.getOrNull(i)
+                writeInputReference(frame, to, if (expected == null) value else requireReferenceCarrier(value, expected))
+            }
+        }
+        if (captureLayout != null) restoreCaptured(frame, function.environment ?: fault("Invalid captured frame"))
+        // Retain the activation's bloom and result destination, as for a caught self tail packet.
+    }
     @ExplodeLoop private fun restoreTypedInput(frame: VirtualFrame, input: HandoffStorage, initial: Boolean) {
         val entry = typedInput ?: fault("Target does not support typed tuple inputs")
         try {
@@ -2479,9 +2497,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 else -> {
                     val function = compile(fn, scope, false)
-                    if (ArgumentLayout.fromProofs(nodes.map { it.representation })?.requiresTyped == true)
+                    val input = ArgumentLayout.fromProofs(nodes.map { it.representation })
+                    if (input?.requiresTyped == true)
                         AstTypedApplication(function, nodes, scope.layout, tail, metrics,
-                            if (tupleProof.isTypedTransport) TupleShape(tupleProof, language as thc.Language) else null)
+                            if (tupleProof.isTypedTransport) TupleShape(tupleProof, language as thc.Language) else null,
+                            tail && !enableAsync && scope.self?.let { supportsTypedSelf(it.inputLayout, it.entryStrict, input) } == true)
                     else if (tupleProof.isTypedTransport) {
                         val shape = TupleShape(tupleProof, language as thc.Language)
                         val vectorSlots = if (tupleProof.isVector) IntArray(shape.width) { scope.layout.bind("<vector call result $it>") } else null
