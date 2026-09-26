@@ -3,14 +3,16 @@
 
 package thc.runtime
 
+import jdk.incubator.vector.IntVector
+
 import java.math.BigInteger
 import java.nio.ByteOrder
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class Int32VectorStorageTest {
-    private fun lanes(value: Int32X4) = intArrayOf(value.first, value.second, value.third, value.fourth)
-    private fun vector(values: IntArray) = Int32X4(values[0], values[1], values[2], values[3])
+    private fun lanes(value: IntVector) = intArrayOf(value.lane(0), value.lane(1), value.lane(2), value.lane(3))
+    private fun vector(values: IntArray) = IntVector.broadcast(IntVector.SPECIES_128, values[0]).withLane(1, values[1]).withLane(2, values[2]).withLane(3, values[3])
     private fun shift(byte: Int) = 8 * (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) byte else 3 - byte)
     private fun loadModel(bytes: ByteArray, offset: Int) = IntArray(4) { lane ->
         (0..3).fold(0) { value, byte -> value or ((bytes[offset + lane * 4 + byte].toInt() and 255) shl shift(byte)) }
@@ -40,16 +42,16 @@ class Int32VectorStorageTest {
             val offset = offsetModel(size, index, scalarOffset)
             val label = "size=$size/index=$index/scalar=$scalarOffset"
             if (offset == null) {
-                assertThrows(RuntimeFault::class.java, { Int32X4.readArray(bytes, index, scalarOffset) }, label)
+                assertThrows(RuntimeFault::class.java, { readIntVectorArray(bytes, index, scalarOffset, "Int32X4") }, label)
                 assertArrayEquals(before, bytes, "failed read $label")
-                assertThrows(RuntimeFault::class.java, { Int32X4.writeArray(bytes, index, vector(values), scalarOffset) }, label)
+                assertThrows(RuntimeFault::class.java, { writeIntVectorArray(bytes, index, vector(values), scalarOffset, "Int32X4") }, label)
                 assertArrayEquals(before, bytes, "no partial write $label")
             } else {
-                assertArrayEquals(loadModel(before, offset), lanes(Int32X4.readArray(bytes, index, scalarOffset)), label)
+                assertArrayEquals(loadModel(before, offset), lanes(readIntVectorArray(bytes, index, scalarOffset, "Int32X4")), label)
                 assertArrayEquals(before, bytes, "read preserved storage $label")
                 val expected = before.copyOf()
                 storeModel(expected, offset, values)
-                Int32X4.writeArray(bytes, index, vector(values), scalarOffset)
+                writeIntVectorArray(bytes, index, vector(values), scalarOffset, "Int32X4")
                 assertArrayEquals(expected, bytes, "full vector and sentinel neighbours $label")
             }
         }
@@ -66,8 +68,8 @@ class Int32VectorStorageTest {
             val expected = ByteArray(48) { (it * 29 + 83).toByte() }
             val actual = expected.copyOf()
             storeModel(expected, offset, values)
-            assertArrayEquals(values, lanes(Int32X4.readArray(expected, index, scalarOffset)))
-            Int32X4.writeArray(actual, index, vector(values), scalarOffset)
+            assertArrayEquals(values, lanes(readIntVectorArray(expected, index, scalarOffset, "Int32X4")))
+            writeIntVectorArray(actual, index, vector(values), scalarOffset, "Int32X4")
             assertArrayEquals(expected, actual)
         }
     }
@@ -75,22 +77,22 @@ class Int32VectorStorageTest {
     @Test fun byteAliasesAndOverlappingStoresObserveWritesButKeepLoadedLanes() {
         val bytes = ByteArray(48) { (it * 19 + 131).toByte() }
         val alias = bytes
-        val captured = Int32X4.readArray(bytes, 1, true)
+        val captured = readIntVectorArray(bytes, 1, true, "Int32X4")
         val original = loadModel(bytes, 4)
-        assertArrayEquals(loadModel(bytes, 16), lanes(Int32X4.readArray(alias, 1, false)))
-        assertArrayEquals(lanes(Int32X4.readArray(alias, 1, false)), lanes(Int32X4.readArray(bytes, 4, true)))
+        assertArrayEquals(loadModel(bytes, 16), lanes(readIntVectorArray(alias, 1, false, "Int32X4")))
+        assertArrayEquals(lanes(readIntVectorArray(alias, 1, false, "Int32X4")), lanes(readIntVectorArray(bytes, 4, true, "Int32X4")))
         for (byte in 0..15) {
             alias[4 + byte] = (alias[4 + byte].toInt() xor 0x80).toByte()
-            assertArrayEquals(loadModel(bytes, 4), lanes(Int32X4.readArray(bytes, 1, true)))
+            assertArrayEquals(loadModel(bytes, 4), lanes(readIntVectorArray(bytes, 1, true, "Int32X4")))
             assertArrayEquals(original, lanes(captured), "loaded lane snapshot after byte $byte mutation")
         }
         val expected = bytes.copyOf()
         storeModel(expected, 8, original)
-        Int32X4.writeArray(alias, 2, captured, true)
+        writeIntVectorArray(alias, 2, captured, true, "Int32X4")
         assertArrayEquals(expected, bytes, "overlapping store uses captured lane values")
         for (index in 0L..8L)
-            assertArrayEquals(loadModel(expected, (index * 4).toInt()), lanes(Int32X4.readArray(bytes, index, true)))
+            assertArrayEquals(loadModel(expected, (index * 4).toInt()), lanes(readIntVectorArray(bytes, index, true, "Int32X4")))
         for (index in 0L..2L)
-            assertArrayEquals(loadModel(expected, (index * 16).toInt()), lanes(Int32X4.readArray(alias, index, false)))
+            assertArrayEquals(loadModel(expected, (index * 16).toInt()), lanes(readIntVectorArray(alias, index, false, "Int32X4")))
     }
 }

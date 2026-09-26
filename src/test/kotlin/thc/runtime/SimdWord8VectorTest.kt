@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import jdk.incubator.vector.ByteVector
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.Instruction
@@ -16,7 +18,6 @@ import thc.CoreModules
 import thc.Json
 import thc.Language
 import java.io.File
-import java.lang.reflect.Modifier
 import java.security.MessageDigest
 import java.util.Collections
 import java.util.IdentityHashMap
@@ -38,27 +39,21 @@ class SimdWord8VectorTest {
         val linked = CoreModules.reachable(input, entry) + mapOf("instrument" to true, "diagnosticUnsupported" to diagnostic)
         return if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
     }
-    private fun lanes(value: Word8X16) = listOf(value.first, value.second, value.third, value.fourth,
-        value.fifth, value.sixth, value.seventh, value.eighth, value.ninth, value.tenth, value.eleventh, value.twelfth,
-        value.thirteenth, value.fourteenth, value.fifteenth, value.sixteenth).map { it.toLong() and 0xffL }
-    private fun pack(values: List<Long>) = Word8X16(values[0].toByte(), values[1].toByte(), values[2].toByte(), values[3].toByte(),
-        values[4].toByte(), values[5].toByte(), values[6].toByte(), values[7].toByte(),
-        values[8].toByte(), values[9].toByte(), values[10].toByte(), values[11].toByte(),
-        values[12].toByte(), values[13].toByte(), values[14].toByte(), values[15].toByte())
+    private fun lanes(value: ByteVector) = listOf(value.lane(0), value.lane(1), value.lane(2), value.lane(3),
+        value.lane(4), value.lane(5), value.lane(6), value.lane(7), value.lane(8), value.lane(9), value.lane(10), value.lane(11),
+        value.lane(12), value.lane(13), value.lane(14), value.lane(15)).map { it.toLong() and 0xffL }
+    private fun pack(values: List<Long>) = ByteVector.broadcast(ByteVector.SPECIES_128, values[0].toByte()).withLane(1, values[1].toByte()).withLane(2, values[2].toByte()).withLane(3, values[3].toByte()).withLane(4, values[4].toByte()).withLane(5, values[5].toByte()).withLane(6, values[6].toByte()).withLane(7, values[7].toByte()).withLane(8, values[8].toByte()).withLane(9, values[9].toByte()).withLane(10, values[10].toByte()).withLane(11, values[11].toByte()).withLane(12, values[12].toByte()).withLane(13, values[13].toByte()).withLane(14, values[14].toByte()).withLane(15, values[15].toByte())
     private fun unsigned(value: Long): Long = value and 0xffL
 
-    @Test fun exactShapeRequiresSixteenByteFieldsAndSixteenWord8TupleLanes() {
+    @Test fun exactShapeRequiresSixteenWord8TupleLanes() {
         val proof = CoreRepresentations.parse(metadata())
         assertEquals(CoreVectors.proofWord8, proof)
         assertFalse(proof.isTuple); assertFalse(proof.isLong)
-        val fields = Word8X16::class.java.declaredFields
-        assertEquals(List(16) { Byte::class.javaPrimitiveType }, fields.map { it.type })
-        assertTrue(fields.all { Modifier.isFinal(it.modifiers) && !Modifier.isStatic(it.modifiers) })
         assertEquals(List(16) { "Word8Rep" }, CoreVectors.unpackedWord8.primReps)
         assertTrue(CoreVectors.unpackedWord8.components!!.all { it.isLong })
         assertEquals(6, CoreVectors.operationsWord8.size)
         assertFalse("negateWord8X16#" in CoreVectors.operations)
-        assertFalse(Word8X16::class.java.declaredMethods.any { it.name == "negate" })
+        assertFalse(ByteVector::class.java.declaredMethods.any { it.name == "negate" })
         for (wrong in listOf(CoreVectors.proof, CoreVectors.proof8, CoreVectors.proof16, CoreVectors.proof32, CoreVectors.proofFloat, CoreVectors.proofDouble, CoreVectors.unpackedWord8)) {
             assertFalse(TupleShape.compatible(proof, wrong))
             assertThrows(RuntimeFault::class.java) { proof.refine(wrong) }
@@ -91,10 +86,10 @@ class SimdWord8VectorTest {
             val a = List(16) { unsigned(bits + it * 7919L) }
             val b = List(16) { unsigned(other * (2 * it + 1) + 127L - it * 3571L) }
             val left = pack(a); val right = pack(b)
-            assertEquals(a, lanes(left)); assertEquals(List(16) { unsigned(bits) }, lanes(Word8X16.broadcast(bits.toByte())))
-            assertEquals(a.zip(b).map { unsigned(it.first + it.second) }, lanes(Word8X16.add(left, right)))
-            assertEquals(a.zip(b).map { unsigned(it.first - it.second) }, lanes(Word8X16.subtract(left, right)))
-            assertEquals(a.zip(b).map { unsigned(it.first * it.second) }, lanes(Word8X16.multiply(left, right)))
+            assertEquals(a, lanes(left)); assertEquals(List(16) { unsigned(bits) }, lanes(ByteVector.broadcast(ByteVector.SPECIES_128, bits.toByte())))
+            assertEquals(a.zip(b).map { unsigned(it.first + it.second) }, lanes((left).add(right)))
+            assertEquals(a.zip(b).map { unsigned(it.first - it.second) }, lanes((left).sub(right)))
+            assertEquals(a.zip(b).map { unsigned(it.first * it.second) }, lanes((left).mul(right)))
         }
     }
 

@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import jdk.incubator.vector.IntVector
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.Instruction
@@ -16,7 +18,6 @@ import thc.CoreModules
 import thc.Json
 import thc.Language
 import java.io.File
-import java.lang.reflect.Modifier
 import java.security.MessageDigest
 import java.util.Collections
 import java.util.IdentityHashMap
@@ -39,17 +40,14 @@ class SimdInt32MultiplyTest {
         return if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
     }
     private fun signed(value: Long): Long = ((value and 0xffff_ffffL) xor 0x8000_0000L) - 0x8000_0000L
-    private fun lanes(value: Int32X4) = listOf(value.first.toLong(), value.second.toLong(), value.third.toLong(), value.fourth.toLong())
-    private fun pack(values: List<Long>) = Int32X4(values[0].toInt(), values[1].toInt(), values[2].toInt(), values[3].toInt())
+    private fun lanes(value: IntVector) = listOf(value.lane(0).toLong(), value.lane(1).toLong(), value.lane(2).toLong(), value.lane(3).toLong())
+    private fun pack(values: List<Long>) = IntVector.broadcast(IntVector.SPECIES_128, values[0].toInt()).withLane(1, values[1].toInt()).withLane(2, values[2].toInt()).withLane(3, values[3].toInt())
 
     @Test fun multiplicationKeepsExactSignedFourLaneContract() {
         val proof = CoreRepresentations.parse(metadata())
         assertEquals(CoreVectors.proof32, proof)
         assertEquals(7, CoreVectors.operations32.size)
         assertTrue("timesInt32X4#" in CoreVectors.operations32)
-        val fields = Int32X4::class.java.declaredFields
-        assertEquals(List(4) { Int::class.javaPrimitiveType }, fields.map { it.type })
-        assertTrue(fields.all { Modifier.isFinal(it.modifiers) && !Modifier.isStatic(it.modifiers) })
         assertEquals(List(4) { "Int32Rep" }, CoreVectors.unpacked32.primReps)
         CoreVectors.validate("timesInt32X4#", listOf(proof, proof), proof)
         for (arity in listOf(0, 1, 3)) assertThrows(RuntimeFault::class.java) {
@@ -80,7 +78,7 @@ class SimdInt32MultiplyTest {
                     .and(java.math.BigInteger.valueOf(0xffff_ffffL)).toLong())
                 else signed(it.first * it.second)
             }
-            assertEquals(expected, lanes(Int32X4.multiply(pack(a), pack(b))))
+            assertEquals(expected, lanes((pack(a)).mul(pack(b))))
         }
         // Both halves visit every 16-bit encoding in every lane. The constructed
         // samples are not exhaustive coverage of 2^32 words or 2^64 operand pairs.
@@ -97,10 +95,8 @@ class SimdInt32MultiplyTest {
             val b = MutableList(4) { signed(0xffff_fffeL - it * 591558727L) }; b[lane] = y
             check(a, b, true)
         }
-        assertEquals(List(4) { -2147483648L }, lanes(Int32X4.multiply(
-            pack(List(4) { -2147483648L }), pack(List(4) { -1L }))))
-        assertEquals(List(4) { -2L }, lanes(Int32X4.multiply(
-            pack(List(4) { 2147483647L }), pack(List(4) { 2L }))))
+        assertEquals(List(4) { -2147483648L }, lanes((pack(List(4) { -2147483648L })).mul(pack(List(4) { -1L }))))
+        assertEquals(List(4) { -2L }, lanes((pack(List(4) { 2147483647L })).mul(pack(List(4) { 2L }))))
     }
 
     private fun multiplyModule(literal: List<Any?>, flags: List<Any?> = listOf(false, false)): Map<String, Any?> {

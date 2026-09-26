@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import jdk.incubator.vector.FloatVector
+
 import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
@@ -12,7 +14,6 @@ import thc.CoreModules
 import thc.Json
 import thc.Language
 import java.io.File
-import java.lang.reflect.Modifier
 import java.security.MessageDigest
 
 class SimdFloatVectorTest {
@@ -44,12 +45,7 @@ class SimdFloatVectorTest {
         assertFalse(TupleShape.compatible(proof, CoreVectors.proof32))
         assertEquals(List(4) { "FloatRep" }, CoreVectors.unpackedFloat.primReps)
         assertTrue(CoreVectors.unpackedFloat.components!!.all { it.isFloat })
-        val fields = FloatX4::class.java.declaredFields
-        assertEquals(1, fields.size)
-        assertEquals("jdk.incubator.vector.FloatVector", fields.single().type.name)
-        assertTrue(Modifier.isPrivate(fields.single().modifiers) && Modifier.isFinal(fields.single().modifiers))
-        assertTrue(FloatX4::class.java.declaredConstructors.all { Modifier.isPrivate(it.modifiers) })
-        assertEquals(Float::class.javaPrimitiveType, FloatX4::class.java.getMethod("lane", Int::class.javaPrimitiveType).returnType)
+        assertEquals(Float::class.javaPrimitiveType, FloatVector::class.java.getMethod("lane", Int::class.javaPrimitiveType).returnType)
         assertThrows(RuntimeFault::class.java) { proof.refine(CoreVectors.unpackedFloat) }
         assertThrows(RuntimeFault::class.java) { proof.refine(CoreVectors.proof32) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.caseResult(listOf(proof, CoreVectors.proof32)) }
@@ -60,7 +56,7 @@ class SimdFloatVectorTest {
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packFloatX4#", CoreVectors.unpackedFloat.components!!, proof) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("broadcastFloatX4#",
             listOf(CoreRepresentation(CoreKind.UNKNOWN, true, true, listOf("FloatRep"))), proof) }
-        // FloatX8 is supported; a three-lane vector still has no carrier.
+        // FloatVector is supported; a three-lane vector still has no supported species.
         assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(metadata() + mapOf(
             "primReps" to listOf("VecRep 3 FloatElemRep"), "vector" to mapOf("lanes" to 3L, "element" to "FloatElemRep"))) }
     }
@@ -72,18 +68,18 @@ class SimdFloatVectorTest {
             0.5f, -1.0f, 1.0f, 16777216.0f, 3.0f)
         for ((i, a) in values.withIndex()) for ((j, b) in values.withIndex()) {
             val lanes = floatArrayOf(a, values[(i + 3) % values.size], values[(j + 7) % values.size], b)
-            val packed = FloatX4.pack(lanes[0], lanes[1], lanes[2], lanes[3])
-            val broadcast = FloatX4.broadcast(b)
+            val packed = FloatVector.broadcast(FloatVector.SPECIES_128, lanes[0]).withLane(1, lanes[1]).withLane(2, lanes[2]).withLane(3, lanes[3])
+            val broadcast = FloatVector.broadcast(FloatVector.SPECIES_128, b)
             for (lane in 0..3) {
                 assertEquals(lanes[lane].toRawBits(), packed.lane(lane).toRawBits(), "movement $i/$j/$lane")
                 assertEquals(b.toRawBits(), broadcast.lane(lane).toRawBits(), "broadcast $i/$j/$lane")
-                sameFloat(lanes[lane] + b, FloatX4.add(packed, broadcast).lane(lane), "add $i/$j/$lane")
-                sameFloat(lanes[lane] - b, FloatX4.subtract(packed, broadcast).lane(lane), "subtract $i/$j/$lane")
-                sameFloat(lanes[lane] * b, FloatX4.multiply(packed, broadcast).lane(lane), "multiply $i/$j/$lane")
+                sameFloat(lanes[lane] + b, (packed).add(broadcast).lane(lane), "add $i/$j/$lane")
+                sameFloat(lanes[lane] - b, (packed).sub(broadcast).lane(lane), "subtract $i/$j/$lane")
+                sameFloat(lanes[lane] * b, (packed).mul(broadcast).lane(lane), "multiply $i/$j/$lane")
             }
         }
-        val product = FloatX4.multiply(FloatX4.broadcast(Float.fromBits(0x3f800001)), FloatX4.broadcast(Float.fromBits(0x3f7ffffe)))
-        sameFloat(0.0f, FloatX4.add(product, FloatX4.broadcast(-1.0f)).lane(0), "separate rounding, not FMA")
+        val product = (FloatVector.broadcast(FloatVector.SPECIES_128, Float.fromBits(0x3f800001))).mul(FloatVector.broadcast(FloatVector.SPECIES_128, Float.fromBits(0x3f7ffffe)))
+        sameFloat(0.0f, (product).add(FloatVector.broadcast(FloatVector.SPECIES_128, -1.0f)).lane(0), "separate rounding, not FMA")
     }
 
     @Test fun bothLoadersAcceptVectorFormalsAndRejectForgedProofs() = withLanguage { language ->

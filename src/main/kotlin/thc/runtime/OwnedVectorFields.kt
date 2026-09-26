@@ -10,12 +10,20 @@ import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.ExplodeLoop
 import com.oracle.truffle.api.staticobject.DefaultStaticProperty
 import com.oracle.truffle.api.staticobject.StaticShape
+import jdk.incubator.vector.ByteVector
+import jdk.incubator.vector.ShortVector
+import jdk.incubator.vector.IntVector
+import jdk.incubator.vector.LongVector
+import jdk.incubator.vector.FloatVector
+import jdk.incubator.vector.DoubleVector
+import jdk.incubator.vector.VectorSpecies
 
 /** A logical vector owns final primitive properties inside its enclosing heap object.
  * Slot arrays are immutable lowering metadata, never payload storage or retained frames. */
 internal class OwnedVectorFields(val proof: CoreRepresentation, name: String) {
     init { VectorLayout.validate(proof) }
     private val vector = proof.vector!!
+    private val transport = VectorLayout(proof)
     val lanes = vector.lanes
     private val lane = VectorLayout.laneProof(vector).primReps!!.single()
     @field:CompilationFinal(dimensions = 1)
@@ -55,46 +63,75 @@ internal class OwnedVectorFields(val proof: CoreRepresentation, name: String) {
         else -> fault("Expected integral owned vector lane")
     }
     private fun checkSlots(size: Int, offset: Int) {
-        require(offset >= 0 && offset <= size - lanes) { "Invalid owned vector lane slots" }
+        require(offset >= 0 && offset < size) { "Invalid owned vector transport slot" }
     }
-    @ExplodeLoop fun initialize(owner: Any, frame: Frame, slots: IntArray, offset: Int) {
-        checkSlots(slots.size, offset)
+    @ExplodeLoop private fun initializeRaw(owner: Any, raw: Any?) {
+        val value = transport.require(raw)
         for (index in 0 until lanes) {
-            val slot = slots[offset + index]
-            when (lane) {
-                "FloatRep" -> properties[index].setFloat(owner, if (frame.isFloat(slot)) frame.getFloat(slot)
-                    else frame.getObject(slot) as? Float ?: fault("Expected Float vector lane"))
-                "DoubleRep" -> properties[index].setDouble(owner, if (frame.isDouble(slot)) frame.getDouble(slot)
-                    else frame.getObject(slot) as? Double ?: fault("Expected Double vector lane"))
-                else -> putLong(owner, index, if (frame.isLong(slot)) frame.getLong(slot)
-                    else frame.getObject(slot) as? Long ?: fault("Expected Long vector lane"))
+            when (value) {
+                is ByteVector -> putLong(owner, index, value.lane(index).toLong())
+                is ShortVector -> putLong(owner, index, value.lane(index).toLong())
+                is IntVector -> putLong(owner, index, value.lane(index).toLong())
+                is LongVector -> putLong(owner, index, value.lane(index))
+                is FloatVector -> properties[index].setFloat(owner, value.lane(index))
+                is DoubleVector -> properties[index].setDouble(owner, value.lane(index))
+                else -> fault("Unsupported raw vector carrier")
             }
         }
     }
-    @ExplodeLoop fun restore(owner: Any, frame: Frame, slots: IntArray, offset: Int) {
-        checkSlots(slots.size, offset)
-        for (index in 0 until lanes) when (lane) {
-            "FloatRep" -> FrameAccess.writeFloat(frame, slots[offset + index], properties[index].getFloat(owner))
-            "DoubleRep" -> FrameAccess.writeDouble(frame, slots[offset + index], properties[index].getDouble(owner))
-            else -> FrameAccess.writeLong(frame, slots[offset + index], getLong(owner, index))
+    @Suppress("UNCHECKED_CAST")
+    @ExplodeLoop private fun restoreRaw(owner: Any): Any {
+        // Return each public carrier directly; a value-producing when joins at the inaccessible AbstractVector.
+        when (lane) {
+            "Int8Rep", "Word8Rep" -> {
+                var value = ByteVector.broadcast(transport.species as VectorSpecies<Byte>, getLong(owner, 0).toByte())
+                for (index in 1 until lanes) value = value.withLane(index, getLong(owner, index).toByte())
+                return value
+            }
+            "Int16Rep", "Word16Rep" -> {
+                var value = ShortVector.broadcast(transport.species as VectorSpecies<Short>, getLong(owner, 0).toShort())
+                for (index in 1 until lanes) value = value.withLane(index, getLong(owner, index).toShort())
+                return value
+            }
+            "Int32Rep", "Word32Rep" -> {
+                var value = IntVector.broadcast(transport.species as VectorSpecies<Int>, getLong(owner, 0).toInt())
+                for (index in 1 until lanes) value = value.withLane(index, getLong(owner, index).toInt())
+                return value
+            }
+            "Int64Rep", "Word64Rep" -> {
+                var value = LongVector.broadcast(transport.species as VectorSpecies<Long>, getLong(owner, 0))
+                for (index in 1 until lanes) value = value.withLane(index, getLong(owner, index))
+                return value
+            }
+            "FloatRep" -> {
+                var value = FloatVector.broadcast(transport.species as VectorSpecies<Float>, properties[0].getFloat(owner))
+                for (index in 1 until lanes) value = value.withLane(index, properties[index].getFloat(owner))
+                return value
+            }
+            "DoubleRep" -> {
+                var value = DoubleVector.broadcast(transport.species as VectorSpecies<Double>, properties[0].getDouble(owner))
+                for (index in 1 until lanes) value = value.withLane(index, properties[index].getDouble(owner))
+                return value
+            }
+            else -> fault("Unsupported owned vector lane")
         }
     }
-    @ExplodeLoop fun initialize(owner: Any, bytecode: BytecodeNode, frame: VirtualFrame,
-        slots: Array<LocalAccessor>, offset: Int) {
+    fun initialize(owner: Any, frame: Frame, slots: IntArray, offset: Int) {
         checkSlots(slots.size, offset)
-        for (index in 0 until lanes) when (lane) {
-            "FloatRep" -> properties[index].setFloat(owner, slots[offset + index].getFloat(bytecode, frame))
-            "DoubleRep" -> properties[index].setDouble(owner, slots[offset + index].getDouble(bytecode, frame))
-            else -> putLong(owner, index, slots[offset + index].getLong(bytecode, frame))
-        }
+        initializeRaw(owner, frame.getObject(slots[offset]))
     }
-    @ExplodeLoop fun restore(owner: Any, bytecode: BytecodeNode, frame: VirtualFrame,
+    fun restore(owner: Any, frame: Frame, slots: IntArray, offset: Int) {
+        checkSlots(slots.size, offset)
+        FrameAccess.writeObject(frame, slots[offset], restoreRaw(owner))
+    }
+    fun initialize(owner: Any, bytecode: BytecodeNode, frame: VirtualFrame,
         slots: Array<LocalAccessor>, offset: Int) {
         checkSlots(slots.size, offset)
-        for (index in 0 until lanes) when (lane) {
-            "FloatRep" -> slots[offset + index].setFloat(bytecode, frame, properties[index].getFloat(owner))
-            "DoubleRep" -> slots[offset + index].setDouble(bytecode, frame, properties[index].getDouble(owner))
-            else -> slots[offset + index].setLong(bytecode, frame, getLong(owner, index))
-        }
+        initializeRaw(owner, slots[offset].getObject(bytecode, frame))
+    }
+    fun restore(owner: Any, bytecode: BytecodeNode, frame: VirtualFrame,
+        slots: Array<LocalAccessor>, offset: Int) {
+        checkSlots(slots.size, offset)
+        slots[offset].setObject(bytecode, frame, restoreRaw(owner))
     }
 }

@@ -3,7 +3,10 @@
 
 package thc.runtime
 
-/** Vector identity is one VecRep; typed spill lanes never turn it into a tuple. */
+import com.oracle.truffle.api.CompilerDirectives
+import jdk.incubator.vector.*
+
+/** Vector identity is one VecRep, independent of its physical runtime value. */
 internal data class CoreVector(val lanes: Int, val element: String) {
     companion object {
         val INT64X2 = CoreVector(2, "Int64ElemRep")
@@ -44,6 +47,43 @@ internal data class CoreVector(val lanes: Int, val element: String) {
 }
 
 internal object CoreVectors {
+    // Generic value boundaries check physical species; signedness stays in the exact VecRep.
+    // Expose the species' exact class to the compiler without naming its inaccessible implementation.
+    @JvmStatic fun requireByte(raw: Any?, species: VectorSpecies<Byte>): ByteVector {
+        val value = raw as? ByteVector ?: fault("Expected ByteVector")
+        if (value.species() != species) fault("Unexpected vector species")
+        return CompilerDirectives.castExact(value, species.vectorType()) as ByteVector
+    }
+    @JvmStatic fun requireShort(raw: Any?, species: VectorSpecies<Short>): ShortVector {
+        val value = raw as? ShortVector ?: fault("Expected ShortVector")
+        if (value.species() != species) fault("Unexpected vector species")
+        return CompilerDirectives.castExact(value, species.vectorType()) as ShortVector
+    }
+    @JvmStatic fun requireInt(raw: Any?, species: VectorSpecies<Int>): IntVector {
+        val value = raw as? IntVector ?: fault("Expected IntVector")
+        if (value.species() != species) fault("Unexpected vector species")
+        return CompilerDirectives.castExact(value, species.vectorType()) as IntVector
+    }
+    @JvmStatic fun requireLong(raw: Any?, species: VectorSpecies<Long>): LongVector {
+        val value = raw as? LongVector ?: fault("Expected LongVector")
+        if (value.species() != species) fault("Unexpected vector species")
+        return CompilerDirectives.castExact(value, species.vectorType()) as LongVector
+    }
+    @JvmStatic fun requireFloat(raw: Any?, species: VectorSpecies<Float>): FloatVector {
+        val value = raw as? FloatVector ?: fault("Expected FloatVector")
+        if (value.species() != species) fault("Unexpected vector species")
+        return CompilerDirectives.castExact(value, species.vectorType()) as FloatVector
+    }
+    @JvmStatic fun requireDouble(raw: Any?, species: VectorSpecies<Double>): DoubleVector {
+        val value = raw as? DoubleVector ?: fault("Expected DoubleVector")
+        if (value.species() != species) fault("Unexpected vector species")
+        return CompilerDirectives.castExact(value, species.vectorType()) as DoubleVector
+    }
+    @JvmStatic fun laneIndex(index: Long, lanes: Int): Int {
+        if (index < 0L || index >= lanes.toLong()) fault("Invalid vector lane index")
+        return index.toInt()
+    }
+
     val proof = CoreRepresentation(CoreKind.VECTOR, true, true, listOf("VecRep 2 Int64ElemRep"), vector = CoreVector.INT64X2)
     private val lane = CoreRepresentation(CoreKind.LONG, true, true, listOf("Int64Rep"))
     val unpacked = CoreRepresentation(CoreKind.UNKNOWN, true, true, listOf("Int64Rep", "Int64Rep"), listOf(lane, lane))

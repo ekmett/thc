@@ -209,7 +209,7 @@ class DataLayout private constructor(
     }
 
     fun isVector(index: Int): Boolean = fields[index].vector != null
-    fun fieldWidth(index: Int): Int = fields[index].vector?.lanes ?: if (fields[index].isVoid()) 0 else 1
+    fun fieldWidth(index: Int): Int = if (fields[index].isVoid()) 0 else 1
     internal fun vectorProof(index: Int): CoreRepresentation? = fields[index].vector?.proof
     private fun checkedVector(value: DataValue, index: Int): OwnedVectorFields {
         if (!owns(value)) fault("Constructor value does not match layout")

@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import jdk.incubator.vector.IntVector
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.Instruction
@@ -16,7 +18,6 @@ import thc.CoreModules
 import thc.Json
 import thc.Language
 import java.io.File
-import java.lang.reflect.Modifier
 import java.security.MessageDigest
 import java.util.Collections
 import java.util.IdentityHashMap
@@ -38,22 +39,19 @@ class SimdWord32VectorTest {
         val linked = CoreModules.reachable(input, entry) + mapOf("instrument" to true, "diagnosticUnsupported" to diagnostic)
         return if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
     }
-    private fun lanes(value: Word32X4) = listOf(value.first, value.second, value.third, value.fourth).map { it.toLong() and 0xffff_ffffL }
-    private fun pack(values: List<Long>) = Word32X4(values[0].toInt(), values[1].toInt(), values[2].toInt(), values[3].toInt())
+    private fun lanes(value: IntVector) = listOf(value.lane(0), value.lane(1), value.lane(2), value.lane(3)).map { it.toLong() and 0xffff_ffffL }
+    private fun pack(values: List<Long>) = IntVector.broadcast(IntVector.SPECIES_128, values[0].toInt()).withLane(1, values[1].toInt()).withLane(2, values[2].toInt()).withLane(3, values[3].toInt())
     private fun unsigned(value: Long): Long = value and 0xffff_ffffL
 
-    @Test fun exactShapeRequiresFourIntFieldsAndFourWord32TupleLanes() {
+    @Test fun exactShapeRequiresFourWord32TupleLanes() {
         val proof = CoreRepresentations.parse(metadata())
         assertEquals(CoreVectors.proofWord32, proof)
         assertFalse(proof.isTuple); assertFalse(proof.isLong)
-        val fields = Word32X4::class.java.declaredFields
-        assertEquals(List(4) { Int::class.javaPrimitiveType }, fields.map { it.type })
-        assertTrue(fields.all { Modifier.isFinal(it.modifiers) && !Modifier.isStatic(it.modifiers) })
         assertEquals(List(4) { "Word32Rep" }, CoreVectors.unpackedWord32.primReps)
         assertTrue(CoreVectors.unpackedWord32.components!!.all { it.isLong })
         assertEquals(6, CoreVectors.operationsWord32.size)
         assertFalse("negateWord32X4#" in CoreVectors.operations)
-        assertFalse(Word32X4::class.java.declaredMethods.any { it.name == "negate" })
+        assertFalse(IntVector::class.java.declaredMethods.any { it.name == "negate" })
         for (wrong in listOf(CoreVectors.proof, CoreVectors.proof8, CoreVectors.proof16, CoreVectors.proofWord8, CoreVectors.proofWord16, CoreVectors.proof32, CoreVectors.proofFloat, CoreVectors.proofDouble, CoreVectors.unpackedWord32)) {
             assertFalse(TupleShape.compatible(proof, wrong))
             assertThrows(RuntimeFault::class.java) { proof.refine(wrong) }
@@ -75,7 +73,7 @@ class SimdWord32VectorTest {
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packWord32X4#", listOf(bad), proof) }
         assertThrows(RuntimeFault::class.java) { CoreRepresentations.parse(metadata() - "vector") }
         assertThrows(RuntimeFault::class.java) { CoreRepresentations.parse(metadata() + ("primReps" to List(4) { "Word32Rep" })) }
-        // Word32X8 is supported; a three-lane vector still has no carrier.
+        // IntVector is supported; a three-lane vector still has no supported species.
         assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(metadata() + mapOf("primReps" to listOf("VecRep 3 Word32ElemRep"),
             "vector" to mapOf("lanes" to 3L, "element" to "Word32ElemRep"))) }
     }
@@ -84,15 +82,15 @@ class SimdWord32VectorTest {
         fun check(a: List<Long>, b: List<Long>, broadcast: Long, independentProduct: Boolean = false) {
             val left = pack(a); val right = pack(b)
             assertEquals(a, lanes(left))
-            assertEquals(List(4) { unsigned(broadcast) }, lanes(Word32X4.broadcast(broadcast.toInt())))
-            assertEquals(a.zip(b).map { unsigned(it.first + it.second) }, lanes(Word32X4.add(left, right)))
-            assertEquals(a.zip(b).map { unsigned(it.first - it.second) }, lanes(Word32X4.subtract(left, right)))
+            assertEquals(List(4) { unsigned(broadcast) }, lanes(IntVector.broadcast(IntVector.SPECIES_128, broadcast.toInt())))
+            assertEquals(a.zip(b).map { unsigned(it.first + it.second) }, lanes((left).add(right)))
+            assertEquals(a.zip(b).map { unsigned(it.first - it.second) }, lanes((left).sub(right)))
             val products = a.zip(b).map {
                 if (independentProduct) java.math.BigInteger.valueOf(it.first).multiply(java.math.BigInteger.valueOf(it.second))
                     .and(java.math.BigInteger.valueOf(0xffff_ffffL)).toLong()
                 else unsigned(it.first * it.second)
             }
-            assertEquals(products, lanes(Word32X4.multiply(left, right)))
+            assertEquals(products, lanes((left).mul(right)))
         }
         // Each 16-bit half covers every encoding in every lane. These 65,536
         // constructed samples are not exhaustive Word32 or binary-pair coverage.

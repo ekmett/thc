@@ -25,6 +25,8 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
     init { if (!proof.isTypedTransport) fault("Typed result shape requires an aggregate or vector proof") }
     @field:CompilationFinal(dimensions = 1) val components = (proof.components ?: emptyList()).toTypedArray()
     @field:CompilationFinal(dimensions = 1) val leaves = (if (proof.isSum) SumShape.storage(proof) else flatten(proof)).toTypedArray()
+    @field:CompilationFinal(dimensions = 1)
+    private val vectors = leaves.map { if (it.isVector) VectorLayout(it) else null }.toTypedArray()
     val layout = language.handoffLayouts.intern(if (proof.isSum) leaves.map { it.primReps!!.single() }
         else VectorLayout.storageReps(proof))
     @field:CompilationFinal(dimensions = 1) val offsets = IntArray(components.size).also { offsets ->
@@ -52,7 +54,8 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
         }
     }
     fun checkedReference(index: Int, value: Any?): Any? =
-        if (leaves[index].kind == CoreKind.ADDRESS)
+        if (vectors[index] != null) vectors[index]!!.require(value)
+        else if (leaves[index].kind == CoreKind.ADDRESS)
             value as? ManagedAddress ?: fault("Expected a managed literal Addr# tuple field")
         else value
     fun finish(frame: VirtualFrame, slots: IntArray): Any {
@@ -83,9 +86,8 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
     fun inlineResult(): Boolean = CompilerDirectives.inCompiledCode() && !CompilerDirectives.inCompilationRoot()
     companion object {
         fun flatten(proof: CoreRepresentation): List<CoreRepresentation> = proof.components?.flatMap(::flatten)
-            ?: if (proof.isVector) List(proof.vector!!.lanes) { VectorLayout.laneProof(proof.vector) }
-            else if (proof.kind == CoreKind.VOID) emptyList() else listOf(proof)
-        /** Logical GHC fields keep VecRep atomic even though its transport has multiple lanes. */
+            ?: if (proof.kind == CoreKind.VOID) emptyList() else listOf(proof)
+        /** Logical GHC fields and transport both keep VecRep atomic. */
         fun logicalLeaves(proof: CoreRepresentation): List<CoreRepresentation> = proof.components?.flatMap(::logicalLeaves)
             ?: if (proof.kind == CoreKind.VOID) emptyList() else listOf(proof)
         fun compatible(left: CoreRepresentation, right: CoreRepresentation): Boolean = signature(left) == signature(right)
@@ -108,9 +110,10 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
             if (proof.primReps == null)
                 throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple has unresolved fields")
             val fields = flatten(proof)
-            if (fields.any { (it.kind !in setOf(CoreKind.LONG, CoreKind.FLOAT, CoreKind.DOUBLE,
+            fields.filter { it.isVector }.forEach { VectorLayout.validate(it) }
+            if (fields.any { !it.isVector && ((it.kind !in setOf(CoreKind.LONG, CoreKind.FLOAT, CoreKind.DOUBLE,
                     CoreKind.ADDRESS, CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT)) ||
-                    it.primReps?.singleOrNull()?.let(HandoffLayout::supportsResult) != true })
+                    it.primReps?.singleOrNull()?.let(HandoffLayout::supportsResult) != true) })
                 throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple has unsupported fields")
             if (fields.any { it.kind == CoreKind.ADDRESS && !it.evaluated })
                 throw UnsupportedCore("Unsupported Core aggregate representation: AddrRep tuple field needs an evaluated carrier")
@@ -385,7 +388,7 @@ internal class TupleApplication(private val language: Language, private val shap
     @CompilationFinal private var destinationOffset = -1
     private val vector = shape.proof.takeIf(CoreRepresentation::isVector)?.let(::VectorLayout)
     init {
-        require(vector == null || vectorSlots?.size == vector.lanes)
+        require(vector == null || vectorSlots?.size == vector.width)
         require(inputLayout?.requiresTyped != true)
         representation = shape.proof.copy(evaluated = true)
     }

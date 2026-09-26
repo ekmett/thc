@@ -104,3 +104,38 @@ overMaker vector = case unpackInt16X8# vector of
 {-# OPAQUE overCase #-}
 overCase :: Int# -> Int#
 overCase x = overMaker (vectorReturn x) 13#
+
+-- Distinct lanes and a checksum that demands all of them keep these useful
+-- for inspecting vector flow between operations, rather than just one lane.
+{-# INLINE vectorSeed #-}
+vectorSeed :: Int# -> Int16X8#
+vectorSeed x = packInt16X8#
+  (# intToInt16# x, intToInt16# (x +# 17#), intToInt16# (x +# 34#),
+     intToInt16# (x +# 51#), intToInt16# (x +# 68#), intToInt16# (x +# 85#),
+     intToInt16# (x +# 102#), intToInt16# (x +# 119#) #)
+
+{-# INLINE vectorChecksum #-}
+vectorChecksum :: Int16X8# -> Int#
+vectorChecksum value = case unpackInt16X8# value of
+  (# a, b, c, d, e, f, g, h #) ->
+    int16ToInt# a +# int16ToInt# b *# 2# +# int16ToInt# c *# 3# +#
+    int16ToInt# d *# 4# +# int16ToInt# e *# 5# +# int16ToInt# f *# 6# +#
+    int16ToInt# g *# 7# +# int16ToInt# h *# 8#
+
+{-# OPAQUE chainCase #-}
+chainCase :: Int# -> Int#
+chainCase x = case vectorSeed x of
+  seed -> vectorChecksum (minusInt16X8#
+    (timesInt16X8# (plusInt16X8# seed (broadcastInt16X8# (intToInt16# 7#)))
+      (broadcastInt16X8# (intToInt16# 3#))) seed)
+
+{-# OPAQUE loopCase #-}
+loopCase :: Int# -> Int#
+loopCase x = go (vectorSeed x) (andI# x 7# +# 1#)
+  where
+    go :: Int16X8# -> Int# -> Int#
+    go value remaining = case remaining of
+      0# -> vectorChecksum value
+      _ -> go (timesInt16X8#
+        (plusInt16X8# value (broadcastInt16X8# (intToInt16# remaining)))
+        (broadcastInt16X8# (intToInt16# 3#))) (remaining -# 1#)

@@ -54,10 +54,13 @@ class HandoffLayout(language: Language, val id: Int, val reps: List<String>) {
         "int8-lane" -> 4; "word8-lane" -> 5
         "int16-lane" -> 6; "word16-lane" -> 7
         "int32-lane" -> 8; "word32-lane" -> 9
+        in VECTOR_REPS -> 10
         else -> fault("Invalid physical handoff field: $it")
     } }.toIntArray()
     @field:CompilationFinal(dimensions = 1)
     private val fields = Array(reps.size) { DefaultStaticProperty("handoff_$it") }
+    @field:CompilationFinal(dimensions = 1)
+    private val vectors = reps.map { if (it in VECTOR_REPS) VectorLayout.fromStorageRep(it) else null }.toTypedArray()
     private val shape = StaticShape.newBuilder(language).also { builder ->
         fields.indices.forEach { i -> builder.property(fields[i], when (kinds[i]) {
             0 -> Long::class.javaPrimitiveType!!
@@ -66,14 +69,15 @@ class HandoffLayout(language: Language, val id: Int, val reps: List<String>) {
             4, 5 -> Byte::class.javaPrimitiveType!!
             6, 7 -> Short::class.javaPrimitiveType!!
             8, 9 -> Int::class.javaPrimitiveType!!
+            10 -> vectors[i]!!.carrierType
             else -> Any::class.java
         }, false) }
     }.build(HandoffStorage::class.java, HandoffFactory::class.java)
     fun create(): HandoffStorage = shape.factory.create(this)
-    fun isLong(index: Int): Boolean = kinds[index] == 0 || kinds[index] >= 4
+    fun isLong(index: Int): Boolean = kinds[index] == 0 || kinds[index] in 4..9
     fun isFloat(index: Int): Boolean = kinds[index] == 1
     fun isDouble(index: Int): Boolean = kinds[index] == 2
-    fun isObject(index: Int): Boolean = kinds[index] == 3
+    fun isObject(index: Int): Boolean = kinds[index] == 3 || kinds[index] == 10
     fun getLong(storage: HandoffStorage, index: Int): Long = when (kinds[index]) {
         0 -> fields[index].getLong(storage)
         4 -> fields[index].getByte(storage).toLong()
@@ -87,7 +91,8 @@ class HandoffLayout(language: Language, val id: Int, val reps: List<String>) {
     fun getFloat(storage: HandoffStorage, index: Int): Float = fields[index].getFloat(storage)
     fun getDouble(storage: HandoffStorage, index: Int): Double = fields[index].getDouble(storage)
     fun getObject(storage: HandoffStorage, index: Int): Any? = fields[index].getObject(storage)
-    fun setObject(storage: HandoffStorage, index: Int, value: Any?) = fields[index].setObject(storage, value)
+    fun setObject(storage: HandoffStorage, index: Int, value: Any?) =
+        fields[index].setObject(storage, if (vectors[index] == null) value else vectors[index]!!.require(value))
     fun setLong(storage: HandoffStorage, index: Int, value: Long) = when (kinds[index]) {
         0 -> fields[index].setLong(storage, value)
         4, 5 -> fields[index].setByte(storage, value.toByte())
@@ -104,7 +109,7 @@ class HandoffLayout(language: Language, val id: Int, val reps: List<String>) {
                 0, 4, 5, 6, 7, 8, 9 -> setLong(storage, i, values[i] as? Long ?: fault("Invalid primitive handoff field"))
                 1 -> fields[i].setFloat(storage, values[i] as? Float ?: fault("Invalid Float handoff field"))
                 2 -> fields[i].setDouble(storage, values[i] as? Double ?: fault("Invalid Double handoff field"))
-                else -> fields[i].setObject(storage, values[i])
+                else -> setObject(storage, i, values[i])
             }
         }
     }
@@ -112,11 +117,16 @@ class HandoffLayout(language: Language, val id: Int, val reps: List<String>) {
         for (i in fields.indices) if (isObject(i)) fields[i].setObject(storage, null)
     }
     companion object {
+        private val VECTOR_REPS = mapOf("byte" to 16, "short" to 8, "int" to 4,
+            "long" to 2, "float" to 4, "double" to 2).flatMap { (lane, count) ->
+            listOf(1, 2, 4).map { "Vector $lane ${count * it}" }
+        }.toSet()
         private val LONG_REPS = setOf("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep")
         // Scalar argument handoff still uses only Long/reference snapshots.
         internal fun supports(rep: String): Boolean = rep in LONG_REPS || rep.startsWith("BoxedRep ")
         internal fun supportsResult(rep: String): Boolean = supports(rep) || rep in setOf("FloatRep", "DoubleRep", "AddrRep")
         internal fun fieldKind(rep: String): String = when {
+            rep in VECTOR_REPS -> rep
             rep == "VectorLane Int8Rep" -> "int8-lane"
             rep == "VectorLane Word8Rep" -> "word8-lane"
             rep == "VectorLane Int16Rep" -> "int16-lane"

@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import jdk.incubator.vector.DoubleVector
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
@@ -422,7 +424,7 @@ class DoubleVectorMemoryProofTest {
                 override fun execute(frame: VirtualFrame): Any? { events.add(name); return action() }
             }
             val arguments = mutableListOf<Expr>(operand("array") { bytes }, operand("index") { Long.MAX_VALUE })
-            if (operation.isWrite) arguments.add(operand("vector") { DoubleX2.pack(1.0, 2.0) })
+            if (operation.isWrite) arguments.add(operand("vector") { DoubleVector.broadcast(DoubleVector.SPECIES_128, 1.0).withLane(1, 2.0) })
             arguments.add(operand("state") { throw failure })
             val expression = VectorByteArrayExpression(operation, arguments.toTypedArray())
             val sentinel = Any(); var published: Any? = sentinel

@@ -5,6 +5,11 @@ package thc.runtime
 
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.interop.InteropLibrary
+import com.oracle.truffle.api.interop.InvalidBufferOffsetException
+import com.oracle.truffle.api.interop.TruffleObject
+import com.oracle.truffle.api.interop.UnsupportedMessageException
+import com.oracle.truffle.api.library.ExportLibrary
+import com.oracle.truffle.api.library.ExportMessage
 import com.oracle.truffle.api.source.Source
 import org.graalvm.polyglot.io.ByteSequence
 import java.lang.ref.WeakReference
@@ -12,6 +17,8 @@ import java.lang.ref.Reference
 import java.util.WeakHashMap
 import java.util.function.LongSupplier
 import java.util.function.Supplier
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.concurrent.FutureTask
 import java.util.concurrent.ExecutionException
 import com.oracle.truffle.api.TruffleSafepoint
@@ -241,6 +248,73 @@ internal class CFinalizerFunction internal constructor(
         if (provider !== owner) fault("C function label belongs to another THC context")
     }
     fun invoke(address: ManagedAddress) = owner.invokeFinalizer(this, address)
+}
+
+/** Byte interop over the original allocation; immutable views may acquire an owned native image. */
+@ExportLibrary(InteropLibrary::class)
+internal class CbitsBuffer @JvmOverloads constructor(bytes: ByteArray, private val writable: Boolean,
+    private val logicalSize: LongSupplier = LongSupplier { bytes.size.toLong() },
+    private val baseOffset: Long = 0,
+    private val nativeImage: Supplier<NativeReadOnlyPointer>? = null) : TruffleObject {
+    private val little = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+    private val big = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN)
+    private var pointer: NativeReadOnlyPointer? = null
+
+    init {
+        require(!writable || nativeImage == null) { "Mutable C buffers cannot use immutable native images" }
+        require(baseOffset >= 0 && baseOffset <= logicalSize.asLong) { "C buffer address exceeds its allocation" }
+    }
+
+    @Synchronized @ExportMessage fun isPointer(): Boolean = pointer?.isPointer() == true
+    @Synchronized @ExportMessage fun toNative() {
+        if (nativeImage != null && pointer == null) pointer = nativeImage.get()
+    }
+    @Synchronized @ExportMessage @Throws(UnsupportedMessageException::class)
+    fun asPointer(): Long {
+        if (!isPointer()) throw UnsupportedMessageException.create()
+        return pointer!!.asPointer() + baseOffset
+    }
+    @ExportMessage fun hasBufferElements(): Boolean = true
+    @ExportMessage fun isBufferWritable(): Boolean = writable
+    @ExportMessage fun getBufferSize(): Long = logicalSize.asLong - baseOffset
+
+    private fun index(offset: Long, width: Int): Int {
+        if (offset < 0 || offset > logicalSize.asLong - baseOffset - width)
+            throw InvalidBufferOffsetException.create(offset, width.toLong())
+        return Math.toIntExact(baseOffset + offset)
+    }
+    private fun requireWritable() { if (!writable) throw UnsupportedMessageException.create() }
+    private fun view(order: ByteOrder): ByteBuffer = if (order == ByteOrder.LITTLE_ENDIAN) little else big
+
+    @ExportMessage @Throws(InvalidBufferOffsetException::class)
+    fun readBuffer(offset: Long, destination: ByteArray, destinationOffset: Int, length: Int) {
+        little.get(index(offset, length), destination, destinationOffset, length)
+    }
+    @ExportMessage @Throws(InvalidBufferOffsetException::class)
+    fun readBufferByte(offset: Long): Byte = little.get(index(offset, 1))
+    @ExportMessage @Throws(InvalidBufferOffsetException::class)
+    fun readBufferShort(order: ByteOrder, offset: Long): Short = view(order).getShort(index(offset, 2))
+    @ExportMessage @Throws(InvalidBufferOffsetException::class)
+    fun readBufferInt(order: ByteOrder, offset: Long): Int = view(order).getInt(index(offset, 4))
+    @ExportMessage @Throws(InvalidBufferOffsetException::class)
+    fun readBufferLong(order: ByteOrder, offset: Long): Long = view(order).getLong(index(offset, 8))
+    @ExportMessage @Throws(InvalidBufferOffsetException::class)
+    fun readBufferFloat(order: ByteOrder, offset: Long): Float = view(order).getFloat(index(offset, 4))
+    @ExportMessage @Throws(InvalidBufferOffsetException::class)
+    fun readBufferDouble(order: ByteOrder, offset: Long): Double = view(order).getDouble(index(offset, 8))
+
+    @ExportMessage @Throws(InvalidBufferOffsetException::class, UnsupportedMessageException::class)
+    fun writeBufferByte(offset: Long, value: Byte) { requireWritable(); little.put(index(offset, 1), value) }
+    @ExportMessage @Throws(InvalidBufferOffsetException::class, UnsupportedMessageException::class)
+    fun writeBufferShort(order: ByteOrder, offset: Long, value: Short) { requireWritable(); view(order).putShort(index(offset, 2), value) }
+    @ExportMessage @Throws(InvalidBufferOffsetException::class, UnsupportedMessageException::class)
+    fun writeBufferInt(order: ByteOrder, offset: Long, value: Int) { requireWritable(); view(order).putInt(index(offset, 4), value) }
+    @ExportMessage @Throws(InvalidBufferOffsetException::class, UnsupportedMessageException::class)
+    fun writeBufferLong(order: ByteOrder, offset: Long, value: Long) { requireWritable(); view(order).putLong(index(offset, 8), value) }
+    @ExportMessage @Throws(InvalidBufferOffsetException::class, UnsupportedMessageException::class)
+    fun writeBufferFloat(order: ByteOrder, offset: Long, value: Float) { requireWritable(); view(order).putFloat(index(offset, 4), value) }
+    @ExportMessage @Throws(InvalidBufferOffsetException::class, UnsupportedMessageException::class)
+    fun writeBufferDouble(order: ByteOrder, offset: Long, value: Double) { requireWritable(); view(order).putDouble(index(offset, 8), value) }
 }
 
 internal object CFinalizerLabels {

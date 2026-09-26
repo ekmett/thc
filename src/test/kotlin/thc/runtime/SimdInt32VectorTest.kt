@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import jdk.incubator.vector.IntVector
+
 import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
@@ -33,15 +35,13 @@ class SimdInt32VectorTest {
         val proof = CoreRepresentations.parse(metadata)
         assertEquals(CoreVectors.proof32, proof)
         assertFalse(proof.isTuple); assertFalse(proof.isLong)
-        assertEquals(List(4) { Int::class.javaPrimitiveType }, Int32X4::class.java.declaredFields.map { it.type })
-        assertTrue(Int32X4::class.java.declaredFields.all { java.lang.reflect.Modifier.isFinal(it.modifiers) })
         assertFalse(TupleShape.compatible(proof, CoreVectors.unpacked32))
         assertThrows(RuntimeFault::class.java) { proof.refine(CoreVectors.proof) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.caseResult(listOf(proof, CoreVectors.proof)) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("plusInt32X4#", listOf(proof, CoreVectors.proof), proof) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packInt32X4#", listOf(CoreVectors.unpacked), proof) }
         assertThrows(RuntimeFault::class.java) { CoreRepresentations.parse(metadata - "vector") }
-        // Int32X8 is supported; a three-lane vector still has no carrier.
+        // IntVector is supported; a three-lane vector still has no supported species.
         assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(metadata + mapOf("primReps" to listOf("VecRep 3 Int32ElemRep"),
             "vector" to mapOf("lanes" to 3L, "element" to "Int32ElemRep"))) }
     }

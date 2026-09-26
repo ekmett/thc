@@ -5,9 +5,13 @@
 
 package thc.runtime
 
+import jdk.incubator.vector.IntVector
+import jdk.incubator.vector.FloatVector
+import jdk.incubator.vector.DoubleVector
+
 import com.oracle.truffle.api.frame.VirtualFrame
 
-/** Closed local memory families, independent of their scalar lane carriers. */
+/** Closed local memory families with exact vector representation proofs. */
 internal enum class VectorMemoryFamily {
     INT32, WORD32, FLOAT32, DOUBLE64;
     val vectorProof: CoreRepresentation get() = when (this) {
@@ -172,22 +176,22 @@ internal class VectorByteArrayExpression(private val operation: VectorByteArrayO
             // prevents partial evaluation from selecting this node's family.
             when {
                 operation.family === VectorMemoryFamily.INT32 -> {
-                    val value = arguments[2].execute(frame) as? Int32X4 ?: fault("Expected Int32X4#")
+                    val value = CoreVectors.requireInt(arguments[2].execute(frame), IntVector.SPECIES_128)
                     ManagedByteArray.requireState(arguments[3].execute(frame))
                     ManagedByteArray.writeInt32VectorGuest(array, index, value, operation.scalarOffset)
                 }
                 operation.family === VectorMemoryFamily.WORD32 -> {
-                    val value = arguments[2].execute(frame) as? Word32X4 ?: fault("Expected Word32X4#")
+                    val value = CoreVectors.requireInt(arguments[2].execute(frame), IntVector.SPECIES_128)
                     ManagedByteArray.requireState(arguments[3].execute(frame))
                     ManagedByteArray.writeWord32VectorGuest(array, index, value, operation.scalarOffset)
                 }
                 operation.family === VectorMemoryFamily.FLOAT32 -> {
-                    val value = arguments[2].execute(frame) as? FloatX4 ?: fault("Expected FloatX4#")
+                    val value = CoreVectors.requireFloat(arguments[2].execute(frame), FloatVector.SPECIES_128)
                     ManagedByteArray.requireState(arguments[3].execute(frame))
                     ManagedByteArray.writeFloatVectorGuest(array, index, value, operation.scalarOffset)
                 }
                 operation.family === VectorMemoryFamily.DOUBLE64 -> {
-                    val value = arguments[2].execute(frame) as? DoubleX2 ?: fault("Expected DoubleX2#")
+                    val value = CoreVectors.requireDouble(arguments[2].execute(frame), DoubleVector.SPECIES_128)
                     ManagedByteArray.requireState(arguments[3].execute(frame))
                     ManagedByteArray.writeDoubleVectorGuest(array, index, value, operation.scalarOffset)
                 }
@@ -196,11 +200,12 @@ internal class VectorByteArrayExpression(private val operation: VectorByteArrayO
             return Unit
         }
         if (operation.isRead) ManagedByteArray.requireState(arguments[2].execute(frame))
-        return when {
-            operation.family === VectorMemoryFamily.INT32 -> ManagedByteArray.readInt32VectorGuest(array, index, operation.scalarOffset)
-            operation.family === VectorMemoryFamily.WORD32 -> ManagedByteArray.readWord32VectorGuest(array, index, operation.scalarOffset)
-            operation.family === VectorMemoryFamily.FLOAT32 -> ManagedByteArray.readFloatVectorGuest(array, index, operation.scalarOffset)
-            operation.family === VectorMemoryFamily.DOUBLE64 -> ManagedByteArray.readDoubleVectorGuest(array, index, operation.scalarOffset)
+        // Return each public carrier directly; a value-producing when joins at the inaccessible AbstractVector.
+        when {
+            operation.family === VectorMemoryFamily.INT32 -> return ManagedByteArray.readInt32VectorGuest(array, index, operation.scalarOffset)
+            operation.family === VectorMemoryFamily.WORD32 -> return ManagedByteArray.readWord32VectorGuest(array, index, operation.scalarOffset)
+            operation.family === VectorMemoryFamily.FLOAT32 -> return ManagedByteArray.readFloatVectorGuest(array, index, operation.scalarOffset)
+            operation.family === VectorMemoryFamily.DOUBLE64 -> return ManagedByteArray.readDoubleVectorGuest(array, index, operation.scalarOffset)
             else -> fault("Unsupported local vector memory family")
         }
     }

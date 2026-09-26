@@ -75,7 +75,7 @@ internal class AstSelfLayout(
 }
 
 /** Clones preserve GuestRoot.bodyIdentity, including cached positive/negative answers. */
-private class AstSelfTarget : Node() {
+internal class AstSelfTarget : Node() {
     private class CachedTarget(val target: RootCallTarget, val matches: Boolean)
     @field:CompilationFinal(dimensions = 1) @Volatile private var cached = emptyArray<CachedTarget>()
 

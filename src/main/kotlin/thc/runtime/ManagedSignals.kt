@@ -7,23 +7,126 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.nodes.RootNode
+import java.io.IOException
+import java.lang.foreign.Arena
+import java.lang.foreign.FunctionDescriptor
+import java.lang.foreign.Linker
+import java.lang.foreign.MemoryLayout
+import java.lang.foreign.MemorySegment
+import java.lang.foreign.SymbolLookup
+import java.lang.foreign.ValueLayout
+import java.lang.invoke.MethodHandle
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.concurrent.atomic.AtomicBoolean
 import thc.Language
 
 internal interface ProcessSignalTransport : AutoCloseable {
-    fun install(action: Int): NativeProcessSignals.Result
+    data class Result(val action: Int, val errno: Int)
+    fun install(action: Int): Result
     fun take(): ByteArray?
     fun wake()
     fun resetWake()
 }
 
-private class NativeSignalTransport : ProcessSignalTransport {
-    private val native = NativeProcessSignals()
-    override fun install(action: Int) = native.install(action)
-    override fun take() = native.take()
-    override fun wake() = native.wake()
-    override fun resetWake() = native.resetWake()
-    override fun close() = native.close()
+/** Machine-code signal boundary: an asynchronous native handler never enters Truffle. */
+internal class NativeSignalTransport : ProcessSignalTransport {
+    private val arena = Arena.ofShared()
+    private val session: MemorySegment
+    private val image: MemorySegment
+    private var closed = false
+    init {
+        try {
+            Arena.ofConfined().use { call ->
+                image = arena.allocate((Api.size.invokeExact() as Int).toLong(), 8)
+                val errors = call.allocate(Api.capture)
+                session = Api.open.invokeExact(errors) as MemorySegment
+                if (session.address() == 0L) fault("Process signal ownership unavailable (errno " +
+                    errors.get(ValueLayout.JAVA_INT, Api.errno) + ")")
+            }
+        } catch (failure: Throwable) { arena.close(); failed("Process signal setup failed", failure) }
+    }
+    override fun install(action: Int): ProcessSignalTransport.Result = try {
+        Arena.ofConfined().use { call ->
+            val errors = call.allocate(Api.capture)
+            val old = Api.install.invokeExact(errors, session, action) as Int
+            ProcessSignalTransport.Result(old, if (old == -3) errors.get(ValueLayout.JAVA_INT, Api.errno) else 0)
+        }
+    } catch (failure: Throwable) { failed("Process signal install failed", failure) }
+    /** Only the single reader calls this; zero is an explicit wake. */
+    override fun take(): ByteArray? = try {
+        when (Api.take.invokeExact(session, image) as Int) {
+            0 -> null
+            1 -> image.toArray(ValueLayout.JAVA_BYTE)
+            -2 -> fault("Process signal queue overflow")
+            else -> fault("Process signal read failed")
+        }
+    } catch (failure: Throwable) { failed("Process signal read failed", failure) }
+    override fun wake() {
+        try { Api.wake.invokeExact(session) }
+        catch (failure: Throwable) { failed("Process signal wake failed", failure) }
+    }
+    override fun resetWake() {
+        try { Api.reset.invokeExact(session) }
+        catch (failure: Throwable) { failed("Process signal wake reset failed", failure) }
+    }
+    /** Caller has stopped/joined the reader and unregistered its interrupter. */
+    override fun close() {
+        if (closed) return
+        closed = true
+        try {
+            Arena.ofConfined().use { call ->
+                val errors = call.allocate(Api.capture)
+                val result = Api.close.invokeExact(errors, session) as Int
+                if (result != 0) fault("Process signal restoration failed")
+            }
+        } catch (failure: Throwable) { failed("Process signal close failed", failure) }
+        finally { arena.close() }
+    }
+    companion object {
+        /** Explicit CLI-only termination after context shutdown, never guest FFI. */
+        fun exitBySignal(signal: Int) {
+            require(signal in 1..64) { "Invalid process exit signal" }
+            try { Api.exit.invokeExact(signal) }
+            catch (failure: Throwable) { failed("Process signal exit failed", failure) }
+            throw AssertionError("Signal exit returned")
+        }
+        private fun failed(message: String, failure: Throwable): Nothing {
+            if (failure is RuntimeException || failure is Error) throw failure
+            throw RuntimeFault(message).also { it.initCause(failure) }
+        }
+    }
+    private object Api {
+        private val linker = Linker.nativeLinker()
+        val capture = Linker.Option.captureStateLayout()
+        val errno = capture.byteOffset(MemoryLayout.PathElement.groupElement("errno"))
+        private val library = load()
+        private fun load(): SymbolLookup {
+            if (System.getProperty("os.name") != "Linux" || System.getProperty("os.arch") !in setOf("amd64", "x86_64"))
+                fault("Process signals require Linux x86_64")
+            try {
+                NativeSignalTransport::class.java.getResourceAsStream("/thc/native/native-process-signal-api.so").use { input ->
+                    if (input == null) throw IOException("Missing native process signal bridge")
+                    val library = Files.createTempFile("thc-process-signals-", ".so")
+                    library.toFile().deleteOnExit()
+                    Files.copy(input, library, StandardCopyOption.REPLACE_EXISTING)
+                    // Late handlers may retain this code after a session closes.
+                    return SymbolLookup.libraryLookup(library, Arena.global())
+                }
+            } catch (failure: IOException) { failed("Cannot load process signal bridge", failure) }
+        }
+        private fun function(name: String, descriptor: FunctionDescriptor, errno: Boolean): MethodHandle =
+            linker.downcallHandle(library.find("thc_signal_$name").orElseThrow(), descriptor,
+                *if (errno) arrayOf(Linker.Option.captureCallState("errno")) else emptyArray())
+        val open = function("open", FunctionDescriptor.of(ValueLayout.ADDRESS), true)
+        val size = function("info_size", FunctionDescriptor.of(ValueLayout.JAVA_INT), false)
+        val install = function("install", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT), true)
+        val take = function("take", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS), false)
+        val wake = function("wake", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS), false)
+        val reset = function("reset_wake", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS), false)
+        val close = function("close", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS), true)
+        val exit = function("exit", FunctionDescriptor.ofVoid(ValueLayout.JAVA_INT), false)
+    }
 }
 
 /** One explicit CLI context owns SIGINT for its process lifetime. Ordinary
@@ -70,8 +173,8 @@ internal class ManagedSignals(private val owner: Language.State, private val lan
             }
         }
         val result = native.install(action.toInt())
-        if (result.action() == -3) owner.stdio.nativeError(result.errno().toLong())
-        return result.action().toLong()
+        if (result.action == -3) owner.stdio.nativeError(result.errno.toLong())
+        return result.action.toLong()
     }
 
     private fun consume(native: ProcessSignalTransport, root: SignalDispatchRoot) {

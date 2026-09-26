@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import jdk.incubator.vector.ShortVector
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.Instruction
@@ -16,7 +18,6 @@ import thc.CoreModules
 import thc.Json
 import thc.Language
 import java.io.File
-import java.lang.reflect.Modifier
 import java.security.MessageDigest
 import java.util.Collections
 import java.util.IdentityHashMap
@@ -38,24 +39,20 @@ class SimdWord16VectorTest {
         val linked = CoreModules.reachable(input, entry) + mapOf("instrument" to true, "diagnosticUnsupported" to diagnostic)
         return if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
     }
-    private fun lanes(value: Word16X8) = listOf(value.first, value.second, value.third, value.fourth,
-        value.fifth, value.sixth, value.seventh, value.eighth).map { it.toLong() and 0xffffL }
-    private fun pack(values: List<Long>) = Word16X8(values[0].toShort(), values[1].toShort(), values[2].toShort(), values[3].toShort(),
-        values[4].toShort(), values[5].toShort(), values[6].toShort(), values[7].toShort())
+    private fun lanes(value: ShortVector) = listOf(value.lane(0), value.lane(1), value.lane(2), value.lane(3),
+        value.lane(4), value.lane(5), value.lane(6), value.lane(7)).map { it.toLong() and 0xffffL }
+    private fun pack(values: List<Long>) = ShortVector.broadcast(ShortVector.SPECIES_128, values[0].toShort()).withLane(1, values[1].toShort()).withLane(2, values[2].toShort()).withLane(3, values[3].toShort()).withLane(4, values[4].toShort()).withLane(5, values[5].toShort()).withLane(6, values[6].toShort()).withLane(7, values[7].toShort())
     private fun unsigned(value: Long): Long = value and 0xffffL
 
-    @Test fun exactShapeRequiresEightShortFieldsAndEightWord16TupleLanes() {
+    @Test fun exactShapeRequiresEightWord16TupleLanes() {
         val proof = CoreRepresentations.parse(metadata())
         assertEquals(CoreVectors.proofWord16, proof)
         assertFalse(proof.isTuple); assertFalse(proof.isLong)
-        val fields = Word16X8::class.java.declaredFields
-        assertEquals(List(8) { Short::class.javaPrimitiveType }, fields.map { it.type })
-        assertTrue(fields.all { Modifier.isFinal(it.modifiers) && !Modifier.isStatic(it.modifiers) })
         assertEquals(List(8) { "Word16Rep" }, CoreVectors.unpackedWord16.primReps)
         assertTrue(CoreVectors.unpackedWord16.components!!.all { it.isLong })
         assertEquals(6, CoreVectors.operationsWord16.size)
         assertFalse("negateWord16X8#" in CoreVectors.operations)
-        assertFalse(Word16X8::class.java.declaredMethods.any { it.name == "negate" })
+        assertFalse(ShortVector::class.java.declaredMethods.any { it.name == "negate" })
         for (wrong in listOf(CoreVectors.proof, CoreVectors.proof8, CoreVectors.proof16, CoreVectors.proofWord8, CoreVectors.proof32, CoreVectors.proofFloat, CoreVectors.proofDouble, CoreVectors.unpackedWord16)) {
             assertFalse(TupleShape.compatible(proof, wrong))
             assertThrows(RuntimeFault::class.java) { proof.refine(wrong) }
@@ -85,10 +82,10 @@ class SimdWord16VectorTest {
         fun check(a: List<Long>, b: List<Long>, broadcast: Long) {
             val left = pack(a); val right = pack(b)
             assertEquals(a, lanes(left))
-            assertEquals(List(8) { unsigned(broadcast) }, lanes(Word16X8.broadcast(broadcast.toShort())))
-            assertEquals(a.zip(b).map { unsigned(it.first + it.second) }, lanes(Word16X8.add(left, right)))
-            assertEquals(a.zip(b).map { unsigned(it.first - it.second) }, lanes(Word16X8.subtract(left, right)))
-            assertEquals(a.zip(b).map { unsigned(it.first * it.second) }, lanes(Word16X8.multiply(left, right)))
+            assertEquals(List(8) { unsigned(broadcast) }, lanes(ShortVector.broadcast(ShortVector.SPECIES_128, broadcast.toShort())))
+            assertEquals(a.zip(b).map { unsigned(it.first + it.second) }, lanes((left).add(right)))
+            assertEquals(a.zip(b).map { unsigned(it.first - it.second) }, lanes((left).sub(right)))
+            assertEquals(a.zip(b).map { unsigned(it.first * it.second) }, lanes((left).mul(right)))
         }
         // All 65,536 encodings in every lane; arithmetic samples are correlated,
         // not a claim of exhaustive coverage of all 2^32 binary operand pairs.

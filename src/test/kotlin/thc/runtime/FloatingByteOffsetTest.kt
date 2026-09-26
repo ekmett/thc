@@ -54,10 +54,10 @@ class FloatingByteOffsetTest {
         val bytes = ByteArray(32)
         val floatBits = 0x7fc12345L
         val doubleBits = 0x7ff8000000001234L
-        ManagedByteArray.writeFloatByteOffsetGuest(bytes, 1, RawBitCasts.word32ToFloat(floatBits))
-        ManagedByteArray.writeDoubleByteOffsetGuest(bytes, 9, RawBitCasts.word64ToDouble(doubleBits))
-        assertEquals(floatBits, RawBitCasts.floatToWord32(ManagedByteArray.readFloatByteOffsetGuest(bytes, 1)))
-        assertEquals(doubleBits, RawBitCasts.doubleToWord64(ManagedByteArray.readDoubleByteOffsetGuest(bytes, 9)))
+        ManagedByteArray.writeFloatByteOffsetGuest(bytes, 1, java.lang.Float.intBitsToFloat((floatBits).toInt()))
+        ManagedByteArray.writeDoubleByteOffsetGuest(bytes, 9, java.lang.Double.longBitsToDouble(doubleBits))
+        assertEquals(floatBits, (java.lang.Float.floatToRawIntBits(ManagedByteArray.readFloatByteOffsetGuest(bytes, 1)).toLong() and 0xffffffffL))
+        assertEquals(doubleBits, java.lang.Double.doubleToRawLongBits(ManagedByteArray.readDoubleByteOffsetGuest(bytes, 9)))
         val model = ByteBuffer.allocate(32).order(ByteOrder.nativeOrder())
             .putInt(1, floatBits.toInt()).putLong(9, doubleBits).array()
         assertArrayEquals(model, bytes)
@@ -67,9 +67,9 @@ class FloatingByteOffsetTest {
             assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeDoubleByteOffsetGuest(bytes, offset, 1.0) }
         val edge = ByteArray(12)
         ManagedByteArray.writeFloatByteOffsetGuest(edge, 8, -0.0f)
-        assertEquals(0x80000000L, RawBitCasts.floatToWord32(ManagedByteArray.readFloatByteOffsetGuest(edge, 8)))
+        assertEquals(0x80000000L, (java.lang.Float.floatToRawIntBits(ManagedByteArray.readFloatByteOffsetGuest(edge, 8)).toLong() and 0xffffffffL))
         ManagedByteArray.writeDoubleByteOffsetGuest(edge, 4, -0.0)
-        assertEquals(Long.MIN_VALUE, RawBitCasts.doubleToWord64(ManagedByteArray.readDoubleByteOffsetGuest(edge, 4)))
+        assertEquals(Long.MIN_VALUE, java.lang.Double.doubleToRawLongBits(ManagedByteArray.readDoubleByteOffsetGuest(edge, 4)))
 
         val owner = ManagedAllocation.mutable(32, 8)
         val target = ManagedAddress.fromAllocation(ManagedAllocation.mutable(8, 8))
@@ -78,7 +78,7 @@ class FloatingByteOffsetTest {
         assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeFloatByteOffsetGuest(owner, 19, 1.0f) }
         assertSame(target, owner.readAddressByteOffset(16))
         ManagedByteArray.writeDoubleByteOffsetGuest(owner, 16, -0.0)
-        assertEquals(Long.MIN_VALUE, RawBitCasts.doubleToWord64(ManagedByteArray.readDoubleByteOffsetGuest(owner, 16)))
+        assertEquals(Long.MIN_VALUE, java.lang.Double.doubleToRawLongBits(ManagedByteArray.readDoubleByteOffsetGuest(owner, 16)))
         assertThrows(RuntimeFault::class.java) { owner.readAddressByteOffset(16) }
 
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameDescriptor.newBuilder().build())

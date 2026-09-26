@@ -17,6 +17,8 @@ entry "heapCase" = heapCase
 entry "heapPapCase" = heapPapCase
 entry "capturedCase" = capturedCase
 entry "thunkCase" = thunkCase
+entry "chainCase" = chainCase
+entry "loopCase" = loopCase
 entry _ = error "Unknown SIMD call entry"
 
 emit :: String -> Int -> IO ()

@@ -122,7 +122,7 @@ class ScalarBitCastTest {
                     app, mapOf("rep" to closure, "resultRep" to proof(output)))))))) as MutableMap<String, Any?>
     }
     private fun lambda(module: Map<String, Any?>) = (module["bindings"] as List<Map<String, Any?>>).single()["expr"] as MutableList<Any?>
-    @Test fun exactKindsSignednessArityAndScalarFrontiersAreChecked() {
+    @Test fun lexicalMetadataArityAndScalarFrontiersAreChecked() {
         for (backend in listOf("ast", "bytecode")) context().use { context ->
             context.initialize("thc"); context.enter()
             try {
@@ -168,16 +168,26 @@ class ScalarBitCastTest {
         }
     }
     @Test fun everyFloatNanEncodingAndSelectedDoubleNanPayloadsRemainExact() {
+        val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameDescriptor.newBuilder().build())
+        var input = 0L
+        fun source() = object : Expr() {
+            override fun execute(frame: VirtualFrame): Any = error("bitcast operand was boxed")
+            override fun executeLong(frame: VirtualFrame): Long = input
+        }
+        val floatValue = rawBitCastPrimitive("castWord32ToFloat#", arrayOf(source()))!!
+        val floatRoundTrip = rawBitCastPrimitive("castFloatToWord32#", arrayOf(floatValue))!!
+        val doubleValue = rawBitCastPrimitive("castWord64ToDouble#", arrayOf(source()))!!
+        val doubleRoundTrip = rawBitCastPrimitive("castDoubleToWord64#", arrayOf(doubleValue))!!
         for (sign in longArrayOf(0, 0x80000000L)) for (payload in 1 until (1 shl 23)) {
             val bits = sign or 0x7f800000L or payload.toLong()
-            val value = RawBitCasts.word32ToFloat(bits)
-            if ((java.lang.Float.floatToRawIntBits(value).toLong() and 0xffffffffL) != bits || RawBitCasts.floatToWord32(value) != bits)
+            input = bits
+            if (floatRoundTrip.executeLong(frame) != bits)
                 fail<Unit>("Float NaN changed: ${bits.toString(16)}")
         }
         for (sign in longArrayOf(0, Long.MIN_VALUE)) for (quiet in longArrayOf(0, 1L shl 51)) for (payload in 1..65535) {
             val bits = sign or 0x7ff0000000000000L or quiet or payload.toLong()
-            val value = RawBitCasts.word64ToDouble(bits)
-            if (java.lang.Double.doubleToRawLongBits(value) != bits || RawBitCasts.doubleToWord64(value) != bits)
+            input = bits
+            if (doubleRoundTrip.executeLong(frame) != bits)
                 fail<Unit>("Double NaN changed: ${bits.toULong().toString(16)}")
         }
     }

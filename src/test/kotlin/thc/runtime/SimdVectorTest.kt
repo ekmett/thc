@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import jdk.incubator.vector.LongVector
+
 import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
@@ -41,7 +43,6 @@ class SimdVectorTest {
             "primReps" to listOf("VecRep 4 Int64ElemRep"), "vector" to mapOf("lanes" to 4L, "element" to "Int64ElemRep"))).vector)
         assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(metadata + mapOf(
             "primReps" to listOf("VecRep 3 Int64ElemRep"), "vector" to mapOf("lanes" to 3L, "element" to "Int64ElemRep"))) }
-        assertEquals(listOf(Long::class.javaPrimitiveType, Long::class.javaPrimitiveType), Int64X2::class.java.declaredFields.map { it.type })
         assertThrows(RuntimeFault::class.java) { CoreVectors.proof.refine(CoreVectors.unpacked) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packInt64X2#", listOf(CoreVectors.proof), CoreVectors.proof) }
         assertEquals(CoreVectors.proof, CoreVectors.caseResult(listOf(CoreVectors.proof, CoreVectors.proof)))
@@ -134,11 +135,8 @@ class SimdVectorTest {
             val resultProof = (inferred.entryTarget("vectorCase").rootNode as GuestRoot).tupleResult?.proof
             assertNotNull(resultProof, backend)
             assertTrue(TupleShape.compatible(CoreVectors.proof, resultProof!!), backend)
-            val scalarDiagnostic = if (backend == "ast")
-                "Primitive representation mismatch: +# argument 0 expects IntRep"
-                else "Unsupported Core vector boundary: argument"
             for ((body, message) in listOf(
-                argument to scalarDiagnostic,
+                argument to "Unsupported Core vector boundary: argument",
                 join to "Conflicting logical tuple representation proofs")) {
                 expression[2] = body
                 m["bindings"] = listOf(binding + ("expr" to expression.toList()))

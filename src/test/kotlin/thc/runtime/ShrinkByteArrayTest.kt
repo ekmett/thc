@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import jdk.incubator.vector.IntVector
+
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.interop.InteropLibrary
 import com.oracle.truffle.api.interop.InvalidBufferOffsetException
@@ -144,11 +146,11 @@ class ShrinkByteArrayTest {
 
     @Test fun vectorsObserveShrunkBoundsWithoutLosingValidPrefix() {
         val owner = ManagedByteArray.allocateGuest(32)
-        val vector = Int32X4(1, 2, 3, 4)
+        val vector = IntVector.broadcast(IntVector.SPECIES_128, 1).withLane(1, 2).withLane(2, 3).withLane(3, 4)
         ManagedByteArray.writeInt32VectorGuest(owner, 0, vector, false)
         owner.shrink(16)
         val read = ManagedByteArray.readInt32VectorGuest(owner, 0, false)
-        assertEquals(listOf(1, 2, 3, 4), listOf(read.first, read.second, read.third, read.fourth))
+        assertEquals(listOf(1, 2, 3, 4), listOf(read.lane(0), read.lane(1), read.lane(2), read.lane(3)))
         assertDoesNotThrow { ManagedByteArray.readWord32VectorGuest(owner, 0, false) }
         assertDoesNotThrow { ManagedByteArray.readFloatVectorGuest(owner, 0, false) }
         assertDoesNotThrow { ManagedByteArray.readDoubleVectorGuest(owner, 0, false) }
@@ -157,6 +159,6 @@ class ShrinkByteArrayTest {
         assertThrows(RuntimeFault::class.java) { ManagedByteArray.readFloatVectorGuest(owner, 1, false) }
         assertThrows(RuntimeFault::class.java) { ManagedByteArray.readDoubleVectorGuest(owner, 1, false) }
         assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeInt32VectorGuest(owner, 1, vector, false) }
-        assertEquals(1, ManagedByteArray.readInt32VectorGuest(owner, 0, false).first)
+        assertEquals(1, ManagedByteArray.readInt32VectorGuest(owner, 0, false).lane(0))
     }
 }

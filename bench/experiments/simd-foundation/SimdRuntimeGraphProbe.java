@@ -35,7 +35,7 @@ public final class SimdRuntimeGraphProbe {
         if(args.length!=6) throw new IllegalArgumentException("module.json oracle.tsv entry ast|bytecode inline|residual native|model");
         String entry=args[2],backend=args[3]; boolean inline=args[4].equals("inline");
         Map<String,Object> module=(Map<String,Object>)Json.INSTANCE.parse(Files.readString(Path.of(args[0])));
-        Map<String,Object> linked=new LinkedHashMap<>(CoreModules.INSTANCE.reachable(module,entry));
+        Map<String,Object> linked=new LinkedHashMap<>(CoreModules.INSTANCE.reachable(module,entry,false));
         linked.put("instrument",false); linked.put("diagnosticUnsupported",false);
         List<Map<String,Object>> bindings=(List<Map<String,Object>>)linked.get("bindings");
         Map<String,Object> selected=bindings.stream().filter(b->entry.equals(b.get("name"))||entry.equals(b.get("id"))).findFirst().orElseThrow();
@@ -52,7 +52,7 @@ public final class SimdRuntimeGraphProbe {
             context.initialize("thc"); context.enter();
             try {
                 Language language=TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                ExecutableProgram program=backend.equals("ast")?new Program(language,linked):new BytecodeProgram(language,linked);
+                ExecutableProgram program=backend.equals("ast")?new Program(language,linked,false):new BytecodeProgram(language,linked);
                 for(int i=0;i<40;i++) check(program,entry,arity,rows);
                 if(!inline) for(Map<String,Object>b:bindings)
                     if(!b.get("id").equals(selected.get("id")) && ((List<?>)b.get("expr")).get(0).equals("lam")) compile(program.entryTarget((String)b.get("id")));
