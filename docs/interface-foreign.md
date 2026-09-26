@@ -37,7 +37,50 @@ metadata; a schema-1 document cannot hide a `foreign` field. The strict Core
 auditor applies the same reachability and global-obligation boundary. This
 does not change the ordinary source-plugin foreign-output contract.
 
-## Local package scalar C calls
+## Package-owned C and CAPI calls
+
+The `thc-package-c-ffi-v1` profile acquires ordinary local and Cabal-store
+packages without a package-name whitelist. It compiles the configured C sources
+and GHC's genuine retained CAPI wrappers with Clang, then links their LLVM into
+the Core bundle. Native Cabal compilation still uses the selected GHC and its
+configured native compiler. LLVM acquisition is a sensible second compilation,
+not a requirement to reproduce the native object's exact bytes.
+
+Initial support is static, unsafe `ccall`/`capi`, scalar arguments, `Addr#`,
+`ByteArray#` and `MutableByteArray#`, and a scalar or void result. Pure source
+imports and IO imports both retain GHC's actual State-token worker ABI. Pointer
+results, callbacks, safe/interruptible calls, additional foreign-file products,
+initializers/finalizers and extra native libraries remain outside this profile.
+Ordinary memory helpers supplied by Sulong/libc are allowed. C++ and assembly
+sources are not acquired by this initial C implementation.
+
+The source capture runs while Cabal's unpacked sources and generated headers
+still exist. `thc-interface --home-interfaces DIR` reads the exact just-emitted
+home-unit interfaces before Cabal registration, with normal dependency package
+databases and binary module-identity checks. No synthetic registration or
+inferred foreign declaration is substituted. Import provenance additionally
+retains alpha-bound state type variables; semantic byte-array carriers are
+derived from their GHC types, not guessed from an unlifted boxed RuntimeRep.
+
+`packageNativeLink` carries the unit, LLVM target/content digest, namespaced
+entry ABI and retained `buildInputs` compiler/source/header observations. Header
+content participates in the wrapper component identity; the final bitcode
+digest covers linked C implementations too. Actual CAPI definitions supply
+their C prototypes. Same-unit inlined calls share the component link and resolve
+against the complete unit's real declaration inventory, even when their own
+module declares no imports. Libraries and mutable byte-array backing storage
+remain context-owned; this profile does not authorize raw JVM addresses.
+
+Select LLVM tools with `THC_CLANG`, `THC_LLVM_LINK`, `THC_LLVM_OPT` and
+`THC_LLVM_NM`, or provide their ordinary executable names on `PATH`. The exact
+Linux x86_64 `pc` vendor alias is normalized to Sulong's `unknown` spelling;
+the observed native target remains in the recipe.
+
+## Legacy local package scalar C calls
+
+Previously emitted `packageScalarLink` bundles remain readable. New ordinary
+package acquisition uses the more general profile above; the restrictions in
+this section describe the legacy producer only.
 
 The `thc-local-scalar-ccall-v1` link profile covers a registered local Cabal
 library component with one C translation unit and static, unsafe `ccall`
