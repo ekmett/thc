@@ -21,6 +21,7 @@ import tarfile
 
 CASES = "build/libraries/cases.json"
 LIB = "build/install/thc/lib"
+TOOLS = "build/diagnostics/thc-tools.jar"
 RECEIPT = "build/library-transfer-verified.json"
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -99,7 +100,7 @@ def original_path(root, name):
     return result
 
 
-def inventory(root, cases, jars, cases_hash):
+def inventory(root, cases, jars, tools, cases_hash):
     require(cases.get("schema") == 1, "Unsupported library manifest schema")
     tracked = set(git(root, "ls-files", "-z").split("\0"))
     inputs, artifacts = cases["inputHashes"], cases["artifactHashes"]
@@ -127,6 +128,9 @@ def inventory(root, cases, jars, cases_hash):
                 and HEX.fullmatch(expected), "Invalid runtime JAR record")
         require(name not in hashes, "Runtime JAR collides with library input")
     hashes.update(jars)
+    require(set(tools) == {TOOLS} and HEX.fullmatch(tools[TOOLS]), "Invalid diagnostics JAR record")
+    require(TOOLS not in hashes, "Diagnostics JAR collides with library input")
+    hashes.update(tools)
     require(CASES not in hashes and HEX.fullmatch(cases_hash), "Invalid original cases fingerprint")
     hashes[CASES] = cases_hash
     require(RECEIPT not in hashes, "Library payload collides with verification receipt")
@@ -134,7 +138,7 @@ def inventory(root, cases, jars, cases_hash):
     payload = {name: value for name, value in hashes.items() if name not in tracked}
     require(all(PurePosixPath(name).parts[0] in ("build", "vendor") for name in payload),
             "Bundle would restore a file outside build/vendor")
-    require(CASES in payload and all(name in payload for name in jars), "Build output overlaps tracked sources")
+    require(CASES in payload and all(name in payload for name in (*jars, *tools)), "Build output overlaps tracked sources")
     return sources, payload
 
 
@@ -155,12 +159,13 @@ def pack(root, output):
         name = path.relative_to(root).as_posix()
         require(path.suffix == ".jar", "Unexpected installed runtime file: " + name)
         jars[name] = digest(file_path(root, name))
-    sources, payload = inventory(root, cases, jars, hashlib.sha256(raw_cases).hexdigest())
+    tools = {TOOLS: digest(file_path(root, TOOLS))}
+    sources, payload = inventory(root, cases, jars, tools, hashlib.sha256(raw_cases).hexdigest())
     check_files(root, {**sources, **payload})
     require(json.loads((root / "build/libraries/oracle-validation.json").read_text())["compiler"] == "9.14.1",
             "Native library provenance must record GHC 9.14.1")
-    manifest = {"schema": 1, "identity": build_identity, "sourceFiles": sources,
-                "payloadFiles": payload, "runtimeJars": jars}
+    manifest = {"schema": 2, "identity": build_identity, "sourceFiles": sources,
+                "payloadFiles": payload, "runtimeJars": jars, "toolsJars": tools}
     output.parent.mkdir(parents=True, exist_ok=True)
     require(not output.exists(), "Bundle output already exists; use a fresh Build attempt")
     with tarfile.open(output, "w:gz", compresslevel=6) as archive:
@@ -187,7 +192,7 @@ def restore(root, source):
         require(all(member.isfile() for member in members), "Bundle contains a link or nonregular file")
         require("bundle.json" in names, "Bundle identity manifest missing")
         manifest = json.load(archive.extractfile("bundle.json"))
-        require(manifest.get("schema") == 1, "Unsupported bundle schema")
+        require(manifest.get("schema") == 2, "Unsupported bundle schema")
         require(manifest["identity"] == current,
                 "Bundle source/run/attempt/workspace/platform/JDK mismatch; rerun all Build jobs")
         payload = manifest["payloadFiles"]
@@ -197,7 +202,7 @@ def restore(root, source):
                 "Bundle members differ from declared regular files")
         raw_cases = archive.extractfile("files/" + CASES).read()
         sources, expected_payload = inventory(root, json.loads(raw_cases), manifest["runtimeJars"],
-                                              hashlib.sha256(raw_cases).hexdigest())
+                                              manifest["toolsJars"], hashlib.sha256(raw_cases).hexdigest())
         require(sources == manifest["sourceFiles"] and expected_payload == payload,
                 "Bundle inventory does not match the original library manifest")
         check_files(root, sources)
@@ -218,9 +223,10 @@ def restore(root, source):
                     for block in iter(lambda: src.read(1024 * 1024), b""):
                         dst.write(block)
         check_files(root, payload)
-    receipt = {"schema": 1, "identity": current, "bundleSha256": digest(source),
+    receipt = {"schema": 2, "identity": current, "bundleSha256": digest(source),
                "casesSha256": payload[CASES], "sourceFilesVerified": len(sources),
-               "payloadFilesVerified": len(payload), "runtimeJars": manifest["runtimeJars"]}
+               "payloadFilesVerified": len(payload), "runtimeJars": manifest["runtimeJars"],
+               "toolsJars": manifest["toolsJars"]}
     with receipt_path.open("x") as stream:
         stream.write(json.dumps(receipt, indent=2) + "\n")
     print(f"Verified original library inputs and runtime for {current['sourceSha']} / {current['runnerOS']}")

@@ -60,7 +60,9 @@ The complete example is [PolyglotDemo.hs](../examples/THC/PolyglotDemo.hs).
 Run `scripts/polyglot-demo.sh` from the repository root. The script builds the
 pinned GHC plugin, exports optimized Core before and after Tidy, audits the
 reachable `IO ()` entry, and runs the demo with the optional GraalVM JavaScript
-dependency. The Gradle `polyglotDemo` task runs both THC backends. The normal
+dependency. The Gradle `polyglotDemo` task builds the separate `src/examples/`
+source set and runs both THC backends. Example classes are not included in the
+runtime JAR, production distribution, or JVM API reference. The normal
 test runtime does not need JavaScript.
 
 The demo checks `42` in each of these configurations, first interpreted and then

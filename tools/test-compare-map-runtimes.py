@@ -6,6 +6,7 @@
 from pathlib import Path
 import runpy
 import json
+import os
 import tempfile
 from unittest.mock import patch
 import unittest
@@ -36,6 +37,48 @@ class CompactHeaderDefaultsTest(unittest.TestCase):
         for options in (['-XX:-UseCompactObjectHeaders'], ['-XX:+UseCompactObjectHeaders'],
                         ['-XX:+UseCompactObjectHeaders', '-XX:-UseCompactObjectHeaders']):
             self.assertEqual(select(options), options)
+
+    def test_separate_tools_jar_is_in_the_frozen_command_and_hashes(self):
+        class ConfigRecorded(Exception):
+            pass
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            files = {
+                'java/bin/java': '', 'native': '',
+                'java/release': 'JAVA_VERSION="25"\nGRAALVM_VERSION="25.3.4.1"\n',
+                'baseline/thc.jar': 'historical runtime with Probe',
+                'candidate/thc.jar': 'runtime only', 'tools/thc-tools.jar': 'Probe',
+                'core.json': '{}', 'modules.txt': 'core.json\n', 'source/Runtime.kt': 'source',
+            }
+            for name, content in files.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content)
+            for name in ('java/bin/java', 'native'):
+                (root / name).chmod(0o700)
+            recorded = {}
+            def capture(path, value):
+                self.assertEqual(path.name, 'run-config.json')
+                recorded.update(value)
+                raise ConfigRecorded
+            argv = ['compare', *(str(root / name) for name in
+                    ('baseline', 'candidate', 'native', 'modules.txt', 'out')),
+                    '--java-home', str(root / 'java'), '--baseline-commit', 'historical',
+                    '--candidate-source-dir', str(root / 'source'),
+                    '--candidate-tools-jar', str(root / 'tools/thc-tools.jar')]
+            with patch('sys.argv', argv), patch.dict(harness['main'].__globals__, write_json=capture), \
+                 self.assertRaises(ConfigRecorded):
+                harness['main']()
+            for command in recorded['commands']:
+                if command['engine'] == 'native':
+                    continue
+                argv = command['argv']
+                classpath = argv[argv.index('-cp') + 1].split(os.pathsep)
+                tools = str(root / 'tools/thc-tools.jar')
+                self.assertEqual(tools in classpath, command['engine'] == 'candidate')
+            self.assertIn({'path': str(root / 'tools/thc-tools.jar'),
+                           'sha256': harness['sha256'](root / 'tools/thc-tools.jar')},
+                          recorded['provenance']['runtimeJars']['candidate'])
 
 
 class PowerStatusTest(unittest.TestCase):

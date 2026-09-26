@@ -17,7 +17,7 @@ OUT="$(cd "$OUT" && pwd)"
   "-Dthc.diagnosticUnsupported=${THC_DIAGNOSTIC_UNSUPPORTED:-false}" \
   -Djdk.graal.Dump=Truffle:1 -Djdk.graal.PrintGraph=File \
   -Djdk.graal.PrintGraphWithSchedule=true -Djdk.graal.PrintBackendCFG=true \
-  "-Djdk.graal.DumpPath=$OUT" -cp 'build/install/thc/lib/*' thc.ProbeKt \
+  "-Djdk.graal.DumpPath=$OUT" -cp 'build/install/thc/lib/*:build/diagnostics/thc-tools.jar' thc.ProbeKt \
   "${THC_GRAPH_MODULES:-build/core/THC.Prim.json,build/core/THC.Fixtures.json}" "$ENTRY" --steady 10 0.01 1 "$BASE" \
   > "$OUT/run.tsv" 2> "$OUT/run.log"
 EXPORTS=(--add-modules jdk.graal.compiler \

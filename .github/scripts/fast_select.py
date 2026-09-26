@@ -38,10 +38,10 @@ POLYGLOT_EXACT_INPUTS = {
     "scripts/polyglot-demo.sh", "scripts/javascript-demo.sh",
     "compiler/build.sh", "compiler/export.sh", "compiler/test-javascript-ffi.py",
     "src/main/kotlin/thc/Language.kt", "src/main/kotlin/thc/Json.kt",
-    "src/main/kotlin/thc/PolyglotDemo.kt",
+    "src/examples/kotlin/thc/PolyglotDemo.kt",
     "src/main/java/thc/runtime/Calls.java", "src/main/java/thc/runtime/BytecodeRoot.java",
     "src/main/java/thc/runtime/RuntimeTypes.java",
-    "src/main/resources/thc/polyglot-abi.json",
+    "src/test/resources/thc/polyglot-abi.json",
 }
 POLYGLOT_INPUT_PREFIXES = (
     POLYGLOT_TEST_ROOT, "compiler/THC/", "examples/THC/Polyglot",

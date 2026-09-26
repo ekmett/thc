@@ -40,6 +40,9 @@ dokka {
             remoteLineSuffix.set("#L")
         }
     }
+    dokkaSourceSets.configureEach {
+        if (name in setOf("diagnostics", "examples")) suppress.set(true)
+    }
 }
 // The checked family table generates concrete primitive carriers and typed nodes.
 // BytecodeRoot's DSL requires nested declarations; its marked regions are checked,
@@ -392,9 +395,32 @@ tasks.register<Test>("jitStabilityTest") {
     outputs.upToDateWhen { false }
     outputs.doNotCacheIf("JIT stability must be measured in a fresh test process") { true }
 }
+// Development entrypoints have their own output; installDist and the runtime
+// JAR contain only main. Tool scripts explicitly add this separate tools JAR.
+val diagnostics = sourceSets.create("diagnostics")
+configurations[diagnostics.implementationConfigurationName].extendsFrom(configurations.implementation.get())
+configurations[diagnostics.runtimeOnlyConfigurationName].extendsFrom(configurations.runtimeOnly.get())
+diagnostics.compileClasspath += sourceSets.main.get().output
+diagnostics.runtimeClasspath += sourceSets.main.get().output
+kotlin.target.compilations.getByName("diagnostics").associateWith(kotlin.target.compilations.getByName("main"))
+tasks.register<Jar>("toolsJar") {
+    group = "build"
+    description = "Packages development checks and benchmark entrypoints separately from the runtime."
+    archiveFileName.set("thc-tools.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("diagnostics"))
+    from(diagnostics.output)
+}
+
+val examples = sourceSets.create("examples")
+configurations[examples.implementationConfigurationName].extendsFrom(configurations.implementation.get())
+configurations[examples.runtimeOnlyConfigurationName].extendsFrom(configurations.runtimeOnly.get())
+examples.compileClasspath += sourceSets.main.get().output
+examples.runtimeClasspath += sourceSets.main.get().output
+kotlin.target.compilations.getByName("examples").associateWith(kotlin.target.compilations.getByName("main"))
+
 tasks.register<JavaExec>("probe") {
     group = "verification"
-    classpath = sourceSets.main.get().runtimeClasspath
+    classpath = diagnostics.runtimeClasspath
     mainClass.set("thc.ProbeKt")
     jvmArgs(application.applicationDefaultJvmArgs)
     workingDir(projectDir)
@@ -403,7 +429,7 @@ tasks.register<JavaExec>("probe") {
 tasks.register<JavaExec>("polyglotDemo") {
     group = "application"
     description = "Runs exported Haskell against GraalJS through THC.Polyglot."
-    classpath = sourceSets.main.get().runtimeClasspath + polyglotDemoRuntime
+    classpath = examples.runtimeClasspath + polyglotDemoRuntime
     mainClass.set("thc.PolyglotDemoKt")
     jvmArgs(application.applicationDefaultJvmArgs)
     workingDir(projectDir)

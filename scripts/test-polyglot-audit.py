@@ -12,7 +12,7 @@ import unittest
 ROOT = Path(__file__).resolve().parent.parent
 Audit = runpy.run_path(str(ROOT / 'scripts/audit-core.py'))['Audit']
 CAPABILITIES = json.loads((ROOT / 'scripts/core-capabilities.json').read_text())
-ABI = json.loads((ROOT / 'src/main/resources/thc/polyglot-abi.json').read_text())
+ABI = json.loads((ROOT / 'src/test/resources/thc/polyglot-abi.json').read_text())
 
 
 def rep(register):

@@ -18,7 +18,7 @@ OUT="$(cd "$OUT" && pwd)"
   -Djdk.graal.Dump=Truffle:1 -Djdk.graal.PrintGraph=File \
   -Djdk.graal.PrintGraphWithSchedule=true -Djdk.graal.PrintBackendCFG=false \
   "-Djdk.graal.DumpPath=$OUT" \
-  -cp "${THC_GRAPH_CLASSPATH:-build/install/thc/lib/*}" thc.ProbeKt \
+  -cp "${THC_GRAPH_CLASSPATH:-build/install/thc/lib/*:build/diagnostics/thc-tools.jar}" thc.ProbeKt \
   "$(paste -sd, build/map/modules.txt)" mapAggregate --steady 10 0.01 1 10000 \
   > "$OUT/run.tsv" 2> "$OUT/run.log"
 printf 'Guest capture finished: %s\n' "$OUT"

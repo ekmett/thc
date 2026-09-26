@@ -130,6 +130,11 @@ def freeze(out, baseline, selection):
         for path in libraries:
             copy_file(path, frozen / name / 'lib' / path.name)
         shutil.copytree(checkout / 'src/main', frozen / name / 'src/main')
+        # The pinned original predates the tools split. Current diagnostics must
+        # be frozen separately, never borrowed from the live checkout at launch.
+        if name == 'current':
+            copy_file(checkout / 'build/diagnostics/thc-tools.jar', frozen / name / 'tools/thc-tools.jar')
+            shutil.copytree(checkout / 'src/diagnostics', frozen / name / 'src/diagnostics')
     if selection['suite'] != 'standard':
         shutil.copytree(root / 'src/test', frozen / 'current/src/test')
     write_json(frozen / 'suite.json', dict(selection, currentCommit=revision(root)))
@@ -235,9 +240,12 @@ def check_configuration(out, java, name, compact_control=None):
     expected = [line.split('\t') for line in (frozen / 'map/oracle.tsv').read_text().splitlines() if line]
     assert len(expected) == 18, 'Expected the full 18-input Map oracle'
     verify(out)
+    classpath = [str(frozen / runtime / 'lib/*')]
+    if runtime == 'current':
+        classpath.append(str(frozen / runtime / 'tools/thc-tools.jar'))
     command = [java, '-XX:+UseCompactObjectHeaders', '--enable-native-access=ALL-UNNAMED', '-Xss2m', *POLICY, *flags,
                '-Dthc.backend=bytecode', '-Dthc.diagnosticUnsupported=true', '-Dthc.sourceNotesEnabled=true',
-               '-Dthc.traceCompilation=true', '-cp', str(frozen / runtime / 'lib/*'), 'thc.MapCheckKt',
+               '-Dthc.traceCompilation=true', '-cp', os.pathsep.join(classpath), 'thc.MapCheckKt',
                frozen / 'map/modules.txt', frozen / 'map/oracle.tsv']
     log = run(out, command, 'check-' + name + suffix, 600)
     lines = log.read_text().splitlines()
@@ -282,6 +290,9 @@ def compare(out, name, java_home):
                '--baseline-source-notes', 'on', '--candidate-source-notes', 'on']
     command += ['--baseline-jvm-option=' + flag for flag in POLICY + baseline_flags]
     command += ['--candidate-jvm-option=' + flag for flag in POLICY + candidate_flags]
+    for side, runtime in (('baseline', baseline), ('candidate', candidate)):
+        if runtime == 'current':
+            command += ['--' + side + '-tools-jar', frozen / runtime / 'tools/thc-tools.jar']
     run(out, command, 'compare-' + name, 3000)
     validation = json.loads((out / 'comparisons' / name / 'validation.json').read_text())
     assert validation['passed'] is True and validation['validatedWindows'] == 45
@@ -320,7 +331,7 @@ def full_tests(out, name, flags):
 def verify_test_sources(out):
     root = Path(json.loads((out / 'run.json').read_text())['repository'])
     assert revision(root) == suite_config(out)['currentCommit'], 'Source commit changed'
-    for subtree in ('src/main', 'src/test'):
+    for subtree in ('src/main', 'src/diagnostics', 'src/test'):
         frozen = out / 'frozen/current' / subtree
         expected = {str(path.relative_to(frozen)): sha(path) for path in frozen.rglob('*') if path.is_file()}
         actual = {str(path.relative_to(root / subtree)): sha(path)
