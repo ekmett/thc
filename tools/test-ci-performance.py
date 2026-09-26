@@ -7,6 +7,7 @@ import argparse
 import importlib.util
 import itertools
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -29,6 +30,69 @@ def options(flags):
 
 
 class ConfigurationTest(unittest.TestCase):
+    def test_freeze_retains_separate_tools_and_diagnostics_sources(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'repo'
+            files = {
+                'src/main/Runtime.kt': b'runtime',
+                'src/diagnostics/kotlin/thc/Probe.kt': b'probe source',
+                'src/test/Test.kt': b'test',
+                'build/install/thc/lib/thc.jar': b'runtime jar',
+                'build/diagnostics/thc-tools.jar': b'tools jar',
+                'build/map/core.json': b'core',
+                'build/map/modules.txt': b'core.json\n',
+                'build/map/native/native-oracle': b'native oracle',
+                'build/map/oracle.tsv': b'oracle',
+                'build/test-results/test/TEST-fixture.xml': b'<testsuite/>',
+                'tools/ci-performance.py': b'harness',
+                'tools/compare-map-runtimes.py': b'comparison',
+                '.github/workflows/performance.yml': b'workflow',
+            }
+            for name in ('object-sizes.py', 'ObjectSizes.java', 'ObjectSizesAgent.java'):
+                files['bench/results/constructor-class/object-sizes/' + name] = b'size tool'
+            for name, content in files.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content)
+            out = Path(directory) / 'result'
+            out.mkdir()
+            with patch.object(ci, '__file__', str(root / 'tools/ci-performance.py')), \
+                 patch.object(ci, 'revision', return_value='fixed-commit'):
+                ci.freeze(out, None, selection('all-on'))
+            tools = out / 'frozen/current/tools/thc-tools.jar'
+            self.assertEqual(tools.read_bytes(), b'tools jar')
+            self.assertEqual([p.name for p in (out / 'frozen/current/lib').iterdir()], ['thc.jar'])
+            self.assertEqual((out / 'frozen/current/src/diagnostics/kotlin/thc/Probe.kt').read_bytes(), b'probe source')
+            (root / 'build/diagnostics/thc-tools.jar').write_bytes(b'new live tools')
+            ci.verify(out)
+            tools.chmod(0o600)
+            tools.write_bytes(b'changed frozen tools')
+            with self.assertRaisesRegex(AssertionError, 'Frozen input changed'):
+                ci.verify(out)
+
+    def test_map_check_uses_the_selected_frozen_tools_classpath(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            oracle = out / 'frozen/map/oracle.tsv'
+            oracle.parent.mkdir(parents=True)
+            oracle.write_text(''.join(f'entry\t{i}\t{i}\n' for i in range(18)))
+            log = out / 'map.log'
+            log.write_text(''.join(f'VERIFIED_MAP\t{phase}\t{i}\t{i}\n'
+                                  for phase in ('before-requested-compilation', 'after-requested-compilation')
+                                  for i in range(18)) + 'MAP_DIAGNOSTICS ' + json.dumps({
+                                      'backend': 'bytecode', 'unsupportedTraps': 0,
+                                      'sourceNotesEnabled': True, 'sourceRootCount': 1}) + '\n')
+            for name, runtime in (('original', 'original'), ('class-owned-baseline', 'current')):
+                with patch.object(ci, 'suite_config', return_value=selection('standard')), \
+                     patch.object(ci, 'verify'), patch.object(ci, 'run', return_value=log) as run:
+                    ci.check_configuration(out, '/fake-java', name)
+                command = run.call_args.args[1]
+                paths = command[command.index('-cp') + 1].split(os.pathsep)
+                expected = [str(out / 'frozen' / runtime / 'lib/*')]
+                if runtime == 'current':
+                    expected.append(str(out / 'frozen/current/tools/thc-tools.jar'))
+                self.assertEqual(paths, expected)
+
     def test_standard_controls_are_explicit_and_distinct(self):
         chosen = selection('standard')
         self.assertEqual(len(chosen['requiredComparisons']), 3)
@@ -142,6 +206,8 @@ class ConfigurationTest(unittest.TestCase):
             for side, name in (('baseline', 'class-owned-baseline'), ('candidate', 'all-on')):
                 actual = [flag.split('=', 1)[1] for flag in command if isinstance(flag, str) and flag.startswith('--' + side + '-jvm-option=')]
                 self.assertEqual(actual, ci.POLICY + chosen['configurations'][name][1])
+                self.assertEqual(command[command.index('--' + side + '-tools-jar') + 1],
+                                 out / 'frozen/current/tools/thc-tools.jar')
 
 
 if __name__ == '__main__':

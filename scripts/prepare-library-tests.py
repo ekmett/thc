@@ -400,7 +400,7 @@ def main():
         ROOT / 'examples/LibraryOracle.hs', ROOT / 'scripts/prepare-library-tests.py',
         ROOT / 'scripts/audit-core.py', ROOT / 'scripts/core-capabilities.json',
         ROOT / 'src/main/resources/thc/scalar-primop-signatures.json',
-        ROOT / 'src/main/kotlin/thc/LibraryCheck.kt', ROOT / 'compiler/build.sh',
+        ROOT / 'src/diagnostics/kotlin/thc/LibraryCheck.kt', ROOT / 'compiler/build.sh',
         ROOT / 'compiler/export.sh', ROOT / 'compiler/export-boot.py', ROOT / 'compiler/toolchain.sh',
         ROOT / 'compiler/package-roots/InterfaceRoots.hs', ROOT / 'vendor/archives/containers-0.8.tar.gz',
         ROOT / 'scripts/sequence_model.py', ROOT / 'scripts/test-sequence-model.py',

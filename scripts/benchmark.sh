@@ -20,7 +20,7 @@ for spec in 'sumLoop 10000' 'fib 12' 'under 100' 'caseList 100'; do
     for ((fork=1; fork<=FORKS; fork++)); do
         printf 'Running %s fork %s: JVM warmup %ss, %s windows of %ss per engine\n' "$entry" "$fork" "$WARM_SECONDS" "$SAMPLES" "$SAMPLE_SECONDS"
         "$THC_JAVA" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders -Dthc.traceCompilation=true \
-            -cp 'build/install/thc/lib/*' thc.ProbeKt \
+            -cp 'build/install/thc/lib/*:build/diagnostics/thc-tools.jar' thc.ProbeKt \
             build/core/THC.Prim.json,build/core/THC.Fixtures.json \
             "$entry" --steady "$WARM_SECONDS" "$SAMPLE_SECONDS" "$SAMPLES" "$inputBase" \
             > "$OUT/$entry-$fork-jvm.tsv" 2> "$OUT/$entry-$fork.log"

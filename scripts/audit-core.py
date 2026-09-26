@@ -30,7 +30,7 @@ from core_vector_memory import OPERATIONS as VECTOR_MEMORY_OPERATIONS, read_case
 SCALAR_SIGNATURES = json.loads((Path(__file__).resolve().parent.parent /
     'src/main/resources/thc/scalar-primop-signatures.json').read_text())['primitives']
 POLYGLOT_ABI = json.loads((Path(__file__).resolve().parent.parent /
-    'src/main/resources/thc/polyglot-abi.json').read_text())
+    'src/test/resources/thc/polyglot-abi.json').read_text())
 
 
 # Original implicit RTS dependencies, not host exceptions or fabricated dictionaries.

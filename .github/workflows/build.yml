@@ -262,7 +262,7 @@ jobs:
               java --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
                 "-Dthc.backend=$backend" "-Dthc.handoffSlabs=$handoff" \
                 -Dthc.diagnosticUnsupported=true -Dthc.traceCompilation=true \
-                -cp 'build/install/thc/lib/*' thc.MapCheckKt build/map/modules.txt build/map/oracle.tsv \
+                -cp 'build/install/thc/lib/*:build/diagnostics/thc-tools.jar' thc.MapCheckKt build/map/modules.txt build/map/oracle.tsv \
                 2>&1 | tee "build/map/check-$backend-handoff-$handoff.log" || matrix_status=1
             done
           done
@@ -556,7 +556,7 @@ jobs:
         run: |
           set -euo pipefail
           "$JAVA_HOME/bin/java" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
-            "-Dthc.handoffSlabs=$HANDOFF" -cp 'build/install/thc/lib/*' \
+            "-Dthc.handoffSlabs=$HANDOFF" -cp 'build/install/thc/lib/*:build/diagnostics/thc-tools.jar' \
             thc.LibraryCheckKt build/libraries/cases.json "$BACKEND" \
             2>&1 | tee "build/libraries/check-$BACKEND-handoff-$HANDOFF.log"
       - name: Preserve each library mode's results

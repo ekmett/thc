@@ -236,6 +236,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('baseline_libdir', type=Path, help='immutable baseline installDist lib directory')
     parser.add_argument('candidate_libdir', type=Path, help='immutable candidate installDist lib directory')
+    parser.add_argument('--baseline-tools-jar', type=Path, help='separate frozen diagnostics JAR; omit for historical runtimes with bundled Probe')
+    parser.add_argument('--candidate-tools-jar', type=Path, help='separate frozen diagnostics JAR; required for current runtimes')
     parser.add_argument('native_binary', type=Path, help='immutable native oracle with scalar and --bench-steady modes')
     parser.add_argument('modules_manifest', type=Path, help='one Core JSON path per line; relative paths resolve beside this manifest')
     parser.add_argument('outdir', type=Path, help='new or empty output directory; existing results are never overwritten')
@@ -279,6 +281,12 @@ def main():
         directory = getattr(args, f'{engine}_libdir').resolve(strict=True)
         libraries[engine] = sorted(directory.glob('*.jar'))
         require(bool(libraries[engine]), f'No runtime JARs in {directory}')
+        tools = getattr(args, f'{engine}_tools_jar')
+        if tools is not None:
+            tools = tools.resolve(strict=True)
+            require(tools.is_file() and tools.suffix == '.jar', f'Invalid diagnostics JAR: {tools}')
+            require(tools not in libraries[engine], f'Diagnostics JAR already present in runtime directory: {tools}')
+            libraries[engine].append(tools)
     manifest = args.modules_manifest.resolve(strict=True)
     manifests = {'baseline': (args.baseline_modules_manifest or manifest).resolve(strict=True), 'candidate': manifest}
     modules_by_engine = {}

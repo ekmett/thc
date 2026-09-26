@@ -160,6 +160,12 @@ The [bytecode backend](docs/bytecode.md) is the default. To use the AST backend:
 THC_BACKEND=ast scripts/run.sh sumLoop 100000 --compile
 ```
 
+Development checks and benchmarks live in `src/diagnostics/`. Build their separate
+`build/diagnostics/thc-tools.jar` with `./gradlew toolsJar`; the `try` scripts do
+this alongside `installDist`. Direct Java launches add that JAR to the runtime
+classpath. The production distribution and JVM API reference exclude these tools
+and the embedding/polyglot examples in `src/examples/`.
+
 For the native-checked library suite and the diagnostic Map example:
 
 ```sh

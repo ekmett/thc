@@ -50,7 +50,8 @@ class LibraryBundleTest(unittest.TestCase):
                  "build/libraries/oracle.tsv": b"entry\t1\t7\n",
                  "build/libraries/oracle-validation.json": b'{"compiler":"9.14.1"}',
                  "build/libraries/native/library-oracle": b"native binary bytes, never executed",
-                 "build/install/thc/lib/thc-test.jar": b"JAR from producer"}
+                 "build/install/thc/lib/thc-test.jar": b"JAR from producer",
+                 bundle.TOOLS: b"separate diagnostics JAR from producer"}
         for name, data in files.items():
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -103,6 +104,9 @@ class LibraryBundleTest(unittest.TestCase):
         bundle.check_files(self.root, self.manifest["payloadFiles"])
         self.assertEqual(receipt["identity"], self.manifest["identity"])
         self.assertEqual(receipt["sourceFilesVerified"], 1)
+        self.assertEqual(receipt["toolsJars"], self.manifest["toolsJars"])
+        self.assertEqual((self.root / bundle.TOOLS).read_bytes(), b"separate diagnostics JAR from producer")
+        self.assertNotIn(bundle.TOOLS, receipt["runtimeJars"])
         self.assertEqual(self.source.read_text(), "verified source\n")
         # Extraction writes data, not an executable native binary or checkout source.
         self.assertFalse(os.access(self.root / "build/libraries/native/library-oracle", os.X_OK))
@@ -140,6 +144,25 @@ class LibraryBundleTest(unittest.TestCase):
             with self.subTest(change=change):
                 with self.assertRaisesRegex(RuntimeError, "members differ"):
                     bundle.restore(self.root, self.rewrite(change))
+
+    def test_missing_corrupt_or_redirected_diagnostics_jar_is_rejected(self):
+        self.pack()
+        self.clear_payload()
+        corrupt = self.rewrite(payload_change=lambda name, data: data + b"corrupt"
+                               if name == "files/" + bundle.TOOLS else data)
+        with self.assertRaisesRegex(RuntimeError, "payload hash mismatch"):
+            bundle.restore(self.root, corrupt)
+        self.assertFalse((self.root / "build").exists())
+        for tools in ({}, {"build/other-tools.jar": "0" * 64}):
+            with self.subTest(tools=tools):
+                with self.assertRaisesRegex(RuntimeError, "Invalid diagnostics JAR"):
+                    bundle.restore(self.root, self.rewrite(lambda m: m.update(toolsJars=tools)))
+        self.assertFalse((self.root / "build").exists())
+
+    def test_producer_requires_separate_diagnostics_jar(self):
+        (self.root / bundle.TOOLS).unlink()
+        with self.assertRaisesRegex(RuntimeError, "Expected regular file"):
+            self.pack()
 
     def test_links_duplicate_members_and_escaping_paths_are_rejected(self):
         self.pack()
