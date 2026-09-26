@@ -4,6 +4,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.ContinuationResult
 import com.oracle.truffle.api.frame.VirtualFrame
@@ -37,6 +38,69 @@ class MaskContinuationProofTest {
         assertTrue(type.isInstance(target))
         type.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
         assertEquals(true, type.getMethod("isValidLastTier").invoke(target))
+        // Match EntryValue.compile: valid guest code alone does not restore a
+        // retired HotSpot boundary. Repairing it during entry loses that call.
+        val runtime = Truffle.getRuntime()
+        runtime.javaClass.getMethod("bypassedInstalledCode", type).invoke(runtime, target)
+        assertEquals(true, type.getMethod("isValidLastTier").invoke(target))
+    }
+
+    @Test fun compilationSetupRestoresRetiredBoundaryBeforeFirstMaskedEffect() {
+        executionContext().use { context -> entered(context) {
+            context.initialize("thc")
+            val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+            val driver = Driver()
+            val compiledEffects = AtomicInteger()
+            val warmChild = Thunk(object : RootNode(null) {
+                override fun execute(frame: VirtualFrame): Any = ThunkYieldProofRoot.Answer(42L, this)
+            }.callTarget, null)
+            val target = ThunkYieldProofRoot.maskedCaller(language, AtomicReference(warmChild),
+                AtomicInteger(), compiledEffects, MaskingState.MASKED_INTERRUPTIBLE,
+                MaskingState.MASKED_UNINTERRUPTIBLE, ThunkYieldProofRoot.MaskProbe())
+            val targetType = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
+            val valid = targetType.getMethod("isValidLastTier")
+            val calls = targetType.getMethod("getCallCount")
+            val jvmci = Class.forName("jdk.vm.ci.runtime.JVMCI").getMethod("getRuntime").invoke(null)
+            val backend = Class.forName("jdk.vm.ci.runtime.JVMCIRuntime").getMethod("getHostJVMCIBackend").invoke(jvmci)
+            val metaAccess = Class.forName("jdk.vm.ci.runtime.JVMCIBackend").getMethod("getMetaAccess").invoke(backend)
+            val method = targetType.getDeclaredMethod("callBoundary", Array<Any?>::class.java)
+            val boundary = Class.forName("jdk.vm.ci.meta.MetaAccessProvider")
+                .getMethod("lookupJavaMethod", java.lang.reflect.Executable::class.java).invoke(metaAccess, method)
+            val reprofile = Class.forName("jdk.vm.ci.meta.ResolvedJavaMethod").getMethod("reprofile")
+            val hasCode = Class.forName("jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod").getMethod("hasCompiledCode")
+            repeat(8) { assertEquals(142L, driver.force(Thunk(target, null))) }
+            compile(target)
+            try {
+                // Negative control: retiring only the shared stub leaves guest
+                // code valid, but its next ordinary call executes interpreted.
+                reprofile.invoke(boundary)
+                assertEquals(false, hasCode.invoke(boundary))
+                assertEquals(true, valid.invoke(target))
+                val effectsBefore = compiledEffects.get()
+                val callsBefore = calls.invoke(target) as Int
+                assertEquals(142L, driver.force(Thunk(target, null)))
+                assertEquals(effectsBefore, compiledEffects.get())
+                assertEquals(callsBefore + 1, calls.invoke(target))
+                assertEquals(true, valid.invoke(target))
+
+                // Positive control: setup must restore the stub without a guest
+                // settling call, even when the guest nmethod is already valid.
+                reprofile.invoke(boundary)
+                assertEquals(false, hasCode.invoke(boundary))
+                compile(target)
+                assertEquals(true, hasCode.invoke(boundary))
+                assertEquals(142L, driver.force(Thunk(target, null)))
+                assertEquals(effectsBefore + 1, compiledEffects.get())
+                assertEquals(callsBefore + 1, calls.invoke(target))
+                assertEquals(true, valid.invoke(target))
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(driver))
+            } finally {
+                // Do not leave the shared test JVM with an absent entry stub if
+                // a control assertion fails after deliberately retiring it.
+                val runtime = Truffle.getRuntime()
+                runtime.javaClass.getMethod("bypassedInstalledCode", targetType).invoke(runtime, target)
+            }
+        } }
     }
 
     @Test fun privateAsyncCutRunsNearestCapturedHandlerAndLeavesSharedChildResumable() {
