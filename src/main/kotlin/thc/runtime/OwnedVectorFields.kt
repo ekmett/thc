@@ -80,38 +80,41 @@ internal class OwnedVectorFields(val proof: CoreRepresentation, name: String) {
         }
     }
     @Suppress("UNCHECKED_CAST")
-    @ExplodeLoop private fun restoreRaw(owner: Any): Any = when (lane) {
-        "Int8Rep", "Word8Rep" -> {
-            var value = ByteVector.broadcast(transport.species as VectorSpecies<Byte>, getLong(owner, 0).toByte())
-            for (index in 1 until lanes) value = value.withLane(index, getLong(owner, index).toByte())
-            value
+    @ExplodeLoop private fun restoreRaw(owner: Any): Any {
+        // Return each public carrier directly; a value-producing when joins at the inaccessible AbstractVector.
+        when (lane) {
+            "Int8Rep", "Word8Rep" -> {
+                var value = ByteVector.broadcast(transport.species as VectorSpecies<Byte>, getLong(owner, 0).toByte())
+                for (index in 1 until lanes) value = value.withLane(index, getLong(owner, index).toByte())
+                return value
+            }
+            "Int16Rep", "Word16Rep" -> {
+                var value = ShortVector.broadcast(transport.species as VectorSpecies<Short>, getLong(owner, 0).toShort())
+                for (index in 1 until lanes) value = value.withLane(index, getLong(owner, index).toShort())
+                return value
+            }
+            "Int32Rep", "Word32Rep" -> {
+                var value = IntVector.broadcast(transport.species as VectorSpecies<Int>, getLong(owner, 0).toInt())
+                for (index in 1 until lanes) value = value.withLane(index, getLong(owner, index).toInt())
+                return value
+            }
+            "Int64Rep", "Word64Rep" -> {
+                var value = LongVector.broadcast(transport.species as VectorSpecies<Long>, getLong(owner, 0))
+                for (index in 1 until lanes) value = value.withLane(index, getLong(owner, index))
+                return value
+            }
+            "FloatRep" -> {
+                var value = FloatVector.broadcast(transport.species as VectorSpecies<Float>, properties[0].getFloat(owner))
+                for (index in 1 until lanes) value = value.withLane(index, properties[index].getFloat(owner))
+                return value
+            }
+            "DoubleRep" -> {
+                var value = DoubleVector.broadcast(transport.species as VectorSpecies<Double>, properties[0].getDouble(owner))
+                for (index in 1 until lanes) value = value.withLane(index, properties[index].getDouble(owner))
+                return value
+            }
+            else -> fault("Unsupported owned vector lane")
         }
-        "Int16Rep", "Word16Rep" -> {
-            var value = ShortVector.broadcast(transport.species as VectorSpecies<Short>, getLong(owner, 0).toShort())
-            for (index in 1 until lanes) value = value.withLane(index, getLong(owner, index).toShort())
-            value
-        }
-        "Int32Rep", "Word32Rep" -> {
-            var value = IntVector.broadcast(transport.species as VectorSpecies<Int>, getLong(owner, 0).toInt())
-            for (index in 1 until lanes) value = value.withLane(index, getLong(owner, index).toInt())
-            value
-        }
-        "Int64Rep", "Word64Rep" -> {
-            var value = LongVector.broadcast(transport.species as VectorSpecies<Long>, getLong(owner, 0))
-            for (index in 1 until lanes) value = value.withLane(index, getLong(owner, index))
-            value
-        }
-        "FloatRep" -> {
-            var value = FloatVector.broadcast(transport.species as VectorSpecies<Float>, properties[0].getFloat(owner))
-            for (index in 1 until lanes) value = value.withLane(index, properties[index].getFloat(owner))
-            value
-        }
-        "DoubleRep" -> {
-            var value = DoubleVector.broadcast(transport.species as VectorSpecies<Double>, properties[0].getDouble(owner))
-            for (index in 1 until lanes) value = value.withLane(index, properties[index].getDouble(owner))
-            value
-        }
-        else -> fault("Unsupported owned vector lane")
     }
     fun initialize(owner: Any, frame: Frame, slots: IntArray, offset: Int) {
         checkSlots(slots.size, offset)

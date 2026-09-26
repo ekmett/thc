@@ -200,11 +200,12 @@ internal class VectorByteArrayExpression(private val operation: VectorByteArrayO
             return Unit
         }
         if (operation.isRead) ManagedByteArray.requireState(arguments[2].execute(frame))
-        return when {
-            operation.family === VectorMemoryFamily.INT32 -> ManagedByteArray.readInt32VectorGuest(array, index, operation.scalarOffset)
-            operation.family === VectorMemoryFamily.WORD32 -> ManagedByteArray.readWord32VectorGuest(array, index, operation.scalarOffset)
-            operation.family === VectorMemoryFamily.FLOAT32 -> ManagedByteArray.readFloatVectorGuest(array, index, operation.scalarOffset)
-            operation.family === VectorMemoryFamily.DOUBLE64 -> ManagedByteArray.readDoubleVectorGuest(array, index, operation.scalarOffset)
+        // Return each public carrier directly; a value-producing when joins at the inaccessible AbstractVector.
+        when {
+            operation.family === VectorMemoryFamily.INT32 -> return ManagedByteArray.readInt32VectorGuest(array, index, operation.scalarOffset)
+            operation.family === VectorMemoryFamily.WORD32 -> return ManagedByteArray.readWord32VectorGuest(array, index, operation.scalarOffset)
+            operation.family === VectorMemoryFamily.FLOAT32 -> return ManagedByteArray.readFloatVectorGuest(array, index, operation.scalarOffset)
+            operation.family === VectorMemoryFamily.DOUBLE64 -> return ManagedByteArray.readDoubleVectorGuest(array, index, operation.scalarOffset)
             else -> fault("Unsupported local vector memory family")
         }
     }
