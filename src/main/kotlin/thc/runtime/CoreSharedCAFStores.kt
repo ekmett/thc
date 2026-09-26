@@ -9,7 +9,10 @@ import com.oracle.truffle.api.frame.VirtualFrame
 internal enum class SharedCAFStore(val symbol: String, val unit: String = "ghc-internal") {
     EVENT_MANAGER("getOrSetSystemEventThreadEventManagerStore"),
     SIGNAL_HANDLER("getOrSetGHCConcSignalSignalHandlerStore"),
-    FAST_STRING("getOrSetLibHSghcFastStringTable", "ghc-9.14.1-inplace");
+    FAST_STRING("getOrSetLibHSghcFastStringTable", "ghc-9.14.1-inplace"),
+    PPR_DEBUG("getOrSetLibHSghcGlobalHasPprDebug", "ghc-9.14.1-inplace"),
+    NO_DEBUG_OUTPUT("getOrSetLibHSghcGlobalHasNoDebugOutput", "ghc-9.14.1-inplace"),
+    NO_STATE_HACK("getOrSetLibHSghcGlobalHasNoStateHack", "ghc-9.14.1-inplace");
 
     companion object { fun named(symbol: Any?): SharedCAFStore? = entries.firstOrNull { it.symbol == symbol } }
 }

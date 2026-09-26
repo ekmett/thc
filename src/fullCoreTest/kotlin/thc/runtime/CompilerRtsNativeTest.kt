@@ -49,7 +49,9 @@ class CompilerRtsNativeTest {
                 descriptor + ("target" to (target + ("isFunction" to false)))))
                 assertThrows(RuntimeFault::class.java) { validate(metadata + ("foreignCall" to bad)) }
         }
-        assertEquals(setOf("keepCAFsForGHCi", "getOrSetLibHSghcFastStringTable"), seen)
+        assertEquals(setOf("keepCAFsForGHCi", "getOrSetLibHSghcFastStringTable",
+            "getOrSetLibHSghcGlobalHasPprDebug", "getOrSetLibHSghcGlobalHasNoDebugOutput",
+            "getOrSetLibHSghcGlobalHasNoStateHack"), seen)
     }
 
     @Test fun actualCompilerDeclarationsMatchNativeBeforeAndAfterCompilation() {
@@ -61,7 +63,8 @@ class CompilerRtsNativeTest {
                 assertEquals(expected, digest, "Stale compiler RTS fixture $path")
             }
         val rows = File(directory, "oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
-        assertEquals(setOf("originalKeep", "originalFast", "uniqueCells"), rows.keys)
+        assertEquals(setOf("originalKeep", "originalFast", "originalPpr", "originalNoDebug",
+            "originalNoState", "uniqueCells"), rows.keys)
         for (stage in listOf("pre", "post")) {
             val module = json(File(directory, "$stage.json"))
             for ((entry, cases) in rows) {
