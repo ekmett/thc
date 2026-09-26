@@ -1,9 +1,11 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
-module InstalledForeignTests (tests, viewTests) where
+module InstalledForeignTests (tests, viewTests, sourceTests) where
 
 import Control.Exception (bracket)
+import Control.Monad (forM, forM_)
+import qualified Crypto.Hash.SHA256 as SHA
 import Data.Aeson (Value(..), object, (.=))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -13,15 +15,20 @@ import qualified Distribution.Types.InstalledPackageInfo as Package
 import GHC.Fingerprint (getFileHash)
 import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMissing,
   copyFile, removeFile, removePathForcibly)
-import System.Environment (lookupEnv)
+import System.Environment (getEnv, lookupEnv)
 import System.FilePath ((</>), takeDirectory, replaceExtension)
 import System.IO (openTempFile, hClose)
 import System.IO.Error (tryIOError)
+import qualified System.Info as Host
+import Numeric (showHex)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign (missingForeignProof, createView, viewContext, observeProbeInterfaces,
-  retainedUsageFiles, verifyUsageFiles, matchUsageFiles)
-import TestSupport (Env, scratch, runExe, assertSuccess, out)
+  retainedUsageFiles, verifyUsageFiles, matchUsageFiles, ForeignCompiler(..), prepareForeignInterfaces)
+import TestSupport (Env(..), runExe, assertSuccess, out, field, string, json, readJson)
+
+unixModules :: [String]
+unixModules = ["System.Posix.Files.PosixString", "System.Posix.Process.Internals", "System.Posix.Signals"]
 
 -- These controls test orchestration decisions only. A verified marker here is
 -- not executable evidence: production obtains it from the real interface helper
@@ -33,21 +40,24 @@ tests = TestLabel "installed foreign regeneration decisions" $ TestList
         (missingForeignProof bound (object []))
       assertEqual "old Posix interface needs the typed producer" (Right True)
         (missingForeignProof posix (object []))
-      assertEqual "original configured Unix import stubs need the typed producer" (Right True)
-        (missingForeignProof "System.Posix.Files.PosixString" (object []))
+      forM_ unixModules $ \name ->
+        assertEqual (name ++ " needs the typed producer") (Right True)
+          (missingForeignProof name (object []))
   , TestCase $ do
       assertEqual "complete verified export evidence is not regenerated" (Right False)
         (missingForeignProof bound (object ["staticForeignExports" .= object [],
           "staticForeignExportRegistration" .= verified]))
-      assertEqual "complete verified import evidence is not regenerated" (Right False)
-        (missingForeignProof posix (object ["staticForeignImportStubs" .= verified]))
+      forM_ (posix : unixModules) $ \name ->
+        assertEqual (name ++ " verified import evidence is not regenerated") (Right False)
+          (missingForeignProof name (object ["staticForeignImportStubs" .= verified]))
   , TestCase $ mapM_ (\core -> rejected "partial export evidence must not be replaced"
         (missingForeignProof bound core))
       [object ["staticForeignExports" .= object []],
        object ["staticForeignExportRegistration" .= verified]]
   , TestCase $ mapM_ (\proof -> do
-      rejected "unclassified/rejected/malformed imports stay rejected"
-        (missingForeignProof posix (object ["staticForeignImportStubs" .= proof]))
+      forM_ (posix : unixModules) $ \name ->
+        rejected (name ++ " unclassified/rejected/malformed imports stay rejected")
+          (missingForeignProof name (object ["staticForeignImportStubs" .= proof]))
       rejected "unclassified/rejected/malformed exports stay rejected"
         (missingForeignProof bound (object ["staticForeignExports" .= object [],
           "staticForeignExportRegistration" .= proof])))
@@ -83,6 +93,57 @@ tests = TestLabel "installed foreign regeneration decisions" $ TestList
     posix = "GHC.Internal.System.Posix.Internals"
     verified = object ["status" .= ("verified" :: String)]
     rejected message result = assertBool message (case result of Left _ -> True; Right _ -> False)
+
+-- Explicit opt-in: this needs an intact matching configured GHC tree and the
+-- real published plugin/helper, not the synthetic decision controls above.
+-- Only Unix is requested: no compiler-library or whole-project capture occurs.
+sourceTests :: Env -> Test
+sourceTests env = TestLabel "original Unix configured-source provenance" $ TestCase $ do
+  source <- getEnv "THC_TEST_GHC_SOURCE"
+  helper <- getEnv "THC_TEST_INTERFACE_HELPER"
+  ghc <- getEnv "GHC"
+  pkg <- getEnv "GHC_PKG"
+  plugin <- readJson (thcRoot env </> "build/compiler/plugin.json")
+  driverBytes <- BS.readFile (driver env)
+  let digest = concatMap (\byte -> let hex = showHex byte "" in replicate (2 - length hex) '0' ++ hex)
+        (BS.unpack (SHA.hash driverBytes))
+      producer = ForeignCompiler ghc (string (field plugin "packageDb"))
+        (string (field plugin "unitId")) (string (field plugin "sharedLibrary"))
+        (string (field plugin "cabalSharedLibrary")) digest
+  context <- installedContext ghc pkg helper [] (object ["platform" .= (Host.arch ++ "-" ++ Host.os)])
+  result <- runExe env (root env) Nothing 30 pkg
+    ["--global", "--no-user-package-db", "field", "unix", "id", "--simple-output"]
+  assertSuccess result
+  identifier <- case words (out result) of [value] -> pure value; _ -> fail "ambiguous Unix installation"
+  original <- discoverInstalled context identifier
+  originalHashes <- mapM (\(_, path) -> (,) path <$> getFileHash path) (installedInterfaces original)
+  before <- forM unixModules $ \name -> do
+    core <- readOriginal context original name
+    assertEqual (name ++ " original stock interface lacks typed import provenance") (Right True)
+      (missingForeignProof name core)
+    pure (name, core)
+  selected <- prepareForeignInterfaces producer (scratch env </> "original-unix-cache") source context [original]
+  regenerated <- discoverInstalled selected identifier
+  forM_ before $ \(name, previous) -> do
+    core <- readOriginal selected regenerated name
+    assertEqual (name ++ " has genuine verified typed import provenance") (Right False)
+      (missingForeignProof name core)
+    forM_ ["foreign", "unit", "module"] $ \key ->
+      assertEqual (name ++ " retains " ++ key) (field previous key) (field core key)
+  warm <- prepareForeignInterfaces producer (scratch env </> "original-unix-cache") source context [original]
+  assertEqual "unchanged inputs reuse the exact acquisition view" selected warm
+  assertEqual "native installed registration and interfaces are untouched" original =<< discoverInstalled context identifier
+  forM_ originalHashes $ \(path, expected) ->
+    assertEqual "native interface bytes are untouched" expected =<< getFileHash path
+  where
+    readOriginal context unit name = do
+      path <- maybe (fail ("missing original interface: " ++ name)) pure (lookup name (installedInterfaces unit))
+      result <- runExe env (root env) Nothing 120 (installedHelper context)
+        (helperCommand context unit (name, path))
+      assertSuccess result
+      response <- json (out result)
+      assertEqual (name ++ " has complete retained Core") "loaded" (string (field response "status"))
+      pure (field response "core")
 
 -- Exercise the actual ghc-pkg view against the selected installation. This
 -- performs no compilation and gives thin stock interfaces no runtime admission.

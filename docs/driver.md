@@ -477,7 +477,8 @@ is drained concurrently and malformed UTF-8 remains a protocol failure.
 
 An optional `--ghc-source DIR` supplies the matching configured GHC 9.14.1
 source tree when original `Conc.Bound`, `System.Posix.Internals`, or Unix's
-`System.Posix.Files.PosixString` interfaces lack
+`System.Posix.Files.PosixString`, `System.Posix.Process.Internals`, and
+`System.Posix.Signals` interfaces lack
 THC's typed foreign annotations. It requires `--installed-core required` and
 currently supports native x86_64/aarch64 Linux with the original
 `_build/stage1/libraries/{ghc-internal,unix}/setup-config`, built interfaces and generated

@@ -546,11 +546,21 @@ producer accepts a matching configured GHC 9.14.1 native Linux stage1 tree with
 the original GMP, Haskell2010 and NoImplicitPrelude ghc-internal configuration,
 and the configured Haskell2010 Unix library. It recompiles only
 `GHC.Internal.Conc.Bound`, `GHC.Internal.System.Posix.Internals`, and
-`System.Posix.Files.PosixString`, and only when their required annotation
+`System.Posix.Files.PosixString`, `System.Posix.Process.Internals`, and
+`System.Posix.Signals`, and only when their required annotation
 is absent. Cabal's saved configuration supplies CPP flags, language settings and
 the original dependency IDs. The selected compiler performs real code generation
 with `-fwrite-if-simplified-core`; the `-fno-code` interface path loses annotations
 and is not used here.
+
+The static-import producer also recognizes a stock `ccall` address declaration
+only after checking its typed binder, normalization and exact emitted address
+literal, with no call, header, C source, initializer, finalizer or foreign file.
+Such a declaration is omitted from the generated-stub call inventory, not given
+a function ABI. Its original Core address remains subject to separate strict
+address-label admission. For example, Unix's `&nocldstop` does not prevent proof
+of its unrelated generated signal-set wrappers; unknown data/function addresses
+still fail the strict audit when reachable.
 
 The tree's dynamic interfaces must match the selected installation byte for
 byte, and each target source must match its retained GHC self-recompilation

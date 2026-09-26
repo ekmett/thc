@@ -25,7 +25,7 @@ import qualified GHC.Unit.Module.WholeCoreBindings as ForeignCore
 import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist, renameFile)
 import System.Exit (die)
 import System.FilePath ((</>), takeDirectory)
-import FixtureSupport (CommandResult(..), runLogged, writeJson)
+import FixtureSupport (CommandResult(..), runLogged, runLoggedExpect, writeJson)
 import THC.Interface
 import THC.Plugin (serializePostTidyCoreWithAnnotations)
 
@@ -335,7 +335,7 @@ inspectInstalledBound environment charPath output = do
 -- are not. Recover the exact annotation through a fresh interface session.
 prepareImportStubs :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> String -> String -> FilePath -> String -> IO [CommandResult]
 prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb pluginUnit = do
-  let variants = [("plain", []), ("extra-file", ["-DTHC_EXTRA_FILE"]),
+  let variants = [("plain", []), ("labels", ["-DTHC_LABELS"]), ("extra-file", ["-DTHC_EXTRA_FILE"]),
                   ("wrapper", ["-DTHC_WRAPPER"]), ("instrumented", ["-finfo-table-map"])]
       source = directory </> "source/ForeignImportStubs.hs"
       output variant = directory </> "import-stubs" </> variant
@@ -385,6 +385,7 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
           proof = maybe Null id (field "staticForeignImportStubs" value)
           (status, reason) = case variant of
             "plain" -> ("verified", "")
+            "labels" -> ("verified", "")
             "extra-file" -> ("rejected", "additional-foreign-files")
             "wrapper" -> ("unclassified", "non-static-c-import-declaration")
             _ -> ("unclassified", "unclassified-target-or-instrumentation")
@@ -394,7 +395,7 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
       check (field "schema" value == Just (Number 2) &&
         (field "execution" =<< field "foreign" value) == Just (String "not-linked"))
         "Import provenance changed native link state"
-      if variant /= "plain" then pure () else do
+      if variant `notElem` ["plain", "labels"] then pure () else do
         check (field "expectedForeign" proof == field "foreign" value) "Import product equality lost"
         let imports = case field "imports" proof of Just (Array values) -> toList values; _ -> []
             aliases = filter ((== Just (String "abs")) . field "symbol") imports
@@ -420,4 +421,20 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
                 "Changed C stub product retained managed import admission"
           _ -> die "Original CAPI control lost its products"
       writeFile (root </> directory </> "import-stubs" </> variant ++ ".json") rendered
-  pure (concat commands ++ [built, native])
+  audits <- forM [("probe", 0), ("unknownData", 1), ("unknownFunction", 1)] $ \(entryName, status) -> do
+    let report = directory </> "import-stubs" </> "labels-" ++ entryName ++ "-audit.json"
+    result <- runLoggedExpect status 60 root (directory </> "logs") ("import-labels-" ++ entryName) [] "python3"
+      ["scripts/audit-core.py", directory </> "import-stubs/labels.json", "--entry",
+       unitName ++ ":ForeignImportStubs." ++ entryName, "--output", report]
+    bytes <- BSC.readFile (root </> report)
+    value <- either die pure (eitherDecodeStrict' bytes)
+    let field name (Object fields) = KeyMap.lookup name fields
+        field _ _ = Nothing
+        issues = case field "issues" value of Just (Array values) -> toList values; _ -> []
+        target = if entryName == "unknownData" then "thc_provenance_unknown_data" else "thc_provenance_unknown_function"
+    check (field "accepted" value == Just (Bool (status == 0))) "Unexpected static-label reachability admission"
+    unless (status == 0) $ check (any (\issue -> field "code" issue == Just (String "unsupported-literal") &&
+      case field "detail" issue of Just (String detail) -> Text.pack target `Text.isInfixOf` detail; _ -> False) issues)
+      "Static address provenance bypassed the unknown-label rejection"
+    pure result
+  pure (concat commands ++ [built, native] ++ audits)
