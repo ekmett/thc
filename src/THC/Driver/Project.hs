@@ -46,7 +46,7 @@ import THC.Driver.ScalarBitcode (ScalarBitcode, withScalarBitcode, scalarBuildIn
 import THC.Driver.RuntimeShim (RuntimeShim, withRuntimeShim, runtimeShimInputs, validateRuntimeShimModules)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign
-import THC.Driver.Run (RunOptions(..))
+import THC.Driver.Run (RunOptions(..), SulongMode, runtimeLaunchArguments)
 import THC.Driver.Zip (decodeZip, encodeZip)
 import THC.Driver.Wired (WiredArtifacts(..), moduleSources, sourceHashes,
                          exportPinnedCore, probeTargetLayout)
@@ -140,7 +140,7 @@ runProject opts target = do
   withProjectLock output $
     runBuiltProject project thcRoot runtime output native executable cabalArgs
                     pluginDb pluginUnit pluginLibrary compiler packageTool (runInstalledCore opts)
-                    source registeredLibrary (runArguments opts)
+                    source registeredLibrary (runSulongMode opts) (runArguments opts)
 
 -- Resolve the actual selected compiler's companion before Cabal sees the
 -- forwarding wrapper. The wrapper directory is not a GHC installation.
@@ -174,9 +174,9 @@ selectedPackageTool ghc requested = do
 
 runBuiltProject :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath ->
                    String -> [String] -> FilePath -> String -> FilePath -> FilePath ->
-                   Maybe FilePath -> String -> Maybe FilePath -> FilePath -> [String] -> IO ()
+                   Maybe FilePath -> String -> Maybe FilePath -> FilePath -> Maybe SulongMode -> [String] -> IO ()
 runBuiltProject project thcRoot runtime output native executable cabalArgs
-                pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary guestArguments = do
+                pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary sulongMode guestArguments = do
   driver <- getExecutablePath
   let proxy = native </> "cache/thc/native-ghc"
       receipts = native </> "cache/thc/native-recipes-v1"
@@ -315,9 +315,9 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   -- Full-Core main and shutdown share one program and its Handle CAFs.
   -- Execute relative paths from the Cabal project just as the native binary does.
   let programName = reverse (takeWhile (/= ':') (reverse executable))
-  runCommand False runtime ((if lifecycle
+  runCommand False runtime (runtimeLaunchArguments sulongMode (if lifecycle
       then ["--run-executable", '@' : manifest, entry, shutdown]
-      else ["--run-io", '@' : manifest, entry]) ++ ["--", programName] ++ guestArguments) project
+      else ["--run-io", '@' : manifest, entry]) programName guestArguments) project
 
 prepareInterfaceHelper :: ExportContext -> FilePath -> IO InstalledContext
 prepareInterfaceHelper context root = do
