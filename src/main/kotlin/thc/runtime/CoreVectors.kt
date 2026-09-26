@@ -84,6 +84,23 @@ internal object CoreVectors {
         return index.toInt()
     }
 
+    /** GHC's shuffle instruction requires a literal tuple of concatenated lane indices. */
+    fun shuffleIndices(raw: List<Any?>, lanes: Int): IntArray {
+        val constructor = raw.getOrNull(1) as? List<*>
+        val fields = raw.getOrNull(2) as? List<*>
+        if (raw.firstOrNull() != "app" || constructor?.firstOrNull() != "con" ||
+            raw.getOrNull(5) != true || fields?.size != lanes)
+            throw UnsupportedCore("Vector shuffle requires a literal index tuple")
+        return IntArray(lanes) { lane ->
+            val literal = fields[lane] as? List<*>
+            val value = if (literal?.firstOrNull() == "lit" && literal.getOrNull(1) == "int")
+                (literal.getOrNull(2) as? String)?.toLongOrNull() else null
+            if (value == null || value < 0L || value >= 2L * lanes)
+                throw UnsupportedCore("Vector shuffle indices must be literals in 0 until ${2 * lanes}")
+            value.toInt()
+        }
+    }
+
     val proof = CoreRepresentation(CoreKind.VECTOR, true, true, listOf("VecRep 2 Int64ElemRep"), vector = CoreVector.INT64X2)
     private val lane = CoreRepresentation(CoreKind.LONG, true, true, listOf("Int64Rep"))
     val unpacked = CoreRepresentation(CoreKind.UNKNOWN, true, true, listOf("Int64Rep", "Int64Rep"), listOf(lane, lane))

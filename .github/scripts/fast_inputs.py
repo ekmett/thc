@@ -35,7 +35,7 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 # preparers. An additional recorded runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
-MANIFEST_DIRS = """stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
+MANIFEST_DIRS = """simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 thread-status thread-label hint-trace thread-inventory boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
@@ -130,6 +130,18 @@ HINT_TRACE_OUTPUTS = frozenset("build/hint-trace/" + name for name in (
     *(f"{stage}/{suffix}" for stage in ("pre", "post")
       for suffix in ("core/HintTraceAudit.json", "hints.audit.json", "traces.audit.json",
                      "event.audit.json", "marker.audit.json", "binary.audit.json", "addressHints.audit.json"))))
+SIMD_ARITHMETIC_SHAPES = ["Word64X2","Word32X8","Int32X8","Int32X16","Int64X2","FloatX4","DoubleX2","FloatX8","DoubleX4","Int64X4","Int64X8","Word64X4","Word64X8","Word32X16","FloatX16","DoubleX8","Int8X16","Int16X8","Int32X4","Word8X16","Word16X8","Word32X4","Int16X16","Word16X16"]
+SIMD_ARITHMETIC_ENTRIES = tuple(op + shape + suffix for shape in SIMD_ARITHMETIC_SHAPES
+    for op in (("shuffle",) if shape.startswith(("Float", "Double")) else ("quot", "rem", "shuffle"))
+    for suffix in (("Pattern0", "Pattern1", "Pattern2") if op == "shuffle" else ("",)))
+SIMD_ARITHMETIC_COMMANDS = ("ghc-version", "native-build", "native-oracle", "pre-export",
+    *(name + "-audit" for name in SIMD_ARITHMETIC_ENTRIES))
+SIMD_ARITHMETIC_OUTPUTS = frozenset("build/simd-arithmetic/" + name for name in (
+    "manifest.json", "inputs.tsv", "oracle.tsv", "native/oracle", "pre-core/SimdArithmeticAudit.json",
+    "sources/SimdArithmeticAudit.hs", "sources/SimdArithmeticScalar.hs", "sources/Native.hs",
+    *(name + "-audit.json" for name in SIMD_ARITHMETIC_ENTRIES),
+    *("commands/" + command + "." + suffix for command in SIMD_ARITHMETIC_COMMANDS
+      for suffix in ("stdout", "stderr", "command.json"))))
 SIMD_WIDE_ARRAY_ENTRIES = tuple(shape + operation + mode
     for shape in ("int8X32","word8X32","int8X64","word8X64","int16X32","word16X32",
                   "int16X16","word16X16","int32X8","word32X8","int32X16","word32X16","int64X4","word64X4","int64X8","word64X8","floatX8","floatX16","doubleX4","doubleX8")
@@ -371,7 +383,7 @@ MAX_FILE_BYTES = 256 * 1024 * 1024
 MAX_TOTAL_BYTES = 3 * 1024 * 1024 * 1024
 MAX_MANIFEST_BYTES = 16 * 1024 * 1024
 MAX_JSON_BYTES = 384 * 1024 * 1024
-NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate", "build/float-decode/native/oracle",
+NATIVE_EXECUTABLES = frozenset({"build/simd-arithmetic/native/oracle", "build/unsafe-equality/api/predicate", "build/float-decode/native/oracle",
     "build/floating-remainder/native/oracle",
     "build/pinned-addresses/native/pinned-address-oracle",
     "build/integer-completion/native/integer-completion-oracle",
@@ -1310,6 +1322,8 @@ def allowed_payload(name, pins):
         return name in ("build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json", "build/libdw-unavailable/foreign-labels.json")
     if parts[1] == "native-addresses":
         return name in ("build/native-addresses/manifest.json", "build/native-addresses/oracle.json")
+    if parts[1] == "simd-arithmetic":
+        return name in SIMD_ARITHMETIC_OUTPUTS
     if parts[1] == "simd-wide-arrays":
         return name in SIMD_WIDE_ARRAY_OUTPUTS
     if parts[1] == "simd128-addresses":

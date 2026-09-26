@@ -2010,7 +2010,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 val name = fn[1] as String
                 CoreVectors.validate(name, args.map(CoreVectors::argumentProof), tupleProof)
                 CoreVectors.validateFlags(flags)
-                vectorPrimitive(name, args.map { compile(it, scope, false) })
+                val operands = args.map { compile(it, scope, false) }
+                val shuffle = if (name.startsWith("shuffle"))
+                    CoreVectors.shuffleIndices(args[2], tupleProof.vector!!.lanes) else null
+                vectorPrimitive(name, operands, shuffle)
             } else if (fn[0] == "prim" && CoreArithmeticExceptions.payload(fn[1] as String) != null) {
                 val name = fn[1] as String
                 CoreArithmeticExceptions.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -3612,8 +3615,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         b.endBlock()
     }
 
-    private fun vectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
-        in GeneratedVectors.operations -> generatedVectorPrimitive(name, operands)
+    private fun vectorPrimitive(name: String, operands: List<Expression>, shuffleIndices: IntArray? = null): Expression = when (name) {
+        in GeneratedVectors.operations -> generatedVectorPrimitive(name, operands, shuffleIndices)
         in CoreVectors.operationsWord32 -> vectorWord32Primitive(name, operands)
         in CoreVectors.operationsWord16 -> vectorWord16Primitive(name, operands)
         in CoreVectors.operationsWord8 -> vectorWord8Primitive(name, operands)
@@ -4717,7 +4720,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     }
 
     // BEGIN GENERATED SIMD FAMILIES
-    private fun generatedVectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+    private fun generatedVectorPrimitive(name: String, operands: List<Expression>, shuffleIndices: IntArray?): Expression = when (name) {
         "packInt8X32#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
@@ -5017,6 +5020,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedWord64X2Max(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X2Max()
         }, GeneratedVectors.proofWord64X2)
+        "quotWord64X2#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord64X2Quot(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X2Quot()
+        }, GeneratedVectors.proofWord64X2)
+        "remWord64X2#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord64X2Rem(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X2Rem()
+        }, GeneratedVectors.proofWord64X2)
+        "shuffleWord64X2#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.LongVector.SPECIES_128, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedWord64X2Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedWord64X2Shuffle()
+            }, GeneratedVectors.proofWord64X2)
+        }
         "packWord32X8#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
@@ -5058,6 +5077,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedWord32X8Max(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X8Max()
         }, GeneratedVectors.proofWord32X8)
+        "quotWord32X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X8Quot(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X8Quot()
+        }, GeneratedVectors.proofWord32X8)
+        "remWord32X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X8Rem(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X8Rem()
+        }, GeneratedVectors.proofWord32X8)
+        "shuffleWord32X8#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.IntVector.SPECIES_256, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedWord32X8Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedWord32X8Shuffle()
+            }, GeneratedVectors.proofWord32X8)
+        }
         "packInt32X8#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
@@ -5103,16 +5138,32 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedInt32X8Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X8Max()
         }, GeneratedVectors.proofInt32X8)
+        "quotInt32X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X8Quot(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X8Quot()
+        }, GeneratedVectors.proofInt32X8)
+        "remInt32X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X8Rem(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X8Rem()
+        }, GeneratedVectors.proofInt32X8)
+        "shuffleInt32X8#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.IntVector.SPECIES_256, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedInt32X8Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedInt32X8Shuffle()
+            }, GeneratedVectors.proofInt32X8)
+        }
         "packInt32X16#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
             val lanes = List(16) { b.createLocal() }
             operands[0].emitTuple(e, lanes)
-            b.beginGeneratedInt32X16Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedInt32X16Pack()
+            b.emitGeneratedInt32X16Pack(BytecodeVectorLanes(lanes.map(LocalAccessor::constantOf).toTypedArray()))
             b.endBlock()
         }, GeneratedVectors.proofInt32X16)
         "unpackInt32X16#" -> tupleExpression(GeneratedVectors.unpackedInt32X16) { e, destination ->
-            e.builder.beginGeneratedInt32X16Unpack(destination[0], destination[1], destination[2], destination[3], destination[4], destination[5], destination[6], destination[7], destination[8], destination[9], destination[10], destination[11], destination[12], destination[13], destination[14], destination[15])
+            e.builder.beginGeneratedInt32X16Unpack(BytecodeVectorLanes(destination.map(LocalAccessor::constantOf).toTypedArray()))
             operands[0].emit(e)
             e.builder.endGeneratedInt32X16Unpack()
         }
@@ -5148,6 +5199,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedInt32X16Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X16Max()
         }, GeneratedVectors.proofInt32X16)
+        "quotInt32X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X16Quot(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X16Quot()
+        }, GeneratedVectors.proofInt32X16)
+        "remInt32X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X16Rem(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X16Rem()
+        }, GeneratedVectors.proofInt32X16)
+        "shuffleInt32X16#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.IntVector.SPECIES_512, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedInt32X16Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedInt32X16Shuffle()
+            }, GeneratedVectors.proofInt32X16)
+        }
         "timesInt64X2#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedInt64X2Times(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X2Times()
@@ -5164,6 +5231,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedInt64X2Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X2Max()
         }, GeneratedVectors.proofInt64X2)
+        "quotInt64X2#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X2Quot(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X2Quot()
+        }, GeneratedVectors.proofInt64X2)
+        "remInt64X2#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X2Rem(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X2Rem()
+        }, GeneratedVectors.proofInt64X2)
+        "shuffleInt64X2#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.LongVector.SPECIES_128, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedInt64X2Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedInt64X2Shuffle()
+            }, GeneratedVectors.proofInt64X2)
+        }
         "negateFloatX4#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedFloatX4Negate(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX4Negate()
@@ -5184,6 +5267,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedFloatX4Max(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX4Max()
         }, GeneratedVectors.proofFloatX4)
+        "shuffleFloatX4#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.FloatVector.SPECIES_128, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedFloatX4Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedFloatX4Shuffle()
+            }, GeneratedVectors.proofFloatX4)
+        }
         "negateDoubleX2#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedDoubleX2Negate(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX2Negate()
@@ -5204,6 +5295,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedDoubleX2Max(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX2Max()
         }, GeneratedVectors.proofDoubleX2)
+        "shuffleDoubleX2#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.DoubleVector.SPECIES_128, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedDoubleX2Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedDoubleX2Shuffle()
+            }, GeneratedVectors.proofDoubleX2)
+        }
         "packFloatX8#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
@@ -5253,6 +5352,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedFloatX8Max(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX8Max()
         }, GeneratedVectors.proofFloatX8)
+        "shuffleFloatX8#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.FloatVector.SPECIES_256, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedFloatX8Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedFloatX8Shuffle()
+            }, GeneratedVectors.proofFloatX8)
+        }
         "packDoubleX4#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
@@ -5302,6 +5409,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedDoubleX4Max(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX4Max()
         }, GeneratedVectors.proofDoubleX4)
+        "shuffleDoubleX4#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.DoubleVector.SPECIES_256, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedDoubleX4Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedDoubleX4Shuffle()
+            }, GeneratedVectors.proofDoubleX4)
+        }
         "packInt64X4#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
@@ -5347,6 +5462,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedInt64X4Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X4Max()
         }, GeneratedVectors.proofInt64X4)
+        "quotInt64X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X4Quot(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X4Quot()
+        }, GeneratedVectors.proofInt64X4)
+        "remInt64X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X4Rem(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X4Rem()
+        }, GeneratedVectors.proofInt64X4)
+        "shuffleInt64X4#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.LongVector.SPECIES_256, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedInt64X4Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedInt64X4Shuffle()
+            }, GeneratedVectors.proofInt64X4)
+        }
         "packInt64X8#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
@@ -5392,6 +5523,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedInt64X8Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X8Max()
         }, GeneratedVectors.proofInt64X8)
+        "quotInt64X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X8Quot(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X8Quot()
+        }, GeneratedVectors.proofInt64X8)
+        "remInt64X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X8Rem(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X8Rem()
+        }, GeneratedVectors.proofInt64X8)
+        "shuffleInt64X8#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.LongVector.SPECIES_512, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedInt64X8Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedInt64X8Shuffle()
+            }, GeneratedVectors.proofInt64X8)
+        }
         "packWord64X4#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
@@ -5433,6 +5580,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedWord64X4Max(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X4Max()
         }, GeneratedVectors.proofWord64X4)
+        "quotWord64X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord64X4Quot(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X4Quot()
+        }, GeneratedVectors.proofWord64X4)
+        "remWord64X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord64X4Rem(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X4Rem()
+        }, GeneratedVectors.proofWord64X4)
+        "shuffleWord64X4#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.LongVector.SPECIES_256, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedWord64X4Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedWord64X4Shuffle()
+            }, GeneratedVectors.proofWord64X4)
+        }
         "packWord64X8#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
@@ -5474,16 +5637,32 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedWord64X8Max(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X8Max()
         }, GeneratedVectors.proofWord64X8)
+        "quotWord64X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord64X8Quot(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X8Quot()
+        }, GeneratedVectors.proofWord64X8)
+        "remWord64X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord64X8Rem(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X8Rem()
+        }, GeneratedVectors.proofWord64X8)
+        "shuffleWord64X8#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.LongVector.SPECIES_512, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedWord64X8Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedWord64X8Shuffle()
+            }, GeneratedVectors.proofWord64X8)
+        }
         "packWord32X16#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
             val lanes = List(16) { b.createLocal() }
             operands[0].emitTuple(e, lanes)
-            b.beginGeneratedWord32X16Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedWord32X16Pack()
+            b.emitGeneratedWord32X16Pack(BytecodeVectorLanes(lanes.map(LocalAccessor::constantOf).toTypedArray()))
             b.endBlock()
         }, GeneratedVectors.proofWord32X16)
         "unpackWord32X16#" -> tupleExpression(GeneratedVectors.unpackedWord32X16) { e, destination ->
-            e.builder.beginGeneratedWord32X16Unpack(destination[0], destination[1], destination[2], destination[3], destination[4], destination[5], destination[6], destination[7], destination[8], destination[9], destination[10], destination[11], destination[12], destination[13], destination[14], destination[15])
+            e.builder.beginGeneratedWord32X16Unpack(BytecodeVectorLanes(destination.map(LocalAccessor::constantOf).toTypedArray()))
             operands[0].emit(e)
             e.builder.endGeneratedWord32X16Unpack()
         }
@@ -5515,16 +5694,32 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedWord32X16Max(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X16Max()
         }, GeneratedVectors.proofWord32X16)
+        "quotWord32X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X16Quot(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X16Quot()
+        }, GeneratedVectors.proofWord32X16)
+        "remWord32X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X16Rem(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X16Rem()
+        }, GeneratedVectors.proofWord32X16)
+        "shuffleWord32X16#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.IntVector.SPECIES_512, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedWord32X16Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedWord32X16Shuffle()
+            }, GeneratedVectors.proofWord32X16)
+        }
         "packFloatX16#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
             val lanes = List(16) { b.createLocal() }
             operands[0].emitTuple(e, lanes)
-            b.beginGeneratedFloatX16Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedFloatX16Pack()
+            b.emitGeneratedFloatX16Pack(BytecodeVectorLanes(lanes.map(LocalAccessor::constantOf).toTypedArray()))
             b.endBlock()
         }, GeneratedVectors.proofFloatX16)
         "unpackFloatX16#" -> tupleExpression(GeneratedVectors.unpackedFloatX16) { e, destination ->
-            e.builder.beginGeneratedFloatX16Unpack(destination[0], destination[1], destination[2], destination[3], destination[4], destination[5], destination[6], destination[7], destination[8], destination[9], destination[10], destination[11], destination[12], destination[13], destination[14], destination[15])
+            e.builder.beginGeneratedFloatX16Unpack(BytecodeVectorLanes(destination.map(LocalAccessor::constantOf).toTypedArray()))
             operands[0].emit(e)
             e.builder.endGeneratedFloatX16Unpack()
         }
@@ -5564,6 +5759,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedFloatX16Max(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX16Max()
         }, GeneratedVectors.proofFloatX16)
+        "shuffleFloatX16#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.FloatVector.SPECIES_512, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedFloatX16Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedFloatX16Shuffle()
+            }, GeneratedVectors.proofFloatX16)
+        }
         "packDoubleX8#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
@@ -5613,6 +5816,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedDoubleX8Max(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX8Max()
         }, GeneratedVectors.proofDoubleX8)
+        "shuffleDoubleX8#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.DoubleVector.SPECIES_512, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedDoubleX8Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedDoubleX8Shuffle()
+            }, GeneratedVectors.proofDoubleX8)
+        }
         "insertInt8X16#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedInt8X16Insert(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X16Insert()
@@ -5625,6 +5836,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedInt8X16Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X16Max()
         }, GeneratedVectors.proofInt8X16)
+        "quotInt8X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X16Quot(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X16Quot()
+        }, GeneratedVectors.proofInt8X16)
+        "remInt8X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X16Rem(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X16Rem()
+        }, GeneratedVectors.proofInt8X16)
+        "shuffleInt8X16#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.ByteVector.SPECIES_128, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedInt8X16Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedInt8X16Shuffle()
+            }, GeneratedVectors.proofInt8X16)
+        }
         "insertInt16X8#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedInt16X8Insert(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X8Insert()
@@ -5637,6 +5864,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedInt16X8Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X8Max()
         }, GeneratedVectors.proofInt16X8)
+        "quotInt16X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X8Quot(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X8Quot()
+        }, GeneratedVectors.proofInt16X8)
+        "remInt16X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X8Rem(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X8Rem()
+        }, GeneratedVectors.proofInt16X8)
+        "shuffleInt16X8#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.ShortVector.SPECIES_128, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedInt16X8Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedInt16X8Shuffle()
+            }, GeneratedVectors.proofInt16X8)
+        }
         "insertInt32X4#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedInt32X4Insert(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X4Insert()
@@ -5649,6 +5892,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedInt32X4Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X4Max()
         }, GeneratedVectors.proofInt32X4)
+        "quotInt32X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X4Quot(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X4Quot()
+        }, GeneratedVectors.proofInt32X4)
+        "remInt32X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X4Rem(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X4Rem()
+        }, GeneratedVectors.proofInt32X4)
+        "shuffleInt32X4#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.IntVector.SPECIES_128, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedInt32X4Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedInt32X4Shuffle()
+            }, GeneratedVectors.proofInt32X4)
+        }
         "insertWord8X16#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedWord8X16Insert(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X16Insert()
@@ -5661,6 +5920,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedWord8X16Max(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X16Max()
         }, GeneratedVectors.proofWord8X16)
+        "quotWord8X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord8X16Quot(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X16Quot()
+        }, GeneratedVectors.proofWord8X16)
+        "remWord8X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord8X16Rem(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X16Rem()
+        }, GeneratedVectors.proofWord8X16)
+        "shuffleWord8X16#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.ByteVector.SPECIES_128, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedWord8X16Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedWord8X16Shuffle()
+            }, GeneratedVectors.proofWord8X16)
+        }
         "insertWord16X8#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedWord16X8Insert(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X8Insert()
@@ -5673,6 +5948,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedWord16X8Max(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X8Max()
         }, GeneratedVectors.proofWord16X8)
+        "quotWord16X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X8Quot(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X8Quot()
+        }, GeneratedVectors.proofWord16X8)
+        "remWord16X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X8Rem(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X8Rem()
+        }, GeneratedVectors.proofWord16X8)
+        "shuffleWord16X8#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.ShortVector.SPECIES_128, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedWord16X8Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedWord16X8Shuffle()
+            }, GeneratedVectors.proofWord16X8)
+        }
         "insertWord32X4#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedWord32X4Insert(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X4Insert()
@@ -5685,16 +5976,32 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedWord32X4Max(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X4Max()
         }, GeneratedVectors.proofWord32X4)
+        "quotWord32X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X4Quot(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X4Quot()
+        }, GeneratedVectors.proofWord32X4)
+        "remWord32X4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X4Rem(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X4Rem()
+        }, GeneratedVectors.proofWord32X4)
+        "shuffleWord32X4#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.IntVector.SPECIES_128, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedWord32X4Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedWord32X4Shuffle()
+            }, GeneratedVectors.proofWord32X4)
+        }
         "packInt16X16#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
             val lanes = List(16) { b.createLocal() }
             operands[0].emitTuple(e, lanes)
-            b.beginGeneratedInt16X16Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedInt16X16Pack()
+            b.emitGeneratedInt16X16Pack(BytecodeVectorLanes(lanes.map(LocalAccessor::constantOf).toTypedArray()))
             b.endBlock()
         }, GeneratedVectors.proofInt16X16)
         "unpackInt16X16#" -> tupleExpression(GeneratedVectors.unpackedInt16X16) { e, destination ->
-            e.builder.beginGeneratedInt16X16Unpack(destination[0], destination[1], destination[2], destination[3], destination[4], destination[5], destination[6], destination[7], destination[8], destination[9], destination[10], destination[11], destination[12], destination[13], destination[14], destination[15])
+            e.builder.beginGeneratedInt16X16Unpack(BytecodeVectorLanes(destination.map(LocalAccessor::constantOf).toTypedArray()))
             operands[0].emit(e)
             e.builder.endGeneratedInt16X16Unpack()
         }
@@ -5730,16 +6037,32 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedInt16X16Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X16Max()
         }, GeneratedVectors.proofInt16X16)
+        "quotInt16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X16Quot(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X16Quot()
+        }, GeneratedVectors.proofInt16X16)
+        "remInt16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X16Rem(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X16Rem()
+        }, GeneratedVectors.proofInt16X16)
+        "shuffleInt16X16#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.ShortVector.SPECIES_256, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedInt16X16Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedInt16X16Shuffle()
+            }, GeneratedVectors.proofInt16X16)
+        }
         "packWord16X16#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
             val lanes = List(16) { b.createLocal() }
             operands[0].emitTuple(e, lanes)
-            b.beginGeneratedWord16X16Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedWord16X16Pack()
+            b.emitGeneratedWord16X16Pack(BytecodeVectorLanes(lanes.map(LocalAccessor::constantOf).toTypedArray()))
             b.endBlock()
         }, GeneratedVectors.proofWord16X16)
         "unpackWord16X16#" -> tupleExpression(GeneratedVectors.unpackedWord16X16) { e, destination ->
-            e.builder.beginGeneratedWord16X16Unpack(destination[0], destination[1], destination[2], destination[3], destination[4], destination[5], destination[6], destination[7], destination[8], destination[9], destination[10], destination[11], destination[12], destination[13], destination[14], destination[15])
+            e.builder.beginGeneratedWord16X16Unpack(BytecodeVectorLanes(destination.map(LocalAccessor::constantOf).toTypedArray()))
             operands[0].emit(e)
             e.builder.endGeneratedWord16X16Unpack()
         }
@@ -5771,6 +6094,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedWord16X16Max(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X16Max()
         }, GeneratedVectors.proofWord16X16)
+        "quotWord16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X16Quot(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X16Quot()
+        }, GeneratedVectors.proofWord16X16)
+        "remWord16X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X16Rem(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X16Rem()
+        }, GeneratedVectors.proofWord16X16)
+        "shuffleWord16X16#" -> run {
+            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.ShortVector.SPECIES_256, shuffleIndices ?: fault("Missing shuffle indices"), 0)
+            ProvenExpression(Expression { e ->
+                e.builder.beginGeneratedWord16X16Shuffle(shuffle)
+                operands[0].emit(e); operands[1].emit(e)
+                e.builder.endGeneratedWord16X16Shuffle()
+            }, GeneratedVectors.proofWord16X16)
+        }
         else -> throw UnsupportedCore("Unsupported generated vector primitive $name")
     }
     // END GENERATED SIMD FAMILIES

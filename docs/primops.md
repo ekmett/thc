@@ -6,12 +6,12 @@ GHC 9.14.1 exposes **1491 primops** on the pinned 64-bit target. This list is
 generated from `allThePrimOps`, the [runtime capabilities](../scripts/core-capabilities.json)
 and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signatures.json).
 
-**Implementation coverage: 1390 / 1491 (93.2%).**
+**Implementation coverage: 1450 / 1491 (97.3%).**
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Implemented | 1390 | A runtime implementation is registered in the capability inventory. |
-| Missing | 101 | No runtime implementation is registered. |
+| Implemented | 1450 | A runtime implementation is registered in the capability inventory. |
+| Missing | 41 | No runtime implementation is registered. |
 
 Implemented means translating the GHC operation to a sensible runtime implementation and
 checking it with ordinary tests. It does not require formal proof or exhaustive input testing.
@@ -894,9 +894,18 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `putMVar#` — arity 3 — MVar operation
 - [x] `quotInt#` — arity 2 — Numeric scalar signature
 - [x] `quotInt16#` — arity 2 — Numeric scalar signature
+- [x] `quotInt16X16#` — arity 2 — Specialized lowering
+- [x] `quotInt16X8#` — arity 2 — Specialized lowering
 - [x] `quotInt32#` — arity 2 — Numeric scalar signature
+- [x] `quotInt32X16#` — arity 2 — Specialized lowering
+- [x] `quotInt32X4#` — arity 2 — Specialized lowering
+- [x] `quotInt32X8#` — arity 2 — Specialized lowering
 - [x] `quotInt64#` — arity 2 — Numeric scalar signature
+- [x] `quotInt64X2#` — arity 2 — Specialized lowering
+- [x] `quotInt64X4#` — arity 2 — Specialized lowering
+- [x] `quotInt64X8#` — arity 2 — Specialized lowering
 - [x] `quotInt8#` — arity 2 — Numeric scalar signature
+- [x] `quotInt8X16#` — arity 2 — Specialized lowering
 - [x] `quotRemInt#` — arity 2 — Scalar tuple result
 - [x] `quotRemInt16#` — arity 2 — Scalar tuple result
 - [x] `quotRemInt32#` — arity 2 — Scalar tuple result
@@ -908,9 +917,18 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `quotRemWord8#` — arity 2 — Scalar tuple result
 - [x] `quotWord#` — arity 2 — Numeric scalar signature
 - [x] `quotWord16#` — arity 2 — Numeric scalar signature
+- [x] `quotWord16X16#` — arity 2 — Specialized lowering
+- [x] `quotWord16X8#` — arity 2 — Specialized lowering
 - [x] `quotWord32#` — arity 2 — Numeric scalar signature
+- [x] `quotWord32X16#` — arity 2 — Specialized lowering
+- [x] `quotWord32X4#` — arity 2 — Specialized lowering
+- [x] `quotWord32X8#` — arity 2 — Specialized lowering
 - [x] `quotWord64#` — arity 2 — Numeric scalar signature
+- [x] `quotWord64X2#` — arity 2 — Specialized lowering
+- [x] `quotWord64X4#` — arity 2 — Specialized lowering
+- [x] `quotWord64X8#` — arity 2 — Specialized lowering
 - [x] `quotWord8#` — arity 2 — Numeric scalar signature
+- [x] `quotWord8X16#` — arity 2 — Specialized lowering
 - [x] `raise#` — arity 1 — Specialized lowering
 - [x] `raiseDivZero#` — arity 1 — Specialized lowering
 - [x] `raiseIO#` — arity 2 — Specialized lowering
@@ -1106,20 +1124,62 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `remAddr#` — arity 2 — Pointer scalar signature
 - [x] `remInt#` — arity 2 — Numeric scalar signature
 - [x] `remInt16#` — arity 2 — Numeric scalar signature
+- [x] `remInt16X16#` — arity 2 — Specialized lowering
+- [x] `remInt16X8#` — arity 2 — Specialized lowering
 - [x] `remInt32#` — arity 2 — Numeric scalar signature
+- [x] `remInt32X16#` — arity 2 — Specialized lowering
+- [x] `remInt32X4#` — arity 2 — Specialized lowering
+- [x] `remInt32X8#` — arity 2 — Specialized lowering
 - [x] `remInt64#` — arity 2 — Numeric scalar signature
+- [x] `remInt64X2#` — arity 2 — Specialized lowering
+- [x] `remInt64X4#` — arity 2 — Specialized lowering
+- [x] `remInt64X8#` — arity 2 — Specialized lowering
 - [x] `remInt8#` — arity 2 — Numeric scalar signature
+- [x] `remInt8X16#` — arity 2 — Specialized lowering
 - [x] `remWord#` — arity 2 — Numeric scalar signature
 - [x] `remWord16#` — arity 2 — Numeric scalar signature
+- [x] `remWord16X16#` — arity 2 — Specialized lowering
+- [x] `remWord16X8#` — arity 2 — Specialized lowering
 - [x] `remWord32#` — arity 2 — Numeric scalar signature
+- [x] `remWord32X16#` — arity 2 — Specialized lowering
+- [x] `remWord32X4#` — arity 2 — Specialized lowering
+- [x] `remWord32X8#` — arity 2 — Specialized lowering
 - [x] `remWord64#` — arity 2 — Numeric scalar signature
+- [x] `remWord64X2#` — arity 2 — Specialized lowering
+- [x] `remWord64X4#` — arity 2 — Specialized lowering
+- [x] `remWord64X8#` — arity 2 — Specialized lowering
 - [x] `remWord8#` — arity 2 — Numeric scalar signature
+- [x] `remWord8X16#` — arity 2 — Specialized lowering
 - [x] `resizeMutableByteArray#` — arity 3 — Byte-array operation
 - [x] `retry#` — arity 1 — STM operation
 - [x] `setAddrRange#` — arity 4 — Byte-array operation
 - [x] `setByteArray#` — arity 5 — Byte-array operation
 - [x] `shrinkMutableByteArray#` — arity 3 — Byte-array operation
 - [x] `shrinkSmallMutableArray#` — arity 3 — Boxed-array operation
+- [x] `shuffleDoubleX2#` — arity 3 — Specialized lowering
+- [x] `shuffleDoubleX4#` — arity 3 — Specialized lowering
+- [x] `shuffleDoubleX8#` — arity 3 — Specialized lowering
+- [x] `shuffleFloatX16#` — arity 3 — Specialized lowering
+- [x] `shuffleFloatX4#` — arity 3 — Specialized lowering
+- [x] `shuffleFloatX8#` — arity 3 — Specialized lowering
+- [x] `shuffleInt16X16#` — arity 3 — Specialized lowering
+- [x] `shuffleInt16X8#` — arity 3 — Specialized lowering
+- [x] `shuffleInt32X16#` — arity 3 — Specialized lowering
+- [x] `shuffleInt32X4#` — arity 3 — Specialized lowering
+- [x] `shuffleInt32X8#` — arity 3 — Specialized lowering
+- [x] `shuffleInt64X2#` — arity 3 — Specialized lowering
+- [x] `shuffleInt64X4#` — arity 3 — Specialized lowering
+- [x] `shuffleInt64X8#` — arity 3 — Specialized lowering
+- [x] `shuffleInt8X16#` — arity 3 — Specialized lowering
+- [x] `shuffleWord16X16#` — arity 3 — Specialized lowering
+- [x] `shuffleWord16X8#` — arity 3 — Specialized lowering
+- [x] `shuffleWord32X16#` — arity 3 — Specialized lowering
+- [x] `shuffleWord32X4#` — arity 3 — Specialized lowering
+- [x] `shuffleWord32X8#` — arity 3 — Specialized lowering
+- [x] `shuffleWord64X2#` — arity 3 — Specialized lowering
+- [x] `shuffleWord64X4#` — arity 3 — Specialized lowering
+- [x] `shuffleWord64X8#` — arity 3 — Specialized lowering
+- [x] `shuffleWord8X16#` — arity 3 — Specialized lowering
 - [x] `sinDouble#` — arity 1 — Numeric scalar signature
 - [x] `sinFloat#` — arity 1 — Numeric scalar signature
 - [x] `sinhDouble#` — arity 1 — Numeric scalar signature
@@ -1496,84 +1556,24 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `newBCO#` — arity 6
 - [ ] `numSparks#` — arity 1
 - [ ] `par#` — arity 1
-- [ ] `quotInt16X16#` — arity 2
 - [ ] `quotInt16X32#` — arity 2
-- [ ] `quotInt16X8#` — arity 2
-- [ ] `quotInt32X16#` — arity 2
-- [ ] `quotInt32X4#` — arity 2
-- [ ] `quotInt32X8#` — arity 2
-- [ ] `quotInt64X2#` — arity 2
-- [ ] `quotInt64X4#` — arity 2
-- [ ] `quotInt64X8#` — arity 2
-- [ ] `quotInt8X16#` — arity 2
 - [ ] `quotInt8X32#` — arity 2
 - [ ] `quotInt8X64#` — arity 2
-- [ ] `quotWord16X16#` — arity 2
 - [ ] `quotWord16X32#` — arity 2
-- [ ] `quotWord16X8#` — arity 2
-- [ ] `quotWord32X16#` — arity 2
-- [ ] `quotWord32X4#` — arity 2
-- [ ] `quotWord32X8#` — arity 2
-- [ ] `quotWord64X2#` — arity 2
-- [ ] `quotWord64X4#` — arity 2
-- [ ] `quotWord64X8#` — arity 2
-- [ ] `quotWord8X16#` — arity 2
 - [ ] `quotWord8X32#` — arity 2
 - [ ] `quotWord8X64#` — arity 2
-- [ ] `remInt16X16#` — arity 2
 - [ ] `remInt16X32#` — arity 2
-- [ ] `remInt16X8#` — arity 2
-- [ ] `remInt32X16#` — arity 2
-- [ ] `remInt32X4#` — arity 2
-- [ ] `remInt32X8#` — arity 2
-- [ ] `remInt64X2#` — arity 2
-- [ ] `remInt64X4#` — arity 2
-- [ ] `remInt64X8#` — arity 2
-- [ ] `remInt8X16#` — arity 2
 - [ ] `remInt8X32#` — arity 2
 - [ ] `remInt8X64#` — arity 2
-- [ ] `remWord16X16#` — arity 2
 - [ ] `remWord16X32#` — arity 2
-- [ ] `remWord16X8#` — arity 2
-- [ ] `remWord32X16#` — arity 2
-- [ ] `remWord32X4#` — arity 2
-- [ ] `remWord32X8#` — arity 2
-- [ ] `remWord64X2#` — arity 2
-- [ ] `remWord64X4#` — arity 2
-- [ ] `remWord64X8#` — arity 2
-- [ ] `remWord8X16#` — arity 2
 - [ ] `remWord8X32#` — arity 2
 - [ ] `remWord8X64#` — arity 2
 - [ ] `setOtherThreadAllocationCounter#` — arity 3
 - [ ] `setThreadAllocationCounter#` — arity 2
-- [ ] `shuffleDoubleX2#` — arity 3
-- [ ] `shuffleDoubleX4#` — arity 3
-- [ ] `shuffleDoubleX8#` — arity 3
-- [ ] `shuffleFloatX16#` — arity 3
-- [ ] `shuffleFloatX4#` — arity 3
-- [ ] `shuffleFloatX8#` — arity 3
-- [ ] `shuffleInt16X16#` — arity 3
 - [ ] `shuffleInt16X32#` — arity 3
-- [ ] `shuffleInt16X8#` — arity 3
-- [ ] `shuffleInt32X16#` — arity 3
-- [ ] `shuffleInt32X4#` — arity 3
-- [ ] `shuffleInt32X8#` — arity 3
-- [ ] `shuffleInt64X2#` — arity 3
-- [ ] `shuffleInt64X4#` — arity 3
-- [ ] `shuffleInt64X8#` — arity 3
-- [ ] `shuffleInt8X16#` — arity 3
 - [ ] `shuffleInt8X32#` — arity 3
 - [ ] `shuffleInt8X64#` — arity 3
-- [ ] `shuffleWord16X16#` — arity 3
 - [ ] `shuffleWord16X32#` — arity 3
-- [ ] `shuffleWord16X8#` — arity 3
-- [ ] `shuffleWord32X16#` — arity 3
-- [ ] `shuffleWord32X4#` — arity 3
-- [ ] `shuffleWord32X8#` — arity 3
-- [ ] `shuffleWord64X2#` — arity 3
-- [ ] `shuffleWord64X4#` — arity 3
-- [ ] `shuffleWord64X8#` — arity 3
-- [ ] `shuffleWord8X16#` — arity 3
 - [ ] `shuffleWord8X32#` — arity 3
 - [ ] `shuffleWord8X64#` — arity 3
 - [ ] `spark#` — arity 2

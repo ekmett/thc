@@ -142,6 +142,7 @@ python3 scripts/prepare-simd-capability-smoke.py
 "$fixture_bin" simd128-arrays
 "$fixture_bin" simd-wide-arrays
 "$fixture_bin" simd-address-families
+"$fixture_bin" simd-arithmetic
 case "$(uname -m)" in
   arm64|aarch64) python3 scripts/prepare-int16x8-audit.py --export-only ;;
   *) python3 scripts/prepare-int16x8-audit.py ;;

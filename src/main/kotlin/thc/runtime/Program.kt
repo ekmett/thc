@@ -2373,8 +2373,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 CoreVectors.validate(name, args.map(CoreVectors::argumentProof), tupleProof)
                 CoreVectors.validateFlags(flags)
                 val operands = args.map { compile(it, scope, false) }.toTypedArray()
+                val shuffle = if (name.startsWith("shuffle"))
+                    CoreVectors.shuffleIndices(args[2], tupleProof.vector!!.lanes) else null
                 when (name) {
-                    in GeneratedVectors.operations -> GeneratedVectors.expression(name, operands) { count ->
+                    in GeneratedVectors.operations -> GeneratedVectors.expression(name, operands, shuffle) { count ->
                         IntArray(count) { scope.layout.bind("<vector lane $it>") }
                     }
                     "packInt64X2#" -> VectorPack(operands[0], IntArray(2) { scope.layout.bind("<vector lane $it>") })

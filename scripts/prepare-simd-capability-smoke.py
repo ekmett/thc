@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+from simd_family_model import defined_division
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/simd-capability-smoke'
@@ -71,6 +72,8 @@ def inputs(generator):
             for left, right in pairs if lane in (0, family['lanes'] - 1) else pairs[:1]:
                 a = signed(left if operation == 'broadcast' else left - lane * 104729)
                 b = signed(right + lane * 7919)
+                if operation in ('quot', 'rem') and not defined_division(family, a, b):
+                    continue
                 yield owners[index], index * 4096 + lane, a, b
 
 
@@ -122,7 +125,7 @@ def main():
     cases.write_text(actual)
     sources = [ROOT / 'scripts' / name for name in (
         'core-capabilities.json', 'simd-families.json', 'generate-simd-families.py',
-        'prepare-simd-capability-smoke.py', 'audit-core.py')]
+        'prepare-simd-capability-smoke.py', 'simd_family_model.py', 'audit-core.py')]
     sources += sorted((ROOT / 'scripts').glob('core_*.py'))
     sources += sorted((ROOT / 'compiler/THC').glob('*.hs'))
     sources += [ROOT / 'compiler' / name for name in ('build.sh', 'export.sh', 'toolchain.sh')]
