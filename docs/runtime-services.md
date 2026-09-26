@@ -212,6 +212,32 @@ installed Core and the configured GHC source provider described in the
 [driver guide](driver.md). A successful native run alone does not establish
 that its entire original Core closure is accepted by THC.
 
+The complete fixture has also run successfully through `thc run` with the real
+runtime library, installed Core, original `:Main` startup and Handle shutdown,
+on the bytecode backend in both default and dense handoff modes. The strict
+audit reported zero missing globals and zero issues. Guest runs must produce
+`THC runtime services smoke: all APIs passed`; the deliberately different
+native compatibility marker is not guest success. The full AST attempt is
+currently rejected before the API actions because original process-signal
+delivery requires bytecode. This is distinct from the direct ABI tests of both
+backends.
+
+With the [pinned full-Core toolchain](driver.md) configured, reproduce acquisition
+and the bytecode run from the repository root:
+
+```sh
+THC_BACKEND=bytecode thc run test/fixtures/run-runtime-services \
+  --exe runtime-services-smoke:exe:completed \
+  --thc-root "$PWD" --runtime "$PWD/build/install/thc/bin/thc" \
+  --dist-dir "$PWD/build/runtime-services-smoke" \
+  --installed-core required --ghc-source "$THC_GHC_SOURCE"
+```
+
+Here `THC_GHC_SOURCE` names the matching GHC source checkout. Set
+`JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true` for the dense handoff run. The smoke
+enables JIT telemetry explicitly but does not claim any entry was compiled or
+that callback counters prove resident compiled code.
+
 The private versioned ABI consists of three exact ordinary `ccall unsafe`
 declarations: `thc_runtime_v1_query`, `thc_runtime_v1_control` and
 `thc_runtime_v1_trace`. Both loaders reserve these before package-C dispatch and

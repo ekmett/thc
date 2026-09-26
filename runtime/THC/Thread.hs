@@ -51,13 +51,13 @@ data CpuCoordinate = CpuCoordinate
 currentThreadInfo :: IO ThreadInfo
 currentThreadInfo = ThreadInfo
   <$> queryEnum 100 [(0, NativeHaskellThread), (1, PlatformThread), (2, VirtualThread)]
-  <*> query 101 0 0
+  <*> queryInt 101 0 0
   <*> queryEnum 102 [(0, False), (1, True)]
   <*> queryEnum 103 [(0, NoCpuAffinity), (1, AdvisoryCpuAffinity), (2, PinnedCpuAffinity)]
   <*> queryEnum 104 [(0, False), (1, True)]
 
 currentThreadAccounting :: IO ThreadAccounting
-currentThreadAccounting = ThreadAccounting <$> query 105 0 0 <*> query 106 0 0 <*> query 107 0 0
+currentThreadAccounting = ThreadAccounting <$> queryWord64 105 0 0 <*> queryWord64 106 0 0 <*> queryWord64 107 0 0
 
 -- | Initial context eligibility in dense capability order, capped by the
 -- JVM's CPU capacity. This is not a live process-affinity query. Unavailable
@@ -74,8 +74,8 @@ eligibleCPUs = do
   where
     collect [] reversed = pure (Available (reverse reversed))
     collect (index:rest) reversed = do
-      group <- query 109 index 0
-      processor <- query 110 index 0
+      group <- queryInt 109 index 0
+      processor <- queryInt 110 index 0
       case (group, processor) of
         (Available g, Available p) -> collect rest (CpuCoordinate g p : reversed)
         (Unsupported, _) -> pure Unsupported
