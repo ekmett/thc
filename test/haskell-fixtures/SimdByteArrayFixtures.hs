@@ -16,6 +16,7 @@ import Data.List (isInfixOf, isPrefixOf, isSuffixOf, sort)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Data.Word (Word32, Word8)
+import Distribution.Simple.Utils (createTempDirectory)
 import FixtureSupport (CommandResult(..), hashFile, runLogged, runLoggedExpect, runLoggedWithInput, writeJson, readInteger, splitTab)
 import Foreign.Marshal.Alloc (alloca)
 import Foreign.Ptr (castPtr)
@@ -25,7 +26,6 @@ import System.Directory (copyFile, createDirectoryIfMissing, doesFileExist, list
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), makeRelative, takeExtension, takeDirectory, splitDirectories)
-import System.Posix.Temp (mkdtemp)
 import Text.Read (readMaybe)
 
 get :: String -> Value -> Value
@@ -347,7 +347,7 @@ prepareSimdByteArray root name args = do
       nativeSource = "compiler/test-fixtures" </> moduleName family ++ "Native.hs"
       stages = if exportOnly then ["pre"] else ["pre","post"]
   createDirectoryIfMissing True (root </> directory)
-  attempt <- makeRelative root <$> mkdtemp (root </> directory </> "prepare-run-")
+  attempt <- makeRelative root <$> createTempDirectory (root </> directory) "prepare-run-"
   old <- doesFileExist (root </> provenancePath)
   when old $ do
     previous <- readJson (root </> provenancePath)
