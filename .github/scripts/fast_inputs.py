@@ -35,7 +35,7 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 # preparers. An additional recorded runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
-MANIFEST_DIRS = """simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
+MANIFEST_DIRS = """simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 thread-status thread-label hint-trace thread-inventory boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
@@ -132,6 +132,22 @@ SIMD_WIDE_ARRAY_OUTPUTS = frozenset("build/simd-wide-arrays/" + name for name in
     *("pre-" + name + "-audit.json" for name in SIMD_WIDE_ARRAY_ENTRIES),
     *("commands/" + command + "." + suffix for command in SIMD_WIDE_ARRAY_COMMANDS
       for suffix in ("stdout", "stderr", "command.json"))))
+SIMD_ADDRESS_SHAPES = ("int32X4", "word32X4", "floatX4", "doubleX2", "int16X16", "word16X16",
+    "int32X8", "word32X8", "int32X16", "word32X16", "int64X4", "word64X4", "int64X8", "word64X8",
+    "floatX8", "floatX16", "doubleX4", "doubleX8")
+SIMD_ADDRESS_ENTRIES = tuple(shape + operation + mode for shape in SIMD_ADDRESS_SHAPES
+    for operation in ("Index", "Read", "Write") for mode in ("Packed", "Scalar"))
+SIMD_ADDRESS_NATIVE128 = platform.machine().lower() not in ("arm64", "aarch64")
+SIMD_ADDRESS_STAGES = (("pre", "SimdAddressAudit"),) + ((("post128", "SimdAddress128Audit"),) if SIMD_ADDRESS_NATIVE128 else ())
+SIMD_ADDRESS_MODES = ("scalar",) + (("vector128",) if SIMD_ADDRESS_NATIVE128 else ())
+SIMD_ADDRESS_COMMANDS = ("ghc-version", *(mode + "-" + phase for mode in SIMD_ADDRESS_MODES for phase in ("build", "oracle")),
+    *(stage + "-" + phase for stage, _ in SIMD_ADDRESS_STAGES for phase in ("export", "audit")))
+SIMD_ADDRESS_OUTPUTS = frozenset("build/simd-address-families/" + path for path in (
+    "manifest.json", *("source/" + name + ".hs" for name in
+      ("SimdAddressAudit", "SimdAddress128Audit", "SimdAddressScalar", "ScalarNative", "VectorNative")),
+    *(path for mode in SIMD_ADDRESS_MODES for path in (mode + "-inputs.tsv", mode + "-oracle.tsv", mode + "/oracle")),
+    *(path for stage, module in SIMD_ADDRESS_STAGES for path in (stage + "-core/" + module + ".json", stage + "-audit.json")),
+    *("commands/" + command + "." + suffix for command in SIMD_ADDRESS_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 SIMD128_ARRAY_ENTRIES = tuple(shape + operation + mode
     for shape in ("int8X16", "word8X16", "int16X8", "word16X8", "int64X2", "word64X2")
     for operation in ("Index", "Read", "Write") for mode in ("Packed", "Scalar"))
@@ -353,6 +369,7 @@ NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate", "build/fl
     "build/simd-wide-arrays/native/oracle",
     "build/simd128-addresses/native/oracle",
     "build/simd128-arrays/native/oracle",
+    "build/simd-address-families/scalar/oracle", "build/simd-address-families/vector128/oracle",
     "build/scalar-memory-utilities/native/oracle",
     "build/simd-capability-smoke/native/simd-smoke-oracle",
     "build/original-stdio/native/original-stdio-oracle",
@@ -1146,6 +1163,21 @@ def bytearray_artifact_hashes(family, manifest):
     return records
 
 
+def simd_address_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
+            manifest.get("ghc") == "9.14.1" and manifest.get("entries") == list(SIMD_ADDRESS_ENTRIES) and
+            type(manifest.get("scalarRows")) is int and manifest["scalarRows"] == 2592 and
+            type(manifest.get("nativeVector128Rows")) is int and
+            manifest["nativeVector128Rows"] == (576 if SIMD_ADDRESS_NATIVE128 else 0), "Invalid vector-address provenance")
+    require(isinstance(manifest.get("stages"), dict) and set(manifest["stages"]) == {stage for stage, _ in SIMD_ADDRESS_STAGES},
+            "Missing vector-address Core stages")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) == SIMD_ADDRESS_OUTPUTS - {"build/simd-address-families/manifest.json"},
+            "Incomplete vector-address artifact closure")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid vector-address hash")
+    return artifacts
+
+
 def scalar_memory_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
             manifest.get("ghc") == "9.14.1" and manifest.get("entries") == list(SCALAR_MEMORY_ENTRIES) and
@@ -1215,6 +1247,8 @@ def allowed_payload(name, pins):
         return name in SCALAR_MEMORY_OUTPUTS
     if parts[1] == "delimited-continuations":
         return name in DELIMITED_OUTPUTS
+    if parts[1] == "simd-address-families":
+        return name in SIMD_ADDRESS_OUTPUTS
     if parts[1] == "bignat-literals":
         return name in BIGNAT_OUTPUTS
     if parts[1] in BYTEARRAY_OUTPUTS:
@@ -1406,6 +1440,8 @@ def inventory(root, current, read, core_files, verified=None):
             scalar_memory_artifact_hashes(doc)
         if name == "build/delimited-continuations/manifest.json":
             delimited_artifact_hashes(doc)
+        if name == "build/simd-address-families/manifest.json":
+            simd_address_artifact_hashes(doc)
         if name == "build/bignat-literals/manifest.json":
             bignat_artifact_hashes(doc)
         if name == "build/pinned-addresses/manifest.json":
