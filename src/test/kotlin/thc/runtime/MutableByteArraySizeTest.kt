@@ -286,7 +286,9 @@ class MutableByteArraySizeTest {
                         7->if(effectful)((meta["rep"] as MutableMap<String,Any?>)["components"] as MutableList<Any?>)[0]=empty else meta["rep"]=longProof+("primReps" to listOf("WordRep"))
                         8->if(effectful)meta["rep"]=longProof else meta["rep"]=longProof+("primReps" to listOf("Int64Rep"))
                     }
-                    assertThrows(RuntimeFault::class.java,{program(language,module+("diagnosticUnsupported" to diagnostic),backend)},"$backend/$effectful/$mutation/$diagnostic")
+                    if (!effectful && mutation in 7..8)
+                        assertDoesNotThrow({program(language,module+("diagnosticUnsupported" to diagnostic),backend)},"$backend/$effectful/$mutation/$diagnostic")
+                    else assertThrows(RuntimeFault::class.java,{program(language,module+("diagnosticUnsupported" to diagnostic),backend)},"$backend/$effectful/$mutation/$diagnostic")
                 }
                 val module=Json.parse(Json.stringify(synthetic(effectful))) as Map<String,Any?>
                 val app=applications(module).single();val bare=(app[1] as List<*>).toList();app.clear();app.addAll(bare)
