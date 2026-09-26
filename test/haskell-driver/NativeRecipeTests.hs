@@ -132,7 +132,7 @@ tests = TestLabel "actual native compiler receipts" $ TestList
       before <- readIORef calls
       omitted <- tryIOError ensure
       assertBool "two declared sources cannot reuse one surviving object and receipt" (isLeft omitted)
-      assertEqual "unsupported declaration inventory rejects before rebuilding" before =<< readIORef calls
+      assertEqual "incomplete multiple-source inventory attempts one targeted rebuild" (before + 1) =<< readIORef calls
       writePackage root True
       let child = dist </> "exe/exe-tmp"
       createDirectoryIfMissing True child

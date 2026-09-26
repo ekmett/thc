@@ -108,18 +108,24 @@ ensureNativeRecipes native dist roots compiler component rebuild = do
   -- warm objects. One surviving receipt cannot conceal a second missing TU.
   let relativeC source = takeExtension source == ".c" && not (isAbsolute source) &&
         ".." `notElem` splitDirectories source
-  unless (if runtimeShim then not (null declarations) && all relativeC declarations else case declarations of
-    [] -> True
-    [source] -> relativeC source
-    _ -> False)
-    (fail "native scalar profile requires exactly one active relative C source; runtime shims require only relative C sources")
+  unless (all relativeC declarations && (not runtimeShim || not (null declarations)))
+    (fail "package native profile requires relative C sources; runtime shims require nonempty C sources")
   let receipts = native </> "cache/thc/native-recipes-v1"
+  sourceRoot <- field component "src-dir" >>= canonicalizePath
+  sources <- mapM (canonicalizePath . (sourceRoot </>)) declarations
+  let complete paths = do
+        observed <- mapM (readNativeRecipe receipts compiler) paths
+        let vanilla = [recipeSource recipe | Just recipe <- observed,
+                        takeExtension (recipeObject recipe) == ".o"]
+        pure (sort vanilla == sort sources && length vanilla == length (nub vanilla))
   missing <- filterM (\path -> maybe True (const False) <$> readNativeRecipe receipts compiler path) objects
-  unless (null missing && (null declarations || any ((== ".o") . takeExtension) objects)) $ do
+  inventoryComplete <- complete objects
+  unless (null missing && inventoryComplete) $ do
     mapM_ removeFile objects
     rebuild
     rebuilt <- componentNativeObjects native dist roots component
-    unless (null declarations || not (null rebuilt))
+    rebuiltComplete <- complete rebuilt
+    unless rebuiltComplete
       (fail "active native declarations remain unobserved after Cabal rebuild")
     unless (all (`elem` rebuilt) missing) (fail "Cabal did not rebuild missing native recipe outputs")
     mapM_ (\path -> do
