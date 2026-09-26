@@ -89,6 +89,8 @@ class TypedCaseTest {
                 listOf(dataArm("Box", listOf("n"), variable("n")))))),
             binding("generic", lambda(listOf(param("input")), case(variable("input"), "whole", null,
                 listOf(arm(0, number(11)), dataArm("End", emptyList(), number(12)), otherwise(number(13)))))),
+            binding("nullLiteral", lambda(listOf(param("input")), case(variable("input"), "whole", null,
+                listOf(listOf("lit", listOf("null-addr", "0"), emptyList<String>(), number(21)), otherwise(number(22)))))),
             binding("plus", lambda(listOf(param("n", long)), primitive("+#", variable("n"), number(5)))),
             identity("dataIdentity", data), identity("functionIdentity", closure), identity("addressIdentity", address))
     }
@@ -117,6 +119,32 @@ class TypedCaseTest {
             assertEquals(enabled, "DataCase" in names)
             assertEquals(enabled, "LongCase" in names)
         } else assertEquals(enabled, "MatchDataValue" in (p as BytecodeProgram).bytecodeDump())
+    }
+
+    @Test fun genericLiteralCasesDoNotInvokeHostEqualityOnColdObjectCarriers() = each { enabled, backend, p ->
+        val hostile = object {
+            override fun equals(other: Any?): Boolean = error("Literal matching invoked arbitrary host equality")
+            override fun hashCode(): Int = 0
+        }
+        val ordinary = Any()
+        repeat(30) {
+            assertEquals(11L, call(p, "generic", 0L))
+            assertEquals(13L, call(p, "generic", ordinary))
+            assertEquals(21L, call(p, "nullLiteral", ManagedAddress.nullAddress()))
+            assertEquals(22L, call(p, "nullLiteral", ordinary))
+        }
+        for ((entry, expected) in listOf("generic" to 13L, "nullLiteral" to 22L)) {
+            compile(p.entryTarget(entry))
+            val before = (p.diagnostics().getValue("compiledEntries") as Number).toLong()
+            assertEquals(expected, call(p, entry, hostile), "$enabled/$backend/$entry first compiled call")
+            assertTrue((p.diagnostics().getValue("compiledEntries") as Number).toLong() > before,
+                "$enabled/$backend/$entry must enter installed guest code")
+            for (wrong in listOf(0, 0.toShort(), 0.toByte(), 0.0f, 0.0, false, java.math.BigInteger.ZERO))
+                assertEquals(expected, call(p, entry, wrong), "$enabled/$backend/$entry/$wrong")
+        }
+        assertEquals(11L, call(p, "generic", 0L), "Object-widened Long still matches numerically")
+        assertEquals(21L, call(p, "nullLiteral", ManagedAddress.nullAddress()), "Null address keeps identity matching")
+        assertEquals(22L, call(p, "nullLiteral", ManagedAddress.fromHex("00")), "Byte contents are not address identity")
     }
 
     @Test fun declaredCaseResultsRejectKnownColdContradictionsAndKeepUnknownFallback() {
