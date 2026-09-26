@@ -48,6 +48,13 @@ closures, initializers, destructors, global variables or additional native
 libraries. This is a bounded source-component path, not arbitrary installed
 Hackage cbits support.
 
+The public runtime library separately opts into the
+[`x-thc-runtime-shim: v1` compatibility profile](runtime-services.md#native-compatibility-shims-in-cabal-projects).
+It records its native fallback products without linking them into the guest,
+and validates every retained import and Core call against the exact reserved
+runtime-service signatures. This is not an expansion of generic scalar-C support
+or an exemption based on package name.
+
 The selected GHC remains Cabal's native compiler. THC uses Cabal's resolved
 flags, target platform and compiler version to select active native declarations.
 Disabled optional C backends do not require native objects;
