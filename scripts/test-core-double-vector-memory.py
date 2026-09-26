@@ -113,7 +113,7 @@ class DoubleVectorMemoryProofTest(unittest.TestCase):
 
     def test_family_registry_is_closed_and_each_proof_is_exact(self):
         from core_vector_memory import VECTOR_PROOFS, vector_proof
-        self.assertEqual(len(VECTOR_PROOFS), 24)
+        self.assertEqual(len(VECTOR_PROOFS), 96)
         for name in OPERATIONS:
             self.assertEqual(vector_proof(name), VECTOR_DOUBLE_REP)
         for name in ('indexDoubleX4Array#', 'readDoubleX8Array#', 'writeDoubleOffAddrAsDoubleX2#'):

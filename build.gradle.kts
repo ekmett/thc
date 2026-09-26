@@ -237,6 +237,8 @@ tasks.withType<Test>().configureEach {
             "simd-wide-floating-fma/**/*.json", "simd-wide-floating-fma/oracle.txt",
             "simd-doublex2/**/*.json", "simd-doublex2/*.tsv",
             "simd-int16x8/**/*.json", "simd-int16x8/*.tsv", "simd-int16x8/native/int16x8-oracle",
+            "simd128-addresses/manifest.json", "simd128-addresses/*.tsv", "simd128-addresses/*-core/*.json",
+            "simd128-addresses/*-audit.json", "simd128-addresses/native/oracle", "simd128-addresses/commands/*",
             "simd128-arrays/manifest.json", "simd128-arrays/*.tsv", "simd128-arrays/*-core/*.json",
             "simd128-arrays/*-audit.json", "simd128-arrays/native/oracle", "simd128-arrays/commands/*",
             "simd-int8x16/**/*.json", "simd-int8x16/*.tsv", "simd-int8x16/native/int8x16-oracle",

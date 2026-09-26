@@ -3,26 +3,22 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
-import com.oracle.truffle.api.RootCallTarget
-import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
-import com.oracle.truffle.api.nodes.DirectCallNode
-import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
 import java.nio.ByteOrder
 
-class Simd128ArrayProofTest {
+class Simd128AddressTest {
     private val families = setOf(VectorMemoryFamily.INT8, VectorMemoryFamily.WORD8,
         VectorMemoryFamily.INT16, VectorMemoryFamily.WORD16, VectorMemoryFamily.INT64, VectorMemoryFamily.WORD64)
-    private val operations = VectorMemoryOp.entries.filter { !it.isAddress && it.family in families }
+    private val operations = VectorMemoryOp.entries.filter { it.isAddress && it.family in families }
     private fun scalar(kind: String, rep: String?) = mapOf("kind" to kind,
         "primReps" to listOfNotNull(rep), "evaluated" to true)
     private val state = scalar("void", null)
     private val integer = scalar("long", "IntRep")
-    private val array = scalar("object", "BoxedRep (Just Unlifted)")
+    private val array = scalar("address", "AddrRep")
     private val closure = scalar("closure", "BoxedRep (Just Lifted)")
     private fun copy(value: Any?): Any? = when (value) {
         is Map<*, *> -> value.entries.associateTo(linkedMapOf()) { it.key as String to copy(it.value) }
@@ -97,7 +93,7 @@ class Simd128ArrayProofTest {
                 mutableMapOf("rep" to copy(integer), "binder" to binder("whole", readResult(true))))
             op.isWrite -> mutableListOf<Any?>("case", app, "written", mutableListOf(mutableListOf<Any?>(
                 "default", null, emptyList<String>(), consume(call("index" +
-                    (if (op.scalarOffset) shape.scalar + "ArrayAs" + shape.name else shape.name + "Array") + "#", args, shape.proof)),
+                    (if (op.scalarOffset) shape.scalar + "OffAddrAs" + shape.name else shape.name + "OffAddr") + "#", args, shape.proof)),
                 mutableMapOf("binders" to emptyList<Any>()))), mutableMapOf("rep" to copy(integer), "binder" to binder("written", state)))
             else -> consume(app)
         }
@@ -110,7 +106,7 @@ class Simd128ArrayProofTest {
         return Fixture(module, app, body)
     }
     private fun withLanguage(inlining: Boolean = false, action: (Language) -> Unit) = Context.newBuilder("thc")
-        .allowExperimentalOptions(true).option("compiler.Inlining", inlining.toString())
+        .allowNativeAccess(true).allowExperimentalOptions(true).option("compiler.Inlining", inlining.toString())
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
         .option("engine.SingleTierCompilationThreshold", "10000000").option("engine.CompilationFailureAction", "Throw")
         .build().use { context ->
@@ -138,117 +134,145 @@ class Simd128ArrayProofTest {
         assertEquals(0, state.arguments.depth); assertEquals(0, state.arguments.retainedReferences())
         assertEquals(0, state.results.depth); assertEquals(0, state.results.retainedReferences())
     }
-    @Test fun all36OperationsPreserveEveryByteAcrossAliasesTailsAndBothBackends() {
+    @Test fun all36OperationsPreserveBytesThroughInteriorAddressesOnBothBackends() {
         assertEquals(36, operations.size)
         for (backend in listOf("ast", "bytecode")) withLanguage { language ->
             for (op in operations) {
                 val shape = Shape(op)
                 val p = program(language, backend, fixture(op))
                 val stride = if (op.scalarOffset) shape.width else 16
-                for (size in listOf(16,17,31,32,33,47,48,49)) for (index in 0..(size-16)/stride) for (owned in listOf(false,true)) {
+                for (size in listOf(16,17,31,32,33,48,49)) for (offset in 0..(size-16)/stride) for (owned in listOf(false,true)) {
                     val bytes = ByteArray(size) { (it * 47 + 129).toByte() }
                     val model = bytes.copyOf()
-                    if (op.isWrite) store(model, index * stride, shape)
+                    if (op.isWrite) store(model, offset * stride, shape)
                     val storage: Any = if (owned) ManagedByteArray.allocateGuest(size.toLong()).also {
                         it.copyBytesIn(bytes, 0, 0, size.toLong())
                     } else bytes
-                    assertSame(storage, ManagedByteArray.freezeGuest(storage))
-                    assertEquals(expected(model, index * stride, shape), invoke(p, storage, index.toLong()), "$backend/$op/$size/$index/$owned")
+                    val address = ManagedAddress.fromGuestByteArray(storage).plus(16)
+                    assertEquals(expected(model, offset * stride, shape),
+                        invoke(p, address, offset.toLong() - 16 / stride), "$backend/$op/$size/$offset/$owned")
                     assertArrayEquals(model, if (storage is ManagedAllocation) storage.copyBytesOut(0, size.toLong()) else bytes)
                     released(language)
                 }
             }
         }
     }
-    @Test fun invalidFullWidthRangesAndTokensDoNotModifyStorage() {
+
+    @Test fun completeRangesTokensAndImmutableStorageAreCheckedBeforeStores() {
         for (backend in listOf("ast", "bytecode")) withLanguage { language ->
             for (op in operations) {
                 val p = program(language, backend, fixture(op))
+                val stride = if (op.scalarOffset) Shape(op).width else 16
                 for (size in listOf(0,1,15,16,17,31,48)) {
-                    val original = ByteArray(size) { it.toByte() }
-                    val stride = if (op.scalarOffset) Shape(op).width else 16
-                    val invalid = listOf(-1L, Long.MIN_VALUE, Long.MAX_VALUE, if (size < 16) 0L else (size-16).toLong()/stride + 1)
+                    val bytes = ByteArray(size) { it.toByte() }
+                    val original = bytes.copyOf()
+                    val address = ManagedAddress.fromByteArray(bytes)
+                    val invalid = listOf(-1L, Long.MIN_VALUE, Long.MAX_VALUE,
+                        if (size < 16) 0L else (size-16).toLong()/stride+1)
                     for (index in invalid) {
-                        val bytes = original.copyOf()
-                        assertThrows(RuntimeFault::class.java) { invoke(p, bytes, index) }
+                        assertThrows(RuntimeFault::class.java) { invoke(p, address, index) }
                         assertArrayEquals(original, bytes); released(language)
                     }
                 }
                 val owner = ManagedByteArray.allocateGuest(48)
+                val address = ManagedAddress.fromAllocation(owner)
                 owner.shrink(16)
-                assertThrows(RuntimeFault::class.java) { invoke(p, owner, 1) }
+                assertThrows(RuntimeFault::class.java) { invoke(p, address, 1) }
+                for (opaque in listOf(ManagedAddress.nullAddress(), ManagedAddress.unownedNumeric(123L)))
+                    assertThrows(RuntimeFault::class.java) { invoke(p, opaque, 0) }
                 if (!op.isIndex) {
                     val bytes = ByteArray(32) { it.toByte() }
                     val original = bytes.copyOf()
-                    assertThrows(RuntimeFault::class.java) { invoke(p, bytes, 0, 1L) }
-                    assertArrayEquals(original, bytes); released(language)
+                    assertThrows(RuntimeFault::class.java) { invoke(p, ManagedAddress.fromByteArray(bytes), 0, 1L) }
+                    assertArrayEquals(original, bytes)
                 }
+                val bytes = ByteArray(32) { (it * 7).toByte() }
+                for (immutable in listOf(ManagedAddress.fromAllocation(ManagedAllocation.immutable(bytes,8)),
+                    ManagedAddress.fromNativeImageSource(bytes,0))) {
+                    if (op.isWrite) assertThrows(RuntimeFault::class.java) { invoke(p, immutable, 0) }
+                    else assertEquals(expected(bytes,0,Shape(op)),invoke(p,immutable,0))
+                }
+                released(language)
             }
         }
     }
-    @Test fun wrongPhysicalCarrierSpeciesAndReadTupleProofsRejectOnBothBackends() {
-        for (backend in listOf("ast", "bytecode")) withLanguage { language ->
+
+    @Test fun pointerCellReadsAndPartialOverwritesRejectWithoutLosingReferences() = withLanguage { _ ->
+        val pointer = ManagedAddress.fromByteArray(ByteArray(8))
+        val owner = ManagedAllocation.mutable(40,8)
+        val address = ManagedAddress.fromAllocation(owner)
+        address.writeAddressElementIndex(2,pointer) // bytes 16..23
+        assertThrows(RuntimeFault::class.java) { address.readVectorBytes(8,1) }
+        val value = jdk.incubator.vector.ByteVector.broadcast(jdk.incubator.vector.ByteVector.SPECIES_128,0x5a.toByte())
+        assertThrows(RuntimeFault::class.java) { address.writeVectorBytes(1,1,value) }
+        assertSame(pointer,address.readAddressElementIndex(2))
+        assertEquals(0L,address.readWord8(0))
+        address.writeVectorBytes(8,1,value) // Complete overlap invalidates the reference.
+        assertThrows(RuntimeFault::class.java) { address.readAddressElementIndex(2) }
+        assertEquals(List(16) { 0x5aL },(8L until 24L).map(address::readWord8))
+    }
+
+    @Test fun nativeStorageSharesBytesAndRejectsFreedAndForeignContextOwners() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("os.name") == "Linux" &&
+            System.getProperty("os.arch") in setOf("amd64","x86_64"))
+        withLanguage { language ->
+            val registry = Language.currentState().nativeAllocations
+            for (backend in listOf("ast","bytecode")) for (op in operations) {
+                val p = program(language,backend,fixture(op))
+                val shape = Shape(op)
+                val stride = if (op.scalarOffset) shape.width else 16
+                val base = registry.malloc(48)
+                try {
+                    val bytes = ByteArray(48) { (it * 47 + 129).toByte() }
+                    bytes.indices.forEach { base.writeWord8(it.toLong(),bytes[it].toLong()) }
+                    val model = bytes.copyOf()
+                    if (op.isWrite) store(model,0,shape)
+                    val alias = base.plus(16)
+                    assertEquals(expected(model,0,shape),invoke(p,alias,-16L/stride))
+                    assertArrayEquals(model,ByteArray(48) { base.readWord8(it.toLong()).toByte() })
+                    assertThrows(RuntimeFault::class.java) { invoke(p,base,Long.MAX_VALUE) }
+                    withLanguage { _ ->
+                        assertThrows(RuntimeFault::class.java) { alias.readVectorBytes(0,1) }
+                    }
+                    released(language)
+                } finally { registry.free(base) }
+                assertThrows(RuntimeFault::class.java) { invoke(p,base,0) }
+            }
+            assertEquals(0,registry.liveCount())
+        }
+    }
+
+    @Test fun loweringKeepsCarrierAndVectorTupleChecksButAcceptsLongAliases() {
+        for (backend in listOf("ast","bytecode")) withLanguage { language ->
             for (op in operations) {
                 fun rejects(change: (Fixture) -> Unit) {
                     val f = fixture(op); change(f)
-                    assertThrows(RuntimeFault::class.java, { program(language, backend, f) }, "$backend/$op")
-                    released(language)
+                    assertThrows(RuntimeFault::class.java,{ program(language,backend,f) },"$backend/$op")
                 }
                 rejects { f ->
-                    val args = f.app[2] as MutableList<Any?>
-                    args[1] = listOf("lit", "double", "0.0", mapOf("rep" to scalar("double", "DoubleRep")))
+                    (f.app[2] as MutableList<Any?>)[1] =
+                        listOf("lit","double","0.0",mapOf("rep" to scalar("double","DoubleRep")))
                 }
                 rejects { (it.app[3] as MutableList<Boolean>)[0] = true }
                 rejects { (it.app[2] as MutableList<Any?>).removeLast() }
-                if (op.isRead) {
-                    rejects { f -> (f.app[6] as MutableMap<String, Any?>)["rep"] = Shape(op).proof }
-                    rejects { f ->
-                        val alternatives = f.body[3] as MutableList<Any?>
-                        alternatives.add(copy(alternatives.single()))
-                    }
-                } else if (op.isWrite) {
-                    rejects { f ->
-                        val value = (f.app[2] as List<*>)[2] as MutableList<Any?>
-                        (value[6] as MutableMap<String, Any?>)["rep"] = Shape(operations.first { it.family != op.family }).proof
-                    }
-                } else rejects { (it.app[6] as MutableMap<String, Any?>)["rep"] = scalar("long", "IntRep") }
-            }
-        }
-    }
-    @Test fun firstInstalledCallHasExactOneGuestEntryForAll36Operations() {
-        for (backend in listOf("ast", "bytecode")) for (inlining in listOf(false,true)) withLanguage(inlining) { language ->
-            for (op in operations) {
-                val shape = Shape(op)
-                val p = program(language, backend, fixture(op))
-                val host = p.hostEntryTarget(3)
-                val original = p.entryTarget("root")
-                fun active() = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
-                    .single { it.callTarget === original }.currentCallTarget as RootCallTarget
-                fun count() = (p.diagnostics().getValue("compiledEntries") as Number).toLong()
-                fun call(index: Long) {
-                    val bytes = ByteArray(48) { (it * 47 + 129).toByte() }
+                for (alias in listOf("IntRep","WordRep","Int8Rep","Word16Rep","Int64Rep","Word64Rep")) {
+                    val f = fixture(op)
+                    val offset = (f.app[2] as MutableList<Any?>)[1] as MutableList<Any?>
+                    offset[2] = mapOf("rep" to scalar("long",alias))
+                    val p = program(language,backend,f)
+                    val bytes = ByteArray(32)
                     val model = bytes.copyOf()
-                    val offset = index.toInt() * if (op.scalarOffset) shape.width else 16
-                    if (op.isWrite) store(model, offset, shape)
-                    assertEquals(expected(model, offset, shape), invoke(p, bytes, index))
-                    assertArrayEquals(model, bytes); released(language)
+                    if (op.isWrite) store(model,0,Shape(op))
+                    assertEquals(expected(model,0,Shape(op)),invoke(p,ManagedAddress.fromByteArray(bytes),0))
                 }
-                call(0); call(1)
-                val target = active()
-                val cls = target.javaClass
-                for (installed in listOf(target, host)) {
-                    cls.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(installed, true)
-                    assertEquals(true, cls.getMethod("isValidLastTier").invoke(installed))
+                if (op.isRead) {
+                    rejects { (it.app[6] as MutableMap<String,Any?>)["rep"] = Shape(op).proof }
+                    rejects { f -> (f.body[3] as MutableList<Any?>).add(copy((f.body[3] as List<*>).single())) }
+                } else if (op.isWrite) rejects { f ->
+                    val value = (f.app[2] as List<*>)[2] as MutableList<Any?>
+                    (value[6] as MutableMap<String,Any?>)["rep"] = Shape(operations.first { it.family != op.family }).proof
                 }
-                val runtime = Truffle.getRuntime()
-                runtime.javaClass.getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, host)
-                for (index in listOf(2L,1L,0L)) {
-                    val before = count()
-                    call(index)
-                    assertEquals(1L, count()-before, "$backend/$op/inlining=$inlining/index=$index")
-                    assertSame(target, active())
-                    for (installed in listOf(target,host)) assertEquals(true, cls.getMethod("isValidLastTier").invoke(installed))
-                }
+                released(language)
             }
         }
     }

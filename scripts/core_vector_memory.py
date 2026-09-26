@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Exact 128-bit ByteArray vector memory; no escaping State/vector read tuple.
+"""Exact 128-bit ByteArray/Addr# vector memory; no escaping State/vector read tuple.
 
 The pinned exporter places its sole physical vector annotation on the logical
 State/vector tuple too. Only an immediate, exactly checked read case accepts it.
@@ -10,6 +10,7 @@ from core_vectors import VECTOR32_REP, VECTOR_WORD32_REP, VECTOR_FLOAT_REP, VECT
 
 STATE = dict(kind='void', primReps=[], evaluated=True)
 ARRAY = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
+ADDRESS = dict(kind='address', primReps=['AddrRep'], evaluated=True)
 INDEX = dict(kind='long', primReps=['IntRep'], evaluated=True)
 SIGNED_READS = {'readInt32X4Array#', 'readInt32ArrayAsInt32X4#'}
 SIGNED_INDICES = {'indexInt32X4Array#', 'indexInt32ArrayAsInt32X4#'}
@@ -43,7 +44,8 @@ for scalar, lanes in (('Int8', 16), ('Word8', 16), ('Int16', 8),
     shape = scalar + 'X' + str(lanes)
     proof = VECTOR_OPERATIONS['broadcast' + shape + '#'][1]
     for verb, operations in (('index', INDICES), ('read', READS), ('write', WRITES)):
-        for suffix in (shape + 'Array#', scalar + 'ArrayAs' + shape + '#'):
+        for suffix in (shape + 'Array#', scalar + 'ArrayAs' + shape + '#',
+                       shape + 'OffAddr#', scalar + 'OffAddrAs' + shape + '#'):
             name = verb + suffix
             operations.add(name)
             VECTOR_PROOFS[name] = proof
@@ -76,7 +78,7 @@ def exact(expected, actual):
 
 def validate_arguments(name, arguments, flags):
     vector = vector_proof(name)
-    expected = [ARRAY, INDEX] + ([STATE] if name in READS else [vector, STATE] if name in WRITES else [])
+    expected = [ADDRESS if 'OffAddr' in name else ARRAY, INDEX] + ([STATE] if name in READS else [vector, STATE] if name in WRITES else [])
     require(isinstance(arguments, list) and len(arguments) == len(expected), 'argument arity')
     require(isinstance(flags, list) and len(flags) == len(expected) and all(f is False for f in flags), 'unlifted flags')
     for argument, wanted in zip(arguments, expected):

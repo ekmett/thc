@@ -35,7 +35,7 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 # preparers. An additional recorded runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
-MANIFEST_DIRS = """simd128-arrays address-fields array-slices bignat-literals bit-primops
+MANIFEST_DIRS = """simd128-addresses simd128-arrays address-fields array-slices bignat-literals bit-primops
 thread-status thread-label boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array
@@ -56,6 +56,8 @@ SIMD128_ARRAY_OUTPUTS = frozenset("build/simd128-arrays/" + name for name in (
     *(stage + "-" + name + "-audit.json" for stage in ("pre", "post") for name in SIMD128_ARRAY_ENTRIES),
     *("commands/" + command + "." + suffix for command in SIMD128_ARRAY_COMMANDS
       for suffix in ("stdout", "stderr", "command.json"))))
+SIMD128_ADDRESS_OUTPUTS = frozenset(path.replace("simd128-arrays", "simd128-addresses")
+    .replace("Simd128ArrayAudit", "Simd128AddressAudit") for path in SIMD128_ARRAY_OUTPUTS)
 BIGNAT_ENTRIES = ("integerRoundTrip", "naturalRoundTrip", "integerLiteral", "naturalLiteral",
                   "magnitudeSize", "magnitudeByte", "magnitudeWord", "magnitudeSign")
 BIGNAT_AUDITS = (*BIGNAT_ENTRIES, "integerAddFrontier", "naturalAddFrontier", "missing-source")
@@ -119,6 +121,7 @@ MAX_TOTAL_BYTES = 3 * 1024 * 1024 * 1024
 MAX_MANIFEST_BYTES = 16 * 1024 * 1024
 MAX_JSON_BYTES = 384 * 1024 * 1024
 NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate",
+    "build/simd128-addresses/native/oracle",
     "build/simd128-arrays/native/oracle",
     "build/simd-capability-smoke/native/simd-smoke-oracle",
     "build/original-stdio/native/original-stdio-oracle",
@@ -904,6 +907,8 @@ def allowed_payload(name, pins):
         return name in ("build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json", "build/libdw-unavailable/foreign-labels.json")
     if parts[1] == "native-addresses":
         return name in ("build/native-addresses/manifest.json", "build/native-addresses/oracle.json")
+    if parts[1] == "simd128-addresses":
+        return name in SIMD128_ADDRESS_OUTPUTS
     if parts[1] == "simd128-arrays":
         return name in SIMD128_ARRAY_OUTPUTS
     if parts[1] == "native-malloc":

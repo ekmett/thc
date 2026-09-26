@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.Simd128AddressTest",
     "thc.runtime.Simd128ArrayProofTest",
     "thc.LauncherDiagnosticsTest",
     "thc.runtime.EnabledCapabilitiesTest",
@@ -47,6 +48,13 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "simd128-addresses": {
+      "junit": ["thc.runtime.Simd128AddressNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd128-addresses"]}],
+      "outputs": ["build/simd128-addresses"],
+      "sources": ["compiler/test-fixtures/Simd128AddressAudit.hs", "compiler/test-fixtures/Simd128AddressNative.hs",
+        "test/haskell-fixtures/Simd128AddressFixtures.hs", "scripts/simd-families.json"]
+    },
     "simd128-arrays": {
       "junit": ["thc.runtime.Simd128ArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd128-arrays"]}],

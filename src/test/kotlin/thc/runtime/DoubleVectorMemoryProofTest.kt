@@ -20,7 +20,7 @@ import thc.Language
 import java.nio.ByteOrder
 
 class DoubleVectorMemoryProofTest {
-    private val operations = VectorByteArrayOp.entries.filter { it.family == VectorMemoryFamily.DOUBLE64 }
+    private val operations = VectorMemoryOp.entries.filter { it.family == VectorMemoryFamily.DOUBLE64 }
     private fun scalar(kind: String, rep: String?) = mapOf("kind" to kind,
         "primReps" to if (rep == null) emptyList<String>() else listOf(rep), "evaluated" to true)
     private val state = scalar("void", null)
@@ -84,7 +84,7 @@ class DoubleVectorMemoryProofTest {
     }
     private data class Fixture(val module: MutableMap<String, Any?>, val app: MutableList<Any?>,
         val body: MutableList<Any?>, val parameters: List<MutableMap<String, Any?>>)
-    private fun fixture(operation: VectorByteArrayOp): Fixture {
+    private fun fixture(operation: VectorMemoryOp): Fixture {
         val parameters = listOf(binder("array", array), binder("offset", integer), binder("state", state))
         val operands = listOf(variable("array", array), variable("offset", integer))
         val app = when {
