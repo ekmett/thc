@@ -257,6 +257,25 @@ all eight original result checks. All four explicit compilation controls still
 fail the frame-materialization gate. Native packaging remains demonstrated;
 guest JIT and guest-specific AOT remain unproven.
 
+The next runtime-graph batch moves fork-result proof validation into the existing
+lazy dispatch installation branch. Known closures keep their earlier validation
+before child creation; lazy action heads remain child-owned. Scalar address reads
+now explicitly restrict the erased native-loan result to `Long`, preserving the
+loan and byte-reading sequence. The emitted numeric call is still
+`Number.longValue`, but is dominated by `instanceof Long`; image analysis confirms
+that the unrelated `BigInteger` route disappears. Together these changes clear
+all 121 blocklist paths from the preceding attempt.
+
+Three self-loop root accesses also use explicit `FunctionRoot` guards and the
+existing interpreter fault path, removing Kotlin's implicit null diagnostic
+without changing loop or OSR control. The final focused batch passes 58 checks
+across both handoff modes: original lazy/known fork behavior, exact first-installed
+thread snapshots, the retired-boundary negative control, tail cycles, captured
+self-tail calls, joins and scalar address reads. Thread-inventory expectations
+independently prove the single original `runRW#` State# wrapper eliminated by
+lowering; all remaining root labels, entry counts and first-call validity checks
+stay exact. This is runtime preparation, not native guest-JIT success.
+
 ## Execution models
 
 | Product | What is fixed when built | Guest execution |
