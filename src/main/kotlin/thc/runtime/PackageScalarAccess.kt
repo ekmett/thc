@@ -18,6 +18,7 @@ internal fun packageScalarInt32(value: Long): Int {
 
 /** One adopted call site for an exact component ABI in the current EXCLUSIVE context policy. */
 internal class PackageScalarAccess(private val call: PackageScalarCall) : Node() {
+    @field:CompilationFinal(dimensions = 1) private val argumentReps = call.arguments.copyOf()
     @Volatile @CompilationFinal private var cached: PackageScalarFunction? = null
     @Child private var calls = InteropLibrary.getFactory().createDispatched(1)
     @Child private var numbers = InteropLibrary.getFactory().createDispatched(1)
@@ -45,9 +46,10 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
 
     @ExplodeLoop private fun prepare(arguments: Array<Any?>, state: Any?): PackageScalarFunction {
         requireVoidCarrier(state)
-        if (arguments.size != call.arguments.size) fault("Package C argument count mismatch")
-        for (index in arguments.indices) {
-            val valid = when (call.arguments[index]) {
+        if (arguments.size != argumentReps.size) fault("Package C argument count mismatch")
+        // The signature bounds explosion even when the caller's array length is dynamic.
+        for (index in 0 until argumentReps.size) {
+            val valid = when (argumentReps[index]) {
                 "Int32Rep" -> arguments[index] is Int
                 "Int64Rep" -> arguments[index] is Long
                 "FloatRep" -> arguments[index] is Float
