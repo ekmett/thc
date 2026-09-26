@@ -40,6 +40,7 @@ import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, wa
 import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.ForeignBitcode (linkClockGetTime)
+import THC.Driver.NativeRecipe (componentRoots, ensureNativeRecipes)
 import THC.Driver.ScalarBitcode (ScalarBitcode, withScalarBitcode, scalarBuildInputs, linkScalarBitcode)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign
@@ -120,30 +121,77 @@ runProject opts target = do
   requireFile pluginLibrary
   requireDirectory pluginDb
   let requested = distDirectory flags
-      output = if isAbsolute requested then requested else project </> requested
-      native = output </> "native"
+      requestedOutput = if isAbsolute requested then requested else project </> requested
       executable = runExecutable opts
+  createDirectoryIfMissing True requestedOutput
+  output <- canonicalizePath requestedOutput
+  let native = output </> "native"
       cabalArgs = ["build", "all", "--enable-build-info", "--project-file", "cabal.project",
-                   "--builddir", native] ++
-                  maybe [] (\path -> ["--with-compiler", path]) (ghcPath flags) ++
-                  maybe [] (\path -> ["--with-hc-pkg", path]) (ghcPkgPath flags)
-  createDirectoryIfMissing True output
+                   "--builddir", native]
   compiler <- case ghcPath flags of
     Just path -> canonicalizePath path
     Nothing -> findExecutable "ghc" >>= maybe (fail "GHC compiler not found") canonicalizePath
-  packageTool <- traverse canonicalizePath (ghcPkgPath flags)
+  packageTool <- Just <$> selectedPackageTool compiler (ghcPkgPath flags)
   source <- traverse canonicalizePath (runGhcSource opts)
   withProjectLock output $
     runBuiltProject project thcRoot runtime output native executable cabalArgs
                     pluginDb pluginUnit pluginLibrary compiler packageTool (runInstalledCore opts)
                     source registeredLibrary
 
+-- Resolve the actual selected compiler's companion before Cabal sees the
+-- forwarding wrapper. The wrapper directory is not a GHC installation.
+selectedPackageTool :: FilePath -> Maybe FilePath -> IO FilePath
+selectedPackageTool ghc requested = do
+  inherited <- lookupEnv "GHC_PKG"
+  path <- case requested `orElse` inherited of
+    Just value -> if isAbsolute value then pure value else findExecutable value >>=
+      maybe (fail "selected ghc-pkg executable not found") pure
+    Nothing -> do
+      let candidates = [takeDirectory ghc </> "ghc-pkg-9.14.1", takeDirectory ghc </> "ghc-pkg"]
+      available <- filterM doesFileExist candidates
+      case available of value:_ -> pure value; [] -> fail "no ghc-pkg beside selected GHC"
+  packageTool <- canonicalizePath path
+  compilerVersion <- output ghc ["--numeric-version"]
+  packageVersion <- output packageTool ["--version"]
+  require (compilerVersion == "9.14.1" && packageVersion == "GHC package manager version 9.14.1")
+    "selected GHC and ghc-pkg must both be 9.14.1"
+  compilerDb <- canonicalizePath =<< output ghc ["--print-global-package-db"]
+  listing <- output packageTool ["--global", "--no-user-package-db", "list", "ghc-internal"]
+  packageDb <- case lines listing of value:_ -> canonicalizePath value; [] -> fail "ghc-pkg did not report its global database"
+  require (compilerDb == packageDb) "selected GHC and ghc-pkg global databases differ"
+  pure packageTool
+  where
+    orElse (Just value) _ = Just value
+    orElse Nothing other = other
+    output program arguments = do
+      (status, out, err) <- readCreateProcessWithExitCode (proc program arguments) ""
+      require (status == ExitSuccess) ("selected tool failed: " ++ program ++ ": " ++ take 4096 err)
+      pure (reverse (dropWhile (`elem` ['\r','\n']) (reverse out)))
+
 runBuiltProject :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath ->
                    String -> [String] -> FilePath -> String -> FilePath -> FilePath ->
                    Maybe FilePath -> String -> Maybe FilePath -> FilePath -> IO ()
 runBuiltProject project thcRoot runtime output native executable cabalArgs
                 pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary = do
-  runCommand True "cabal" cabalArgs project
+  driver <- getExecutablePath
+  let proxy = native </> "cache/thc/native-ghc"
+      receipts = native </> "cache/thc/native-recipes-v1"
+      packageTool = maybe (takeDirectory ghc </> "ghc-pkg") id ghcPkg
+      nativeArguments = cabalArgs ++ ["--with-compiler", proxy, "--with-hc-pkg", packageTool]
+  createDirectoryIfMissing True (takeDirectory proxy)
+  let wrapper = "#!/bin/sh\n# compiler " ++ shaHex (BL.toStrict (encode (ghc, packageTool))) ++
+        "\nexec \"$THC_PROXY_DRIVER\" ghc-proxy \"$@\"\n"
+  exists <- doesFileExist proxy
+  unchanged <- if exists then (== wrapper) <$> readFile proxy else pure False
+  unless unchanged (writeFile proxy wrapper)
+  permissions <- getPermissions proxy
+  setPermissions proxy (permissions {Directory.executable = True})
+  inherited <- getEnvironment
+  let overrides = [("THC_PROXY_DRIVER", driver), ("THC_PROXY_GHC", ghc),
+                   ("THC_PROXY_NATIVE_RECIPES", receipts), ("THC_PROXY_GLOBAL_UNITS", "")]
+      environment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
+      nativeBuild arguments = runCommandWithEnv True "cabal" arguments project (Just environment)
+  nativeBuild nativeArguments
   plan <- readJson (native </> "cache/plan.json")
   cabalVersion <- field plan "cabal-version"
   compilerId <- field plan "compiler-id"
@@ -153,7 +201,6 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   os <- field plan "os"
   arch <- field plan "arch"
   cacheRoot <- coreCacheDirectory
-  driver <- getExecutablePath
   driverHash <- digestFile driver
   let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
                               pluginLibrary native cacheRoot driverHash ghc ghcPkg driver thcRoot
@@ -166,6 +213,30 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   -- did not build. Only the requested executable and its complete dependency
   -- closure have required build-info; a missing member of that closure fails.
   ordered <- dependencyClosure byId (unitId selected)
+  builtLocals <- filterM (\unit -> case jsonField (unitValue unit) "build-info" of
+    Nothing -> pure False
+    Just path -> doesFileExist path) (filter unitLocal units)
+  builtComponents <- forM builtLocals $ \unit -> do
+    component <- readComponentMetadata (unitId unit `elem` map unitId ordered) unit context
+    pure (unit, component)
+  let localComponents = filter (\(unit, _) -> unitId unit `elem` map unitId ordered) builtComponents
+  roots <- fmap (sort . nub . concat) $ forM builtComponents $ \(unit, component) -> do
+    dist <- field (unitValue unit) "dist-dir"
+    componentRoots dist (componentValue component)
+  -- Repair missing native receipts through Cabal itself; never reconstruct
+  -- the missing compiler invocation from a binary setup-config.
+  forM_ localComponents $ \(unit, component) -> do
+    dist <- field (unitValue unit) "dist-dir"
+    ensureNativeRecipes native dist roots ghc (componentValue component) $ do
+      packageName <- field (unitValue unit) "pkg-name" :: IO String
+      componentName <- field (unitValue unit) "component-name" :: IO String
+      sourceRoot <- field (componentValue component) "src-dir"
+      let target = if componentName == "lib" then "lib:" ++ packageName else componentName
+      -- v2-build's monitor can say "up to date" after an intermediate .o is
+      -- deleted. Ask this same Cabal CLI's Simple Setup to build the component
+      -- directly; it owns and reads its own configured build representation.
+      runCommandWithEnv True "cabal" ["act-as-setup", "--build-type=Simple", "--", "build",
+        "--builddir=" ++ dist, target] sourceRoot (Just environment)
   let globals = [unit | unit <- ordered, not (unitLocal unit),
                        jsonField (unitValue unit) "type" == Just ("configured" :: String)]
   installed <- if installedPolicy == "pinned" then pure Map.empty else do
@@ -203,7 +274,7 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   (_, described) <- foldlM (\(keys, acc) unit -> do
     kind <- optionalField (unitValue unit) "type" ("" :: String)
     bundle <- if unitLocal unit
-      then Just <$> exportUnit context keys unit
+      then Just <$> exportUnit context roots keys unit
       else do
         if kind == "configured" then Just <$> maybe
           (fail ("Core bundle missing for Cabal store component " ++ unitId unit)) pure
@@ -816,11 +887,13 @@ readGlobalBundle path unit buildKey exportKey = do
       then Just (Bundle path (shaHex bytes) modules buildKey)
       else Nothing
 
-exportUnit :: ExportContext -> Map.Map String String -> Unit -> IO Bundle
-exportUnit context keys unit = do
-  component <- readComponent unit (contextCompiler context)
+exportUnit :: ExportContext -> [FilePath] -> Map.Map String String -> Unit -> IO Bundle
+exportUnit context roots keys unit = do
+  component <- readComponent unit context
   dist <- field (unitValue unit) "dist-dir"
-  withScalarBitcode dist (componentCompiler component) (unitId unit) (componentValue component) $
+  withScalarBitcode (contextNative context) dist roots (componentCompiler component)
+    (maybe (takeDirectory (contextGhc context) </> "ghc-pkg") id (contextGhcPkg context))
+    (unitId unit) (componentValue component) $
     exportConfiguredUnit context keys unit component
 
 exportConfiguredUnit :: ExportContext -> Map.Map String String -> Unit -> Component -> Maybe ScalarBitcode -> IO Bundle
@@ -1098,16 +1171,21 @@ expectedModuleNames component = do
     require (length files == 1) "project executable must have one Haskell main source"
   pure (sort (modules ++ if componentType == "exe" then ["Main"] else []))
 
-readComponent :: Unit -> String -> IO Component
-readComponent unit compilerId = do
+readComponent :: Unit -> ExportContext -> IO Component
+readComponent = readComponentMetadata True
+
+readComponentMetadata :: Bool -> Unit -> ExportContext -> IO Component
+readComponentMetadata selected unit context = do
   location <- field (unitValue unit) "build-info"
   info <- readJson location
   compiler <- field info "compiler" :: IO Value
   flavour <- field compiler "flavour"
   actualCompilerId <- field compiler "compiler-id"
-  require (flavour == ("ghc" :: String) && actualCompilerId == compilerId)
+  require (flavour == ("ghc" :: String) && actualCompilerId == contextCompiler context)
     ("unsupported compiler in build-info for " ++ unitId unit)
-  compilerPath <- field compiler "path"
+  compilerPath <- canonicalizePath =<< field compiler "path"
+  require (not selected || compilerPath == contextNative context </> "cache/thc/native-ghc")
+    "Cabal build-info does not identify the transparent native compiler"
   components <- field info "components" :: IO [Value]
   componentName <- field (unitValue unit) "component-name" :: IO String
   matches <- filterM (\value -> do
@@ -1120,8 +1198,8 @@ readComponent unit compilerId = do
   arguments <- field value "compiler-args"
   require (hasPair "-this-unit-id" (unitId unit) arguments)
     ("compiler arguments have wrong unit ID for " ++ unitId unit)
-  sources <- sourcePaths value arguments
-  pure (Component value compilerPath arguments sources)
+  sources <- if selected then sourcePaths value arguments else pure []
+  pure (Component value (contextGhc context) arguments sources)
 
 sourcePaths :: Value -> [String] -> IO [(String, FilePath)]
 sourcePaths component arguments = do
