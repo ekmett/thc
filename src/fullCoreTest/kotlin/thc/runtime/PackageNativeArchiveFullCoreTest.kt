@@ -25,12 +25,14 @@ class PackageNativeArchiveFullCoreTest {
             "test/fixtures/run-native-archive/mixed/src/CapiMix.hs", "test/fixtures/run-native-archive/mixed/include/mixed-header.h",
             "test/fixtures/run-native-archive/unresolved/native.c", "test/haskell-fixtures/PackageNativeArchiveFixtures.hs",
             "src/THC/Driver/PackageNative.hs", "src/THC/Driver/NativeArgumentBridge.hs",
+            "src/THC/Driver/NativeLibrarySources.hs", "test/fixtures/run-native-archive/mixed/lifecycle.cpp",
+            "test/fixtures/run-native-archive/mixed/src/Lifecycle.hs",
             "scripts/core_package_manifest.py", "scripts/audit-core.py"))
         val paths = manifest["modules"] as List<String>
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], (paths + listOf(
             "build/native-archive/supported-audit.json", "build/native-archive/interruptible.json",
             "build/native-archive/mixed-width-audit.json", "build/native-archive/narrow-conflict.json", "build/native-archive/wide-conflict.json",
-            "build/native-archive/mixed-header-audit.json",
+            "build/native-archive/mixed-header-audit.json", "build/native-archive/lifecycle-audit.json",
             "build/native-archive/non-static.json", "build/native-archive/unresolved.json")).toSet(), "build/native-archive/")
         val modules = paths.map { Json.parse(File(root, it).readText()) as Map<String, Any?> }
         val mixed = "native-archive-mixed-0.1.0.0-inplace:Mixed."
@@ -39,17 +41,21 @@ class PackageNativeArchiveFullCoreTest {
         val staticPointer = "native-archive-mixed-0.1.0.0-inplace:CapiMix.staticPointerProbe#"
         val wideHeader = "native-archive-mixed-0.1.0.0-inplace:CapiMix.wideProbe#"
         val word16Header = "native-archive-mixed-0.1.0.0-inplace:CapiMix.word16Probe#"
+        val lifecycle = "native-archive-mixed-0.1.0.0-inplace:Lifecycle.lifecycleProbe#"
         val observations = manifest["mixedHeaderObservations"] as List<List<Number>>
         assertEquals(36, observations.size)
         val merged = CoreModules.merge(modules)
         val links = merged["packageScalarLinks"] as List<PackageScalarLink>
         assertEquals(1, links.size)
-        assertEquals(setOf("archive_allowed", "archive_count", "archive_header_mix", "archive_header_mix_wide", "archive_header_mix16"),
+        assertEquals(setOf("archive_allowed", "archive_count", "archive_header_mix", "archive_header_mix_wide", "archive_header_mix16", "archive_lifecycle"),
             links.single().abi.filter { it.convention == "ccall" }.map { it.symbol }.toSet())
         assertEquals(2, links.single().abi.count { it.convention == "capi" })
         assertEquals(listOf("AddrRep", "Word8Rep", "Word32Rep"), links.single().abi.single { it.symbol == "archive_header_mix" }.arguments)
         assertEquals(listOf("AddrRep", "IntRep", "IntRep"), links.single().abi.single { it.symbol == "archive_header_mix_wide" }.arguments)
         val nativeProof = modules.first { it["packageNativeLink"] != null }["packageNativeLink"] as Map<String, Any?>
+        assertEquals("llvm-embedded-elf", nativeProof["format"])
+        val libraries = (nativeProof["buildInputs"] as Map<String, Any?>)["nativeLibraries"] as List<Map<String, Any?>>
+        assertEquals("native-libstdcxx-ios-init-v1", libraries.single()["provider"])
         val bridge = ((nativeProof["buildInputs"] as Map<String, Any?>)["argumentBridges"] as List<Map<String, Any?>>).single()
         assertEquals("x86_64-c-integer-argument-truncation-v1", bridge["profile"])
         val bridgeSource = bridge["source"] as String
@@ -68,7 +74,7 @@ class PackageNativeArchiveFullCoreTest {
                     val state = Language.currentState()
                     links.forEach(state.packageCbits::link)
                     val source = CoreModules.reachable(merged,
-                        listOf(mixed + "allowed", mixed + "count", narrow + "allowed", mixedHeader, staticPointer, wideHeader, word16Header), true) + ("instrument" to true)
+                        listOf(mixed + "allowed", mixed + "count", narrow + "allowed", mixedHeader, staticPointer, wideHeader, word16Header, lifecycle), true) + ("instrument" to true)
                     val program: ExecutableProgram = if (backend == "ast") Program(language, source, enableAsync = true)
                         else BytecodeProgram(language, source, enableAsync = true)
                     state.threads.enterCurrent()
@@ -79,6 +85,12 @@ class PackageNativeArchiveFullCoreTest {
                         assertEquals(40L, Calls.target(allowed, arrayOf(0L, 3L)))
                         assertEquals(42L, Calls.target(program.entryTarget(narrow + "allowed"), arrayOf(0L, 5L)))
                         assertEquals(0L, effectCount())
+                        val initialized = program.entryTarget(lifecycle)
+                        assertEquals(47L, Calls.target(initialized, arrayOf(0L, 5L)))
+                        initialized.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(initialized, true)
+                        assertEquals(true, initialized.javaClass.getMethod("isValidLastTier").invoke(initialized))
+                        assertEquals(48L, Calls.target(initialized, arrayOf(0L, 6L)), "$backend initialized native C++ state")
+                        assertEquals(true, initialized.javaClass.getMethod("isValidLastTier").invoke(initialized))
                         for (entry in failures) {
                             val rejected = assertThrows(IllegalArgumentException::class.java) {
                                 CoreModules.reachable(merged, entry, true)

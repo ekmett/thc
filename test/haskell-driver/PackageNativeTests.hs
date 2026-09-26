@@ -11,7 +11,8 @@ import Data.Either (isLeft)
 import Data.List (isInfixOf, isPrefixOf)
 import Test.HUnit
 import THC.Driver.PackageNative
-import THC.Driver.NativeLibrarySources (validateNativeMathIR, validateNativeEntropyIR, validateNativeWidthIR)
+import THC.Driver.NativeLibrarySources (validateNativeMathIR, validateNativeEntropyIR, validateNativeWidthIR,
+  nativeCxxInitSymbols, nativeLifecycleSymbols, validateNativeLifecycleIR)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
 
 tests :: Test
@@ -248,10 +249,21 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       (nativeCompilerArguments ["--make","-hide-all-packages","-Iinclude","-O2","-odir","/build",
         "-optc-DREAL=1","-package-db","/db","-package-id","base-unit","-main-is","Main","Main.hs"])
   , TestCase $ do
-      assertEqual "ordinary C data is permitted" (Right ()) (validateNativeIR "@counter = internal global i32 0\n")
-      mapM_ (assertBool "C-level initialization obligations remain excluded" . isLeft . validateNativeIR)
-        ["@llvm.global_ctors = appending global [1 x { i32, ptr, ptr }] []\n",
-         "@llvm.global_dtors = appending global [1 x { i32, ptr, ptr }] []\n"]
+      let source = unlines ["@__dso_handle = external hidden global i8",
+            "declare void @_ZNSt8ios_base4InitC1Ev(ptr noundef nonnull align 1 dereferenceable(1)) unnamed_addr #0",
+            "declare void @_ZNSt8ios_base4InitD1Ev(ptr noundef nonnull align 1 dereferenceable(1)) unnamed_addr #1",
+            "declare i32 @__cxa_atexit(ptr, ptr, ptr) local_unnamed_addr #2"]
+          symbols = nativeCxxInitSymbols ++ nativeLifecycleSymbols
+          validate = validateNativeLifecycleIR "x86_64-unknown-linux-gnu" symbols
+      assertEqual "exact original simdutf iostream lifecycle ABI" (Right ()) (validate source)
+      assertBool "different platform ABI is not guessed" (isLeft (validateNativeLifecycleIR "aarch64-unknown-linux-gnu" symbols source))
+      mapM_ (\line -> assertBool "malformed supported lifetime declaration remains fatal" (isLeft
+        (validateNativeLifecycleIR "x86_64-unknown-linux-gnu" ["__cxa_atexit"] line)))
+        ["declare i64 @__cxa_atexit(ptr, ptr, ptr)", "declare i32 @__cxa_atexit(ptr, ptr)",
+         "declare i32 @__cxa_atexit(ptr, ptr, ...)", "declare fastcc i32 @__cxa_atexit(ptr, ptr, ptr)",
+         "declare i32 @__cxa_atexit(ptr addrspace(1), ptr, ptr)"]
+      assertBool "DSO identity must retain its actual type" (isLeft
+        (validateNativeLifecycleIR "x86_64-unknown-linux-gnu" ["__dso_handle"] "@__dso_handle = external hidden global i64"))
   , TestCase $ do
       let roots = ["/package/dist/build"]
           allRoots = roots ++ ["/package/dist/build/tool/tool-tmp"]

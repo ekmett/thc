@@ -2,7 +2,7 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 module THC.Driver.NativeLibrarySources
   ( zlibChecksumSources, nativeMathSymbols, validateNativeMathIR, validateNativeEntropyIR,
-    validateNativeWidthIR ) where
+    validateNativeWidthIR, nativeCxxInitSymbols, nativeLifecycleSymbols, validateNativeLifecycleIR ) where
 
 import Control.Monad (forM_, unless)
 import qualified Crypto.Hash.SHA256 as SHA
@@ -13,6 +13,49 @@ import System.FilePath ((</>))
 
 nativeMathSymbols :: [String]
 nativeMathSymbols = ["erf", "erfc", "erff", "erfcf"]
+
+-- The configured Linux libstdc++ header emits these exact iostream lifetime
+-- calls even for otherwise freestanding users such as original simdutf.
+nativeCxxInitSymbols :: [String]
+nativeCxxInitSymbols = ["_ZNSt8ios_base4InitC1Ev", "_ZNSt8ios_base4InitD1Ev"]
+
+-- Sulong supplies context-owned atexit registration and its DSO identity.
+-- These are not forwarded to a process-wide host atexit registry.
+nativeLifecycleSymbols :: [String]
+nativeLifecycleSymbols = ["__cxa_atexit", "__dso_handle"]
+
+validateNativeLifecycleIR :: String -> [String] -> String -> Either String ()
+validateNativeLifecycleIR target symbols source = do
+  unless (target == "x86_64-unknown-linux-gnu")
+    (Left "native C++ lifecycle provider currently requires Linux x86_64")
+  forM_ symbols $ \symbol -> do
+    unless (symbol `elem` nativeCxxInitSymbols ++ nativeLifecycleSymbols)
+      (Left "unsupported native lifecycle symbol")
+    let definitions = [line | line <- lines source, ("@" ++ symbol ++ " =") `isPrefixOf` line]
+        declarations = [(before, arguments after) | line <- lines source,
+          "declare " `isPrefixOf` line, let (before,rest) = break (== '@') line,
+          let prefix = "@" ++ symbol ++ "(", prefix `isPrefixOf` rest,
+          let after = drop (length prefix) rest]
+        expected = if symbol == "__cxa_atexit" then ("i32",3) else ("void",1)
+        valid (before,parameters) = words before == ["declare",fst expected] &&
+          length parameters == snd expected && all pointer parameters
+        pointer parameter = case words parameter of
+          "ptr":attributes -> attributes `elem` [[],["noundef"],["noundef","nonnull","align","1","dereferenceable(1)"]]
+          _ -> False
+    unless (if symbol == "__dso_handle" then
+        map words definitions == [["@__dso_handle","=","external","hidden","global","i8"]]
+      else length declarations == 1 && all valid declarations)
+      (Left ("native lifecycle declaration has unsupported ABI: " ++ symbol))
+  where
+    -- Parenthesized parameter attributes do not terminate the argument list.
+    arguments = split . takeParameters (0::Int)
+    takeParameters _ [] = []
+    takeParameters depth (c:rest)
+      | c == ')' && depth == 0 = []
+      | otherwise = c : takeParameters (depth + if c == '(' then 1 else if c == ')' then -1 else 0) rest
+    split text = case break (== ',') text of
+      (first,[]) -> [first]
+      (first,_:rest) -> first : split rest
 
 -- These standard libm entries take one floating scalar and return the same
 -- width. Check the linked LLVM declaration too, including package-owned C
