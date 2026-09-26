@@ -800,6 +800,7 @@ executable thc-fixtures
     SqrtFixtures
     FloatDecodeFixtures
     FloatingRemainderFixtures
+    ProxyVoidFixtures
     UnsafeEqualityFixtures
     OriginalStdioFixtures
     OriginalStdioCloseFixtures

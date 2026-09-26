@@ -356,6 +356,7 @@ jobs:
             build/short-bytes-slices/cstring/boot-provenance.json
             build/short-bytes-slices/native/short-bytes-slices-oracle
             build/unsafe-equality/
+            build/proxy-void/
             build/test-results/
             build/mask-functions/
             build/aggregate-frontier.json
