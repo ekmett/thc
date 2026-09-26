@@ -3,6 +3,7 @@
 
 module Main (main) where
 
+import Control.Monad (foldM)
 import Distribution.Simple.Utils (topHandler)
 import Distribution.Types.Flag (mkFlagName)
 import System.Console.GetOpt
@@ -38,8 +39,9 @@ main = topHandler $ do
           guestArgs = drop 1 suffix
       case getOpt Permute runOptions driverArgs of
         (updates, targets, []) | length targets <= 1 -> do
-          let opts = foldl (flip ($)) (RunOptions defaultPlanOptions "" "" Nothing "pinned" Nothing guestArgs) updates
-              target = case targets of [] -> "."; [file] -> file; _ -> error "checked above"
+          opts <- either (die . (++ "\n" ++ runUsage)) pure $
+            foldM (flip ($)) (RunOptions defaultPlanOptions "" "" Nothing "pinned" Nothing Nothing guestArgs) updates
+          let target = case targets of [] -> "."; [file] -> file; _ -> error "checked above"
           project <- doesFileExist (target </> "cabal.project")
           if project then runProject opts target else runPackage opts target
         (_, _, errors) -> die (concat errors ++ runUsage)
@@ -61,21 +63,23 @@ options =
 usage :: String
 usage = usageInfo "Usage: thc plan-package [PACKAGE.cabal|DIR] [OPTIONS]\n\nConfigure one Simple Cabal package against installed global dependencies.\nEmits JSON; does not solve cabal.project, compile, export THC Core or repl.\n\nAlso available: thc run [PACKAGE.cabal|DIR] --exe NAME --thc-root DIR [--runtime PATH]\n" options
 
-runOptions :: [OptDescr (RunOptions -> RunOptions)]
+runOptions :: [OptDescr (RunOptions -> Either String RunOptions)]
 runOptions =
-  [ Option [] ["exe"] (ReqArg (\name r -> r {runExecutable = name}) "NAME") "Selected Cabal executable"
-  , Option [] ["thc-root"] (ReqArg (\path r -> r {runThcRoot = path}) "DIR") "THC source/build root"
-  , Option [] ["runtime"] (ReqArg (\path r -> r {runRuntime = Just path}) "PATH") "Installed THC JVM launcher"
-  , Option [] ["installed-core"] (ReqArg (\policy r -> r {runInstalledCore = policy}) "required|pinned") "Project boot-library provider (default: limited pinned sources); required never silently falls back"
-  , Option [] ["ghc-source"] (ReqArg (\path r -> r {runGhcSource = Just path}) "DIR") "Matching configured GHC 9.14.1 source tree for missing installed foreign annotations (required provider only)"
+  [ Option [] ["exe"] (ReqArg (\name r -> Right r {runExecutable = name}) "NAME") "Selected Cabal executable"
+  , Option [] ["thc-root"] (ReqArg (\path r -> Right r {runThcRoot = path}) "DIR") "THC source/build root"
+  , Option [] ["runtime"] (ReqArg (\path r -> Right r {runRuntime = Just path}) "PATH") "Installed THC JVM launcher"
+  , Option [] ["sulong-mode"] (ReqArg (\value r -> (\mode -> r {runSulongMode = Just mode}) <$> parseSulongMode value)
+      "native|managed") "Sulong execution mode (launcher default: native); managed requires a supporting GraalVM installation"
+  , Option [] ["installed-core"] (ReqArg (\policy r -> Right r {runInstalledCore = policy}) "required|pinned") "Project boot-library provider (default: limited pinned sources); required never silently falls back"
+  , Option [] ["ghc-source"] (ReqArg (\path r -> Right r {runGhcSource = Just path}) "DIR") "Matching configured GHC 9.14.1 source tree for missing installed foreign annotations (required provider only)"
   ] ++ map liftPlanOption options
 
-liftPlanOption :: OptDescr (PlanOptions -> PlanOptions) -> OptDescr (RunOptions -> RunOptions)
+liftPlanOption :: OptDescr (PlanOptions -> PlanOptions) -> OptDescr (RunOptions -> Either String RunOptions)
 liftPlanOption (Option shorts longs argument description) = Option shorts longs (case argument of
   NoArg update -> NoArg (liftUpdate update)
   ReqArg update name -> ReqArg (\value -> liftUpdate (update value)) name
   OptArg update name -> OptArg (\value -> liftUpdate (update value)) name) description
-  where liftUpdate update run = run {runPlan = update (runPlan run)}
+  where liftUpdate update run = Right run {runPlan = update (runPlan run)}
 
 runUsage :: String
 runUsage = usageInfo "Usage: thc run [PACKAGE.cabal|DIR] --exe NAME --thc-root DIR [OPTIONS] [-- ARG...]\n\nBuild the selected Cabal executable, export and audit its GHC main :: IO (), then execute that action in THC.\nArguments after -- are passed unchanged to the guest, including empty strings and option-looking arguments.\nA DIR containing cabal.project uses Cabal's resolved multi-package plan and accepts NAME or PACKAGE:exe:NAME.\nFor an explicit .cabal file, the initial single-package path still requires no internal library or build-tool dependencies.\n" runOptions

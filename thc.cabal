@@ -417,6 +417,7 @@ test-suite driver-tests
     TestSupportTests
     PlanTests
     RunTests
+    RunOptionsTests
     ProjectTests
     StoreProjectTests
     EmptyStoreProjectTests
@@ -426,6 +427,9 @@ test-suite driver-tests
     NativeRecipeTests
     RuntimeShimTests
     InstalledForeignTests
+    THC.Driver.Cabal
+    THC.Driver.Json
+    THC.Driver.Run
     THC.Driver.GhcProxy
     THC.Driver.Installed
     THC.Driver.InstalledForeign
