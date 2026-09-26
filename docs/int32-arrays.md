@@ -29,11 +29,13 @@ Ordinary Int32 arithmetic also retains actual `int32` literals with exact
 machine-width literals.
 The new signed literal loader accepts only canonical decimal values in
 `[-2147483648, 2147483647]`, including case alternatives. Both signed and unsigned
-32-bit literal kinds preserve exact identity: present metadata cannot relabel one
-as the other or as another Long-carried representation. Missing legacy metadata
-and explicit unknown records with no register constraints refine to the literal's
-intrinsic signedness. This includes genuine `noinline` erasure, where the exporter
-conservatively clears operand certificates. Malformed metadata still fails. Two
+32-bit literal kinds determine their intrinsic range and signedness. Runtime
+lowering accepts integral metadata aliases sharing the Long carrier; strict
+exporter auditing separately checks GHC's exact type identities. Missing legacy
+metadata and explicit unknown records with no register constraints refine from
+literal syntax. This includes genuine `noinline` erasure, where the exporter
+conservatively clears operand certificates. Malformed metadata and incompatible
+carriers still fail. Two
 opaque-worker controls retain these literals before and after Tidy; their separate
 14-row native oracle exercises both backends with inlining enabled and disabled,
 including per-row compiled entry and installed-target checks.
@@ -78,10 +80,11 @@ byte order. Source and artifact fingerprints include the exact capability and
 exporter inputs, generated driver, oracle executable, rows, and Core.
 The frozen domain is 397 inputs per entry: 2,382 unique native/model rows.
 
-The guest-root proof counts the entry and its unconditional immediate local
-`State#` lambda. It does not count genuine complete local-join prefixes, and it
+The structural proof checks the entry and its unconditional immediate local
+`State#` lambda. Runtime lowering beta-reduces that state application, leaving
+one executable root. The proof does not count genuine complete local-join prefixes, and it
 still inspects their bodies and dictionary-held expressions for extra functions.
-Thus these frozen fixtures require two guest entries per uninlined public call,
+Thus these frozen fixtures require one guest entry per uninlined public call,
 excluding the host bridge. Separate JVM tests compile the actual selected/nested
 targets and enforce exact per-call counters on both backends, both Core stages,
 and with guest inlining enabled and disabled. Every measured compiled call must

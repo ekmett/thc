@@ -11,10 +11,11 @@ The four added GHC 9.14.1 primitives are:
 
 Existing `writeWord8Array#` and `indexWord8Array#` complete the unsigned family.
 Both array references have exact `BoxedRep (Just Unlifted)` proofs. Signed and
-unsigned payloads retain `Int8Rep` and `Word8Rep`; neither is interchangeable
-with machine Int/Word or another narrow width. State has no physical result
-slot. Arity, argument flags and recursive result proofs are checked by both
-loaders and the strict auditor.
+unsigned payloads retain `Int8Rep` and `Word8Rep` in GHC and the strict exporter
+audit. Runtime lowering accepts integral metadata aliases sharing the Long
+carrier; the selected primitive determines width and signedness. State has no
+physical result slot. Both loaders still check arity, argument flags, actual
+carriers and recursive result shape.
 
 The carrier remains the primitive JVM `byte[]`, with no wrapper or boxed
 individual bytes. The AST uses fixed-child nodes; bytecode uses typed Long
@@ -52,17 +53,21 @@ rows**. Inputs include every value from -256 through 255, all 64 machine bit
 positions and their neighbors with both signs, and alternating byte patterns.
 An unbounded JVM model and separate sequential-cell/bytearray checks verify
 the results. Pre/post-Tidy exports require all expected primitive occurrences,
-strict whole-closure acceptance and exactly two guest functions per entry: the
-entry and its immediately applied State lambda.
+strict whole-closure acceptance and exactly two exported lambda forms per entry:
+the entry and its immediately applied State lambda. Runtime lowering beta-reduces
+the latter; it is not a second executable guest root.
 
 The JVM matrix executes both Core stages on AST and bytecode with inlining
 both enabled and disabled. It compiles the observed active targets and requires
-exactly two compiled guest entries, unchanged target identities and valid
+exactly one compiled guest entry, unchanged target identities and valid
 last-tier code after every measured call. That is **60,912 compiled invocations
-and 121,824 guest entries per handoff configuration**, in addition to the
+and 60,912 guest entries per handoff configuration**, in addition to the
 interpreted checks. The count excludes the host bridge. Storage and malformed
 Core controls check all 256 byte patterns, full-width invalid indices, exact
-signedness/width/State/levity, failed-effect publication and released storage.
+carriers/State/levity, failed-effect publication and released storage. Same-Long
+scalar and index metadata aliases are positive execution controls against the
+independent model. Unilateral tuple payload changes still fail against unchanged
+case-binder contracts.
 
 ## Reproduction and limits
 

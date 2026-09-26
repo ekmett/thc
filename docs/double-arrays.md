@@ -11,8 +11,10 @@ must lie in `[0, byteCount / 8)` before narrowing or multiplying by eight.
 Incomplete trailing elements are inaccessible, and invalid writes leave storage
 unchanged. This is not an atomic or concurrent-access API.
 
-The loaders and auditor require exact `DoubleRep` payloads, `IntRep` indices,
-unlifted array references, and zero-width State arguments. Neither `FloatRep`
+GHC and the strict exporter audit require `DoubleRep` payloads and `IntRep`
+indices. Runtime lowering accepts integral metadata aliases for Long indices,
+while retaining Double carriers, unlifted array references and zero-width State
+arguments. Neither `FloatRep`
 nor an equal-width integer payload is interchangeable with Double. A mutable
 read returns exactly `(# State# s, Double# #)`: two logical components and one
 primitive Double destination. State expressions run before memory access; only
@@ -54,8 +56,8 @@ The manifest under `build/double-arrays` records source/artifact hashes, native
 byte order and exact input domain. JVM
 tests compare every row on both backends with guest inlining enabled and
 disabled. Every post-compilation call must make the exact expected compiled
-entry increment (two for public roots, three with a retained helper). Each entry
-also calls the immediate local State lambda left by `runRW#` lowering. Tests
+entry increment (one for public roots, two with a retained helper). The immediate
+local State lambda in exported `runRW#` Core is beta-reduced during lowering. Tests
 discover the active call tree after interpreter coverage, explicitly compile
 every guest target, require unchanged active target identities and valid code,
 and release result/argument slabs. CI repeats with dense handoff

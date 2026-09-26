@@ -122,14 +122,24 @@ class Explicit64PrimopsTest {
             }
         }
     }
-    @Test fun sharedLongCarrierDoesNotPermitReplacingInt64ProofWithWord64() = visit { language,backend ->
-        for (diagnostic in listOf(false,true)) {
+    @Test fun integralBinderAliasesExecuteButIncompatibleCarriersReject() = visit { language,backend ->
+        for (diagnostic in listOf(false,true)) for ((kind,rep) in listOf(
+            "long" to "Word64Rep", "long" to "IntRep", "float" to "FloatRep",
+            "double" to "DoubleRep", "object" to "BoxedRep (Just Lifted)")) {
             val module=CoreModules.reachable(module(),"plusInt64")
             val lambda=((module["bindings"] as List<Map<String,Any?>>).single()["expr"] as List<Any?>)
             val binder=(lambda[1] as List<MutableMap<String,Any?>>)[0]
-            (binder["rep"] as MutableMap<String,Any?>)["primReps"]=listOf("Word64Rep")
-            val error=assertThrows(RuntimeFault::class.java) { program(language,module+("diagnosticUnsupported" to diagnostic),backend) }
-            assertTrue(error.message.orEmpty().contains("Conflicting Core scalar representation proofs"),error.message)
+            binder["rep"]=mapOf("kind" to kind,"primReps" to listOf(rep),"evaluated" to true)
+            val label="$backend/$rep/diagnostic=$diagnostic"
+            if (kind=="long") {
+                val p=program(language,module+("diagnosticUnsupported" to diagnostic),backend)
+                for ((x,y) in listOf(0L to 1L,Long.MAX_VALUE to 1L,Long.MIN_VALUE to -1L,-1L to 1L)) {
+                    assertEquals(ScalarPrimopModel.explicit64("plus",false,x,y),
+                        Calls.target(p.hostEntryTarget(2),arrayOf(p.entryValue("plusInt64"),arrayOf(x,y))),label)
+                }
+            } else assertThrows(RuntimeFault::class.java, {
+                program(language,module+("diagnosticUnsupported" to diagnostic),backend)
+            },label)
         }
     }
 }

@@ -57,15 +57,17 @@ class Int16ArrayNativeTest {
                 assertEquals(expected, actual, "Stale boundary-control fixture: $path")
             }
         val paths = (manifest["stages"] as Map<String, List<String>>).getValue("post")
-        val name = "unboxedInt16Accum"
+        // A genuine opaque worker retains two executable roots after runRW
+        // state applications are beta-reduced by the loaders.
+        val name = "noinlineInt16Literal"
         val module = merged(paths)
-        assertEquals(2L, checkedCalls(module, name), "Genuine public entry and immediate state lambda")
+        assertEquals(2L, literalCalls(module, name), "Genuine public entry and opaque literal worker")
         val evidence = ArrayCoreEvidence(module, name)
-        val labels = evidence.guestLambdas(evidence.root["expr"]).map { expression ->
+        val labels = evidence.bindings.flatMap { evidence.guestLambdas(it["expr"]) }.map { expression ->
             val formals = expression[1] as List<Map<String, Any?>>
             "lambda ${formals.joinToString { it["name"].toString() }}"
         }.toSet()
-        val rows = checkedRows(File(root, "build/int16-arrays/oracle.tsv").readText()).getValue(name)
+        val rows = checkedRows(File(root, "build/int16-arrays/literal-oracle.tsv").readText(), literals=true).getValue(name)
         val (input, answer) = rows.first()
         assertEquals(Long.MIN_VALUE, input)
         for (backendName in listOf("ast", "bytecode")) context(false).use { context ->
@@ -90,7 +92,7 @@ class Int16ArrayNativeTest {
                 fun count() = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                 for ((seed, native) in rows) assertEquals(native, Calls.target(entry, arrayOf(0L, seed)))
                 val targets = activeTargets(entry)
-                assertEquals(2, targets.size, "$backendName active public and state roots")
+                assertEquals(2, targets.size, "$backendName active public and opaque worker roots")
                 assertEquals(labels, targets.map { it.rootNode.name }.toSet(), "$backendName source-derived root labels")
                 fun calls() = targets.map { callCount.invoke(it) as Int }
                 fun unchanged() {
@@ -102,7 +104,7 @@ class Int16ArrayNativeTest {
                 try {
                     // The old helper leaves valid guest nmethods behind a retired
                     // stub. The outer entry interprets and repairs the boundary;
-                    // its nested state call enters compiled code. This loses one entry,
+                    // its opaque worker call enters compiled code. This loses one entry,
                     // not both, so it does not explain the historical delta-zero failure.
                     reprofile.invoke(boundary)
                     assertEquals(false, hasCode.invoke(boundary))
@@ -329,7 +331,7 @@ class Int16ArrayNativeTest {
         val evidence = ArrayCoreEvidence(module, name)
         require(evidence.primitiveCounts.keys.containsAll(requiredPrimitives(name))) { "$name missing required primitive" }
         if (name.startsWith("alias")) require(evidence.primitiveCounts == exactAliasPrimitives(name)) { "$name exact alias primitive counts changed" }
-        return evidence.immediateStateCalls().toLong()
+        return evidence.loweredImmediateStateCalls().toLong()
     }
     private val unknownLiteralProof = mapOf("kind" to "unknown", "primReps" to null, "evaluated" to false)
     private fun literalCalls(module: Map<String, Any?>, name: String, unknownProof: Boolean = false): Long {
@@ -389,7 +391,7 @@ class Int16ArrayNativeTest {
     @Test fun genuineCoreMustRetainRequiredAndExactAliasPrimitives() {
         for ((_, paths) in manifest()["stages"] as Map<String, List<String>>) for (name in names) {
             val module = merged(paths)
-            assertEquals(2L, checkedCalls(module, name))
+            assertEquals(1L, checkedCalls(module, name))
             for (primitive in requiredPrimitives(name)) {
                 val changed = Json.parse(Json.stringify(module)) as Map<String, Any?>
                 val nodes = ArrayCoreEvidence(changed, name).nodes(changed)
@@ -536,10 +538,8 @@ class Int16ArrayNativeTest {
                             val formals = expression[1] as List<Map<String, Any?>>
                             return "lambda ${formals.joinToString { it["name"].toString() }}"
                         }
-                        val rootExpression = bindings.single { it["name"] == name }["expr"] as List<*>
-                        val stateCall = rootExpression[2] as List<*>
-                        val expectedLabels = bindings.map { lambdaLabel(it["expr"] as List<*>) }.toSet() +
-                            lambdaLabel(stateCall[1] as List<*>)
+                        // The checked immediate runRW State# lambda is beta-reduced.
+                        val expectedLabels = bindings.map { lambdaLabel(it["expr"] as List<*>) }.toSet()
                         var targets = emptyList<RootCallTarget>()
                         fun count() = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                         fun check(compiled: Boolean) {
@@ -581,7 +581,7 @@ class Int16ArrayNativeTest {
     private fun paths() = (manifest()["stages"] as Map<String, List<String>>).getValue("pre")
     private fun owner(operation: ByteArrayOp) = if (operation.primitive.contains("Word16")) "aliasWord16Bytes" else "aliasInt16Bytes"
 
-    @Test fun exactNarrowStateShapesAndSaturationAreRequiredInBothLoadModes() {
+    @Test fun longAliasesExecuteWhileCarrierStateShapeAndSaturationGuardsRemain() {
         val paths = paths()
         for (backend in listOf("ast", "bytecode")) context(true).use { context ->
             context.initialize("thc"); context.enter()
@@ -632,13 +632,19 @@ class Int16ArrayNativeTest {
                             } else metadata["rep"] = payload
                         }
                     }
-                    // A changed tuple payload still contradicts the untouched
-                    // case binder's aggregate metadata; scalar Long aliases do not.
+                    // Scalar aliases share Long, but a unilateral tuple change
+                    // still conflicts with the untouched case binder's ABI.
                     val sameCarrier = mutation == 6 || (!operation.tuple && (mutation == 7 || mutation in 10..17))
-                    if (sameCarrier) assertDoesNotThrow({
-                        program(language, module + ("diagnosticUnsupported" to diagnostic), backend)
-                    }, "$backend/$operation/mutation$mutation/$diagnostic")
-                    else if (diagnostic && mutation == 18 && operation.tuple) {
+                    if (sameCarrier) {
+                        val name = owner(operation)
+                        val p = program(language, module + ("diagnosticUnsupported" to diagnostic), backend)
+                        for (seed in listOf(5L, -1L, Long.MIN_VALUE)) {
+                            assertEquals(model(name, seed),
+                                Calls.target(p.hostEntryTarget(1), arrayOf(p.entryValue(name), arrayOf(seed))),
+                                "$backend/$operation/mutation$mutation/$diagnostic/$seed")
+                            released(language)
+                        }
+                    } else if (diagnostic && mutation == 18 && operation.tuple) {
                         // Unknown tuple leaves retain the existing diagnostic frontier.
                         val p = program(language, module + mapOf("diagnosticUnsupported" to true, "instrument" to true), backend)
                         val reason = "Unsupported Core aggregate representation: unboxed-tuple has unsupported fields"

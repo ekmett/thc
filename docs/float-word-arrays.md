@@ -16,9 +16,10 @@ Their value arities are respectively three, four, and two.
 Both AST and bytecode use the existing shared `byte[]` allocation and unsafe
 freeze identity. Float accesses use a native-order four-byte `VarHandle` view
 and primitive Float expressions, frame slots and bytecode locals. Word accesses
-reuse the eight-byte raw-Long storage operations, preserving every bit, while
-the loader separately requires the exact `WordRep` contract. This reuse does
-not reinterpret machine Word as `Word64Rep` or permit `IntRep` payloads.
+reuse the eight-byte raw-Long storage operations, preserving every bit.
+GHC and the strict exporter audit retain exact `WordRep` type identity;
+runtime lowering accepts integral metadata aliases sharing the Long carrier.
+Float remains a different carrier and cannot be replaced by an integer payload.
 
 Each full-width element index is checked against the complete-element count
 before narrowing or multiplication; partial trailing bytes are inaccessible.
@@ -28,10 +29,12 @@ allocations, native byte order, cross-view aliases, partial tails, extreme
 indices, raw quiet-NaN Float movement and failed State effects.
 
 The native suite mutates each of the six actual primitive applications to
-exercise saturation, representation flags, signedness/width, scalar-versus-tuple
-State and unknown payload kinds on both backends. Contradictory supported
-contracts fail at load in both policies. Unknown tuple leaves are the existing
-aggregate frontier: strict loading rejects them; diagnostic loading records
+exercise saturation, representation flags, actual carriers, scalar-versus-tuple
+State and unknown payload kinds on both backends. Same-Long index and scalar
+Word payload aliases execute against the independent model; incompatible carriers,
+shapes and unilateral tuple/case-binder mismatches fail at load in both policies.
+Unknown tuple leaves are the existing aggregate frontier: strict loading
+rejects them; diagnostic loading records
 the unsupported shape and must trap when demanded, with no handoff loans or
 retained references. No diagnostic policy was changed for these operations.
 
@@ -49,13 +52,17 @@ dyadics, and the final `float2Int#` conversion is finite and in range.
 
 | Entry | Independent result | Inputs | Actual guest calls |
 | --- | --- | ---: | ---: |
-| `unboxedFloatAccum` | `150*x + 277` | 397 | 2 |
-| `unboxedFloatST` | `176*x + 76` | 397 | 2 |
-| `unboxedWordAccum` | `S64(44*raw + 62)` | 397 | 2 |
-| `unboxedWordST` | `S64(44*raw + 350)` | 397 | 2 |
-| `moveFloatBits` | `raw & 0xffffffff` | 590 | 3 |
-| `indexFloatBits` | `raw & 0xffffffff` | 590 | 3 |
-| `aliasWordBytes` | Ordered byte model below | 397 | 2 |
+| `unboxedFloatAccum` | `150*x + 277` | 397 | 1 |
+| `unboxedFloatST` | `176*x + 76` | 397 | 1 |
+| `unboxedWordAccum` | `S64(44*raw + 62)` | 397 | 1 |
+| `unboxedWordST` | `S64(44*raw + 350)` | 397 | 1 |
+| `moveFloatBits` | `raw & 0xffffffff` | 590 | 2 |
+| `indexFloatBits` | `raw & 0xffffffff` | 590 | 2 |
+| `aliasWordBytes` | Ordered byte model below | 397 | 1 |
+
+The exact call counts exclude the immediate `runRW#` State lambda, which the
+loaders beta-reduce after its source shape has been checked. Retained opaque
+movement helpers remain executable guest roots.
 
 The 397 machine-input patterns include each of 64 individual bits and its
 neighbors, both signs, signed endpoints, alternating patterns, and differing
@@ -99,8 +106,9 @@ per-entry input domains, and recorded native byte order.
 
 All fourteen strict root audits accept after the six selected capabilities are
 present, with zero missing globals. Each public/alias root has one reachable
-global; movement roots have two. Actual guest-call counts additionally include
-the immediate, unconditional, zero-slot `State# RealWorld` lambda. A complete
+global; movement roots have two. The immediate, unconditional, zero-slot
+`State# RealWorld` lambda remains in exported Core but is beta-reduced, not
+counted as an executable guest call. A complete
 proven local join prefix is not a guest function; its body remains traversed.
 The preparation rejects extra lambdas, conditional/malformed State calls,
 changed helper results, or a changed global closure. Native/static preparation
@@ -113,7 +121,7 @@ the active split targets through AST children and bytecode instruction caches,
 compile callees before callers, and require exact compiled-entry increments,
 unchanged target identities and last-tier validity after every measured call.
 There are no settling calls or retries. The complete matrix contains 25,320
-compiled invocations and 60,080 guest-root entries per handoff configuration.
+compiled invocations and 34,760 guest-root entries per handoff configuration.
 Result and argument loans must be released, warmed result pools reused, and
 supported workloads must report zero unsupported traps and blackholes.
 
@@ -133,7 +141,7 @@ On eak-quartus, Linux x86_64, using GHC 9.14.1 and GraalVM 25.3.4.1/JDK 25:
   passed 388 tests in 82 suites with zero failures, errors or skips; `installDist`
   passed in both modes. Dense handoff used a forced rebuild/rerun.
 - Each handoff configuration passed all 25,320 measured compiled invocations and
-  exact 60,080 guest-root entries described above, with no weakened entry gates.
+  exact 60,080 guest-root entries before runRW beta-reduction, with no weakened entry gates.
 - Python tests passed without skips: 13 Float/Word model, 5 Int model, 9 Double
   model, 7 Int32 model, 9 ByteArray contracts, 43 auditor and 4 primop inventory.
 - Independent xhigh review covered runtime, JVM tests, build inputs and CI.

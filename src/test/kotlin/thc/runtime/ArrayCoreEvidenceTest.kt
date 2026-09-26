@@ -46,6 +46,7 @@ class ArrayCoreEvidenceTest {
 
     @Test fun immediateStateProofRejectsChangedFormalsArgumentsFlagsAndControlFlow() {
         assertEquals(2, ArrayCoreEvidence(module(root()), "root").immediateStateCalls())
+        assertEquals(1, ArrayCoreEvidence(module(root()), "root").loweredImmediateStateCalls())
         val badCalls = mutableListOf<Map<String, Any?>>()
         for ((key, value) in listOf("type" to "Proxy# RealWorld", "rep" to intRep,
             "lifted" to true, "coercion" to true)) {
@@ -71,8 +72,10 @@ class ArrayCoreEvidenceTest {
         val outer = root()["expr"] as List<Any?>
         badCalls += binding("root", listOf("lam", outer[1],
             listOf("case", leaf, "c", listOf(listOf("default", null, emptyList<String>(), outer[2])))))
-        for ((index, bad) in badCalls.withIndex())
+        for ((index, bad) in badCalls.withIndex()) {
             assertThrows(IllegalArgumentException::class.java, { ArrayCoreEvidence(module(bad), "root").immediateStateCalls() }, "mutation$index")
+            assertThrows(IllegalArgumentException::class.java, { ArrayCoreEvidence(module(bad), "root").loweredImmediateStateCalls() }, "lowered mutation$index")
+        }
     }
 
     @Test fun onlyCompleteProvenJoinPrefixesAreExcludedAndTheirBodiesRemainVisible() {

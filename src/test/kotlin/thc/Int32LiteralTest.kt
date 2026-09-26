@@ -40,20 +40,20 @@ class Int32LiteralTest {
         }
     }
 
-    @Test fun signedAndUnsignedLiteralKindsCannotBeRelabelledThroughLongOrUnknownProofs() {
+    @Test fun integralMetadataAliasesPreserveLiteralValuesButConstrainedUnknownCarriersFail() {
         for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) executionContext().use { context ->
-            for ((kind, exact) in listOf("int32" to "Int32Rep", "word32" to "Word32Rep")) {
+            for ((kind, value) in listOf("int32" to "-2147483648", "word32" to "4294967295")) {
                 for (rep in listOf("Int32Rep", "Word32Rep", "IntRep", "WordRep", "Int64Rep", "Word64Rep"))
                     for (carrier in listOf("long", "unknown")) {
                         val metadata = mapOf("rep" to mapOf("kind" to carrier, "primReps" to listOf(rep), "evaluated" to true))
-                        val body = listOf("lit", kind, "1", metadata)
-                        if (carrier == "long" && rep == exact) {
-                            assertEquals(1L, context.eval("thc", request(backend, body, diagnostic)).execute(0L).asLong())
+                        val body = listOf("lit", kind, value, metadata)
+                        if (carrier == "long") {
+                            assertEquals(value.toLong(), context.eval("thc", request(backend, body, diagnostic)).execute(0L).asLong())
                         } else {
                             val error = assertThrows(PolyglotException::class.java) {
                                 context.eval("thc", request(backend, body, diagnostic))
                             }
-                            assertTrue(error.message.orEmpty().contains("literal requires exact"), error.message)
+                            assertTrue(error.message.orEmpty().contains("literal requires a scalar Long carrier"), error.message)
                         }
                     }
             }
@@ -67,15 +67,16 @@ class Int32LiteralTest {
                     val proof = mapOf("kind" to "unknown", "evaluated" to evaluated) + registers
                     assertEquals(1L, context.eval("thc", request(backend,
                         listOf("lit", kind, "1", mapOf("rep" to proof)), diagnostic)).execute(0L).asLong())
-                    for ((operation, expected, result) in listOf(Triple("int32ToInt#", "int32", "IntRep"),
-                        Triple("word32ToWord#", "word32", "WordRep"))) {
+                    for ((operation, result) in listOf("int32ToInt#" to "IntRep", "word32ToWord#" to "WordRep")) {
                         val body = listOf("app", listOf("prim", operation), listOf(listOf("lit", kind, "1", mapOf("rep" to proof))),
                             listOf(false), false, false, mapOf("rep" to mapOf("kind" to "long", "primReps" to listOf(result), "evaluated" to true)))
-                        if (kind == expected) assertEquals(1L, context.eval("thc", request(backend, body, diagnostic)).execute(0L).asLong())
-                        else assertThrows(PolyglotException::class.java) { context.eval("thc", request(backend, body, diagnostic)) }
+                        assertEquals(1L, context.eval("thc", request(backend, body, diagnostic)).execute(0L).asLong())
                     }
                 }
                 val malformed = listOf(emptyList<Any?>(), "unknown", mapOf("kind" to "unknown", "primReps" to null),
+                    mapOf("kind" to "float", "primReps" to listOf("FloatRep"), "evaluated" to true),
+                    mapOf("kind" to "double", "primReps" to listOf("DoubleRep"), "evaluated" to true),
+                    mapOf("kind" to "object", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true),
                     mapOf("kind" to "unknown", "primReps" to null, "evaluated" to "false"),
                     mapOf("kind" to "unknown", "primReps" to emptyList<String>(), "evaluated" to false),
                     mapOf("kind" to "unknown", "primReps" to emptyList<String>(), "evaluated" to false,
