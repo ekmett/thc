@@ -49,8 +49,8 @@ class SimdArithmeticTest {
                 record["scalar"] as String, int("pattern"))
         }
         val expected = GeneratedVectors.operations.filter { it.startsWith("quot") || it.startsWith("rem") || it.startsWith("shuffle") }.toSet()
-        assertEquals(60, expected.size); assertEquals(expected, shapes.map { it.primitive }.toSet())
-        assertEquals(108, shapes.size)
+        assertEquals(78, expected.size); assertEquals(expected, shapes.map { it.primitive }.toSet())
+        assertEquals(138, shapes.size)
         val rows = File(directory, "oracle.tsv").readLines().map { line ->
             val fields = line.split('\t'); assertEquals(4, fields.size)
             Row(fields[0], fields[1].toLong(), fields[2].toLong(), fields[3].toLong())
@@ -72,7 +72,7 @@ class SimdArithmeticTest {
                 val selected = when (shape.pattern) {
                     0 -> shape.lanes - 1 - index + if (index % 2 == 1) shape.lanes else 0
                     1 -> index + 1
-                    else -> if (index % 2 == 1) shape.lanes else 0
+                    else -> if (index % 2 == 1) 2 * shape.lanes - 1 else 0
                 }
                 if (selected >= shape.lanes) lane(b - (selected - shape.lanes) * 7919L, shape)
                 else lane(a + selected * 104729L, shape)
@@ -163,25 +163,29 @@ class SimdArithmeticTest {
     }
     @Test fun literalShuffleIndicesAreCheckedBeforeExecution() {
         evidence()
-        val original = CoreModules.reachable(json(File(directory, "pre-core/SimdArithmeticAudit.json")), "shuffleInt8X16Pattern0")
+        val module = json(File(directory, "pre-core/SimdArithmeticAudit.json"))
         fun nodes(value: Any?): List<MutableList<Any?>> = when (value) {
             is MutableList<*> -> listOf(value as MutableList<Any?>) + value.flatMap(::nodes)
             is Map<*, *> -> value.values.flatMap(::nodes)
             else -> emptyList()
         }
         for (backend in listOf("ast", "bytecode")) language { _, language ->
-            for (bad in listOf(-1L, 32L, Long.MAX_VALUE, null)) {
-                val input = Json.parse(Json.stringify(original)) as Map<String, Any?>
-                val call = nodes(input).single { it.firstOrNull() == "app" &&
-                    (it.getOrNull(1) as? List<*>)?.getOrNull(1) == "shuffleInt8X16#" }
-                val tuple = (call[2] as List<*>)[2] as MutableList<Any?>
-                val fields = tuple[2] as MutableList<Any?>
-                val index = fields[0] as MutableList<Any?>
-                if (bad == null) fields[0] = mutableListOf("var", "not-a-literal", index.last())
-                else index[2] = bad.toString()
-                assertThrows(RuntimeFault::class.java, {
-                    if (backend == "ast") Program(language, input) else BytecodeProgram(language, input)
-                }, "$backend/$bad")
+            for ((shape, lanes) in listOf("Int8X16" to 16, "Int8X64" to 64, "Word16X32" to 32)) {
+                val primitive = "shuffle$shape#"
+                val original = CoreModules.reachable(module, "shuffle${shape}Pattern0")
+                for (bad in listOf(-1L, 2L * lanes, Long.MAX_VALUE, null)) {
+                    val input = Json.parse(Json.stringify(original)) as Map<String, Any?>
+                    val call = nodes(input).single { it.firstOrNull() == "app" &&
+                        (it.getOrNull(1) as? List<*>)?.getOrNull(1) == primitive }
+                    val tuple = (call[2] as List<*>)[2] as MutableList<Any?>
+                    val fields = tuple[2] as MutableList<Any?>
+                    val index = fields[0] as MutableList<Any?>
+                    if (bad == null) fields[0] = mutableListOf("var", "not-a-literal", index.last())
+                    else index[2] = bad.toString()
+                    assertThrows(RuntimeFault::class.java, {
+                        if (backend == "ast") Program(language, input) else BytecodeProgram(language, input)
+                    }, "$backend/$shape/$bad")
+                }
             }
         }
     }

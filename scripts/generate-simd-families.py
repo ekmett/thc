@@ -405,14 +405,18 @@ def smoke_groups(fs):
     index = 0
     for family in fs:
         indices = []
+        standalone = []
         for operation in family['operations']:
             if operation in ('pack', 'unpack'):
                 continue
-            (legacy if operation == 'insert' and not family['newCarrier'] else indices).append(index)
+            (legacy if operation == 'insert' and not family['newCarrier'] else
+             standalone if operation in ('quot', 'rem', 'shuffle') else indices).append(index)
             index += 1
         limit = 112 // family['lanes']
         for start in range(0, len(indices), limit):
             groups.append(indices[start:start + limit])
+        # Keep division and shuffling separate from the ordinary arithmetic drivers.
+        groups.extend([entry] for entry in standalone)
     if legacy:
         groups.append(legacy)
     return {f'simdSmoke{i}': indices for i, indices in enumerate(groups)}

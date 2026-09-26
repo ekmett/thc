@@ -54,7 +54,7 @@ indices entry = [pick lane | lane <- [0..count-1]] where
   pick lane = case patternId entry of
     0 -> count - 1 - lane + if odd lane then count else 0
     1 -> lane + 1
-    _ -> if odd lane then count else 0
+    _ -> if odd lane then 2*count - 1 else 0
 checksum :: [String] -> String
 checksum values = foldr (\(lane,value) total -> "(" ++ value ++ ") *# " ++ show (2*lane+1 :: Int) ++ "# +# (" ++ total ++ ")")
   "0#" (zip [0..] values)

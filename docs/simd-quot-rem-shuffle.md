@@ -1,14 +1,16 @@
 # Integer vector division and vector shuffle
 
-THC implements quotient and remainder for the eighteen existing integer vector
+THC implements quotient and remainder for all twenty-four integer vector
 shapes, and shuffle for those shapes plus the six Float/Double shapes. Both AST
 and bytecode use the same raw public Vector API carriers and exact species.
-The separately introduced six wide byte/short shapes reuse the common lowering
-when their operation declarations are enabled.
+The six wide byte/short shapes use the same lowering, completing their 147
+local and memory operations without another vector representation.
 
 Integer quotient rounds toward zero; remainder satisfies `q*y+r=x` lane-wise.
 Word lanes divide unsigned, including the high bit of Word64. These operations
-use scalar lane arithmetic; no SIMD-division speedup is claimed. Native defined
+use ordinary compiled scalar-lane loops behind typed residual calls, avoiding
+forced expansion of 64 divisions into one oversized guest target; no
+SIMD-division speedup is claimed. Native defined
 inputs exclude zero divisors and signed minimum divided by minus one. Host-side
 zero-divisor controls remain explicit, including a zero in the last lane.
 
@@ -25,6 +27,8 @@ an independent scalar-lane native GHC oracle, and strict provenance/audits.
 `SimdArithmeticTest` checks its results against a Kotlin BigInteger/bit-lane model,
 then executes the unchanged Core on both backends, including each first installed
 call and target validity. Three shuffle patterns cover both inputs, reversal,
-rotation, and repeated lanes. The existing generated SIMD smoke corpus also
+rotation, and repeated first-left/last-right lanes, including the highest valid
+concatenated index. Literal rejection covers 16-, 32-, and 64-lane tuples.
+The corpus has 138 entries for 78 operations. The existing generated SIMD smoke corpus also
 includes the new operations. Native scalar evidence does not require wide host
 vector hardware and does not claim native wide-vector code execution.

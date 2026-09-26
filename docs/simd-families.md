@@ -20,11 +20,12 @@ Recursive or lifted vector let bindings, sum fields and public host vector
 arguments/results remain outside that contract.
 
 The six wide byte/short shapes (`Int8X32`, `Word8X32`, `Int8X64`, `Word8X64`,
-`Int16X32`, `Word16X32`) add 57 pack, unpack, broadcast, arithmetic, insertion
-and extrema operations. The existing native scalar smoke now observes all 64
+`Int16X32`, `Word16X32`) add 75 pack, unpack, broadcast, arithmetic, insertion,
+extrema and shuffle operations, plus 72 ByteArray/Addr memory operations.
+The existing native scalar smoke now observes all 64
 possible lanes, using separate selector fields for the operation, insertion
 lane and observed lane.
-Wide pack/unpack instructions group their immutable local-slot metadata into
+Pack/unpack instructions with 16 or more lanes group their immutable local-slot metadata into
 one bytecode operand; lane values still use typed primitive reads/writes. This
 avoids exceeding the JVM method-size limit in generated instruction metadata.
 All six shapes also support packed and scalar-offset ByteArray and address
@@ -34,13 +35,15 @@ existing [array](simd-wide-array-memory.md) and
 and full-width storage checks.
 
 The current generator emits typed AST nodes and exact proof checks under
-`build/generated/simd`. It emits no nominal vector carrier classes or arithmetic
-helper facades: each operation uses the appropriate raw Vector API type and
+`build/generated/simd`. It emits no nominal vector carrier classes: each
+operation uses the appropriate raw Vector API type and
 fixed species directly at its primop site. Two marked regions in the existing
 bytecode loader/root contain the corresponding concrete specializations;
 normal builds check these regions without rewriting source files. Pack emits a
 broadcast/withLane construction, unpack reads lanes, and ordinary arithmetic
-returns the raw vector result. Species validation uses the existing vector
+returns the raw vector result. Integer quotient/remainder use shared typed
+scalar-lane helpers because the pinned target has no integer SIMD division.
+Species validation uses the existing vector
 metadata owner. Activation transport stores one raw vector reference; dense
 primitive fields remain the explicit heap-storage boundary.
 

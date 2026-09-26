@@ -2,14 +2,16 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime
 
-import com.oracle.truffle.api.nodes.ExplodeLoop
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import jdk.incubator.vector.*
 
 /** Integer SIMD has no division instruction on the pinned target.
- * Keep lane arithmetic explicit, including unsigned 64-bit division.
+ * Keep lane arithmetic explicit, including unsigned 64-bit division. These
+ * ordinary compiled loops stay residual: exploding 64 divides and vector
+ * reconstructions exceeds the guest compiler's installed-code size limit.
  */
 internal object VectorIntegerDivision {
-    @JvmStatic @ExplodeLoop
+    @JvmStatic @TruffleBoundary
     fun quotByte(left: ByteVector, right: ByteVector, unsigned: Boolean): ByteVector {
         var result = left
         for (lane in 0 until left.length()) {
@@ -20,7 +22,7 @@ internal object VectorIntegerDivision {
         }
         return result
     }
-    @JvmStatic @ExplodeLoop
+    @JvmStatic @TruffleBoundary
     fun remByte(left: ByteVector, right: ByteVector, unsigned: Boolean): ByteVector {
         var result = left
         for (lane in 0 until left.length()) {
@@ -31,7 +33,7 @@ internal object VectorIntegerDivision {
         }
         return result
     }
-    @JvmStatic @ExplodeLoop
+    @JvmStatic @TruffleBoundary
     fun quotShort(left: ShortVector, right: ShortVector, unsigned: Boolean): ShortVector {
         var result = left
         for (lane in 0 until left.length()) {
@@ -42,7 +44,7 @@ internal object VectorIntegerDivision {
         }
         return result
     }
-    @JvmStatic @ExplodeLoop
+    @JvmStatic @TruffleBoundary
     fun remShort(left: ShortVector, right: ShortVector, unsigned: Boolean): ShortVector {
         var result = left
         for (lane in 0 until left.length()) {
@@ -53,7 +55,7 @@ internal object VectorIntegerDivision {
         }
         return result
     }
-    @JvmStatic @ExplodeLoop
+    @JvmStatic @TruffleBoundary
     fun quotInt(left: IntVector, right: IntVector, unsigned: Boolean): IntVector {
         var result = left
         for (lane in 0 until left.length()) {
@@ -64,7 +66,7 @@ internal object VectorIntegerDivision {
         }
         return result
     }
-    @JvmStatic @ExplodeLoop
+    @JvmStatic @TruffleBoundary
     fun remInt(left: IntVector, right: IntVector, unsigned: Boolean): IntVector {
         var result = left
         for (lane in 0 until left.length()) {
@@ -75,7 +77,7 @@ internal object VectorIntegerDivision {
         }
         return result
     }
-    @JvmStatic @ExplodeLoop
+    @JvmStatic @TruffleBoundary
     fun quotLong(left: LongVector, right: LongVector, unsigned: Boolean): LongVector {
         var result = left
         for (lane in 0 until left.length()) {
@@ -86,7 +88,7 @@ internal object VectorIntegerDivision {
         }
         return result
     }
-    @JvmStatic @ExplodeLoop
+    @JvmStatic @TruffleBoundary
     fun remLong(left: LongVector, right: LongVector, unsigned: Boolean): LongVector {
         var result = left
         for (lane in 0 until left.length()) {
