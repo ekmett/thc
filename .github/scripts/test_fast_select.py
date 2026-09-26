@@ -111,6 +111,88 @@ class FastSelectionTest(unittest.TestCase):
         self.assertRegex(result["policySha256"], "^[0-9a-f]{64}$")
         self.assertEqual(result, self.plan())
 
+
+    def full_core_addition(self):
+        before = ("cabal-version: 3.0\nname: example\nversion: 0.1\n"
+                  "extra-source-files:\n  README.md\n"
+                  "flag full-core-tests\n  description: Full Core regressions\n"
+                  "  default: False\n  manual: True\n"
+                  "executable thc\n  main-is: Main.hs\n  build-depends: base\n"
+                  "test-suite old-test\n  main-is: Old.hs\n")
+        self.write("thc.cabal", before)
+        self.write("test/haskell-driver/TestSupport.hs", "module TestSupport where\n")
+        base = self.commit()
+        prefix = "test/fixtures/run-added/"
+        fixture_paths = [prefix + path for path in ("cabal.project", "run-added.cabal", "app/Main.hs")]
+        harness = "test/haskell-driver/AddedFullCore.hs"
+        for path in fixture_paths + [harness]:
+            self.write(path, "new test input\n")
+        after = before.replace("  README.md\n", "  README.md\n" +
+                               "".join("  " + path + "\n" for path in fixture_paths))
+        after += "\ntest-suite added-full-core\n" + select.FULL_CORE_TEST_BODY.format(main="AddedFullCore.hs") + "\n"
+        self.write("thc.cabal", after)
+        return base, before, after
+
+    def test_added_disabled_full_core_harness_is_compiled_with_smoke(self):
+        base, _, _ = self.full_core_addition()
+        self.commit()
+        result = self.plan(base=base)
+        self.assertEqual("narrow", result["mode"], result["reasons"])
+        self.assertEqual(["example.SmokeTest"], result["junit"]["patterns"])
+        self.assertEqual([], result["haskell"]["suites"])
+        self.assertEqual(["test:added-full-core"], result["haskell"]["compileTargets"])
+        self.assertFalse(result["polyglot"]["required"])
+
+    def test_full_core_exception_rejects_active_unknown_and_production_changes(self):
+        base, _, after = self.full_core_addition()
+        changes = {
+            "active default": after.replace("  default: False", "  default: True"),
+            "automatic flag": after.replace("  manual: True", "  manual: False"),
+            "active stanza": after.replace("if !flag(full-core-tests)", "if flag(full-core-tests)"),
+            "unknown condition": after.replace("if !flag(full-core-tests)", "if os(linux)"),
+            "overridden buildable": after.replace("  main-is: AddedFullCore.hs", "  buildable: True\n  main-is: AddedFullCore.hs"),
+            "production source dir": after.replace("hs-source-dirs: test/haskell-driver", "hs-source-dirs: src"),
+            "production module": after.replace("other-modules: TestSupport", "other-modules: THC.Driver.Project"),
+            "production import": after.replace("test-suite added-full-core", "test-suite added-full-core\n  import: production"),
+            "production dependency": after.replace("  build-depends: base\n", "  build-depends: base, containers\n"),
+            "changed test dependency": after.replace("    aeson >= 2.3 && < 2.4,", "    thc,"),
+            "changed old stanza": after.replace("  main-is: Old.hs", "  main-is: Changed.hs"),
+            "removed old stanza": after.replace("test-suite old-test\n  main-is: Old.hs\n", ""),
+        }
+        for name, text in changes.items():
+            with self.subTest(name=name):
+                self.write("thc.cabal", text)
+                self.commit()
+                result = self.plan(base=base)
+                self.assertEqual("full", result["mode"])
+                self.assertEqual([], result["haskell"]["compileTargets"])
+                self.assertTrue(result["polyglot"]["required"])
+
+    def test_full_core_exception_does_not_hide_unowned_or_shared_inputs(self):
+        base, _, _ = self.full_core_addition()
+        self.write("test/haskell-driver/TestSupport.hs", "module TestSupport where\nchanged = True\n")
+        self.commit()
+        result = self.plan(base=base)
+        self.assertEqual("full", result["mode"])
+        self.assertIn("test/haskell-driver/TestSupport.hs", [r.get("path") for r in result["reasons"]])
+        self.assertEqual(["test:added-full-core"], result["haskell"]["compileTargets"])
+
+    def test_full_core_exception_requires_new_exact_fixture_ownership(self):
+        base, before, after = self.full_core_addition()
+        statuses = {"thc.cabal": "M", "test/haskell-driver/AddedFullCore.hs": "A",
+                    **{f"test/fixtures/run-added/{name}": "A" for name in
+                       ("cabal.project", "run-added.cabal", "app/Main.hs")}}
+        self.assertIsNotNone(select.additive_full_core_tests(before, after, statuses, []))
+        self.assertIsNone(select.additive_full_core_tests(before, after, statuses,
+                          ["test/fixtures/run-added/existing.hs"]))
+        for path in statuses.keys() - {"thc.cabal"}:
+            with self.subTest(path=path):
+                self.assertIsNone(select.additive_full_core_tests(before, after, statuses | {path: "M"}, []))
+        self.write("test/fixtures/run-added/unowned.hs", "unlisted input\n")
+        self.commit()
+        self.assertEqual("full", self.plan(base=base)["mode"])
+
+
     def test_driver_source_selects_cabal_suite(self):
         self.policy["owners"]["src/THC/Driver/Project.hs"] = dict(
             junit=[], python=[], haskell=["driver-tests"])

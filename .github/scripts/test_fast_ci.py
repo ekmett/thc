@@ -47,6 +47,12 @@ class FastRunnerTest(unittest.TestCase):
         self.assertEqual(result["tests"], 1)
         self.assertEqual(result["cases"], [["example.Test", "works"]])
 
+    def test_haskell_compile_targets_cannot_select_production_or_inject_options(self):
+        self.assertEqual([], ci.haskell_compile_targets(self.selection()))
+        for targets in (["exe:thc"], ["--enable-tests"], ["test:driver-tests"], ["test:x-full-core"] * 2, "test:x-full-core"):
+            with self.subTest(targets=targets), self.assertRaisesRegex(RuntimeError, "Haskell"):
+                ci.haskell_compile_targets(self.selection() | {"haskell": {"compileTargets": targets}})
+
     def test_missing_xml_rejected(self):
         with self.assertRaisesRegex(RuntimeError, "No fresh"):
             ci.validate_xml(self.root, ["example.Test"])
@@ -269,6 +275,33 @@ class FastRunnerTest(unittest.TestCase):
                          ["driver-plugin", "driver-launcher", "driver-tests"])
         self.assertEqual(["cabal", "test", "driver-tests", "-fdevelopment", "--test-show-details=direct"],
                          commands.call_args_list[4].args[1])
+
+
+    def test_opt_in_harness_compiles_without_executing_and_retains_jvm_smoke(self):
+        selection = self.selection() | {"reasons": [], "python": {"commands": []},
+                                        "haskell": {"suites": [], "count": 0,
+                                                    "compileTargets": ["test:added-full-core"]}}
+        identity_path = self.root / "identity.json"
+        identity_path.write_text(json.dumps({"platform": "linux", "toolchain": {}}))
+        for failed in (False, True):
+            with self.subTest(failed=failed), patch.object(ci, "git", return_value="a" * 40):
+                recorder = ci.Recorder(self.root, self.root / ("failed" if failed else "passed"))
+                outputs = [(0, json.dumps(selection)), (0, ""),
+                           RuntimeError("compile failed") if failed else (0, "")]
+                with patch.object(recorder, "command", side_effect=outputs) as commands, \
+                        patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
+                        patch.object(ci, "run_mode", return_value={"cases": []}) as smoke:
+                    if failed:
+                        with self.assertRaisesRegex(RuntimeError, "haskell-compile"):
+                            ci.execute(recorder, "HEAD", "HEAD", identity_path)
+                    else:
+                        ci.execute(recorder, "HEAD", "HEAD", identity_path)
+                self.assertEqual(commands.call_args_list[2].args,
+                                 ("haskell-compile", ["cabal", "build", "test:added-full-core",
+                                                       "-fdevelopment", "-ffull-core-tests"]))
+                self.assertEqual([call.args[2] for call in smoke.call_args_list], ["default", "dense"])
+                self.assertEqual(recorder.data["passed"], not failed)
+
 
     def test_required_polyglot_lane_runs_real_demo_after_normal_tests(self):
         selection = self.selection() | {"reasons": [], "python": {"commands": []},
