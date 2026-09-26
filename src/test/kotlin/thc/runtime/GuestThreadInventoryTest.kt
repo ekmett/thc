@@ -13,6 +13,66 @@ import java.util.concurrent.atomic.AtomicReference
 class GuestThreadInventoryTest {
     private fun registry() = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }) { }
 
+    @Test fun logicalCountIsContextLocalAndShrinkDoesNotRewriteAffinityClaims() {
+        val affinity = CpuAffinity(null, 8)
+        val first = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }, affinity) { }
+        val second = registry()
+        val originalSecond = second.capabilityCount()
+        first.enterCurrent(capability = 7)
+        try {
+            val id = first.currentIdentity()
+            id.affinityApplied = true // A prior successful native request is historical evidence.
+            assertEquals(7L, id.capability)
+            first.setCapabilityCount(3)
+            assertEquals(3L, first.capabilityCount())
+            assertEquals(1L, id.capability)
+            assertTrue(id.capabilityLocked); assertTrue(id.affinityApplied)
+            assertEquals(8, affinity.count)
+            assertEquals(originalSecond, second.capabilityCount())
+            first.setCapabilityCount(0xffff_ffffL)
+            assertEquals(0xffff_ffffL, first.capabilityCount())
+            for (invalid in listOf(0L, -1L, Long.MIN_VALUE, 0x1_0000_0000L, Long.MAX_VALUE)) {
+                assertThrows(RuntimeFault::class.java) { first.setCapabilityCount(invalid) }
+                assertEquals(0xffff_ffffL, first.capabilityCount())
+            }
+        } finally { first.leaveCurrent(); first.close(); second.close() }
+        assertThrows(RuntimeFault::class.java) { first.setCapabilityCount(1) }
+        assertThrows(RuntimeFault::class.java) { first.capabilityCount() }
+    }
+
+    @Test fun concurrentCountUpdatesAndNewThreadAssignmentsRemainInTheSameRegistry() {
+        val threads = registry()
+        val failure = AtomicReference<Throwable>()
+        val start = CountDownLatch(1)
+        val workers = (1L..4L).map { count -> Thread {
+            try {
+                assertTrue(start.await(5, TimeUnit.SECONDS))
+                repeat(100) {
+                    threads.setCapabilityCount(count)
+                    assertTrue(threads.capabilityCount() in 1L..4L)
+                }
+                threads.enterCurrent(capability = -1)
+                try { assertTrue(threads.currentIdentity().capability in 0L..3L) }
+                finally { threads.leaveCurrent() }
+            } catch (error: Throwable) { failure.compareAndSet(null, error) }
+        } }
+        try {
+            workers.forEach(Thread::start); start.countDown()
+            workers.forEach { it.join(5000); assertFalse(it.isAlive) }
+            failure.get()?.let { throw AssertionError("capability worker failed", it) }
+            threads.setCapabilityCount(2)
+            val observed = AtomicReference<GuestThreadId>()
+            val child = Thread {
+                threads.enterCurrent(capability = 7)
+                try { observed.set(threads.currentIdentity()) } finally { threads.leaveCurrent() }
+            }
+            child.start(); child.join(5000); assertFalse(child.isAlive)
+            assertEquals(1L, observed.get().capability)
+            threads.setCapabilityCount(1)
+            assertEquals(0L, observed.get().capability, "Retained finished ThreadId# is normalized too")
+        } finally { threads.close() }
+    }
+
     @Test fun currentEntryIsRequiredAndContextsNeverEnumerateHostThreadsOrEachOther() {
         val first = registry()
         val second = registry()

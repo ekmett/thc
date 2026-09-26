@@ -52,6 +52,8 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     O_WRONLY("__hscore_o_wronly", "ccall", "unsafe", listOf(null), "Int32Rep"),
     F_GETFL("__hscore_f_getfl", "ccall", "unsafe", listOf(null), "Int32Rep"),
     F_SETFL("__hscore_f_setfl", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    F_SETFD("__hscore_f_setfd", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    FD_CLOEXEC("__hscore_fd_cloexec", "ccall", "unsafe", listOf(null), "Int64Rep"),
     FCNTL_READ("ghczuwrapperZC17ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCfcntl", "capi", "unsafe",
         listOf("Int32Rep", "Int32Rep", null), "Int32Rep"),
     FCNTL_WRITE("ghczuwrapperZC16ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCfcntl", "capi", "unsafe",
@@ -99,7 +101,7 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     // synthetic switch table even when this enum receiver is constant.
     val flagConstant: Boolean get() = this == O_APPEND || this == O_CREAT || this == O_NOCTTY ||
         this == O_NONBLOCK || this == O_RDONLY || this == O_RDWR || this == O_WRONLY ||
-        this == F_GETFL || this == F_SETFL
+        this == F_GETFL || this == F_SETFL || this == F_SETFD || this == FD_CLOEXEC
     val fcntl: Boolean get() = this == FCNTL_READ || this == FCNTL_WRITE
     val seekConstant: Boolean get() = this == SEEK_SET || this == SEEK_CUR || this == SEEK_END
     val stat: Boolean get() = this == SIZEOF_STAT || statField ||

@@ -773,6 +773,11 @@ class Audit:
                                       'rintFloat', 'rintDouble')
                         or symbol in ('getRTSStatsEnabled', 'getRTSStats', 'performGC', 'performMajorGC',
                                       'performBlockingMajorGC', 'getMonotonicNSec')
+                        or symbol in ('getNumberOfProcessors', 'setNumCapabilities', '__hscore_sizeof_siginfo_t',
+                                      '__hscore_f_setfd', '__hscore_fd_cloexec',
+                                      'getOrSetSystemEventThreadIOManagerThreadStore',
+                                      'getOrSetSystemTimerThreadEventManagerStore',
+                                      'getOrSetSystemTimerThreadIOManagerThreadStore')
                         or symbol in ('getOrSetSystemEventThreadEventManagerStore',
                                       'getOrSetGHCConcSignalSignalHandlerStore',
                                       'getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',

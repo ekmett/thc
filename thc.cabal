@@ -25,6 +25,8 @@ extra-source-files:
   test/fixtures/run-wcwidth/src/Width.hs
   test/fixtures/run-wcwidth/app/Main.hs
   compiler/test-fixtures/GcStatsAudit.hs
+  compiler/test-fixtures/RtsEventAudit.hs
+  docs/rts-event-capabilities.md
   docs/gc-stats-clock.md
   compiler/test-fixtures/RubbishLiteralAudit.hs
   compiler/test-fixtures/OriginalDigestNative.hs
@@ -808,6 +810,7 @@ executable thc-fixtures
     OriginalRtsLocksFixtures
     CompilerRtsFixtures
     GcStatsFixtures
+    RtsEventFixtures
     FloatForeignFixtures
     GhcApiFixtures
     RtsDiagnosticFixtures

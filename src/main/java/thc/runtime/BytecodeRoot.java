@@ -3413,6 +3413,23 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             GcForeignOp.STATS.invoke();
         }
     }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = RtsEventForeignOp.class, name = "operation")
+    public static final class RtsEventQuery {
+        @Specialization public static void query(VirtualFrame frame, LocalAccessor destination,
+                RtsEventForeignOp operation, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, operation.invoke(node, 0L));
+        }
+    }
+    @Operation
+    public static final class SetNumCapabilities {
+        @Specialization public static void set(long count, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            RtsEventForeignOp.CAPABILITIES.invoke(node, count);
+        }
+    }
     /** Original thread queries. Neither capability support nor accounting enforces a limit. */
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")

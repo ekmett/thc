@@ -8,6 +8,9 @@ import com.oracle.truffle.api.frame.VirtualFrame
 /** Selected GHC 9.14.1 RTS slots holding context-owned shared-CAF StablePtrs. */
 internal enum class SharedCAFStore(val symbol: String, val unit: String = "ghc-internal") {
     EVENT_MANAGER("getOrSetSystemEventThreadEventManagerStore"),
+    EVENT_MANAGER_THREAD("getOrSetSystemEventThreadIOManagerThreadStore"),
+    TIMER_MANAGER("getOrSetSystemTimerThreadEventManagerStore"),
+    TIMER_MANAGER_THREAD("getOrSetSystemTimerThreadIOManagerThreadStore"),
     SIGNAL_HANDLER("getOrSetGHCConcSignalSignalHandlerStore"),
     FAST_STRING("getOrSetLibHSghcFastStringTable", "ghc-9.14.1-inplace"),
     PPR_DEBUG("getOrSetLibHSghcGlobalHasPprDebug", "ghc-9.14.1-inplace"),

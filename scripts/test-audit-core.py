@@ -2017,7 +2017,15 @@ class OriginalGcStatsDeclarationTest(unittest.TestCase):
                 ('performGC', (None,), None, 'safe'),
                 ('performMajorGC', (None,), None, 'safe'),
                 ('performBlockingMajorGC', (None,), None, 'safe'),
-                ('getMonotonicNSec', (None,), 'Word64Rep', 'unsafe')):
+                ('getMonotonicNSec', (None,), 'Word64Rep', 'unsafe'),
+                ('getNumberOfProcessors', (None,), 'Word32Rep', 'unsafe'),
+                ('setNumCapabilities', ('Word32Rep', None), None, 'safe'),
+                ('__hscore_sizeof_siginfo_t', (None,), 'Word64Rep', 'safe'),
+                ('__hscore_f_setfd', (None,), 'Int32Rep', 'unsafe'),
+                ('__hscore_fd_cloexec', (None,), 'Int64Rep', 'unsafe'),
+                ('getOrSetSystemEventThreadIOManagerThreadStore', ('AddrRep', None), 'AddrRep', 'unsafe'),
+                ('getOrSetSystemTimerThreadEventManagerStore', ('AddrRep', None), 'AddrRep', 'unsafe'),
+                ('getOrSetSystemTimerThreadIOManagerThreadStore', ('AddrRep', None), 'AddrRep', 'unsafe')):
             declaration = dict(schema=1, target=dict(kind='static', symbol=symbol,
                 unit='ghc-internal', isFunction=True), convention='ccall', safety=safety,
                 arity=len(arguments), suppliedArity=len(arguments),

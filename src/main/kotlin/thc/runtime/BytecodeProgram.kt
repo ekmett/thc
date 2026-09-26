@@ -1472,6 +1472,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val gcForeign = CoreGcForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val rtsEventForeign = CoreRtsEventForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val allocationCounterForeign = CoreBoundThreadForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"), true)
             val stringRts = CoreStringRtsForeign.validate(foreignMetadata,
@@ -1503,7 +1505,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (gcForeign == null && memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (rtsEventForeign == null && gcForeign == null && memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (runtimeService != null) {
@@ -1808,6 +1810,27 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (operands.size > 2) operands[1].emit(e) else e.builder.emitLoadConstant(Unit)
                     operands.last().emit(e)
                     e.builder.endRtsDiagnostic()
+                }
+            } else if (rtsEventForeign != null) {
+                CoreRtsEventForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreRtsEventForeign.validateOperand(rtsEventForeign, index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    if (rtsEventForeign.result != null) {
+                        e.builder.beginRtsEventQuery(destination.single(), rtsEventForeign)
+                        operands.single().emit(e)
+                        e.builder.endRtsEventQuery()
+                    } else {
+                        check(destination.isEmpty())
+                        e.builder.beginSetNumCapabilities()
+                        operands.forEach { it.emit(e) }
+                        e.builder.endSetNumCapabilities()
+                    }
+                    if (enableAsync && rtsEventForeign.safety == "safe") emitAsyncPoll(e)
                 }
             } else if (gcForeign != null) {
                 CoreGcForeign.validateHead(fn, defined)

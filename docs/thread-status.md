@@ -17,12 +17,14 @@ MVar. Terminal overrides are 16 for normal completion and 17 for an uncaught
 guest exception. A runtime implementation failure remains a diagnostic error;
 it is not relabeled as a Haskell exception.
 
-Each context snapshots the available CPU capacity before guest pinning. Ordinary
-carriers share zero-based capability indices round-robin; `forkOn#` selects an
-index modulo that count and requests native CPU affinity on a best-effort basis.
+Each context snapshots available CPU capacity before guest pinning and initializes
+its separate logical capability count from it. Ordinary carriers share logical
+indices round-robin; `forkOn#` selects modulo that count and maps to eligible CPUs
+for a best-effort affinity request. Original `setNumCapabilities` can change the
+logical count; shrinking normalizes retained indices without repinning carriers.
 The locked result records that request, not OS acceptance. More guest threads do
 not increase the capability count. Weak carrier references let retained thread
-identities preserve their assigned capability without retaining dead Java threads.
+identities preserve their observable capability without retaining dead Java threads.
 See [scheduling and affinity](thread-scheduling.md) for platform support and
 `fork#`'s inherited-affinity reset. Masking, Java-thread binding, capability
 locking, and physical CPU affinity remain separate concepts.
