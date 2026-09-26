@@ -6,6 +6,8 @@ import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.frame.FrameDescriptor
 import com.oracle.truffle.api.frame.FrameSlotKind
+import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.nodes.Node
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -21,10 +23,10 @@ import java.security.MessageDigest
 class DelimitedContinuationsTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val entries = listOf("promptPure", "abortSuffix", "resumeTwice", "nestedPrompts", "sameTagNearest",
-        "capturedCatch", "capturedMask", "escapedResume", "ambientMask")
+        "capturedCatch", "capturedMask", "escapedResume", "ambientMask", "resumedTail", "resumedJoin")
     private val calls = mapOf("promptPure" to 3L, "abortSuffix" to 4L, "resumeTwice" to 6L,
         "nestedPrompts" to 7L, "sameTagNearest" to 5L, "capturedCatch" to 7L, "capturedMask" to 7L,
-        "escapedResume" to 6L, "ambientMask" to 7L)
+        "escapedResume" to 6L, "ambientMask" to 7L, "resumedTail" to 6L, "resumedJoin" to 5L)
 
     private fun provenance(): List<Long> {
         val manifest = Json.parse(File(root, "build/delimited-continuations/manifest.json").readText()) as Map<*, *>
@@ -49,6 +51,7 @@ class DelimitedContinuationsTest {
         "capturedMask" -> n + 21
         "escapedResume" -> 2 * n + 14
         "ambientMask" -> n
+        "resumedTail", "resumedJoin" -> n + 117
         else -> error(entry)
     }
 
@@ -66,7 +69,17 @@ class DelimitedContinuationsTest {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                     val linked = CoreModules.reachable(module, entry)
                     val source = ArrayCoreEvidence(module, entry)
-                    assertEquals(calls.getValue(entry), source.bindings.sumOf { source.guestLambdas(it["expr"]).size }.toLong(),
+                    val nodes = source.bindings.flatMap { source.nodes(it["expr"]) }
+                    val joins = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<List<*>, Boolean>())
+                    for (binding in nodes.filter { it.firstOrNull() == "let" }.flatMap { it[2] as List<*> }) {
+                        binding as Map<*, *>
+                        val arity = binding["joinValueArity"] as? Number ?: continue
+                        val rhs = binding["expr"] as List<*>
+                        assertEquals("lam", rhs[0])
+                        assertEquals(arity.toInt(), (rhs[1] as List<*>).size)
+                        joins.add(rhs)
+                    }
+                    assertEquals(calls.getValue(entry), nodes.count { it.firstOrNull() == "lam" && it !in joins }.toLong(),
                         "Each fixture executes every reachable source lambda once; resumes do not restart them")
                     val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
                     val function = context.asValue(EntryValue(program, entry, 1))
@@ -155,6 +168,46 @@ class DelimitedContinuationsTest {
             assertThrows(RuntimeFault::class.java) {
                 DelimitedControl.validate(name, listOf(tag, closure, state), listOf(false, true, false), tuple(tag, state))
             }
+        }
+    }
+
+    @Test fun closedContextPromptAndContinuationCannotEnterAnotherContext() {
+        lateinit var foreignTag: PromptTag
+        lateinit var foreignStack: DelimitedStack
+        Context.newBuilder("thc").option("engine.WarnInterpreterOnly", "false").build().use { first ->
+            first.initialize("thc"); first.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                foreignTag = PromptTag(Language.currentState(null))
+                assertNotSame(foreignTag, PromptTag(Language.currentState(null)))
+                val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
+                val value = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
+                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, primReps = value.primReps,
+                    components = listOf(state, value)), language)
+                foreignStack = DelimitedStack(DelimitedCut(foreignTag, null, shape,
+                    MaskingState.UNMASKED, object : Node() {}), shape)
+            } finally { first.leave() }
+        }
+        Context.newBuilder("thc").option("engine.WarnInterpreterOnly", "false").build().use { second ->
+            second.initialize("thc"); second.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val local = PromptTag(Language.currentState(null))
+                val probe = object : GuestRoot(language, FrameDescriptor.newBuilder().build()) {
+                    @Child private var site = DelimitedActionSite(language, Metrics(false))
+                    override fun bloom(frame: VirtualFrame): Long = 0L
+                    override fun execute(frame: VirtualFrame): Any? = when (frame.arguments[0]) {
+                        0 -> DelimitedControl.tag(this, local)
+                        1 -> DelimitedControl.tag(this, foreignTag)
+                        2 -> foreignStack.resume(site, frame, null)
+                        else -> DelimitedControl.tag(this, 0L)
+                    }
+                }.callTarget
+                assertSame(local, probe.call(0))
+                for (operation in 1..3) assertThrows(RuntimeFault::class.java) { probe.call(operation) }
+                ThreadInventoryCoreEvidence.released(language)
+                assertEquals(MaskingState.UNMASKED, Language.currentState(null).maskingState.get())
+            } finally { second.leave() }
         }
     }
 }

@@ -1494,13 +1494,15 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                             tupleSlots: IntArray = intArrayOf(),
                             inputLayout: ArgumentLayout? = null,
                             internal val enableAsync: Boolean = false,
-                            @field:CompilationFinal(dimensions = 2) private val environmentVectorSlots: Array<IntArray?> = emptyArray()) : GuestRoot(language, descriptor) {
+                            @field:CompilationFinal(dimensions = 2) private val environmentVectorSlots: Array<IntArray?> = emptyArray(),
+                            private val enableDelimited: Boolean = false) : GuestRoot(language, descriptor) {
     init { configureEntry(entryStrict, captureLayout != null); configureInput(inputLayout); configureTupleResult(tuple) }
     @field:CompilationFinal(dimensions = 1)
     private val argumentReferences = argumentProofs.map { it.referenceCarrier() }.toTypedArray()
     @field:CompilationFinal private var hasSelfTail = false
     private val tailCallProfile = BranchProfile.create()
     @Child private var loop: LoopNode = Truffle.getRuntime().createLoopNode(SelfRepeater(FunctionBody(body, metrics, resultProof, tuple, tupleSlots), metrics))
+    @Child private var delimitedHandoff: HandoffCaller? = null
     override fun bloom(frame: VirtualFrame): Long = frame.getLong(FrameLayout.BLOOM_FILTER)
     @ExplodeLoop fun buildFrame(arguments: Array<Any?>, frame: VirtualFrame) {
         val offset = if (captureLayout == null) 1 else 2
@@ -1638,7 +1640,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             frame.setLong(FrameLayout.BLOOM_FILTER, (frame.arguments[0] as? Long ?: fault("Invalid bloom argument")) or mask)
             buildFrame(frame.arguments, frame)
         }
-        return try { executeBody(frame) }
+        return try { executeCapturableBody(frame) }
         catch (cut: AstCapture) {
             // Continuations own a real frame only on the interrupted slow path.
             // Keep its escape out of ordinary compiled calls and foreign-call edges.
@@ -1646,6 +1648,44 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             cut.freeze(this, frame.materialize())
         }
     }
+
+    private fun executeCapturableBody(frame: VirtualFrame): Any? {
+        // This is fixed for the entire linked program, including its callees.
+        // Do not expand cold frame-capture handlers in ordinary scalar graphs.
+        if (!enableDelimited) return executeBody(frame)
+        return try { executeBody(frame) }
+        catch (cut: DelimitedCut) { throw cut.append(frame, DelimitedRootStep(this)) }
+    }
+
+    internal fun resumeDelimited(frame: VirtualFrame, transfer: ControlFlowException, site: DelimitedActionSite): Any? {
+        if (transfer is TailCall && !isSelf(transfer.target)) return site.tail(transfer)
+        if (transfer is HandoffTailCall && !isSelf(transfer.target)) {
+            val entry = handoff ?: fault("Missing saved handoff entry")
+            val caller = delimitedHandoff ?: installDelimitedHandoff(entry)
+            return caller.trampoline(entry.state(), transfer)
+        }
+        when (transfer) {
+            is TailCall -> restoreTail(frame, transfer)
+            is HandoffTailCall -> restoreHandoff(frame, transfer.arguments, false)
+            AstSelfCall -> Unit // The self application already performed parallel local moves.
+            else -> throw transfer
+        }
+        if (metrics.enabled) metrics.incrementSelfTailReentries()
+        // The captured caller's return register is no longer live. A resumed
+        // suffix returns an owned value to its saved caller, not a stale loan.
+        handoff?.initializeOrdinary(frame)
+        return try {
+            executeBody(frame)
+        } catch (cut: DelimitedCut) { throw cut.append(frame, DelimitedRootStep(this)) }
+        catch (tail: TailCall) { site.tail(tail) }
+        catch (tail: HandoffTailCall) {
+            val entry = handoff ?: fault("Missing saved handoff entry")
+            (delimitedHandoff ?: installDelimitedHandoff(entry)).trampoline(entry.state(), tail)
+        }
+    }
+
+    @CompilerDirectives.TruffleBoundary private fun installDelimitedHandoff(entry: HandoffEntry): HandoffCaller =
+        delimitedHandoff ?: insert(HandoffCaller(callTarget, entry, metrics)).also { delimitedHandoff = it }
 
     private fun executeBody(frame: VirtualFrame): Any? {
         // Non-looping roots retain entry argument facts. Once self recursion
@@ -1938,7 +1978,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val tupleSlots = IntArray(tuple?.width ?: 0) { scope.layout.bind("<typed return $it>") }
         val root = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
             argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics, argumentProofs.toTypedArray(), resultProof,
-            rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync, environmentVectorSlots)
+            rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync, environmentVectorSlots, delimited)
         if (language is thc.Language) root.configureTypedInput(TypedInputLayout.create(language, inputLayout, captures != null))
         if (body is Case && inputLayout == null) root.configureLeadingCaseReturn(LeadingCaseReturn.discover(args, expression,
             resultProof, root.entryArgumentOffset, free.intersect(argumentIds), captures != null,
@@ -2906,7 +2946,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val tuple = if (result.isTypedTransport) TupleShape(result, language as thc.Language) else null
         val tupleSlots = IntArray(tuple?.width ?: 0) { local.layout.bind("<join tuple result $it>") }
         return LocalJoinRegion(identity, local.layout.bind("<join selector>"), local.layout.bind("<join result>"),
-            (listOf(entry) + bodies).toTypedArray(), result, recursive, tuple, tupleSlots)
+            (listOf(entry) + bodies).toTypedArray(), result, recursive, tuple, tupleSlots, delimited)
     }
     private fun dataLayout(id: String): DataLayout = dataLayouts.getOrPut(id) {
         val info = constructors[id] ?: throw RuntimeFault("Missing constructor metadata $id")

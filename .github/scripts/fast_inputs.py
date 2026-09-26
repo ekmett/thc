@@ -44,7 +44,7 @@ show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls s
 THREAD_INVENTORY_ENTRIES = ("selfInventory", "boundQuery", "snapshotSize", "forkSnapshot",
                             "lazyFork", "forkMasks", "selfKilledStatus", "parkedFork")
 DELIMITED_ENTRIES = ("promptPure", "abortSuffix", "resumeTwice", "nestedPrompts", "sameTagNearest",
-                     "capturedCatch", "capturedMask", "escapedResume", "ambientMask")
+                     "capturedCatch", "capturedMask", "escapedResume", "ambientMask", "resumedTail", "resumedJoin")
 DELIMITED_COMMANDS = ("ghc-version", "native-build", "native-run",
                       *(f"{stage}-export" for stage in ("pre", "post")),
                       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in DELIMITED_ENTRIES))
@@ -871,7 +871,7 @@ def delimited_artifact_hashes(manifest):
             "Invalid delimited-continuation manifest")
     require(manifest.get("entries") == list(DELIMITED_ENTRIES) and manifest.get("stages") == ["pre", "post"] and
             manifest.get("arguments") == [-2, 0, 7] and isinstance(manifest.get("native"), list) and
-            len(manifest["native"]) == 27 and all(type(value) is int for value in manifest["native"]),
+            len(manifest["native"]) == 33 and all(type(value) is int for value in manifest["native"]),
             "Invalid delimited-continuation provenance")
     artifacts = manifest.get("artifactHashes")
     require(isinstance(artifacts, dict) and set(artifacts) == DELIMITED_OUTPUTS - {"build/delimited-continuations/manifest.json"},
