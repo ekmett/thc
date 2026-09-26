@@ -33,9 +33,9 @@ internal enum class VectorMemoryFamily {
 }
 
 /** These are local intrinsics, not vector function or aggregate ABIs. */
-internal enum class VectorByteArrayOp(val primitive: String, val scalarOffset: Boolean,
+internal enum class VectorMemoryOp(val primitive: String, val scalarOffset: Boolean,
     val family: VectorMemoryFamily = VectorMemoryFamily.INT32, val vectorBytes: Int = 16,
-    private val wideProof: CoreRepresentation? = null) {
+    private val wideProof: CoreRepresentation? = null, val isAddress: Boolean = false) {
     INDEX_INT16X16("indexInt16X16Array#", false, VectorMemoryFamily.INT16, 32, GeneratedVectors.proofInt16X16),
     INDEX_INT16X16_SCALAR("indexInt16ArrayAsInt16X16#", true, VectorMemoryFamily.INT16, 32, GeneratedVectors.proofInt16X16),
     READ_INT16X16("readInt16X16Array#", false, VectorMemoryFamily.INT16, 32, GeneratedVectors.proofInt16X16),
@@ -120,6 +120,42 @@ internal enum class VectorByteArrayOp(val primitive: String, val scalarOffset: B
     READ_DOUBLEX8_SCALAR("readDoubleArrayAsDoubleX8#", true, VectorMemoryFamily.DOUBLE64, 64, GeneratedVectors.proofDoubleX8),
     WRITE_DOUBLEX8("writeDoubleX8Array#", false, VectorMemoryFamily.DOUBLE64, 64, GeneratedVectors.proofDoubleX8),
     WRITE_DOUBLEX8_SCALAR("writeDoubleArrayAsDoubleX8#", true, VectorMemoryFamily.DOUBLE64, 64, GeneratedVectors.proofDoubleX8),
+    INDEX_INT8_ADDRESS("indexInt8X16OffAddr#", false, VectorMemoryFamily.INT8, isAddress = true),
+    INDEX_INT8_ADDRESS_SCALAR("indexInt8OffAddrAsInt8X16#", true, VectorMemoryFamily.INT8, isAddress = true),
+    READ_INT8_ADDRESS("readInt8X16OffAddr#", false, VectorMemoryFamily.INT8, isAddress = true),
+    READ_INT8_ADDRESS_SCALAR("readInt8OffAddrAsInt8X16#", true, VectorMemoryFamily.INT8, isAddress = true),
+    WRITE_INT8_ADDRESS("writeInt8X16OffAddr#", false, VectorMemoryFamily.INT8, isAddress = true),
+    WRITE_INT8_ADDRESS_SCALAR("writeInt8OffAddrAsInt8X16#", true, VectorMemoryFamily.INT8, isAddress = true),
+    INDEX_WORD8_ADDRESS("indexWord8X16OffAddr#", false, VectorMemoryFamily.WORD8, isAddress = true),
+    INDEX_WORD8_ADDRESS_SCALAR("indexWord8OffAddrAsWord8X16#", true, VectorMemoryFamily.WORD8, isAddress = true),
+    READ_WORD8_ADDRESS("readWord8X16OffAddr#", false, VectorMemoryFamily.WORD8, isAddress = true),
+    READ_WORD8_ADDRESS_SCALAR("readWord8OffAddrAsWord8X16#", true, VectorMemoryFamily.WORD8, isAddress = true),
+    WRITE_WORD8_ADDRESS("writeWord8X16OffAddr#", false, VectorMemoryFamily.WORD8, isAddress = true),
+    WRITE_WORD8_ADDRESS_SCALAR("writeWord8OffAddrAsWord8X16#", true, VectorMemoryFamily.WORD8, isAddress = true),
+    INDEX_INT16_ADDRESS("indexInt16X8OffAddr#", false, VectorMemoryFamily.INT16, isAddress = true),
+    INDEX_INT16_ADDRESS_SCALAR("indexInt16OffAddrAsInt16X8#", true, VectorMemoryFamily.INT16, isAddress = true),
+    READ_INT16_ADDRESS("readInt16X8OffAddr#", false, VectorMemoryFamily.INT16, isAddress = true),
+    READ_INT16_ADDRESS_SCALAR("readInt16OffAddrAsInt16X8#", true, VectorMemoryFamily.INT16, isAddress = true),
+    WRITE_INT16_ADDRESS("writeInt16X8OffAddr#", false, VectorMemoryFamily.INT16, isAddress = true),
+    WRITE_INT16_ADDRESS_SCALAR("writeInt16OffAddrAsInt16X8#", true, VectorMemoryFamily.INT16, isAddress = true),
+    INDEX_WORD16_ADDRESS("indexWord16X8OffAddr#", false, VectorMemoryFamily.WORD16, isAddress = true),
+    INDEX_WORD16_ADDRESS_SCALAR("indexWord16OffAddrAsWord16X8#", true, VectorMemoryFamily.WORD16, isAddress = true),
+    READ_WORD16_ADDRESS("readWord16X8OffAddr#", false, VectorMemoryFamily.WORD16, isAddress = true),
+    READ_WORD16_ADDRESS_SCALAR("readWord16OffAddrAsWord16X8#", true, VectorMemoryFamily.WORD16, isAddress = true),
+    WRITE_WORD16_ADDRESS("writeWord16X8OffAddr#", false, VectorMemoryFamily.WORD16, isAddress = true),
+    WRITE_WORD16_ADDRESS_SCALAR("writeWord16OffAddrAsWord16X8#", true, VectorMemoryFamily.WORD16, isAddress = true),
+    INDEX_INT64_ADDRESS("indexInt64X2OffAddr#", false, VectorMemoryFamily.INT64, isAddress = true),
+    INDEX_INT64_ADDRESS_SCALAR("indexInt64OffAddrAsInt64X2#", true, VectorMemoryFamily.INT64, isAddress = true),
+    READ_INT64_ADDRESS("readInt64X2OffAddr#", false, VectorMemoryFamily.INT64, isAddress = true),
+    READ_INT64_ADDRESS_SCALAR("readInt64OffAddrAsInt64X2#", true, VectorMemoryFamily.INT64, isAddress = true),
+    WRITE_INT64_ADDRESS("writeInt64X2OffAddr#", false, VectorMemoryFamily.INT64, isAddress = true),
+    WRITE_INT64_ADDRESS_SCALAR("writeInt64OffAddrAsInt64X2#", true, VectorMemoryFamily.INT64, isAddress = true),
+    INDEX_WORD64_ADDRESS("indexWord64X2OffAddr#", false, VectorMemoryFamily.WORD64, isAddress = true),
+    INDEX_WORD64_ADDRESS_SCALAR("indexWord64OffAddrAsWord64X2#", true, VectorMemoryFamily.WORD64, isAddress = true),
+    READ_WORD64_ADDRESS("readWord64X2OffAddr#", false, VectorMemoryFamily.WORD64, isAddress = true),
+    READ_WORD64_ADDRESS_SCALAR("readWord64OffAddrAsWord64X2#", true, VectorMemoryFamily.WORD64, isAddress = true),
+    WRITE_WORD64_ADDRESS("writeWord64X2OffAddr#", false, VectorMemoryFamily.WORD64, isAddress = true),
+    WRITE_WORD64_ADDRESS_SCALAR("writeWord64OffAddrAsWord64X2#", true, VectorMemoryFamily.WORD64, isAddress = true),
     INDEX_INT8("indexInt8X16Array#", false, VectorMemoryFamily.INT8),
     INDEX_INT8_SCALAR("indexInt8ArrayAsInt8X16#", true, VectorMemoryFamily.INT8),
     READ_INT8("readInt8X16Array#", false, VectorMemoryFamily.INT8),
@@ -186,32 +222,34 @@ internal enum class VectorByteArrayOp(val primitive: String, val scalarOffset: B
     val isIndex: Boolean = primitive.startsWith("index")
     val vectorProof: CoreRepresentation get() = wideProof ?: family.vectorProof
     internal fun validateArguments(actual: List<CoreRepresentation>, flags: List<*>) {
-        val expected = listOf(CoreVectorMemory.arrayProof, CoreVectorMemory.indexProof) + when {
+        val expected = listOf(if (isAddress) CoreVectorMemory.addressProof else CoreVectorMemory.arrayProof, CoreVectorMemory.indexProof) + when {
             isRead -> listOf(CoreVectorMemory.stateProof)
             isWrite -> listOf(vectorProof, CoreVectorMemory.stateProof)
             else -> emptyList()
         }
         if (actual.size != expected.size || flags != List(expected.size) { false } ||
-            actual.indices.any { !CoreVectorMemory.exact(expected[it], actual[it]) })
-            throw RuntimeFault("Vector ByteArray primitive argument representation mismatch: $primitive")
+            actual.indices.any { if (isAddress && it == 1) !actual[it].present || actual[it].isAggregate || actual[it].kind != CoreKind.LONG
+                else !CoreVectorMemory.exact(expected[it], actual[it]) })
+            throw RuntimeFault("Vector memory primitive argument representation mismatch: $primitive")
     }
     fun validate(actual: List<CoreRepresentation>, flags: List<*>, result: CoreRepresentation) {
-        if (isRead) throw UnsupportedCore("Vector ByteArray read requires an immediate exact case")
+        if (isRead) throw UnsupportedCore("Vector memory read requires an immediate exact case")
         validateArguments(actual, flags)
         if (!CoreVectorMemory.exact(if (isWrite) CoreVectorMemory.stateProof else vectorProof, result))
-            throw RuntimeFault("Vector ByteArray primitive result representation mismatch: $primitive")
+            throw RuntimeFault("Vector memory primitive result representation mismatch: $primitive")
     }
     companion object {
-        fun named(name: String): VectorByteArrayOp? = entries.firstOrNull { it.primitive == name }
+        fun named(name: String): VectorMemoryOp? = entries.firstOrNull { it.primitive == name }
     }
 }
 
-internal data class VectorReadCase(val operation: VectorByteArrayOp, val arguments: List<List<Any?>>,
+internal data class VectorReadCase(val operation: VectorMemoryOp, val arguments: List<List<Any?>>,
     val stateBinder: String, val vectorBinder: String, val body: List<Any?>)
 
 internal object CoreVectorMemory {
     val stateProof = CoreRepresentation(CoreKind.VOID, true, true, emptyList())
     internal val arrayProof = CoreRepresentation(CoreKind.OBJECT, true, true, listOf("BoxedRep (Just Unlifted)"))
+    internal val addressProof = CoreRepresentation(CoreKind.ADDRESS, true, true, listOf("AddrRep"))
     internal val indexProof = CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep"))
     internal fun exact(expected: CoreRepresentation, actual: CoreRepresentation): Boolean =
         actual.present && !actual.isTuple && actual.kind == expected.kind &&
@@ -252,7 +290,7 @@ internal object CoreVectorMemory {
         if (app.firstOrNull() != "app") return null
         val function = app.getOrNull(1) as? List<*> ?: return null
         if (function.firstOrNull() != "prim") return null
-        val operation = (function.getOrNull(1) as? String)?.let(VectorByteArrayOp::named) ?: return null
+        val operation = (function.getOrNull(1) as? String)?.let(VectorMemoryOp::named) ?: return null
         if (!operation.isRead) return null
         val arguments = (app.getOrNull(2) as? List<*>)?.map {
             it as? List<Any?> ?: throw RuntimeFault("Invalid local vector read argument")
@@ -293,7 +331,7 @@ internal object CoreVectorMemory {
 
 /** The read form is constructed only by the validated immediate-case lowering.
  * It publishes a dense local vector, never a State/vector tuple value. */
-internal class VectorByteArrayExpression(private val operation: VectorByteArrayOp,
+internal class VectorByteArrayExpression(private val operation: VectorMemoryOp,
     @field:Children private var arguments: Array<Expr>) : Expr() {
     init { representation = if (operation.isWrite) CoreVectorMemory.stateProof else operation.vectorProof }
     override fun execute(frame: VirtualFrame): Any {

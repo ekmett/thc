@@ -137,6 +137,7 @@ esac
 python3 scripts/prepare-simd-capability-smoke.py
 "$fixture_bin" tuple-arithmetic
 "$fixture_bin" integer-completion
+"$fixture_bin" simd128-addresses
 "$fixture_bin" simd128-arrays
 "$fixture_bin" simd-wide-arrays
 case "$(uname -m)" in

@@ -168,6 +168,30 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(6, len([p for p in fast_fixtures.FULL_REQUIRED if p.startswith('build/atomic-int-arrays/')]))
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
 
+    def test_simd128_address_completion_has_native_owner_and_closed_cache_scope(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        self.assertEqual('simd128-addresses', owners['thc.runtime.Simd128AddressNativeTest'])
+        self.assertIsNone(owners['thc.runtime.Simd128AddressTest'])
+        group = manifest['groups']['simd128-addresses']
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'simd128-addresses']}],
+                         group['commands'])
+        self.assertEqual(['build/simd128-addresses'], group['outputs'])
+        sources = fast_fixtures._source_hashes(project, group)
+        for path in ('compiler/test-fixtures/Simd128AddressAudit.hs', 'compiler/test-fixtures/Simd128AddressNative.hs',
+                     'test/haskell-fixtures/Simd128AddressFixtures.hs', 'scripts/core_vector_memory.py',
+                     'scripts/core_vectors.py', 'scripts/simd-families.json'):
+            self.assertIn(path, sources)
+        self.assertIn('build/simd128-addresses/manifest.json', fast_fixtures.FULL_REQUIRED)
+        self.assertIn('build/simd128-addresses', fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertEqual(36, len(fast_fixtures.fast_inputs.SIMD128_ARRAY_ENTRIES))
+        self.assertIn('"$fixture_bin" simd128-addresses', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        for path in fast_fixtures.fast_inputs.SIMD128_ADDRESS_OUTPUTS:
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path, {}), path)
+        for path in ('build/simd128-addresses/native/rogue', 'build/simd128-addresses/commands/fake.stdout',
+                     'build/simd128-addresses/arbitrary.json'):
+            self.assertFalse(fast_fixtures.fast_inputs.allowed_payload(path, {}), path)
+
     def test_simd128_array_completion_has_native_owner_and_closed_cache_scope(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
