@@ -33,8 +33,9 @@ the exact 48-float or 24-double argument layout, retained compiled targets and
 released handoff state. Finite results and signed zero use raw bits; NaNs are
 compared by class.
 
-Local preparation and both Core audits passed. The compiled JVM checks remain
-pending the Linux gate, using the project's configured Graal JDK:
+The Linux validation passed all 14 focused tests across the default and dense
+handoff modes, including both compiled backends and the narrower FMA regression.
+To repeat the wide checks with the project's configured Graal JDK:
 
 ```sh
 cabal run exe:thc-fixtures --offline -- simd-wide-floating-fma
