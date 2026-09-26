@@ -421,12 +421,19 @@ def package_scalar_link(module):
         require(key not in abi, 'duplicate ABI signature')
         abi[key] = entry
     require(list(abi) == sorted(abi), 'sorted unique ABI')
+    def pointer_abi(rep):
+        return 'AddrRep' if rep in ('ByteArray#', 'MutableByteArray#') else rep
+    def integer_abi(rep):
+        return 'Word' + rep[3:] if rep in ('IntRep', 'Int8Rep', 'Int16Rep', 'Int32Rep', 'Int64Rep') else rep
+    header_adapted = set()
     for name in {entry['symbol'] for entry in abi.values()}:
         variants = [entry for entry in abi.values() if entry['symbol'] == name]
         require(native or len(variants) == 1, 'duplicate scalar ABI symbol')
         def shape(entry, normalize):
             return (entry.get('convention', 'ccall'), entry.get('safety', 'unsafe'), tuple(normalize(rep) for rep in entry['arguments']), entry['result'])
-        require(len({shape(entry, lambda rep: 'AddrRep' if rep in ('ByteArray#', 'MutableByteArray#') else rep)
+        if len({shape(entry, pointer_abi) for entry in variants}) > 1:
+            header_adapted.add(name)
+        require(len({shape(entry, lambda rep: integer_abi(pointer_abi(rep)))
                      for entry in variants}) == 1, 'conflicting C ABI variants')
         require(len({shape(entry, lambda rep: 'ByteArray#' if rep == 'MutableByteArray#' else rep)
                      for entry in variants}) == len(variants), 'ambiguous byte-array mutability variants')
@@ -468,6 +475,10 @@ def package_scalar_link(module):
         text(item['symbol'])
         emitted = record(item['emitted'], 'symbol unit convention safety arguments result')
         name = text(emitted['symbol'] if native else item['symbol'])
+        if name in header_adapted:
+            require(convention == 'ccall' and isinstance(item['header'], str) and item['header'] and
+                    not any(char in item['header'] for char in '\0\n\r"\\'),
+                    'signedness variants require a retained configured C header')
         variants = [entry for entry in abi.values() if entry['symbol'] == name and
             convention == entry.get('convention', 'ccall') and item['safety'] == entry.get('safety', 'unsafe') and exact(emitted,
                 dict(symbol=name, unit=unit, convention=convention, safety=entry.get('safety', 'unsafe'), arguments=entry['arguments'] + ['void'],

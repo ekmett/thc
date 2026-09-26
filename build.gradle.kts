@@ -592,7 +592,7 @@ for ((taskName, dense) in listOf("stablePtrFfiFullCoreDefault" to false, "stable
 for ((taskName, dense) in listOf("packageNativeOriginalsDefault" to false, "packageNativeOriginalsDense" to true)) {
     tasks.register<Test>(taskName) {
         group = "verification"
-        description = "Checks original digest C++/zlib and safe erf/libm against native Haskell observations."
+        description = "Checks original digest, safe erf/libm and primitive integer setters against native Haskell observations."
         testClassesDirs = fullCoreTests.output.classesDirs
         classpath = fullCoreTests.runtimeClasspath
         systemProperty("thc.handoffSlabs", dense.toString())
@@ -602,7 +602,7 @@ for ((taskName, dense) in listOf("packageNativeOriginalsDefault" to false, "pack
         outputs.upToDateWhen { false }
         doFirst {
             check(file("build/original-native/manifest.json").isFile) {
-                "Missing original digest fixture: set THC_DIGEST_SOURCE and run cabal run exe:thc-fixtures -- package-native-originals"
+                "Missing original package fixtures: set THC_DIGEST_SOURCE, THC_ERF_SOURCE and THC_PRIMITIVE_SOURCE; run cabal run exe:thc-fixtures -- package-native-originals"
             }
         }
     }

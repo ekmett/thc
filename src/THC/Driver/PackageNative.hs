@@ -39,7 +39,16 @@ nativeSignatures unit modules = do
   signatures <- mapM classify imports
   let ordered = sort (nub signatures)
   forM_ (groupBy (\a b -> first a == first b) ordered) $ \variants -> do
-    require (length (nub (map cAbi variants)) == 1) "conflicting package native signatures"
+    require (length (nub (map (cAbi integerAbi) variants)) == 1)
+      ("conflicting package native signatures: " ++ show variants)
+    when (length (nub (map (cAbi id) variants)) /= 1) $ do
+      let declarations = [entry | entry <- imports, Just emitted <- [member entry "emitted"],
+            member emitted "symbol" `elem` map (Just . toJSON . first) variants]
+          headers = [header | entry <- declarations, Just (String header) <- [member entry "header"]]
+      require (all (\(_,convention,_,_,_) -> convention == "ccall") variants &&
+        length headers == length declarations && length (nub headers) == 1 &&
+        all (validHeader . T.unpack) headers)
+        "package native signedness variants require one retained configured C header"
     -- Addr# and ByteArray# have the same C pointer ABI but distinct Core
     -- carriers. Do not collapse their typed adapters or pointer handling.
     -- ByteArray# and MutableByteArray# erase to the same Core shape; without
@@ -49,9 +58,11 @@ nativeSignatures unit modules = do
   pure ordered
   where
     first (symbol,_,_,_,_) = symbol
-    cAbi (_,convention,safety,arguments,result) =
-      (convention,safety,map pointerAbi arguments,result)
+    cAbi integer (_,convention,safety,arguments,result) =
+      (convention,safety,map (integer . pointerAbi) arguments,result)
     pointerAbi value | value `elem` ["ByteArray#","MutableByteArray#"] = "AddrRep"
+                     | otherwise = value
+    integerAbi value | value `elem` ["IntRep","Int8Rep","Int16Rep","Int32Rep","Int64Rep"] = "Word" ++ drop 3 value
                      | otherwise = value
     coreAbi (_,convention,safety,arguments,result) =
       (convention,safety,map (\value -> if value == "MutableByteArray#" then "ByteArray#" else value) arguments,result)
@@ -110,10 +121,13 @@ validateNativeIR source = require (not (any forbidden (lines source)))
   "package native C constructors/destructors are unsupported"
   where forbidden line = any (`isPrefixOf` line) ["@llvm.global_ctors =", "@llvm.global_dtors ="]
 
-nativeWrapperSource :: [(Signature, String)] -> Either String String
-nativeWrapperSource entries = fmap concat $ forM entries $ \((symbol,convention,_,arguments,result), entry) -> do
+validHeader :: String -> Bool
+validHeader header = not (null header) && all (`notElem` ['\0','\n','\r','"','\\']) header
+
+nativeWrapperSource :: [(Signature, String, Maybe String)] -> Either String String
+nativeWrapperSource entries = fmap concat $ forM entries $ \((symbol,convention,_,arguments,result), entry, header) -> do
   require (identifier symbol && identifier entry && all inputCarrier arguments &&
-    (result == "void" || scalarCarrier result))
+    (result == "void" || scalarCarrier result) && maybe True validHeader header)
     "invalid native wrapper ABI"
   let types = map cType arguments
       parameters = if null types then "void" else join ", " [ty ++ " a" ++ show index | (index,ty) <- zip [0::Int ..] types]
@@ -121,7 +135,12 @@ nativeWrapperSource entries = fmap concat $ forM entries $ \((symbol,convention,
       args = join ", " ["a" ++ show index | index <- [0 .. length arguments - 1]]
   -- Retained CAPI definitions already provide their exact C prototypes (for
   -- example HsWord8*, while Core quite correctly lowers this to AddrRep).
-  pure ((if convention == "capi" then "" else
+  -- Signed/unsigned imports of one symbol retain distinct Haskell adapters.
+  -- Its actual configured header supplies the callee prototype (including
+  -- narrow integer extension); the C compiler performs the bit-width conversion.
+  -- A ccall names a function, not a header macro of the same name.
+  pure (maybe "" (\name -> "#include \"" ++ name ++ "\"\n#undef " ++ symbol ++ "\n") header ++
+    (if convention == "capi" || header /= Nothing then "" else
       "extern " ++ cType result ++ " " ++ symbol ++ "(" ++ prototype ++ ");\n") ++
     cType result ++ " " ++ entry ++ "(" ++ parameters ++ ") { " ++
     (if result == "void" then "" else "return ") ++ symbol ++ "(" ++ args ++ "); }\n")
@@ -217,6 +236,22 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
       let nativeDirectory = directory </> "native"
       imports <- concat <$> mapM (\value -> maybe (pure []) (\proof -> get proof "imports")
         (member value "staticForeignImports")) retained
+      let signedVariants symbol = length (nub [map pointerAbi arguments' |
+            (name,_,_,arguments',_) <- signatures, name == symbol]) > 1
+          pointerAbi value | value `elem` ["ByteArray#","MutableByteArray#"] = "AddrRep"
+                           | otherwise = value
+          adaptedHeaders = nub [header | entry <- imports, Just emitted <- [member entry "emitted"],
+            Just (String symbol) <- [member emitted "symbol"], signedVariants (T.unpack symbol),
+            Just (String header) <- [member entry "header"]]
+          -- Including one header also declares its other symbols. Use those
+          -- same declarations for their pointer adapters rather than emitting
+          -- conflicting void* prototypes later in this translation unit.
+          wrapperHeader symbol = case
+            [T.unpack header | entry <- imports, Just emitted <- [member entry "emitted"],
+              member emitted "symbol" == Just (toJSON symbol), Just (String header) <- [member entry "header"],
+              header `elem` adaptedHeaders] of
+              header:_ -> Just header
+              [] -> Nothing
       -- Capture candidate source providers while the configured package headers
       -- still exist. Final linking selects only actually unresolved symbols,
       -- so a package-owned implementation is never replaced by the provider.
@@ -246,7 +281,8 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
               not (null entries)] $ \(index,source,entries) -> do
                 let output = nativeDirectory </> show index
                 createDirectoryIfMissing True output
-                wrappers <- either fail pure (nativeWrapperSource entries)
+                wrappers <- either fail pure (nativeWrapperSource
+                  [(signature,entry,wrapperHeader symbol) | (signature@(symbol,_,_,_,_),entry) <- entries])
                 (bitcode,target,inputs) <- compileC compiler root configured output
                   (Just ("#include <Rts.h>\n#include <HsFFI.h>\n" ++ source ++ wrappers))
                 headers <- headerInputs (output </> "wrappers.c") inputs

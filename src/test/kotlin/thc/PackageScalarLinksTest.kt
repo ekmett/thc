@@ -171,8 +171,22 @@ class PackageScalarLinksTest {
             CoreModules.merge(listOf(native + ("staticForeignImports" to (proof + ("imports" to listOf(one))))))
         }
         for (reps in listOf(listOf("AddrRep", "WordRep"), listOf("ByteArray#", "MutableByteArray#"),
-            listOf("ByteArray#", "AddrRep"), listOf("AddrRep", "AddrRep"))) {
+            listOf("ByteArray#", "AddrRep"), listOf("AddrRep", "AddrRep"),
+            listOf("Int8Rep", "Word16Rep"), listOf("IntRep", "Word64Rep"))) {
             assertThrows(IllegalArgumentException::class.java) { CoreModules.merge(listOf(variant(reps))) }
+        }
+        for (width in listOf("", "8", "16", "32", "64")) {
+            val signed = variant(listOf("Int${width}Rep", "Word${width}Rep"))
+            assertThrows(IllegalArgumentException::class.java) { PackageScalarLinks.read(signed) }
+            val signedProof = signed["staticForeignImports"] as Map<String, Any?>
+            val signedImports = signedProof["imports"] as List<Map<String, Any?>>
+            fun headers(header: Any?) = signed + ("staticForeignImports" to (signedProof +
+                ("imports" to signedImports.map { it + ("header" to header) })))
+            val admittedSigned = PackageScalarLinks.read(headers("primitive-memops.h"))!!
+            assertEquals(2, admittedSigned.proved.size)
+            assertEquals(listOf("Int${width}Rep", "Word${width}Rep"), admittedSigned.link.abi.map { it.arguments.single() })
+            for (invalid in listOf("", "bad\nheader", "bad\"header", "bad\\header", null))
+                assertThrows(IllegalArgumentException::class.java) { PackageScalarLinks.read(headers(invalid)) }
         }
     }
 
