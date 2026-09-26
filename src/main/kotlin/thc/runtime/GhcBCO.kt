@@ -3,6 +3,7 @@
 
 package thc.runtime
 
+import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.TruffleSafepoint
 import com.oracle.truffle.api.frame.FrameDescriptor
@@ -219,7 +220,10 @@ internal class GhcBCOExpression(private val name: String, @field:Children privat
                                 private val language: Language, private val metrics: Metrics,
                                 proof: CoreRepresentation) : Expr() {
     init { representation = proof.copy(evaluated = true) }
-    override fun execute(frame: VirtualFrame): Nothing = fault("$name requires a tuple destination")
+    override fun execute(frame: VirtualFrame): Nothing {
+        CompilerDirectives.transferToInterpreterAndInvalidate()
+        fault("$name requires a tuple destination")
+    }
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val value = if (name == "mkApUpd0#") GhcBCO.updating(this, operands[0].execute(frame)) else {
             val code = operands[0].execute(frame); val literals = operands[1].execute(frame)

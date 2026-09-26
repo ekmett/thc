@@ -42,6 +42,8 @@ internal class LimbRegion private constructor(val address: ManagedAddress, val l
 
 /** Arithmetic providers share storage and exact output/alias contracts. A future
  * native-limb implementation can replace GMP without changing guest arrays. */
+internal enum class LimbBitwise { AND, AND_NOT, OR, XOR }
+
 internal interface LimbProvider {
     fun add(output: LimbRegion, left: LimbRegion, right: LimbRegion): Long
     fun addWord(output: LimbRegion, input: LimbRegion, word: Long): Long
@@ -53,6 +55,12 @@ internal interface LimbProvider {
     fun moduloWord(input: LimbRegion, divisor: Long): Long
     fun shiftRight(output: LimbRegion, input: LimbRegion, count: Long, negative: Boolean): Long
     fun toDouble(input: LimbRegion, negative: Boolean, exponent: Long): Double
+    fun gcdWords(left: Long, right: Long): Long
+    fun gcdWord(input: LimbRegion, word: Long): Long
+    fun gcd(output: LimbRegion, left: LimbRegion, right: LimbRegion): Long
+    fun shiftLeft(output: LimbRegion, input: LimbRegion, count: Long): Long
+    fun bitwise(output: LimbRegion, left: LimbRegion, right: LimbRegion, operation: LimbBitwise)
+    fun populationCount(input: LimbRegion): Long
     fun divide(quotient: LimbRegion, remainder: LimbRegion, fractionalLimbs: Long,
         numerator: LimbRegion, divisor: LimbRegion)
     fun quotient(output: LimbRegion, numerator: LimbRegion, divisor: LimbRegion)

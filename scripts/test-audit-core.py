@@ -2425,6 +2425,15 @@ class OriginalGmpAuditTest(unittest.TestCase):
         'integer_gmp_mpn_rshift_2c': ((array, array, 'IntRep', 'WordRep', None), 'WordRep'),
         'integer_gmp_mpn_get_d': ((array, 'IntRep', 'IntRep', None), 'DoubleRep'),
         '__int_encodeDouble': (('IntRep', 'IntRep', None), 'DoubleRep'),
+        'integer_gmp_gcd_word': (('WordRep', 'WordRep', None), 'WordRep'),
+        'integer_gmp_mpn_gcd_1': ((array, 'IntRep', 'WordRep', None), 'WordRep'),
+        'integer_gmp_mpn_gcd': ((array, array, 'IntRep', array, 'IntRep', None), 'IntRep'),
+        'integer_gmp_mpn_lshift': ((array, array, 'IntRep', 'WordRep', None), 'WordRep'),
+        'integer_gmp_mpn_and_n': ((array, array, array, 'IntRep', None), None),
+        'integer_gmp_mpn_andn_n': ((array, array, array, 'IntRep', None), None),
+        'integer_gmp_mpn_ior_n': ((array, array, array, 'IntRep', None), None),
+        'integer_gmp_mpn_xor_n': ((array, array, array, 'IntRep', None), None),
+        '__gmpn_popcount': ((array, 'IntRep', None), 'WordRep'),
     }
 
     def fixture(self, symbol):
@@ -2464,7 +2473,7 @@ class OriginalGmpAuditTest(unittest.TestCase):
         if detail is not None:
             self.assertTrue(any(detail in str(i['detail']) for i in report['issues']), report)
 
-    def test_exact_fifteen_shapes_require_explicit_capability(self):
+    def test_exact_twenty_four_shapes_require_explicit_capability(self):
         self.assertEqual(set(self.signatures), core_original_foreign.GMP_SYMBOLS)
         for symbol in self.signatures:
             module = self.fixture(symbol)

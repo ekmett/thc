@@ -41,7 +41,7 @@ import THC.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, is
 import GHC.Types.Tickish (CoreTickish, tickishFloatable)
 import GHC.Types.Literal
 import qualified GHC.Types.ForeignCall as Foreign
-import GHC.Types.RepType (typePrimRep_maybe, unwrapType, ubxSumRepType, layoutUbxSum, primRepSlot, slotPrimRep)
+import GHC.Types.RepType (typePrimRep_maybe, runtimeRepPrimRep_maybe, unwrapType, ubxSumRepType, layoutUbxSum, primRepSlot, slotPrimRep)
 import GHC.Builtin.Types (tupleRepDataConTyCon, sumRepDataConTyCon)
 import GHC.Core.TyCo.Rep (scaledThing)
 import GHC.Core.TyCo.Compare (eqType)
@@ -440,9 +440,18 @@ exprRep d (Tick _ e) = exprRep d e
 exprRep d e
   | not (canCertify d) = unknownRep
   | Coercion{} <- e = voidRep
-  | otherwise = typeRep (exprType e) (exprIsHNF e || case e of
+  | otherwise = typeRep (exprType e) (rubbishValue e || exprIsHNF e || case e of
       Var v -> v `elemVarSet` evaluatedIds d
       _ -> False)
+
+-- GHC's generic HNF predicate is conservative for a type-applied literal.
+-- Our LitRubbish scalar lowering constructs a value, not a thunk or bottom.
+-- Do not extend this fact to value applications headed by rubbish.
+rubbishValue :: CoreExpr -> Bool
+rubbishValue (Lit LitRubbish{}) = True
+rubbishValue (App f Type{}) = rubbishValue f
+rubbishValue (Cast body _) = rubbishValue body
+rubbishValue _ = False
 
 binderRep :: Ctx -> Bool -> Var -> J
 binderRep d evaluated v
@@ -734,6 +743,16 @@ literal d = \case
   LitFloat f -> ("float",show (fromRational f :: Float))
   LitDouble f -> ("double",show (fromRational f :: Double))
   LitNullAddr -> ("null-addr","0")
+  -- Note [Rubbish literals] in GHC.Types.Literal: a non-bottom absent
+  -- filler, not an exception. Keep GHC's exact physical identity; in
+  -- particular do not turn a singleton TupleRep/SumRep into a scalar.
+  LitRubbish _ rep
+    | noFreeVarsOfType rep
+    , Just (tc,_) <- splitTyConApp_maybe rep
+    , tc /= tupleRepDataConTyCon, tc /= sumRepDataConTyCon
+    , Just [r] <- runtimeRepPrimRep_maybe rep
+    , case r of VecRep{} -> False; BoxedRep Nothing -> False; _ -> True
+    -> ("rubbish",show r)
   -- A label has a symbol and an exact function/data distinction, but no
   -- calling-convention or argument-type certificate. Preserve only those
   -- facts; resolving a callable ABI is the foreign provider's obligation.

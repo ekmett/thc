@@ -19,6 +19,18 @@ import com.oracle.truffle.api.nodes.RootNode
  * calling convention. This is interpreter structure, not a node in Graal's compiler IR.
  */
 abstract class GuestRoot(language: TruffleLanguage<*>?, descriptor: FrameDescriptor) : RootNode(language, descriptor) {
+    @field:CompilationFinal internal var delimitedControlEnabled: Boolean = false
+        private set
+
+    override fun prepareForCall() {
+        super.prepareForCall()
+        // Resolve the concrete root's control policy before target publication,
+        // not while compiling a never-taken continuation handler. Otherwise
+        // linking that handler can load another GuestRoot subtype after Graal
+        // has already assumed FunctionRoot is the only concrete implementation.
+        delimitedControlEnabled = DelimitedControl.rootEnabled(this)
+    }
+
     @field:CompilationFinal internal var coreIdentity: CoreFunctionIdentity? = null
         private set
     internal fun configureCoreIdentity(identity: CoreFunctionIdentity?) { coreIdentity = identity }

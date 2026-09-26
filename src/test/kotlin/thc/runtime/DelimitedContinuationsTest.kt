@@ -8,6 +8,7 @@ import com.oracle.truffle.api.frame.FrameDescriptor
 import com.oracle.truffle.api.frame.FrameSlotKind
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.Node
+import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -94,6 +95,30 @@ class DelimitedContinuationsTest {
                     val polymorphic = entry in setOf("polymorphicApplications", "polymorphicScalarApplications")
                     assertEquals(if (polymorphic) 19L else calls.getValue(entry), lambdas.size.toLong(),
                         "Every reachable lambda runs once, except applyWorker runs four times; resumes never restart them")
+                    // The exported runRW# wrapper is now beta-reduced during
+                    // lowering. Prove that exact single State# application from
+                    // original Core, independently of runtime target discovery.
+                    val entryLambda = source.root["expr"] as List<*>
+                    val stateCall = entryLambda[2] as List<*>
+                    assertEquals("app", stateCall[0])
+                    assertEquals(listOf(listOf(false), false, false), stateCall.subList(3, 6))
+                    val stateLambda = stateCall[1] as List<*>
+                    assertEquals("lam", stateLambda[0])
+                    val stateFormal = (stateLambda[1] as List<*>).single() as Map<*, *>
+                    val voidRep = mapOf("primReps" to emptyList<String>(), "kind" to "void", "evaluated" to true)
+                    assertEquals("State# RealWorld", stateFormal["type"])
+                    assertEquals(false, stateFormal["lifted"])
+                    assertEquals(false, stateFormal["coercion"])
+                    assertEquals(voidRep, stateFormal["rep"])
+                    val stateArgument = (stateCall[2] as List<*>).single() as List<*>
+                    assertEquals("void", stateArgument[0])
+                    assertEquals(voidRep, (stateArgument.last() as Map<*, *>)["rep"])
+                    val immediateLambdas = nodes.filter { it.firstOrNull() == "app" &&
+                        (it.getOrNull(1) as? List<*>)?.firstOrNull() == "lam" }
+                    assertEquals(1, immediateLambdas.size, "Exactly one immediate lambda can be eliminated")
+                    assertSame(stateCall, immediateLambdas.single())
+                    assertTrue(lambdas.any { it === stateLambda })
+                    val executableLambdas = lambdas.filter { it !== stateLambda }
                     for (worker in source.bindings.filter { it["name"] in setOf("applicationWorker", "applicationWorker2",
                             "applicationWorker3", "applicationWorker4", "scalarApplicationWorker", "scalarApplicationWorker2",
                             "scalarApplicationWorker3", "scalarApplicationWorker4") }) {
@@ -118,6 +143,8 @@ class DelimitedContinuationsTest {
                             (it.getOrNull(1) as? List<*>)?.take(2) == listOf("var", apply["id"]) })
                     }
                     val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
+                    assertTrue((program.entryTarget(entry).rootNode as GuestRoot).delimitedControlEnabled,
+                        "$stage/$backend/$entry: root policy is prepared before the first guest call")
                     val function = context.asValue(EntryValue(program, entry, 1))
                     for ((index, n) in listOf(-2L, 0L, 7L).withIndex()) {
                         assertEquals(native[index * entries.size + entries.indexOf(entry)], function.execute(n).asLong(), "$stage/$backend/$entry/$n")
@@ -137,7 +164,7 @@ class DelimitedContinuationsTest {
                     val targets = source.bindings.filter { (it["expr"] as List<*>)[0] == "lam" }
                         .flatMap { ThreadInventoryCoreEvidence.targets(program.entryTarget(it["id"] as String)) }
                         .filter { (it.rootNode is FunctionRoot || it.rootNode is BytecodeRoot) && seen.add(it) }
-                    val labels = lambdas.map { lambda -> "lambda " + (lambda[1] as List<*>).joinToString {
+                    val labels = executableLambdas.map { lambda -> "lambda " + (lambda[1] as List<*>).joinToString {
                         (it as Map<*, *>)["name"].toString()
                     } }.sorted()
                     val functions = targets.filter { it.rootNode.name.startsWith("lambda ") }
@@ -153,13 +180,14 @@ class DelimitedContinuationsTest {
                             "Only already-forced source CAFs may accompany the exact function inventory")
                     val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                     val interpreted = ThreadInventoryCoreEvidence.interpretedCalls(targets)
-                    ThreadInventoryCoreEvidence.install(targets)
+                    try { ThreadInventoryCoreEvidence.install(targets) }
+                    catch (failure: Throwable) { throw AssertionError("$stage/$backend/$entry first installation", failure) }
                     assertTrue(function.invokeMember("compile").asBoolean())
                     assertEquals(before, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
                     val handoff = language.handoffState.get()
                     val allocations = handoff.arguments.allocations to handoff.results.allocations
                     assertEquals(expected(entry, 11), function.execute(11L).asLong(), "$stage/$backend/$entry first installed call")
-                    assertEquals(calls.getValue(entry), (program.diagnostics().getValue("compiledEntries") as Number).toLong() - before,
+                    assertEquals(calls.getValue(entry) - 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong() - before,
                         "$stage/$backend/$entry: resumes do not restart original Core roots")
                     assertEquals(interpreted, ThreadInventoryCoreEvidence.interpretedCalls(targets), "No interpreted settling call")
                     ThreadInventoryCoreEvidence.released(language)
@@ -167,6 +195,43 @@ class DelimitedContinuationsTest {
                     assertEquals(MaskingState.UNMASKED, Language.currentState(null).maskingState.get())
                 } finally { context.leave() }
             }
+        }
+    }
+
+    @Test fun rootPoliciesArePreparedWithoutExecutingBodiesAndRetainedByClones() {
+        Context.newBuilder("thc").build().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                for (enabled in listOf(false, true)) {
+                    val source = FunctionRoot(language, FrameLayout().build(), "unexecuted policy", null,
+                        intArrayOf(), intArrayOf(), intArrayOf(), object : Expr() {
+                            override fun execute(frame: VirtualFrame): Any? = error("Metadata preparation executed guest code")
+                        }, Metrics(false), enableDelimited = enabled)
+                    val clone = NodeUtil.cloneNode(source)
+                    for (root in listOf(source, clone)) {
+                        assertSame(root, root.callTarget.rootNode)
+                        assertEquals(enabled, root.delimitedControlEnabled)
+                        assertEquals(enabled, DelimitedControl.enabled(root))
+                    }
+                }
+                val other = object : GuestRoot(language, FrameDescriptor.newBuilder().build()) {
+                    override fun bloom(frame: VirtualFrame): Long = 0L
+                    override fun execute(frame: VirtualFrame): Any? = error("Metadata preparation executed guest code")
+                }
+                other.callTarget
+                assertFalse(DelimitedControl.enabled(other), "Unrecognized roots do not gain continuation authority")
+                val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
+                val value = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
+                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, primReps = value.primReps,
+                    components = listOf(state, value)), language)
+                val cut = DelimitedCut(PromptTag(Language.currentState(null)), null, shape,
+                    MaskingState.UNMASKED, other)
+                val continuation = DelimitedStack(cut, shape).closure(language, Metrics(false)).target.rootNode as GuestRoot
+                assertTrue(continuation.delimitedControlEnabled)
+                assertTrue(DelimitedControl.enabled(continuation))
+                ThreadInventoryCoreEvidence.released(language)
+            } finally { context.leave() }
         }
     }
 
@@ -199,6 +264,35 @@ class DelimitedContinuationsTest {
         assertEquals(listOf(15L), second.getObject(reference))
         first.setObject(reference, null)
         assertSame(heap, image.getObject(reference))
+    }
+
+    @Test fun scalarEntryRejectsTupleOnlyOperationsBeforeEvaluatingOperands() {
+        Context.newBuilder("thc").option("engine.WarnInterpreterOnly", "false").build().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
+                val value = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
+                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, primReps = value.primReps,
+                    components = listOf(state, value)), language)
+                val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameDescriptor.newBuilder().build())
+                fun operands(): Array<Expr> = Array(3) {
+                    object : Expr() {
+                        override fun execute(frame: VirtualFrame): Any? = error("scalar rejection evaluated an operand")
+                    }
+                }
+                for (name in listOf("newPromptTag#", "prompt#", "control0#")) {
+                    val node = DelimitedPrimitive(name, shape, operands(), language, Metrics(false))
+                    assertEquals("$name requires a tuple destination",
+                        assertThrows(RuntimeFault::class.java) { node.execute(frame) }.message)
+                }
+                for (name in listOf("catch#", "maskAsyncExceptions#", "maskUninterruptible#", "unmaskAsyncExceptions#")) {
+                    val node = DelimitedIOBoundary(name, shape, operands(), language, Metrics(false))
+                    assertEquals("$name requires a tuple destination",
+                        assertThrows(RuntimeFault::class.java) { node.execute(frame) }.message)
+                }
+            } finally { context.leave() }
+        }
     }
 
     @Test fun continuationLoweringRejectsWrongCarrierAndTupleContracts() {

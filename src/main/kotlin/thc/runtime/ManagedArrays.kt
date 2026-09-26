@@ -3,6 +3,7 @@
 
 package thc.runtime
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.frame.VirtualFrame
 import java.lang.invoke.MethodHandles
 
@@ -13,8 +14,8 @@ internal object ManagedArray {
     // Object[] has identity equality. Weak metadata records GHC's frozen info-table
     // distinction without replacing the existing array carrier or retaining it.
     private val frozen = java.util.WeakHashMap<Array<Any?>, Boolean>()
-    @JvmStatic @Synchronized fun isFrozen(array: Array<Any?>): Boolean = frozen.containsKey(array)
-    @JvmStatic @Synchronized fun thaw(array: Array<Any?>): Array<Any?> {
+    @JvmStatic @TruffleBoundary @Synchronized fun isFrozen(array: Array<Any?>): Boolean = frozen.containsKey(array)
+    @JvmStatic @TruffleBoundary @Synchronized fun thaw(array: Array<Any?>): Array<Any?> {
         frozen.remove(array)
         return array
     }
@@ -69,7 +70,7 @@ internal object ManagedArray {
         System.arraycopy(source, sourceOffset.toInt(), destination, destinationOffset.toInt(), count.toInt())
     }
     /** Preserve storage identity and retain the immutable-pointer-array distinction. */
-    @JvmStatic @Synchronized fun freeze(array: Array<Any?>): Array<Any?> {
+    @JvmStatic @TruffleBoundary @Synchronized fun freeze(array: Array<Any?>): Array<Any?> {
         frozen[array] = true
         return array
     }

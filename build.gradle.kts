@@ -402,6 +402,21 @@ for ((taskName, dense) in listOf("compilerRtsFullCoreTest" to false, "compilerRt
         doFirst { check(file("build/compiler-rts/manifest.json").isFile) { "Run thc-fixtures compiler-rts with complete installed GHC Core" } }
     }
 }
+for ((taskName, dense) in listOf("floatForeignFullCoreTest" to false, "floatForeignFullCoreDenseTest" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests original GHC Float/Double C declarations against native raw-bit controls."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.FloatForeignNativeTest") }
+        inputs.files(fileTree("build/float-foreign") { include("*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original floating FFI native/first-entry checks require a fresh process") { true }
+        doFirst { check(file("build/float-foreign/manifest.json").isFile) { "Run thc-fixtures float-foreign with complete installed GHC Core" } }
+    }
+}
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("main"))
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("test"))
 tasks.register<Test>("graphWorkloadTest") {
@@ -622,6 +637,24 @@ for ((taskName, dense) in listOf("packageNativeOriginalsDefault" to false, "pack
         doFirst {
             check(file("build/original-native/manifest.json").isFile) {
                 "Missing original package fixtures: set THC_DIGEST_SOURCE, THC_ERF_SOURCE and THC_PRIMITIVE_SOURCE; run cabal run exe:thc-fixtures -- package-native-originals"
+            }
+        }
+    }
+}
+for ((taskName, dense) in listOf("getEntropyDefault" to false, "getEntropyDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Checks original splitmix initialization and native libc getentropy status/bounds."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        systemProperty("thc.handoffSlabs", dense.toString())
+        inputs.files(fileTree("build/getentropy") { include("**/*.json", "native.tsv", "control.so", "sources/**") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.GetEntropyTest") }
+        outputs.upToDateWhen { false }
+        doFirst {
+            check(file("build/getentropy/manifest.json").isFile) {
+                "Set THC_SPLITMIX_SOURCE and run cabal run exe:thc-fixtures -- getentropy"
             }
         }
     }

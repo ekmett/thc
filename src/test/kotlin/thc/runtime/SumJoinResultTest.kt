@@ -43,7 +43,7 @@ class SumJoinResultTest {
     @Test fun originalSumJoinsMatchNativeWithInlining() = checkNative(true)
     private fun checkNative(inlining: Boolean) {
         val rows = File(root, "build/sum-join/oracle.tsv").readLines().map { it.split('\t') }
-        assertEquals(18, rows.size)
+        assertEquals(30, rows.size)
         for (stage in listOf("pre", "post")) for (backend in listOf("ast", "bytecode")) context(inlining).use { context ->
             context.initialize("thc"); context.enter()
             try {
@@ -53,25 +53,31 @@ class SumJoinResultTest {
                     bindings(CoreModules.reachable(module, it)) }.map { it["id"] }.toSet()
                 val selected = bindings(module).filter { it["id"] in ids }
                 val program = program(language, module + ("bindings" to selected), backend)
-                fun checkRows() {
+                fun checkRows(compiled: Boolean) {
                     for ((name, input, expected) in rows) {
                         val x = input.toLong()
                         val model = when (name) {
                             "forwardCase" -> if (x <= 0) -11L else (x + 18L) * 3L
                             "recursiveCase" -> if (x == 0L) -13L else (if (x < 0) -x else 2L * x) + 19L
                             "nestedCase" -> if (x <= 0) -23L else (x + 7L) * 5L
+                            "stateForwardCase" -> if (x <= 0) -31L else (x + 30L) * 7L
+                            "stateRecursiveCase" -> if (x == 0L) -37L else (if (x < 0) -x else 2L * x) + 41L
                             else -> error(name)
                         }
                         assertEquals(model, expected.toLong(), "Independent native model: $name/$x")
+                        val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                         assertEquals(model, Calls.target(program.hostEntryTarget(1),
                             arrayOf(program.entryValue(name), arrayOf(x))), "$stage/$backend/$name/$x")
+                        if (compiled) assertTrue(
+                            (program.diagnostics().getValue("compiledEntries") as Number).toLong() > before,
+                            "First installed compiled call: $stage/$backend/$name/$x/inlining=$inlining")
                         released(language)
                     }
                 }
-                checkRows()
+                checkRows(false)
                 selected.filter { (it["expr"] as List<*>)[0] == "lam" }.forEach {
                     compile(program.entryTarget(it["id"] as String)) }
-                checkRows()
+                checkRows(true)
                 assertTrue((program.diagnostics().getValue("localJoinTransfers") as Number).toLong() > 40_000)
                 assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong())
                 assertEquals(0L, (program.diagnostics().getValue("blackholes") as Number).toLong())

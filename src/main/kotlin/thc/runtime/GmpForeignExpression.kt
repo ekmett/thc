@@ -19,6 +19,14 @@ internal class GmpForeignExpression(private val operation: GmpForeignOp,
             FrameAccess.writeDouble(frame, slots[offset], ManagedGmp.invokeDouble(this, operation, input, a, b))
             return null
         }
+        if (operation.form == GmpForm.WORD_PAIR) {
+            val left = operands[0].executeRequiredLong(frame)
+            val right = operands[1].executeRequiredLong(frame)
+            requireVoidCarrier(operands[2].execute(frame))
+            FrameAccess.writeLong(frame, slots[offset], ManagedGmp.invoke(this, operation,
+                null, null, null, null, left, right, 0))
+            return null
+        }
         val first = operands[0].execute(frame)
         // Primitive counts/words stay long locals; object/primitive interleaving
         // follows the original FCallId argument order exactly.
@@ -53,6 +61,17 @@ internal class GmpForeignExpression(private val operation: GmpForeignOp,
                 val a = operands[1].executeRequiredLong(frame); val b = operands[2].executeRequiredLong(frame)
                 requireVoidCarrier(operands[3].execute(frame))
                 ManagedGmp.invoke(this, operation, first, null, null, null, a, b, 0)
+            }
+            operation.form == GmpForm.LOGICAL -> {
+                val second = operands[1].execute(frame); val third = operands[2].execute(frame)
+                val count = operands[3].executeRequiredLong(frame)
+                requireVoidCarrier(operands[4].execute(frame))
+                ManagedGmp.invoke(this, operation, first, second, third, null, count, 0, 0)
+            }
+            operation.form == GmpForm.COUNT -> {
+                val count = operands[1].executeRequiredLong(frame)
+                requireVoidCarrier(operands[2].execute(frame))
+                ManagedGmp.invoke(this, operation, first, null, null, null, count, 0, 0)
             }
             else -> { // GmpForm.DIVIDE
                 val second = operands[1].execute(frame); val a = operands[2].executeRequiredLong(frame)

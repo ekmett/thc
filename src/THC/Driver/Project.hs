@@ -375,11 +375,12 @@ prepareInterfaceHelper context root = do
 prepareInstalledBundle :: FilePath -> FilePath -> FilePath -> String -> InstalledContext -> InstalledUnit ->
                           IO (Either MissingCore InstalledBundle)
 prepareInstalledBundle cache staging recipe driverHash context registrationUnit = do
+  probeCurrent <- prepareInstalledProbe context registrationUnit
   evidence <- optionalIO $ do
     helperHash <- digestFile (installedHelper context)
     recipeHash <- digestFile recipe
     (rtsRegistration, _) <- installedLayoutHeaders context registrationUnit
-    probe <- probeInstalled context registrationUnit
+    probe <- probeCurrent
     let identity = object ["schema" .= (1 :: Int), "helperHash" .= helperHash,
           "driverHash" .= driverHash, "recipeHash" .= recipeHash,
           "rtsRegistration" .= rtsRegistration,
@@ -409,7 +410,7 @@ prepareInstalledBundle cache staging recipe driverHash context registrationUnit 
           (map fst (installedInterfaces registrationUnit))
         bundle <- maybe (fail "invalid indexed installed bundle") pure loaded
         require (jsonField record "bundleSha256" == Just (bundleHash bundle)) "changed indexed installed bundle"
-        after <- probeInstalled context registrationUnit
+        after <- probeCurrent
         require (after == probe) "installed payload changed while validating cached bundle"
         validateSourceObservations sources
         pure (InstalledBundle owner bundle)
@@ -419,7 +420,7 @@ prepareInstalledBundle cache staging recipe driverHash context registrationUnit 
           _ <- optionalIO $ do
             sources <- installedSourceObservations modules
             validateSourceObservations sources
-            after <- probeInstalled context registrationUnit
+            after <- probeCurrent
             require (after == probe) "installed payload changed during acquisition"
             let record = object ["identity" .= identity, "probe" .= probe,
                   "sources" .= sources, "inputs" .= inputs,

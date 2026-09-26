@@ -164,6 +164,85 @@ reports any of the ten blocklist violations; it stops later at an unbacked image
 constant while preparing bytecode closure creation. Guest JIT in the native THC
 executable remains unverified. Compiler assertions and blocklist checks stay on.
 
+Further preparation exposed dynamic diagnostic formatting in the scalar entry
+overrides of `DelimitedPrimitive`, `DelimitedIOBoundary` and `GhcBCOExpression`.
+Those entries always reject tuple-only operations. They now leave compilation
+before formatting their messages; tuple execution is unchanged. It also exposed
+the AST generic case matcher invoking an arbitrary scrutinee's `equals` method.
+Literal matching now uses guarded primitive Long comparisons, including a Long
+in an object-widened slot, and identity for address literals. `ManagedAddress`
+does not override `Object.equals`; this preserves its previous literal comparison,
+not the different semantics of address-comparison primops. Floating and BigNat
+alternatives remain rejected during lowering.
+
+A new cold-object regression first failed against the old matcher with an
+arbitrary-host-equality exception. The corrected batch passes 20 focused tests
+across both handoff modes, including AST/bytecode and typed/generic case options,
+wrong numeric carriers, address literals, tuple-only rejection before operand
+evaluation, and frame/context isolation. Each newly compiled generic-case target's
+first call checks both its result and an increased installed-code entry count.
+Bytecode inspection confirms primitive `lcmp` and reference comparison, without
+an `equals` call in the literal matcher, and interpreter transitions preceding
+the three diagnostic concatenations. The next image analysis clears these four
+blocklist paths and advances to preparation of the empty handoff-argument array.
+These JVM checks do not establish guest JIT in the native executable.
+
+Preparing the signal-dispatch root then exposed 68 blocklist paths through
+`TupleShape.matches`: structural `List.equals` admitted arbitrary host equality
+implementations into runtime analysis. Tuple shapes now reuse the existing
+canonical lowering-time compatibility key already used by argument layouts.
+Runtime matching compares key identity, while representation validation and
+context-owned storage layouts are unchanged. Only immutable metadata is interned.
+
+Verification includes a 24-by-24 logical-shape compatibility matrix covering
+zero-width fields, nesting, field order, boxed refinements, vectors and sums;
+two contexts on one engine retain separate language instances and storage
+layouts while agreeing on metadata. Tuple, typed-case and floating tests pass
+in both handoff modes: 24 focused passes, followed by four passes of the
+strengthened context-isolation checks. The generated matcher uses reference
+comparison, not `List.equals`. The next real image analysis clears all 68
+blocklist paths and advances to other runtime-graph preparation issues; it
+does not yet establish native guest-JIT execution.
+
+The unchanged pure-image recipe also rebuilds successfully after integrating
+main `80c23c62`, including the cached FFM byte-access handle and prepared root
+control metadata. All eight original native result checks still pass; all four
+explicit scalar/constructor compilation controls still report the frame
+materialization bailout. The build took 105.91 seconds wall time and 3,534,800 KiB
+peak RSS on the shared host. This checks image compatibility, not native downcalls.
+
+Further runtime preparation exposed Kotlin's generated nonnull diagnostics in
+the generic dispatcher's cold continuation-capture branches. These branches now
+transfer to the interpreter before copying saved arguments and constructing
+resume records, without invalidating the installed target. Ordinary dispatch
+does not gain a boundary. Bytecode inspection confirms the transition precedes
+all three snapshot copies; the next image analysis no longer reports the eleven
+diagnostic blocklist paths. It stops later while preparing other runtime state.
+The continuation fixture's exact root inventory now independently proves the
+single immediate `runRW#` State# wrapper eliminated by existing lowering;
+original Core, native GHC results and exact remaining root-entry counts remain
+unchanged acceptance inputs.
+
+The final capture batch passes 28 tests across both handoff modes, including
+fresh GHC continuation fixtures, first-installed generic captures, exact
+no-replay entry counts, cross-thread AST resumption and released storage loans.
+An exploratory all-target-validity assertion also failed on unchanged production
+source and is not an acceptance condition. A separate initial cold-install
+failure did not recur in the unchanged-source control or final candidate run;
+its cause remains undiagnosed, and no test retries compilation internally.
+
+Subsequent analysis exposed mutable frozen-array bookkeeping in guest graphs
+and a nullable platform cast's diagnostic path in `FunctionRoot.executeBody`.
+The existing synchronized array freeze/thaw/query methods now have host
+boundaries; their lock, weak-key map and actual array storage are unchanged.
+The self-loop accessor rejects an invalid node through the existing interpreter
+fault path. No mutable map is added to build-time initialization. All 34 focused
+array, PAP, tail-cycle and join tests pass in both handoff modes, including new
+first-installed AST/bytecode freeze/thaw checks for identity, lazy payloads and
+independent metadata. Bytecode retains the synchronized method flags and explicit
+guard. Real image analysis advances past both failures and next stops preparing
+the weak-pointer operation; guest JIT is still not established.
+
 ## Execution models
 
 | Product | What is fixed when built | Guest execution |

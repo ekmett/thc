@@ -93,6 +93,14 @@ code. Private compilation setup must restore that prerequisite, as the public
 original-Core continuation and mask tests include forced-stub-retirement controls;
 keep their first-effect and no-replay assertions intact.
 
+Root control policy is also compilation metadata. `GuestRoot.prepareForCall`
+fixes the delimited-continuation flag before Truffle publishes the call target;
+guest code reads that flag instead of resolving concrete root types in a cold
+handler during partial evaluation. This avoids a first-compilation class-hierarchy
+bailout without executing guest code, retrying compilation, or preloading unrelated
+classes. Preserve the fresh floating-tuple compilation check and the metadata,
+clone and continuation-policy controls when changing root initialization.
+
 ### Generated instruction metadata
 
 The pinned Truffle 25.3.4.1 processor emits one large

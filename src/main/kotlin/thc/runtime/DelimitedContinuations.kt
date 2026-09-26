@@ -3,6 +3,7 @@
 
 package thc.runtime
 
+import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.bytecode.ContinuationResult
@@ -310,7 +311,11 @@ internal object DelimitedControl {
             cut.append(frame, DelimitedTupleStep(destination, node))
         return cut
     }
-    fun enabled(node: Node): Boolean = when (val root = node.rootNode) {
+    fun enabled(node: Node): Boolean = (node.rootNode as? GuestRoot)?.delimitedControlEnabled == true
+
+    /** Fixed calling-convention metadata, computed before the root can execute. */
+    @TruffleBoundary
+    fun rootEnabled(root: GuestRoot): Boolean = when (root) {
         is FunctionRoot -> root.enableDelimited
         is BytecodeRoot -> root.isDelimitedEnabled
         is DelimitedContinuationRoot -> true
@@ -350,7 +355,10 @@ internal class DelimitedPrimitive(private val name: String, private val shape: T
                                  language: Language, metrics: Metrics) : Expr() {
     @Child private var site = DelimitedActionSite(language, metrics)
     init { representation = shape.proof.copy(evaluated = true) }
-    override fun execute(frame: VirtualFrame): Nothing = fault("$name requires a tuple destination")
+    override fun execute(frame: VirtualFrame): Nothing {
+        CompilerDirectives.transferToInterpreterAndInvalidate()
+        fault("$name requires a tuple destination")
+    }
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         if (name == "newPromptTag#") {
             requireVoidCarrier(operands[0].execute(frame))
@@ -379,7 +387,10 @@ internal class DelimitedIOBoundary(private val name: String, private val shape: 
                                   language: Language, metrics: Metrics) : Expr() {
     @Child private var site = DelimitedActionSite(language, metrics)
     init { representation = shape.proof.copy(evaluated = true) }
-    override fun execute(frame: VirtualFrame): Nothing = fault("$name requires a tuple destination")
+    override fun execute(frame: VirtualFrame): Nothing {
+        CompilerDirectives.transferToInterpreterAndInvalidate()
+        fault("$name requires a tuple destination")
+    }
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val action = operands[0].execute(frame)
         val handler = if (name == "catch#") operands[1].execute(frame) else null

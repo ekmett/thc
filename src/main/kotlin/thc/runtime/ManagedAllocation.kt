@@ -14,7 +14,8 @@ import java.lang.foreign.ValueLayout
  */
 internal class ManagedAllocation private constructor(
     private val bytes: ByteArray?, private val segment: MemorySegment,
-    private val writable: Boolean, private val pointerBytes: Int
+    private val writable: Boolean, private val pointerBytes: Int,
+    internal val isStaticImage: Boolean = false
 ) {
     init { if (pointerBytes != 4 && pointerBytes != 8) fault("Unsupported target pointer width") }
     // Pointer-free pinned arrays pay for the owner, not a per-cell map.
@@ -109,14 +110,14 @@ internal class ManagedAllocation private constructor(
     @Synchronized fun readByte(offset: Long): Long {
         val start = range(offset, 1)
         if (pointerCapable && intersectsPointer(start, 1)) fault("Cannot expose managed pointer bits as a byte")
-        return segment.get(ValueLayout.JAVA_BYTE, start.toLong()).toLong() and 255L
+        return (BYTE_ACCESS.get(segment, start.toLong()) as Byte).toLong() and 255L
     }
 
     @Synchronized fun writeByte(offset: Long, value: Long) {
         mutable()
         val start = range(offset, 1)
         if (pointerCapable) invalidate(start, 1)
-        segment.set(ValueLayout.JAVA_BYTE, start.toLong(), value.toByte())
+        BYTE_ACCESS.set(segment, start.toLong(), value.toByte())
     }
 
     /** Write one complete native-endian numeric element without exposing raw
@@ -128,7 +129,7 @@ internal class ManagedAllocation private constructor(
         if (pointerCapable) invalidate(start, width)
         for (index in 0 until width) {
             val shift = (if (little) index else width - 1 - index) * 8
-            segment.set(ValueLayout.JAVA_BYTE, start.toLong() + index, (value ushr shift).toByte())
+            BYTE_ACCESS.set(segment, start.toLong() + index, (value ushr shift).toByte())
         }
     }
 
@@ -410,6 +411,11 @@ internal class ManagedAllocation private constructor(
 
     companion object {
         private val COPY_TIE_LOCK = Any()
+        // FFM layouts lazily construct access handles. Resolve this immutable
+        // metadata once, outside guest partial evaluation: a cold layout path
+        // otherwise expands LayoutPath.rootLayout recursively during compilation.
+        // Reads and writes themselves stay inline, on the original storage.
+        private val BYTE_ACCESS = ValueLayout.JAVA_BYTE.varHandle()
         init {
             // Link both supported segment implementations before any guest
             // target can assume the native implementation is the only subtype.
@@ -431,9 +437,9 @@ internal class ManagedAllocation private constructor(
             val bytes = ByteArray(size.toInt())
             return ManagedAllocation(bytes, MemorySegment.ofArray(bytes), true, pointerBytes)
         }
-        fun immutable(bytes: ByteArray, pointerBytes: Int): ManagedAllocation {
+        fun immutable(bytes: ByteArray, pointerBytes: Int, staticImage: Boolean = false): ManagedAllocation {
             val copy = bytes.copyOf()
-            return ManagedAllocation(copy, MemorySegment.ofArray(copy), false, pointerBytes)
+            return ManagedAllocation(copy, MemorySegment.ofArray(copy), false, pointerBytes, staticImage)
         }
     }
 }

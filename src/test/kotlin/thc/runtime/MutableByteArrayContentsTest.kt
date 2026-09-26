@@ -65,8 +65,11 @@ class MutableByteArrayContentsTest {
             assertTrue(first.sameLocation(ManagedAddress.fromGuestByteArray(frozen)))
             // Unsafe freeze does not copy or change physical backing identity.
             assertEquals(255L, alias.readWord8(7))
-            assertThrows(RuntimeFault::class.java) { first.plus(-1) }
-            assertThrows(RuntimeFault::class.java) { first.plus(Long.MAX_VALUE) }
+            // Address arithmetic may leave the allocation; dereferences still
+            // check its bounds, and overflowing offset arithmetic still fails.
+            assertThrows(RuntimeFault::class.java) { first.plus(-1).readWord8(0) }
+            assertThrows(RuntimeFault::class.java) { first.plus(Long.MAX_VALUE).readWord8(0) }
+            assertThrows(RuntimeFault::class.java) { first.plus(1).plus(Long.MAX_VALUE) }
             assertThrows(RuntimeFault::class.java) { first.plus(24).readWord8(0) }
         }
         val empty = contents(PinnedMemory.allocate(0, 1))

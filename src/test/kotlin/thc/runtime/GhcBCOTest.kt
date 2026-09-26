@@ -3,6 +3,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.frame.FrameDescriptor
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.Node
@@ -211,6 +212,28 @@ class GhcBCOTest {
                 }
                 assertEquals(0, resumed)
                 ThreadInventoryCoreEvidence.released(language)
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun scalarEntryRejectsTupleOnlyBcoOperationsBeforeEvaluatingOperands() {
+        context().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val bco = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
+                val proof = CoreRepresentation(CoreKind.UNKNOWN, primReps = bco.primReps, components = listOf(bco))
+                val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameDescriptor.newBuilder().build())
+                for (name in listOf("newBCO#", "mkApUpd0#")) {
+                    val operands = Array<Expr>(if (name == "newBCO#") 6 else 1) {
+                        object : Expr() {
+                            override fun execute(frame: VirtualFrame): Any? = error("scalar rejection evaluated an operand")
+                        }
+                    }
+                    val node = GhcBCOExpression(name, operands, language, Metrics(false), proof)
+                    assertEquals("$name requires a tuple destination",
+                        assertThrows(RuntimeFault::class.java) { node.execute(frame) }.message)
+                }
             } finally { context.leave() }
         }
     }

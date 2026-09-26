@@ -28,6 +28,38 @@ There is no implicit widening between the two types. Every floating operation
 rounds to its declared precision; comparisons use IEEE arithmetic equality and
 ordering, including unordered NaNs and equal positive/negative zeros.
 
+## Original floating C imports
+
+Both backends translate the twelve original `ghc-internal` declarations from
+GHC 9.14.1's `primFloat.c`: `isFloatNaN`, `isFloatInfinite`, `isFloatFinite`,
+`isFloatDenormalized`, `isFloatNegativeZero`, their five `Double` counterparts,
+and `rintFloat`/`rintDouble`. These are foreign library calls, not additional
+primops or a general-purpose libm symbol dispatcher. Admission checks the exact
+installed owner, unsafe `ccall`, and saturated Float/Double/State/result ABI.
+
+Predicates return Haskell `Int#` zero or one. Denormal tests exclude both zeros;
+negative-zero tests inspect the sign and all remaining bits. Rounding uses
+nearest, ties to even, and follows GHC's explicit positive-zero result for
+inputs in `[-0.5, 0.5]`. Already-integral large values, infinities and NaNs are
+returned unchanged. No host floating-environment rounding-mode control is
+introduced. The raw NaN-payload comparisons are a pinned platform/JDK test,
+not a portable Java guarantee about signalling NaNs on every architecture.
+
+With complete installed Core for `ghc-internal`:
+
+```sh
+cabal run exe:thc-fixtures --offline -- float-foreign
+./gradlew --continue floatForeignFullCoreTest floatForeignFullCoreDenseTest
+```
+
+The Haskell producer recovers the actual FCallIds from installed `GHC.Internal.Float`
+and `GHC.Internal.Float.RealFracMethods` interfaces. It specializes GHC-typechecked
+raw-bit consumers, executes the same consumers natively, and retains 384 native
+rows plus 24 strict pre/post-Tidy audits. Both backends and handoff modes compare
+all rows before and immediately after compilation, including signed quiet and
+signalling NaNs, subnormal/normal boundaries, infinities, half ties and adjacent
+encodings. The compiler/plugin and original library bodies are not replaced.
+
 ## Integer decomposition and public exponent
 
 `decodeFloat_Int#` returns `(# Int#, Int# #)` and `decodeDouble_Int64#`

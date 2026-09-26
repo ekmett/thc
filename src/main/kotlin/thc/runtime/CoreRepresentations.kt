@@ -266,6 +266,7 @@ internal object CoreRepresentations {
         // Intrinsic literal identities must reach strict primitive validation,
         // which runs before operand lowering, even after metadata erasure.
         if (expr.firstOrNull() == "lit") when (expr.getOrNull(1)) {
+            "rubbish" -> RubbishLiterals.proof(expr)
             "bignat" -> BigNatLiterals.proof(expr)
             "int8", "word8", "int16", "word16", "int32", "word32" -> narrowLiteralProof(expr)
             else -> parse(metadata(expr)?.get("rep"))
@@ -346,6 +347,7 @@ internal object CoreJoins {
         val joinsInGroup = definitions(group) ?: return
         val arities = joinsInGroup.associate { it.id to it.parameters.size }
         fun visit(expr: List<Any?>, tail: Boolean, shadowed: Set<String>) {
+            CoreStateApplications.inline(expr)?.let { visit(it, tail, shadowed); return }
             fun isJoin(id: String) = id in arities && id !in shadowed
             when (expr.firstOrNull()) {
                 "var" -> {

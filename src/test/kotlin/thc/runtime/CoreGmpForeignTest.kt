@@ -29,8 +29,8 @@ class CoreGmpForeignTest {
             "unit" to "ghc-internal", "isFunction" to true), "convention" to "ccall", "safety" to "unsafe",
         "arity" to operation.arguments.size.toLong(), "suppliedArity" to operation.arguments.size.toLong(),
         "argumentReps" to operation.arguments.map { scalar(it, false) }, "resultRep" to result(operation, false))
-    @Test fun allFifteenExactContractsIncludeOriginalStateAndLogicalTuple() {
-        assertEquals(15, GmpForeignOp.entries.size)
+    @Test fun allTwentyFourExactContractsIncludeOriginalStateAndLogicalTuple() {
+        assertEquals(24, GmpForeignOp.entries.size)
         for (operation in GmpForeignOp.entries) {
             val proof = result(operation, true)
             assertEquals(operation, CoreGmpForeign.validate(mapOf("rep" to proof, "foreignCall" to descriptor(operation)),

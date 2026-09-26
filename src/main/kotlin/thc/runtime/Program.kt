@@ -1161,10 +1161,22 @@ private class Alternative(val kind: Int, val value: Any?,
             val scrutinee = frame.getObject(slot)
             (value as DataLayout).matches(scrutinee)
         } else false
-        LITERAL_ALTERNATIVE -> if (value is Long && frame.isLong(slot)) frame.getLong(slot) == value
-            else FrameAccess.read(frame, slot) == value
+        LITERAL_ALTERNATIVE -> matchesLiteral(frame, slot)
         else -> false
     })
+    private fun matchesLiteral(frame: VirtualFrame, slot: Int): Boolean {
+        val literal = value
+        if (literal is Long) {
+            val number = literal.toLong()
+            if (frame.isLong(slot)) return frame.getLong(slot) == number
+            val scrutinee = FrameAccess.read(frame, slot)
+            return scrutinee is Long && scrutinee.toLong() == number
+        }
+        // Lowering rejects floating/BigNat alternatives. The remaining literal
+        // carrier is ManagedAddress, whose Object.equals is identity, not the
+        // separate address-comparison primop. Never invoke a scrutinee's equals.
+        return FrameAccess.read(frame, slot) === literal
+    }
 }
 private open class Case(scrutinee: Expr, protected val binderSlot: Int,
                    @field:Children protected var alternatives: Array<Alternative>, metrics: Metrics,
@@ -1874,7 +1886,8 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         // Non-looping roots retain entry argument facts. Once self recursion
         // is observed, PE selects only the loop body instead of duplicating it.
         if (hasSelfTail) return loop.execute(frame)
-        return try { (loop.repeatingNode as SelfRepeater).once(frame) }
+        val repeating = loop.repeatingNode as? SelfRepeater ?: fault("Invalid function self-loop node")
+        return try { repeating.once(frame) }
         catch (_: AstSelfCall) {
             tailCallProfile.enter()
             if (metrics.enabled) metrics.incrementSelfTailReentries()
@@ -1959,6 +1972,7 @@ private data class FunctionSpec(val target: RootCallTarget, val captureLayout: C
 class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>,
               internal val enableAsync: Boolean = false) : ExecutableProgram {
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
+    private val rubbishLiterals = RubbishLiterals(language)
     private val foreignLinks = moduleData["foreignLinks"] as? List<thc.ForeignBitcode> ?: emptyList()
     private val packageScalarLinks = moduleData["packageScalarLinks"] as? List<thc.PackageScalarLink> ?: emptyList()
     private val stackTargetLayout = moduleData["targetLayout"]
@@ -2239,6 +2253,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }.also { check(it.representation) }
     }
     private fun literal(kind: String, value: String, proof: CoreRepresentation? = null): Any = when (kind) {
+        "rubbish" -> rubbishLiterals.decode(requireNotNull(proof))
         "int8" -> int8Literal(value)
         "int16" -> int16Literal(value)
         "int32" -> int32Literal(value)
@@ -2257,6 +2272,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
     private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expr {
+        CoreStateApplications.inline(expr)?.let { return compile(it, scope, tail) }
         val outer = operandBuilder
         val head = (expr.getOrNull(1) as? List<*>)?.firstOrNull()
         val operands = if (enableAsync && expr.firstOrNull() == "app" && head in setOf("prim", "con"))
@@ -2308,7 +2324,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         }
         "lit" -> Literal(literal(expr[1] as String, expr[2] as String, CoreRepresentations.expression(expr))).let {
             if (expr[1] in listOf("int8", "word8", "int16", "word16", "int32", "word32")) it.proven(CoreRepresentations.narrowLiteralProof(expr))
-            else if (expr[1] == "bignat") it.proven(BigNatLiterals.proof(expr)) else it
+            else if (expr[1] == "bignat") it.proven(BigNatLiterals.proof(expr))
+            else if (expr[1] == "rubbish") it.proven(RubbishLiterals.proof(expr)) else it
         }
         "void" -> Literal(Unit)
         "lam" -> {
@@ -2356,6 +2373,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"), true)
             val stringRts = CoreStringRtsForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val floatingForeign = CoreFloatForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val environment = CoreEnvironmentForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val rtsDiagnostic = CoreRtsDiagnosticForeign.validate(foreignMetadata,
@@ -2379,7 +2398,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (runtimeService != null) {
@@ -2489,6 +2508,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     }
                 }
                 EnvironmentExpression(environment, operands.toTypedArray(), tupleProof)
+            } else if (floatingForeign != null) {
+                CoreFloatForeign.validateHead(fn, defined || fn.getOrNull(1) in scope.joins)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreFloatForeign.validateOperand(floatingForeign, index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                FloatForeignExpression(floatingForeign, operands[0], operands[1], tupleProof)
             } else if (stringRts != null) {
                 CoreStringRtsForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
@@ -3049,7 +3077,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val child = local.child(); val kind = alt[0] as String
                 val value = when (kind) {
                     "lit" -> (alt[1] as List<String>).let {
-                        if (it[0] == "bignat") throw UnsupportedCore("BigNat literal alternatives are invalid GHC Core")
+                        if (it[0] in setOf("bignat", "rubbish")) throw UnsupportedCore("BigNat/rubbish literal alternatives are invalid GHC Core")
                         if (it[0] in setOf("float", "double")) throw UnsupportedCore("Floating literal alternatives are invalid GHC Core")
                         literal(it[0], it[1])
                     }

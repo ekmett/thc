@@ -49,6 +49,7 @@ checkInstalledCache root directory ghc ghcPkg helper libdir baseUnit = withCurre
         "platform" .= platform, "way" .= ("dynamic-nonprofiling" :: String)]
       check condition message = unless condition (fail message)
       count = length . filter (== "load") . BS.lines <$> BS.readFile trace
+      probeCount = length . filter (== "probe") . BS.lines <$> BS.readFile trace
       shellQuote value = "'" ++ concatMap (\c -> if c == '\'' then "'\\''" else [c]) value ++ "'"
   createDirectoryIfMissing True work
   cacheExists <- doesDirectoryExist cache
@@ -98,9 +99,12 @@ checkInstalledCache root directory ghc ghcPkg helper libdir baseUnit = withCurre
         pure result
       warm label = do
         before <- count
+        probesBefore <- probeCount
         _ <- loaded
         after <- count
+        probesAfter <- probeCount
         check (after == before) (label ++ " unexpectedly hydrated/rendered Core")
+        check (probesAfter == probesBefore + 1) (label ++ " did not reuse its exact transaction probe")
       invalid label = do
         before <- count
         result <- Exception.try acquire :: IO (Either IOException (Either Installed.MissingCore Project.InstalledBundle))
@@ -155,6 +159,39 @@ checkInstalledCache root directory ghc ghcPkg helper libdir baseUnit = withCurre
             Foreign.IfaceForeign Nothing [Foreign.IfaceForeignFile LangC "int cache_probe_extra;\n" ".c"]}) original
           annotationChange = set_mi_anns [] original
       check (sum (map snd altered) > 0 && not (null (mi_anns original))) "Cache mutation controls are vacuous"
+      -- Exercise the reusable action itself against genuine interface bytes.
+      -- Exact reuse must avoid the helper; changed retained Core or helper
+      -- bytes must invalidate it even when ordinary interface hashes agree.
+      memoized <- Installed.prepareInstalledProbe context unit
+      probesBefore <- probeCount
+      memoOriginal <- memoized
+      probesFirst <- probeCount
+      memoRepeated <- memoized
+      probesRepeated <- probeCount
+      check (memoRepeated == memoOriginal && probesFirst == probesBefore + 1 && probesRepeated == probesFirst)
+        "Unchanged exact probe did not reuse its invocation-local result"
+      (do writeRaw (hi "InterfaceCacheRoot") bodyChange
+          changed <- memoized
+          probesChanged <- probeCount
+          check (changed /= memoOriginal && probesChanged == probesRepeated + 1)
+            "Raw retained-Core mutation reused a previous probe")
+        `finally` BS.writeFile (hi "InterfaceCacheRoot") rawBytes
+      restored <- memoized
+      check (restored == memoOriginal) "Restored raw interface changed the probe result"
+      wrapperBytes <- BS.readFile wrapper
+      (do BS.appendFile wrapper "\n# changed helper bytes for invocation-local probe control\n"
+          beforeHelper <- probeCount
+          same <- memoized
+          afterHelper <- probeCount
+          check (same == memoOriginal && afterHelper == beforeHelper + 1)
+            "Changed helper bytes reused a previous probe")
+        `finally` BS.writeFile wrapper wrapperBytes
+      fresh <- Installed.prepareInstalledProbe context unit
+      beforeFresh <- probeCount
+      freshResult <- fresh
+      afterFresh <- probeCount
+      check (freshResult == memoOriginal && afterFresh == beforeFresh + 1)
+        "A new transaction reused another transaction's probe state"
       (do writeRaw replacement bodyChange
           BS.writeFile mutateAfterProbe ""
           changed <- cold "input mutation after initial hit probe"
@@ -216,6 +253,7 @@ checkInstalledCache root directory ghc ghcPkg helper libdir baseUnit = withCurre
     "sameInterfaceHashPayloadControls" .= (["core", "foreign", "annotations"] :: [String]),
     "mutableDependency" .= True, "sourceContentAndAvailability" .= True,
     "hitInputMutation" .= True, "incompleteRegistrationFallback" .= True,
+    "transactionExactProbeReuse" .= True, "rawProbeAndHelperMutation" .= True,
     "retainedProviderWithPresentUsages" .= True,
     "corruptBundleAndIndex" .= True, "missingCorruptThinInterfaces" .= True,
     "compilerBinariesHashed" .= False])

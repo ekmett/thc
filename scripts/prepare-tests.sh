@@ -34,6 +34,7 @@ fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
 "$fixture_bin" word-floating
 "$fixture_bin" scalar-bitcasts
 "$fixture_bin" bignat-literals
+"$fixture_bin" rubbish-literals
 "$fixture_bin" float-decode
 "$fixture_bin" floating-remainder
 "$fixture_bin" floating-address
