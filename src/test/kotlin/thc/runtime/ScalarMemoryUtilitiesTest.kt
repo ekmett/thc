@@ -98,7 +98,9 @@ class ScalarMemoryUtilitiesTest {
             assertEquals(emptyList<Any>(), audit["missingGlobals"])
             assertTrue((audit["primitives"] as List<Map<String, Any?>>).map { it["name"] }.containsAll(primitives))
             val module = json(File(directory, "$stage/core/ScalarMemoryUtilities.json"))
-            for (backend in listOf("ast", "bytecode")) for (name in names) context().use { context ->
+            // Native pointer remainder observes the actual aligned allocation
+            // address; all other cases retain the native-access-denied context.
+            for (backend in listOf("ast", "bytecode")) for (name in names) context(name == "remainderCase").use { context ->
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
@@ -125,7 +127,7 @@ class ScalarMemoryUtilitiesTest {
                     // floated $j once, regardless of which allocation branch wins.
                     // shrinkCase's shared I# 77 CAF was evaluated by the interpreted
                     // corpus; its cached target remains but is not re-entered.
-                    val expectedEntries = when {
+                    val sourceEntries = when {
                         name == "pinCase" -> 3L
                         name.startsWith("numeric") -> 1L
                         else -> 2L
@@ -135,13 +137,26 @@ class ScalarMemoryUtilitiesTest {
                     val body = (binding["expr"] as List<*>)[2] as List<*>
                     if (!name.startsWith("numeric")) {
                         assertEquals("app", body[0]); assertEquals("lam", (body[1] as List<*>)[0])
+                        val state = body[1] as List<*>
+                        val formal = (state[1] as List<Map<String, Any?>>).single()
+                        val void = mapOf("primReps" to emptyList<String>(), "kind" to "void", "evaluated" to true)
+                        assertEquals("State# RealWorld",formal["type"])
+                        assertEquals(void,formal["rep"])
+                        assertEquals(false,formal["lifted"]); assertEquals(false,formal["coercion"])
+                        val argument = (body[2] as List<List<*>>).single()
+                        assertEquals("void",argument[0])
+                        assertEquals(void,(argument.last() as Map<*, *>)["rep"])
+                        assertEquals(listOf(listOf(false),false,false),body.drop(3).take(3))
                     }
                     fun nodes(value: Any?): List<List<*>> = when (value) {
                         is List<*> -> listOf(value) + value.flatMap(::nodes)
                         is Map<*, *> -> value.values.flatMap(::nodes)
                         else -> emptyList()
                     }
-                    assertEquals(expectedEntries, nodes(bindings).count { it.firstOrNull() == "lam" }.toLong())
+                    assertEquals(sourceEntries, nodes(bindings).count { it.firstOrNull() == "lam" }.toLong())
+                    // Lowering beta-reduces exactly the proven immediate State#
+                    // application, without changing the original Core inventory.
+                    val expectedEntries = sourceEntries - if (name.startsWith("numeric")) 0L else 1L
                     if (name == "pinCase") {
                         val helper = bindings.single { it["name"] == "\$j" }
                         assertEquals(3, nodes(binding).count { it.firstOrNull() == "var" && it[1] == helper["id"] })
@@ -234,6 +249,22 @@ class ScalarMemoryUtilitiesTest {
         assertThrows(RuntimeFault::class.java) { ManagedSmallArray.slice(storage,2,2) }
         storage.shrink(0); assertTrue(backing.all { it == null })
         assertEquals(0L,ManagedSmallArray.size(storage))
+    }
+
+    @Test fun nativeRemainderRequiresPermissionWhileManagedOffsetsDoNot() {
+        for (native in listOf(false, true)) context(native).use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val pinned = ManagedAddress.fromAllocation(PinnedMemory.allocate(64,64)).plus(31)
+                if (native) assertEquals(31L,pinned.remainder(64))
+                else assertEquals("Native address projection requires native access",
+                    assertThrows(RuntimeFault::class.java) { pinned.remainder(64) }.message)
+                val managed = ManagedAddress.fromByteArray(ByteArray(64)).plus(31)
+                assertEquals(31L,managed.remainder(64))
+                assertEquals(3L,managed.remainder(7))
+                assertThrows(RuntimeFault::class.java) { managed.remainder(0) }
+            } finally { context.leave() }
+        }
     }
 
     @Test fun nativeFillAndMoveKeepBorrowLifetimeAndContextChecks() {

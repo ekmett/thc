@@ -14,7 +14,7 @@ import java.util.WeakHashMap
 import java.lang.ref.WeakReference
 
 /** An unlifted ThreadId# is the actual JVM thread ID scoped to its owning context. */
-internal class GuestThreadId(val javaId: Long, val owner: GuestThreads, val capability: Long,
+internal class GuestThreadId(val javaId: Long, val owner: GuestThreads, @Volatile var capability: Long,
                              carrier: Thread, internal val forked: Boolean, internal val capabilityLocked: Boolean = false) {
     internal val carrier = WeakReference(carrier)
     // Outcome of this fork's initial native request, not a perpetual OS promise.
@@ -50,7 +50,7 @@ internal class GuestThreadExtent internal constructor(private val identity: Gues
     }
 }
 
-/** Guest identities are carrier-local; logical capabilities describe CPU capacity. */
+/** Guest identities are carrier-local; logical capabilities do not resize JVM pools. */
 internal class GuestThreads internal constructor(
     private val maskingState: ThreadLocal<MaskingState>,
     val cpuAffinity: CpuAffinity = CpuAffinity.discover(false),
@@ -104,9 +104,19 @@ internal class GuestThreads internal constructor(
     // key or a numeric Java-thread snapshot. Signal delivery is not admitted yet.
     private var mainThreadWeak: MainThreadWeakKey? = null
     private var nextCapability = 0L
+    private var logicalCapabilities = cpuAffinity.count.toLong()
     @TruffleBoundary @Synchronized internal fun capabilityCount(): Long {
         if (closed) fault("Guest context has closed")
-        return cpuAffinity.count.toLong()
+        return logicalCapabilities
+    }
+    @TruffleBoundary @Synchronized internal fun setCapabilityCount(count: Long) {
+        if (closed) fault("Guest context has closed")
+        if (count !in 1L..0xffff_ffffL) fault("setNumCapabilities requires a positive Word32 count")
+        logicalCapabilities = count
+        nextCapability %= count
+        // Keep retained ThreadId# observations in range, without changing the
+        // initial affinity outcome or repinning live Java carriers.
+        knownThreads.keys.forEach { it.capability %= count }
     }
     @Synchronized fun registerMainThread(key: MainThreadWeakKey) {
         check(!closed) { "Guest context has closed" }
@@ -172,8 +182,8 @@ internal class GuestThreads internal constructor(
         check(prior == null || prior.thread === current) { "Java thread ID was reused before guest completion" }
         if (prior == null && inheritedMask != null) maskingState.set(inheritedMask)
         val identity = identities.getOrPut(current) {
-            val selected = Math.floorMod(capability ?: nextCapability, cpuAffinity.count.toLong())
-            if (capability == null) nextCapability = (selected + 1L) % cpuAffinity.count
+            val selected = Math.floorMod(capability ?: nextCapability, logicalCapabilities)
+            if (capability == null) nextCapability = (selected + 1L) % logicalCapabilities
             GuestThreadId(id, this, selected, current, forked, capability != null).also { knownThreads[it] = Unit }
         }
         check(!identity.status.terminal) { "Terminated guest Java thread re-entered" }

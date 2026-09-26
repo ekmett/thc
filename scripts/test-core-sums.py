@@ -226,7 +226,7 @@ class SumAuditTest(unittest.TestCase):
             report=self.rejected(module)
             self.assertTrue(any(i['detail']=='unboxed-sum global binding' for i in report['issues']))
 
-    def test_formals_arguments_captures_let_and_join_inputs_reject(self):
+    def test_ordinary_inputs_and_captures_require_capabilities_other_boundaries_reject(self):
         proof=summ()
         for mode in ('formal','argument','capture','let','erased-let','heap-field','join-capture','join-formal'):
             with self.subTest(mode=mode):
@@ -244,7 +244,19 @@ class SumAuditTest(unittest.TestCase):
                     join=binding('j',lam([binder('n',proof if mode=='join-formal' else INT)],body,INT))
                     join.update(joinValueArity=1,joinResultRep=INT,info=dict(joinArity=1))
                     case[3][0][3]=['let',False,[join],lit(),dict(rep=INT)]
-                report=self.rejected(module)
+                if mode in ('formal', 'capture'):
+                    self.accepted(module)
+                    disabled=dict(ENABLED, aggregateInputs=[], aggregateCaptures=[])
+                    report=run(module,cap=disabled)
+                    self.assertFalse(report['accepted'])
+                elif mode=='argument':
+                    # Sum arguments are admitted, but cannot replace the original
+                    # producer's scalar formal merely because the payload is Long.
+                    report=self.rejected(module)
+                    self.assertTrue(any(i['code']=='aggregate-shape' for i in report['issues']))
+                    continue
+                else:
+                    report=self.rejected(module)
                 expected={'formal':'formal argument','argument':'argument','capture':'capture','let':'let binding',
                           'erased-let':'let binding','heap-field':'argument',
                           'join-capture':'join capture','join-formal':'formal argument'}[mode]
@@ -270,6 +282,26 @@ class SumAuditTest(unittest.TestCase):
             changed=copy.deepcopy(module)
             changed['bindings'][1]['expr'][2][2][0]['joinResultRep']=summ(WORD,INT)
             self.rejected(changed)
+
+    def test_ordinary_sum_actuals_require_exact_logical_shape_and_unlifted_flags(self):
+        proof=summ()
+        module=fixture()
+        original=module['bindings'][0]['expr'][2]
+        body=copy.deepcopy(original)
+        body[1]=var('s',proof)
+        module['bindings'].append(binding('consume',lam([binder('s',proof)],body,INT)))
+        value=module['bindings'][1]['expr'][2]
+        call=['app',var('consume',CLOSURE),[value],[False],False,False,dict(rep=INT)]
+        module['bindings'][0]['expr'][2]=call
+        self.accepted(module)
+        disabled=dict(ENABLED,aggregateInputs=[])
+        self.assertTrue(any(i['detail']=='unboxed-sum argument' for i in run(module,cap=disabled)['issues']))
+        changed=copy.deepcopy(module)
+        changed['bindings'][0]['expr'][2][3]=[True]
+        self.assertTrue(any(i['code']=='application-levity' for i in self.rejected(changed)['issues']))
+        changed=copy.deepcopy(module)
+        changed['bindings'][-1]['expr'][1][0]['rep']=summ(WORD,INT)
+        self.assertTrue(any(i['code']=='aggregate-shape' for i in self.rejected(changed)['issues']))
 
     def test_constructor_metadata_cannot_encode_a_sum_as_one_word_field(self):
         module=fixture();zero=summ(VOID,tup())

@@ -355,10 +355,19 @@ class Audit:
     def supported_empty_join_input(self, rep):
         return self.is_empty_tuple(rep) and 'empty-unboxed-tuple' in self.cap.get('aggregateJoinInputs', [])
 
+    def supported_tuple_join_input(self, rep):
+        return (self.supported_empty_join_input(rep) or
+                'unboxed-tuple' in self.cap.get('aggregateJoinInputs', []) and tuple_input_proof_error(rep,
+                    allow_vectors='join-arguments' in self.cap.get('vectorTransport', [])) is None)
+
     def supported_tuple_input(self, rep):
         return (self.supported_empty_input(rep) or
                 'unboxed-tuple' in self.cap.get('aggregateInputs', []) and tuple_input_proof_error(rep,
                     allow_vectors='tuple-fields' in self.cap.get('vectorTransport', [])) is None)
+
+    def supported_sum(self, rep, capability):
+        return ('unboxed-sum' in self.cap.get(capability, []) and is_sum(rep) and
+                sum_proof_error(rep) is None)
 
     def supported_vector(self, rep, boundary):
         return (boundary in self.cap.get('vectorTransport', []) and is_vector(rep) and
@@ -760,7 +769,9 @@ class Audit:
                 core_original_foreign.validate_head(function, defined)
                 if symbol == 'stg_sig_install':
                     self.reference('ghc-internal:GHC.Internal.Conc.Signal.runHandlersPtr', owner, path + '/signal-dispatcher')
-                if (symbol in core_original_foreign.STACK_INFO or symbol in core_original_foreign.SEEK_CONSTANTS
+                if (symbol in core_original_foreign.TEXT_OPERATIONS
+                        or symbol in core_original_foreign.WAIT_STATUS_OPERATIONS
+                        or symbol in core_original_foreign.STACK_INFO or symbol in core_original_foreign.SEEK_CONSTANTS
                         or symbol in core_original_foreign.STAT_IMAGE
                         or symbol in core_original_foreign.GMP_SYMBOLS
                         or symbol in core_original_foreign.LIBDW_UNAVAILABLE
@@ -773,6 +784,11 @@ class Audit:
                                       'rintFloat', 'rintDouble')
                         or symbol in ('getRTSStatsEnabled', 'getRTSStats', 'performGC', 'performMajorGC',
                                       'performBlockingMajorGC', 'getMonotonicNSec')
+                        or symbol in ('getNumberOfProcessors', 'setNumCapabilities', '__hscore_sizeof_siginfo_t',
+                                      '__hscore_f_setfd', '__hscore_fd_cloexec',
+                                      'getOrSetSystemEventThreadIOManagerThreadStore',
+                                      'getOrSetSystemTimerThreadEventManagerStore',
+                                      'getOrSetSystemTimerThreadIOManagerThreadStore')
                         or symbol in ('getOrSetSystemEventThreadEventManagerStore',
                                       'getOrSetGHCConcSignalSignalHandlerStore',
                                       'getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',
@@ -1183,22 +1199,28 @@ class Audit:
             elif tag == 'lam':
                 ids = self.binder_ids(expr[1], owner, path + '/binders')
                 for index, binder in enumerate(expr[1]):
-                    if is_sum(binder.get('rep')):
+                    if is_sum(binder.get('rep')) and (index < join_prefix or
+                            not self.supported_sum(binder.get('rep'), 'aggregateInputs')):
                         self.issue('aggregate-boundary', owner, path, 'unboxed-sum formal argument')
+                    if is_sum(binder.get('rep')) and binder.get('lifted') is not False:
+                        self.issue('application-levity', owner, path, 'Sum formal must be unlifted')
                     if is_vector(binder.get('rep')) and not self.supported_vector(binder['rep'],
                             'join-arguments' if index < join_prefix else 'arguments'):
                         self.issue('vector-boundary', owner, path, 'vector formal argument')
                     if is_vector(binder.get('rep')) and binder.get('lifted') is not False:
                         self.issue('application-levity', owner, path, 'Vector formal must be unlifted')
                     if self.is_tuple(binder.get('rep')) and not (
-                            self.supported_empty_join_input(binder.get('rep')) if index < join_prefix else
+                            self.supported_tuple_join_input(binder.get('rep')) if index < join_prefix else
                             self.supported_tuple_input(binder.get('rep'))):
                         self.issue('aggregate-boundary', owner, path, 'unboxed-tuple formal argument')
                     if self.is_tuple(binder.get('rep')) and binder.get('lifted') is not False:
                         self.issue('application-levity', owner, path, 'Tuple formal must be unlifted')
                 captured = {key for key in (self.free_variables(expr[2]) - ids) & bound.keys()
                             if self.is_tuple_value(bound[key])}
-                if any(self.is_sum_value(bound[key]) for key in (self.free_variables(expr[2]) - ids) & bound.keys()):
+                sum_captures = [bound[key] for key in (self.free_variables(expr[2]) - ids) & bound.keys()
+                                if self.is_sum_value(bound[key])]
+                if sum_captures and (join_prefix > 0 or
+                        not all(self.supported_sum(rep, 'aggregateCaptures') for rep in sum_captures)):
                     self.issue('aggregate-boundary', owner, path, 'unboxed-sum capture')
                 # The consumed join lambda branches within its enclosing frame;
                 # a residual lambda still allocates an ordinary closure.
@@ -1755,6 +1777,13 @@ class Audit:
                         if registers == ['BoxedRep Nothing'] and isinstance(rep, dict) and rep.get('primReps') in (
                                 ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)']):
                             stored = dict(stored, primReps=rep['primReps'])
+                        # An erased STM newtype cast refines an opaque lifted
+                        # object to its function type without changing carrier,
+                        # levity or evaluatedness. Runtime forcing still checks
+                        # that the value is actually a closure.
+                        if (role == 'action' and isinstance(stored, dict) and stored.get('kind') == 'object' and
+                                stored.get('primReps') == ['BoxedRep (Just Lifted)']):
+                            stored = dict(stored, kind='closure')
                         if isinstance(registers, list) and (
                                 self.shape(stored) != self.shape(rep) or
                                 stored.get('kind') != 'unknown' and not mvar_role(stored, role)):
@@ -1838,7 +1867,12 @@ class Audit:
                         except ValueError as error:
                             self.issue('constructor-arity', owner, path, str(error))
                     if not sum_constructor and not heap_aggregate and is_sum(self.effective_rep(argument, bound)):
-                        self.issue('aggregate-boundary', owner, f'{path}/arguments/{index}', 'unboxed-sum argument')
+                        join = isinstance(target, dict) and '_join_arity' in target
+                        if (function[0] in ('prim', 'con') or join or
+                                not self.supported_sum(self.effective_rep(argument, bound), 'aggregateInputs')):
+                            self.issue('aggregate-boundary', owner, f'{path}/arguments/{index}', 'unboxed-sum argument')
+                        if not isinstance(flags, list) or index >= len(flags) or flags[index] is not False:
+                            self.issue('application-levity', owner, path, 'Sum argument must be unlifted')
                     if tuple_constructor and self.is_tuple(proof) and isinstance(proof.get('components'), list):
                         components = proof['components']
                         if index < len(components):
@@ -1861,7 +1895,7 @@ class Audit:
                         if self.is_tuple(argument_rep) or self.is_tuple(stored):
                             join = isinstance(target, dict) and '_join_arity' in target
                             ordinary = function[0] not in ('prim', 'con') and not join
-                            supported = self.supported_empty_join_input(argument_rep) if join else (
+                            supported = self.supported_tuple_join_input(argument_rep) if join else (
                                 heap_aggregate or ordinary and self.supported_tuple_input(argument_rep) or
                                 arithmetic_exception and self.is_empty_tuple(argument_rep))
                             if not supported:
@@ -1931,8 +1965,8 @@ class Audit:
                 if is_sum(binder_proof) and not expr[3]:
                     self.issue('aggregate-shape', owner, path, 'Empty sum case')
                 if self.is_tuple(binder_proof):
-                    if len(expr[3]) != 1:
-                        self.issue('aggregate-boundary', owner, path, 'unboxed-tuple requires one alternative')
+                    if len(expr[3]) > 1:
+                        self.issue('aggregate-boundary', owner, path, 'unboxed-tuple requires at most one alternative')
                 arm_proofs = [self.literal_rep(alt[3]) or self.expression_rep(alt[3]) for alt in expr[3]]
                 floating = next((proof for proof in [self.expression_rep(expr), *arm_proofs]
                                  if isinstance(proof, dict) and proof.get('kind') in ('float', 'double')), None)

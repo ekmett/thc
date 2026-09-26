@@ -10,7 +10,9 @@ import Control.Monad (unless)
 import Data.Data (Data)
 import Data.IORef (newIORef, readIORef)
 import Data.List (elemIndex, nub)
+import Data.Maybe (catMaybes)
 import GHC.Plugins
+import GHC.Builtin.Names (funPtrTyConKey)
 import GHC.Builtin.Types.Prim (byteArrayPrimTyCon, mutableByteArrayPrimTyCon)
 import GHC.Core.TyCo.Rep (Type(..), scaledThing)
 import GHC.Core.TyCo.Compare (eqType)
@@ -154,19 +156,22 @@ recordImports options environment
               (liftIO (ioError (userError "THC stock static-import probe mutated compilation state")))
             case result of
               Just products | isEmptyMessages messages -> do
-                let calls = traverse oneCall products
+                encoded <- mapM (\(stubs,_) -> liftIO
+                  (Foreign.encodeIfaceForeign (hsc_logger top) flags stubs [])) products
+                let imports = sequence (zipWith3 (\checked original (_,bindings) -> checked original (fromOL bindings))
+                      typed encoded products)
                     (headers,sources) = unzip [case stubs of NoStubs -> (mempty,mempty); ForeignStubs h c -> (h,c)
                       | (stubs,_) <- products]
                 original <- liftIO (Foreign.encodeIfaceForeign (hsc_logger top) flags
                   (ForeignStubs (mconcat headers) (mconcat sources)) [])
-                pure $ either Unclassified (\emitted -> StockImports (zipWith ($) typed emitted) (productOf original)) calls
+                pure $ either Unclassified (\emitted -> StockImports (catMaybes emitted) (productOf original)) imports
               _ -> pure (Unclassified "stock-import-emitter-did-not-complete-cleanly")
       let owner = tcg_mod environment
           proof = ImportProof 1 (unitString (moduleUnit owner)) (moduleNameString (moduleName owner)) evidence
       pure environment { tcg_anns = tcg_anns environment ++
         [Annotation (ModuleTarget owner) (toSerialized serializeWithData proof)] }
   where
-    oneCall (_,bindings) = case concatMap (callIn . snd) (fromOL bindings) of
+    oneCall bindings = case concatMap (callIn . snd) bindings of
       [result] -> result
       _ -> Left "static import did not emit exactly one foreign call"
     classify (L _ ForeignImport { fd_name = L _ binder, fd_i_ext = coercion,
@@ -177,9 +182,42 @@ recordImports options environment
           identity <- nameIdentity (varName binder)
           declared <- importTypeIdentity (idType binder)
           normalized <- importTypeIdentity (coercionLKind coercion)
-          pure (Import identity (fmap (\(Header _ name') -> unpackFS name') header) (unpackFS name)
-            (unitString <$> unit) function (convention conv) (safetyName safe) declared normalized)
+          pure $ \_ bindings -> Just . Import identity (fmap (\(Header _ name') -> unpackFS name') header) (unpackFS name)
+            (unitString <$> unit) function (convention conv) (safetyName safe) declared normalized <$> oneCall bindings
+    classify (L _ ForeignImport { fd_name = L _ binder, fd_i_ext = coercion,
+        fd_fi = CImport _ (L _ CCallConv) _ Nothing (CLabel symbol) }) = do
+      unless (idType binder `eqType` coercionRKind coercion && coercionRole coercion == Representational)
+        (Left "foreign-address normalization disagrees with actual binder")
+      _ <- nameIdentity (varName binder)
+      _ <- importTypeIdentity (idType binder)
+      _ <- importTypeIdentity (coercionLKind coercion)
+      let kind = case tyConAppTyCon_maybe (dropForAlls (coercionLKind coercion)) of
+            Just constructor | tyConUnique constructor == funPtrTyConKey -> IsFunction
+            _ -> IsData
+      -- A stock static address has one typed binding and no C obligations.
+      -- It is not a function import and cannot acquire a fabricated call ABI.
+      -- Omit it only from this generated-stub inventory; the retained Core
+      -- literal still undergoes the separate strict address/runtime admission.
+      pure $ \original bindings -> do
+        unless (productOf original `elem` [Product Nothing [], Product (Just ("","",[],[])) []])
+          (Left "static address import emitted foreign products")
+        case bindings of
+          [(actual,rhs)] | actual == binder && exprType rhs `eqType` idType binder &&
+              null (callIn rhs) && addressLabels rhs == [(symbol,kind)] -> Right Nothing
+          _ -> Left "static address import did not emit its exact typed literal binding"
     classify _ = Left "non-static-c-import-declaration"
+
+addressLabels :: CoreExpr -> [(FastString, FunctionOrData)]
+addressLabels = \case
+  Lit (LitLabel symbol kind) -> [(symbol,kind)]
+  App function argument -> addressLabels function ++ addressLabels argument
+  Lam _ body -> addressLabels body
+  Let binding body -> concatMap (addressLabels . snd) (flattenBinds [binding]) ++ addressLabels body
+  Case scrutinee _ _ alternatives -> addressLabels scrutinee ++
+    concatMap (\(Alt _ _ body) -> addressLabels body) alternatives
+  Cast body _ -> addressLabels body
+  Tick _ body -> addressLabels body
+  _ -> []
 
 inspectImports :: Module -> [Annotation] -> Foreign.IfaceForeign -> Either String (Maybe Verdict)
 inspectImports owner annotations original = case proofs of

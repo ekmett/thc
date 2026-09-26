@@ -352,6 +352,8 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
     @Child private var calls = ThunkTargetCache(metrics)
     @Child private var trampoline = TailCallLoop(metrics)
     private val tailCallProfile = BranchProfile.create()
+    private val resumeProfile = BranchProfile.create()
+    private val suspensionProfile = BranchProfile.create()
     @CompilationFinal @Volatile private var seenThunk = false
     @Suppress("UNUSED_PARAMETER")
     fun execute(frame: VirtualFrame, original: Any?): Any? {
@@ -370,7 +372,10 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 3 -> rethrowFailure(original)
                 4 -> fault("Interrupted thunk has no resumable continuation")
             }
-            val observed = if (original.state == 5) savedGuestContinuation(original.value) else null
+            val observed = if (original.state == 5) {
+                resumeProfile.enter()
+                savedGuestContinuation(original.value)
+            } else null
             val child = suspendedChild(observed)
             // The continuation owns its captured callee frame. None of the
             // update/resume helpers needs this caller's frame; materializing
@@ -502,16 +507,19 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 val claim = synchronized(original.monitor) {
                     when (original.state) {
                         0 -> { original.owner = Thread.currentThread(); original.state = 1; claimedHere = true; 0 }
-                        5 -> if ((observed != null && original.value !== observed.identity) ||
-                            (observed == null &&
-                                (suspendedChild(savedGuestContinuation(original.value)) != null))) 3 else {
-                            continuation = savedGuestContinuation(original.value)
-                                ?: fault("Suspended thunk has no guest continuation")
-                            original.value = null // One owner consumes the one-shot continuation.
-                            original.owner = Thread.currentThread()
-                            original.state = 1
-                            claimedHere = true
-                            0
+                        5 -> {
+                            resumeProfile.enter()
+                            if ((observed != null && original.value !== observed.identity) ||
+                                (observed == null &&
+                                    (suspendedChild(savedGuestContinuation(original.value)) != null))) 3 else {
+                                continuation = savedGuestContinuation(original.value)
+                                    ?: fault("Suspended thunk has no guest continuation")
+                                original.value = null // One owner consumes the one-shot continuation.
+                                original.owner = Thread.currentThread()
+                                original.state = 1
+                                claimedHere = true
+                                0
+                            }
                         }
                         1 -> if (original.owner === Thread.currentThread()) 2 else 1
                         else -> 3
@@ -781,6 +789,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
             }
             val saved = savedGuestContinuation(result)
             if (saved != null) {
+                suspensionProfile.enter()
                 if (saved.yielded is DelimitedCut)
                     fault("control0# cannot capture across a thunk update")
                 val expectedRoot = continuation?.sourceRoot
@@ -2141,31 +2150,44 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         freeLocals.filter { outer.locals.getValue(it).let { local -> local.slot < 0 && local.proof.kind == CoreKind.VOID } }
             .forEach { scope.bindVoid(it, outer.locals.getValue(it).proof) }
         val captured = freeLocals.filter { outer.locals.getValue(it).let { local -> local.slot >= 0 || local.proof.kind != CoreKind.VOID } }
-        captured.forEach { id ->
+        val captureFields = arrayListOf<Local>()
+        val captureDestinations = arrayListOf<Int>()
+        val vectorDestinations = arrayListOf<IntArray?>()
+        for (id in captured) {
             val local = outer.locals.getValue(id)
-            if (local.proof.isVector) {
+            if (local.proof.isSum) {
+                CoreRepresentations.requireInput(local.proof)
+                val fields = ArgumentLayout.leaves(local.proof)
+                val sources = local.tupleSlots
+                if (local.cell || sources?.size != fields.size)
+                    throw UnsupportedCore("Sum capture requires exact typed locals")
+                // The sum remains a logical alias. Its owned capture consists of
+                // ordinary typed tag/payload properties, including nullable inactive refs.
+                val destinations = IntArray(fields.size) { index ->
+                    val field = fields[index]
+                    captureFields += Local(sources[index], field.isLong, field, false)
+                    vectorDestinations += null
+                    scope.layout.bind("$id captured sum field $index").also { captureDestinations += it }
+                }
+                scope.bindTuple(id, local.proof, destinations)
+            } else if (local.proof.isVector) {
                 CoreRepresentations.requireInput(local.proof)
                 if (local.cell || local.tupleSlots?.size != 1)
                     throw UnsupportedCore("Vector capture requires one raw-vector local")
-            } else CoreRepresentations.requireScalar(local.proof, "capture")
-        }
-        val captureSources = captured.flatMap { id ->
-            val local = outer.locals.getValue(id)
-            if (local.proof.isVector) local.tupleSlots!!.toList() else listOf(local.slot)
-        }.toIntArray()
-        val captureKinds = captured.map { id ->
-            val local = outer.locals.getValue(id)
-            !local.proof.isVector && local.primitive
-        }.toBooleanArray()
-        val environmentVectorSlots = arrayOfNulls<IntArray>(captured.size)
-        val environmentSlots = captured.mapIndexed { index, id ->
-            val local = outer.locals.getValue(id)
-            if (local.proof.isVector) {
                 val lanes = IntArray(1) { scope.layout.bind("$id captured vector") }
-                environmentVectorSlots[index] = lanes
-                scope.bindTuple(id, local.proof, lanes).slot
-            } else scope.bind(id, local.primitive, local.proof, local.cell, local.entry, local.arityCertificate).slot
-        }.toIntArray()
+                captureFields += local
+                vectorDestinations += lanes
+                captureDestinations += scope.bindTuple(id, local.proof, lanes).slot
+            } else {
+                CoreRepresentations.requireScalar(local.proof, "capture")
+                captureFields += local
+                vectorDestinations += null
+                captureDestinations += scope.bind(id, local.primitive, local.proof, local.cell, local.entry, local.arityCertificate).slot
+            }
+        }
+        val captureSources = captureFields.map { if (it.proof.isVector) it.tupleSlots!![0] else it.slot }.toIntArray()
+        val environmentSlots = captureDestinations.toIntArray()
+        val environmentVectorSlots = vectorDestinations.toTypedArray()
         val argumentSlots = arrayListOf<Int>(); val argumentIndices = arrayListOf<Int>()
         val argumentProofs = arrayListOf<CoreRepresentation>()
         for ((index, arg) in args.withIndex()) {
@@ -2173,7 +2195,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val proof = CoreRepresentations.binder(arg).let { if (lifted) it.copy(evaluated = entryStrict[index]) else it }
             if (proof.isTypedTransport) {
                 if (lifted) throw RuntimeFault("Typed formal cannot be lifted")
-                val fields = TupleShape.flatten(proof)
+                val fields = ArgumentLayout.leaves(proof)
                 val slots = IntArray(fields.size) { leaf -> scope.layout.bind("${arg["id"]} typed input $leaf") }
                 scope.bindTuple(arg["id"] as String, proof, slots)
                 fields.forEachIndexed { leaf, field ->
@@ -2186,12 +2208,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 argumentSlots += scope.bind(arg["id"] as String, !lifted && arg["coercion"] != true, proof).slot
             }
         }
-        val captures = if (captured.isEmpty()) null else CaptureLayout.withVectors(requireNotNull(language),
-            captured.map { id -> outer.locals.getValue(id).proof.takeIf { it.isVector } }.toTypedArray(), captureKinds,
-            captured.map { outer.locals.getValue(it).let { local -> !local.cell && local.proof.isLong && local.proof.evaluated } }.toBooleanArray(),
-            captured.map { outer.locals.getValue(it).let { local -> if (local.cell) null else local.proof.referenceCarrier() } }.toTypedArray(),
-            captured.map { outer.locals.getValue(it).let { local -> !local.cell && local.proof.isFloat && local.proof.evaluated } }.toBooleanArray(),
-            captured.map { outer.locals.getValue(it).let { local -> !local.cell && local.proof.isDouble && local.proof.evaluated } }.toBooleanArray())
+        val captures = if (captureFields.isEmpty()) null else CaptureLayout.withVectors(requireNotNull(language),
+            captureFields.map { it.proof.takeIf { proof -> proof.isVector } }.toTypedArray(),
+            captureFields.map { !it.proof.isVector && it.primitive }.toBooleanArray(),
+            captureFields.map { !it.cell && it.proof.isLong && it.proof.evaluated }.toBooleanArray(),
+            captureFields.map { if (it.cell) null else it.proof.referenceCarrier() }.toTypedArray(),
+            captureFields.map { !it.cell && it.proof.isFloat && it.proof.evaluated }.toBooleanArray(),
+            captureFields.map { !it.cell && it.proof.isDouble && it.proof.evaluated }.toBooleanArray())
         val allArgumentSlots = IntArray(args.size) { -1 }
         val allArgumentProofs = Array(args.size) { CoreRepresentation.UNKNOWN }
         args.forEachIndexed { index, arg ->
@@ -2384,11 +2407,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val gcForeign = CoreGcForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val rtsEventForeign = CoreRtsEventForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val allocationCounterForeign = CoreBoundThreadForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"), true)
             val stringRts = CoreStringRtsForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val floatingForeign = CoreFloatForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val textForeign = CoreTextForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val environment = CoreEnvironmentForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
@@ -2415,7 +2442,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (gcForeign == null && memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (rtsEventForeign == null && gcForeign == null && textForeign == null && memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (runtimeService != null) {
@@ -2457,7 +2484,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio == OriginalStdioOp.UNLINK || originalStdio.flagConstant || originalStdio.fcntl || originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio.opening ||
+                        if (originalStdio.waitStatus || originalStdio == OriginalStdioOp.UNLINK || originalStdio.flagConstant || originalStdio.fcntl || originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio.opening ||
                             originalStdio.iconv || originalStdio.strerror || originalStdio.duplication || originalStdio.locking)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.representation, if (argument[0] == "var")
@@ -2509,6 +2536,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     }
                 }
                 RtsDiagnosticExpression(rtsDiagnostic, operands.toTypedArray(), tupleProof)
+            } else if (rtsEventForeign != null) {
+                CoreRtsEventForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreRtsEventForeign.validateOperand(rtsEventForeign, index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                RtsEventForeignExpression(rtsEventForeign, operands.toTypedArray(), tupleProof)
             } else if (gcForeign != null) {
                 CoreGcForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
@@ -2534,6 +2570,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     }
                 }
                 EnvironmentExpression(environment, operands.toTypedArray(), tupleProof)
+            } else if (textForeign != null) {
+                CoreTextForeign.validateHead(fn, defined || fn.getOrNull(1) in scope.joins)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreTextForeign.validateOperand(textForeign, index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                TextForeignExpression(textForeign, operands.toTypedArray(), tupleProof)
             } else if (floatingForeign != null) {
                 CoreFloatForeign.validateHead(fn, defined || fn.getOrNull(1) in scope.joins)
                 val operands = args.mapIndexed { index, argument ->
@@ -3311,7 +3356,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val slots = IntArray(shape.width) { local.layout.bind("<tuple case $it>") }
         local.bindTuple(expr[2] as String, proof, slots)
         val alternatives = expr[3] as List<List<Any?>>
-        if (alternatives.size != 1) throw RuntimeFault("Tuple case requires one alternative")
+        if (alternatives.isEmpty()) return TupleCase(scrutinee, slots,
+            EmptyCaseResult(CoreRepresentations.expression(expr)))
+        if (alternatives.size != 1) throw RuntimeFault("Tuple case requires at most one alternative")
         val alt = alternatives.single()
         val ids = alt[2] as List<String>
         if (alt[0] == "data") {
@@ -3339,21 +3386,20 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val nodes = args.mapIndexed { index, arg ->
             val lifted = flags.getOrNull(index) as? Boolean ?: throw RuntimeFault("Missing join argument levity")
             argument(arg, scope, lifted && !callStrict[index] && !target.entryStrict[index],
-                allowEmpty = target.proofs[index].isEmptyTuple, declaredLifted = lifted).also {
+                allowEmpty = target.proofs[index].isTuple, declaredLifted = lifted).also {
                 CoreRepresentations.requireJoinArgument(target.proofs[index], it.representation)
             }
         }.toTypedArray()
-        val vectorTemps = arrayOfNulls<IntArray>(nodes.size)
+        val typedTemps = arrayOfNulls<IntArray>(nodes.size)
         val temps = IntArray(nodes.size) { index ->
-            if (target.proofs[index].isVector) {
-                vectorTemps[index] = IntArray(TupleShape.flatten(target.proofs[index]).size) {
-                    scope.layout.bind("<join vector argument $index lane $it>")
+            if (target.proofs[index].isTypedTransport) {
+                typedTemps[index] = IntArray(TupleShape.flatten(target.proofs[index]).size) {
+                    scope.layout.bind("<join typed argument $index field $it>")
                 }
                 -1
-            } else if (target.proofs[index].isEmptyTuple) -1
-            else scope.layout.bind("<join argument $index>")
+            } else scope.layout.bind("<join argument $index>")
         }
-        return LocalJoinCall(target, nodes, temps, metrics, vectorTemps)
+        return LocalJoinCall(language as thc.Language, target, nodes, temps, metrics, typedTemps)
     }
     private fun compileJoins(expr: List<Any?>, outer: Scope, tail: Boolean,
                              definitions: List<CoreJoinDefinition>): Expr {
@@ -3391,13 +3437,12 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             definition.parameters.forEachIndexed { index, parameter ->
                 val lifted = representation(parameter)
                 val proof = CoreRepresentations.binder(parameter).let { if (lifted) it.copy(evaluated = entryStrict[index]) else it }
-                if (proof.isVector) {
+                if (proof.isTypedTransport) {
                     val lanes = IntArray(TupleShape.flatten(proof).size) {
-                        scope.layout.bind("${parameter["id"]} join vector lane $it")
+                        scope.layout.bind("${parameter["id"]} join typed field $it")
                     }
                     scope.bindTuple(parameter["id"] as String, proof.copy(evaluated = true), lanes)
-                } else if (proof.isEmptyTuple) scope.bindTuple(parameter["id"] as String, proof.copy(evaluated = true), intArrayOf())
-                else scope.bind(parameter["id"] as String, !lifted && parameter["coercion"] != true, proof)
+                } else scope.bind(parameter["id"] as String, !lifted && parameter["coercion"] != true, proof)
             }
             scope
         }
@@ -3405,7 +3450,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val parameters = definition.parameters.map { bodyScopes[index].locals.getValue(it["id"] as String) }
             LocalJoinTarget(identity, index + 1, parameters.map { it.slot }.toIntArray(),
                 parameters.map { it.proof }.toTypedArray(), entryContracts[index], definition.result,
-                parameters.map { parameter -> if (parameter.proof.isVector) parameter.tupleSlots else null }.toTypedArray())
+                parameters.map { parameter -> if (parameter.proof.isTypedTransport) parameter.tupleSlots else null }.toTypedArray())
         }
         definitions.forEachIndexed { index, definition -> local.bindJoin(definition.id, targets[index]) }
         if (recursive) bodyScopes.forEachIndexed { index, scope ->

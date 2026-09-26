@@ -1439,7 +1439,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 return;
             }
             long result;
-            if (operation.getSigset()) result = SigsetImage.execute(operation, address, fd, CoreOriginalStdio.current(node));
+            if (operation.getWaitStatus()) result = CoreOriginalStdio.waitStatus(node, operation, fd);
+            else if (operation.getSigset()) result = SigsetImage.execute(operation, address, fd, CoreOriginalStdio.current(node));
             else if (operation.getStat()) result = PosixStat.execute(operation, address, fd);
             else if (operation == OriginalStdioOp.TCGETATTR) result = CoreOriginalStdio.current(node).tcgetattr(fd, address);
             else if (operation == OriginalStdioOp.FSTAT) result = CoreOriginalStdio.current(node).fstat(fd, address);
@@ -2331,7 +2332,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return literal instanceof Long number && number.longValue() == value;
         }
         @Specialization(guards = "!isLong(value)") public static boolean object(Object literal, Object value) {
-            return java.util.Objects.equals(literal, value);
+            // Lowering rejects floating/BigNat alternatives. The remaining
+            // ManagedAddress literal carrier has identity equality, as in AST
+            // cases; do not expose arbitrary Object.equals to guest compilation.
+            return literal == value;
         }
         public static boolean isLong(Object value) { return value instanceof Long; }
     }
@@ -3307,6 +3311,18 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = TextForeignOp.class, name = "operation")
+    public static final class OriginalTextCall {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                TextForeignOp operation, Object bytes, long offset, long length, long count, Object state,
+                @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = ManagedText.invoke(operation, bytes, offset, length, count);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = FloatForeignOp.class, name = "operation")
     public static final class OriginalFloatCall {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
@@ -3411,6 +3427,23 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void unavailable(ManagedAddress address, Object state) {
             TupleResultsKt.requireVoidCarrier(state);
             GcForeignOp.STATS.invoke();
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = RtsEventForeignOp.class, name = "operation")
+    public static final class RtsEventQuery {
+        @Specialization public static void query(VirtualFrame frame, LocalAccessor destination,
+                RtsEventForeignOp operation, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, operation.invoke(node, 0L));
+        }
+    }
+    @Operation
+    public static final class SetNumCapabilities {
+        @Specialization public static void set(long count, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            RtsEventForeignOp.CAPABILITIES.invoke(node, count);
         }
     }
     /** Original thread queries. Neither capability support nor accounting enforces a limit. */

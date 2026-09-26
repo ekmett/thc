@@ -98,7 +98,14 @@ GHC caller prototypes in one C file would create spurious conflicting-type
 errors. Separation preserves both the original callee definition and the
 emitted caller ABI, without rewriting either declaration or guessing a header
 prototype. Both translation units and their real header dependencies contribute
-to the native component identity. The mixed-header fixture compares an existing
+to the native component identity.
+
+Direct caller translation units include only `HsFFI.h` for the emitted scalar
+types, not the broad `Rts.h` header. This also prevents unrelated libc
+declarations such as `FILE*` prototypes from colliding with opaque `Addr#`
+caller signatures. The original `fdopen`/`fclose` shape is exercised natively;
+unresolved libc execution remains archive-only, not implicitly linked by this
+source-capture correction. The mixed-header fixture compares an existing
 managed buffer passed as an opaque struct pointer and 8/32-bit argument-boundary
 behavior against native GHC with exact-width Haskell arguments. The retained
 machine-word caller variant uses an explicit x86_64 Linux argument bridge when
@@ -207,6 +214,55 @@ or AD test suite.
 ```sh
 THC_TASTY_SOURCE=/path/to/tasty-1.5.4 cabal run exe:thc-fixtures -- wcwidth
 ./gradlew --continue wcwidthDefault wcwidthDense
+```
+
+The seven original `unix-2.8.8.0-inplace` wait-status CAPI declarations
+(`WCOREDUMP`, `WSTOPSIG`, `WIFSTOPPED`, `WTERMSIG`, `WIFSIGNALED`,
+`WEXITSTATUS`, `WIFEXITED`) execute wrappers compiled against the installed
+`HsUnix.h` on Linux x86-64. They reuse the checked scalar foreign-call path
+with the exact original unit, wrapper symbol, CInt width, and hidden
+State/result tuple. Raw macro results are preserved, including `WCOREDUMP`'s
+`128` mask; there is no JVM status formula or guest process/fork emulation.
+The context must permit native access.
+
+The `unix-wait-status` fixture recovers genuine declarations from the installed
+`System.Posix.Process.Internals` Core, specializes typed consumers with those
+FCallIds, and compiles the same calls with native GHC. Its 280 observations
+cover exit/signal/stop encodings, flags, signed CInt edges, and outer Int
+narrowing. Both backends compare pre/post-tidy Core interpreted and from the
+first installed compiled call, with inlining enabled and disabled. These
+leaf checks do not claim full process management or a completed AD test run.
+
+```sh
+cabal run exe:thc-fixtures -- unix-wait-status
+./gradlew --continue testDefault --tests thc.runtime.UnixWaitStatusTest \
+  testDense --tests thc.runtime.UnixWaitStatusTest
+```
+
+Installed `text-2.1.3-inplace` also has two closed original-C adapters on Linux
+x86-64: `_hs_text_memchr` and `_hs_text_measure_off`. Their exact unsafe
+State-threaded declarations retain the `ByteArray#`, size/byte and signed
+result carriers. They execute the unchanged upstream C over a read-only
+Sulong buffer view of the existing heap or pinned allocation; ordinary heap
+arrays are neither copied nor pinned. Full-width offset/length checks and
+pointer-cell rejection precede C access. The measure operation retains text's
+valid-UTF-8 precondition and negative available-character-count result.
+
+The original sources and license are under `compiler/pinned-text/2.1.3`.
+Their supported non-atomic configuration selects the original SSE/word/tail
+code, avoiding a native CPUID/AVX dispatcher inside Sulong. This is not generic
+installed-package C acquisition. The original portable OpenBSD `memchr` is
+linked into this bitcode under a private name, so the heap buffer cannot fall
+through to native libc. The full unsigned character-count domain preserves
+the original C's signed-intermediate wrap behavior, including its non-ideal
+result at `UINT64_MAX`; it is checked against the native library, not corrected
+to an idealized text algorithm. The focused fixture calls the unchanged
+installed declarations and native library over 500 search/UTF-8 inputs; it is
+separate from completion of the original AD upstream test suite.
+
+```sh
+cabal run exe:thc-fixtures -- text-cbits
+./gradlew --continue testDefault --tests thc.runtime.TextCbitsTest testDense --tests thc.runtime.TextCbitsTest
 ```
 
 The unchanged `erf-2.0.0.0` package has source-pure imports whose emitted
@@ -497,11 +553,21 @@ producer accepts a matching configured GHC 9.14.1 native Linux stage1 tree with
 the original GMP, Haskell2010 and NoImplicitPrelude ghc-internal configuration,
 and the configured Haskell2010 Unix library. It recompiles only
 `GHC.Internal.Conc.Bound`, `GHC.Internal.System.Posix.Internals`, and
-`System.Posix.Files.PosixString`, and only when their required annotation
+`System.Posix.Files.PosixString`, `System.Posix.Process.Internals`, and
+`System.Posix.Signals`, and only when their required annotation
 is absent. Cabal's saved configuration supplies CPP flags, language settings and
 the original dependency IDs. The selected compiler performs real code generation
 with `-fwrite-if-simplified-core`; the `-fno-code` interface path loses annotations
 and is not used here.
+
+The static-import producer also recognizes a stock `ccall` address declaration
+only after checking its typed binder, normalization and exact emitted address
+literal, with no call, header, C source, initializer, finalizer or foreign file.
+Such a declaration is omitted from the generated-stub call inventory, not given
+a function ABI. Its original Core address remains subject to separate strict
+address-label admission. For example, Unix's `&nocldstop` does not prevent proof
+of its unrelated generated signal-set wrappers; unknown data/function addresses
+still fail the strict audit when reachable.
 
 The tree's dynamic interfaces must match the selected installation byte for
 byte, and each target source must match its retained GHC self-recompilation

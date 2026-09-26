@@ -15,6 +15,13 @@ $(addForeignSource LangC "int thc_extra_import_product(void) { return 1; }\n" >>
 import Foreign.Ptr (FunPtr)
 foreign import ccall "wrapper" callback :: (CInt -> IO CInt) -> IO (FunPtr (CInt -> IO CInt))
 #endif
+#ifdef THC_LABELS
+import qualified Foreign.Ptr as Pointer
+-- Deliberately unprovided: proving no generated C obligations must not grant
+-- either address runtime admission or manufacture an executable call ABI.
+foreign import ccall "&thc_provenance_unknown_data" unknownData :: Pointer.Ptr CInt
+foreign import ccall "&thc_provenance_unknown_function" unknownFunction :: Pointer.FunPtr (CInt -> IO CInt)
+#endif
 foreign import capi unsafe "stdlib.h abs" first :: CInt -> IO CInt
 foreign import capi unsafe "stdlib.h abs" second :: CInt -> IO CInt
 foreign import capi unsafe "stdio.h value SEEK_SET" seekSet :: CInt

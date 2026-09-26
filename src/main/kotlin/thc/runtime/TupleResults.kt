@@ -602,6 +602,13 @@ internal class TupleApplication(private val language: Language, private val shap
         return null
     }
 }
+/** Empty cases demand their scrutinee; a returning value is impossible in valid Core. */
+internal class EmptyCaseResult(proof: CoreRepresentation) : Expr() {
+    init { representation = proof }
+    override fun execute(frame: VirtualFrame): Nothing = fault("Non-exhaustive Core case")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Nothing = execute(frame)
+}
+
 internal class TupleCase(@field:Child private var scrutinee: Expr,
     @field:CompilationFinal(dimensions = 1) private val slots: IntArray,
     @field:Child private var body: Expr) : Expr() {

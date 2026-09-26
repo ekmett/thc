@@ -3,7 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module GcStatsFixtures (prepareGcStats) where
 
-import Control.Monad (forM, unless)
+import Control.Monad (forM, forM_, unless)
 import Data.Aeson (object, (.=))
 import qualified Data.ByteString.Char8 as BS
 import Data.List (nubBy)
@@ -112,7 +112,7 @@ prepareGcStats root = do
             in (setIdArity (setIdType (setIdInfo v vanillaIdInfo) (exprType applied)) (exprArity applied), applied)
           _ -> error ("Original GC/stats FCallId differs from typed consumer " ++ prefix ++ consumer ++ "/" ++ target)
     -- Separate exports avoid assigning a shared consumer binder to three GC bodies.
-    liftIO $ forM calls $ \call@(entry,_,_) -> do
+    liftIO $ forM_ calls $ \call@(entry,_,_) -> do
       let (v,body) = specialize "original" call
           adapted = optimized { mg_binds = [NonRec v body], mg_exports = filter ((== varName v) . availName) (mg_exports optimized) }
       serializeOptimizedCore flags ["unit-qualified"] adapted >>= writeFile (root </> directory </> entry ++ "-pre.json")

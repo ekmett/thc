@@ -10,11 +10,13 @@ execute in source order before a call or partial application is published.
 Boxed tuples remain DataValue references. An unlifted boxed datatype remains one
 reference. Neither is flattened. A lifted leaf inside an unboxed tuple stays lazy,
 including when the tuple parameter is strict or unused. Unknown layouts or levity,
-sums and vectors are excluded from this tuple-input slice. An exact evaluated
+sums are excluded; exact vector leaves retain their fixed species. An exact evaluated
 `AddrRep` leaf carries only a checked `ManagedAddress`, never a native pointer.
-Aggregate captures, ordinary let bindings and nonempty local-join arguments are
-still rejected, as are aggregate parameters and results at the public host entry.
+Tuple captures and ordinary aggregate let bindings are still rejected, as are aggregate
+parameters and results at the public host entry. [Local tuple-join arguments](tuple-joins.md)
+use the same logical layouts but parallel moves within the current frame.
 Saturated boxed constructors support [owned tuple/sum fields](aggregate-heap-fields.md).
+Ordinary binary-sum parameters and captures use [the existing typed input protocol](sum-inputs.md).
 Scalar-only and exact-empty-only calls retain their existing conventions.
 
 A typed call passes a single precise generated storage object in the outer Truffle

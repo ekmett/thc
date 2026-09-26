@@ -1,0 +1,93 @@
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+{-# LANGUAGE OverloadedStrings #-}
+module TextCbitsFixtures (prepareTextCbits) where
+
+import Control.Monad (forM_, unless)
+import Data.Aeson (object, (.=))
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BSC
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
+import qualified Distribution.InstalledPackageInfo as Package
+import qualified Distribution.ModuleName as ModuleName
+import FixtureSupport
+import System.Directory (createDirectoryIfMissing, doesDirectoryExist)
+import System.Environment (lookupEnv)
+import System.FilePath ((</>))
+
+prepareTextCbits :: FilePath -> IO ()
+prepareTextCbits root = do
+  let directory = "build/text-cbits"
+      output = root </> directory
+      source = "compiler/test-fixtures/TextCbitsAudit.hs"
+      nativeSource = "compiler/test-fixtures/TextCbitsNative.hs"
+      execute = runLogged 600 root (directory </> "logs")
+      corpus = ["", "a", "abc\NULdef\n", "\x00e9\x03bb\x4e2d\x1f642",
+        T.replicate 7 "x", T.replicate 16 "x", T.replicate 32 "x", T.replicate 64 "x",
+        T.replicate 70 "\x00e9\x4e2d\x1f642", T.replicate 130 "ab\x00e9\n"]
+      cases = [unwords [operation, hexBytes (prefix <> bytes <> BS.pack [254,255]),
+          show (BS.length prefix), show (BS.length bytes), show count] |
+        value <- corpus, let bytes = T.encodeUtf8 value, prefix <- [BS.empty, BS.pack [1,2,3]],
+        (operation,counts) <- [("memchr",[0,10,65,97,127,128,195,255]),
+          ("measure",[0,1,2,3,7,8,15,16,17,31,32,63,64,65,127,999,2^(64::Int)-1])],
+        count <- counts :: [Integer]]
+  createDirectoryIfMissing True output
+  ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+  ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
+  version <- execute "ghc-version" [] ghc ["--numeric-version"]
+  unless (BSC.lines (commandStdout version) == ["9.14.1"]) (fail "text cbits require GHC9.14.1")
+  registration <- execute "original-registration" [] ghcPkg ["describe","text","--expand-pkgroot"]
+  original <- case Package.parseInstalledPackageInfo (commandStdout registration) of
+    Left errors -> fail (show errors)
+    Right (_,package) -> pure package
+  let name = ModuleName.fromString "Data.Text.Internal.Measure"
+      exposed = Package.exposedModules original
+      hidden = Package.hiddenModules original
+      needExpose = all ((/= name) . Package.exposedName) exposed
+      visible = original { Package.exposedModules = exposed ++ [Package.ExposedModule name Nothing | needExpose],
+        Package.hiddenModules = filter (/= name) hidden }
+      findDatabase index = do
+        let path = output </> "package-db-" ++ show index
+        exists <- doesDirectoryExist path
+        if exists then findDatabase (index+1) else pure path
+  unless (not needExpose || name `elem` hidden) (fail "original text Measure module missing")
+  database <- findDatabase (0::Int)
+  writeFile (output </> "exposed-text.conf") (Package.showInstalledPackageInfo visible)
+  _ <- execute "package-init" [] ghcPkg ["init",database]
+  _ <- execute "package-register" [] ghcPkg ["--package-db",database,"update",output </> "exposed-text.conf"]
+  let packageOptions = ["-package-db",database,"-package","text"]
+  forM_ ["pre","post"] $ \stage -> do
+    _ <- execute ("export-" ++ stage)
+      [("THC_CORE_OUT",output </> stage ++ "-core"),("THC_GHC_OUT",output </> stage ++ "-ghc")]
+      "compiler/export.sh" (packageOptions ++ ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
+    pure ()
+  let native = output </> "native"
+  createDirectoryIfMissing True native
+  _ <- execute "native-build" [] ghc (["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint",
+    "-i" ++ root </> "compiler/test-fixtures","-odir",native,"-hidir",native,
+    root </> nativeSource,"-o",native </> "text-cbits-oracle"] ++ packageOptions)
+  writeFile (output </> "inputs.tsv") (unlines cases)
+  oracle <- runLoggedWithInput (directory </> "inputs.tsv") 600 root (directory </> "logs")
+    "native-oracle" [] (native </> "text-cbits-oracle") []
+  let rows = BSC.lines (commandStdout oracle)
+  unless (length rows == length cases && and (zipWith (\input row ->
+    case splitTab (BSC.unpack row) of [originalInput,result] -> originalInput == input && readInteger result /= Nothing; _ -> False) cases rows))
+    (fail "native text row inventory differs")
+  BS.writeFile (output </> "oracle.tsv") (commandStdout oracle)
+  forM_ ["pre","post"] $ \stage -> do
+    _ <- execute ("audit-" ++ stage) [] "python3" ["scripts/audit-core.py","--entry","textMemchr","--entry","textMeasure",
+      "--output",output </> stage ++ "-audit.json",output </> stage ++ "-core/TextCbitsAudit.json"]
+    pure ()
+  inputs <- hashes root [source,nativeSource,"test/haskell-fixtures/TextCbitsFixtures.hs",
+    "scripts/core_original_foreign.py","scripts/audit-core.py","scripts/core-capabilities.json",
+    "compiler/pinned-text/2.1.3/cbits/utils.c","compiler/pinned-text/2.1.3/cbits/measure_off.c",
+    "compiler/pinned-text/2.1.3/LICENSE","compiler/pinned-text/2.1.3/openbsd-memchr.c",
+    "src/main/c/text-api.c","scripts/build-cbits.py"]
+  artifacts <- hashes root [directory </> file | file <- ["inputs.tsv","oracle.tsv",
+    "pre-core/TextCbitsAudit.json","post-core/TextCbitsAudit.json","pre-audit.json","post-audit.json","exposed-text.conf",
+    "logs/original-registration.stdout","logs/native-oracle.command.json","logs/native-build.command.json",
+    "native/text-cbits-oracle"]]
+  writeJson (output </> "manifest.json") (object ["schema" .= (1::Int),"nativeRows" .= length cases,
+    "unit" .= ("text-2.1.3-inplace"::String),"inputHashes" .= inputs,"artifactHashes" .= artifacts])
+  putStrLn ("text-cbits: " ++ show (length cases) ++ " original installed text native rows and strict pre/post Core")

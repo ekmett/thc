@@ -5,6 +5,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
@@ -30,6 +31,10 @@ class TupleArithmeticTest {
         Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget").getMethod("isValidLastTier").invoke(target))
     private fun compile(target: RootCallTarget) {
         Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget").getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+        valid(target)
+        val runtime = Truffle.getRuntime()
+        runtime.javaClass.getMethod("bypassedInstalledCode",
+            Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target)
         valid(target)
     }
     private fun checkHashes() {
@@ -190,17 +195,46 @@ class TupleArithmeticTest {
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 for (name in listOf("quotRemInt", "quotRemWord")) {
-                    val program = program(language, CoreModules.reachable(module(), name), backend)
-                    val host = program.hostEntryTarget(3); val entry = program.entryValue(name)
+                    val program = program(language, CoreModules.reachable(module(), name) + ("instrument" to true), backend)
+                    val entry = program.entryTarget(name)
+                    fun count() = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                     val invalid = listOf(1L to 0L) + if (name == "quotRemInt") listOf(Long.MIN_VALUE to -1L) else emptyList()
-                    for ((x, y) in invalid) assertThrows(RuntimeFault::class.java) {
-                        Calls.target(host, arrayOf(entry, arrayOf(x, y, 0L)))
+                    // Prepare only valid arithmetic before the first installed failure.
+                    assertEquals(2L, Calls.target(entry, arrayOf(0L, 7L, 3L, 0L)))
+                    assertEquals(1L, Calls.target(entry, arrayOf(0L, 7L, 3L, 1L)))
+                    val beforeCompile = count()
+                    compile(entry)
+                    assertEquals(beforeCompile, count(), "Compilation must not enter guest code")
+                    for ((x, y) in invalid) {
+                        val before = count()
+                        val failure = assertThrows(RuntimeFault::class.java) {
+                            Calls.target(entry, arrayOf(0L, x, y, 0L))
+                        }
+                        assertEquals("Undefined input to $name#", failure.message)
+                        assertEquals(before + 1, count(), "$backend/$name: cold error enters installed code")
+                        valid(entry)
                     }
-                    assertEquals(2L, Calls.target(host, arrayOf(entry, arrayOf(7L, 3L, 0L))))
-                    assertEquals(1L, Calls.target(host, arrayOf(entry, arrayOf(7L, 3L, 1L))))
+                    assertEquals(2L, Calls.target(entry, arrayOf(0L, 7L, 3L, 0L)))
+                    assertEquals(1L, Calls.target(entry, arrayOf(0L, 7L, 3L, 1L)))
+                    valid(entry)
                     assertEquals(0L, language.handoffState.get().results.allocations)
                 }
             } finally { context.leave() }
+        }
+    }
+    @Test fun narrowDivisionRejectsZeroAfterNarrowingForBothResultFields() {
+        for ((bits, operations) in listOf(
+            8 to listOf(TupleArithmeticOp.QUOT_REM_INT8, TupleArithmeticOp.QUOT_REM_WORD8),
+            16 to listOf(TupleArithmeticOp.QUOT_REM_INT16, TupleArithmeticOp.QUOT_REM_WORD16),
+            32 to listOf(TupleArithmeticOp.QUOT_REM_INT32, TupleArithmeticOp.QUOT_REM_WORD32))) {
+            for (operation in operations) for (zero in listOf(0L, 1L shl bits)) {
+                assertEquals("Undefined input to ${operation.primitive}",
+                    assertThrows(RuntimeFault::class.java) { operation.first(7L, zero) }.message)
+                assertEquals("Undefined input to ${operation.primitive}",
+                    assertThrows(RuntimeFault::class.java) { operation.second(7L, zero) }.message)
+                assertEquals(2L, operation.first(7L, 3L))
+                assertEquals(1L, operation.second(7L, 3L))
+            }
         }
     }
 }

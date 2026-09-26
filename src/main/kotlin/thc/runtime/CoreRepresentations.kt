@@ -165,19 +165,20 @@ internal object CoreRepresentations {
             TupleShape.validate(proof)
             if (TupleShape.flatten(proof).any { it.primReps == listOf("BoxedRep Nothing") })
                 throw UnsupportedCore("Unsupported Core tuple input with unknown boxed levity")
-        } else if (proof.isVector) VectorLayout.validate(proof)
+        } else if (proof.isSum) SumShape.validate(proof)
+        else if (proof.isVector) VectorLayout.validate(proof)
         else requireScalar(proof, "argument")
     }
-    /** Joins retain logical arity; only the exact nullary tuple has no input slot. */
+    /** Joins retain logical arity and flatten tuple/vector operands into this frame. */
     fun requireJoinInput(proof: CoreRepresentation) {
-        if (proof.isVector) VectorLayout.validate(proof)
-        else if (!proof.isEmptyTuple) requireScalar(proof, "join argument")
+        if (proof.isTuple || proof.isVector) requireInput(proof)
+        else requireScalar(proof, "join argument")
     }
     fun requireJoinArgument(expected: CoreRepresentation, actual: CoreRepresentation) {
         requireJoinInput(actual)
-        if (expected.isEmptyTuple || actual.isEmptyTuple) {
-            if (!expected.isEmptyTuple || !actual.isEmptyTuple)
-                throw RuntimeFault("Local join requires matching exact empty tuple argument proof")
+        if (expected.isTuple || actual.isTuple) {
+            if (!expected.isTuple || !actual.isTuple || !TupleShape.compatible(expected, actual))
+                throw RuntimeFault("Local join requires matching exact tuple argument proof")
         }
         if (expected.isVector || actual.isVector) {
             if (!expected.isVector || !actual.isVector || !TupleShape.compatible(expected, actual))

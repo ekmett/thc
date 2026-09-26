@@ -49,7 +49,10 @@ internal object CoreInputCalls {
                             } else if (expected.isVector || actual.isVector) {
                                 if (!expected.isVector || !actual.isVector || !TupleShape.compatible(expected, actual))
                                     throw UnsupportedCore("Missing or conflicting exact vector argument proof")
-                            } else if (expected.isAggregate || actual.isAggregate) TupleShape.requireCompatible(expected, actual, component = true)
+                            } else if (expected.isSum || actual.isSum) {
+                                if (!expected.isSum || !actual.isSum || !TupleShape.compatible(expected, actual))
+                                    throw UnsupportedCore("Missing or conflicting exact sum argument proof")
+                            }
                         }
                     }
                     visit(fn, scope); args.forEach { visit(it, scope) }

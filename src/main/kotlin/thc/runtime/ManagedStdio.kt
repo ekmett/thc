@@ -61,6 +61,7 @@ internal class ManagedStdio(private val files: ManagedFiles) {
     @TruffleBoundary fun seekConstant(operation: OriginalStdioOp): Long = hostAbi.seekConstant(operation)
 
     @TruffleBoundary fun flagConstant(operation: OriginalStdioOp): Long = hostAbi.flagConstant(operation)
+    @TruffleBoundary fun siginfoSize(): Long = hostAbi.siginfoBytes
 
     @TruffleBoundary fun fcntl(fd: Long, command: Long, argument: Long, write: Boolean): Long {
         val abi = hostAbi
