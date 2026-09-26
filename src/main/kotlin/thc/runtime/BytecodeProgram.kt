@@ -1472,11 +1472,15 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val gcForeign = CoreGcForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val rtsEventForeign = CoreRtsEventForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val allocationCounterForeign = CoreBoundThreadForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"), true)
             val stringRts = CoreStringRtsForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val floatingForeign = CoreFloatForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val textForeign = CoreTextForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val environment = CoreEnvironmentForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
@@ -1503,7 +1507,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (gcForeign == null && memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (rtsEventForeign == null && gcForeign == null && textForeign == null && memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (runtimeService != null) {
@@ -1597,7 +1601,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio == OriginalStdioOp.UNLINK || originalStdio.flagConstant || originalStdio.fcntl || originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio.opening ||
+                        if (originalStdio.waitStatus || originalStdio == OriginalStdioOp.UNLINK || originalStdio.flagConstant || originalStdio.fcntl || originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio.opening ||
                             originalStdio.iconv || originalStdio.strerror || originalStdio.duplication || originalStdio.locking)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
@@ -1622,7 +1626,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         (0..1).map { index -> b.createLocal("original tcsetattr integer $index", "primitive").also {
                             b.beginStoreLocal(it); operands[index].emit(e); b.endStoreLocal()
                         } } else null
-                    val status = originalStdio == OriginalStdioOp.UNLINK || originalStdio.flagConstant || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
+                    val status = originalStdio.waitStatus || originalStdio == OriginalStdioOp.UNLINK || originalStdio.flagConstant || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
                         originalStdio == OriginalStdioOp.CLOSE || originalStdio == OriginalStdioOp.DUP || originalStdio.readImage || originalStdio == OriginalStdioOp.UNLOCK || originalStdio.seekConstant || originalStdio.stat
                     // Image updates declare address before value. Store that operand
                     // once before filling the shared long/address/State lanes.
@@ -1809,6 +1813,27 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     operands.last().emit(e)
                     e.builder.endRtsDiagnostic()
                 }
+            } else if (rtsEventForeign != null) {
+                CoreRtsEventForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreRtsEventForeign.validateOperand(rtsEventForeign, index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    if (rtsEventForeign.result != null) {
+                        e.builder.beginRtsEventQuery(destination.single(), rtsEventForeign)
+                        operands.single().emit(e)
+                        e.builder.endRtsEventQuery()
+                    } else {
+                        check(destination.isEmpty())
+                        e.builder.beginSetNumCapabilities()
+                        operands.forEach { it.emit(e) }
+                        e.builder.endSetNumCapabilities()
+                    }
+                    if (enableAsync && rtsEventForeign.safety == "safe") emitAsyncPoll(e)
+                }
             } else if (gcForeign != null) {
                 CoreGcForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
@@ -1866,6 +1891,19 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         EnvironmentOp.PUT, EnvironmentOp.UNSET -> e.builder.endEnvironmentChange()
                         EnvironmentOp.ENUMERATE -> e.builder.endEnvironmentEnumerate()
                     }
+                }
+            } else if (textForeign != null) {
+                CoreTextForeign.validateHead(fn, defined || fn.getOrNull(1) in scope.joins)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreTextForeign.validateOperand(textForeign, index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginOriginalTextCall(destination.single(), textForeign)
+                    operands.forEach { it.emit(e) }
+                    e.builder.endOriginalTextCall()
                 }
             } else if (floatingForeign != null) {
                 CoreFloatForeign.validateHead(fn, defined || fn.getOrNull(1) in scope.joins)
@@ -4481,6 +4519,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val fields = shape.leaves.mapIndexed { index, field -> Local(nextLocal++, "tuple field $index", field.isLong, field) }
         scope.bindTuple(expr[2] as String, proof, fields)
         val alternatives = expr[3] as List<List<Any?>>
+        if (alternatives.isEmpty() && proof.isTuple) return ProvenExpression(ResultExpression { e, _ ->
+            val b = e.builder
+            b.beginBlock()
+            val slots = fields.map { b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
+            scrutinee.emitTuple(e, slots)
+            b.emitFailCase()
+            b.endBlock()
+        }, CoreRepresentations.expression(expr))
         if (alternatives.size != 1) throw RuntimeFault("Tuple or vector case requires one alternative")
         val alt = alternatives.single()
         val ids = alt[2] as List<String>

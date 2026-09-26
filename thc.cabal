@@ -21,11 +21,21 @@ extra-source-files:
   test/fixtures/run-native-archive/unresolved/native-archive-unresolved.cabal
   test/fixtures/run-native-archive/unresolved/native.c
   test/fixtures/run-native-archive/unresolved/Unresolved.hs
+  compiler/test-fixtures/TextCbitsAudit.hs
+  compiler/test-fixtures/UnixWaitStatusAudit.hs
+  compiler/test-fixtures/TextCbitsNative.hs
+  compiler/pinned-text/2.1.3/README.md
+  compiler/pinned-text/2.1.3/LICENSE
+  compiler/pinned-text/2.1.3/openbsd-memchr.c
+  compiler/pinned-text/2.1.3/cbits/utils.c
+  compiler/pinned-text/2.1.3/cbits/measure_off.c
   test/fixtures/run-wcwidth/cabal.project
   test/fixtures/run-wcwidth/wcwidth-ffi.cabal
   test/fixtures/run-wcwidth/src/Width.hs
   test/fixtures/run-wcwidth/app/Main.hs
   compiler/test-fixtures/GcStatsAudit.hs
+  compiler/test-fixtures/RtsEventAudit.hs
+  docs/rts-event-capabilities.md
   docs/gc-stats-clock.md
   compiler/test-fixtures/RubbishLiteralAudit.hs
   compiler/test-fixtures/OriginalDigestNative.hs
@@ -477,6 +487,7 @@ executable thc
     THC.Driver.NativeRecipe
     THC.Driver.PackageNative
     THC.Driver.NativeLibrarySources
+    THC.Driver.NativeArgumentBridge
     THC.Driver.ScalarBitcode
     THC.Driver.RuntimeShim
     THC.Driver.GhcProxy
@@ -539,6 +550,7 @@ test-suite driver-tests
     THC.Driver.NativeRecipe
     THC.Driver.PackageNative
     THC.Driver.NativeLibrarySources
+    THC.Driver.NativeArgumentBridge
     THC.Driver.ScalarBitcode
     THC.Driver.RuntimeShim
   build-tool-depends: thc:thc
@@ -809,6 +821,7 @@ executable thc-fixtures
     OriginalRtsLocksFixtures
     CompilerRtsFixtures
     GcStatsFixtures
+    RtsEventFixtures
     FloatForeignFixtures
     GhcApiFixtures
     RtsDiagnosticFixtures
@@ -819,6 +832,8 @@ executable thc-fixtures
     PackageNativeArchiveFixtures
     GetEntropyFixtures
     WcwidthFixtures
+    TextCbitsFixtures
+    UnixWaitStatusFixtures
     HashableFfiFixtures
     OriginalTermiosFixtures
     OriginalTcsetattrFixtures
@@ -834,6 +849,7 @@ executable thc-fixtures
     StablePointerFixtures
     StableNameFixtures
     SumJoinFixtures
+    TupleJoinFixtures
     WeakFixtures
     ShrinkByteArrayFixtures
     ByteArrayFixtures
@@ -853,6 +869,7 @@ executable thc-fixtures
     THC.Driver.NativeRecipe
     THC.Driver.PackageNative
     THC.Driver.NativeLibrarySources
+    THC.Driver.NativeArgumentBridge
     THC.Driver.ScalarBitcode
     THC.Driver.Installed
     THC.Driver.RuntimeShim

@@ -119,7 +119,8 @@ prepareGetEntropy root = do
   inputHashes <- hashes root ["compiler/test-fixtures/NativeGetEntropy.c","compiler/test-fixtures/OriginalSplitmixNative.hs",
     "compiler/test-fixtures/OriginalSplitmixEntry.hs",
     "test/haskell-fixtures/GetEntropyFixtures.hs","test/haskell-fixtures/FixtureSupport.hs",
-    "src/THC/Driver/PackageNative.hs","src/THC/Driver/NativeLibrarySources.hs","src/THC/Driver/GhcProxy.hs",
+    "src/THC/Driver/PackageNative.hs","src/THC/Driver/NativeArgumentBridge.hs",
+    "src/THC/Driver/NativeLibrarySources.hs","src/THC/Driver/GhcProxy.hs",
     "compiler/THC/Plugin.hs","compiler/THC/ForeignImportProvenance.hs","compiler/THC/Interface.hs",
     "scripts/audit-core.py","scripts/core_package_manifest.py"]
   artifactHashes <- hashes root ([relative </> path | path <-

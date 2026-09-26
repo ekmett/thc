@@ -64,7 +64,7 @@ class StdioHostAbiTest {
         assertTrue(abi.openAppend(write or append)); assertFalse(abi.openAppend(write))
         for (operation in listOf(OriginalStdioOp.O_APPEND, OriginalStdioOp.O_CREAT, OriginalStdioOp.O_NOCTTY,
             OriginalStdioOp.O_NONBLOCK, OriginalStdioOp.O_RDONLY, OriginalStdioOp.O_RDWR, OriginalStdioOp.O_WRONLY,
-            OriginalStdioOp.F_GETFL, OriginalStdioOp.F_SETFL))
+            OriginalStdioOp.F_GETFL, OriginalStdioOp.F_SETFL, OriginalStdioOp.F_SETFD, OriginalStdioOp.FD_CLOEXEC))
             assertEquals((raw[operation.name] as Number).toLong(), abi.flagConstant(operation))
         assertThrows(RuntimeFault::class.java) { abi.flagConstant(OriginalStdioOp.ERRNO) }
         assertThrows(RuntimeFault::class.java) { parse(original + ("open" to (raw + ("F_SETFL" to raw["F_GETFL"])))) }
@@ -94,6 +94,14 @@ class StdioHostAbiTest {
         for (wrong in listOf(null, emptyList<Any?>(), emptyMap<String, Any?>(), seek + ("extra" to 0)))
             assertThrows(RuntimeFault::class.java) { parse(original + ("seek" to wrong)) }
         assertThrows(RuntimeFault::class.java) { parse(original - "seek") }
+    }
+
+    @Test fun signalRecordSizeRequiresPositiveExactNativeSize() {
+        val original = document()
+        assertEquals((original["siginfoBytes"] as Number).toLong(), parse(original).siginfoBytes)
+        for (wrong in listOf(null, true, false, 128.0, "128", 0, -1, 1L shl 31))
+            assertThrows(RuntimeFault::class.java) { parse(original + ("siginfoBytes" to wrong)) }
+        assertThrows(RuntimeFault::class.java) { parse(original - "siginfoBytes") }
     }
 
     @Test fun mismatchedPlatformWidthsAndMalformedErrnoReject() {

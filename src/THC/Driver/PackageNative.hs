@@ -29,6 +29,7 @@ import System.FilePath
 import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import THC.Driver.ScalarBitcode (parseDependencies, sulongScalarTarget)
 import THC.Driver.NativeLibrarySources (zlibChecksumSources, nativeMathSymbols, validateNativeMathIR, validateNativeEntropyIR, validateNativeWidthIR)
+import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
 
 -- (original emitted symbol, convention, safety, semantic carriers, result)
 type Signature = (String, String, String, [String], String)
@@ -529,13 +530,32 @@ finishPackageNative pieces directory unit currentObjects modules = do
         final = directory </> "native/package.bc"
     _ <- command directory link (wrapper : bitcodes ++ ["-o",linked])
     _ <- command directory opt ["-S","-passes=verify",linked,"-o",linkedIR]
-    either fail pure . validateNativeIR =<< readFile linkedIR
+    linkedSource <- readFile linkedIR
+    either fail pure (validateNativeIR linkedSource)
+    bridges <- fmap concat $ forM abi $ \value -> do
+      symbol <- get value "symbol"
+      entry <- get value "entry"
+      pure [bridge | member value "convention" == Just "ccall",
+        Just bridge <- [nativeArgumentBridge target symbol entry linkedSource]]
+    (prepared,bridgeInputs) <- if null bridges then pure (linked,[]) else do
+      let source = unlines (nub [declaration | (declaration,_,_) <- bridges]) ++
+            concat [body | (_,body,_) <- bridges]
+          bridgeSource = directory </> "native/argument-bridges.ll"
+          bridgeBitcode = directory </> "native/argument-bridges.bc"
+          bridged = directory </> "native/bridged.bc"
+      writeFile bridgeSource source
+      _ <- command directory opt ["-passes=verify","--mtriple=" ++ target,bridgeSource,"-o",bridgeBitcode]
+      _ <- command directory link [linked,"--override=" ++ bridgeBitcode,"-o",bridged]
+      inputHash <- sha <$> BS.readFile linked
+      pure (bridged,[object ["profile" .= ("x86_64-c-integer-argument-truncation-v1"::String),
+        "source" .= source,"sourceSha256" .= sha (T.encodeUtf8 (T.pack source)),
+        "inputBitcodeSha256" .= inputHash,"definitions" .= [witnesses | (_,_,witnesses) <- bridges]]])
     let trim input = command directory opt ["-passes=internalize,globaldce",
           "-internalize-public-api-list=" ++ join "," entries,input,"-o",final]
         unresolved = do
           output <- command directory nm ["--undefined-only","--format=posix",final]
           pure [name | line <- lines output, name:_ <- [words line]]
-    _ <- trim linked
+    _ <- trim prepared
     initialExternals <- unresolved
     candidates' <- maybe (pure []) (either fail pure . parseValue) (member record "providers")
     providers <- filterM (\value -> any (`elem` initialExternals) <$> (get value "symbols" :: IO [String])) candidates'
@@ -547,7 +567,7 @@ finishPackageNative pieces directory unit currentObjects modules = do
         check (member value "bitcodeSha256" == Just (toJSON digest)) "package native source provider bitcode changed"
         pure path
       let resolved = directory </> "native/resolved.bc"
-      _ <- command directory link (linked : providerBitcodes ++ ["-o",resolved])
+      _ <- command directory link (prepared : providerBitcodes ++ ["-o",resolved])
       _ <- trim resolved
       pure ()
     externals <- unresolved
@@ -591,7 +611,7 @@ finishPackageNative pieces directory unit currentObjects modules = do
           "profile" .= ("thc-package-c-ffi-v1"::String),"unit" .= unit,"target" .= target,
           "componentSha256" .= component,"bitcodeSha256" .= sha bytes,"bitcodeHex" .= hex bytes,"abi" .= abi,
           "buildInputs" .= object ["translationUnits" .= inputs,"providers" .= providers,
-            "nativeLibraries" .= libraries,"unresolved" .= externals]]
+            "nativeLibraries" .= libraries,"unresolved" .= externals,"argumentBridges" .= bridgeInputs]]
     writeJson (directory </> "native/inputs.json") (object ["sources" .= inputs,"unresolved" .= externals])
     forM modules $ \(name,bytes') -> do
       value <- either fail pure (eitherDecodeStrict' bytes')

@@ -11,19 +11,22 @@ no speculative worker pool or parallel-speedup claim.
 
 `forkOn#` uses the existing real managed-thread implementation, lazy child action
 and inherited masking state. It records a locked context-local logical capability,
-reducing the requested number modulo the context's CPU capacity. It then attempts
-native affinity for that CPU on the child **platform** thread. Affinity is best
+reducing the requested number modulo the context's logical capability count. It
+maps that index modulo eligible CPU capacity and attempts native affinity on
+the child **platform** thread. Affinity is best
 effort: an unavailable API, denied native access or rejected request never prevents
 the fork. `threadStatus#` reports the logical capability and requested lock, not
 proof that the OS accepted a pin. This is not `forkOS` or bound foreign TLS.
 
 CPU capacity is captured when the context is created, before guest pinning: the
 JVM's available-processor count, capped by discovered eligible CPUs. This respects
-JVM/container capacity limits. `enabled_capabilities` (used by GHC's capability
-query) reports that count; creating more guest threads never creates more CPUs.
-Capabilities are dense indices into ordered eligible OS CPUs, which need not have
-contiguous IDs. Ordinary carriers share these indices round-robin. There is no
-dynamic `setNumCapabilities` or GHC `-N` scheduler configuration yet.
+JVM/container capacity limits. The separate logical count starts at this capacity;
+original `setNumCapabilities` changes it per context and `enabled_capabilities`
+reports it. Ordinary carriers share logical indices round-robin. Shrinking the
+count normalizes retained thread indices without repinning existing carriers or
+changing their initial affinity outcome. Eligible OS CPU IDs need not be contiguous.
+No JVM pool scaling or GHC `-N` scheduler configuration is implied. See
+[RTS event prerequisites and capabilities](rts-event-capabilities.md).
 
 Linux uses `sched_getaffinity`/`sched_setaffinity` on the current native thread,
 not a Java thread ID. The kernel's online-CPU and cpuset restrictions still apply.

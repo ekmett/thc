@@ -973,6 +973,16 @@ class AuditTest(unittest.TestCase):
             report = audit_core.Audit([('join', module)], oldcap).run(['root'])
             self.assertIn('aggregate-boundary', {i['code'] for i in report['issues']})
 
+    def test_empty_tuple_case_evaluates_bottom_without_requiring_a_fabricated_alternative(self):
+        module = tuple_fixture(tuple_rep(LONG))
+        case = module['bindings'][0]['expr'][2]
+        self.assertEqual('case', case[0])
+        case[3] = []
+        self.assertTrue(run_tuple(module)['accepted'])
+        case[3] = [['default', None, [], lit(0)], ['default', None, [], lit(0)]]
+        self.assertIn('unboxed-tuple requires at most one alternative',
+                      [issue['detail'] for issue in run_tuple(module)['issues']])
+
     def test_tuple_join_result_lambda_and_call_proofs_must_agree(self):
         for location in ('join', 'lambda', 'call'):
             module, join = tuple_join_fixture()
@@ -1874,7 +1884,12 @@ class LibdwUnavailableAuditTest(unittest.TestCase):
 
 class OriginalSignalDeclarationTest(unittest.TestCase):
     def test_exact_call_requires_capability_and_implicit_original_dispatcher(self):
-        resource = ROOT.parent / 'src/test/resources/core/original-signal-install-descriptor.json'
+        for name in ('original-signal-install-descriptor.json', 'original-unix-signal-install-descriptor.json'):
+            with self.subTest(resource=name):
+                self.check_original(name)
+
+    def check_original(self, name):
+        resource = ROOT.parent / 'src/test/resources/core' / name
         declaration = json.loads(resource.read_text())
         fixture = LibdwUnavailableAuditTest()
         module = fixture.fixture(declaration)
@@ -1892,6 +1907,12 @@ class OriginalSignalDeclarationTest(unittest.TestCase):
             wrong = copy.deepcopy(module)
             wrong['bindings'][0]['expr'][1][index]['rep'] = LONG
             self.assertFalse(fixture.audit(wrong, enabled)['accepted'])
+        for unit in (None, 'unix', 'unix-2.8.7.0-inplace', 'other', 1):
+            wrong = copy.deepcopy(declaration)
+            wrong['target']['unit'] = unit
+            malformed = fixture.fixture(wrong)
+            malformed['bindings'].append(bind(dispatcher, lit(0)))
+            self.assertFalse(fixture.audit(malformed, enabled)['accepted'])
 
 
 class NativeMallocDeclarationTest(unittest.TestCase):
@@ -2017,7 +2038,15 @@ class OriginalGcStatsDeclarationTest(unittest.TestCase):
                 ('performGC', (None,), None, 'safe'),
                 ('performMajorGC', (None,), None, 'safe'),
                 ('performBlockingMajorGC', (None,), None, 'safe'),
-                ('getMonotonicNSec', (None,), 'Word64Rep', 'unsafe')):
+                ('getMonotonicNSec', (None,), 'Word64Rep', 'unsafe'),
+                ('getNumberOfProcessors', (None,), 'Word32Rep', 'unsafe'),
+                ('setNumCapabilities', ('Word32Rep', None), None, 'safe'),
+                ('__hscore_sizeof_siginfo_t', (None,), 'Word64Rep', 'safe'),
+                ('__hscore_f_setfd', (None,), 'Int32Rep', 'unsafe'),
+                ('__hscore_fd_cloexec', (None,), 'Int64Rep', 'unsafe'),
+                ('getOrSetSystemEventThreadIOManagerThreadStore', ('AddrRep', None), 'AddrRep', 'unsafe'),
+                ('getOrSetSystemTimerThreadEventManagerStore', ('AddrRep', None), 'AddrRep', 'unsafe'),
+                ('getOrSetSystemTimerThreadIOManagerThreadStore', ('AddrRep', None), 'AddrRep', 'unsafe')):
             declaration = dict(schema=1, target=dict(kind='static', symbol=symbol,
                 unit='ghc-internal', isFunction=True), convention='ccall', safety=safety,
                 arity=len(arguments), suppliedArity=len(arguments),
@@ -3205,6 +3234,130 @@ class STMContractTest(unittest.TestCase):
         self.assertIn('ghc-internal:GHC.Internal.Control.Exception.Base.nestedAtomically',
                       [binding['id'] for binding in report['missingGlobals']])
         self.assertNotIn('sameTVar#', CAP['primitives'])
+
+    def test_erased_stm_newtype_action_refines_only_the_same_lifted_object_carrier(self):
+        for name in ('atomically#', 'catchRetry#', 'catchSTM#'):
+            for index, role in enumerate(CAP['managedSTMPrimitives'][name]['arguments']):
+                if role != 'action':
+                    continue
+                original = self.fixture(name)
+                binder = original['bindings'][0]['expr'][1][index]
+                binder['rep'] = dict(kind='object', primReps=['BoxedRep (Just Lifted)'], evaluated=False)
+                report = audit_core.Audit([('newtype-stm.json', original)], CAP).run(['root'])
+                self.assertTrue(report['accepted'], (name, index, report['issues']))
+                for wrong in (LONG, dict(kind='float', primReps=['FloatRep'], evaluated=True),
+                              dict(kind='address', primReps=['AddrRep'], evaluated=True),
+                              dict(kind='void', primReps=[], evaluated=True),
+                              dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True),
+                              dict(kind='closure', primReps=['BoxedRep (Just Unlifted)'], evaluated=True),
+                              dict(kind='data', primReps=['BoxedRep (Just Lifted)'], evaluated=True),
+                              dict(kind='unknown', aggregate='unboxed-tuple', components=[REFERENCE],
+                                   primReps=['BoxedRep (Just Lifted)'], evaluated=True)):
+                    for site in ('binding', 'occurrence'):
+                        changed = copy.deepcopy(original)
+                        target = (changed['bindings'][0]['expr'][1][index] if site == 'binding' else
+                                  changed['bindings'][0]['expr'][2][1][2][index][2])
+                        target['rep'] = wrong
+                        bad = audit_core.Audit([('bad-newtype-stm.json', changed)], CAP).run(['root'])
+                        self.assertFalse(bad['accepted'], (name, index, site, wrong))
+                # A stored object does not grant a missing function occurrence.
+                changed = copy.deepcopy(original)
+                changed['bindings'][0]['expr'][2][1][2][index][2]['rep'] = copy.deepcopy(binder['rep'])
+                self.assertFalse(audit_core.Audit([('bad-action.json', changed)], CAP).run(['root'])['accepted'])
+
+
+class OriginalTextForeignAuditTests(unittest.TestCase):
+    def fixture(self, symbol):
+        arguments = ('BoxedRep (Just Unlifted)', 'Word64Rep', 'Word64Rep',
+                     'Word8Rep' if symbol == '_hs_text_memchr' else 'Word64Rep', None)
+        def scalar(rep, evaluated=True):
+            return dict(kind='void' if rep is None else 'object' if rep.startswith('BoxedRep') else 'long',
+                        primReps=[] if rep is None else [rep], evaluated=evaluated)
+        parameters = [dict(id=f'a{i}', lifted=False, rep=scalar(rep)) for i, rep in enumerate(arguments)]
+        result = dict(tuple_rep(scalar(None), scalar('Int64Rep')), evaluated=False)
+        descriptor = dict(schema=1, target=dict(kind='static', unit='text-2.1.3-inplace', symbol=symbol,
+                          isFunction=True), convention='ccall', safety='unsafe', arity=5, suppliedArity=5,
+                          argumentReps=[scalar(rep, False) for rep in arguments], resultRep=copy.deepcopy(result))
+        call = ['app', ['var', 'original-text', dict(rep=CLOSURE)],
+                [['var', p['id'], dict(rep=copy.deepcopy(p['rep']))] for p in parameters],
+                [False] * 5, False, False, dict(rep=result, foreignCall=descriptor)]
+        body = ['case', call, 'result', [['default', None, [], [*lit(0), dict(rep=LONG)]]],
+                dict(rep=LONG, binder=dict(id='result', lifted=False, rep=dict(result, evaluated=True)))]
+        root = dict(bind('root', ['lam', parameters, body, dict(rep=CLOSURE, resultRep=LONG)]),
+                    rep=CLOSURE, arity=5)
+        return dict(schema=1, ghc='9.14.1', bindings=[root], constructors=[])
+
+    def test_exact_text_calls_and_capability_boundary(self):
+        for symbol in ('_hs_text_memchr', '_hs_text_measure_off'):
+            module = self.fixture(symbol)
+            report = audit_core.Audit([('text-control.json', module)], CAP).run(['root'])
+            self.assertTrue(report['accepted'], report['issues'])
+            disabled = dict(CAP, managedForeignCalls=[name for name in CAP['managedForeignCalls'] if name != symbol])
+            self.assertFalse(audit_core.Audit([('text-control.json', module)], disabled).run(['root'])['accepted'])
+
+    def test_text_identity_state_array_result_and_binding_mutations_reject(self):
+        for symbol in ('_hs_text_memchr', '_hs_text_measure_off'):
+            for mutation in ('unit', 'safety', 'arity', 'array', 'state', 'result', 'stored-array', 'flags'):
+                module = self.fixture(symbol)
+                call = module['bindings'][0]['expr'][2][1]
+                descriptor = call[6]['foreignCall']
+                if mutation == 'unit': descriptor['target']['unit'] = 'other-text'
+                elif mutation == 'safety': descriptor['safety'] = 'safe'
+                elif mutation == 'arity': descriptor['suppliedArity'] = 4
+                elif mutation == 'array': descriptor['argumentReps'][0]['primReps'] = ['AddrRep']
+                elif mutation == 'state': call[2][-1][2]['rep'] = LONG
+                elif mutation == 'result': descriptor['resultRep']['primReps'] = ['Word64Rep']
+                elif mutation == 'stored-array': module['bindings'][0]['expr'][1][0]['rep'] = LONG
+                elif mutation == 'flags': call[3][0] = True
+                report = audit_core.Audit([('text-control.json', module)], CAP).run(['root'])
+                self.assertFalse(report['accepted'], (symbol, mutation))
+
+
+class OriginalWaitStatusAuditTests(unittest.TestCase):
+    def fixture(self, symbol):
+        def scalar(rep, evaluated=True):
+            return dict(kind='void' if rep is None else 'long', primReps=[] if rep is None else [rep],
+                        evaluated=evaluated)
+        parameters = [dict(id='status', lifted=False, rep=scalar('Int32Rep')),
+                      dict(id='state', lifted=False, rep=scalar(None))]
+        result = dict(tuple_rep(scalar(None), scalar('Int32Rep')), evaluated=False)
+        descriptor = dict(schema=1, target=dict(kind='static', unit='unix-2.8.8.0-inplace', symbol=symbol,
+                          isFunction=True), convention='capi', safety='unsafe', arity=2, suppliedArity=2,
+                          argumentReps=[scalar('Int32Rep', False), scalar(None, False)], resultRep=copy.deepcopy(result))
+        call = ['app', ['var', 'original-wait-status', dict(rep=CLOSURE)],
+                [['var', p['id'], dict(rep=copy.deepcopy(p['rep']))] for p in parameters],
+                [False, False], False, False, dict(rep=result, foreignCall=descriptor)]
+        body = ['case', call, 'result', [['default', None, [], [*lit(0), dict(rep=LONG)]]],
+                dict(rep=LONG, binder=dict(id='result', lifted=False, rep=dict(result, evaluated=True)))]
+        root = dict(bind('root', ['lam', parameters, body, dict(rep=CLOSURE, resultRep=LONG)]), rep=CLOSURE, arity=2)
+        return dict(schema=1, ghc='9.14.1', bindings=[root], constructors=[])
+
+    def test_seven_original_macros_and_capability_boundary(self):
+        for symbol in audit_core.core_original_foreign.WAIT_STATUS_OPERATIONS:
+            module = self.fixture(symbol)
+            report = audit_core.Audit([('wait-status.json', module)], CAP).run(['root'])
+            self.assertTrue(report['accepted'], report['issues'])
+            disabled = dict(CAP, managedForeignCalls=[name for name in CAP['managedForeignCalls'] if name != symbol])
+            self.assertFalse(audit_core.Audit([('wait-status.json', module)], disabled).run(['root'])['accepted'])
+
+    def test_wait_status_unit_width_state_and_stored_proofs_are_exact(self):
+        for symbol in audit_core.core_original_foreign.WAIT_STATUS_OPERATIONS:
+            for mutation in ('unit', 'safety', 'convention', 'arity', 'width', 'state', 'result', 'stored-status', 'stored-state', 'flags'):
+                module = self.fixture(symbol)
+                call = module['bindings'][0]['expr'][2][1]
+                descriptor = call[6]['foreignCall']
+                if mutation == 'unit': descriptor['target']['unit'] = 'ghc-internal'
+                elif mutation == 'safety': descriptor['safety'] = 'safe'
+                elif mutation == 'convention': descriptor['convention'] = 'ccall'
+                elif mutation == 'arity': descriptor['suppliedArity'] = 1
+                elif mutation == 'width': descriptor['argumentReps'][0]['primReps'] = ['IntRep']
+                elif mutation == 'state': call[2][-1][2]['rep'] = LONG
+                elif mutation == 'result': descriptor['resultRep']['primReps'] = ['Word32Rep']
+                elif mutation == 'stored-status': module['bindings'][0]['expr'][1][0]['rep'] = LONG
+                elif mutation == 'stored-state': module['bindings'][0]['expr'][1][1]['rep'] = LONG
+                elif mutation == 'flags': call[3][0] = True
+                report = audit_core.Audit([('wait-status.json', module)], CAP).run(['root'])
+                self.assertFalse(report['accepted'], (symbol, mutation))
 
 
 if __name__ == '__main__':

@@ -231,11 +231,12 @@ class TupleInputs(unittest.TestCase):
         call[2][0][6]['rep']['primReps']=['BoxedRep Nothing']
         self.rejected(module,detail='unboxed-tuple argument')
 
-    def test_join_formals_captures_local_storage_and_primitive_boundaries_remain_rejected(self):
+    def test_join_formals_are_admitted_but_capture_storage_and_primop_boundaries_remain_rejected(self):
         shape=tup(LONG)
         module=fixture([shape]);worker=module['bindings'].pop();worker.update(joinValueArity=1,joinResultRep=LONG,info=dict(joinArity=1))
         module['bindings'][0]['expr']=['let',False,[worker],module['bindings'][0]['expr'],dict(rep=LONG)]
-        self.rejected(module,detail='unboxed-tuple formal argument')
+        self.accepted(module)
+        self.rejected(module,cap=dict(ENABLED,aggregateJoinInputs=['empty-unboxed-tuple']),detail='unboxed-tuple formal argument')
         module=fixture([shape]);worker=module['bindings'][1]
         worker['expr'][2]=['lam',[],var('p0',shape),dict(rep=CLOSURE,resultRep=shape)];worker['expr'][3]['resultRep']=CLOSURE
         module['bindings'][0]['expr'][6]['rep']=CLOSURE

@@ -82,7 +82,7 @@ class OperandRetentionTest {
             arrayOf(CoreRepresentation.UNKNOWN, CoreRepresentation.UNKNOWN, long))
         val temporaries = intArrayOf(3, 4, 5)
         val metrics = Metrics(true)
-        val call = LocalJoinCall(target, arrayOf(
+        val call = LocalJoinCall(thc.Language(), target, arrayOf(
             expression { order += 0; FrameAccess.read(it, 1) },
             expression { order += 1; FrameAccess.read(it, 0) },
             expression { order += 2; if (fail) throw failure; it.getLong(2) + 1 }),

@@ -17,3 +17,6 @@ uint64_t archive_header_mix(archive_state *value, uint8_t rounds, uint32_t keyle
 uint64_t archive_header_mix_wide(archive_state *value, uint8_t rounds, uint32_t keylen) {
   return archive_header_mix(value, rounds, keylen);
 }
+int64_t archive_header_mix16(archive_state *value, int16_t first, uint16_t second) {
+  return (int64_t) value->bias + (int64_t) first * 65536 + second;
+}

@@ -3,10 +3,45 @@
 {-# LANGUAGE MagicHash, UnboxedTuples, UnliftedDatatypes, StandaloneKindSignatures #-}
 module STMAudit where
 import GHC.Exts
+import GHC.Conc.Sync (STM(..))
 
 data Box = Box Int#
 type UBox :: UnliftedType
 data UBox = UBox Int#
+
+-- The original tasty Async field stores an STM newtype as an opaque lifted
+-- object; its erased cast supplies the closure occurrence passed to atomically#.
+-- Opaque consumers preserve this real field boundary after optimization.
+data STMField = STMField (STM Box)
+data STMBranches = STMBranches (STM Box) (STM Box)
+newtype STMHandler = STMHandler (Box -> State# RealWorld -> (# State# RealWorld, Box #))
+data STMProtected = STMProtected (STM Box) STMHandler
+
+{-# OPAQUE consumeSTMField #-}
+consumeSTMField :: STMField -> Int#
+consumeSTMField (STMField (STM action)) = runRW# (\s ->
+  case atomically# action s of (# _, Box result #) -> result)
+{-# OPAQUE newtypeField #-}
+newtypeField :: Int# -> Int#
+newtypeField x = consumeSTMField (STMField (STM (\s -> (# s, Box (x +# 11#) #))))
+
+{-# OPAQUE consumeSTMBranches #-}
+consumeSTMBranches :: STMBranches -> Int#
+consumeSTMBranches (STMBranches (STM left) (STM right)) = runRW# (\s ->
+  case atomically# (\t -> catchRetry# left right t) s of (# _, Box result #) -> result)
+{-# OPAQUE newtypeAlternative #-}
+newtypeAlternative :: Int# -> Int#
+newtypeAlternative x = consumeSTMBranches (STMBranches (STM (\s -> retry# s))
+  (STM (\s -> (# s, Box (x +# 13#) #))))
+
+{-# OPAQUE consumeSTMProtected #-}
+consumeSTMProtected :: STMProtected -> Int#
+consumeSTMProtected (STMProtected (STM action) (STMHandler handler)) = runRW# (\s ->
+  case atomically# (\t -> catchSTM# action handler t) s of (# _, Box result #) -> result)
+{-# OPAQUE newtypeCatch #-}
+newtypeCatch :: Int# -> Int#
+newtypeCatch x = consumeSTMProtected (STMProtected (STM (\s -> raiseIO# (Box x) s))
+  (STMHandler (\(Box n) s -> (# s, Box (n +# 17#) #))))
 
 {-# OPAQUE basic #-}
 basic :: Int# -> Int#

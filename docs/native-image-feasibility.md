@@ -290,6 +290,15 @@ altering validity assertions. An initial typed-cycle trampoline-count failure
 did not recur in the unchanged-source or final candidate runs. Mask diagnostics
 were added without changing its counter assertion; its cause is not established.
 
+Tuple arithmetic now transfers to the interpreter before formatting invalid
+division-input diagnostics. Valid arithmetic and the exact failure messages are
+unchanged. The focused arithmetic, narrow-integer and carry suites pass 30 checks
+across both handoff modes, including first installed failure entry, retained
+targets and recovery. Bytecode inspection confirms each transfer precedes string
+construction. Actual image analysis clears that path; its next main failure is
+the bytecode literal matcher's unrestricted object equality, with additional
+native-access and generated-metadata paths still unresolved.
+
 ## Execution models
 
 | Product | What is fixed when built | Guest execution |

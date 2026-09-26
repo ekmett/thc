@@ -101,8 +101,16 @@ prototype. Both translation units and their real header dependencies contribute
 to the native component identity. The mixed-header fixture compares an existing
 managed buffer passed as an opaque struct pointer and 8/32-bit argument-boundary
 behavior against native GHC with exact-width Haskell arguments. The retained
-machine-word caller variant also succeeds natively, but currently fails in
-Sulong when an i64 caller enters an i8/i32 C definition. A separate control retains the current rejection
+machine-word caller variant uses an explicit x86_64 Linux argument bridge when
+the verified LLVM caller and actual C definition establish ordinary C integer
+register slots. The bridge truncates i64/i32 arguments to the definition's
+i8/i16/i32 width and preserves its sign/zero-extension attributes. Original
+Haskell import metadata remains unchanged. The native GHC oracle includes
+negative and high-bit values, including signed/unsigned 16-bit parameters.
+The original LLVM definition lines, bridge source/hash and linked input hash
+are retained in build inputs. No return conversion, pointer conversion,
+variadic or non-C convention adaptation is inferred. Unrecognized signatures
+keep the original adapter. A separate control retains the current rejection
 when an unowned static C pointer is returned and passed into another call; TU
 separation does not grant byte ownership to that numeric address.
 
@@ -187,6 +195,55 @@ or AD test suite.
 ```sh
 THC_TASTY_SOURCE=/path/to/tasty-1.5.4 cabal run exe:thc-fixtures -- wcwidth
 ./gradlew --continue wcwidthDefault wcwidthDense
+```
+
+The seven original `unix-2.8.8.0-inplace` wait-status CAPI declarations
+(`WCOREDUMP`, `WSTOPSIG`, `WIFSTOPPED`, `WTERMSIG`, `WIFSIGNALED`,
+`WEXITSTATUS`, `WIFEXITED`) execute wrappers compiled against the installed
+`HsUnix.h` on Linux x86-64. They reuse the checked scalar foreign-call path
+with the exact original unit, wrapper symbol, CInt width, and hidden
+State/result tuple. Raw macro results are preserved, including `WCOREDUMP`'s
+`128` mask; there is no JVM status formula or guest process/fork emulation.
+The context must permit native access.
+
+The `unix-wait-status` fixture recovers genuine declarations from the installed
+`System.Posix.Process.Internals` Core, specializes typed consumers with those
+FCallIds, and compiles the same calls with native GHC. Its 280 observations
+cover exit/signal/stop encodings, flags, signed CInt edges, and outer Int
+narrowing. Both backends compare pre/post-tidy Core interpreted and from the
+first installed compiled call, with inlining enabled and disabled. These
+leaf checks do not claim full process management or a completed AD test run.
+
+```sh
+cabal run exe:thc-fixtures -- unix-wait-status
+./gradlew --continue testDefault --tests thc.runtime.UnixWaitStatusTest \
+  testDense --tests thc.runtime.UnixWaitStatusTest
+```
+
+Installed `text-2.1.3-inplace` also has two closed original-C adapters on Linux
+x86-64: `_hs_text_memchr` and `_hs_text_measure_off`. Their exact unsafe
+State-threaded declarations retain the `ByteArray#`, size/byte and signed
+result carriers. They execute the unchanged upstream C over a read-only
+Sulong buffer view of the existing heap or pinned allocation; ordinary heap
+arrays are neither copied nor pinned. Full-width offset/length checks and
+pointer-cell rejection precede C access. The measure operation retains text's
+valid-UTF-8 precondition and negative available-character-count result.
+
+The original sources and license are under `compiler/pinned-text/2.1.3`.
+Their supported non-atomic configuration selects the original SSE/word/tail
+code, avoiding a native CPUID/AVX dispatcher inside Sulong. This is not generic
+installed-package C acquisition. The original portable OpenBSD `memchr` is
+linked into this bitcode under a private name, so the heap buffer cannot fall
+through to native libc. The full unsigned character-count domain preserves
+the original C's signed-intermediate wrap behavior, including its non-ideal
+result at `UINT64_MAX`; it is checked against the native library, not corrected
+to an idealized text algorithm. The focused fixture calls the unchanged
+installed declarations and native library over 500 search/UTF-8 inputs; it is
+separate from completion of the original AD upstream test suite.
+
+```sh
+cabal run exe:thc-fixtures -- text-cbits
+./gradlew --continue testDefault --tests thc.runtime.TextCbitsTest testDense --tests thc.runtime.TextCbitsTest
 ```
 
 The unchanged `erf-2.0.0.0` package has source-pure imports whose emitted
