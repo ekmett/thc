@@ -1,6 +1,6 @@
 # Checked native GMP limb provider
 
-This implements fifteen exact original GHC foreign calls: fourteen through a
+This implements twenty-four exact original GHC foreign calls: twenty-three through a
 checked native provider on Linux x86_64, plus the original RTS scalar
 `__int_encodeDouble` translated directly to JVM scaling. Genuine pre/post Core calls match a native GHC
 oracle in interpreted and first-installed compiled AST/bytecode execution,
@@ -20,12 +20,37 @@ MD5 build remains present on its previously supported platforms.
 
 ## Contracts
 
-The extended original-call fixture has 296 native observations and fifteen
-genuine imported declarations. It adds `integer_gmp_mpn_rshift`,
+The extended original-call fixture has 464 native observations and twenty-four
+genuine imported declarations. Beyond the baseline arithmetic it covers `integer_gmp_mpn_rshift`,
 `integer_gmp_mpn_rshift_2c`, `integer_gmp_mpn_get_d` and `__int_encodeDouble`.
 Both backends retain typed Double result slots; no boxed numeric result packet
 or Java `BigInteger` conversion is introduced. Both handoff modes check every
 original entry before and on the first call after explicit compilation.
+
+The compiler-session tranche adds `integer_gmp_gcd_word`,
+`integer_gmp_mpn_gcd_1`, `integer_gmp_mpn_gcd`, `integer_gmp_mpn_lshift`,
+`integer_gmp_mpn_and_n`, `integer_gmp_mpn_andn_n`, `integer_gmp_mpn_ior_n`,
+`integer_gmp_mpn_xor_n` and `__gmpn_popcount`. These are the nine additional
+targets reached by the original GHC 9.14.1 session graph; admitting these
+calls alone does not establish a successful full compiler session.
+
+Word GCD preserves unsigned 64-bit values and accepts zero on either side.
+Array/word GCD requires a positive limb count and a nonzero word for multi-limb
+inputs. Array/array GCD requires positive counts, left count at least right,
+normalized multi-limb inputs and output capacity equal to the right count.
+It returns the number of result limbs and writes only that prefix, preserving
+the unused tail. GHC's caller performs the subsequent logical trim. The native
+adapter uses read-only operand views and GMP's own temporary result, like the
+original wrapper, rather than destructively applying `mpn_gcd` to guest inputs.
+
+Left shifts require a positive count and an output of
+`inputLimbs + ceil(count / 64)` limbs. They preserve low zero limbs and return
+the top stored limb, including zero for a partially filled extra limb. Exact
+start aliases also work on native-pinned storage without an additional copy.
+Logical operations require equal, positive counts and permit exact-start
+output/input aliasing. Population count treats every input limb as unsigned;
+the input must contain at least one limb. Partial overlap, undersized or
+immutable destinations and pointer-bearing storage reject before native stores.
 
 Right shifts require `0 < count < inputLimbs * 64`. The ordinary destination has
 `inputLimbs - count / 64` limbs; the negative-magnitude version has
@@ -97,18 +122,21 @@ sentinel allocation but zero copy capacity.
 Sulong interprets an embedded LLVM adapter with a real native GMP dependency.
 Volatile C function pointers retain actual external GMP calls, including those
 whose headers offer inline implementations. No arithmetic is emulated in Java.
-The adapter has no allocation, abort, managed interop reads or free calls.
+The adapter has no managed interop reads. Multi-limb GCD uses GMP-owned temporary
+result storage and frees it before returning, as the original GHC wrapper does;
+the other adapters introduce no native allocation or free calls.
 Host try/finally closes all native memory even when LLVM calls/conversion fail
 or the LLVM context is cancelled. This does not promise interruption of an
 arbitrary in-flight native GMP call.
 
 ## Evidence and boundaries
 
-Six `SulongLimbProviderTest` tests exercise all eleven adapter entries using
+The provider controls exercise the adapter entries using
 fixed arithmetic controls, unsigned carry/borrow, aliases, canaries, empty
 division cases, malformed shapes/divisors, pointer-cell rejection, immutable
-destinations, logical shrink and native-access denial. All six plus four
-existing Sulong/MD5 tests pass in default and dense modes. The separate
+destinations, logical shrink and native-access denial. The GCD/bitwise tranche
+adds zero/high-bit word controls, prefix-only writes and native-pinned aliases.
+The separate
 `bench/experiments/gmp-sulong/run-ownership.sh` passes pointer lifetime,
 confinement, failed interop and post-cancellation cleanup controls.
 
@@ -136,7 +164,7 @@ denial and invalid counts without guest stores. `CoreGmpForeignTest` covers
 all exact descriptors, stored operand kinds and the load-time null-sentinel
 predicate; the auditor independently enforces those shapes before admission.
 
-The native fixture producer's `--require-supported` mode requires all 22
+The native fixture producer's `--require-supported` mode requires all 48
 strict entry audits to accept. Its `runtimeVerified:false` field correctly
 describes a producer that does not run JVM tests; those results are separate.
 CI includes the stock-compatible Linux fixture and a closed receipt allowlist,

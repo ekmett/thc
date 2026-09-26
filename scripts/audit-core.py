@@ -32,6 +32,14 @@ SCALAR_SIGNATURES = json.loads((Path(__file__).resolve().parent.parent /
 POLYGLOT_ABI = json.loads((Path(__file__).resolve().parent.parent /
     'src/test/resources/thc/polyglot-abi.json').read_text())
 
+# Closed scalar PrimRep identities emitted from GHC's LitRubbish RuntimeRep.
+# Do not infer singleton aggregates, vectors, or unknown levity as scalars.
+RUBBISH_KINDS = {
+    **dict.fromkeys(('IntRep', 'Int8Rep', 'Int16Rep', 'Int32Rep', 'Int64Rep',
+                     'WordRep', 'Word8Rep', 'Word16Rep', 'Word32Rep', 'Word64Rep'), 'long'),
+    'FloatRep': 'float', 'DoubleRep': 'double', 'AddrRep': 'address',
+    'BoxedRep (Just Lifted)': 'object', 'BoxedRep (Just Unlifted)': 'object'}
+
 
 # Original implicit RTS dependencies, not host exceptions or fabricated dictionaries.
 ARITHMETIC_EXCEPTIONS = {name: 'ghc-internal:GHC.Internal.Exception.Type.' + payload for name, payload in (
@@ -291,6 +299,8 @@ class Audit:
         if kind not in self.cap['literalKinds']:
             self.issue('unsupported-literal', owner, path, kind)
             return
+        if kind == 'rubbish' and (not isinstance(value, str) or value not in RUBBISH_KINDS):
+            self.issue('invalid-literal-value', owner, path, 'Unsupported rubbish representation')
         if kind == 'function-addr' and value not in self.cap.get('functionLabels', []):
             self.issue('unsupported-literal', owner, path, f'uncertified C function label {value}')
         if kind == 'data-addr' and value not in self.cap.get('dataLabels', []):
@@ -493,6 +503,8 @@ class Audit:
             narrow = {'int8': 'Int8Rep', 'word8': 'Word8Rep', 'int16': 'Int16Rep', 'word16': 'Word16Rep', 'int32': 'Int32Rep', 'word32': 'Word32Rep'}
             if expr[1] == 'bignat':
                 return dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
+            if expr[1] == 'rubbish' and isinstance(expr[2], str) and expr[2] in RUBBISH_KINDS:
+                return dict(kind=RUBBISH_KINDS[expr[2]], primReps=[expr[2]], evaluated=True)
             if expr[1] in narrow:
                 return dict(kind='long', primReps=[narrow[expr[1]]], evaluated=True)
             if expr[1] in ('null-addr', 'function-addr', 'data-addr'):
@@ -744,6 +756,9 @@ class Audit:
                         or symbol in (core_original_foreign.TCGETATTR_SYMBOL, core_original_foreign.TCSETATTR_SYMBOL)
                         or symbol in core_original_foreign.SIGSET_OPERATIONS
                         or symbol == 'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask'
+                        or symbol in ('isFloatNaN', 'isFloatInfinite', 'isFloatFinite', 'isFloatDenormalized', 'isFloatNegativeZero',
+                                      'isDoubleNaN', 'isDoubleInfinite', 'isDoubleFinite', 'isDoubleDenormalized', 'isDoubleNegativeZero',
+                                      'rintFloat', 'rintDouble')
                         or symbol in ('getOrSetSystemEventThreadEventManagerStore',
                                       'getOrSetGHCConcSignalSignalHandlerStore',
                                       'getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',
@@ -1110,6 +1125,15 @@ class Audit:
             elif tag == 'lit':
                 self.literal(expr[1], expr[2], owner, path)
                 self.compare_shapes(self.expression_rep(expr), self.literal_rep(expr), owner, path + '/rep')
+                if expr[1] == 'rubbish':
+                    raw = expr[3].get('rep') if len(expr) > 3 and isinstance(expr[3], dict) else None
+                    expected = RUBBISH_KINDS.get(expr[2]) if isinstance(expr[2], str) else None
+                    kinds = ('object', 'data', 'closure') if expected == 'object' else (expected,)
+                    if (not isinstance(raw, dict) or expected is None or raw.get('kind') not in kinds or
+                            raw.get('primReps') != [expr[2]] or raw.get('evaluated') is not True or
+                            'aggregate' in raw or is_vector(raw)):
+                        self.issue('scalar-representation', owner, path + '/rep',
+                                   'Rubbish literal requires explicit exact evaluated scalar representation')
                 if expr[1] in ('int8', 'word8', 'int16', 'word16', 'int32', 'word32'):
                     proof, intrinsic = self.expression_rep(expr), self.literal_rep(expr)
                     if (not isinstance(proof, dict) or proof.get('kind') != 'long' or
@@ -1948,8 +1972,8 @@ class Audit:
                                                             owner, f'{altpath}/binders/{field}/rep', component=True)
                     elif kind == 'lit':
                         self.literal(value[0], value[1], owner, altpath + '/literal')
-                        if value[0] == 'bignat':
-                            self.issue('alternative-kind', owner, altpath, 'BigNat literal alternatives are invalid GHC Core')
+                        if value[0] in ('bignat', 'rubbish'):
+                            self.issue('alternative-kind', owner, altpath, 'BigNat/rubbish literal alternatives are invalid GHC Core')
                         if value[0] in ('float', 'double', 'function-addr', 'data-addr'):
                             self.issue('alternative-kind', owner, altpath,
                                        'Floating and C label literal alternatives are invalid GHC Core')

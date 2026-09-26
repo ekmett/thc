@@ -20,7 +20,10 @@ import thc.Language
 import java.nio.ByteOrder
 
 class Word32VectorMemoryProofTest {
-    private val operations = VectorMemoryOp.entries.filter { it.family == VectorMemoryFamily.WORD32 }
+    // These fixtures use 128-bit vectors and ByteArray#, not wider vectors or Addr#.
+    private val operations = VectorMemoryOp.entries.filter {
+        it.family == VectorMemoryFamily.WORD32 && it.vectorBytes == 16 && !it.isAddress
+    }
     private fun scalar(kind: String, rep: String?) = mapOf("kind" to kind,
         "primReps" to if (rep == null) emptyList<String>() else listOf(rep), "evaluated" to true)
     private val state = scalar("void", null)

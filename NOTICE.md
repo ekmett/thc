@@ -71,7 +71,7 @@ without changing the recorded source hashes.
 
 ## GHC GMP wrappers
 
-The right-shift and floating-conversion adapters in `src/main/c/gmp-api.c`
+The shift, GCD and floating-conversion adapters in `src/main/c/gmp-api.c`
 adapt GHC 9.14.1's `libraries/ghc-internal/cbits/gmp_wrappers.c`, copyright
 (c) 2014 Herbert Valerio Riedel <hvr@gnu.org>, under BSD-3-Clause. The original
 terms and University of Glasgow notice are retained in

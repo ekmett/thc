@@ -35,12 +35,17 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 # preparers. An additional recorded runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
-MANIFEST_DIRS = """ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
+MANIFEST_DIRS = """rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
 narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
+RUBBISH_OUTPUTS = frozenset("build/rubbish-literals/" + name for name in (
+    "manifest.json", "pre.json", "post.json", "oracle.json", "originals.json", "pre.audit.json", "post.audit.json", "frontiers.json", "frontiers.audit.json",
+    *(f"logs/{command}.{suffix}" for command in
+      ("version", "info", "libdir", "imports-ghc-internal", "pre-audit", "post-audit", "frontiers-audit")
+      for suffix in ("stdout", "stderr", "command.json"))))
 BCO_ENTRIES = ("bcoConstant", "bcoApply", "bcoApplyTwo", "bcoFunction", "bcoArithmetic", "bcoBranch", "bcoLargeOperand", "bcoSharing")
 BCO_COMMANDS = ("ghc-version", "native-build", "native-run",
                 *(f"{stage}-export" for stage in ("pre", "post")),
@@ -353,6 +358,7 @@ tuple-return unsafe-equality""".split()
 CORE_DIRS = ("build/core", "build/aggregate-core", "build/aggregate-post-core",
              "build/cbv-post-core", "build/source-core", "build/map/core", "build/map/boot-core")
 REQUIRED = tuple(sorted({
+    *RUBBISH_OUTPUTS,
     *(f"build/{d}/manifest.json" for d in MANIFEST_DIRS),
     *(["build/original-gmp/manifest.json"] if GMP_NATIVE_HOST else []),
     *(f"build/{d}/provenance.json" for d in PROVENANCE_DIRS),
@@ -1315,6 +1321,8 @@ def allowed_payload(name, pins):
         return False
     if parts[1] == "integer-completion":
         return name in INTEGER_COMPLETION_OUTPUTS
+    if parts[1] == "rubbish-literals":
+        return name in RUBBISH_OUTPUTS
     if parts[1] in MEMORY_FIXTURE_OUTPUTS:
         return name in MEMORY_FIXTURE_OUTPUTS[parts[1]]
     if parts[1] == "compiler":

@@ -101,12 +101,58 @@ class SulongLimbProviderTest {
         arithmetic.addWord(middle, input(4, 5), 7)
         assertArrayEquals(bytes(0x5a5a, 11, 5, 0x5a5a), separate)
     }
+    @Test fun gcdAndPopulationCountKeepUnsignedWordsAndOnlyWriteTheResultPrefix() = provider { arithmetic ->
+        assertEquals(0L, arithmetic.gcdWords(0, 0))
+        assertEquals(-1L, arithmetic.gcdWords(0, -1))
+        assertEquals(-1L, arithmetic.gcdWords(-1, 0))
+        assertEquals(6L, arithmetic.gcdWords(48, 18))
+        assertEquals(2L, arithmetic.gcdWords(Long.MIN_VALUE, 6))
+        assertEquals(-1L, arithmetic.gcdWord(input(-1), 0))
+        assertEquals(2L, arithmetic.gcdWord(input(0, 1), 6))
+        assertEquals(0L, arithmetic.populationCount(input(0)))
+        assertEquals(129L, arithmetic.populationCount(input(-1, -1, Long.MIN_VALUE)))
+        val destination = bytes(0x5a5a, 0x5a5a, 0x1357)
+        assertEquals(1L, arithmetic.gcd(output(destination, 2), input(3, 2), input(3, 1)))
+        assertArrayEquals(bytes(1, 0x5a5a, 0x1357), destination)
+        assertEquals(1L, arithmetic.gcd(output(destination, 1), input(0), input(0)))
+        assertArrayEquals(bytes(0, 0x5a5a, 0x1357), destination)
+        assertEquals(2L, arithmetic.gcd(output(destination, 2), input(0, 2), input(0, 1)))
+        assertArrayEquals(bytes(0, 1, 0x1357), destination)
+    }
+    @Test fun leftShiftAndLogicalOperationsPreserveHeapAndPinnedAliases() = provider { arithmetic ->
+        for (pinned in listOf(false, true)) {
+            fun allocation(vararg words: Long): ManagedAllocation =
+                ManagedAllocation.mutable(words.size.toLong() * 8, 8, pinned).also { buffer ->
+                    bytes(*words).forEachIndexed { index, value -> buffer.writeByte(index.toLong(), value.toLong() and 255) }
+                }
+            fun observe(buffer: ManagedAllocation, size: Int) = ByteArray(size) { buffer.readByte(it.toLong()).toByte() }
+            val shift = allocation(3, 1, 0x5a5a, 0x5a5a, 0x1357)
+            assertEquals(0L, arithmetic.shiftLeft(LimbRegion.write(shift, 4), LimbRegion.read(shift, 2), 65))
+            assertArrayEquals(bytes(0, 6, 2, 0, 0x1357), observe(shift, 40))
+            val gcd = allocation(3, 2, 0x1357)
+            assertEquals(1L, arithmetic.gcd(LimbRegion.write(gcd, 2), LimbRegion.read(gcd, 2), input(3, 1)))
+            assertArrayEquals(bytes(1, 2, 0x1357), observe(gcd, 24))
+            for ((operation, expected) in listOf(
+                LimbBitwise.AND to bytes(0x0a, 0x50, 0x1357),
+                LimbBitwise.AND_NOT to bytes(0xf0, 0xa0, 0x1357),
+                LimbBitwise.OR to bytes(0xff, 0xf5, 0x1357),
+                LimbBitwise.XOR to bytes(0xf5, 0xa5, 0x1357))) {
+                val left = allocation(0xfa, 0xf0, 0x1357)
+                val right = allocation(0x0f, 0x55, 0x1357)
+                arithmetic.bitwise(LimbRegion.write(right, 2), LimbRegion.read(left, 2), LimbRegion.read(right, 2), operation)
+                assertArrayEquals(expected, observe(right, 24), "$operation pinned=$pinned")
+                assertArrayEquals(bytes(0xfa, 0xf0, 0x1357), observe(left, 24))
+            }
+        }
+    }
     @Test fun rejectedShapesAliasesDivisorsAndPointerCellsHaveNoGuestStores() = provider { arithmetic ->
         val destination = bytes(0x5a5a, 0x5a5a)
         val initial = destination.copyOf()
         val out = output(destination)
         val shared = bytes(1, 2, 3)
         val address = ManagedAddress.fromByteArray(shared)
+        val shifted = bytes(1, 2, 3, 4)
+        val shiftAddress = ManagedAddress.fromByteArray(shifted)
         val lower = LimbRegion.region(address, 2, false)
         val upper = LimbRegion.region(address.plus(8), 2, true)
         val pointerOwner = ManagedAllocation.mutable(16, 8)
@@ -127,6 +173,25 @@ class SulongLimbProviderTest {
             { arithmetic.shiftRight(out, input(1, 2), 64, false) },
             { arithmetic.shiftRight(upper, lower, 1, false) },
             { arithmetic.toDouble(LimbRegion.read(pointerOwner, 2), false, 0) },
+            { arithmetic.gcdWord(input(), 1) },
+            { arithmetic.gcdWord(input(1, 1), 0) },
+            { arithmetic.gcdWord(input(1, 0), 7) },
+            { arithmetic.gcd(out, input(1), input(1, 1)) },
+            { arithmetic.gcd(out, input(1, 1), input(1)) },
+            { arithmetic.gcd(out, input(1, 1), input(1, 0)) },
+            { arithmetic.gcd(output(destination, 1), input(1, 1), input(0)) },
+            { arithmetic.gcd(upper, lower, input(1, 1)) },
+            { arithmetic.populationCount(input()) },
+            { arithmetic.populationCount(LimbRegion.read(pointerOwner, 2)) },
+            { arithmetic.shiftLeft(out, input(1), 0) },
+            { arithmetic.shiftLeft(out, input(1), -1) },
+            { arithmetic.shiftLeft(out, input(1), Long.MAX_VALUE) },
+            { arithmetic.shiftLeft(out, input(1, 1), 1) },
+            { arithmetic.shiftLeft(LimbRegion.region(shiftAddress.plus(8), 3, true),
+                LimbRegion.region(shiftAddress, 2, false), 1) },
+            { arithmetic.bitwise(out, input(1, 1), input(1), LimbBitwise.AND) },
+            { arithmetic.bitwise(upper, lower, input(1, 1), LimbBitwise.XOR) },
+            { arithmetic.bitwise(out, LimbRegion.read(pointerOwner, 2), input(1, 1), LimbBitwise.OR) },
             { arithmetic.quotient(out, input(1, 2), input(0)) },
             { arithmetic.divide(out, out, 0, input(1, 2), input(3)) },
             { arithmetic.divide(out, output(ByteArray(8)), 1, input(1, 2), input(3)) },
@@ -134,10 +199,11 @@ class SulongLimbProviderTest {
             { arithmetic.addWord(out, LimbRegion.read(pointerOwner, 2), 1) },
             { arithmetic.addWord(LimbRegion.read(destination, 2), input(1, 2), 1) }
         )
-        for (call in rejected) {
-            assertThrows(RuntimeFault::class.java) { call() }
+        for ((index, call) in rejected.withIndex()) {
+            assertThrows(RuntimeFault::class.java, { call() }, "invalid limb request $index")
             assertArrayEquals(initial, destination)
             assertArrayEquals(bytes(1, 2, 3), shared)
+            assertArrayEquals(bytes(1, 2, 3, 4), shifted)
         }
         for (count in listOf(-1L, Long.MAX_VALUE, Int.MAX_VALUE.toLong() / 8 + 1))
             assertThrows(RuntimeFault::class.java) { LimbRegion.read(destination, count, true) }

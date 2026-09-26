@@ -12,6 +12,7 @@ maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  compiler/test-fixtures/RubbishLiteralAudit.hs
   compiler/test-fixtures/OriginalDigestNative.hs
   compiler/test-fixtures/OriginalErfNative.hs
   compiler/test-fixtures/OriginalErfEntry.hs
@@ -727,6 +728,7 @@ executable thc-fixtures
     ScalarBitCastFixtures
     AddressArrayCopyFixtures
     BigNatLiteralFixtures
+    RubbishLiteralFixtures
     PinnedAddressFixtures
     FloatingAddressFixtures
     AtomicAddressFixtures
@@ -766,12 +768,14 @@ executable thc-fixtures
     OriginalFdReadyFixtures
     OriginalRtsLocksFixtures
     CompilerRtsFixtures
+    FloatForeignFixtures
     GhcApiFixtures
     RtsDiagnosticFixtures
     OriginalOpenFixtures
     PackageScalarFixtures
     StablePtrFFIFixtures
     PackageNativeOriginalsFixtures
+    GetEntropyFixtures
     HashableFfiFixtures
     OriginalTermiosFixtures
     OriginalTcsetattrFixtures

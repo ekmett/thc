@@ -116,6 +116,38 @@ zero/nonzero counts and signed/unsigned boundaries, interpreted and on their
 first installed calls in both handoff modes. Writes affect the original managed
 storage directly, without copying or pinning it.
 
+Three small Core entry points call the original public `setByteArray` and
+`readByteArray` APIs for Int16, Word16 and Int64. Their strict reachable audit
+passes; 18 boundary observations match the actual native memory bytes in
+interpreted and first-installed compiled AST/bytecode execution, with async
+capture enabled and all installed targets retained, in both handoff modes.
+This adds genuine public-API Core execution to the common-adapter checks above;
+it does not claim whole-package or Pandoc execution.
+
+Linux x86-64 package C also has an exact native libc `getentropy` provider.
+The final LLVM declaration must be `i32 (ptr, i64)`, matching
+`int getentropy(void *, size_t)`, and the embedded-LLVM ELF container explicitly
+links libc. Original `splitmix-0.1.3.2` uses this through its unchanged safe
+`splitmix_init :: IO Word64` import: its eight-byte buffer is local C stack
+storage, not a copied Haskell array. Real native/pinned addresses remain
+in-place; an ordinary unpinned heap buffer cannot be projected into libc.
+The provider does not manufacture entropy, change libc status returns, or
+replace the original package's error fallback. It does not expand admission
+of safe imports with pointer arguments or results.
+
+The `getentropy` fixture captures the unchanged package through the production
+GHC proxy and linker, checks the retained Core strictly, and records native
+zero/short/256-byte/oversize/null status and guard-byte observations. The JVM
+checks both backends and first installed compiled execution of the original
+initializer, plus persistent pinned-buffer writes and unpinned rejection.
+Random bytes are not compared bit-for-bit or claimed as an entropy-quality test.
+
+```sh
+THC_SPLITMIX_SOURCE=/path/to/splitmix-0.1.3.2 cabal run exe:thc-fixtures -- getentropy
+cabal test driver-tests --test-options=--package-native-only
+./gradlew --continue getEntropyDefault getEntropyDense
+```
+
 The unchanged `erf-2.0.0.0` package has source-pure imports whose emitted
 State-threaded calls are `safe`. Its four Float/Double entries retain that safety
 through acquisition, ABI admission and call selection. A Linux native-libm
@@ -135,7 +167,7 @@ result resumption and exceptional cleanup in interpreted and compiled entries.
 This tranche does not claim interruptible native blocking calls, callbacks,
 bound OS threads or native errno behavior.
 
-Four primitive bit-pattern entrypoints using the original package's public API
+Four primitive bit-pattern entrypoints using the original erf package's public API
 pass the strict reachable audit and match 88 native observations, including
 signed zeros, subnormals, infinities and NaNs, in interpreted and first-installed
 compiled AST/bytecode execution in both handoff modes. Both backends run with

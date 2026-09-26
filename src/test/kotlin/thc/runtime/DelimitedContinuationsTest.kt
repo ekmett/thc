@@ -95,6 +95,30 @@ class DelimitedContinuationsTest {
                     val polymorphic = entry in setOf("polymorphicApplications", "polymorphicScalarApplications")
                     assertEquals(if (polymorphic) 19L else calls.getValue(entry), lambdas.size.toLong(),
                         "Every reachable lambda runs once, except applyWorker runs four times; resumes never restart them")
+                    // The exported runRW# wrapper is now beta-reduced during
+                    // lowering. Prove that exact single State# application from
+                    // original Core, independently of runtime target discovery.
+                    val entryLambda = source.root["expr"] as List<*>
+                    val stateCall = entryLambda[2] as List<*>
+                    assertEquals("app", stateCall[0])
+                    assertEquals(listOf(listOf(false), false, false), stateCall.subList(3, 6))
+                    val stateLambda = stateCall[1] as List<*>
+                    assertEquals("lam", stateLambda[0])
+                    val stateFormal = (stateLambda[1] as List<*>).single() as Map<*, *>
+                    val voidRep = mapOf("primReps" to emptyList<String>(), "kind" to "void", "evaluated" to true)
+                    assertEquals("State# RealWorld", stateFormal["type"])
+                    assertEquals(false, stateFormal["lifted"])
+                    assertEquals(false, stateFormal["coercion"])
+                    assertEquals(voidRep, stateFormal["rep"])
+                    val stateArgument = (stateCall[2] as List<*>).single() as List<*>
+                    assertEquals("void", stateArgument[0])
+                    assertEquals(voidRep, (stateArgument.last() as Map<*, *>)["rep"])
+                    val immediateLambdas = nodes.filter { it.firstOrNull() == "app" &&
+                        (it.getOrNull(1) as? List<*>)?.firstOrNull() == "lam" }
+                    assertEquals(1, immediateLambdas.size, "Exactly one immediate lambda can be eliminated")
+                    assertSame(stateCall, immediateLambdas.single())
+                    assertTrue(lambdas.any { it === stateLambda })
+                    val executableLambdas = lambdas.filter { it !== stateLambda }
                     for (worker in source.bindings.filter { it["name"] in setOf("applicationWorker", "applicationWorker2",
                             "applicationWorker3", "applicationWorker4", "scalarApplicationWorker", "scalarApplicationWorker2",
                             "scalarApplicationWorker3", "scalarApplicationWorker4") }) {
@@ -140,7 +164,7 @@ class DelimitedContinuationsTest {
                     val targets = source.bindings.filter { (it["expr"] as List<*>)[0] == "lam" }
                         .flatMap { ThreadInventoryCoreEvidence.targets(program.entryTarget(it["id"] as String)) }
                         .filter { (it.rootNode is FunctionRoot || it.rootNode is BytecodeRoot) && seen.add(it) }
-                    val labels = lambdas.map { lambda -> "lambda " + (lambda[1] as List<*>).joinToString {
+                    val labels = executableLambdas.map { lambda -> "lambda " + (lambda[1] as List<*>).joinToString {
                         (it as Map<*, *>)["name"].toString()
                     } }.sorted()
                     val functions = targets.filter { it.rootNode.name.startsWith("lambda ") }
@@ -156,13 +180,14 @@ class DelimitedContinuationsTest {
                             "Only already-forced source CAFs may accompany the exact function inventory")
                     val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                     val interpreted = ThreadInventoryCoreEvidence.interpretedCalls(targets)
-                    ThreadInventoryCoreEvidence.install(targets)
+                    try { ThreadInventoryCoreEvidence.install(targets) }
+                    catch (failure: Throwable) { throw AssertionError("$stage/$backend/$entry first installation", failure) }
                     assertTrue(function.invokeMember("compile").asBoolean())
                     assertEquals(before, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
                     val handoff = language.handoffState.get()
                     val allocations = handoff.arguments.allocations to handoff.results.allocations
                     assertEquals(expected(entry, 11), function.execute(11L).asLong(), "$stage/$backend/$entry first installed call")
-                    assertEquals(calls.getValue(entry), (program.diagnostics().getValue("compiledEntries") as Number).toLong() - before,
+                    assertEquals(calls.getValue(entry) - 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong() - before,
                         "$stage/$backend/$entry: resumes do not restart original Core roots")
                     assertEquals(interpreted, ThreadInventoryCoreEvidence.interpretedCalls(targets), "No interpreted settling call")
                     ThreadInventoryCoreEvidence.released(language)

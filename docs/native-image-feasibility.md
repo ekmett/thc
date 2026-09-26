@@ -187,6 +187,50 @@ the three diagnostic concatenations. The next image analysis clears these four
 blocklist paths and advances to preparation of the empty handoff-argument array.
 These JVM checks do not establish guest JIT in the native executable.
 
+Preparing the signal-dispatch root then exposed 68 blocklist paths through
+`TupleShape.matches`: structural `List.equals` admitted arbitrary host equality
+implementations into runtime analysis. Tuple shapes now reuse the existing
+canonical lowering-time compatibility key already used by argument layouts.
+Runtime matching compares key identity, while representation validation and
+context-owned storage layouts are unchanged. Only immutable metadata is interned.
+
+Verification includes a 24-by-24 logical-shape compatibility matrix covering
+zero-width fields, nesting, field order, boxed refinements, vectors and sums;
+two contexts on one engine retain separate language instances and storage
+layouts while agreeing on metadata. Tuple, typed-case and floating tests pass
+in both handoff modes: 24 focused passes, followed by four passes of the
+strengthened context-isolation checks. The generated matcher uses reference
+comparison, not `List.equals`. The next real image analysis clears all 68
+blocklist paths and advances to other runtime-graph preparation issues; it
+does not yet establish native guest-JIT execution.
+
+The unchanged pure-image recipe also rebuilds successfully after integrating
+main `80c23c62`, including the cached FFM byte-access handle and prepared root
+control metadata. All eight original native result checks still pass; all four
+explicit scalar/constructor compilation controls still report the frame
+materialization bailout. The build took 105.91 seconds wall time and 3,534,800 KiB
+peak RSS on the shared host. This checks image compatibility, not native downcalls.
+
+Further runtime preparation exposed Kotlin's generated nonnull diagnostics in
+the generic dispatcher's cold continuation-capture branches. These branches now
+transfer to the interpreter before copying saved arguments and constructing
+resume records, without invalidating the installed target. Ordinary dispatch
+does not gain a boundary. Bytecode inspection confirms the transition precedes
+all three snapshot copies; the next image analysis no longer reports the eleven
+diagnostic blocklist paths. It stops later while preparing other runtime state.
+The continuation fixture's exact root inventory now independently proves the
+single immediate `runRW#` State# wrapper eliminated by existing lowering;
+original Core, native GHC results and exact remaining root-entry counts remain
+unchanged acceptance inputs.
+
+The final capture batch passes 28 tests across both handoff modes, including
+fresh GHC continuation fixtures, first-installed generic captures, exact
+no-replay entry counts, cross-thread AST resumption and released storage loans.
+An exploratory all-target-validity assertion also failed on unchanged production
+source and is not an acceptance condition. A separate initial cold-install
+failure did not recur in the unchanged-source control or final candidate run;
+its cause remains undiagnosed, and no test retries compilation internally.
+
 ## Execution models
 
 | Product | What is fixed when built | Guest execution |
