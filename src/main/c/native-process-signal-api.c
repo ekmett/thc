@@ -19,9 +19,12 @@ _Static_assert(ATOMIC_INT_LOCK_FREE == 2, "signal atomics must be lock free");
 _Static_assert(sizeof(siginfo_t) <= 512, "one signal record must fit PIPE_BUF");
 static atomic_int signal_fd = -1, active_handlers, overflow;
 static atomic_int owned;
+static const int supported_signals[] = {SIGHUP, SIGINT, SIGQUIT, SIGTERM};
+#define SIGNAL_COUNT (sizeof(supported_signals) / sizeof(supported_signals[0]))
 struct signal_session {
-    int read_fd, write_fd, wake_fd, action;
-    struct sigaction previous;
+    int read_fd, write_fd, wake_fd;
+    int action[SIGNAL_COUNT], installed[SIGNAL_COUNT];
+    struct sigaction previous[SIGNAL_COUNT];
 };
 
 static void capture(int signal_number, siginfo_t *info, void *context) {
@@ -36,6 +39,7 @@ static void capture(int signal_number, siginfo_t *info, void *context) {
 }
 
 int thc_signal_info_size(void) { return sizeof(siginfo_t); }
+int thc_signal_number(const void *info) { return ((const siginfo_t *)info)->si_signo; }
 
 void *thc_signal_open(void) {
     int expected = 0;
@@ -44,11 +48,11 @@ void *thc_signal_open(void) {
     int pipes[2] = {-1, -1};
     if (s == NULL) goto failed;
     s->wake_fd = -1;
-    if (sigaction(SIGINT, NULL, &s->previous) != 0) goto failed;
+    for (unsigned i = 0; i < SIGNAL_COUNT; ++i) s->action[i] = -1;
     if (pipe2(pipes, O_NONBLOCK | O_CLOEXEC) != 0) goto failed;
     s->wake_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
     if (s->wake_fd < 0) goto failed;
-    s->read_fd = pipes[0]; s->write_fd = pipes[1]; s->action = -1;
+    s->read_fd = pipes[0]; s->write_fd = pipes[1];
     atomic_store(&overflow, 0);
     atomic_store_explicit(&signal_fd, s->write_fd, memory_order_seq_cst);
     return s;
@@ -62,8 +66,11 @@ failed:;
 
 /* Exact GHC STG_SIG_* constants. The logical old action initially is DFL,
  * independently of the embedding JVM disposition saved for restoration. */
-int thc_signal_install(void *session, int action) {
+int thc_signal_install(void *session, int signal_number, int action) {
     struct signal_session *s = session;
+    unsigned slot = 0;
+    while (slot < SIGNAL_COUNT && supported_signals[slot] != signal_number) ++slot;
+    if (slot == SIGNAL_COUNT) { errno = EINVAL; return -3; }
     struct sigaction next = {0};
     sigemptyset(&next.sa_mask);
     switch (action) {
@@ -73,8 +80,12 @@ int thc_signal_install(void *session, int action) {
     case -5: next.sa_sigaction = capture; next.sa_flags = SA_SIGINFO | SA_RESETHAND; break;
     default: errno = EINVAL; return -3;
     }
-    if (sigaction(SIGINT, &next, NULL) != 0) return -3;
-    int old = s->action; s->action = action; return old;
+    /* Other signals may have changed since opening this session. Acquire the
+     * immediately preceding disposition when first taking each signal. */
+    if (sigaction(signal_number, &next, s->installed[slot] ? NULL : &s->previous[slot]) != 0)
+        return -3;
+    int old = s->action[slot];
+    s->action[slot] = action; s->installed[slot] = 1; return old;
 }
 
 void thc_signal_wake(void *session) {
@@ -112,16 +123,21 @@ int thc_signal_take(void *session, void *info) {
 int thc_signal_close(void *session) {
     struct signal_session *s = session;
     atomic_store_explicit(&signal_fd, -1, memory_order_seq_cst);
-    struct sigaction current;
-    int result = sigaction(SIGINT, NULL, &current);
-    if (result == 0) {
+    int result = 0, error = 0;
+    for (unsigned i = 0; i < SIGNAL_COUNT; ++i) {
+        if (!s->installed[i]) continue;
+        struct sigaction current;
+        if (sigaction(supported_signals[i], NULL, &current) != 0) {
+            result = -1; error = errno; continue;
+        }
         int ours = (current.sa_flags & SA_SIGINFO) && current.sa_sigaction == capture;
-        ours |= s->action == -1 && current.sa_handler == SIG_DFL;
-        ours |= s->action == -2 && current.sa_handler == SIG_IGN;
-        ours |= s->action == -5 && current.sa_handler == SIG_DFL; /* consumed one-shot */
-        if (ours) result = sigaction(SIGINT, &s->previous, NULL);
+        ours |= s->action[i] == -1 && current.sa_handler == SIG_DFL;
+        ours |= s->action[i] == -2 && current.sa_handler == SIG_IGN;
+        ours |= s->action[i] == -5 && current.sa_handler == SIG_DFL; /* consumed one-shot */
+        if (ours && sigaction(supported_signals[i], &s->previous[i], NULL) != 0) {
+            result = -1; error = errno;
+        }
     }
-    int error = errno;
     while (atomic_load_explicit(&active_handlers, memory_order_seq_cst) != 0) sched_yield();
     close(s->read_fd); close(s->write_fd); close(s->wake_fd); free(s);
     /* A launcher has one process lifetime. Never reuse the global handler

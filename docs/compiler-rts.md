@@ -46,8 +46,9 @@ first compiled calls, plus concurrent increments, wrapping, aliasing, independen
 contexts, closed contexts and shared-CAF lifetime. The native fixtures require
 the complete-Core GHC installation; ordinary runtime unit tests do not.
 
-Remaining frontiers are separate: `runGhc` installs handlers for SIGQUIT, SIGINT,
-SIGHUP and SIGTERM, while the current native signal bridge admits SIGINT only.
+`runGhc` installs handlers for SIGQUIT, SIGINT, SIGHUP and SIGTERM. The
+[standalone process signal bridge](process-signals.md) admits these on Linux
+x86_64 bytecode launches with `-Xrs`; embeddings and AST delivery remain separate.
 Native object loading/GHCi, compiler RTS flags and other reachable foreign calls
 must be tested and implemented as they are encountered. These translations do
 not bypass strict Core admission.

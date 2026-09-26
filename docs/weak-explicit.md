@@ -43,7 +43,7 @@ not a permanent key or ID snapshot. This is a liveness snapshot, not a dispatch
 permission: a consumer sending to this key must atomically recheck the exact
 identity when enqueuing its request. The numeric send path alone is not that guard.
 This accessor alone does not install a signal handler; the separate
-[launcher-only SIGINT bridge](primops.md#current-aggregate-and-address-limits)
+[launcher-only process signal bridge](process-signals.md)
 has its own bounded admission contract.
 
 `addCFinalizerToWeak#` now admits only [source-certified one-argument C labels

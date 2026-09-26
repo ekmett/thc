@@ -35,13 +35,13 @@ prepareProcessSignals root = do
     "-dcore-lint", "-dstg-lint", "-odir", root </> native, "-hidir", root </> native,
     source, "-o", root </> native </> "oracle"]
   observed <- execute "native-oracle" [] (root </> native </> "oracle") []
-  unless (commandStdout observed == "[-1,-2,-4,-5]\n" && BS.null (commandStderr observed))
+  unless (commandStdout observed == "[(1,[-1,-2,-4,-5]),(2,[-1,-2,-4,-5]),(3,[-1,-2,-4,-5]),(15,[-1,-2,-4,-5])]\n" && BS.null (commandStderr observed))
     (die "Native GHC signal action oracle mismatch")
   BS.writeFile (root </> oracle) (commandStdout observed)
   _ <- execute "capture-build" [] clang ["-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
     "src/test/c/native-process-signals-test.c", "-o", root </> native </> "capture-test"]
   captured <- execute "capture-child-controls" [] (root </> native </> "capture-test") []
-  unless (commandStdout captured == "9 isolated native signal controls passed\n" && BS.null (commandStderr captured))
+  unless (commandStdout captured == "25 isolated native signal controls passed\n" && BS.null (commandStderr captured))
     (die "Native signal capture child controls failed")
   BS.writeFile (root </> controls) (commandStdout captured)
   inputHashes <- hashes root [source, "src/main/c/native-process-signal-api.c",
@@ -50,4 +50,4 @@ prepareProcessSignals root = do
   artifactHashes <- hashes root [oracle, controls]
   writeJson (root </> manifest) $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]
-  putStrLn "process-signals: native GHC action order and nine isolated machine capture controls"
+  putStrLn "process-signals: four native GHC action oracles and 25 isolated machine capture controls"

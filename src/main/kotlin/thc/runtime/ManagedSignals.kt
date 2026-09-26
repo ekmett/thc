@@ -7,6 +7,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.nodes.RootNode
+import com.sun.management.HotSpotDiagnosticMXBean
 import java.io.IOException
 import java.lang.foreign.Arena
 import java.lang.foreign.FunctionDescriptor
@@ -16,6 +17,7 @@ import java.lang.foreign.MemorySegment
 import java.lang.foreign.SymbolLookup
 import java.lang.foreign.ValueLayout
 import java.lang.invoke.MethodHandle
+import java.lang.management.ManagementFactory
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.concurrent.atomic.AtomicBoolean
@@ -23,8 +25,9 @@ import thc.Language
 
 internal interface ProcessSignalTransport : AutoCloseable {
     data class Result(val action: Int, val errno: Int)
-    fun install(action: Int): Result
-    fun take(): ByteArray?
+    data class Event(val signal: Int, val info: ByteArray)
+    fun install(signal: Int, action: Int): Result
+    fun take(): Event?
     fun wake()
     fun resetWake()
 }
@@ -46,18 +49,18 @@ internal class NativeSignalTransport : ProcessSignalTransport {
             }
         } catch (failure: Throwable) { arena.close(); failed("Process signal setup failed", failure) }
     }
-    override fun install(action: Int): ProcessSignalTransport.Result = try {
+    override fun install(signal: Int, action: Int): ProcessSignalTransport.Result = try {
         Arena.ofConfined().use { call ->
             val errors = call.allocate(Api.capture)
-            val old = Api.install.invokeExact(errors, session, action) as Int
+            val old = Api.install.invokeExact(errors, session, signal, action) as Int
             ProcessSignalTransport.Result(old, if (old == -3) errors.get(ValueLayout.JAVA_INT, Api.errno) else 0)
         }
     } catch (failure: Throwable) { failed("Process signal install failed", failure) }
     /** Only the single reader calls this; zero is an explicit wake. */
-    override fun take(): ByteArray? = try {
+    override fun take(): ProcessSignalTransport.Event? = try {
         when (Api.take.invokeExact(session, image) as Int) {
             0 -> null
-            1 -> image.toArray(ValueLayout.JAVA_BYTE)
+            1 -> ProcessSignalTransport.Event(Api.number.invokeExact(image) as Int, image.toArray(ValueLayout.JAVA_BYTE))
             -2 -> fault("Process signal queue overflow")
             else -> fault("Process signal read failed")
         }
@@ -120,7 +123,9 @@ internal class NativeSignalTransport : ProcessSignalTransport {
                 *if (errno) arrayOf(Linker.Option.captureCallState("errno")) else emptyArray())
         val open = function("open", FunctionDescriptor.of(ValueLayout.ADDRESS), true)
         val size = function("info_size", FunctionDescriptor.of(ValueLayout.JAVA_INT), false)
-        val install = function("install", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT), true)
+        val number = function("number", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS), false)
+        val install = function("install", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS,
+            ValueLayout.JAVA_INT, ValueLayout.JAVA_INT), true)
         val take = function("take", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS), false)
         val wake = function("wake", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS), false)
         val reset = function("reset_wake", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS), false)
@@ -129,7 +134,7 @@ internal class NativeSignalTransport : ProcessSignalTransport {
     }
 }
 
-/** One explicit CLI context owns SIGINT for its process lifetime. Ordinary
+/** One explicit CLI context owns GHC's INT/QUIT/HUP/TERM handlers. Ordinary
  * native-access contexts cannot acquire it. Pending OS events contain real
  * siginfo bytes; GHC's own dispatcher chooses the current Haskell handler.
  *
@@ -137,6 +142,7 @@ internal class NativeSignalTransport : ProcessSignalTransport {
  * this JVM. This prevents late old handlers from targeting a new context.
  */
 internal class ManagedSignals(private val owner: Language.State, private val language: Language,
+                              private val reducedVmSignals: Boolean = hasReducedVmSignals(),
                               private val factory: () -> ProcessSignalTransport = { NativeSignalTransport() }) {
     private var authorized = false
     private var binding: SignalDispatchRoot? = null
@@ -159,9 +165,12 @@ internal class ManagedSignals(private val owner: Language.State, private val lan
     fun install(signal: Long, action: Long, mask: ManagedAddress): Long {
         current()
         if (!authorized) fault("Process signals require explicit NativeIO launcher authority")
-        if (signal != 2L || (action != -1L && action != -2L && action != -4L && action != -5L) ||
+        if ((signal != 1L && signal != 2L && signal != 3L && signal != 15L) ||
+            (action != -1L && action != -2L && action != -4L && action != -5L) ||
             mask !== ManagedAddress.nullAddress())
-            fault("stg_sig_install supports only SIGINT, DFL/IGN/HAN/RST and a null mask")
+            fault("stg_sig_install supports only SIGHUP/SIGINT/SIGQUIT/SIGTERM, DFL/IGN/HAN/RST and a null mask")
+        if (signal != 2L && !reducedVmSignals)
+            fault("GHC process signal handlers require the standalone JVM launcher with -Xrs")
         if (closed || stopping) fault("Process signal service is closed")
         val root = binding ?: fault("Missing original bytecode signal dispatcher")
         val native = transport ?: factory().also { acquired ->
@@ -172,7 +181,7 @@ internal class ManagedSignals(private val owner: Language.State, private val lan
                 transport = null; worker = null; closed = true; acquired.close(); throw failure
             }
         }
-        val result = native.install(action.toInt())
+        val result = native.install(signal.toInt(), action.toInt())
         if (result.action == -3) owner.stdio.nativeError(result.errno.toLong())
         return result.action.toLong()
     }
@@ -181,7 +190,7 @@ internal class ManagedSignals(private val owner: Language.State, private val lan
         var registered = false
         var failure: Throwable? = null
         var outcome = GuestThreadStatus.FINISHED
-        var pending: ByteArray? = null
+        var pending: ProcessSignalTransport.Event? = null
         val interrupted = AtomicBoolean()
         val interrupter = object : TruffleSafepoint.Interrupter {
             override fun interrupt(thread: Thread) { interrupted.set(true); native.wake() }
@@ -191,21 +200,22 @@ internal class ManagedSignals(private val owner: Language.State, private val lan
             owner.threads.enterCurrent(MaskingState.UNMASKED, forked = true)
             registered = true
             while (!stopping) {
-                val image = TruffleSafepoint.getCurrent().setBlockedFunction(null, interrupter,
-                    TruffleSafepoint.InterruptibleFunction<Unit, ByteArray?> {
+                val event = TruffleSafepoint.getCurrent().setBlockedFunction(null, interrupter,
+                    TruffleSafepoint.InterruptibleFunction<Unit, ProcessSignalTransport.Event?> {
                         if (interrupted.get()) throw InterruptedException()
                         if (stopping) null else (pending ?: native.take().also { pending = it }).also {
                             if (interrupted.get()) throw InterruptedException()
                         }
                     }, Unit, null, null)
-                if (image != null && !stopping) {
+                if (event != null && !stopping) {
                     pending = null
+                    val image = event.info
                     val address = owner.nativeAllocations.malloc(image.size.toLong())
                     if (address === ManagedAddress.nullAddress()) fault("Cannot allocate signal information")
                     image.indices.forEach { address.writeWord8(it.toLong(), image[it].toLong() and 255L) }
                     // Ownership is transferred to original newForeignPtr(&free).
                     // On a guest failure the context registry still owns the base.
-                    root.callTarget.call(address)
+                    root.callTarget.call(address, event.signal.toLong())
                 }
             }
         } catch (caught: Throwable) {
@@ -245,6 +255,14 @@ internal class ManagedSignals(private val owner: Language.State, private val lan
     }
 
     companion object {
+        // Check the effective setting: later -XX:-ReduceSignalUsage can override
+        // launcher -Xrs. A VM without this policy must not inherit authority.
+        internal fun hasReducedVmSignals(): Boolean = try {
+            ManagementFactory.getPlatformMXBean(HotSpotDiagnosticMXBean::class.java)
+                ?.getVMOption("ReduceSignalUsage")?.value == "true"
+        } catch (_: IllegalArgumentException) { false }
+          catch (_: SecurityException) { false }
+
         @JvmStatic fun install(node: Node, signal: Long, action: Long, mask: ManagedAddress): Long =
             Language.currentState(node).signals.install(signal, action, mask)
     }
@@ -274,7 +292,7 @@ internal fun finishSignalConsumer(initial: Throwable?, restore: () -> Unit, unre
 
 /** CInt is erased to boxed Int32; Ptr's exact AddrRep field carries the owned
  * image. Both layouts come from this program, including case identity. */
-private class SignalDispatchRoot(language: Language, program: ExecutableProgram) : RootNode(language, FrameLayout().build()) {
+internal class SignalDispatchRoot(language: Language, program: ExecutableProgram) : RootNode(language, FrameLayout().build()) {
     private val action = program.entryValue(CoreSignalForeign.dispatcher)
     private val pointer = program.constructorLayout("ghc-internal:GHC.Internal.Ptr.Ptr")
     private val signal = program.constructorLayout("ghc-internal:GHC.Internal.Int.I32#")
@@ -297,12 +315,13 @@ private class SignalDispatchRoot(language: Language, program: ExecutableProgram)
         val target = closure.target.rootNode as? BytecodeRoot ?: fault("Signal dispatcher must be bytecode")
         if (!target.isAsyncEnabled || target.tupleResult?.matches(shape) != true)
             fault("Signal dispatcher requires an async IO unit tuple")
-        dispatch.execute(frame, closure, arrayOf(pointer.create(arrayOf(frame.arguments[0])), signal.createLong(2L), Unit))
+        dispatch.execute(frame, closure, arrayOf(pointer.create(arrayOf(frame.arguments[0])),
+            signal.createLong(frame.arguments[1] as Long), Unit))
         val unit = unitForce.execute(frame, frame.getObject(FrameLayout.TAIL_RESULT)) as? DataValue
             ?: fault("Signal dispatcher did not return boxed unit")
         if (unit.layout.id != "ghc-internal:GHC.Internal.Tuple.()" || unit.layout.arity != 0)
             fault("Signal dispatcher did not return boxed unit")
         return Unit
     }
-    override fun getName() = "THC original SIGINT dispatcher"
+    override fun getName() = "THC original process signal dispatcher"
 }
