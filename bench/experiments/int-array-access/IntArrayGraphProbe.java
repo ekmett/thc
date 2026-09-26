@@ -50,7 +50,7 @@ public final class IntArrayGraphProbe {
         List<Map<String,Object>> modules=new ArrayList<>();
         for(String path:Files.readAllLines(Path.of(args[0]))) modules.add((Map<String,Object>)Json.INSTANCE.parse(Files.readString(Path.of(path))));
         Map<String,Object> module=CoreModules.INSTANCE.merge(modules);
-        Map<String,Object> linked=new LinkedHashMap<>(CoreModules.INSTANCE.reachable(module,entry));
+        Map<String,Object> linked=new LinkedHashMap<>(CoreModules.INSTANCE.reachable(module,entry,false));
         linked.put("instrument",false); linked.put("diagnosticUnsupported",false);
         List<Map<String,Object>> bindings=(List<Map<String,Object>>)linked.get("bindings");
         Map<String,Object> selected=bindings.stream().filter(b->entry.equals(b.get("name"))||entry.equals(b.get("id"))).findFirst().orElseThrow();
@@ -66,7 +66,7 @@ public final class IntArrayGraphProbe {
             context.initialize("thc"); context.enter();
             try {
                 Language language=TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                ExecutableProgram program=backend.equals("ast")?new Program(language,linked):new BytecodeProgram(language,linked);
+                ExecutableProgram program=backend.equals("ast")?new Program(language,linked,false):new BytecodeProgram(language,linked);
                 for(int i=0;i<40;i++) check(program,entry,arity,rows,null);
                 RootCallTarget target=active(program,(String)selected.get("id"),arity);
                 System.out.println("GRAPH_TARGET="+Json.INSTANCE.stringify(Map.of("entry",entry,"backend",backend,
