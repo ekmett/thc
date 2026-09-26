@@ -56,11 +56,23 @@ Pointer results retain the runtime's pointer ownership/lifetime boundary.
 Pure source imports and IO
 imports both retain GHC's actual State-token worker ABI and original safety.
 Callbacks, interruptible calls, additional foreign-file products,
-initializers/finalizers and arbitrary extra native libraries remain outside this profile.
+and arbitrary extra native libraries remain outside this profile.
 Ordinary memory helpers supplied by Sulong/libc are allowed. C++ `.cc`, `.cpp`
 and `.cxx` sources retain their actual Cabal compiler arguments, including
-`-optcxx` options, and replay through GHC's C++ compiler phase. The LLVM link
-still rejects constructors/destructors and unresolved C++ runtime dependencies;
+`-optcxx` options, and replay through GHC's C++ compiler phase. Verified LLVM
+constructor/destructor arrays remain intact through linking and trimming.
+Sulong executes constructors once when the owning context loads the component;
+normal context close executes registered C++ `atexit` handlers and module
+destructors. Forced cancellation does not promise guest cleanup. No separate
+THC initializer runner or process-global destructor registration is introduced.
+
+On Linux x86-64, the original libstdc++ iostream `Init` constructor/destructor
+ABI has an explicit `-lstdc++` embedded-LLVM provider; this preserves the actual
+configured headers and does not substitute libc++. `__cxa_atexit` and the DSO
+identity use Sulong's context-owned runtime. The original declarations are
+checked before admission, even for otherwise archive-only components. Native
+libstdc++ internals remain process-shared, while package LLVM globals belong to
+their context. Other unresolved C++ runtime dependencies remain archive-only;
 this does not admit arbitrary C++ programs. Assembly sources remain unsupported.
 
 The source capture runs while Cabal's unpacked sources and generated headers

@@ -7,7 +7,7 @@
 -- about native object layouts, into the immutable Core bundle.
 module THC.Driver.PackageNative
   ( captureNativeObject, captureNativeComponent, capturePackageNative, finishPackageNative
-  , nativeSignatures, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeCompilerArguments, validateNativeIR, nativeObjectOwned
+  , nativeSignatures, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeCompilerArguments, nativeObjectOwned
   ) where
 
 import Control.Monad (filterM, forM, forM_, unless, when)
@@ -28,7 +28,8 @@ import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import THC.Driver.ScalarBitcode (parseDependencies, sulongScalarTarget)
-import THC.Driver.NativeLibrarySources (zlibChecksumSources, nativeMathSymbols, validateNativeMathIR, validateNativeEntropyIR, validateNativeWidthIR)
+import THC.Driver.NativeLibrarySources (zlibChecksumSources, nativeMathSymbols, validateNativeMathIR, validateNativeEntropyIR, validateNativeWidthIR,
+  nativeCxxInitSymbols, nativeLifecycleSymbols, validateNativeLifecycleIR)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
 
 -- (original emitted symbol, convention, safety, semantic carriers, result)
@@ -253,11 +254,6 @@ scalarCarrier value = value `elem`
    "Int64Rep","Word64Rep","FloatRep","DoubleRep","AddrRep"]
 inputCarrier :: String -> Bool
 inputCarrier value = scalarCarrier value || value `elem` ["ByteArray#","MutableByteArray#"]
-
-validateNativeIR :: String -> Either String ()
-validateNativeIR source = require (not (any forbidden (lines source)))
-  "package native C constructors/destructors are unsupported"
-  where forbidden line = any (`isPrefixOf` line) ["@llvm.global_ctors =", "@llvm.global_dtors ="]
 
 validHeader :: String -> Bool
 validHeader header = not (null header) && all (`notElem` ['\0','\n','\r','"','\\']) header
@@ -535,7 +531,9 @@ finishPackageNative pieces directory unit currentObjects modules = do
     _ <- command directory link (wrapper : bitcodes ++ ["-o",linked])
     _ <- command directory opt ["-S","-passes=verify",linked,"-o",linkedIR]
     linkedSource <- readFile linkedIR
-    either fail pure (validateNativeIR linkedSource)
+    -- Preserve actual constructor/destructor metadata. Sulong initializes each
+    -- loaded component once and runs its destructors on normal context close.
+    -- LLVM verification remains mandatory before and after trimming.
     bridges <- fmap concat $ forM abi $ \value -> do
       symbol <- get value "symbol"
       entry <- get value "entry"
@@ -579,34 +577,39 @@ finishPackageNative pieces directory unit currentObjects modules = do
     -- getentropy requires a genuine native address, never a managed heap copy.
     -- Other unresolved symbols retain this component as a non-executable archive.
     let unsupported = [name | name <- externals,
-          name `notElem` (["memcpy","memmove","memset","memcmp","bcmp","getentropy","wcwidth"] ++ nativeMathSymbols),
+          name `notElem` (["memcpy","memmove","memset","memcmp","bcmp","getentropy","wcwidth"] ++
+            nativeMathSymbols ++ nativeCxxInitSymbols ++ nativeLifecycleSymbols),
           not ("llvm." `isPrefixOf` name)]
     let math = filter (`elem` nativeMathSymbols) externals
         entropy = "getentropy" `elem` externals
         width = "wcwidth" `elem` externals
+        cxx = filter (`elem` nativeCxxInitSymbols) externals
+        lifecycle = filter (`elem` nativeLifecycleSymbols) externals
         finalIR = directory </> "native/final.ll"
     _ <- command directory opt ["-S","-passes=verify",final,"-o",finalIR]
     ir <- readFile finalIR
-    either fail pure (validateNativeIR ir)
     -- Even archive-only components must not disguise malformed supported ABIs.
     unless (null math) $ do
       check ("-linux-gnu" `isSuffixOf` target) "native scalar libm provider currently requires Linux"
       either fail pure (validateNativeMathIR math ir)
     when entropy (either fail pure (validateNativeEntropyIR target ir))
     when width (either fail pure (validateNativeWidthIR target ir))
-    (artifact,format,libraries) <- if (null math && not entropy && not width) || not (null unsupported)
+    unless (null (cxx ++ lifecycle)) (either fail pure (validateNativeLifecycleIR target (cxx ++ lifecycle) ir))
+    (artifact,format,libraries) <- if (null math && not entropy && not width && null cxx) || not (null unsupported)
       then pure (final,"llvm-bitcode",[]) else do
       clang <- tool "THC_CLANG" "clang"
       let container = directory </> "native/final.so"
           arguments = ["--target=" ++ target,"-fembed-bitcode","-shared","-fPIC",final] ++
-            ["-lm" | not (null math)] ++ ["-lc" | entropy || width] ++ ["-o",container]
+            ["-lm" | not (null math)] ++ ["-lc" | entropy || width] ++
+            ["-lstdc++" | not (null cxx)] ++ ["-o",container]
       _ <- command directory clang arguments
       compilerHash <- sha <$> BS.readFile clang
       pure (container,"llvm-embedded-elf",[object ["provider" .= provider,
         "symbols" .= symbols,"compiler" .= clang,"compilerSha256" .= compilerHash,"arguments" .= arguments] |
         (provider,symbols) <- [("native-libm-scalars-v1"::String,math) | not (null math)] ++
           [("native-libc-getentropy-v1",["getentropy"]) | entropy] ++
-          [("native-libc-wcwidth-v1",["wcwidth"]) | width]])
+          [("native-libc-wcwidth-v1",["wcwidth"]) | width] ++
+          [("native-libstdcxx-ios-init-v1",cxx) | not (null cxx)]])
     bytes <- BS.readFile artifact
     component <- get record "componentSha256" :: IO String
     providerInputs <- mapM (\value -> get value "inputs") providers
