@@ -169,7 +169,18 @@ internal abstract class TupleDestination(val shape: TupleShape) {
 }
 internal class AstTupleDestination(shape: TupleShape,
     @field:CompilationFinal(dimensions = 1) private val slots: IntArray, private val offset: Int) : TupleDestination(shape) {
-    override fun consume(frame: VirtualFrame, node: Node, result: Any?) = shape.consume(frame, result, slots, offset)
+    override fun consume(frame: VirtualFrame, node: Node, result: Any?) {
+        val answer = try { AstControl.complete(node, result, tupleShape = shape) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                    shape.consume(frame, input, slots, offset)
+                    return null
+                }
+            })
+        }
+        shape.consume(frame, answer, slots, offset)
+    }
 }
 
 /** Cache the complete call shape before making its packet. Each arm consumes its
@@ -443,21 +454,54 @@ internal class TupleApplication(private val language: Language, private val shap
     }
     override fun execute(frame: VirtualFrame): Any {
         val vector = vector ?: fault("Tuple value requires a destination")
-        executeInto(frame, vectorSlots!!, 0)
+        try { executeInto(frame, vectorSlots!!, 0) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any = vector.read(frame, vectorSlots!!, 0)
+            })
+        }
         return vector.read(frame, vectorSlots, 0)
     }
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         if (vector == null) return executeInto(frame, slots, offset)
-        executeInto(frame, vectorSlots!!, 0)
+        try { executeInto(frame, vectorSlots!!, 0) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                    vector.copy(frame, vectorSlots!!, 0, slots, offset)
+                    return null
+                }
+            })
+        }
         vector.copy(frame, vectorSlots, 0, slots, offset)
         return null
     }
     @ExplodeLoop private fun executeInto(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        val function = this.function.executeRequiredClosure(frame)
+        val function = try { this.function.executeRequiredClosure(frame) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? =
+                    executeArguments(frame, slots, offset, requireClosure(input),
+                        arrayOfNulls(ArgumentLayout.width(inputLayout, arguments.size)), 0)
+            })
+        }
         val values = arrayOfNulls<Any>(ArgumentLayout.width(inputLayout, arguments.size))
-        for (index in arguments.indices) {
-            if (inputLayout?.isEmpty(index) == true) arguments[index].executeTuple(frame, EMPTY_TUPLE_SLOTS, 0)
-            else values[ArgumentLayout.offset(inputLayout, index)] = arguments[index].execute(frame)
+        return executeArguments(frame, slots, offset, function, values, 0)
+    }
+    @ExplodeLoop private fun executeArguments(frame: VirtualFrame, slots: IntArray, offset: Int,
+                                             function: Closure, values: Array<Any?>, start: Int): Any? {
+        for (index in start until arguments.size) {
+            try {
+                if (inputLayout?.isEmpty(index) == true) arguments[index].executeTuple(frame, EMPTY_TUPLE_SLOTS, 0)
+                else values[ArgumentLayout.offset(inputLayout, index)] = arguments[index].execute(frame)
+            } catch (cut: AstCapture) {
+                throw cut.append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                        if (inputLayout?.isEmpty(index) != true) values[ArgumentLayout.offset(inputLayout, index)] = input
+                        return executeArguments(frame, slots, offset, function, values, index + 1)
+                    }
+                })
+            }
         }
         val child = dispatch ?: run {
             CompilerDirectives.transferToInterpreterAndInvalidate()
@@ -481,6 +525,12 @@ internal class TupleCase(@field:Child private var scrutinee: Expr,
     init { representation = body.representation }
     private fun prepare(frame: VirtualFrame, destination: IntArray? = null, offset: Int = 0) {
         try { scrutinee.executeTuple(frame, slots, 0) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? =
+                    if (destination == null) body.execute(frame) else body.executeTuple(frame, destination, offset)
+            })
+        }
         catch (cut: DelimitedCut) {
             throw cut.append(frame, object : DelimitedStep {
                 override fun resume(frame: MaterializedFrame, input: DelimitedResume,
@@ -491,16 +541,9 @@ internal class TupleCase(@field:Child private var scrutinee: Expr,
             })
         }
     }
-    private class ResumeLong(private val owner: TupleCase) : AstResumeStep {
-        override fun resume(frame: VirtualFrame, input: Any?): Any? {
-            if (input != null) fault("Invalid AST tuple-case resume value")
-            return owner.body.executeLong(frame)
-        }
-    }
     override fun execute(frame: VirtualFrame): Any? { prepare(frame); return body.execute(frame) }
     override fun executeLong(frame: VirtualFrame): Long {
-        try { prepare(frame) }
-        catch (cut: AstCapture) { throw cut.append(ResumeLong(this)) }
+        prepare(frame)
         return body.executeLong(frame)
     }
     override fun executeFloat(frame: VirtualFrame): Float { prepare(frame); return body.executeFloat(frame) }

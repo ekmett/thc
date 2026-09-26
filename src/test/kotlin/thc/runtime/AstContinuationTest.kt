@@ -57,34 +57,21 @@ class AstContinuationTest {
             "constructors" to listOf(mapOf("id" to "Pair", "name" to "Pair", "kind" to "unboxed-tuple", "arity" to 2)))
     }
 
-    @Test fun asyncAstAdmissionRejectsAnUncapturedParentSuffix() {
+    @Test fun ordinaryCallerAndEntryRoutesAreCapturedAndConflictingProofsStillFail() {
         Context.newBuilder("thc").build().use { context ->
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 Program(language, directMVarModule(), true)
-                val failure = assertThrows(RuntimeFault::class.java) {
-                    Program(language, directMVarModule(wrap = true), true)
-                }
-                assertTrue(failure.message!!.contains("direct"))
-                val eager = assertThrows(RuntimeFault::class.java) {
-                    Program(language, directMVarModule(strict = true), true)
-                }
-                assertTrue(eager.message!!.contains("direct"))
-                Program(language, directMVarModule(casePayload = true))
-                val lazyBranch = assertThrows(RuntimeFault::class.java) {
-                    Program(language, directMVarModule(casePayload = true), true)
-                }
-                assertTrue(lazyBranch.message!!.contains("direct"))
-                val wrongRoute = assertThrows(RuntimeFault::class.java) {
+                Program(language, directMVarModule(strict = true), true)
+                Program(language, directMVarModule(casePayload = true), true)
+                assertThrows(RuntimeFault::class.java) {
                     Program(language, directMVarModule(caseLiteral = true, wrongCaseResult = true), true)
                 }
-                assertTrue(wrongRoute.message!!.contains("direct"))
-                Program(language, directMVarModule(unevaluatedCell = true))
-                val hiddenForce = assertThrows(RuntimeFault::class.java) {
-                    Program(language, directMVarModule(unevaluatedCell = true), true)
+                Program(language, directMVarModule(unevaluatedCell = true), true)
+                assertThrows(UnsupportedCore::class.java) {
+                    AstAsyncAdmission.validate(listOf(mapOf("id" to "unsupported", "expr" to listOf("unknown"))))
                 }
-                assertTrue(hiddenForce.message!!.contains("direct"))
             } finally { context.leave() }
         }
     }

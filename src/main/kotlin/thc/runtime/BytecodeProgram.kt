@@ -23,7 +23,7 @@ import thc.Language
  */
 class BytecodeProgram internal constructor(private val language: Language, moduleData: Map<String, Any?>,
                                            private val checkpoint: BytecodeCheckpoint?,
-                                           private val enableAsync: Boolean) : ExecutableProgram {
+                                           internal val enableAsync: Boolean) : ExecutableProgram {
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
     private val foreignLinks = moduleData["foreignLinks"] as? List<thc.ForeignBitcode> ?: emptyList()
     private val packageScalarLinks = moduleData["packageScalarLinks"] as? List<thc.PackageScalarLink> ?: emptyList()

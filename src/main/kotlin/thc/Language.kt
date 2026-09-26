@@ -282,7 +282,7 @@ object CoreModules {
      */
     fun request(paths: List<String>, entry: String, instrument: Boolean = true, diagnosticUnsupported: Boolean = false,
                 backend: String = defaultBackend(), sourceNotesEnabled: Boolean = true, ioMain: Boolean = false,
-                shutdownEntry: String? = null): String {
+                shutdownEntry: String? = null, asyncExceptions: Boolean? = null): String {
         require(shutdownEntry == null || (ioMain && shutdownEntry.isNotBlank() && shutdownEntry != entry)) {
             "Executable shutdown requires a distinct IO entry"
         }
@@ -294,6 +294,7 @@ object CoreModules {
         if (manifest != null) settings["strictLink"] = true
         if (ioMain) settings["ioMain"] = true
         if (shutdownEntry != null) settings["shutdownEntry"] = shutdownEntry
+        if (asyncExceptions != null) settings["asyncExceptions"] = asyncExceptions
         return requestDocument(paths, settings)
     }
 
@@ -574,6 +575,10 @@ class Language : TruffleLanguage<Language.State>() {
         }
         val backend = input["backend"] ?: defaultBackend()
         require(backend == "ast" || backend == "bytecode") { "Unknown THC backend: $backend" }
+        require(!input.containsKey("asyncExceptions") || input["asyncExceptions"] is Boolean) {
+            "asyncExceptions must be a Boolean"
+        }
+        val asyncExceptions = input["asyncExceptions"] as? Boolean ?: (backend == "bytecode")
         val registrations = linked["managedRegistrations"] as List<ManagedExportAdmission>
         return object : RootNode(this) {
             override fun execute(frame: VirtualFrame): Any {
@@ -582,8 +587,8 @@ class Language : TruffleLanguage<Language.State>() {
                 val owner = currentState(this)
                 (linked["foreignLinks"] as List<ForeignBitcode>).forEach { owner.cbits().link(it) }
                 (linked["packageScalarLinks"] as List<PackageScalarLink>).forEach { owner.packageCbits.link(it) }
-                val program = if (backend == "ast") Program(this@Language, linked)
-                    else BytecodeProgram(this@Language, linked, true)
+                val program = if (backend == "ast") Program(this@Language, linked, asyncExceptions)
+                    else BytecodeProgram(this@Language, linked, asyncExceptions)
                 val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), hostResultFault,
                     ioResult, this@Language, shutdownEntry, shutdownResult,
                     bindings.any { it["id"] == thc.runtime.CoreSignalForeign.dispatcher })
@@ -629,7 +634,11 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
             }
         }
         val threads = Language.currentState(dispatch).threads
-        threads.enterCurrent()
+        threads.enterCurrent(externalAsync = when (program) {
+            is Program -> program.enableAsync
+            is BytecodeProgram -> program.enableAsync
+            else -> true
+        })
         var outcome = thc.runtime.GuestThreadStatus.FINISHED
         try {
             try {
@@ -671,7 +680,11 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                 throw thc.runtime.RuntimeFault("Executable IO lifecycle already started")
             val owner = Language.currentState(dispatch)
             val threads = owner.threads
-            threads.enterCurrent()
+            threads.enterCurrent(externalAsync = when (program) {
+                is Program -> program.enableAsync
+                is BytecodeProgram -> program.enableAsync
+                else -> true
+            })
             var outcome = thc.runtime.GuestThreadStatus.FINISHED
             try {
                 if (processSignals) owner.signals.bind(program)

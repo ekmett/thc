@@ -119,7 +119,8 @@ class ThreadAsyncNativeTest {
             }
             try {
                 val core = File(root, "build/thread-async/$stage/core/$module.json")
-                val entry = context.eval("thc", CoreModules.request(listOf(core.path), name, backend = backend))
+                val entry = context.eval("thc", CoreModules.request(listOf(core.path), name,
+                    backend = backend, asyncExceptions = true))
                 val result = executor.submit<List<Long>> {
                     val interpreted = entry.execute(0L).asLong()
                     assertTrue(entry.invokeMember("compile").asBoolean())
@@ -136,7 +137,9 @@ class ThreadAsyncNativeTest {
     }
 
     @Test fun publicForkAndThrowResumeTheSharedThunk() = exercise("forkAndThrow", listOf(43, 44))
+    @Test fun astPublicForkAndThrowResumeTheSharedThunk() = exercise("forkAndThrow", listOf(43, 44), backend = "ast")
     @Test fun uncaughtChildDeliveryReleasesTheSender() = exercise("killUncaught", listOf(5, 6))
+    @Test fun astUncaughtChildDeliveryReleasesTheSender() = exercise("killUncaught", listOf(5, 6), backend = "ast")
     @Test fun selfDirectedThrowEntersTheOriginalHandler() = exercise("selfThrow", listOf(-1, 0))
     @Test fun outerUninterruptibleMaskStillCapturesCalleeThatUnmasksAndSelfThrows() =
         exercise("maskedUnmaskSelf", listOf(-1, 0))
@@ -146,6 +149,8 @@ class ThreadAsyncNativeTest {
         exercise("maskedUnmaskSelf", listOf(-1, 0), backend = "ast")
     @Test fun forkedChildOwnsAndResumesTheSharedLazyActionHead() =
         exercise("lazyFork", listOf(52, 53), "LazyForkAudit")
+    @Test fun astForkedChildOwnsAndResumesTheSharedLazyActionHead() =
+        exercise("lazyFork", listOf(52, 53), "LazyForkAudit", "ast")
 
     @Test fun yieldPreservesStateAndMaskInCompiledAstAndBytecode() {
         checkReceipt()

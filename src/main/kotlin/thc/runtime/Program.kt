@@ -638,10 +638,14 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
             SynchronousMasking.set(this, resumeMask)
             val returned = try { continuation.continueWith(resumeValue) }
                 catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
-            val result = if (returned is TailYield) returned.continuation else returned
+            val result = when (returned) {
+                is TailYield -> returned.continuation
+                is AstTailYield -> returned.continuation
+                else -> returned
+            }
             val saved = savedGuestContinuation(result)
             if (saved != null) {
-                if (returned !is TailYield && !sameContinuationBody(saved.sourceRoot, continuation.sourceRoot))
+                if (returned !is TailYield && returned !is AstTailYield && !sameContinuationBody(saved.sourceRoot, continuation.sourceRoot))
                     throw IllegalStateException("Nested guest yield has no captured caller segment")
                 val parkedMask = (saved.yielded as? CallSegmentSuspended)?.parkedActiveMask
                 if (parkedMask != null && SynchronousMasking.current(this) != segment.callerMask)
@@ -733,7 +737,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         TruffleSafepoint.setBlockedThreadInterruptible(this, TruffleSafepoint.Interruptible<CallSegment> { waiting ->
             synchronized(waiting.monitor) {
                 if (waiting.state == 1 && waiting.owner !== Thread.currentThread()) {
-                    if (asyncMode) GuestThreads.pollCurrent(this, true)?.let { throw AsyncBlocked(it, this) }
+                    if (asyncMode || AstControl.enabled(this)) GuestThreads.pollCurrent(this, true)?.let { throw AsyncBlocked(it, this) }
                     GuestThreads.blocking(GuestThreadStatus.BLACK_HOLE).use { waiting.monitor.wait() }
                 }
             }
@@ -764,14 +768,18 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                     StackAnnotations.set(this, ambientAnnotations)
                 }
             }
-            val result = if (returned is TailYield) returned.continuation else returned
+            val result = when (returned) {
+                is TailYield -> returned.continuation
+                is AstTailYield -> returned.continuation
+                else -> returned
+            }
             val saved = savedGuestContinuation(result)
             if (saved != null) {
                 if (saved.yielded is DelimitedCut)
                     fault("control0# cannot capture across a thunk update")
                 val expectedRoot = continuation?.sourceRoot
                     ?: thunk.target?.rootNode
-                if (returned !is TailYield && !sameContinuationBody(saved.sourceRoot, expectedRoot))
+                if (returned !is TailYield && returned !is AstTailYield && !sameContinuationBody(saved.sourceRoot, expectedRoot))
                     throw IllegalStateException("Nested guest yield has no captured caller segment")
                 val request = saved.asyncRequest()
                 publishContinuation(thunk, saved)
@@ -869,7 +877,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         TruffleSafepoint.setBlockedThreadInterruptible(this, TruffleSafepoint.Interruptible<Thunk> { waiting ->
             synchronized(waiting.monitor) {
                 if (waiting.state == 1 && waiting.owner !== Thread.currentThread()) {
-                    if (asyncMode) GuestThreads.pollCurrent(this, true)?.let { throw AsyncBlocked(it, this) }
+                    if (asyncMode || AstControl.enabled(this)) GuestThreads.pollCurrent(this, true)?.let { throw AsyncBlocked(it, this) }
                     GuestThreads.blocking(GuestThreadStatus.BLACK_HOLE).use { waiting.monitor.wait() }
                 }
             }
@@ -882,26 +890,39 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int) = value.executeTuple(frame, slots, offset)
     @Child private var force = Force(metrics)
     private fun forceResult(frame: VirtualFrame, original: Any?): Any? {
-        val result = force.execute(frame, original)
+        val result = AstControl.force(frame, this, force, original)
         // WHNF reads need no write. A failed force never reaches this point.
         if (original is Thunk && value is LocalRead) (value as LocalRead).writeForced(frame, original, result)
         return result
     }
-    override fun execute(frame: VirtualFrame): Any? = when {
+    override fun execute(frame: VirtualFrame): Any? = if (AstControl.enabled(this)) executeAsync(frame) else when {
         value.representation.isLong -> value.executeRequiredLong(frame)
         value.representation.isFloat -> value.executeRequiredFloat(frame)
         value.representation.isDouble -> value.executeRequiredDouble(frame)
         value.representation.evaluated -> value.execute(frame)
         else -> forceResult(frame, value.execute(frame))
     }
+    private fun executeAsync(frame: VirtualFrame): Any? {
+        val original = try { value.execute(frame) }
+        catch (cut: AstCapture) {
+            if (value.representation.evaluated) throw cut
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? = forceResult(frame, input)
+            })
+        }
+        return if (value.representation.evaluated) original else forceResult(frame, original)
+    }
     @CompilationFinal private var genericLong = false
     override fun executeFloat(frame: VirtualFrame): Float =
-        if (value.representation.evaluated || value.representation.isFloat) value.executeFloat(frame)
+        if (AstControl.enabled(this)) RuntimeTypesGen.expectFloat(executeAsync(frame))
+        else if (value.representation.evaluated || value.representation.isFloat) value.executeFloat(frame)
         else RuntimeTypesGen.expectFloat(forceResult(frame, value.execute(frame)))
     override fun executeDouble(frame: VirtualFrame): Double =
-        if (value.representation.evaluated || value.representation.isDouble) value.executeDouble(frame)
+        if (AstControl.enabled(this)) RuntimeTypesGen.expectDouble(executeAsync(frame))
+        else if (value.representation.evaluated || value.representation.isDouble) value.executeDouble(frame)
         else RuntimeTypesGen.expectDouble(forceResult(frame, value.execute(frame)))
     override fun executeLong(frame: VirtualFrame): Long {
+        if (AstControl.enabled(this)) return RuntimeTypesGen.expectLong(executeAsync(frame))
         if (value.representation.evaluated || value.representation.isLong) return value.executeLong(frame)
         if (genericLong) return RuntimeTypesGen.expectLong(forceResult(frame, value.execute(frame)))
         return try { value.executeLong(frame) }
@@ -914,6 +935,7 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
     }
     @CompilationFinal private var genericClosure = false
     override fun executeClosure(frame: VirtualFrame): Closure {
+        if (AstControl.enabled(this)) return RuntimeTypesGen.expectClosure(executeAsync(frame))
         if (value.representation.evaluated || value.representation.isLong) return value.executeClosure(frame)
         if (value.representation.kind == CoreKind.CLOSURE || genericClosure) return RuntimeTypesGen.expectClosure(forceResult(frame, value.execute(frame)))
         return try { value.executeClosure(frame) }
@@ -926,6 +948,7 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
     }
     @CompilationFinal private var genericDataValue = false
     override fun executeDataValue(frame: VirtualFrame): DataValue {
+        if (AstControl.enabled(this)) return RuntimeTypesGen.expectDataValue(executeAsync(frame))
         if (value.representation.evaluated || value.representation.isLong) return value.executeDataValue(frame)
         if (value.representation.kind == CoreKind.DATA || genericDataValue) return RuntimeTypesGen.expectDataValue(forceResult(frame, value.execute(frame)))
         return try { value.executeDataValue(frame) }
@@ -938,6 +961,7 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
     }
     @CompilationFinal private var genericAddress = false
     override fun executeAddress(frame: VirtualFrame): ManagedAddress {
+        if (AstControl.enabled(this)) return RuntimeTypesGen.expectManagedAddress(executeAsync(frame))
         if (value.representation.evaluated || value.representation.isLong) return value.executeAddress(frame)
         if (value.representation.kind == CoreKind.ADDRESS || genericAddress) return RuntimeTypesGen.expectManagedAddress(forceResult(frame, value.execute(frame)))
         return try { value.executeAddress(frame) }
@@ -957,11 +981,29 @@ private class Application(function: Expr,
     @Child private var dispatch = Dispatch.create(arguments.size, tail, metrics,
         arguments.map { it.representation.evaluated }.toBooleanArray(), inputLayout)
     @ExplodeLoop override fun execute(frame: VirtualFrame): Any? {
-        val fn = function.executeRequiredClosure(frame)
+        val fn = try { function.executeRequiredClosure(frame) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? =
+                    applyArguments(frame, requireClosure(input), arrayOfNulls(ArgumentLayout.width(inputLayout, arguments.size)), 0)
+            })
+        }
         val values = arrayOfNulls<Any>(ArgumentLayout.width(inputLayout, arguments.size))
-        for (i in arguments.indices) {
-            if (inputLayout?.isEmpty(i) == true) arguments[i].executeTuple(frame, EMPTY_TUPLE_SLOTS, 0)
-            else values[ArgumentLayout.offset(inputLayout, i)] = arguments[i].execute(frame)
+        return applyArguments(frame, fn, values, 0)
+    }
+    @ExplodeLoop private fun applyArguments(frame: VirtualFrame, fn: Closure, values: Array<Any?>, start: Int): Any? {
+        for (i in start until arguments.size) {
+            try {
+                if (inputLayout?.isEmpty(i) == true) arguments[i].executeTuple(frame, EMPTY_TUPLE_SLOTS, 0)
+                else values[ArgumentLayout.offset(inputLayout, i)] = arguments[i].execute(frame)
+            } catch (cut: AstCapture) {
+                throw cut.append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                        if (inputLayout?.isEmpty(i) != true) values[ArgumentLayout.offset(inputLayout, i)] = input
+                        return applyArguments(frame, fn, values, i + 1)
+                    }
+                })
+            }
         }
         return dispatch.execute(frame, fn, values)
     }
@@ -981,6 +1023,17 @@ internal class LocalBinding(private val slot: Int, @field:Child private var valu
         return value.execute(frame)
     }
     fun write(frame: VirtualFrame) {
+        try { writeValue(frame) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                    if (vectorSlots == null) FrameAccess.write(frame, slot, input)
+                    return Unit
+                }
+            })
+        }
+    }
+    private fun writeValue(frame: VirtualFrame) {
         if (vectorSlots != null) { value.executeTuple(frame, vectorSlots, 0); return }
         if (exactLong) { FrameAccess.writeLong(frame, slot, value.executeRequiredLong(frame)); return }
         if (value.representation.isFloat) { FrameAccess.writeFloat(frame, slot, value.executeRequiredFloat(frame)); return }
@@ -1027,15 +1080,34 @@ private class Let(@field:CompilationFinal(dimensions = 1) private val slots: Int
         return body.executeAddress(frame)
     }
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        initialize(frame); return body.executeTuple(frame, slots, offset)
+        initialize(frame, destination = slots, offset = offset); return body.executeTuple(frame, slots, offset)
     }
-    @ExplodeLoop private fun initialize(frame: VirtualFrame) {
+    private fun initialize(frame: VirtualFrame, destination: IntArray? = null, offset: Int = 0) {
+        try { initializeFrom(frame, 0) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? =
+                    if (destination == null) body.execute(frame) else body.executeTuple(frame, destination, offset)
+            })
+        }
+    }
+    @ExplodeLoop private fun initializeFrom(frame: VirtualFrame, start: Int) {
         if (recursive) {
             // A closure captures these cells, never a mutable activation frame.
-            for (slot in slots) FrameAccess.write(frame, slot, RecCell())
-            for (i in slots.indices) {
+            if (start == 0) for (slot in slots) FrameAccess.write(frame, slot, RecCell())
+            for (i in start until slots.size) {
                 val cell = FrameAccess.read(frame, slots[i]) as? RecCell ?: fault("Invalid recursive cell")
-                cell.value = bindings[i].evaluate(frame)
+                cell.value = try { bindings[i].evaluate(frame) }
+                catch (cut: AstCapture) {
+                    throw cut.append(object : AstResumeStep {
+                        override fun resume(frame: VirtualFrame, input: Any?): Any {
+                            cell.value = input
+                            cell.initialized = true
+                            initializeFrom(frame, i + 1)
+                            return Unit
+                        }
+                    })
+                }
                 cell.initialized = true
             }
             // Existing recursive captures retain the cells; the let body and
@@ -1045,7 +1117,17 @@ private class Let(@field:CompilationFinal(dimensions = 1) private val slots: Int
                 val cell = FrameAccess.read(frame, slot) as? RecCell ?: fault("Invalid recursive cell")
                 FrameAccess.write(frame, slot, cell.value)
             }
-        } else for (binding in bindings) binding.write(frame)
+        } else for (i in start until bindings.size) {
+            try { bindings[i].write(frame) }
+            catch (cut: AstCapture) {
+                throw cut.append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Any {
+                        initializeFrom(frame, i + 1)
+                        return Unit
+                    }
+                })
+            }
+        }
     }
 }
 private const val DEFAULT_ALTERNATIVE = 0
@@ -1090,9 +1172,18 @@ private open class Case(scrutinee: Expr, protected val binderSlot: Int,
         if (binderProof != null) representation = representation.refine(binderProof.copy(evaluated = false))
     }, true)
     protected fun prepare(frame: VirtualFrame, destination: IntArray? = null, offset: Int = 0) {
-        if (!delimited) { scrutinee.write(frame); return }
         try { scrutinee.write(frame) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                    val branch = select(frame).body
+                    return if (destination == null) branch.execute(frame)
+                        else branch.executeTuple(frame, destination, offset)
+                }
+            })
+        }
         catch (cut: DelimitedCut) {
+            if (!delimited) throw cut
             throw cut.append(frame, object : DelimitedStep {
                 override fun resume(frame: MaterializedFrame, input: DelimitedResume,
                                     ambient: MaskingState, outerMask: DelimitedStep?): Any? {
@@ -1495,6 +1586,7 @@ private class FunctionBody(expression: Expr, metrics: Metrics, result: CoreRepre
 private class SelfRepeater(@field:Child private var body: FunctionBody, private val metrics: Metrics) : Node(), RepeatingNode {
     fun once(frame: VirtualFrame): Any? {
         val root = rootNode as FunctionRoot
+        root.forceEntry(frame)
         root.pollBeforeBody(this)
         val entry = root.handoff
         return if (entry != null && entry.resultLong && entry.destination(frame) >= 0) entry.finishLong(frame, body.executeLong(frame))
@@ -1541,6 +1633,11 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     init { configureEntry(entryStrict, captureLayout != null); configureInput(inputLayout); configureTupleResult(tuple) }
     @field:CompilationFinal(dimensions = 1)
     private val argumentReferences = argumentProofs.map { it.referenceCarrier() }.toTypedArray()
+    @field:CompilationFinal(dimensions = 1)
+    private val strictSlots = argumentSlots.indices.filter {
+        enableAsync && argumentIndices[it] + entryArgumentOffset in strictArgumentPositions
+    }.toIntArray()
+    @Child private var entryForce = Force(metrics, enableAsync)
     @field:CompilationFinal private var hasSelfTail = false
     private val tailCallProfile = BranchProfile.create()
     @Child private var loop: LoopNode = Truffle.getRuntime().createLoopNode(SelfRepeater(FunctionBody(body, metrics, resultProof, tuple, tupleSlots), metrics))
@@ -1551,7 +1648,8 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         for (i in argumentSlots.indices) {
             val value = arguments[argumentIndices[i] + offset]
             val reference = argumentReferences.getOrNull(i)
-            if (reference != null)
+            if (enableAsync && i in strictSlots) FrameAccess.write(frame, argumentSlots[i], value)
+            else if (reference != null)
                 FrameAccess.write(frame, argumentSlots[i], requireReferenceCarrier(value, reference))
             else if (i < argumentProofs.size && argumentProofs[i].isLong)
                 FrameAccess.writeLong(frame, argumentSlots[i], value as? Long ?: fault("Expected primitive Long argument"))
@@ -1576,6 +1674,29 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     }
     fun handoffDestination(frame: VirtualFrame): Int = handoff?.destination(frame) ?: -1
 
+    @ExplodeLoop fun forceEntry(frame: VirtualFrame) {
+        for (index in strictSlots.indices) {
+            val argument = strictSlots[index]
+            val slot = argumentSlots[argument]
+            val answer = try { AstControl.force(frame, this, entryForce, FrameAccess.read(frame, slot)) }
+            catch (cut: AstCapture) {
+                throw cut.append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                        writeStrict(frame, argument, input)
+                        return executeCapturableBody(frame)
+                    }
+                })
+            }
+            writeStrict(frame, argument, answer)
+        }
+    }
+
+    private fun writeStrict(frame: VirtualFrame, argument: Int, value: Any?) {
+        val reference = argumentReferences.getOrNull(argument)
+        FrameAccess.write(frame, argumentSlots[argument],
+            if (reference == null) value else requireReferenceCarrier(value, reference))
+    }
+
     private class ResumeBody(private val root: FunctionRoot) : AstResumeStep {
         override fun resume(frame: VirtualFrame, input: Any?): Any? {
             if (input !== Unit) fault("Invalid AST root poll resume value")
@@ -1586,6 +1707,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     fun pollBeforeBody(node: Node) {
         if (!enableAsync) return
         val request = GuestThreads.pollCurrent(node, false) ?: return
+        request.compiledCapture = CompilerDirectives.inCompiledCode()
         throw AstCapture(request, SynchronousMasking.current(node)).append(ResumeBody(this))
     }
 
@@ -1629,7 +1751,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                 else {
                     val value = entry.packet.getObject(input, from)
                     val expected = argumentReferences.getOrNull(i)
-                    writeInputReference(frame, to, if (expected == null) value else requireReferenceCarrier(value, expected))
+                    writeInputReference(frame, to, if (expected == null || enableAsync && i in strictSlots) value else requireReferenceCarrier(value, expected))
                 }
             }
             if (captureLayout != null) {
@@ -1816,7 +1938,7 @@ private data class FunctionSpec(val target: RootCallTarget, val captureLayout: C
  * until every public closure/call boundary can consume a saved continuation.
  */
 class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>,
-              private val enableAsync: Boolean = false) : ExecutableProgram {
+              internal val enableAsync: Boolean = false) : ExecutableProgram {
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
     private val foreignLinks = moduleData["foreignLinks"] as? List<thc.ForeignBitcode> ?: emptyList()
     private val packageScalarLinks = moduleData["packageScalarLinks"] as? List<thc.PackageScalarLink> ?: emptyList()
@@ -1826,6 +1948,23 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val delimited = DelimitedControl.contains(moduleData["bindings"])
     private val sources = CoreSources(moduleData)
     private var currentSource: CoreSourceLocation? = null
+    private var operandBuilder: OperandBuilder? = null
+    private inner class OperandBuilder(private val layout: FrameLayout) {
+        private val bindings = ArrayList<LocalBinding>()
+        fun operand(value: Expr): Expr {
+            val proof = value.representation
+            if (proof.isTypedTransport) {
+                val shape = TupleShape(proof, language as thc.Language)
+                val slots = IntArray(shape.width) { layout.bind("<async operand field $it>") }
+                bindings += LocalBinding(-1, value, false, slots)
+                return TupleLocalRead(shape, slots)
+            }
+            val slot = layout.bind("<async operand ${bindings.size}>")
+            bindings += LocalBinding(slot, value, proof.isLong)
+            return LocalRead(slot, false).proven(proof)
+        }
+        fun finish(body: Expr): Expr = if (bindings.isEmpty()) body else AstOperands(bindings.toTypedArray(), body)
+    }
     private var attachedRootCount = 0
     private fun <T> withSource(location: CoreSourceLocation?, action: () -> T): T {
         val previous = currentSource
@@ -1989,7 +2128,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     argumentProofs += field
                     argumentSlots += slots[leaf]
                 }
-            } else if (arg["id"] in free) {
+            } else if (arg["id"] in free || enableAsync && entryStrict[index]) {
                 argumentIndices += ArgumentLayout.offset(inputLayout, index); argumentProofs += proof
                 argumentSlots += scope.bind(arg["id"] as String, !lifted && arg["coercion"] != true, proof).slot
             }
@@ -2024,7 +2163,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics, argumentProofs.toTypedArray(), resultProof,
             rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync, environmentVectorSlots, delimited)
         if (language is thc.Language) root.configureTypedInput(TypedInputLayout.create(language, inputLayout, captures != null))
-        if (body is Case && inputLayout == null) root.configureLeadingCaseReturn(LeadingCaseReturn.discover(args, expression,
+        if (!enableAsync && body is Case && inputLayout == null) root.configureLeadingCaseReturn(LeadingCaseReturn.discover(args, expression,
             resultProof, root.entryArgumentOffset, free.intersect(argumentIds), captures != null,
             ::dataLayout, sources, body.coreSourceLocation))
         return FunctionSpec(root.callTarget, captures, captureSources)
@@ -2036,6 +2175,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             .located(sources.expression(expr, currentSource))
     }
     private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk", allowEmpty: Boolean = false, declaredLifted: Boolean = lifted): Expr {
+        val operands = operandBuilder
+        operandBuilder = null
+        val result = try { argumentUnsequenced(expr, scope, lifted, label, allowEmpty, declaredLifted) }
+            finally { operandBuilder = operands }
+        return operands?.operand(result) ?: result
+    }
+    private fun argumentUnsequenced(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String, allowEmpty: Boolean, declaredLifted: Boolean): Expr {
         val proof = CoreRepresentations.expression(expr)
         fun check(value: CoreRepresentation) {
             if (allowEmpty || value.isVector) CoreRepresentations.requireInput(value)
@@ -2084,8 +2230,20 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
-    private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expr =
-        withSource(sources.expression(expr, currentSource)) { compileLocated(expr, scope, tail).located(currentSource) }
+    private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expr {
+        val outer = operandBuilder
+        val head = (expr.getOrNull(1) as? List<*>)?.firstOrNull()
+        val operands = if (enableAsync && expr.firstOrNull() == "app" && head in setOf("prim", "con"))
+            OperandBuilder(scope.layout) else null
+        operandBuilder = operands
+        val result = try {
+            withSource(sources.expression(expr, currentSource)) {
+                val node = compileLocated(expr, scope, tail).located(currentSource)
+                (operands?.finish(node) ?: node).located(currentSource)
+            }
+        } finally { operandBuilder = outer }
+        return outer?.operand(result) ?: result
+    }
     private fun compileLocated(expr: List<Any?>, scope: Scope, tail: Boolean): Expr = try {
         val lowered = compileSupported(expr, scope, tail)
         val metadata = if (diagnosticUnsupported && lowered is GlobalRead) CoreRepresentation.UNKNOWN
@@ -2775,7 +2933,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     }
                     else {
                     val self = scope.self
-                    if (tail && self != null && self.inputLayout == null && nodes.none { it.representation.isEmptyTuple } && self.arity > 0 && nodes.size <= self.arity) {
+                    if (tail && !enableAsync && self != null && self.inputLayout == null && nodes.none { it.representation.isEmptyTuple } && self.arity > 0 && nodes.size <= self.arity) {
                         val temporaries = IntArray(self.arity) { scope.layout.bind("<self argument $it>") }
                         AstTailApplication(function, nodes, self, temporaries, metrics)
                     } else Application(function, nodes, tail, metrics)
