@@ -315,17 +315,31 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val argumentIds = args.map { it["id"] as String }.toSet()
         args.forEach { CoreRepresentations.requireInput(CoreRepresentations.binder(it)) }
         context.inputLayout = ArgumentLayout.fromProofs(args.map(CoreRepresentations::binder))
-        val freeVectors = (free - argumentIds).mapNotNull { id ->
+        val freeAggregates = (free - argumentIds).mapNotNull { id ->
             outer.tuples[id]?.let { (proof, fields) ->
-                if (!proof.isVector) throw UnsupportedCore("Unsupported Core aggregate capture: unboxed-tuple")
+                if (!proof.isVector && !proof.isSum) throw UnsupportedCore("Unsupported Core aggregate capture: unboxed-tuple")
+                CoreRepresentations.requireInput(proof)
+                if (fields.size != ArgumentLayout.leaves(proof).size)
+                    throw RuntimeFault("Aggregate capture slot count mismatch")
                 Triple(id, proof, fields)
             }
         }
+        val freeVectors = freeAggregates.filter { it.second.isVector }
+        val freeSums = freeAggregates.filter { it.second.isSum }
         val freeLocals = (free - argumentIds).filter { it in outer.locals }.map { outer.locals.getValue(it) }
         freeLocals.filter { it.id < 0 && it.proof.kind == CoreKind.VOID }.forEach { scope.bindVoid(it.name, it.proof) }
-        val captureSources = freeLocals.filter { it.id >= 0 || it.proof.kind != CoreKind.VOID }
+        val scalarSources = freeLocals.filter { it.id >= 0 || it.proof.kind != CoreKind.VOID }
+        val captureSources = scalarSources + freeSums.flatMap { it.third }
         captureSources.forEach { CoreRepresentations.requireNoVector(it.proof, "capture") }
-        context.captures = captureSources.map { bind(scope, it.name, it.primitive, it.proof, it.cell, it.entry, it.arityCertificate) }
+        val scalarDestinations = scalarSources.map { bind(scope, it.name, it.primitive, it.proof, it.cell, it.entry, it.arityCertificate) }
+        val sumDestinations = freeSums.flatMap { (id, proof, _) ->
+            val fields = ArgumentLayout.leaves(proof).mapIndexed { index, field ->
+                Local(nextLocal++, "$id captured sum field $index", field.isLong, field)
+            }
+            scope.bindTuple(id, proof, fields)
+            fields
+        }
+        context.captures = scalarDestinations + sumDestinations
         context.vectorCaptures = freeVectors.map { (id, proof, fields) ->
             val lanes = TupleShape.flatten(proof).mapIndexed { lane, leaf ->
                 Local(nextLocal++, "$id captured vector slot $lane", leaf.isLong, leaf)
