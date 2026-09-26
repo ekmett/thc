@@ -31,8 +31,16 @@ cannot pin arbitrary JVM arrays on demand: its native-pointer conversion calls
 Resolution uses only the current context's live registry: a numeric address
 from another context grants no access to that context's storage.
 
-Mutable managed arrays and opaque StablePtr handles still reject numeric
-projection. Supporting mutable arrays requires native-primary storage or a
+StablePtr handles acquire an opaque native identity lazily, when passed to C or
+projected to bits. The context's stable-pointer table keeps the lazy referent
+rooted until `freeStablePtr` or disposal; only an exact live token in that context
+recovers its handle. C can retain and return the token across calls, including
+through native pointer cells. The identity has no guest byte storage, and neither
+its numeric bits nor a C copy extends the lifetime after explicit free. An
+unrecognized pointer result remains opaque and unowned. This is not a native
+GHC closure address or callback/re-entry implementation.
+
+Mutable managed arrays still reject numeric projection. Supporting them requires native-primary storage or a
 complete coherent storage abstraction, including escaped raw array aliases,
 concurrent access, and real pointer-cell encoding. A temporary native copy or
 native identity token would not satisfy that contract. This increment does not

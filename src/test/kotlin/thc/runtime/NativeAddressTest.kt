@@ -180,7 +180,13 @@ class NativeAddressTest {
                 assertThrows(RuntimeFault::class.java) { mutable.toNativeBits() }
                 assertArrayEquals(byteArrayOf(1, 2, 3), bytes)
                 assertThrows(RuntimeFault::class.java) { ManagedAddress.fromAllocation(ManagedAllocation.mutable(8, 8)).toNativeBits() }
-                assertThrows(RuntimeFault::class.java) { StablePointers.current(null).make(Unit).toNativeBits() }
+                val stable = StablePointers.current(null)
+                val handle = stable.make(Unit)
+                val token = handle.toNativeBits()
+                assertSame(Unit, stable.dereference(registry.recover(token)))
+                assertThrows(RuntimeFault::class.java) { registry.recover(token).readWord8(0) }
+                stable.free(handle)
+                assertThrows(RuntimeFault::class.java) { stable.dereference(registry.recover(token)) }
             } finally { context.leave() }
         }
         context(native = false).use { context ->

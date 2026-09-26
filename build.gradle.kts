@@ -525,6 +525,26 @@ tasks.register<Test>("packageScalarFullCoreTest") {
         }
     }
 }
+for ((taskName, dense) in listOf("stablePtrFfiFullCoreDefault" to false, "stablePtrFfiFullCoreDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests ordinary Foreign.StablePtr through genuine package-owned ccall/capi imports."
+        maxHeapSize = "4g"
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        inputs.files(fileTree("build/stableptr-ffi") { include("**/*.json", "logs/*.stdout", "logs/*.stderr") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.StablePtrFfiFullCoreTest") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Native StablePtr C and compiled evidence requires a fresh process") { true }
+        doFirst {
+            check(file("build/stableptr-ffi/manifest.json").isFile) {
+                "Select full-Core GHC9.14.1/configured Clang and run cabal run exe:thc-fixtures -- stableptr-ffi"
+            }
+        }
+    }
+}
 for ((taskName, dense) in listOf("hashableFfiFullCoreDefault" to false, "hashableFfiFullCoreDense" to true)) {
     tasks.register<Test>(taskName) {
         group = "verification"

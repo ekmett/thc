@@ -82,6 +82,7 @@ internal class ManagedAddress private constructor(
         if (heap != null) fault("Opaque guest heap address has no native pointer bits")
         if (capabilities != null) fault("RTS data label has no numeric guest address")
         if (finalizer != null) fault("Opaque C function label has no numeric guest address")
+        if (stable != null) return StablePointers.current(null).nativeToken(this)
         native?.let { return it.access { segment -> segment.address() + offset } }
         return if (this === NULL) 0L else numeric ?: NativeAddresses.current(null).project(this)
     }
@@ -620,7 +621,8 @@ internal class ManagedAddress private constructor(
                 requireRange(displacement, 8)
                 segment.get(ValueLayout.JAVA_LONG_UNALIGNED, offset + displacement)
             }
-            return Language.currentState().nativeAllocations.recoverAddress(bits)
+            return StablePointers.current(null).recoverToken(bits)
+                ?: Language.currentState().nativeAllocations.recoverAddress(bits)
                 ?: NativeAddresses.current(null).recover(bits)
         }
         val allocation = owner ?: fault("Addr# has no allocation-owned pointer cells")
@@ -636,7 +638,7 @@ internal class ManagedAddress private constructor(
     @JvmOverloads fun writeAddressElementIndex(elementOffset: Long, value: ManagedAddress, byteOffset: Boolean = false) {
         if (native != null) {
             // A real native pointer cell cannot retain an arbitrary JVM object.
-            // Projection remains restricted to existing native/immutable owners.
+            // Projection requires a native/immutable owner or opaque StablePtr identity.
             writeNativeScalar(elementOffset, 8, value.toNativeBits(), byteOffset)
             return
         }

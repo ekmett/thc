@@ -38,6 +38,10 @@ extra-source-files:
   test/fixtures/run-scalar-cbits/app/Main.hs
   test/fixtures/run-scalar-cbits/cbits/scalar.c
   test/fixtures/run-scalar-cbits/cbits/scalar.h
+  test/fixtures/run-stableptr-ffi/src/StableForeign.hs
+  test/fixtures/run-stableptr-ffi/app/Main.hs
+  test/fixtures/run-stableptr-ffi/cbits/stable.c
+  test/fixtures/run-stableptr-ffi/cbits/stable.h
   test/fixtures/run-native-capi/cabal.project
   test/fixtures/run-native-capi/README.md
   test/fixtures/run-native-capi/run-native-capi.cabal
@@ -707,6 +711,7 @@ executable thc-fixtures
     RtsDiagnosticFixtures
     OriginalOpenFixtures
     PackageScalarFixtures
+    StablePtrFFIFixtures
     HashableFfiFixtures
     OriginalTermiosFixtures
     OriginalTcsetattrFixtures

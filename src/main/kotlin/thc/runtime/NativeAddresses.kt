@@ -54,6 +54,7 @@ internal class NativeAddresses(private val env: TruffleLanguage.Env) {
     fun recover(bits: Long): ManagedAddress {
         requireOpen()
         if (bits == 0L) return ManagedAddress.nullAddress()
+        StablePointers.current(null).recoverToken(bits)?.let { return it }
         reap()
         val image = ranges.floorEntry(bits)?.value?.get()
         if (image != null) {

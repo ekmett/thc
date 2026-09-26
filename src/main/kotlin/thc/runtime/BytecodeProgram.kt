@@ -1736,6 +1736,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                             b.emitLinkedPackageScalarLong(arguments, destination.single())
                         "FloatRep" -> b.emitLinkedPackageScalarFloat(arguments, destination.single())
                         "DoubleRep" -> b.emitLinkedPackageScalarDouble(arguments, destination.single())
+                        "AddrRep" -> b.emitLinkedPackageAddress(arguments, destination.single())
                         "void" -> {
                             if (destination.isNotEmpty()) fault("Void package C call has result slots")
                             b.emitLinkedPackageVoid(arguments)
