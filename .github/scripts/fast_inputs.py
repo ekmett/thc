@@ -34,7 +34,7 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 # These are the runtime files actually fingerprinted by prepare-tests.sh's
 # preparers. An additional recorded runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
-                  "src/main/java/thc/runtime/DoubleX2.java")
+                  "src/main/kotlin/thc/runtime/VectorMemory.kt")
 MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 thread-status thread-label boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays

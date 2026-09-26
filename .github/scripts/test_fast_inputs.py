@@ -1087,7 +1087,7 @@ class RenamedInputContractTests(unittest.TestCase):
     def test_recorded_runtime_and_compiler_sources_use_actual_published_paths(self):
         root = Path(__file__).resolve().parents[2]
         self.assertEqual(("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
-                          "src/main/java/thc/runtime/DoubleX2.java"), cache.RUNTIME_INPUTS)
+                          "src/main/kotlin/thc/runtime/VectorMemory.kt"), cache.RUNTIME_INPUTS)
         with patch.object(cache, "toolchain", return_value={}):
             sources = cache.identity(root)["sources"]
         for name in (*cache.RUNTIME_INPUTS, *("compiler/THC/" + name + ".hs" for name in
