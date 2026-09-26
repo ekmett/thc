@@ -286,38 +286,38 @@ internal object ManagedByteArray {
     @JvmStatic fun allocateGuest(size: Long): ManagedAllocation =
         ManagedAllocation.mutable(size, ValueLayout.ADDRESS.byteSize().toInt())
     private inline fun <T> vectorGuest(value: Any?, index: Long, scalarOffset: Boolean,
-        scalarWidth: Int, writable: Boolean, action: (ByteArray) -> T): T =
+        scalarWidth: Int, writable: Boolean, vectorBytes: Int, action: (ByteArray) -> T): T =
         if (value is ManagedAllocation)
-            value.accessVector(index, scalarOffset, scalarWidth, writable, action)
+            value.accessVector(index, scalarOffset, scalarWidth, writable, vectorBytes, action)
         else action(require(value))
-    @JvmStatic fun readByteVectorGuest(value: Any?, index: Long, scalarOffset: Boolean): ByteVector =
-        vectorGuest(value, index, scalarOffset, 1, false) { readByteVectorArray(it, index, scalarOffset) }
-    @JvmStatic fun writeByteVectorGuest(value: Any?, index: Long, vector: ByteVector, scalarOffset: Boolean) =
-        vectorGuest(value, index, scalarOffset, 1, true) { writeByteVectorArray(it, index, vector, scalarOffset) }
-    @JvmStatic fun readShortVectorGuest(value: Any?, index: Long, scalarOffset: Boolean): ShortVector =
-        vectorGuest(value, index, scalarOffset, 2, false) { readShortVectorArray(it, index, scalarOffset) }
-    @JvmStatic fun writeShortVectorGuest(value: Any?, index: Long, vector: ShortVector, scalarOffset: Boolean) =
-        vectorGuest(value, index, scalarOffset, 2, true) { writeShortVectorArray(it, index, vector, scalarOffset) }
-    @JvmStatic fun readLongVectorGuest(value: Any?, index: Long, scalarOffset: Boolean): LongVector =
-        vectorGuest(value, index, scalarOffset, 8, false) { readLongVectorArray(it, index, scalarOffset) }
-    @JvmStatic fun writeLongVectorGuest(value: Any?, index: Long, vector: LongVector, scalarOffset: Boolean) =
-        vectorGuest(value, index, scalarOffset, 8, true) { writeLongVectorArray(it, index, vector, scalarOffset) }
-    @JvmStatic fun readInt32VectorGuest(value: Any?, index: Long, scalarOffset: Boolean): IntVector =
-        vectorGuest(value, index, scalarOffset, 4, false) { readIntVectorArray(it, index, scalarOffset, "Int32X4") }
-    @JvmStatic fun writeInt32VectorGuest(value: Any?, index: Long, vector: IntVector, scalarOffset: Boolean) =
-        vectorGuest(value, index, scalarOffset, 4, true) { writeIntVectorArray(it, index, vector, scalarOffset, "Int32X4") }
-    @JvmStatic fun readWord32VectorGuest(value: Any?, index: Long, scalarOffset: Boolean): IntVector =
-        vectorGuest(value, index, scalarOffset, 4, false) { readIntVectorArray(it, index, scalarOffset, "Word32X4") }
-    @JvmStatic fun writeWord32VectorGuest(value: Any?, index: Long, vector: IntVector, scalarOffset: Boolean) =
-        vectorGuest(value, index, scalarOffset, 4, true) { writeIntVectorArray(it, index, vector, scalarOffset, "Word32X4") }
-    @JvmStatic fun readFloatVectorGuest(value: Any?, index: Long, scalarOffset: Boolean): FloatVector =
-        vectorGuest(value, index, scalarOffset, 4, false) { readFloatVectorArray(it, index, scalarOffset) }
-    @JvmStatic fun writeFloatVectorGuest(value: Any?, index: Long, vector: FloatVector, scalarOffset: Boolean) =
-        vectorGuest(value, index, scalarOffset, 4, true) { writeFloatVectorArray(it, index, vector, scalarOffset) }
-    @JvmStatic fun readDoubleVectorGuest(value: Any?, index: Long, scalarOffset: Boolean): DoubleVector =
-        vectorGuest(value, index, scalarOffset, 8, false) { readDoubleVectorArray(it, index, scalarOffset) }
-    @JvmStatic fun writeDoubleVectorGuest(value: Any?, index: Long, vector: DoubleVector, scalarOffset: Boolean) =
-        vectorGuest(value, index, scalarOffset, 8, true) { writeDoubleVectorArray(it, index, vector, scalarOffset) }
+    @JvmStatic @JvmOverloads fun readByteVectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): ByteVector =
+        vectorGuest(value, index, scalarOffset, 1, false, vectorBytes) { readByteVectorArray(it, index, scalarOffset, vectorBytes) }
+    @JvmStatic @JvmOverloads fun writeByteVectorGuest(value: Any?, index: Long, vector: ByteVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
+        vectorGuest(value, index, scalarOffset, 1, true, vectorBytes) { writeByteVectorArray(it, index, vector, scalarOffset, vectorBytes) }
+    @JvmStatic @JvmOverloads fun readShortVectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): ShortVector =
+        vectorGuest(value, index, scalarOffset, 2, false, vectorBytes) { readShortVectorArray(it, index, scalarOffset, vectorBytes) }
+    @JvmStatic @JvmOverloads fun writeShortVectorGuest(value: Any?, index: Long, vector: ShortVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
+        vectorGuest(value, index, scalarOffset, 2, true, vectorBytes) { writeShortVectorArray(it, index, vector, scalarOffset, vectorBytes) }
+    @JvmStatic @JvmOverloads fun readLongVectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): LongVector =
+        vectorGuest(value, index, scalarOffset, 8, false, vectorBytes) { readLongVectorArray(it, index, scalarOffset, vectorBytes) }
+    @JvmStatic @JvmOverloads fun writeLongVectorGuest(value: Any?, index: Long, vector: LongVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
+        vectorGuest(value, index, scalarOffset, 8, true, vectorBytes) { writeLongVectorArray(it, index, vector, scalarOffset, vectorBytes) }
+    @JvmStatic @JvmOverloads fun readInt32VectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): IntVector =
+        vectorGuest(value, index, scalarOffset, 4, false, vectorBytes) { readIntVectorArray(it, index, scalarOffset, "Int32X4", vectorBytes) }
+    @JvmStatic @JvmOverloads fun writeInt32VectorGuest(value: Any?, index: Long, vector: IntVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
+        vectorGuest(value, index, scalarOffset, 4, true, vectorBytes) { writeIntVectorArray(it, index, vector, scalarOffset, "Int32X4", vectorBytes) }
+    @JvmStatic @JvmOverloads fun readWord32VectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): IntVector =
+        vectorGuest(value, index, scalarOffset, 4, false, vectorBytes) { readIntVectorArray(it, index, scalarOffset, "Word32X4", vectorBytes) }
+    @JvmStatic @JvmOverloads fun writeWord32VectorGuest(value: Any?, index: Long, vector: IntVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
+        vectorGuest(value, index, scalarOffset, 4, true, vectorBytes) { writeIntVectorArray(it, index, vector, scalarOffset, "Word32X4", vectorBytes) }
+    @JvmStatic @JvmOverloads fun readFloatVectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): FloatVector =
+        vectorGuest(value, index, scalarOffset, 4, false, vectorBytes) { readFloatVectorArray(it, index, scalarOffset, vectorBytes) }
+    @JvmStatic @JvmOverloads fun writeFloatVectorGuest(value: Any?, index: Long, vector: FloatVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
+        vectorGuest(value, index, scalarOffset, 4, true, vectorBytes) { writeFloatVectorArray(it, index, vector, scalarOffset, vectorBytes) }
+    @JvmStatic @JvmOverloads fun readDoubleVectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): DoubleVector =
+        vectorGuest(value, index, scalarOffset, 8, false, vectorBytes) { readDoubleVectorArray(it, index, scalarOffset, vectorBytes) }
+    @JvmStatic @JvmOverloads fun writeDoubleVectorGuest(value: Any?, index: Long, vector: DoubleVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
+        vectorGuest(value, index, scalarOffset, 8, true, vectorBytes) { writeDoubleVectorArray(it, index, vector, scalarOffset, vectorBytes) }
     @JvmStatic fun require(value: Any?): ByteArray = when (value) {
         is ByteArray -> value
         is ManagedAllocation -> value.wholeBytesForPrimitive()

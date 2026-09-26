@@ -483,6 +483,7 @@ executable thc-fixtures
     FusedFloatingFixtures
     SimdCallFixtures
     Simd128ArrayFixtures
+    SimdWideArrayFixtures
     SimdFloatFmaFixtures
     SimdWideFloatFmaFixtures
     SqrtFixtures

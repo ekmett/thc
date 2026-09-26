@@ -1122,10 +1122,12 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                 "SimdWord8VectorTest", "SimdWord16VectorTest", "SimdInt32VectorTest", "SimdInt32MultiplyTest",
                 "SimdInt32ByteArrayTest", "Int32VectorMemoryProofTest", "Int32VectorStorageTest",
                 "SimdWord32VectorTest", "SimdWord32ByteArrayTest", "Word32VectorMemoryProofTest",
-                "Word32VectorStorageTest", "Simd128ArrayNativeTest", "Simd128ArrayProofTest"],
+                "Word32VectorStorageTest", "Simd128ArrayNativeTest", "Simd128ArrayProofTest",
+                "SimdWideArrayNativeTest", "SimdWideArrayProofTest"],
             "FloatingVectorPrimitives": ["SimdFloatVectorTest", "SimdFloatFmaTest", "SimdWideFloatFmaTest", "SimdFloatByteArrayTest",
                 "FloatVectorMemoryProofTest", "FloatVectorStorageTest", "SimdDoubleVectorTest",
-                "SimdDoubleByteArrayTest", "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest"],
+                "SimdDoubleByteArrayTest", "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest",
+                "SimdWideArrayNativeTest", "SimdWideArrayProofTest"],
         }
         python = {
             "IntegerVectorPrimitives": ["core-vector-memory", "core-vectors", "core-word32-vector-memory",
