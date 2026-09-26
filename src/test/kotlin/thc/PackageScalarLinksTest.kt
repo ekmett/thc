@@ -60,6 +60,10 @@ class PackageScalarLinksTest {
             proofChange(imported + ("emitted" to (emitted + ("arguments" to listOf("AddrRep", "void"))))),
             proofChange(imported + ("emitted" to (emitted + ("result" to listOf("void", "Int64Rep"))))))
         assertEquals(setOf("scalar_value"), PackageScalarLinks.read(original)!!.proved)
+        if (System.getProperty("os.name").startsWith("Mac")) {
+            val clangTarget = "${System.getProperty("os.arch")}-apple-macosx15.0.0"
+            assertNotNull(PackageScalarLinks.read(original + ("packageScalarLink" to (link + ("target" to clangTarget)))))
+        }
         for ((index, altered) in bad.withIndex()) assertThrows(IllegalArgumentException::class.java,
             { CoreModules.merge(listOf(altered)) }, "mutation $index")
     }

@@ -66,7 +66,7 @@ internal object PackageScalarLinks {
         val arch = when (System.getProperty("os.arch")) { "amd64" -> "x86_64"; "arm64" -> "aarch64"; else -> System.getProperty("os.arch") }
         val cpu = target.substringBefore('-').let { if (it == "arm64") "aarch64" else it }
         check(cpu == arch && ((system == "Linux" && target.endsWith("-linux-gnu")) ||
-            (system.startsWith("Mac") && "-darwin" in target)), "target differs from runtime")
+            (system.startsWith("Mac") && ("-darwin" in target || "-apple-macosx" in target))), "target differs from runtime")
     }
 
     fun read(module: Map<*, *>): PackageScalarAdmission? {
