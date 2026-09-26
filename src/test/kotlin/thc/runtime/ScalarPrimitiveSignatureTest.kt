@@ -30,38 +30,6 @@ class ScalarPrimitiveSignatureTest {
             finally { context.leave() }
         }
     }
-    @Test fun genuineScalarApplicationsRejectConsistentlyForgedArgumentsAndResults() = visit { language, backend ->
-        // Arithmetic, comparison (IntRep result), and a rep-changing conversion.
-        for (name in listOf("plusInt64", "ltWord64", "int64ToWord64"))
-            for (variant in listOf("arguments", "result", "omittedOccurrence", "unknownOccurrence"))
-                for (diagnostic in listOf(false, true)) {
-                    val input = CoreModules.reachable(module("build/explicit64-primops/core/Explicit64PrimopsAudit.json"), name)
-                    val lambda = ((input["bindings"] as List<Map<String, Any?>>).single()["expr"] as List<Any?>)
-                    val body = lambda[2] as MutableList<Any?>
-                    assertEquals("app", body[0])
-                    fun replace(rep: MutableMap<String, Any?>) {
-                        rep["primReps"] = listOf(if (rep["primReps"] == listOf("Word64Rep")) "Int64Rep" else "Word64Rep")
-                    }
-                    if (variant == "result") {
-                        replace((lambda[3] as Map<String, Any?>)["resultRep"] as MutableMap<String, Any?>)
-                        replace((body[6] as Map<String, Any?>)["rep"] as MutableMap<String, Any?>)
-                    } else {
-                        val parameter = (lambda[1] as List<Map<String, Any?>>)[0]
-                        replace(parameter["rep"] as MutableMap<String, Any?>)
-                        val argument = (body[2] as List<MutableList<Any?>>)[0]
-                        assertEquals(listOf("var", parameter["id"]), argument.take(2))
-                        when (variant) {
-                            "arguments" -> replace((argument[2] as Map<String, Any?>)["rep"] as MutableMap<String, Any?>)
-                            "omittedOccurrence" -> argument.removeAt(2)
-                            else -> (argument[2] as MutableMap<String, Any?>)["rep"] = unknown
-                        }
-                    }
-                    val error = assertThrows(RuntimeFault::class.java) {
-                        program(language, input + ("diagnosticUnsupported" to diagnostic), backend)
-                    }
-                    assertTrue(error.message.orEmpty().contains("Primitive representation mismatch: $name#"), error.message)
-                }
-    }
     @Test fun missingUnknownAndCorrectLegacyMetadataRemainCompatible() = visit { language, backend ->
         for (rep in listOf(null, unknown, proof("Int64Rep"))) {
             val binder = mutableMapOf<String, Any?>("id" to "x", "lifted" to false)

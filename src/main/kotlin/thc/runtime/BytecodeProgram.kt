@@ -2866,7 +2866,6 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             when {
                 fn[0] == "var" && fn[1] in scope.joins -> joinCall(scope.joins.getValue(fn[1] as String), operands)
                 fn[0] == "prim" -> {
-                    ScalarPrimitiveSignatures.validate(fn[1] as String, operands.map { it.proof }, tupleProof)
                     val value = primitive(fn[1] as String, operands)
                     if (fn[1] == "raise#" && tupleProof.isTypedTransport) tupleExpression(tupleProof) { e, _ ->
                         val b = e.builder

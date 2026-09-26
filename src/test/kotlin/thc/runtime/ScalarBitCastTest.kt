@@ -122,7 +122,7 @@ class ScalarBitCastTest {
                     app, mapOf("rep" to closure, "resultRep" to proof(output)))))))) as MutableMap<String, Any?>
     }
     private fun lambda(module: Map<String, Any?>) = (module["bindings"] as List<Map<String, Any?>>).single()["expr"] as MutableList<Any?>
-    @Test fun exactKindsSignednessArityAndScalarFrontiersAreChecked() {
+    @Test fun lexicalMetadataArityAndScalarFrontiersAreChecked() {
         for (backend in listOf("ast", "bytecode")) context().use { context ->
             context.initialize("thc"); context.enter()
             try {

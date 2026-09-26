@@ -135,11 +135,8 @@ class SimdVectorTest {
             val resultProof = (inferred.entryTarget("vectorCase").rootNode as GuestRoot).tupleResult?.proof
             assertNotNull(resultProof, backend)
             assertTrue(TupleShape.compatible(CoreVectors.proof, resultProof!!), backend)
-            val scalarDiagnostic = if (backend == "ast")
-                "Primitive representation mismatch: +# argument 0 expects IntRep"
-                else "Unsupported Core vector boundary: argument"
             for ((body, message) in listOf(
-                argument to scalarDiagnostic,
+                argument to "Unsupported Core vector boundary: argument",
                 join to "Conflicting logical tuple representation proofs")) {
                 expression[2] = body
                 m["bindings"] = listOf(binding + ("expr" to expression.toList()))

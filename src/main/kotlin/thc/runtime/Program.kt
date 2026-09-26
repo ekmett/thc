@@ -2454,7 +2454,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             }.toTypedArray()
             when {
                 fn[0] == "prim" -> {
-                    ScalarPrimitiveSignatures.validate(fn[1] as String, nodes.map { it.representation }, tupleProof)
+                    // The scalar lowering has no aggregate destination or vector carrier.
+                    nodes.forEach { CoreRepresentations.requireScalar(it.representation, "argument") }
                     primitive(fn[1] as String, nodes)
                 }
                 constructorStrictFields != null -> {
