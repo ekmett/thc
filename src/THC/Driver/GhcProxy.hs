@@ -11,6 +11,7 @@ import Control.Monad (unless, when)
 import System.Directory (createDirectoryIfMissing)
 import GHC.ResponseFile (expandResponse)
 import THC.Driver.NativeRecipe (captureNativeRecipe)
+import THC.Driver.PackageNative (captureNativeObject, captureNativeComponent, capturePackageNative)
 import System.Environment (getEnv, lookupEnv)
 import System.Exit (ExitCode(..), exitWith)
 import System.FilePath ((</>))
@@ -29,6 +30,9 @@ runGhcProxy arguments = do
   when (native /= ExitSuccess) (exitWith native)
   receipts <- lookupEnv "THC_PROXY_NATIVE_RECIPES"
   mapM_ (\directory -> captureNativeRecipe directory compiler options) receipts
+  nativePieces <- lookupEnv "THC_PROXY_NATIVE_PIECES"
+  mapM_ (\directory -> captureNativeComponent directory options) nativePieces
+  mapM_ (\directory -> captureNativeObject directory compiler options) nativePieces
   targetUnits <- maybe [] lines <$> lookupEnv "THC_PROXY_GLOBAL_UNITS"
   case ("--make" `elem` options, valueAfter "-this-unit-id" options) of
     (True, Just unit) | unit `elem` targetUnits -> do
@@ -48,8 +52,15 @@ runGhcProxy arguments = do
          "-fplugin-opt=THC.Plugin:" ++ core,
          "-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:unit-qualified",
          "-fplugin-opt=THC.Plugin:source-notes",
-         "-fplugin-opt=THC.Plugin:foreign-import-provenance", "-g", "-dcore-lint"])
+         "-fplugin-opt=THC.Plugin:foreign-import-provenance", "-fwrite-if-simplified-core",
+         "-g", "-dcore-lint"])
       unless (exported == ExitSuccess) (exitWith exported)
+      helper <- lookupEnv "THC_PROXY_INTERFACE_HELPER"
+      libdir <- lookupEnv "THC_PROXY_INTERFACE_LIBDIR"
+      case (helper,libdir) of
+        (Just executable,Just selectedLibdir) ->
+          capturePackageNative executable selectedLibdir compiler options unit root
+        _ -> pure ()
     _ -> pure ()
 
 valueAfter :: Eq a => a -> [a] -> Maybe a
