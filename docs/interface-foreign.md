@@ -74,9 +74,14 @@ same-symbol component isolation, repeated imports and authority/carrier
 rejection. It is separate from the stock/thin-GHC default test inventory and
 fails when its real fixture has not been prepared.
 
-This first runtime slice checks semantics and ownership. Its interop call uses
-a Truffle boundary and boxed argument/result transport; compiled guest-entry
-validity does not establish Sulong inlining or allocation-free foreign calls.
+Each call site caches a context-owned resolved function and adopted interop
+libraries. Closing a context invalidates the shared lifetime assumption; cached calls
+still check their context owner. AST and bytecode paths build one interop
+argument array and write Long, Float or Double results directly to typed
+destinations. Library loading and initial resolution remain behind boundaries.
+Foreign entry/exit retain their existing masking boundaries and scope storage.
+Compiled guest-entry validity does not establish Sulong inlining or
+allocation-free foreign calls; those claims require separate graph evidence.
 
 ## Why compiling the stubs through Sulong is insufficient
 

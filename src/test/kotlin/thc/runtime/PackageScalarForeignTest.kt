@@ -9,6 +9,13 @@ import thc.PackageScalarSignature
 
 /** Call-proof controls only; no synthetic bitcode is executed. */
 class PackageScalarForeignTest {
+    @Test fun int32ProtocolConversionRejectsTruncation() {
+        for (value in listOf(Int.MIN_VALUE, -1, 0, 1, Int.MAX_VALUE))
+            assertEquals(value, packageScalarInt32(value.toLong()))
+        for (value in listOf(Int.MIN_VALUE.toLong() - 1, Int.MAX_VALUE.toLong() + 1, Long.MIN_VALUE, Long.MAX_VALUE))
+            assertThrows(RuntimeFault::class.java) { packageScalarInt32(value) }
+    }
+
     private fun kind(rep: String?) = when (rep) {
         null -> CoreKind.VOID
         "FloatRep" -> CoreKind.FLOAT

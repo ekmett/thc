@@ -1031,17 +1031,48 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation
     @ConstantOperand(type = BytecodePackageScalarArguments.class, name = "arguments")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    public static final class LinkedPackageScalar {
+    public static final class LinkedPackageScalarLong {
         @Specialization public static void call(VirtualFrame frame, BytecodePackageScalarArguments arguments,
-                LocalAccessor destination, @Bind("$node") Node node) {
+                LocalAccessor destination, @Bind("$node") Node node,
+                @Cached(value = "createAccess(arguments)", neverDefault = true) PackageScalarAccess access) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            Object result = CorePackageScalarForeign.invoke(node, arguments.getCall(),
-                    arguments.read(bytecode, frame), arguments.state(bytecode, frame));
-            String rep = arguments.getCall().getResult();
-            if (rep.equals("Int32Rep") || rep.equals("Int64Rep")) destination.setLong(bytecode, frame, (Long) result);
-            else if (rep.equals("FloatRep")) destination.setFloat(bytecode, frame, (Float) result);
-            else if (rep.equals("DoubleRep")) destination.setDouble(bytecode, frame, (Double) result);
-            else throw new RuntimeFault("Invalid package C result representation");
+            destination.setLong(bytecode, frame,
+                    access.executeLong(arguments.read(bytecode, frame), arguments.state(bytecode, frame)));
+        }
+        public static PackageScalarAccess createAccess(BytecodePackageScalarArguments arguments) {
+            return new PackageScalarAccess(arguments.getCall());
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = BytecodePackageScalarArguments.class, name = "arguments")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class LinkedPackageScalarFloat {
+        @Specialization public static void call(VirtualFrame frame, BytecodePackageScalarArguments arguments,
+                LocalAccessor destination, @Bind("$node") Node node,
+                @Cached(value = "createAccess(arguments)", neverDefault = true) PackageScalarAccess access) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            destination.setFloat(bytecode, frame,
+                    access.executeFloat(arguments.read(bytecode, frame), arguments.state(bytecode, frame)));
+        }
+        public static PackageScalarAccess createAccess(BytecodePackageScalarArguments arguments) {
+            return new PackageScalarAccess(arguments.getCall());
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = BytecodePackageScalarArguments.class, name = "arguments")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class LinkedPackageScalarDouble {
+        @Specialization public static void call(VirtualFrame frame, BytecodePackageScalarArguments arguments,
+                LocalAccessor destination, @Bind("$node") Node node,
+                @Cached(value = "createAccess(arguments)", neverDefault = true) PackageScalarAccess access) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            destination.setDouble(bytecode, frame,
+                    access.executeDouble(arguments.read(bytecode, frame), arguments.state(bytecode, frame)));
+        }
+        public static PackageScalarAccess createAccess(BytecodePackageScalarArguments arguments) {
+            return new PackageScalarAccess(arguments.getCall());
         }
     }
 

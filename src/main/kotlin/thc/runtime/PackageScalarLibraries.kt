@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime
 
+import com.oracle.truffle.api.Assumption
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.TruffleSafepoint
@@ -16,19 +17,22 @@ import java.util.concurrent.FutureTask
 
 /** Component C globals and entrypoints live in one owning Truffle context. */
 internal class PackageScalarLibraries(private val env: TruffleLanguage.Env) {
-    private class Loaded(val link: PackageScalarLink, val task: FutureTask<Map<String, Any>>)
+    private class Loaded(val link: PackageScalarLink, val task: FutureTask<Map<String, PackageScalarFunction>>)
     private val libraries = HashMap<String, Loaded>()
+    private val alive = Assumption.create("THC package C libraries are open")
     private var closed = false
     private val interop = InteropLibrary.getUncached()
 
-    private fun current() {
-        if (Language.currentState().env !== env) fault("Package C library belongs to another context")
+    private fun current(): Language.State {
+        val owner = Language.currentState()
+        if (owner.env !== env) fault("Package C library belongs to another context")
         if (!env.isNativeAccessAllowed) fault("Package C bitcode requires native access")
+        return owner
     }
 
     @TruffleBoundary
     fun link(link: PackageScalarLink) {
-        current()
+        val owner = current()
         val selected = synchronized(this) {
             if (closed) fault("Package C library registry is closed")
             if (libraries.values.any { it.link.unit != link.unit && it.link.componentSha256 == link.componentSha256 })
@@ -43,7 +47,7 @@ internal class PackageScalarLibraries(private val env: TruffleLanguage.Env) {
                         fault("Missing package C entry: ${signature.entry}")
                     val function = interop.readMember(library, signature.entry)
                     if (!interop.isExecutable(function)) fault("Package C entry is not executable")
-                    signature.symbol to function
+                    signature.symbol to PackageScalarFunction(owner, signature, function, alive)
                 }
             }).also { libraries[link.unit] = it }
         }
@@ -52,29 +56,16 @@ internal class PackageScalarLibraries(private val env: TruffleLanguage.Env) {
         await(selected.task)
     }
 
-    private fun await(task: FutureTask<Map<String, Any>>): Map<String, Any> = try {
+    private fun await(task: FutureTask<Map<String, PackageScalarFunction>>): Map<String, PackageScalarFunction> = try {
         if (task.isDone) task.get()
         else TruffleSafepoint.setBlockedThreadInterruptibleFunction(null,
-            TruffleSafepoint.InterruptibleFunction<FutureTask<Map<String, Any>>, Map<String, Any>> { it.get() }, task)
+            TruffleSafepoint.InterruptibleFunction<FutureTask<Map<String, PackageScalarFunction>>, Map<String, PackageScalarFunction>> { it.get() }, task)
     } catch (failure: ExecutionException) { throw (failure.cause ?: failure) }
 
-    @TruffleBoundary(transferToInterpreterOnException = false)
-    fun call(link: PackageScalarLink, signature: PackageScalarSignature, values: Array<Any?>): Any {
+    /** Resolve only on a call site's first execution; no registry work spans the foreign call. */
+    @TruffleBoundary
+    fun resolve(link: PackageScalarLink, signature: PackageScalarSignature): PackageScalarFunction {
         current()
-        if (values.size != signature.arguments.size) fault("Package C argument count mismatch")
-        val arguments = Array<Any>(values.size) { index ->
-            when (signature.arguments[index]) {
-                "Int32Rep" -> {
-                    val value = values[index] as? Long ?: fault("Package C Int32 argument carrier")
-                    if (value != value.toInt().toLong()) fault("Package C Int32 argument is out of range")
-                    value.toInt()
-                }
-                "Int64Rep" -> values[index] as? Long ?: fault("Package C Int64 argument carrier")
-                "FloatRep" -> values[index] as? Float ?: fault("Package C Float argument carrier")
-                "DoubleRep" -> values[index] as? Double ?: fault("Package C Double argument carrier")
-                else -> fault("Unsupported package C argument representation")
-            }
-        }
         val selected = synchronized(this) {
             if (closed) fault("Package C library registry is closed")
             libraries[link.unit]?.also {
@@ -82,32 +73,12 @@ internal class PackageScalarLibraries(private val env: TruffleLanguage.Env) {
                     fault("Package C call differs from its registered component ABI")
             } ?: fault("Unlinked package C component: ${link.unit}")
         }
-        val function = await(selected.task).getValue(signature.symbol)
-        val threads = Language.currentState().threads
-        val previous = threads.enterForeign()
-        try {
-            val result = interop.execute(function, *arguments)
-            return when (signature.result) {
-                "Int32Rep" -> {
-                    if (!interop.fitsInInt(result)) fault("Package C result is not Int32")
-                    interop.asInt(result).toLong()
-                }
-                "Int64Rep" -> {
-                    if (!interop.fitsInLong(result)) fault("Package C result is not Int64")
-                    interop.asLong(result)
-                }
-                "FloatRep" -> {
-                    if (!interop.fitsInFloat(result)) fault("Package C result is not Float")
-                    interop.asFloat(result)
-                }
-                "DoubleRep" -> {
-                    if (!interop.fitsInDouble(result)) fault("Package C result is not Double")
-                    interop.asDouble(result)
-                }
-                else -> fault("Unsupported package C result representation")
-            }
-        } finally { threads.leaveForeign(previous) }
+        return await(selected.task).getValue(signature.symbol)
     }
 
-    @Synchronized fun close() { closed = true; libraries.clear() }
+    @Synchronized fun close() { closed = true; alive.invalidate(); libraries.clear() }
 }
+
+/** A context owns the callable and its lifetime; adopted interop nodes belong to call sites. */
+internal class PackageScalarFunction(val owner: Language.State, val signature: PackageScalarSignature,
+    val receiver: Any, val alive: Assumption)
