@@ -47,9 +47,10 @@ configured native compiler. LLVM acquisition is a sensible second compilation,
 not a requirement to reproduce the native object's exact bytes.
 
 Initial support is static, unsafe `ccall`/`capi`, scalar arguments, `Addr#`,
-`ByteArray#` and `MutableByteArray#`, and a scalar or void result. Pure source
+`ByteArray#` and `MutableByteArray#`, and a scalar, address or void result. Pure source
 imports and IO imports both retain GHC's actual State-token worker ABI. Pointer
-results, callbacks, safe/interruptible calls, additional foreign-file products,
+results retain the runtime's pointer ownership/lifetime boundary. Callbacks,
+safe/interruptible calls, additional foreign-file products,
 initializers/finalizers and extra native libraries remain outside this profile.
 Ordinary memory helpers supplied by Sulong/libc are allowed. C++ and assembly
 sources are not acquired by this initial C implementation.

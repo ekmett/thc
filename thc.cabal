@@ -38,6 +38,16 @@ extra-source-files:
   test/fixtures/run-scalar-cbits/app/Main.hs
   test/fixtures/run-scalar-cbits/cbits/scalar.c
   test/fixtures/run-scalar-cbits/cbits/scalar.h
+  test/fixtures/run-native-capi/cabal.project
+  test/fixtures/run-native-capi/README.md
+  test/fixtures/run-native-capi/run-native-capi.cabal
+  test/fixtures/run-native-capi/src/NativeLeft.hs
+  test/fixtures/run-native-capi/src/NativeRight.hs
+  test/fixtures/run-native-capi/include/left.h
+  test/fixtures/run-native-capi/include/right.h
+  test/fixtures/run-native-capi/cbits/first.c
+  test/fixtures/run-native-capi/cbits/second.c
+  test/fixtures/run-native-capi/app/Main.hs
   compiler/test-fixtures/OriginalStringRtsNative.hs
   compiler/test-fixtures/RtsShutdownNative.hs
   compiler/pinned-ghc-internal/cbits/strerror.c
