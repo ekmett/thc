@@ -4544,6 +4544,264 @@ class BytecodeProgram internal constructor(private val language: Language, modul
 
     // BEGIN GENERATED SIMD FAMILIES
     private fun generatedVectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+        "packInt8X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(32) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.emitGeneratedInt8X32Pack(BytecodeVectorLanes(lanes.map(LocalAccessor::constantOf).toTypedArray()))
+            b.endBlock()
+        }, GeneratedVectors.proofInt8X32)
+        "unpackInt8X32#" -> tupleExpression(GeneratedVectors.unpackedInt8X32) { e, destination ->
+            e.builder.beginGeneratedInt8X32Unpack(BytecodeVectorLanes(destination.map(LocalAccessor::constantOf).toTypedArray()))
+            operands[0].emit(e)
+            e.builder.endGeneratedInt8X32Unpack()
+        }
+        "broadcastInt8X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X32Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X32Broadcast()
+        }, GeneratedVectors.proofInt8X32)
+        "plusInt8X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X32Plus(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X32Plus()
+        }, GeneratedVectors.proofInt8X32)
+        "minusInt8X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X32Minus(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X32Minus()
+        }, GeneratedVectors.proofInt8X32)
+        "timesInt8X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X32Times(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X32Times()
+        }, GeneratedVectors.proofInt8X32)
+        "negateInt8X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X32Negate(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X32Negate()
+        }, GeneratedVectors.proofInt8X32)
+        "insertInt8X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X32Insert(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X32Insert()
+        }, GeneratedVectors.proofInt8X32)
+        "minInt8X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X32Min(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X32Min()
+        }, GeneratedVectors.proofInt8X32)
+        "maxInt8X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X32Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X32Max()
+        }, GeneratedVectors.proofInt8X32)
+        "packWord8X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(32) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.emitGeneratedWord8X32Pack(BytecodeVectorLanes(lanes.map(LocalAccessor::constantOf).toTypedArray()))
+            b.endBlock()
+        }, GeneratedVectors.proofWord8X32)
+        "unpackWord8X32#" -> tupleExpression(GeneratedVectors.unpackedWord8X32) { e, destination ->
+            e.builder.beginGeneratedWord8X32Unpack(BytecodeVectorLanes(destination.map(LocalAccessor::constantOf).toTypedArray()))
+            operands[0].emit(e)
+            e.builder.endGeneratedWord8X32Unpack()
+        }
+        "broadcastWord8X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord8X32Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X32Broadcast()
+        }, GeneratedVectors.proofWord8X32)
+        "plusWord8X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord8X32Plus(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X32Plus()
+        }, GeneratedVectors.proofWord8X32)
+        "minusWord8X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord8X32Minus(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X32Minus()
+        }, GeneratedVectors.proofWord8X32)
+        "timesWord8X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord8X32Times(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X32Times()
+        }, GeneratedVectors.proofWord8X32)
+        "insertWord8X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord8X32Insert(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X32Insert()
+        }, GeneratedVectors.proofWord8X32)
+        "minWord8X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord8X32Min(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X32Min()
+        }, GeneratedVectors.proofWord8X32)
+        "maxWord8X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord8X32Max(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X32Max()
+        }, GeneratedVectors.proofWord8X32)
+        "packInt8X64#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(64) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.emitGeneratedInt8X64Pack(BytecodeVectorLanes(lanes.map(LocalAccessor::constantOf).toTypedArray()))
+            b.endBlock()
+        }, GeneratedVectors.proofInt8X64)
+        "unpackInt8X64#" -> tupleExpression(GeneratedVectors.unpackedInt8X64) { e, destination ->
+            e.builder.beginGeneratedInt8X64Unpack(BytecodeVectorLanes(destination.map(LocalAccessor::constantOf).toTypedArray()))
+            operands[0].emit(e)
+            e.builder.endGeneratedInt8X64Unpack()
+        }
+        "broadcastInt8X64#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X64Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X64Broadcast()
+        }, GeneratedVectors.proofInt8X64)
+        "plusInt8X64#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X64Plus(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X64Plus()
+        }, GeneratedVectors.proofInt8X64)
+        "minusInt8X64#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X64Minus(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X64Minus()
+        }, GeneratedVectors.proofInt8X64)
+        "timesInt8X64#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X64Times(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X64Times()
+        }, GeneratedVectors.proofInt8X64)
+        "negateInt8X64#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X64Negate(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X64Negate()
+        }, GeneratedVectors.proofInt8X64)
+        "insertInt8X64#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X64Insert(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X64Insert()
+        }, GeneratedVectors.proofInt8X64)
+        "minInt8X64#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X64Min(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X64Min()
+        }, GeneratedVectors.proofInt8X64)
+        "maxInt8X64#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt8X64Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt8X64Max()
+        }, GeneratedVectors.proofInt8X64)
+        "packWord8X64#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(64) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.emitGeneratedWord8X64Pack(BytecodeVectorLanes(lanes.map(LocalAccessor::constantOf).toTypedArray()))
+            b.endBlock()
+        }, GeneratedVectors.proofWord8X64)
+        "unpackWord8X64#" -> tupleExpression(GeneratedVectors.unpackedWord8X64) { e, destination ->
+            e.builder.beginGeneratedWord8X64Unpack(BytecodeVectorLanes(destination.map(LocalAccessor::constantOf).toTypedArray()))
+            operands[0].emit(e)
+            e.builder.endGeneratedWord8X64Unpack()
+        }
+        "broadcastWord8X64#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord8X64Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X64Broadcast()
+        }, GeneratedVectors.proofWord8X64)
+        "plusWord8X64#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord8X64Plus(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X64Plus()
+        }, GeneratedVectors.proofWord8X64)
+        "minusWord8X64#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord8X64Minus(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X64Minus()
+        }, GeneratedVectors.proofWord8X64)
+        "timesWord8X64#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord8X64Times(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X64Times()
+        }, GeneratedVectors.proofWord8X64)
+        "insertWord8X64#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord8X64Insert(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X64Insert()
+        }, GeneratedVectors.proofWord8X64)
+        "minWord8X64#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord8X64Min(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X64Min()
+        }, GeneratedVectors.proofWord8X64)
+        "maxWord8X64#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord8X64Max(); operands.forEach { it.emit(e) }; b.endGeneratedWord8X64Max()
+        }, GeneratedVectors.proofWord8X64)
+        "packInt16X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(32) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.emitGeneratedInt16X32Pack(BytecodeVectorLanes(lanes.map(LocalAccessor::constantOf).toTypedArray()))
+            b.endBlock()
+        }, GeneratedVectors.proofInt16X32)
+        "unpackInt16X32#" -> tupleExpression(GeneratedVectors.unpackedInt16X32) { e, destination ->
+            e.builder.beginGeneratedInt16X32Unpack(BytecodeVectorLanes(destination.map(LocalAccessor::constantOf).toTypedArray()))
+            operands[0].emit(e)
+            e.builder.endGeneratedInt16X32Unpack()
+        }
+        "broadcastInt16X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X32Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X32Broadcast()
+        }, GeneratedVectors.proofInt16X32)
+        "plusInt16X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X32Plus(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X32Plus()
+        }, GeneratedVectors.proofInt16X32)
+        "minusInt16X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X32Minus(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X32Minus()
+        }, GeneratedVectors.proofInt16X32)
+        "timesInt16X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X32Times(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X32Times()
+        }, GeneratedVectors.proofInt16X32)
+        "negateInt16X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X32Negate(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X32Negate()
+        }, GeneratedVectors.proofInt16X32)
+        "insertInt16X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X32Insert(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X32Insert()
+        }, GeneratedVectors.proofInt16X32)
+        "minInt16X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X32Min(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X32Min()
+        }, GeneratedVectors.proofInt16X32)
+        "maxInt16X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt16X32Max(); operands.forEach { it.emit(e) }; b.endGeneratedInt16X32Max()
+        }, GeneratedVectors.proofInt16X32)
+        "packWord16X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(32) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.emitGeneratedWord16X32Pack(BytecodeVectorLanes(lanes.map(LocalAccessor::constantOf).toTypedArray()))
+            b.endBlock()
+        }, GeneratedVectors.proofWord16X32)
+        "unpackWord16X32#" -> tupleExpression(GeneratedVectors.unpackedWord16X32) { e, destination ->
+            e.builder.beginGeneratedWord16X32Unpack(BytecodeVectorLanes(destination.map(LocalAccessor::constantOf).toTypedArray()))
+            operands[0].emit(e)
+            e.builder.endGeneratedWord16X32Unpack()
+        }
+        "broadcastWord16X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X32Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X32Broadcast()
+        }, GeneratedVectors.proofWord16X32)
+        "plusWord16X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X32Plus(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X32Plus()
+        }, GeneratedVectors.proofWord16X32)
+        "minusWord16X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X32Minus(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X32Minus()
+        }, GeneratedVectors.proofWord16X32)
+        "timesWord16X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X32Times(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X32Times()
+        }, GeneratedVectors.proofWord16X32)
+        "insertWord16X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X32Insert(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X32Insert()
+        }, GeneratedVectors.proofWord16X32)
+        "minWord16X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X32Min(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X32Min()
+        }, GeneratedVectors.proofWord16X32)
+        "maxWord16X32#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord16X32Max(); operands.forEach { it.emit(e) }; b.endGeneratedWord16X32Max()
+        }, GeneratedVectors.proofWord16X32)
         "packWord64X2#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()

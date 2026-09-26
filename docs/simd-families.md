@@ -14,10 +14,19 @@ local pack, unpack, broadcast and arithmetic for Word64X2, Word32X8, Int32X8 and
 plus Int64X2 multiplication, FloatX4/DoubleX2 negation and division, and
 FloatX8/DoubleX4 pack, unpack, broadcast, add, subtract, multiply, negate and divide. Existing
 carrier class names and memory operations were unchanged. Current transport
-supports 24 exact `VecRep` shapes through arguments/results, PAP prefixes, joins,
+supports 30 exact `VecRep` shapes through arguments/results, PAP prefixes, joins,
 tuple fields, owned closure/thunk captures and boxed constructor fields.
 Recursive or lifted vector let bindings, sum fields and public host vector
 arguments/results remain outside that contract.
+
+The six wide byte/short shapes (`Int8X32`, `Word8X32`, `Int8X64`, `Word8X64`,
+`Int16X32`, `Word16X32`) add 57 pack, unpack, broadcast, arithmetic, insertion
+and extrema operations. The existing native scalar smoke now observes all 64
+possible lanes, using separate selector fields for the operation, insertion
+lane and observed lane.
+Wide pack/unpack instructions group their immutable local-slot metadata into
+one bytecode operand; lane values still use typed primitive reads/writes. This
+avoids exceeding the JVM method-size limit in generated instruction metadata.
 
 The current generator emits typed AST nodes and exact proof checks under
 `build/generated/simd`. It emits no nominal vector carrier classes or arithmetic

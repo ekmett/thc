@@ -6,12 +6,12 @@ GHC 9.14.1 exposes **1491 primops** on the pinned 64-bit target. This list is
 generated from `allThePrimOps`, the [runtime capabilities](../scripts/core-capabilities.json)
 and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signatures.json).
 
-**Implementation coverage: 1011 / 1491 (67.8%).**
+**Implementation coverage: 1068 / 1491 (71.6%).**
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Implemented | 1011 | A runtime implementation is registered in the capability inventory. |
-| Missing | 480 | No runtime implementation is registered. |
+| Implemented | 1068 | A runtime implementation is registered in the capability inventory. |
+| Missing | 423 | No runtime implementation is registered. |
 
 Implemented means translating the GHC operation to a sensible runtime implementation and
 checking it with ordinary tests. It does not require formal proof or exhaustive input testing.
@@ -76,7 +76,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - StablePtr# uses context-owned opaque AddrRep handles, with lazy referents and exact hs_free_stable_ptr. The two original RTS shared-CAF getOrSet calls atomically retain their first live handle per context until disposal; null queries leave empty slots unchanged. Live identity casts may be compared, but the handles have no byte storage, pointer arithmetic or ordering. Aligned StablePtr array/address index/read/write operations retain opaque handles in allocation-owned pointer cells; raw ByteArray storage, numeric projections and native pointer-cell access remain rejected. A stored handle does not extend its registry lifetime: dereference/equality still reject foreign or released handles.
 - Weak# support is PARTIAL: context-owned registrations retain lazy keys, values and Haskell actions until explicit finalizeWeak# or context close. Exact source-certified USE_LIBDW=0 C labels can register one-argument callbacks; explicit finalization makes the weak dead before invoking them through Sulong outside the registry lock, then returns the real Haskell action without invoking it. Close discards outstanding callbacks. Original rts_setMainThread stores the Weak# key capability, not its boxed value or a permanent Java thread ID. The separate launcher-only SIGINT bridge does not enable other signal handlers. Automatic GC/ephemeron reclamation and arbitrary C function/data labels remain unsupported.
 - Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Local joins may read an enclosing tuple's existing typed frame slots; ordinary function captures, heap fields and ordinary let bindings remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums and unresolved leaves cannot appear in tuple inputs; exact vector leaves retain atomic VecRep identity and occupy one raw fixed-species vector reference each; exact evaluated AddrRep leaves use managed address references.
-- SIMD guest transport admits only the 24 exact vectorRepresentations through arguments, results, PAP prefixes, tail transfers, local calls, join arguments/results, same-frame join captures, unboxed tuple fields, nonrecursive unlifted let bindings, owned closure/thunk captures and boxed constructor fields. Exact VecRep identity remains distinct from equal-width tuples and other vector shapes. Recursive or lifted vector let bindings, sum fields and public host vector arguments/results remain unsupported. Transport does not expand the existing SIMD operation families.
+- SIMD guest transport admits the 30 exact vectorRepresentations through arguments, results, PAP prefixes, tail transfers, local calls, join arguments/results, same-frame join captures, unboxed tuple fields, nonrecursive unlifted let bindings, owned closure/thunk captures and boxed constructor fields. Exact VecRep identity remains distinct from equal-width tuples and other vector shapes. Recursive or lifted vector let bindings, sum fields and public host vector arguments/results remain unsupported. Transport does not expand the existing SIMD operation families.
 - Binary unboxed sum results and immediate cases support exact machine Int/Word, Float, Double, known reference, void and tuple payloads. Nested sums, width-changing payload casts, vector/address or unknown leaves, sum inputs/captures/heap fields/local lets/joins/host results remain unsupported.
 
 ## Implemented primops
@@ -151,6 +151,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `broadcastFloatX4#` — arity 1 — Specialized lowering
 - [x] `broadcastFloatX8#` — arity 1 — Specialized lowering
 - [x] `broadcastInt16X16#` — arity 1 — Specialized lowering
+- [x] `broadcastInt16X32#` — arity 1 — Specialized lowering
 - [x] `broadcastInt16X8#` — arity 1 — Specialized lowering
 - [x] `broadcastInt32X16#` — arity 1 — Specialized lowering
 - [x] `broadcastInt32X4#` — arity 1 — Specialized lowering
@@ -159,7 +160,10 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `broadcastInt64X4#` — arity 1 — Specialized lowering
 - [x] `broadcastInt64X8#` — arity 1 — Specialized lowering
 - [x] `broadcastInt8X16#` — arity 1 — Specialized lowering
+- [x] `broadcastInt8X32#` — arity 1 — Specialized lowering
+- [x] `broadcastInt8X64#` — arity 1 — Specialized lowering
 - [x] `broadcastWord16X16#` — arity 1 — Specialized lowering
+- [x] `broadcastWord16X32#` — arity 1 — Specialized lowering
 - [x] `broadcastWord16X8#` — arity 1 — Specialized lowering
 - [x] `broadcastWord32X16#` — arity 1 — Specialized lowering
 - [x] `broadcastWord32X4#` — arity 1 — Specialized lowering
@@ -168,6 +172,8 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `broadcastWord64X4#` — arity 1 — Specialized lowering
 - [x] `broadcastWord64X8#` — arity 1 — Specialized lowering
 - [x] `broadcastWord8X16#` — arity 1 — Specialized lowering
+- [x] `broadcastWord8X32#` — arity 1 — Specialized lowering
+- [x] `broadcastWord8X64#` — arity 1 — Specialized lowering
 - [x] `byteArrayContents#` — arity 1 — Pointer or pinned-memory operation
 - [x] `byteSwap#` — arity 1 — Numeric scalar signature
 - [x] `byteSwap16#` — arity 1 — Numeric scalar signature
@@ -421,6 +427,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `insertFloatX4#` — arity 3 — Specialized lowering
 - [x] `insertFloatX8#` — arity 3 — Specialized lowering
 - [x] `insertInt16X16#` — arity 3 — Specialized lowering
+- [x] `insertInt16X32#` — arity 3 — Specialized lowering
 - [x] `insertInt16X8#` — arity 3 — Specialized lowering
 - [x] `insertInt32X16#` — arity 3 — Specialized lowering
 - [x] `insertInt32X4#` — arity 3 — Specialized lowering
@@ -429,7 +436,10 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `insertInt64X4#` — arity 3 — Specialized lowering
 - [x] `insertInt64X8#` — arity 3 — Specialized lowering
 - [x] `insertInt8X16#` — arity 3 — Specialized lowering
+- [x] `insertInt8X32#` — arity 3 — Specialized lowering
+- [x] `insertInt8X64#` — arity 3 — Specialized lowering
 - [x] `insertWord16X16#` — arity 3 — Specialized lowering
+- [x] `insertWord16X32#` — arity 3 — Specialized lowering
 - [x] `insertWord16X8#` — arity 3 — Specialized lowering
 - [x] `insertWord32X16#` — arity 3 — Specialized lowering
 - [x] `insertWord32X4#` — arity 3 — Specialized lowering
@@ -438,6 +448,8 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `insertWord64X4#` — arity 3 — Specialized lowering
 - [x] `insertWord64X8#` — arity 3 — Specialized lowering
 - [x] `insertWord8X16#` — arity 3 — Specialized lowering
+- [x] `insertWord8X32#` — arity 3 — Specialized lowering
+- [x] `insertWord8X64#` — arity 3 — Specialized lowering
 - [x] `int16ToInt#` — arity 1 — Numeric scalar signature
 - [x] `int16ToWord16#` — arity 1 — Numeric scalar signature
 - [x] `int2Addr#` — arity 1 — Pointer scalar signature
@@ -500,6 +512,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `maxFloatX4#` — arity 2 — Specialized lowering
 - [x] `maxFloatX8#` — arity 2 — Specialized lowering
 - [x] `maxInt16X16#` — arity 2 — Specialized lowering
+- [x] `maxInt16X32#` — arity 2 — Specialized lowering
 - [x] `maxInt16X8#` — arity 2 — Specialized lowering
 - [x] `maxInt32X16#` — arity 2 — Specialized lowering
 - [x] `maxInt32X4#` — arity 2 — Specialized lowering
@@ -508,7 +521,10 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `maxInt64X4#` — arity 2 — Specialized lowering
 - [x] `maxInt64X8#` — arity 2 — Specialized lowering
 - [x] `maxInt8X16#` — arity 2 — Specialized lowering
+- [x] `maxInt8X32#` — arity 2 — Specialized lowering
+- [x] `maxInt8X64#` — arity 2 — Specialized lowering
 - [x] `maxWord16X16#` — arity 2 — Specialized lowering
+- [x] `maxWord16X32#` — arity 2 — Specialized lowering
 - [x] `maxWord16X8#` — arity 2 — Specialized lowering
 - [x] `maxWord32X16#` — arity 2 — Specialized lowering
 - [x] `maxWord32X4#` — arity 2 — Specialized lowering
@@ -517,6 +533,8 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `maxWord64X4#` — arity 2 — Specialized lowering
 - [x] `maxWord64X8#` — arity 2 — Specialized lowering
 - [x] `maxWord8X16#` — arity 2 — Specialized lowering
+- [x] `maxWord8X32#` — arity 2 — Specialized lowering
+- [x] `maxWord8X64#` — arity 2 — Specialized lowering
 - [x] `minDouble#` — arity 2 — Numeric scalar signature
 - [x] `minDoubleX2#` — arity 2 — Specialized lowering
 - [x] `minDoubleX4#` — arity 2 — Specialized lowering
@@ -526,6 +544,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `minFloatX4#` — arity 2 — Specialized lowering
 - [x] `minFloatX8#` — arity 2 — Specialized lowering
 - [x] `minInt16X16#` — arity 2 — Specialized lowering
+- [x] `minInt16X32#` — arity 2 — Specialized lowering
 - [x] `minInt16X8#` — arity 2 — Specialized lowering
 - [x] `minInt32X16#` — arity 2 — Specialized lowering
 - [x] `minInt32X4#` — arity 2 — Specialized lowering
@@ -534,7 +553,10 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `minInt64X4#` — arity 2 — Specialized lowering
 - [x] `minInt64X8#` — arity 2 — Specialized lowering
 - [x] `minInt8X16#` — arity 2 — Specialized lowering
+- [x] `minInt8X32#` — arity 2 — Specialized lowering
+- [x] `minInt8X64#` — arity 2 — Specialized lowering
 - [x] `minWord16X16#` — arity 2 — Specialized lowering
+- [x] `minWord16X32#` — arity 2 — Specialized lowering
 - [x] `minWord16X8#` — arity 2 — Specialized lowering
 - [x] `minWord32X16#` — arity 2 — Specialized lowering
 - [x] `minWord32X4#` — arity 2 — Specialized lowering
@@ -543,6 +565,8 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `minWord64X4#` — arity 2 — Specialized lowering
 - [x] `minWord64X8#` — arity 2 — Specialized lowering
 - [x] `minWord8X16#` — arity 2 — Specialized lowering
+- [x] `minWord8X32#` — arity 2 — Specialized lowering
+- [x] `minWord8X64#` — arity 2 — Specialized lowering
 - [x] `minusDoubleX2#` — arity 2 — Specialized lowering
 - [x] `minusDoubleX4#` — arity 2 — Specialized lowering
 - [x] `minusDoubleX8#` — arity 2 — Specialized lowering
@@ -551,6 +575,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `minusFloatX4#` — arity 2 — Specialized lowering
 - [x] `minusFloatX8#` — arity 2 — Specialized lowering
 - [x] `minusInt16X16#` — arity 2 — Specialized lowering
+- [x] `minusInt16X32#` — arity 2 — Specialized lowering
 - [x] `minusInt16X8#` — arity 2 — Specialized lowering
 - [x] `minusInt32X16#` — arity 2 — Specialized lowering
 - [x] `minusInt32X4#` — arity 2 — Specialized lowering
@@ -559,8 +584,11 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `minusInt64X4#` — arity 2 — Specialized lowering
 - [x] `minusInt64X8#` — arity 2 — Specialized lowering
 - [x] `minusInt8X16#` — arity 2 — Specialized lowering
+- [x] `minusInt8X32#` — arity 2 — Specialized lowering
+- [x] `minusInt8X64#` — arity 2 — Specialized lowering
 - [x] `minusWord#` — arity 2 — Numeric scalar signature
 - [x] `minusWord16X16#` — arity 2 — Specialized lowering
+- [x] `minusWord16X32#` — arity 2 — Specialized lowering
 - [x] `minusWord16X8#` — arity 2 — Specialized lowering
 - [x] `minusWord32X16#` — arity 2 — Specialized lowering
 - [x] `minusWord32X4#` — arity 2 — Specialized lowering
@@ -569,6 +597,8 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `minusWord64X4#` — arity 2 — Specialized lowering
 - [x] `minusWord64X8#` — arity 2 — Specialized lowering
 - [x] `minusWord8X16#` — arity 2 — Specialized lowering
+- [x] `minusWord8X32#` — arity 2 — Specialized lowering
+- [x] `minusWord8X64#` — arity 2 — Specialized lowering
 - [x] `mkWeak#` — arity 4 — Weak-pointer operation
 - [x] `mkWeakNoFinalizer#` — arity 3 — Weak-pointer operation
 - [x] `mulIntMayOflo#` — arity 2 — Numeric scalar signature
@@ -603,6 +633,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `negateInt#` — arity 1 — Numeric scalar signature
 - [x] `negateInt16#` — arity 1 — Numeric scalar signature
 - [x] `negateInt16X16#` — arity 1 — Specialized lowering
+- [x] `negateInt16X32#` — arity 1 — Specialized lowering
 - [x] `negateInt16X8#` — arity 1 — Specialized lowering
 - [x] `negateInt32#` — arity 1 — Numeric scalar signature
 - [x] `negateInt32X16#` — arity 1 — Specialized lowering
@@ -614,6 +645,8 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `negateInt64X8#` — arity 1 — Specialized lowering
 - [x] `negateInt8#` — arity 1 — Numeric scalar signature
 - [x] `negateInt8X16#` — arity 1 — Specialized lowering
+- [x] `negateInt8X32#` — arity 1 — Specialized lowering
+- [x] `negateInt8X64#` — arity 1 — Specialized lowering
 - [x] `newAlignedPinnedByteArray#` — arity 3 — Pointer or pinned-memory operation
 - [x] `newArray#` — arity 3 — Boxed-array operation
 - [x] `newByteArray#` — arity 2 — Byte-array operation
@@ -643,6 +676,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `packFloatX4#` — arity 1 — Specialized lowering
 - [x] `packFloatX8#` — arity 1 — Specialized lowering
 - [x] `packInt16X16#` — arity 1 — Specialized lowering
+- [x] `packInt16X32#` — arity 1 — Specialized lowering
 - [x] `packInt16X8#` — arity 1 — Specialized lowering
 - [x] `packInt32X16#` — arity 1 — Specialized lowering
 - [x] `packInt32X4#` — arity 1 — Specialized lowering
@@ -651,7 +685,10 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `packInt64X4#` — arity 1 — Specialized lowering
 - [x] `packInt64X8#` — arity 1 — Specialized lowering
 - [x] `packInt8X16#` — arity 1 — Specialized lowering
+- [x] `packInt8X32#` — arity 1 — Specialized lowering
+- [x] `packInt8X64#` — arity 1 — Specialized lowering
 - [x] `packWord16X16#` — arity 1 — Specialized lowering
+- [x] `packWord16X32#` — arity 1 — Specialized lowering
 - [x] `packWord16X8#` — arity 1 — Specialized lowering
 - [x] `packWord32X16#` — arity 1 — Specialized lowering
 - [x] `packWord32X4#` — arity 1 — Specialized lowering
@@ -660,6 +697,8 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `packWord64X4#` — arity 1 — Specialized lowering
 - [x] `packWord64X8#` — arity 1 — Specialized lowering
 - [x] `packWord8X16#` — arity 1 — Specialized lowering
+- [x] `packWord8X32#` — arity 1 — Specialized lowering
+- [x] `packWord8X64#` — arity 1 — Specialized lowering
 - [x] `pdep#` — arity 2 — Numeric scalar signature
 - [x] `pdep16#` — arity 2 — Numeric scalar signature
 - [x] `pdep32#` — arity 2 — Numeric scalar signature
@@ -680,6 +719,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `plusFloatX8#` — arity 2 — Specialized lowering
 - [x] `plusInt16#` — arity 2 — Numeric scalar signature
 - [x] `plusInt16X16#` — arity 2 — Specialized lowering
+- [x] `plusInt16X32#` — arity 2 — Specialized lowering
 - [x] `plusInt16X8#` — arity 2 — Specialized lowering
 - [x] `plusInt32#` — arity 2 — Numeric scalar signature
 - [x] `plusInt32X16#` — arity 2 — Specialized lowering
@@ -691,9 +731,12 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `plusInt64X8#` — arity 2 — Specialized lowering
 - [x] `plusInt8#` — arity 2 — Numeric scalar signature
 - [x] `plusInt8X16#` — arity 2 — Specialized lowering
+- [x] `plusInt8X32#` — arity 2 — Specialized lowering
+- [x] `plusInt8X64#` — arity 2 — Specialized lowering
 - [x] `plusWord#` — arity 2 — Numeric scalar signature
 - [x] `plusWord16#` — arity 2 — Numeric scalar signature
 - [x] `plusWord16X16#` — arity 2 — Specialized lowering
+- [x] `plusWord16X32#` — arity 2 — Specialized lowering
 - [x] `plusWord16X8#` — arity 2 — Specialized lowering
 - [x] `plusWord2#` — arity 2 — Scalar tuple result
 - [x] `plusWord32#` — arity 2 — Numeric scalar signature
@@ -706,6 +749,8 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `plusWord64X8#` — arity 2 — Specialized lowering
 - [x] `plusWord8#` — arity 2 — Numeric scalar signature
 - [x] `plusWord8X16#` — arity 2 — Specialized lowering
+- [x] `plusWord8X32#` — arity 2 — Specialized lowering
+- [x] `plusWord8X64#` — arity 2 — Specialized lowering
 - [x] `popCnt#` — arity 1 — Numeric scalar signature
 - [x] `popCnt16#` — arity 1 — Numeric scalar signature
 - [x] `popCnt32#` — arity 1 — Numeric scalar signature
@@ -895,6 +940,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `timesFloatX8#` — arity 2 — Specialized lowering
 - [x] `timesInt16#` — arity 2 — Numeric scalar signature
 - [x] `timesInt16X16#` — arity 2 — Specialized lowering
+- [x] `timesInt16X32#` — arity 2 — Specialized lowering
 - [x] `timesInt16X8#` — arity 2 — Specialized lowering
 - [x] `timesInt2#` — arity 2 — Scalar tuple result
 - [x] `timesInt32#` — arity 2 — Numeric scalar signature
@@ -907,9 +953,12 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `timesInt64X8#` — arity 2 — Specialized lowering
 - [x] `timesInt8#` — arity 2 — Numeric scalar signature
 - [x] `timesInt8X16#` — arity 2 — Specialized lowering
+- [x] `timesInt8X32#` — arity 2 — Specialized lowering
+- [x] `timesInt8X64#` — arity 2 — Specialized lowering
 - [x] `timesWord#` — arity 2 — Numeric scalar signature
 - [x] `timesWord16#` — arity 2 — Numeric scalar signature
 - [x] `timesWord16X16#` — arity 2 — Specialized lowering
+- [x] `timesWord16X32#` — arity 2 — Specialized lowering
 - [x] `timesWord16X8#` — arity 2 — Specialized lowering
 - [x] `timesWord2#` — arity 2 — Scalar tuple result
 - [x] `timesWord32#` — arity 2 — Numeric scalar signature
@@ -922,6 +971,8 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `timesWord64X8#` — arity 2 — Specialized lowering
 - [x] `timesWord8#` — arity 2 — Numeric scalar signature
 - [x] `timesWord8X16#` — arity 2 — Specialized lowering
+- [x] `timesWord8X32#` — arity 2 — Specialized lowering
+- [x] `timesWord8X64#` — arity 2 — Specialized lowering
 - [x] `touch#` — arity 2 — Specialized lowering
 - [x] `traceBinaryEvent#` — arity 3 — Specialized lowering
 - [x] `traceEvent#` — arity 2 — Specialized lowering
@@ -962,6 +1013,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `unpackFloatX4#` — arity 1 — Specialized lowering
 - [x] `unpackFloatX8#` — arity 1 — Specialized lowering
 - [x] `unpackInt16X16#` — arity 1 — Specialized lowering
+- [x] `unpackInt16X32#` — arity 1 — Specialized lowering
 - [x] `unpackInt16X8#` — arity 1 — Specialized lowering
 - [x] `unpackInt32X16#` — arity 1 — Specialized lowering
 - [x] `unpackInt32X4#` — arity 1 — Specialized lowering
@@ -970,7 +1022,10 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `unpackInt64X4#` — arity 1 — Specialized lowering
 - [x] `unpackInt64X8#` — arity 1 — Specialized lowering
 - [x] `unpackInt8X16#` — arity 1 — Specialized lowering
+- [x] `unpackInt8X32#` — arity 1 — Specialized lowering
+- [x] `unpackInt8X64#` — arity 1 — Specialized lowering
 - [x] `unpackWord16X16#` — arity 1 — Specialized lowering
+- [x] `unpackWord16X32#` — arity 1 — Specialized lowering
 - [x] `unpackWord16X8#` — arity 1 — Specialized lowering
 - [x] `unpackWord32X16#` — arity 1 — Specialized lowering
 - [x] `unpackWord32X4#` — arity 1 — Specialized lowering
@@ -979,6 +1034,8 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `unpackWord64X4#` — arity 1 — Specialized lowering
 - [x] `unpackWord64X8#` — arity 1 — Specialized lowering
 - [x] `unpackWord8X16#` — arity 1 — Specialized lowering
+- [x] `unpackWord8X32#` — arity 1 — Specialized lowering
+- [x] `unpackWord8X64#` — arity 1 — Specialized lowering
 - [x] `unsafeFreezeArray#` — arity 2 — Boxed-array operation
 - [x] `unsafeFreezeByteArray#` — arity 2 — Byte-array operation
 - [x] `unsafeFreezeSmallArray#` — arity 2 — Boxed-array operation
@@ -1101,12 +1158,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `addrToAny#` — arity 1
 - [ ] `annotateStack#` — arity 3
 - [ ] `anyToAddr#` — arity 2
-- [ ] `broadcastInt16X32#` — arity 1
-- [ ] `broadcastInt8X32#` — arity 1
-- [ ] `broadcastInt8X64#` — arity 1
-- [ ] `broadcastWord16X32#` — arity 1
-- [ ] `broadcastWord8X32#` — arity 1
-- [ ] `broadcastWord8X64#` — arity 1
 - [ ] `clearCCS#` — arity 2
 - [ ] `closureSize#` — arity 1
 - [ ] `compactAdd#` — arity 3
@@ -1227,56 +1278,17 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `indexWord8X32OffAddr#` — arity 2
 - [ ] `indexWord8X64Array#` — arity 2
 - [ ] `indexWord8X64OffAddr#` — arity 2
-- [ ] `insertInt16X32#` — arity 3
-- [ ] `insertInt8X32#` — arity 3
-- [ ] `insertInt8X64#` — arity 3
-- [ ] `insertWord16X32#` — arity 3
-- [ ] `insertWord8X32#` — arity 3
-- [ ] `insertWord8X64#` — arity 3
 - [ ] `isByteArrayPinned#` — arity 1
 - [ ] `isByteArrayWeaklyPinned#` — arity 1
 - [ ] `isMutableByteArrayPinned#` — arity 1
 - [ ] `isMutableByteArrayWeaklyPinned#` — arity 1
 - [ ] `makeStableName#` — arity 2
-- [ ] `maxInt16X32#` — arity 2
-- [ ] `maxInt8X32#` — arity 2
-- [ ] `maxInt8X64#` — arity 2
-- [ ] `maxWord16X32#` — arity 2
-- [ ] `maxWord8X32#` — arity 2
-- [ ] `maxWord8X64#` — arity 2
-- [ ] `minInt16X32#` — arity 2
-- [ ] `minInt8X32#` — arity 2
-- [ ] `minInt8X64#` — arity 2
-- [ ] `minWord16X32#` — arity 2
-- [ ] `minWord8X32#` — arity 2
-- [ ] `minWord8X64#` — arity 2
 - [ ] `minusAddr#` — arity 2
-- [ ] `minusInt16X32#` — arity 2
-- [ ] `minusInt8X32#` — arity 2
-- [ ] `minusInt8X64#` — arity 2
-- [ ] `minusWord16X32#` — arity 2
-- [ ] `minusWord8X32#` — arity 2
-- [ ] `minusWord8X64#` — arity 2
 - [ ] `mkApUpd0#` — arity 1
-- [ ] `negateInt16X32#` — arity 1
-- [ ] `negateInt8X32#` — arity 1
-- [ ] `negateInt8X64#` — arity 1
 - [ ] `newBCO#` — arity 6
 - [ ] `newPromptTag#` — arity 1
 - [ ] `numSparks#` — arity 1
-- [ ] `packInt16X32#` — arity 1
-- [ ] `packInt8X32#` — arity 1
-- [ ] `packInt8X64#` — arity 1
-- [ ] `packWord16X32#` — arity 1
-- [ ] `packWord8X32#` — arity 1
-- [ ] `packWord8X64#` — arity 1
 - [ ] `par#` — arity 1
-- [ ] `plusInt16X32#` — arity 2
-- [ ] `plusInt8X32#` — arity 2
-- [ ] `plusInt8X64#` — arity 2
-- [ ] `plusWord16X32#` — arity 2
-- [ ] `plusWord8X32#` — arity 2
-- [ ] `plusWord8X64#` — arity 2
 - [ ] `prompt#` — arity 3
 - [ ] `quotInt16X16#` — arity 2
 - [ ] `quotInt16X32#` — arity 2
@@ -1463,19 +1475,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `shuffleWord8X64#` — arity 3
 - [ ] `spark#` — arity 2
 - [ ] `stableNameToInt#` — arity 1
-- [ ] `timesInt16X32#` — arity 2
-- [ ] `timesInt8X32#` — arity 2
-- [ ] `timesInt8X64#` — arity 2
-- [ ] `timesWord16X32#` — arity 2
-- [ ] `timesWord8X32#` — arity 2
-- [ ] `timesWord8X64#` — arity 2
 - [ ] `unpackClosure#` — arity 1
-- [ ] `unpackInt16X32#` — arity 1
-- [ ] `unpackInt8X32#` — arity 1
-- [ ] `unpackInt8X64#` — arity 1
-- [ ] `unpackWord16X32#` — arity 1
-- [ ] `unpackWord8X32#` — arity 1
-- [ ] `unpackWord8X64#` — arity 1
 - [ ] `unsafeThawByteArray#` — arity 2
 - [ ] `whereFrom#` — arity 3
 - [ ] `writeDoubleArrayAsDoubleX4#` — arity 4

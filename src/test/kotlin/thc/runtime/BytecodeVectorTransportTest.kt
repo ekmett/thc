@@ -42,7 +42,7 @@ class BytecodeVectorTransportTest {
         val table = Json.parse(File(System.getProperty("thc.projectRoot"), "scripts/simd-families.json").readText()) as Map<String, Any?>
         return (table["families"] as List<Map<String, Any?>>).map {
             Family(it["name"] as String, it["element"] as String, (it["lanes"] as Number).toInt())
-        }.also { assertEquals(24, it.size) }
+        }.also { assertEquals(30, it.size) }
     }
     private fun variable(id: String, proof: VectorRep = integer): VectorCore = listOf("var", id, mapOf("rep" to proof))
     private fun number(value: Long): VectorCore = listOf("lit", "int", value.toString(), mapOf("rep" to integer))
