@@ -20,7 +20,8 @@ import System.Exit (die)
 import System.FilePath
 
 families :: [(String, Int, Int)]
-families = [("int16",16,2),("word16",16,2),("int32",8,4),("word32",8,4),("int32",16,4),("word32",16,4),("int64",4,8),("word64",4,8),("int64",8,8),("word64",8,8),("float",8,4),("float",16,4),("double",4,8),("double",8,8) ]
+families = [("int8",32,1),("word8",32,1),("int8",64,1),("word8",64,1),("int16",32,2),("word16",32,2),
+  ("int16",16,2),("word16",16,2),("int32",8,4),("word32",8,4),("int32",16,4),("word32",16,4),("int64",4,8),("word64",4,8),("int64",8,8),("word64",8,8),("float",8,4),("float",16,4),("double",4,8),("double",8,8)]
 entries :: [(String, Int, Int, Bool)]
 entries = [(family ++ "X" ++ show lanes ++ operation ++ mode, width, lanes, mode == "Scalar") |
   (family,lanes,width) <- families, operation <- ["Index","Read","Write"], mode <- ["Packed","Scalar"]]

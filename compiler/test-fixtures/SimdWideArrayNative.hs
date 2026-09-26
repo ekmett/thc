@@ -24,6 +24,42 @@ run name (I# seed) (I# offset) = runRW# (\s -> case size name of { I# n ->
   case checksum bytes n 0# 0# s2 of { (# _, digest #) -> (I# result, I# digest) } } } } })
 size :: String -> Int
 size name = case name of
+  "int8X32IndexPacked" -> 96
+  "int8X32IndexScalar" -> 96
+  "int8X32ReadPacked" -> 96
+  "int8X32ReadScalar" -> 96
+  "int8X32WritePacked" -> 96
+  "int8X32WriteScalar" -> 96
+  "word8X32IndexPacked" -> 96
+  "word8X32IndexScalar" -> 96
+  "word8X32ReadPacked" -> 96
+  "word8X32ReadScalar" -> 96
+  "word8X32WritePacked" -> 96
+  "word8X32WriteScalar" -> 96
+  "int8X64IndexPacked" -> 192
+  "int8X64IndexScalar" -> 192
+  "int8X64ReadPacked" -> 192
+  "int8X64ReadScalar" -> 192
+  "int8X64WritePacked" -> 192
+  "int8X64WriteScalar" -> 192
+  "word8X64IndexPacked" -> 192
+  "word8X64IndexScalar" -> 192
+  "word8X64ReadPacked" -> 192
+  "word8X64ReadScalar" -> 192
+  "word8X64WritePacked" -> 192
+  "word8X64WriteScalar" -> 192
+  "int16X32IndexPacked" -> 192
+  "int16X32IndexScalar" -> 192
+  "int16X32ReadPacked" -> 192
+  "int16X32ReadScalar" -> 192
+  "int16X32WritePacked" -> 192
+  "int16X32WriteScalar" -> 192
+  "word16X32IndexPacked" -> 192
+  "word16X32IndexScalar" -> 192
+  "word16X32ReadPacked" -> 192
+  "word16X32ReadScalar" -> 192
+  "word16X32WritePacked" -> 192
+  "word16X32WriteScalar" -> 192
   "int16X16IndexPacked" -> 96
   "int16X16IndexScalar" -> 96
   "int16X16ReadPacked" -> 96
@@ -111,6 +147,42 @@ size name = case name of
   _ -> error "Unknown SIMD wide scalar input"
 select :: String -> MutableByteArray# RealWorld -> Int# -> Int# -> Int#
 select name = case name of
+  "int8X32IndexPacked" -> Scalar.int8X32IndexPacked
+  "int8X32IndexScalar" -> Scalar.int8X32IndexScalar
+  "int8X32ReadPacked" -> Scalar.int8X32ReadPacked
+  "int8X32ReadScalar" -> Scalar.int8X32ReadScalar
+  "int8X32WritePacked" -> Scalar.int8X32WritePacked
+  "int8X32WriteScalar" -> Scalar.int8X32WriteScalar
+  "word8X32IndexPacked" -> Scalar.word8X32IndexPacked
+  "word8X32IndexScalar" -> Scalar.word8X32IndexScalar
+  "word8X32ReadPacked" -> Scalar.word8X32ReadPacked
+  "word8X32ReadScalar" -> Scalar.word8X32ReadScalar
+  "word8X32WritePacked" -> Scalar.word8X32WritePacked
+  "word8X32WriteScalar" -> Scalar.word8X32WriteScalar
+  "int8X64IndexPacked" -> Scalar.int8X64IndexPacked
+  "int8X64IndexScalar" -> Scalar.int8X64IndexScalar
+  "int8X64ReadPacked" -> Scalar.int8X64ReadPacked
+  "int8X64ReadScalar" -> Scalar.int8X64ReadScalar
+  "int8X64WritePacked" -> Scalar.int8X64WritePacked
+  "int8X64WriteScalar" -> Scalar.int8X64WriteScalar
+  "word8X64IndexPacked" -> Scalar.word8X64IndexPacked
+  "word8X64IndexScalar" -> Scalar.word8X64IndexScalar
+  "word8X64ReadPacked" -> Scalar.word8X64ReadPacked
+  "word8X64ReadScalar" -> Scalar.word8X64ReadScalar
+  "word8X64WritePacked" -> Scalar.word8X64WritePacked
+  "word8X64WriteScalar" -> Scalar.word8X64WriteScalar
+  "int16X32IndexPacked" -> Scalar.int16X32IndexPacked
+  "int16X32IndexScalar" -> Scalar.int16X32IndexScalar
+  "int16X32ReadPacked" -> Scalar.int16X32ReadPacked
+  "int16X32ReadScalar" -> Scalar.int16X32ReadScalar
+  "int16X32WritePacked" -> Scalar.int16X32WritePacked
+  "int16X32WriteScalar" -> Scalar.int16X32WriteScalar
+  "word16X32IndexPacked" -> Scalar.word16X32IndexPacked
+  "word16X32IndexScalar" -> Scalar.word16X32IndexScalar
+  "word16X32ReadPacked" -> Scalar.word16X32ReadPacked
+  "word16X32ReadScalar" -> Scalar.word16X32ReadScalar
+  "word16X32WritePacked" -> Scalar.word16X32WritePacked
+  "word16X32WriteScalar" -> Scalar.word16X32WriteScalar
   "int16X16IndexPacked" -> Scalar.int16X16IndexPacked
   "int16X16IndexScalar" -> Scalar.int16X16IndexScalar
   "int16X16ReadPacked" -> Scalar.int16X16ReadPacked

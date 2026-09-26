@@ -39,7 +39,8 @@ VECTOR_PROOFS = {**dict.fromkeys(SIGNED_OPERATIONS, VECTOR32_REP),
 
 # Memory moves bits: signedness remains an exact VecRep contract, while the
 # underlying public JVM carrier is shared by each signed/unsigned pair.
-for scalar, lanes in (('Int8', 16), ('Word8', 16), ('Int16', 8),
+for scalar, lanes in (('Int8', 32), ('Word8', 32), ('Int8', 64), ('Word8', 64), ('Int16', 32), ('Word16', 32),
+                      ('Int8', 16), ('Word8', 16), ('Int16', 8),
                       ('Word16', 8), ('Int64', 2), ('Word64', 2),
                       ('Int16', 16), ('Word16', 16), ('Int32', 8), ('Word32', 8), ('Int32', 16), ('Word32', 16), ('Int64', 4), ('Word64', 4), ('Int64', 8), ('Word64', 8), ('Float', 8), ('Float', 16), ('Double', 4), ('Double', 8)):
     shape = scalar + 'X' + str(lanes)
