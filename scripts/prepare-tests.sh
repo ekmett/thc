@@ -11,7 +11,6 @@ compiler/build.sh
 python3 scripts/prepare-io-main-pap.py
 python3 scripts/prepare-floating-audit.py
 python3 scripts/prepare-floating-tuples.py
-python3 scripts/prepare-scalar-bitcasts.py
 python3 scripts/prepare-tag-to-enum-audit.py
 python3 scripts/prepare-show-int.py
 python3 scripts/prepare-show-word-list.py
@@ -33,6 +32,7 @@ fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
 "$fixture_bin" integer
 "$fixture_bin" bit
 "$fixture_bin" word-floating
+"$fixture_bin" scalar-bitcasts
 "$fixture_bin" floating-address
 "$fixture_bin" floating-byte-offset
 "$fixture_bin" narrow-byte-offset

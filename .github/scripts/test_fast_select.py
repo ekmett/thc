@@ -1061,7 +1061,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             "SimdDoubleVectorTest", "SimdFloatByteArrayTest", "SimdFloatVectorTest", "SimdFloatFmaTest", "SimdWideFloatFmaTest", "SqrtPrimitiveTest",
             "SumProtocolTest", "SumResultTest", "TupleInputNativeTest", "TypedInputScalarSourceTest")}},
                          set(floating["junit"]))
-        self.assertLessEqual({"scripts/test-scalar-bitcasts.py", "scripts/test-core-sums.py",
+        self.assertLessEqual({"scripts/test-core-sums.py",
                              "scripts/test-sum-layout.py", "scripts/test-tuple-inputs.py",
                              "scripts/test-doublex2-bytearray-model.py", "scripts/test-floatx4-bytearray-model.py"},
                             set(floating["python"]))
@@ -1072,6 +1072,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_floating_haskell_producers_and_main_keep_their_consumers(self):
         owners = self.policy["owners"]
         for producer, consumer in (("FusedFloatingFixtures", "FusedFloatingTest"),
+                                   ("ScalarBitCastFixtures", "ScalarBitCastTest"),
                                    ("SimdFloatFmaFixtures", "SimdFloatFmaTest"),
                                    ("SimdWideFloatFmaFixtures", "SimdWideFloatFmaTest"),
                                    ("WordFloatingFixtures", "WordFloatingTest")):

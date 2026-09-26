@@ -161,7 +161,7 @@ class FastRunnerTest(unittest.TestCase):
 
     def test_matching_automation_job_reuses_only_its_complete_test_files(self):
         selected = {"python": {"commands": [["python3", path] for path in (
-            ".github/scripts/test_fast_select.py", "scripts/test-scalar-bitcasts.py",
+            ".github/scripts/test_fast_select.py", "scripts/test-audit-core.py",
             ".github/scripts/extra/test_nested.py")]}}
         all_commands = list(ci.python_commands(selected, "/python"))
         reused = list(ci.python_commands(selected, "/python", automation_checked=True))

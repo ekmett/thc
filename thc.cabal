@@ -454,6 +454,7 @@ executable thc-fixtures
     InterfaceForeignFacts
     FixtureSupport
     WordFloatingFixtures
+    ScalarBitCastFixtures
     FloatingAddressFixtures
     FloatingByteOffsetFixtures
     NarrowByteOffsetFixtures

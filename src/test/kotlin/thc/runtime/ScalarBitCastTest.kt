@@ -15,11 +15,14 @@ import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import thc.*
 import java.io.File
+import java.nio.file.Path
 import java.security.MessageDigest
 import java.util.Collections
 import java.util.IdentityHashMap
+import java.util.concurrent.TimeUnit
 
 class ScalarBitCastTest {
     private val root = File(System.getProperty("thc.projectRoot"))
@@ -59,15 +62,120 @@ class ScalarBitCastTest {
         assertEquals(0, state.results.depth); assertEquals(0, state.results.retainedReferences())
     }
     private fun model(name: String, raw: Long): Long = if (name.startsWith("float")) raw and 0xffffffffL else raw
-    @Test fun nativeRawBitsWithInlining() = native(true)
-    @Test fun nativeRawBitsAcrossResidualCalls() = native(false)
-    private fun native(inlining: Boolean) {
-        val manifest = Json.parse(File(root, "build/scalar-bitcasts/manifest.json").readText()) as Map<String, Any?>
-        assertEquals(names, manifest["entries"])
+    private fun patterns(width: Int): Set<Long> {
+        val fraction = if (width == 32) 23 else 52
+        val exponent = ((1L shl (if (width == 32) 8 else 11)) - 1) shl fraction
+        val edges = listOf(0L, 1L, (1L shl fraction) - 1, 1L shl fraction, exponent, exponent - 1)
+        return buildSet {
+            addAll(edges); add(if (width == 32) 0xffffffffL else -1L)
+            for (sign in listOf(0L, 1L shl (width - 1))) {
+                addAll(edges.map { sign or it })
+                for (quiet in listOf(0L, 1L shl (fraction - 1))) {
+                    val payloads = (0L..256L).toList() + (0 until fraction - 1).map { 1L shl it } +
+                        (1 until fraction).map { (1L shl it) - 1 }
+                    addAll(payloads.map { sign or exponent or quiet or it })
+                }
+                addAll((0 until width).map { sign or (1L shl it) })
+            }
+        }
+    }
+    private fun inputs(width: Int): List<Long> = (patterns(width) + if (width == 32)
+        setOf(Long.MIN_VALUE, Long.MAX_VALUE, -1L, -(1L shl 32), 1L shl 32,
+            (1L shl 48) or 0x7f800001L, -((1L shl 40) or 0x123456L)) else emptySet()).sorted()
+    private val expectedCalls = names.associateWith { name -> when {
+        name.endsWith("Roundtrip") -> 5L
+        name.endsWith("Field") -> 6L
+        name.endsWith("Captured") -> 7L
+        else -> 4L
+    } }
+    private fun evidence() = Json.parse(File(root, "build/scalar-bitcasts/manifest.json").readText()) as Map<String, Any?>
+    private fun verifyEvidence(manifest: Map<String, Any?>) {
+        val prefix = "build/scalar-bitcasts"
+        assertEquals(1L, manifest["schema"]); assertEquals("9.14.1", manifest["ghc"])
+        assertEquals(names, manifest["entries"]); assertEquals(13555L, manifest["nativeRows"])
+        assertEquals(mapOf("pre" to "$prefix/pre-core/ScalarBitCastAudit.json",
+            "post" to "$prefix/post-core/ScalarBitCastAudit.json"), manifest["stages"])
+        assertEquals(mapOf("32" to inputs(32), "64" to inputs(64)), manifest["inputsByWidth"])
+        assertEquals(expectedCalls, manifest["expectedGuestCalls"])
+        assertEquals(signatures.keys.associateWith { 1L }, manifest["bitcastPrimitiveArities"])
+        val keys = listOf("pre", "post").flatMap { stage -> names.map { "$stage/$it" } }.toSet()
+        assertEquals(keys, (manifest["audits"] as Map<*, *>).keys)
+        assertEquals(keys, (manifest["structure"] as Map<*, *>).keys)
+        val requiredSources = setOf("compiler/test-fixtures/ScalarBitCastAudit.hs", "compiler/test-fixtures/ScalarBitCastNative.hs",
+            "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
+            "test/haskell-fixtures/ScalarBitCastFixtures.hs", "scripts/core-capabilities.json", "scripts/audit-core.py",
+            "scripts/generate-scalar-signatures.py", "src/main/resources/thc/scalar-primop-signatures.json",
+            "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py") +
+            File(root, "compiler/THC").listFiles()!!.filter { it.extension == "hs" }.map { it.relativeTo(root).path } +
+            File(root, "scripts").listFiles()!!.filter { it.name.startsWith("core_") && it.extension == "py" }.map { it.relativeTo(root).path }
+        assertEquals(requiredSources, (manifest["inputHashes"] as Map<*, *>).keys)
+        val commands = listOf("native-build", "native-oracle") + listOf("pre", "post").flatMap { stage ->
+            listOf("$stage-export") + names.map { "$stage-$it-audit" }
+        }
+        val requiredArtifacts = setOf("$prefix/inputs.tsv", "$prefix/oracle.tsv", "$prefix/native/scalar-bitcast-oracle") +
+            listOf("pre", "post").flatMap { stage -> listOf("$prefix/$stage-core/ScalarBitCastAudit.json", "$prefix/$stage-audit.json") +
+                names.map { "$prefix/$stage-$it-audit.json" } } +
+            commands.flatMap { name -> listOf("stdout", "stderr", "command.json").map { "$prefix/commands/$name.$it" } }
+        assertEquals(requiredArtifacts.toSet(), (manifest["artifactHashes"] as Map<*, *>).keys)
         for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
             val hash = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes()).joinToString("") { "%02x".format(it.toInt() and 255) }
             assertEquals(expected, hash, "Stale bitcast fixture: $path")
         }
+        for (stage in listOf("pre", "post")) for (name in names) {
+            val report = Json.parse(File(root, "$prefix/$stage-$name-audit.json").readText()) as Map<String, Any?>
+            assertEquals(true, report["accepted"]); assertEquals(emptyList<Any>(), report["issues"])
+            assertEquals(emptyList<Any>(), report["missingGlobals"])
+            val shape = (manifest["structure"] as Map<String, Map<String, Any?>>).getValue("$stage/$name")
+            assertEquals(expectedCalls[name], shape["guestCalls"])
+        }
+    }
+    @Test fun evidenceFailsClosedOnMissingHashesStagesCountsAndCorruption() {
+        val good = evidence(); verifyEvidence(good)
+        for ((field, value) in listOf("nativeRows" to 13554L, "stages" to mapOf("pre" to "other"),
+            "inputsByWidth" to mapOf("32" to emptyList<Long>(), "64" to inputs(64)),
+            "expectedGuestCalls" to (expectedCalls + ("floatRoundtrip" to 4L)),
+            "bitcastPrimitiveArities" to emptyMap<String, Long>())) {
+            assertThrows(AssertionError::class.java, { verifyEvidence(good + (field to value)) }, field)
+        }
+        for (field in listOf("inputHashes", "artifactHashes")) {
+            val hashes = good[field] as Map<String, String>
+            for (path in hashes.keys) assertThrows(AssertionError::class.java,
+                { verifyEvidence(good + (field to (hashes - path))) }, "$field/$path")
+            assertThrows(AssertionError::class.java) {
+                verifyEvidence(good + (field to (hashes + (hashes.keys.first() to "0".repeat(64)))))
+            }
+        }
+    }
+    @Test fun integerCorpusRetainsEveryIeeeClassSignAndPayloadBit() {
+        assertEquals(1211, inputs(32).size); assertEquals(1500, inputs(64).size)
+        for (width in listOf(32, 64)) {
+            val fraction = if (width == 32) 23 else 52
+            val maximumExponent = if (width == 32) 255L else 2047L
+            val exponent = maximumExponent shl fraction
+            val values = patterns(width)
+            val classes = values.map { bits ->
+                val mantissa = bits and ((1L shl fraction) - 1)
+                val exp = (bits ushr fraction) and maximumExponent
+                val kind = when {
+                    exp == maximumExponent && mantissa != 0L -> if (mantissa ushr (fraction - 1) == 0L) "signalling-nan" else "quiet-nan"
+                    exp == maximumExponent -> "infinity"
+                    exp == 0L -> if (mantissa == 0L) "zero" else "subnormal"
+                    else -> "normal"
+                }
+                (bits ushr (width - 1) and 1L) to kind
+            }.toSet()
+            assertEquals(listOf(0L, 1L).flatMap { sign -> listOf("zero", "subnormal", "normal", "infinity", "quiet-nan", "signalling-nan").map { sign to it } }.toSet(), classes)
+            for (sign in listOf(0L, 1L shl (width - 1))) for (bit in 0 until fraction)
+                assertTrue((sign or exponent or (1L shl bit)) in values)
+            for (raw in inputs(width)) assertEquals(if (width == 32) raw.toInt().toUInt().toLong() else raw,
+                model(if (width == 32) "floatDecode" else "doubleDecode", raw))
+        }
+        assertEquals(0xffffffffL, model("floatDecode", -1)); assertEquals(Long.MIN_VALUE, model("doubleDecode", Long.MIN_VALUE))
+    }
+    @Test fun nativeRawBitsWithInlining() = native(true)
+    @Test fun nativeRawBitsAcrossResidualCalls() = native(false)
+    private fun native(inlining: Boolean) {
+        val manifest = evidence(); verifyEvidence(manifest)
         val rows = File(root, "build/scalar-bitcasts/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
         assertEquals(names.toSet(), rows.keys)
         assertEquals((manifest["nativeRows"] as Number).toInt(), rows.values.sumOf { it.size })
@@ -122,6 +230,46 @@ class ScalarBitCastTest {
                     app, mapOf("rep" to closure, "resultRep" to proof(output)))))))) as MutableMap<String, Any?>
     }
     private fun lambda(module: Map<String, Any?>) = (module["bindings"] as List<Map<String, Any?>>).single()["expr"] as MutableList<Any?>
+    @Test fun pinnedSignaturesAndSharedAuditorPositiveNegativeControls(@TempDir directory: Path) {
+        val table = (Json.parse(File(root, "src/main/resources/thc/scalar-primop-signatures.json").readText()) as Map<*, *>)["primitives"] as Map<*, *>
+        // The producer checks this subset using Aeson: the complete capability
+        // document also has unsigned bounds outside the Core reader's Long range.
+        val capabilities = evidence()["bitcastPrimitiveArities"] as Map<*, *>
+        for ((name, signature) in signatures) {
+            assertEquals(mapOf("arguments" to listOf(signature.first), "result" to signature.second), table[name])
+            assertEquals(1L, capabilities[name])
+            for (mutation in listOf("valid", "argument", "result", "lexical", "partial", "over", "bare")) {
+                val module = synthetic(name); val lam = lambda(module); val app = lam[2] as MutableList<Any?>
+                when (mutation) {
+                    "argument" -> ((app[2] as List<List<Any?>>).single()[2] as MutableMap<String, Any?>)["rep"] = proof("IntRep")
+                    "result" -> (app[6] as MutableMap<String, Any?>)["rep"] = proof("WordRep")
+                    "lexical" -> (lam[1] as List<MutableMap<String, Any?>>).single()["rep"] = proof("WordRep")
+                    "partial" -> { (app[2] as MutableList<Any?>).clear(); (app[3] as MutableList<Any?>).clear() }
+                    "over" -> { (app[2] as MutableList<Any?>).add((app[2] as List<Any?>).single()); (app[3] as MutableList<Any?>).add(false) }
+                    "bare" -> lam[2] = listOf("prim", name)
+                }
+                val label = "${name.removeSuffix("#")}-$mutation"
+                val source = directory.resolve("$label.json").toFile().apply { writeText(Json.stringify(module)) }
+                val report = directory.resolve("$label-report.json").toFile()
+                // Preserve the shared auditor's controls, not just JVM admission.
+                val process = ProcessBuilder("python3", "scripts/audit-core.py", source.path,
+                    "--entry", "entry", "--output", report.path).directory(root)
+                    .redirectOutput(directory.resolve("$label.stdout").toFile())
+                    .redirectError(directory.resolve("$label.stderr").toFile()).start()
+                if (!process.waitFor(60, TimeUnit.SECONDS)) {
+                    process.destroyForcibly().waitFor()
+                    fail<Unit>("Shared bitcast auditor timed out: $label")
+                }
+                assertEquals(if (mutation == "valid") 0 else 1, process.exitValue(), label)
+                val actual = Json.parse(report.readText()) as Map<*, *>
+                assertEquals(mutation == "valid", actual["accepted"], label)
+                if (mutation == "valid") {
+                    assertEquals(emptyList<Any>(), actual["issues"])
+                    assertEquals(emptyList<Any>(), actual["missingGlobals"])
+                } else assertTrue((actual["issues"] as List<*>).isNotEmpty(), label)
+            }
+        }
+    }
     @Test fun exactKindsSignednessArityAndScalarFrontiersAreChecked() {
         for (backend in listOf("ast", "bytecode")) context().use { context ->
             context.initialize("thc"); context.enter()
