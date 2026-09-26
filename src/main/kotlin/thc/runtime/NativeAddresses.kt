@@ -12,11 +12,13 @@ import com.oracle.truffle.api.library.ExportMessage
 import com.oracle.truffle.api.nodes.Node
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
+import java.lang.foreign.ValueLayout
 import java.lang.ref.Cleaner
 import java.lang.ref.Reference
 import java.lang.ref.WeakReference
 import java.util.TreeMap
 import java.util.WeakHashMap
+import java.util.Objects
 import thc.Language
 
 /** Real native storage for immutable guest images, never a numeric identity token.
@@ -121,5 +123,57 @@ internal class NativeReadOnlyPointer(private val image: NativeReadOnlyImage,
     @ExportMessage fun asPointer(): Long {
         if (!image.isAlive()) throw UnsupportedMessageException.create()
         return try { image.base } finally { Reference.reachabilityFence(source) }
+    }
+}
+
+/** Native copies owned by one synchronous provider call. Closing the arena is
+ * a host operation and never re-enters a cancelled LLVM context to call free.
+ * Callers check guest capacities, mutability and aliasing before copying. */
+internal class NativeLimbScope : AutoCloseable {
+    private val arena = Arena.ofConfined()
+
+    fun allocate(bytes: Long): Pointer {
+        require(bytes in 0..Int.MAX_VALUE.toLong() && bytes % Long.SIZE_BYTES == 0L) {
+            "Invalid native limb byte count"
+        }
+        // Empty GMP inputs still receive an aligned non-null address.
+        return Pointer(arena.allocate(maxOf(bytes, Long.SIZE_BYTES.toLong()), Long.SIZE_BYTES.toLong()), bytes)
+    }
+
+    fun snapshot(bytes: ByteArray, offset: Int, count: Int): Pointer {
+        Objects.checkFromIndexSize(offset, count, bytes.size)
+        return allocate(count.toLong()).also { it.copyFrom(bytes, offset, count) }
+    }
+
+    override fun close() = arena.close()
+
+    /** Sulong transport tied to its arena lifetime, never a guest Addr# value. */
+    @ExportLibrary(InteropLibrary::class)
+    class Pointer internal constructor(private val segment: MemorySegment, private val capacity: Long) : TruffleObject {
+        fun copyTo(destination: ByteArray, offset: Int, count: Int) {
+            Objects.checkFromIndexSize(offset, count, destination.size)
+            Objects.checkFromIndexSize(0L, count.toLong(), capacity)
+            MemorySegment.copy(segment, 0, MemorySegment.ofArray(destination), offset.toLong(), count.toLong())
+        }
+
+        fun copyFrom(source: ByteArray, offset: Int, count: Int) {
+            Objects.checkFromIndexSize(offset, count, source.size)
+            Objects.checkFromIndexSize(0L, count.toLong(), capacity)
+            MemorySegment.copy(MemorySegment.ofArray(source), offset.toLong(), segment, 0, count.toLong())
+        }
+
+        fun readWord(index: Long): Long {
+            Objects.checkIndex(index, capacity / Long.SIZE_BYTES)
+            return segment.get(ValueLayout.JAVA_LONG, index * Long.SIZE_BYTES)
+        }
+
+        @ExportMessage fun isPointer(): Boolean =
+            segment.scope().isAlive && segment.isAccessibleBy(Thread.currentThread())
+
+        @ExportMessage @Throws(UnsupportedMessageException::class)
+        fun asPointer(): Long {
+            if (!isPointer()) throw UnsupportedMessageException.create()
+            return segment.address()
+        }
     }
 }
