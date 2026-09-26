@@ -147,7 +147,12 @@ class AddressFieldTest {
         val source=module(true,partial=true)
         val shifted=listOf("app",listOf("prim","plusAddr#"),
             listOf(listOf("lit","string-bytes","41"),variable("offset")),listOf(false,false))
-        val partial=listOf("app",listOf("con","Record",3),listOf(shifted,listOf("lit","int","17")),listOf(false,false))
+        // Address arithmetic may form a before-start/after-end sentinel. A
+        // strict read makes failure observable before the PAP is published.
+        val read=listOf("app",listOf("prim","indexCharOffAddr#"),
+            listOf(shifted,listOf("lit","int","0")),listOf(false,false))
+        val checked=listOf("case",read,"checkedByte",listOf(listOf("default",null,emptyList<String>(),shifted)))
+        val partial=listOf("app",listOf("con","Record",3),listOf(checked,listOf("lit","int","17")),listOf(false,false))
         val bindings=(source["bindings"] as List<Map<String,Any?>>).dropLast(1)+binding("entry",
             listOf("lam",listOf(mapOf("id" to "offset","lifted" to false)),partial),1)
         for(backend in listOf("ast","bytecode")) {

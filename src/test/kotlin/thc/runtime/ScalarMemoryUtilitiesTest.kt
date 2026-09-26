@@ -187,7 +187,7 @@ class ScalarMemoryUtilitiesTest {
     @Test fun addressRangesAndPointerCellsAreCheckedBeforeEffects() {
         val allocation = PinnedMemory.allocate(32,8)
         assertTrue(allocation.isPinned)
-        assertTrue(allocation.resized(40).isPinned)
+        assertFalse(allocation.resized(40).isPinned, "GHC resize growth returns ordinary unpinned storage")
         assertFalse(ManagedAllocation.mutable(32,8).isPinned)
         assertSame(allocation,ManagedByteArray.freezeGuest(allocation))
         val base = ManagedAddress.fromAllocation(allocation)

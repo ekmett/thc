@@ -288,7 +288,7 @@ class AlignedScalarMemoryTest {
         }
     }
 
-    @Test fun pointerCellBoundariesRejectRawNativeAndOutOfRangeStorage() {
+    @Test fun pointerCellBoundsRemainCheckedAndNativeCellsTransportStableTokens() {
         val cells = ManagedAllocation.mutable(24, 8)
         val address = ManagedAddress.fromAllocation(cells)
         val pointer = ManagedAddress.fromAllocation(ManagedAllocation.mutable(8, 8))
@@ -317,8 +317,12 @@ class AlignedScalarMemoryTest {
                 val native = state.nativeAllocations.malloc(24)
                 val handle = state.stablePointers.make(37L)
                 try {
-                    assertThrows(RuntimeFault::class.java) { native.writeAddressElementIndex(1, handle) }
-                    assertThrows(RuntimeFault::class.java) { native.readAddressElementIndex(1) }
+                    native.writeAddressElementIndex(1, handle)
+                    val recovered = native.readAddressElementIndex(1)
+                    assertTrue(state.stablePointers.equal(handle, recovered))
+                    assertEquals(37L, state.stablePointers.dereference(recovered))
+                    assertThrows(RuntimeFault::class.java) { native.writeAddressElementIndex(3, handle) }
+                    assertThrows(RuntimeFault::class.java) { native.readAddressElementIndex(3) }
                 } finally {
                     state.stablePointers.free(handle)
                     state.nativeAllocations.free(native)
