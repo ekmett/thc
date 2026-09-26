@@ -99,4 +99,28 @@ tests env = TestLabel "run options and target selection" $ TestList
         ["run", "bench:measured", "--", "--exe", "guest-option", "", "--"]
       assertFailure result
       assertContains "run requires --thc-root DIR" (err result)
+  , TestLabel "driver help follows ordinary option ordering" $ TestCase $
+      forM_ ["run", "acquire"] $ \command ->
+      forM_ ["--help", "-h"] $ \help ->
+      forM_ [[help], ["example:bench:measured", help],
+             [help, "example:test:checked"],
+             ["example:exe:ordinary", "--project-dir", "missing-project", help]] $ \arguments -> do
+        result <- run env (root env) Nothing 30 (command : arguments)
+        assertSuccess result
+        assertEqual "help needs no project/build and writes no diagnostic" "" (err result)
+        assertContains ("Usage: thc " ++ command ++ " [TARGET]") (out result)
+        assertContains "--help" (out result)
+        assertContains "Show this help text" (out result)
+  , TestLabel "guest help does not request driver help" $ TestCase $
+      forM_ ["--help", "-h"] $ \help -> do
+        result <- run env (root env) Nothing 30 ["run", "example:bench:measured", "--", help]
+        assertFailure result
+        assertNoStdout result
+        assertContains "run requires --thc-root DIR" (err result)
+  , TestLabel "help spelling as a required option value is opaque" $ TestCase $
+      forM_ ["run", "acquire"] $ \command -> do
+        result <- run env (root env) Nothing 30 [command, "example:bench:measured", "--project-dir", "--help"]
+        assertFailure result
+        assertNoStdout result
+        assertContains (command ++ " requires --thc-root DIR") (err result)
   ]
