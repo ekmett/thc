@@ -101,7 +101,7 @@ class Int32ByteOffsetTest {
         assertDoesNotThrow {
             ByteArrayOp.INDEX_WORD8_AS_WORD32.validate(listOf(array, offset), listOf(false, false), signed)
         }
-        assertDoesNotThrow {
+        assertThrows(RuntimeFault::class.java) {
             ByteArrayOp.INDEX_WORD8_AS_INT32.validate(listOf(array, offset), listOf(false, true), signed)
         }
     }

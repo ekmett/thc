@@ -269,7 +269,11 @@ class IntArrayNativeTest {
                         9 -> if (operation == ByteArrayOp.READ_INT) (metadata["rep"] as MutableMap<String, Any?>)["kind"] = "long"
                             else flags[1] = true
                     }
-                    assertThrows(RuntimeFault::class.java, {
+                    val sameCarrier = mutation == 6 || (mutation == 3 && operation == ByteArrayOp.INDEX_INT)
+                    if (sameCarrier) assertDoesNotThrow({
+                        program(language, module + ("diagnosticUnsupported" to diagnostic), backend)
+                    }, "$backend/${operation.primitive}/mutation$mutation/$diagnostic")
+                    else assertThrows(RuntimeFault::class.java, {
                         program(language, module + ("diagnosticUnsupported" to diagnostic), backend)
                     }, "$backend/${operation.primitive}/mutation$mutation/$diagnostic")
                 }

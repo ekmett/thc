@@ -335,7 +335,9 @@ class MutableByteArrayTest {
                             10,11-> {val index=if(mutation==10)1 else if(operation==ByteArrayOp.SET)2 else 3
                                 (CoreRepresentations.metadata(args[index] as List<Any?>)!!["rep"] as MutableMap<String,Any?>)["primReps"]=listOf("WordRep")}
                         }
-                        assertThrows(RuntimeFault::class.java,{program(language,module+("diagnosticUnsupported" to diagnostic),backend)},"$operation/$mutation/$backend/$diagnostic")
+                        if (mutation in 5..7 || mutation in 10..11)
+                            assertDoesNotThrow({program(language,module+("diagnosticUnsupported" to diagnostic),backend)},"$operation/$mutation/$backend/$diagnostic")
+                        else assertThrows(RuntimeFault::class.java,{program(language,module+("diagnosticUnsupported" to diagnostic),backend)},"$operation/$mutation/$backend/$diagnostic")
                     }
                     val module=CoreModules.reachable(merged(paths),name);val app=applications(module).first {(it[1] as List<*>).take(2)==listOf("prim",operation.primitive)}
                     val primitive=(app[1] as List<*>).toList();app.clear();app.addAll(primitive)
