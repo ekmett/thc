@@ -52,8 +52,12 @@ internal class VectorLayout(val proof: CoreRepresentation) {
     }
     fun require(value: Any?): Vector<*> {
         val raw = value as? Vector<*> ?: fault("Expected raw vector carrier")
-        if (raw.species() != species) fault("Vector carrier species disagrees with VecRep")
-        return CompilerDirectives.castExact(raw, species.vectorType())
+        // VectorSpecies.vectorType specifies an iff correspondence with species.
+        // Check that class before exposing the exact stamp: a virtual species()
+        // call here would keep an exception-bearing reference edge in AST loops.
+        val exact = species.vectorType()
+        if (!exact.isInstance(raw)) fault("Vector carrier species disagrees with VecRep")
+        return CompilerDirectives.castExact(raw, exact)
     }
     fun write(frame: VirtualFrame, slots: IntArray, offset: Int, value: Any?) {
         FrameAccess.writeObject(frame, slots[offset], require(value))

@@ -46,7 +46,8 @@ class VectorLayoutTest {
                 "vector" to mapOf("lanes" to shape["lanes"], "element" to shape["element"])))
         }.also { assertEquals(24, it.size) }
     }
-    private fun withLanguage(action: (Language) -> Unit) = Context.newBuilder("thc").build().use { context ->
+    private fun withLanguage(action: (Language) -> Unit) = Context.newBuilder("thc").allowExperimentalOptions(true)
+        .option("engine.BackgroundCompilation", "false").build().use { context ->
         context.initialize("thc"); context.enter()
         try { action(TruffleLanguage.LanguageReference.create(Language::class.java).get(null)) }
         finally { context.leave() }
@@ -173,6 +174,30 @@ class VectorLayoutTest {
             assertThrows(RuntimeFault::class.java) { shape.finish(slots.frame, slots.slots) }
             assertEquals(0, language.handoffState.get().results.depth)
             assertEquals(0, language.handoffState.get().results.retainedReferences())
+        }
+    }
+    @Test fun compiledExactClassChecksRetainSpeciesAndNullRejectionForEveryShape() = withLanguage { language ->
+        val all = vectors().map(::rawVectorTestValue)
+        for (proof in vectors()) {
+            val vector = VectorLayout(proof)
+            val target = object : RootNode(language) {
+                override fun execute(frame: VirtualFrame): Any = vector.require(frame.arguments[0])
+            }.callTarget
+            val raw = rawVectorTestValue(proof)
+            repeat(20) { assertSame(raw, target.call(raw)) }
+            target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+            assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+            assertSame(raw, target.call(raw))
+            for (candidate in all) {
+                // Signed/unsigned VecReps may share a species; different physical
+                // element types or shapes must still report a guest RuntimeFault.
+                val sameSpecies = candidate.species() == vector.species
+                assertEquals(sameSpecies, vector.species.vectorType().isInstance(candidate))
+                if (sameSpecies) assertSame(candidate, target.call(candidate))
+                else assertThrows(RuntimeFault::class.java) { target.call(candidate) }
+            }
+            for (wrong in listOf(null, 1L, longArrayOf(1L), Any()))
+                assertThrows(RuntimeFault::class.java) { target.call(wrong) }
         }
     }
     @Test fun physicalVectorAnnotationDoesNotEraseLogicalTupleIdentity() {
