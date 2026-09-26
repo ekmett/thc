@@ -75,6 +75,7 @@ OPERATIONS = {
     'malloc': ('ccall', 'unsafe', ('Word64Rep', None), (None, 'AddrRep')),
     'free': ('ccall', 'unsafe', ('AddrRep', None), (None,)),
     'memmove': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', 'Word64Rep', None), (None, 'AddrRep')),
+    'memcpy': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', 'Word64Rep', None), (None, 'AddrRep')),
     'strlen': ('ccall', 'unsafe', ('AddrRep', None), (None, 'IntRep')),
     **{symbol: ('capi', 'unsafe', arguments, output)
        for symbol, (arguments, output) in SIGSET_OPERATIONS.items()},
