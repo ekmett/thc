@@ -128,6 +128,35 @@ This is distinct from the repaired oversized-code failure during initial
 training. Investigation must explain the loss of installed code without
 weakening the retention assertion, extending warmup or adding retries.
 
+Follow-up profiling reproduces the original failure with
+`-XX:+UnlockDiagnosticVMOptions -XX:+LogCompilation` and
+`-Dpolyglot.engine.TraceCompilationDetails=true`. It records a non-permanent
+`Compilable not ready for compilation` bailout after `opt reprof`. The pinned
+runtime's `HotSpotOptimizedCallTarget.prepareForCompilation` bytecode shows
+that this particular profile-reset path responds to **cold-method
+invalidation**, rather than oversized code or an application result mismatch.
+`lambda n` is inlined into `EntryRoot`, so its standalone code can be unused
+even while that host entry executes. Whether the executed host entry remains
+valid in the failing run is not yet established.
+
+The new `thc.RetentionProbeKt` diagnostic inspects exact host/original/active
+target identities, last-tier validity, code address and invalidation reason.
+It uses the real public loader and checks all 12,032 calls against a native
+16-input cycle. Both sampled and endpoint-only diagnostic runs pass, including
+an instrumented control whose first compiled call increments the counter.
+Their host targets remain installed with unchanged code addresses. These
+passes **do not clear the original failure**: target inspection calls
+HotSpot's `updateHotSpotNmethod`, changes code reachability/observation, and
+can perturb the cold-code behavior under investigation. The diagnostic
+defaults to endpoint-only inspection; periodic sampling is an explicit
+`-Dthc.retentionProbe.sampleTargets=true` control. No runtime workaround or
+relaxed benchmark assertion was applied.
+
+The profile log and endpoint records are under `retention-diagnostic/`; the
+21 MB HotSpot compilation XML and `javap` captures stay in the raw directory.
+The follow-up tools JAR hash is
+`ecc14d632966731fe6cd1f8f19eb4cde4a46addfcc977b2186c5df9b41a88c85`.
+
 ### 3. Large extraction/audit memory and time: retained evidence, separate owner
 
 The Pandoc owner's prior genuine capture produced 154 units, 2,508 modules and
@@ -157,6 +186,16 @@ the poll repair. Map loading is 1.273 s / 1.481 GB in the reference, 1.478 s /
 screens: smaller time/allocation deltas need repetition and source attribution.
 The poll change does not purport to fix loader allocation. Phase allocations
 exclude Graal compiler threads; phase heap occupancy is not retained heap size.
+
+The separate endpoint diagnostic records 79,761,059,104 calling-thread bytes
+for 12,032 warmed native-checked reference calls, versus 95,089,286,840 repaired
+current bytes: approximately **6.629 MB versus 7.903 MB per call**. These
+totals include the small endpoint JSON/reflection overhead, exclude compiler
+threads, and are not a timing benchmark. During those intervals the whole JVM
+records 145 / 200 collections and 112 / 146 ms of collection time respectively.
+The approximately 1.274 MB/call additional allocation needs source attribution;
+the poll repair has not removed it. The instrumented control is separate and
+must not substitute for the uninstrumented allocation comparison.
 
 ### Benchmark launch correction
 
@@ -214,7 +253,9 @@ screen using the existing nine-process rotated harness stopped at the repaired
 runtime's retention failure described above. It checks every 16-input checksum
 and rejects compilation or deoptimization during measurement. Warmed
 allocation/GC and residual throughput costs remain distinct from the proven
-graph/initial-compilation repair.
+graph/initial-compilation repair. The endpoint allocation diagnostic above
+provides an initial warmed allocation observation, not a completed throughput
+or allocation optimization campaign.
 
 ## Reproduction and raw evidence
 
@@ -272,3 +313,19 @@ Heavy commands use the shared `tools/resource_run.py --build-dir OWNED_BUILD`
 gate. Gradle requires ordinary local socket access; a restricted first launch
 failed opening its wildcard lock socket and that log is retained as an
 environment failure, not a test result.
+
+The target-state diagnostic uses the 16 native rows retained by the existing
+comparison harness, with the same runtime flags as the lifecycle probe:
+
+```sh
+java --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED \
+  -Xss2m -Xmx4g -XX:+UseCompactObjectHeaders -Dthc.traceCompilation=true \
+  -Dthc.backend=bytecode -Dthc.handoffSlabs=false -Dthc.diagnosticUnsupported=true \
+  -cp 'build/install/thc/lib/*:build/diagnostics/thc-tools.jar' \
+  thc.RetentionProbeKt build/map/modules.txt mapAggregate \
+  bench/results/performance-regressions-20260926/throughput-screen/oracle.tsv
+```
+
+Run once with `-Dthc.retentionProbe.instrument=true` for the separately labeled
+counter control. Private-field/reflection inspection is diagnostic-only and
+specific to the pinned runtime, not part of the guest language API.
