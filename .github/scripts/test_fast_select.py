@@ -900,7 +900,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
         self.assertEqual({"AddressIdentity", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArrays", "ManagedMutVars", "ManagedNativeAllocations", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
-                         "IntegerVectorPrimitives", "FloatingVectorPrimitives", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown"},
+                         "IntegerVectorPrimitives", "FloatingVectorPrimitives", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "ThreadObservation"},
                          {Path(path).stem for path in self.families})
         for path, group in self.families.items():
             with self.subTest(path=path):
@@ -918,6 +918,13 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertEqual({"junit": ["thc.runtime.CoreBoundThreadForeignTest"],
                           "python": ["scripts/test-audit-core.py"]},
                          self.family("CoreBoundThreadForeign"))
+
+    def test_thread_inventory_lowering_and_example_keep_native_and_structural_owners(self):
+        self.assertEqual({"thc.runtime.GuestThreadInventoryTest", "thc.runtime.ThreadInventoryNativeTest"},
+                         set(self.family("ThreadObservation")["junit"]))
+        for path in ("examples/ThreadInventory.hs", "compiler/test-fixtures/ThreadInventoryNative.hs",
+                     "test/haskell-fixtures/ThreadInventoryFixtures.hs", "test/haskell-fixtures/Main.hs"):
+            self.assertIn("thc.runtime.ThreadInventoryNativeTest", self.policy["owners"][path]["junit"])
 
     def test_native_malloc_source_and_composite_owners_select_both_consumers(self):
         malloc = "thc.runtime.NativeMallocTest"

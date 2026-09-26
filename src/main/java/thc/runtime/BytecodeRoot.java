@@ -531,6 +531,20 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = boolean.class, name = "listing")
+    public static final class ObserveThreads {
+        @Specialization public static void observe(VirtualFrame frame, LocalAccessor destination,
+                boolean listing, Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            GuestThreads threads = GuestThreads.current(node);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            if (listing) destination.setObject(bytecode, frame, threads.snapshot());
+            else destination.setLong(bytecode, frame, threads.isCurrentBound() ? 1L : 0L);
+        }
+    }
+
     @Operation public static final class LabelThread {
         @Specialization public static void set(Object identity, Object bytes, Object state, @Bind Node node) {
             TupleResultsKt.requireVoidCarrier(state);

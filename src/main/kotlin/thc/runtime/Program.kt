@@ -2324,6 +2324,12 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (fn[0] == "prim" && fn[1] == "noDuplicate#") {
                 CoreNoDuplicate.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 NoDuplicate(argument(args[0], scope, false), tupleProof)
+            } else if (fn[0] == "prim" && CoreThreadObservation.named(fn[1] as String)) {
+                val name = fn[1] as String
+                CoreThreadObservation.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val state = argument(args[0], scope, false)
+                CoreThreadObservation.validate(name, listOf(state.representation), flags, tupleProof)
+                ThreadObservation(name == "listThreads#", state, tupleProof)
             } else if (fn[0] == "prim" && fn[1] == "yield#") {
                 CoreYield.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 YieldThread(argument(args[0], scope, false), enableAsync, tupleProof)

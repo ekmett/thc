@@ -21,6 +21,31 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def test_thread_inventory_exact_closed_archive_roundtrip_and_missing_member(self):
+        self.assertEqual(12, len(cache.THREAD_INVENTORY_OUTPUTS))
+        self.assertIn('build/thread-inventory/manifest.json', DECLARED_REQUIRED)
+        for path in cache.THREAD_INVENTORY_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+        for suffix in ('extra.json', 'native/oracle', 'post/core/Other.json', 'pre/other-audit.json'):
+            self.assertFalse(cache.allowed_payload('build/thread-inventory/' + suffix, {}))
+        name = 'build/thread-inventory/manifest.json'
+        artifacts = cache.THREAD_INVENTORY_OUTPUTS - {name}
+        for path in artifacts:
+            self.put(path, b'{}\n' if path.endswith('.json') else b'10\n0\n111\n1\n')
+        original = json.dumps(dict(schema=1, ghc='9.14.1', entries=list(cache.THREAD_INVENTORY_ENTRIES),
+            stages=['pre', 'post'], nativeThread='unbound forkIO, threaded RTS -N2',
+            inputHashes=self.manifest['inputHashes'],
+            artifactHashes={path: cache.digest(self.root / path) for path in artifacts}))
+        self.put(name, original)
+        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
+            packed = self.pack(); self.remove_payload(packed)
+            cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(original, (self.root / name).read_text())
+            self.remove_payload(packed)
+            changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                if member.name != 'files/build/thread-inventory/post/core/ThreadInventory.json'])
+            self.rejected_without_writes(changed)
+
     def test_tcsetattr_exact_native_image_fixture_inventory(self):
         self.assertEqual(33, len(cache.ORIGINAL_TCSETATTR_OUTPUTS))
         self.assertIn('build/original-tcsetattr/manifest.json', DECLARED_REQUIRED)

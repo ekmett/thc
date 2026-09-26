@@ -19,6 +19,34 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_thread_inventory_owns_exact_native_outputs_and_rejects_partial_receipts(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        cache = fast_fixtures.fast_inputs
+        group = manifest['groups']['thread-inventory']
+        self.assertEqual('thread-inventory', owners['thc.runtime.ThreadInventoryNativeTest'])
+        self.assertIn('thc.runtime.GuestThreadInventoryTest', manifest['fixtureFreeJunit'])
+        self.assertIn('examples/ThreadInventory.hs', group['sources'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'thread-inventory']}], group['commands'])
+        self.assertIn('"$fixture_bin" thread-inventory', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('build/thread-inventory', fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertTrue(cache.THREAD_INVENTORY_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        name = 'build/thread-inventory/manifest.json'
+        artifacts = {}
+        for item in cache.THREAD_INVENTORY_OUTPUTS - {name}:
+            path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
+        receipt = dict(schema=1, ghc='9.14.1', entries=list(cache.THREAD_INVENTORY_ENTRIES), stages=['pre', 'post'],
+                       nativeThread='unbound forkIO, threaded RTS -N2', artifactHashes=artifacts)
+        (self.root / name).write_text(json.dumps(receipt))
+        self.assertEqual(cache.THREAD_INVENTORY_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+        for bad in (dict(receipt, schema=True), dict(receipt, ghc='9.12.2'), dict(receipt, entries=[]),
+                    dict(receipt, nativeThread='main'), dict(receipt, stages=['pre']), dict(receipt, artifactHashes={})):
+            with self.assertRaises(cache.CacheMiss): cache.thread_inventory_artifact_hashes(bad)
+        (self.root / 'build/thread-inventory/pre/core/ThreadInventory.json').write_text('mutated')
+        with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+
     def test_thread_label_uses_its_native_core_fixture_and_baseline_registration(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

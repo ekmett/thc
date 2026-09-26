@@ -36,11 +36,15 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
 MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
-thread-status thread-label boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
+thread-status thread-label thread-inventory boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array
 narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
+THREAD_INVENTORY_ENTRIES = ("selfInventory", "boundQuery", "snapshotSize", "forkSnapshot")
+THREAD_INVENTORY_OUTPUTS = frozenset("build/thread-inventory/" + name for name in (
+    "manifest.json", "oracle.txt", *(f"{stage}/{suffix}" for stage in ("pre", "post")
+        for suffix in ("core/ThreadInventory.json", *(f"{entry}-audit.json" for entry in THREAD_INVENTORY_ENTRIES)))))
 SIMD_FLOAT_FMA_OUTPUTS = frozenset("build/simd-floatx4-fma/" + name for name in (
     "manifest.json", "oracle.txt", "pre-core/SimdFloatFma.json", "post-core/SimdFloatFma.json",
     "pre-audit.json", "post-audit.json", "pre-double-audit.json", "post-double-audit.json"))
@@ -852,6 +856,20 @@ def bignat_artifact_hashes(manifest):
     return artifacts
 
 
+def thread_inventory_artifact_hashes(manifest):
+    require(type(manifest.get("schema")) is int and manifest["schema"] == 1 and manifest.get("ghc") == "9.14.1",
+            "Invalid thread inventory manifest")
+    require(manifest.get("entries") == list(THREAD_INVENTORY_ENTRIES) and manifest.get("stages") == ["pre", "post"] and
+            manifest.get("nativeThread") == "unbound forkIO, threaded RTS -N2",
+            "Invalid thread inventory provenance")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) == THREAD_INVENTORY_OUTPUTS - {"build/thread-inventory/manifest.json"},
+            "Incomplete thread inventory artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid thread inventory artifact hash")
+    return artifacts
+
+
 def allowed_payload(name, pins):
     parts = PurePosixPath(relative(name)).parts
     if name in pins:
@@ -869,6 +887,8 @@ def allowed_payload(name, pins):
             bool(re.fullmatch(r"libHSthc-[\w.-]+\.(so|dylib)", parts[2])))
     if parts[1] == "original-stdio":
         return name in ORIGINAL_STDIO_OUTPUTS
+    if parts[1] == "thread-inventory":
+        return name in THREAD_INVENTORY_OUTPUTS
     if parts[1] == "bignat-literals":
         return name in BIGNAT_OUTPUTS
     if parts[1] == "simd-capability-smoke":
@@ -1025,6 +1045,8 @@ def inventory(root, current, read, core_files, verified=None):
         if not name.endswith(".json"):
             continue
         doc = json.loads(data)
+        if name == "build/thread-inventory/manifest.json":
+            thread_inventory_artifact_hashes(doc)
         if name == "build/bignat-literals/manifest.json":
             bignat_artifact_hashes(doc)
         if name == "build/original-stack-formatter/manifest.json":

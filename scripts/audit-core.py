@@ -1208,6 +1208,8 @@ class Audit:
                             return kind == 'long' and reps == ['IntRep']
                         if role == 'array':
                             return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
+                        if function[1] in ('readArray#', 'indexArray#') and kind == 'object':
+                            return reps in (['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)'])
                         return kind in ('object', 'data', 'closure') and reps == ['BoxedRep (Just Lifted)']
                     expected = array['arguments']
                     if (len(arguments) != len(expected) or any(type(flag) is not bool for flag in flags) or
@@ -1322,7 +1324,7 @@ class Audit:
                             return kind == 'void' and reps == []
                         if role == 'int':
                             return kind == 'long' and reps == ['IntRep']
-                        if role in ('threadId', 'byteArray'):
+                        if role in ('threadId', 'byteArray', 'threadArray'):
                             return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
                         if role == 'action':
                             return kind == 'closure' and reps == ['BoxedRep (Just Lifted)']

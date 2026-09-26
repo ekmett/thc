@@ -11,6 +11,10 @@
     ]
   },
   "leafSources": {
+    "src/main/kotlin/thc/runtime/ThreadObservation.kt": {
+      "junit": ["thc.runtime.GuestThreadInventoryTest", "thc.runtime.ThreadInventoryNativeTest"],
+      "python": ["scripts/test-audit-core.py"]
+    },
     "src/main/kotlin/thc/runtime/ManagedNativeAllocations.kt": {
       "junit": ["thc.runtime.NativeFileBuffersTest", "thc.runtime.NativeMallocTest"],
       "python": []
@@ -249,6 +253,15 @@
     }
   },
   "owners": {
+    "examples/ThreadInventory.hs": {
+      "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
+    },
+    "compiler/test-fixtures/ThreadInventoryNative.hs": {
+      "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
+    },
+    "test/haskell-fixtures/ThreadInventoryFixtures.hs": {
+      "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
+    },
     "test/haskell-fixtures/ScalarBitCastFixtures.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
     "test/haskell-fixtures/BigNatLiteralFixtures.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/BigNatLiteralAudit.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["scripts/test-audit-core.py"]},
@@ -1157,6 +1170,7 @@
         "thc.runtime.ManagedAddressReadTest",
         "thc.runtime.ThreadAsyncNativeTest",
         "thc.runtime.ThreadStatusNativeTest",
+        "thc.runtime.ThreadInventoryNativeTest",
         "thc.runtime.ThreadLabelNativeTest",
         "thc.runtime.UncaughtSelfNativeTest",
         "thc.runtime.Int32ByteOffsetTest",

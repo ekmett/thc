@@ -2189,6 +2189,16 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.endBlock()
                     }
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && CoreThreadObservation.named(fn[1] as String)) {
+                val name = fn[1] as String
+                CoreThreadObservation.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val state = argument(args[0], scope, false)
+                CoreThreadObservation.validate(name, listOf(state.proof), flags, tupleProof)
+                tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginObserveThreads(destination[0], name == "listThreads#")
+                    state.emit(e)
+                    e.builder.endObserveThreads()
+                }
             } else if (fn[0] == "prim" && fn[1] == "yield#") {
                 CoreYield.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operand = argument(args[0], scope, false)

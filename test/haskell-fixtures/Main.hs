@@ -27,6 +27,7 @@ import ArithmeticExceptionFixtures (prepareArithmeticExceptions, refreshArithmet
 import LiveAsyncFixtures (prepareLiveAsync)
 import ThreadLabelFixtures (prepareThreadLabel)
 import ThreadStatusFixtures (prepareThreadStatus)
+import ThreadInventoryFixtures (prepareThreadInventory)
 import ThreadAsyncFixtures (prepareThreadAsync)
 import UncaughtSelfFixtures (prepareUncaughtSelf)
 import MaskFunctionFixtures (prepareMaskFunctions)
@@ -945,10 +946,11 @@ main = do
     ["live-async"] -> prepareLiveAsync root
     ["thread-label"] -> prepareThreadLabel root
     ["thread-status"] -> prepareThreadStatus root
+    ["thread-inventory"] -> prepareThreadInventory root
     ["thread-async"] -> prepareThreadAsync root
     ["uncaught-self"] -> prepareUncaughtSelf root
     ["mask-functions"] -> prepareMaskFunctions root
     ["interface-core"] -> prepareInterfaceCore root
     ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (rts-shutdown|interface-core|core-continuation|arithmetic-exceptions [--core-only]|mask-functions|live-async|thread-async|thread-status|thread-label|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-fcntl|original-stdio [OPTIONS]|original-stdio-read|original-handle-readiness|original-stdio-close|original-posix-dup|original-stdio-seek|original-stdio-truncate|original-strerror|original-fd-ready|file-wait|original-gmp [--require-supported]|original-rts-locks [--require-supported]|rts-diagnostics|mutvar|stable-pointers|weak-explicit|shrink-bytearrays|bit|integer|signed-narrow|explicit64|word-floating|scalar-bitcasts|bignat-literals [--check-only]|fused-floating|simd-floatx4-fma|simd-wide-floating-fma|sqrt|unsafe-equality [--check-only]|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|managed-address-reads|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (rts-shutdown|interface-core|core-continuation|arithmetic-exceptions [--core-only]|mask-functions|live-async|thread-async|thread-status|thread-label|thread-inventory|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-fcntl|original-stdio [OPTIONS]|original-stdio-read|original-handle-readiness|original-stdio-close|original-posix-dup|original-stdio-seek|original-stdio-truncate|original-strerror|original-fd-ready|file-wait|original-gmp [--require-supported]|original-rts-locks [--require-supported]|rts-diagnostics|mutvar|stable-pointers|weak-explicit|shrink-bytearrays|bit|integer|signed-narrow|explicit64|word-floating|scalar-bitcasts|bignat-literals [--check-only]|fused-floating|simd-floatx4-fma|simd-wide-floating-fma|sqrt|unsafe-equality [--check-only]|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|managed-address-reads|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

@@ -81,6 +81,9 @@ internal class GuestThreads internal constructor(
     // Weak keys release dead Java carriers. Numbers are never recycled, so a
     // retained finished ThreadId still names its original logical capability.
     private val identities = WeakHashMap<Thread, GuestThreadId>()
+    // A retained ThreadId# keeps a finished guest observable even after its
+    // Java carrier is collected. This registry itself retains neither.
+    private val knownThreads = WeakHashMap<GuestThreadId, Unit>()
     // Like TSO.label, the exact ByteArray# stays live while its ThreadId# does.
     // Weak keys do not keep a terminated Java carrier or discarded ThreadId alive.
     private val labels = WeakHashMap<GuestThreadId, Any>()
@@ -155,7 +158,7 @@ internal class GuestThreads internal constructor(
         check(prior == null || prior.thread === current) { "Java thread ID was reused before guest completion" }
         if (prior == null && inheritedMask != null) maskingState.set(inheritedMask)
         val identity = identities.getOrPut(current) {
-            GuestThreadId(id, this, allocatedCapabilities++, current, forked)
+            GuestThreadId(id, this, allocatedCapabilities++, current, forked).also { knownThreads[it] = Unit }
         }
         check(!identity.status.terminal) { "Terminated guest Java thread re-entered" }
         val slot = prior ?: GuestThread(current, identity).also { threads[id] = it }
@@ -175,6 +178,23 @@ internal class GuestThreads internal constructor(
 
     fun currentIdentity(): GuestThreadId = currentSlot.get()?.takeIf { it.entries > 0 }?.identity
         ?: fault("Current Java thread has not entered this guest context")
+
+    /** Independent Array# snapshot including retained completed identities.
+     * Registry mutation and weak-key expunging share this lock. No guest code
+     * or Java thread enumeration runs under it; ordering is unspecified. */
+    @TruffleBoundary @Synchronized fun snapshot(): Array<Any?> {
+        if (closed) fault("Guest context has closed")
+        currentIdentity()
+        return knownThreads.keys.toTypedArray<Any?>()
+    }
+
+    /** The admitted runtime has no forkOS/bound-foreign-TLS contract. A Java
+     * carrier, foreign-call extent or capability lock does not make a bound TSO. */
+    @TruffleBoundary @Synchronized fun isCurrentBound(): Boolean {
+        if (closed) fault("Guest context has closed")
+        currentIdentity()
+        return false
+    }
 
     @TruffleBoundary @Synchronized fun status(identity: GuestThreadId): GuestThreadStatus {
         if (closed) fault("Guest context has closed")
@@ -324,6 +344,7 @@ internal class GuestThreads internal constructor(
             closed = true
             mainThreadWeak = null
             labels.clear()
+            knownThreads.clear()
             identities.values.forEach { it.status = GuestThreadStatus.RUNTIME_FAILURE }
             threads.values.flatMap { slot ->
                 slot.identity.status = GuestThreadStatus.RUNTIME_FAILURE
@@ -389,6 +410,7 @@ internal class GuestThreads internal constructor(
     }
 
     companion object {
+        @JvmStatic fun current(node: Node): GuestThreads = Language.currentState(node).threads
         private val foreignExtents = ThreadLocal<Int?>()
         private val activeIdentity = ThreadLocal<GuestThreadId?>()
 

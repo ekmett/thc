@@ -23,6 +23,7 @@
     "thc.runtime.GuestThreadsTest",
     "thc.runtime.GuestThreadStatusTest",
     "thc.runtime.GuestThreadLabelTest",
+    "thc.runtime.GuestThreadInventoryTest",
     "thc.runtime.BytecodeTypedTupleInputTest",
     "thc.runtime.SimdAstTransportTest",
     "thc.runtime.DoubleArrayTest",
@@ -46,6 +47,14 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "thread-inventory": {
+      "junit": ["thc.runtime.ThreadInventoryNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-inventory"]}],
+      "outputs": ["build/thread-inventory"],
+      "sources": ["examples/ThreadInventory.hs", "compiler/test-fixtures/ThreadInventoryNative.hs",
+        "test/haskell-fixtures/ThreadInventoryFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "thread-label": {
       "junit": ["thc.runtime.ThreadLabelNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-label"]}],

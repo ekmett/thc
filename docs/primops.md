@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 503 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 679 | No declared lowering. |
+| Partial | 505 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 677 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -53,6 +53,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - Original ghc-internal memcpy has the same exact Addr#/Addr#/Word64#/State# declaration and checked storage transport as memmove, but rejects overlapping nonempty ranges before mutation. Adjacent and empty checked regions are permitted; the returned Addr# is the original destination carrier.
 - Original ghc-internal strlen scans only live, bounded managed or owned native Addr# bytes through the first NUL and returns the exact Int# length. Unterminated storage, pointer-cell byte exposure, opaque labels, unowned numeric addresses and freed native allocations reject. rts_isThreaded reports the nonthreaded RTS mode used by THC's admitted original FD and wait path; it does not report the number of Java guest threads or offer GHC's threaded RTS ABI.
 - labelThread#/threadLabel# retain and observe the exact UTF-8 ByteArray# on context-owned Java thread identities, including finished threads; empty labels are present and host Java thread names are unchanged. Labels are released with their identities or context disposal. No RTS eventlog emission is claimed.
+- listThreads# returns independent Array# snapshots of context-owned guest identities, including retained completed threads, with unspecified order and weak registry retention. indexArray#/readArray# also transport unlifted object elements; writes retain the lifted gate. isCurrentThreadBound# observes THC's admitted unbound-only runtime and returns zero for registered guest entries, not a claim of forkOS/TLS support. par#/spark#/getSpark#/numSparks#/forkOn# remain unsupported: safe speculative cancellation and a capability scheduler are not provided.
 - threadStatus# returns the exact State#/Int#/Int#/Int# tuple for context-owned Java thread identities. Logical capabilities are monotonically allocated per Java carrier, not physical CPU numbers; forkOn/count/affinity APIs remain unsupported. Registered MVar, black-hole, throwTo and foreign boundaries report their actual managed states. Forked threads retain normal/uncaught-guest completion; a live host carrier outside guest entry remains foreign and keeps its identity on re-entry. Existing throwTo mailboxes are scoped to active guest invocations and do not queue across separate host calls.
 - The public AST killThread# path preserves exact asynchronous self-delivery through catch# and Haskell masks. It rejects an external target before enqueueing because ordinary AST callers have no saved sender continuation. Only the restricted, explicitly admitted captured AST route can suspend and resume an external send; bytecode remains the general thread-primitive backend.
 - The enabled_capabilities RTS data label is a context-owned, live Word32 cell containing at least one logical Java carrier. Only readWord32OffAddr# at offset zero is supported; writes, other widths, offsets and native projection reject. This does not provide physical GHC -N semantics, capability resizing, event-manager reconfiguration or arbitrary RTS data symbols.
@@ -542,11 +543,13 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `insertWord64X8#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `insertWord8X16#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `int2Addr#` — arity 1 — Managed addresses with operation-specific storage restrictions
+- [ ] `isCurrentThreadBound#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `isEmptyMVar#` — arity 2 — Managed blocking cells; backend and continuation limits apply
 - [ ] `keepAlive#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `killThread#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `labelThread#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `leAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
+- [ ] `listThreads#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `ltAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `makeStablePtr#` — arity 2 — Context-owned opaque stable handles; no pointer memory access
 - [ ] `maskAsyncExceptions#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -1110,10 +1113,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `insertWord8X64#` — arity 3
 - [ ] `isByteArrayPinned#` — arity 1
 - [ ] `isByteArrayWeaklyPinned#` — arity 1
-- [ ] `isCurrentThreadBound#` — arity 1
 - [ ] `isMutableByteArrayPinned#` — arity 1
 - [ ] `isMutableByteArrayWeaklyPinned#` — arity 1
-- [ ] `listThreads#` — arity 1
 - [ ] `makeStableName#` — arity 2
 - [ ] `maxDouble#` — arity 2
 - [ ] `maxFloat#` — arity 2

@@ -39,6 +39,19 @@ def report(module):return audit.Audit([('array.json',module)],CAP).run(['root'])
 def codes(module):return {i['code'] for i in report(module)['issues']}
 
 class ArrayContracts(unittest.TestCase):
+    def test_reads_transport_unlifted_object_elements_but_not_scalar_or_forged_boxed_values(self):
+        for name in ('readArray#', 'indexArray#'):
+            module, app = fixture(name, 'object')
+            proof = app[6]['rep']
+            proof['components'][-1].update(primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
+            proof['primReps'] = ['BoxedRep (Just Unlifted)']
+            module['bindings'][0]['expr'][2][-1]['binder']['rep'] = copy.deepcopy(proof)
+            self.assertTrue(report(module)['accepted'], report(module)['issues'])
+            for kind in ('long', 'data', 'closure', 'unknown'):
+                changed = copy.deepcopy(module)
+                changed['bindings'][0]['expr'][2][1][6]['rep']['components'][-1]['kind'] = kind
+                self.assertIn('primitive-representation', codes(changed), (name, kind))
+
     def test_all_lifted_reference_classes(self):
         for name in CAP['managedArrayPrimitives']:
             for kind in ('data','closure','object'):
