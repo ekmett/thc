@@ -7,6 +7,7 @@ package thc.runtime
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Context
+import org.graalvm.polyglot.Engine
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.CoreModules
@@ -23,9 +24,54 @@ class TupleRepresentationTest {
     private fun module() = map(Json.parse(File(root, "build/aggregate-core/AggregateFrontier.json").readText()))
     private fun binding(module: Map<String, Any?>, name: String) = (module["bindings"] as List<Map<String, Any?>>).single { it["name"] == name }
     private fun expression(module: Map<String, Any?>, name: String) = list(binding(module, name)["expr"])
-    private fun withLanguage(action: (Language) -> Unit) = Context.newBuilder("thc").build().use { context ->
+    private fun withLanguage(engine: Engine? = null, action: (Language) -> Unit) = Context.newBuilder("thc")
+        .also { builder -> if (engine != null) builder.engine(engine) }.build().use { context ->
         context.initialize("thc"); context.enter()
         try { action(TruffleLanguage.LanguageReference.create(Language::class.java).get(null)) } finally { context.leave() }
+    }
+    @Test fun canonicalShapeKeysPreserveLogicalIdentityWithoutSharingContextLayouts() {
+        val state = CoreRepresentation(CoreKind.VOID, true, true, emptyList())
+        val integer = CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep"))
+        val word = integer.copy(primReps = listOf("WordRep"))
+        val lifted = CoreRepresentation(CoreKind.OBJECT, false, true, listOf("BoxedRep (Just Lifted)"))
+        val unlifted = lifted.copy(evaluated = true, primReps = listOf("BoxedRep (Just Unlifted)"))
+        val float = CoreRepresentation(CoreKind.FLOAT, true, true, listOf("FloatRep"))
+        val double = CoreRepresentation(CoreKind.DOUBLE, true, true, listOf("DoubleRep"))
+        fun tuple(vararg fields: CoreRepresentation) = CoreRepresentation(CoreKind.UNKNOWN, true, true,
+            fields.flatMap { it.primReps!! }, fields.toList())
+        fun vector(lanes: Int, element: String) = CoreRepresentation(CoreKind.VECTOR, true, true,
+            listOf("VecRep $lanes $element"), vector = CoreVector(lanes, element))
+        fun sum(first: CoreRepresentation, second: CoreRepresentation) = CoreRepresentation(CoreKind.UNKNOWN, true, true,
+            listOf("WordRep", "WordRep"), alternatives = listOf(first, second), tagSlot = 0,
+            alternativeSlots = listOf(listOf(1), listOf(1))).also(SumShape::validate)
+        val floatVector = vector(4, "FloatElemRep")
+        val proofs = listOf(tuple(), tuple(state), tuple(tuple()), tuple(integer), tuple(word),
+            tuple(state, integer), tuple(integer, state), tuple(tuple(integer)), tuple(integer, word), tuple(word, integer),
+            tuple(lifted), tuple(lifted.copy(kind = CoreKind.DATA, evaluated = true)), tuple(unlifted),
+            tuple(float), tuple(double), floatVector, tuple(floatVector), vector(2, "DoubleElemRep"),
+            vector(4, "Int32ElemRep"), vector(4, "Word32ElemRep"), sum(integer, word), sum(word, integer),
+            sum(integer, integer), sum(tuple(integer), integer))
+        Engine.create().use { engine ->
+            lateinit var previous: List<TupleShape>
+            withLanguage(engine) { language ->
+                previous = proofs.map { TupleShape(it, language) }
+                for (left in proofs.indices) for (right in proofs.indices)
+                    assertEquals(TupleShape.compatible(proofs[left], proofs[right]), previous[left].matches(previous[right]),
+                        "logical shape $left / $right")
+                assertTrue(previous[10].matches(previous[11]), "WHNF/kind refinements do not change boxed representation")
+                for ((left, right) in listOf(0 to 1, 0 to 2, 3 to 4, 5 to 6, 3 to 7, 8 to 9, 10 to 12,
+                        13 to 14, 15 to 16, 15 to 17, 18 to 19, 20 to 21, 20 to 22, 22 to 23))
+                    assertFalse(previous[left].matches(previous[right]), "distinct logical shapes $left / $right")
+            }
+            withLanguage(engine) { language ->
+                for ((index, proof) in proofs.withIndex()) {
+                    val fresh = TupleShape(proof, language)
+                    assertTrue(fresh.matches(previous[index]), "same metadata across contexts")
+                    assertNotSame(previous[index].language, fresh.language, "THC's EXCLUSIVE context policy remains unchanged")
+                    assertNotSame(previous[index].layout, fresh.layout, "storage layouts remain context-owned")
+                }
+            }
+        }
     }
     @Test fun equalPhysicalVectorsDoNotEraseLogicalTupleBoundaries() {
         val mutations = listOf<(MutableMap<String, Any?>) -> Unit>(

@@ -239,6 +239,23 @@ the three diagnostic concatenations. The next image analysis clears these four
 blocklist paths and advances to preparation of the empty handoff-argument array.
 These JVM checks do not establish guest JIT in the native executable.
 
+Preparing the signal-dispatch root then exposed 68 blocklist paths through
+`TupleShape.matches`: structural `List.equals` admitted arbitrary host equality
+implementations into runtime analysis. Tuple shapes now reuse the existing
+canonical lowering-time compatibility key already used by argument layouts.
+Runtime matching compares key identity, while representation validation and
+context-owned storage layouts are unchanged. Only immutable metadata is interned.
+
+Verification includes a 24-by-24 logical-shape compatibility matrix covering
+zero-width fields, nesting, field order, boxed refinements, vectors and sums;
+two contexts on one engine retain separate language instances and storage
+layouts while agreeing on metadata. Tuple, typed-case and floating tests pass
+in both handoff modes: 24 focused passes, followed by four passes of the
+strengthened context-isolation checks. The generated matcher uses reference
+comparison, not `List.equals`. The next real image analysis clears all 68
+blocklist paths and advances to other runtime-graph preparation issues; it
+does not yet establish native guest-JIT execution.
+
 ## Execution models
 
 | Product | What is fixed when built | Guest execution |

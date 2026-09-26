@@ -35,8 +35,10 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
         components.forEachIndexed { index, component -> offsets[index] = next; next += flatten(component).size }
     }
     val width: Int get() = leaves.size
-    private val signature = signature(proof)
-    fun matches(other: TupleShape): Boolean = signature == other.signature
+    // Reuse the canonical load-time key used by argument layouts. Guest calls
+    // compare only metadata identity, never recursively dispatch List.equals.
+    private val signature = compatibilityKey(proof)
+    fun matches(other: TupleShape): Boolean = signature === other.signature
     @ExplodeLoop fun copyFrom(frame: VirtualFrame, storage: HandoffStorage, slots: IntArray, offset: Int) {
         check(storage.layout === layout)
         for (index in leaves.indices) {
