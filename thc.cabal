@@ -716,6 +716,7 @@ executable thc-fixtures
     LibdwUnavailableFixtures
     NativeAddressFixtures
     ProcessSignalFixtures
+    SignalDispatchFixtures
     RtsShutdownFixtures
     FileWaitFixtures
     OriginalFdReadyFixtures

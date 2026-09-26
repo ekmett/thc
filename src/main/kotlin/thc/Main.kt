@@ -74,13 +74,16 @@ internal fun executionContext(fileIO: Boolean, ffiMode: FfiMode): Context {
  * @param ioMain select the `IO ()` entry contract and disable diagnostic unsupported traps.
  * @param shutdownEntry distinct accepted IO shutdown entry for full executable lifecycle;
  * only valid with [ioMain].
+ * @param asyncExceptions explicit asynchronous mode, or the optional strict Boolean
+ * `thc.asyncExceptions` launcher property. When absent, AST defaults to false and bytecode to true.
  */
 @JvmOverloads
 fun loadEntry(context: Context, modules: List<String>, entry: String, instrument: Boolean = true,
-              backend: String = defaultBackend(), ioMain: Boolean = false, shutdownEntry: String? = null): Value =
+              backend: String = defaultBackend(), ioMain: Boolean = false, shutdownEntry: String? = null,
+              asyncExceptions: Boolean? = System.getProperty("thc.asyncExceptions")?.toBooleanStrict()): Value =
     context.eval("thc", CoreModules.request(modules, entry, instrument,
         !ioMain && java.lang.Boolean.getBoolean("thc.diagnosticUnsupported"), backend,
-        System.getProperty("thc.sourceNotesEnabled", "true").toBooleanStrict(), ioMain, shutdownEntry))
+        System.getProperty("thc.sourceNotesEnabled", "true").toBooleanStrict(), ioMain, shutdownEntry, asyncExceptions))
 
 /**
  * Load one verified managed export bundle into [context]. The result has read-only

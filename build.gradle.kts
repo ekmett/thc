@@ -548,6 +548,26 @@ tasks.register<Test>("packageScalarFullCoreTest") {
         }
     }
 }
+for ((taskName, dense) in listOf("signalDispatchFullCoreDefault" to false, "signalDispatchFullCoreDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests original GHC signal handler lookup and forked dispatch on both backends."
+        maxHeapSize = "4g"
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        inputs.files(fileTree("build/signal-dispatch") { include("**/*.json", "oracle.txt", "installed/bundles/*.zip") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.SignalDispatchFullCoreTest") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original signal delivery requires a fresh test process") { true }
+        doFirst {
+            check(file("build/signal-dispatch/manifest.json").isFile) {
+                "Select full-Core GHC 9.14.1 and run cabal run exe:thc-fixtures -- signal-dispatch"
+            }
+        }
+    }
+}
 for ((taskName, dense) in listOf("stablePtrFfiFullCoreDefault" to false, "stablePtrFfiFullCoreDense" to true)) {
     tasks.register<Test>(taskName) {
         group = "verification"
