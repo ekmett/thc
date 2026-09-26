@@ -27,7 +27,7 @@ internal data class CoreRepresentation(
     val isTuple: Boolean get() = components != null
     val isSum: Boolean get() = alternatives != null
     val isAggregate: Boolean get() = isTuple || isSum
-    /** A vector remains one logical value, but crosses calls through primitive lane storage. */
+    /** A vector remains one logical value and one raw reference in typed transport. */
     val isTypedTransport: Boolean get() = isAggregate || isVector
     val isEmptyTuple: Boolean get() = present && kind == CoreKind.UNKNOWN && components?.isEmpty() == true && primReps?.isEmpty() == true
     val isLong: Boolean get() = kind == CoreKind.LONG

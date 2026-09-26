@@ -3723,12 +3723,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         }
         local.bindTuple(read.vectorBinder, vectorProof, lanes)
         val body = compile(read.body, local, tail)
-        // The immediate read result owns primitive locals, including when a
-        // nested closure later snapshots those lanes into its captured frame.
+        // Retain the raw vector locally; a nested closure converts it to owned
+        // primitive fields only when constructing its captured environment.
         return LoweredCaseExpression(ProvenExpression(ResultExpression { e, destination ->
             val b = e.builder
             b.beginBlock()
-            lanes.forEach { e.locals[it.id] = b.createLocal(it.name, "primitive") }
+            lanes.forEach { e.locals[it.id] = b.createLocal(it.name, "object") }
             value.emitTuple(e, lanes.map { e.locals.getValue(it.id) })
             emitResult(body, e, destination)
             b.endBlock()
@@ -3784,7 +3784,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             b.beginBlock()
             val fields = args.mapIndexed { index, argument ->
                 if (layout.isVector(index)) {
-                    val lanes = List(layout.fieldWidth(index)) { lane -> b.createLocal("field $index lane $lane", "primitive") }
+                    val lanes = List(layout.fieldWidth(index)) { lane -> b.createLocal("field $index vector $lane", "object") }
                     argument.emitTuple(e, lanes)
                     lanes
                 } else {

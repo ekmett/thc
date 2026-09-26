@@ -15,6 +15,7 @@ import thc.Json
 import thc.Language
 import java.io.File
 import java.lang.reflect.Modifier
+import jdk.incubator.vector.Vector
 
 /** Heap ownership is independent of transient carriers and reusable call storage. */
 class VectorHeapStorageTest {
@@ -39,32 +40,13 @@ class VectorHeapStorageTest {
         val frame: VirtualFrame = Truffle.getRuntime().createVirtualFrame(emptyArray(), layout.build())
     }
     private fun fill(proof: CoreRepresentation, target: Slots) {
-        val vector = VectorLayout(proof)
-        for (index in 0 until vector.lanes) when {
-            vector.lane.isFloat -> FrameAccess.writeFloat(target.frame, target.slots[index],
-                Float.fromBits(intArrayOf(Int.MIN_VALUE, 1, 0x7fc01234, 0x7f800000)[index % 4]))
-            vector.lane.isDouble -> FrameAccess.writeDouble(target.frame, target.slots[index],
-                Double.fromBits(longArrayOf(Long.MIN_VALUE, 1, 0x7ff8000000001234L, 0x7ff0000000000000L)[index % 4]))
-            else -> {
-                val bits = -1L - index * 104729L
-                FrameAccess.writeLong(target.frame, target.slots[index], when (vector.lane.primReps!!.single()) {
-                    "Int8Rep" -> bits.toByte().toLong(); "Word8Rep" -> bits and 255L
-                    "Int16Rep" -> bits.toShort().toLong(); "Word16Rep" -> bits and 65535L
-                    "Int32Rep" -> bits.toInt().toLong(); "Word32Rep" -> bits and 4294967295L
-                    else -> bits
-                })
-            }
-        }
+        VectorLayout(proof).write(target.frame, target.slots, 0, rawVectorTestValue(proof))
     }
     private fun compare(proof: CoreRepresentation, expected: Slots, actual: Slots) {
         val vector = VectorLayout(proof)
-        for (index in 0 until vector.lanes) when {
-            vector.lane.isFloat -> assertEquals(expected.frame.getFloat(expected.slots[index]).toRawBits(),
-                actual.frame.getFloat(actual.slots[index]).toRawBits())
-            vector.lane.isDouble -> assertEquals(expected.frame.getDouble(expected.slots[index]).toRawBits(),
-                actual.frame.getDouble(actual.slots[index]).toRawBits())
-            else -> assertEquals(expected.frame.getLong(expected.slots[index]), actual.frame.getLong(actual.slots[index]))
-        }
+        val first = vector.read(expected.frame, expected.slots, 0) as Vector<*>
+        val second = vector.read(actual.frame, actual.slots, 0) as Vector<*>
+        assertArrayEquals(first.reinterpretAsBytes().toArray(), second.reinterpretAsBytes().toArray())
     }
     private fun metadata(proof: CoreRepresentation): Map<String, Any?> = mapOf(
         "id" to "VectorBox", "name" to "VectorBox", "kind" to "boxed", "arity" to 3,
@@ -79,21 +61,21 @@ class VectorHeapStorageTest {
         for (strategy in listOf("field-based", "array-based")) inLanguage(strategy) { language ->
             for (proof in vectors()) {
                 val lanes = proof.vector!!.lanes
-                val source = Slots(lanes + 2); fill(proof, source)
-                val expected = Slots(lanes); fill(proof, expected)
+                val source = Slots(3); fill(proof, source)
+                val expected = Slots(1); fill(proof, expected)
                 val cell = RecCell()
                 val captures = CaptureLayout.withVectors(language, arrayOf(proof, null, null),
                     booleanArrayOf(false, true, false), booleanArrayOf(false, true, false))
-                assertEquals(lanes + 2, captures.storageSize)
-                assertEquals(lanes, captures.fieldWidth(0)); assertEquals(1, captures.fieldWidth(1))
+                assertEquals(3, captures.storageSize)
+                assertEquals(1, captures.fieldWidth(0)); assertEquals(1, captures.fieldWidth(1))
                 assertEquals(proof, captures.vectorProof(0)); assertFalse(captures.isVector(1))
-                FrameAccess.writeLong(source.frame, source.slots[lanes], Long.MIN_VALUE)
-                FrameAccess.write(source.frame, source.slots[lanes + 1], cell)
+                FrameAccess.writeLong(source.frame, source.slots[1], Long.MIN_VALUE)
+                FrameAccess.write(source.frame, source.slots[2], cell)
                 val environment = captures.capture(source.frame, source.slots)
                 val fields = CoreFields(metadata(proof))
                 val constructor = DataLayout.fromFields(language, "VectorBox", "VectorBox", fields)
                 assertEquals(3, constructor.arity)
-                assertEquals(lanes, constructor.fieldWidth(0)); assertEquals(proof, constructor.vectorProof(0))
+                assertEquals(1, constructor.fieldWidth(0)); assertEquals(proof, constructor.vectorProof(0))
                 val never = object : RootNode(language) {
                     override fun execute(frame: VirtualFrame): Any = error("Lazy heap reference was forced")
                 }.callTarget
@@ -103,7 +85,7 @@ class VectorHeapStorageTest {
                 constructor.initializeLong(value, 1, Long.MAX_VALUE)
                 constructor.initialize(value, 2, thunk)
                 source.slots.forEach(source.frame::clear)
-                val restored = Slots(lanes)
+                val restored = Slots(1)
                 repeat(2) {
                     captures.restoreVector(environment, 0, restored.frame, restored.slots, 0)
                     compare(proof, expected, restored)
@@ -153,8 +135,7 @@ class VectorHeapStorageTest {
         for (strategy in listOf("field-based", "array-based")) inLanguage(strategy) { language ->
             for (proof in vectors()) {
                 val vector = VectorLayout(proof)
-                val lanes = vector.lanes
-                val expected = Slots(lanes); fill(proof, expected)
+                val expected = Slots(1); fill(proof, expected)
                 val captures = CaptureLayout.withVectors(language, arrayOf(proof, null, null, null, null),
                     booleanArrayOf(false, true, true, true, false))
                 val locals = mutableListOf<LocalAccessor>()
@@ -169,24 +150,20 @@ class VectorHeapStorageTest {
                 // including their primitive type profiles, without an AST slot shim.
                 val frame = Truffle.getRuntime().createVirtualFrame(arrayOf(0L), root.frameDescriptor)
                 val slots = locals.toTypedArray()
-                for (index in 0 until lanes) when {
-                    vector.lane.isFloat -> slots[index].setFloat(bytecode, frame, expected.frame.getFloat(expected.slots[index]))
-                    vector.lane.isDouble -> slots[index].setDouble(bytecode, frame, expected.frame.getDouble(expected.slots[index]))
-                    else -> slots[index].setLong(bytecode, frame, expected.frame.getLong(expected.slots[index]))
-                }
+                vector.write(bytecode, frame, slots, 0, vector.read(expected.frame, expected.slots, 0))
                 val float = Float.fromBits(0x7fc01234)
                 val double = Double.fromBits(0x7ff8000000001234L)
                 val cell = RecCell()
-                slots[lanes].setLong(bytecode, frame, Long.MIN_VALUE)
-                slots[lanes + 1].setFloat(bytecode, frame, float)
-                slots[lanes + 2].setDouble(bytecode, frame, double)
-                slots[lanes + 3].setObject(bytecode, frame, cell)
+                slots[1].setLong(bytecode, frame, Long.MIN_VALUE)
+                slots[2].setFloat(bytecode, frame, float)
+                slots[3].setDouble(bytecode, frame, double)
+                slots[4].setObject(bytecode, frame, cell)
                 // Direct LocalAccessor writes retain primitive frame carriers;
                 // bytecode locals' typeProfile is populated by executed StoreLocal
                 // instructions, which this isolated storage test does not emit.
-                assertEquals(Long.MIN_VALUE, slots[lanes].getLong(bytecode, frame))
-                assertEquals(float.toRawBits(), slots[lanes + 1].getFloat(bytecode, frame).toRawBits())
-                assertEquals(double.toRawBits(), slots[lanes + 2].getDouble(bytecode, frame).toRawBits())
+                assertEquals(Long.MIN_VALUE, slots[1].getLong(bytecode, frame))
+                assertEquals(float.toRawBits(), slots[2].getFloat(bytecode, frame).toRawBits())
+                assertEquals(double.toRawBits(), slots[3].getDouble(bytecode, frame).toRawBits())
                 val environment = captures.captureLocals(bytecode, frame, slots)
                 slots.forEach { it.clear(bytecode, frame) }
                 assertTrue(slots.all { it.isCleared(bytecode, frame) })
@@ -197,13 +174,9 @@ class VectorHeapStorageTest {
                 assertEquals(double.toRawBits(), (captures.readObject(environment, 3) as Double).toRawBits())
                 assertSame(cell, captures.readObject(environment, 4)); assertFalse(cell.initialized)
                 captures.restoreVector(environment, 0, bytecode, frame, slots, 0)
-                for (index in 0 until lanes) when {
-                    vector.lane.isFloat -> assertEquals(expected.frame.getFloat(expected.slots[index]).toRawBits(),
-                        slots[index].getFloat(bytecode, frame).toRawBits())
-                    vector.lane.isDouble -> assertEquals(expected.frame.getDouble(expected.slots[index]).toRawBits(),
-                        slots[index].getDouble(bytecode, frame).toRawBits())
-                    else -> assertEquals(expected.frame.getLong(expected.slots[index]), slots[index].getLong(bytecode, frame))
-                }
+                val restored = Slots(1)
+                vector.write(restored.frame, restored.slots, 0, vector.read(bytecode, frame, slots, 0))
+                compare(proof, expected, restored)
             }
         }
     }
@@ -211,7 +184,7 @@ class VectorHeapStorageTest {
     @Test fun bytecodeGenericFieldsBesideVectorsPreserveBoxedNumericCarriers() {
         for (strategy in listOf("field-based", "array-based")) inLanguage(strategy) { language ->
             val proof = vectors().single { it.vector == CoreVector.INT8X16 }
-            val expected = Slots(16); fill(proof, expected)
+            val expected = Slots(1); fill(proof, expected)
             val layout = DataLayout.fromFields(language, "VectorBox", "VectorBox", CoreFields(metadata(proof)))
             val numbers: List<Any> = listOf(Long.MIN_VALUE, Float.fromBits(0x7fc01234),
                 Double.fromBits(0x7ff8000000001234L))
@@ -220,10 +193,10 @@ class VectorHeapStorageTest {
                 // fallback must not hide a missing numeric storage guard.
                 val target = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
                     b.beginRoot()
-                    val lanes = List(16) { index ->
-                        b.createLocal("lane $index", "primitive").also { local ->
+                    val lanes = List(1) { index ->
+                        b.createLocal("vector $index", "object").also { local ->
                             b.beginStoreLocal(local)
-                            b.emitLoadConstant(expected.frame.getLong(expected.slots[index]))
+                            b.emitLoadConstant(expected.frame.getObject(expected.slots[index]))
                             b.endStoreLocal()
                         }
                     }
@@ -251,7 +224,7 @@ class VectorHeapStorageTest {
                         is Double -> assertEquals(number.toRawBits(), (actual as Double).toRawBits())
                     }
                     assertEquals(Long.MAX_VALUE, layout.readLong(value, 1))
-                    val restored = Slots(16)
+                    val restored = Slots(1)
                     layout.restoreVector(value, 0, restored.frame, restored.slots, 0)
                     compare(proof, expected, restored)
                 }
@@ -265,7 +238,7 @@ class VectorHeapStorageTest {
             val unsigned = vectors().single { it.vector == CoreVector.WORD8X16 }
             val first = DataLayout.fromFields(language, "A", "A", CoreFields(metadata(signed)))
             val second = DataLayout.fromFields(language, "B", "B", CoreFields(metadata(unsigned)))
-            val source = Slots(16); fill(signed, source)
+            val source = Slots(1); fill(signed, source)
             val value = first.allocate(); first.initializeVector(value, 0, source.frame, source.slots, 0)
             assertNotEquals(first.vectorProof(0), second.vectorProof(0))
             assertThrows(RuntimeFault::class.java) { second.restoreVector(value, 0, source.frame, source.slots, 0) }

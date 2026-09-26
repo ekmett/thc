@@ -9,7 +9,7 @@ import com.oracle.truffle.api.bytecode.LocalAccessor
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.ExplodeLoop
 
-/** Exact vector metadata and replay-local lanes; no activation or vector payload is retained. */
+/** Exact vector metadata and one replay-local slot; no activation or payload is retained here. */
 internal class BytecodeVectorSlots(proof: CoreRepresentation,
     @field:CompilationFinal(dimensions = 1) private val slots: Array<LocalAccessor>) {
     private val layout = VectorLayout(proof)

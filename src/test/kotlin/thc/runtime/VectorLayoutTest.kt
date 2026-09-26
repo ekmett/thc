@@ -13,6 +13,26 @@ import org.junit.jupiter.api.Test
 import thc.Json
 import thc.Language
 import java.io.File
+import jdk.incubator.vector.*
+
+/** Independent payload construction for transport/heap tests, including nonuniform lanes. */
+@Suppress("UNCHECKED_CAST")
+internal fun rawVectorTestValue(proof: CoreRepresentation): Vector<*> {
+    val layout = VectorLayout(proof)
+    val count = layout.lanes
+    fun bits(index: Int) = -1L - index * 104729L
+    return when (proof.vector!!.element) {
+        "Int8ElemRep", "Word8ElemRep" -> ByteVector.fromArray(layout.species as VectorSpecies<Byte>, ByteArray(count) { bits(it).toByte() }, 0)
+        "Int16ElemRep", "Word16ElemRep" -> ShortVector.fromArray(layout.species as VectorSpecies<Short>, ShortArray(count) { bits(it).toShort() }, 0)
+        "Int32ElemRep", "Word32ElemRep" -> IntVector.fromArray(layout.species as VectorSpecies<Int>, IntArray(count) { bits(it).toInt() }, 0)
+        "Int64ElemRep", "Word64ElemRep" -> LongVector.fromArray(layout.species as VectorSpecies<Long>, LongArray(count) { bits(it) }, 0)
+        "FloatElemRep" -> FloatVector.fromArray(layout.species as VectorSpecies<Float>, FloatArray(count) {
+            Float.fromBits(intArrayOf(Int.MIN_VALUE, 1, 0x7fc01234, 0x7f800000)[it % 4]) }, 0)
+        "DoubleElemRep" -> DoubleVector.fromArray(layout.species as VectorSpecies<Double>, DoubleArray(count) {
+            Double.fromBits(longArrayOf(Long.MIN_VALUE, 1L, 0x7ff8000000001234L, 0x7ff0000000000000L)[it % 4]) }, 0)
+        else -> error("Unexpected vector proof")
+    }
+}
 
 /** Transport controls independent of arithmetic and of either loader's optimizations. */
 class VectorLayoutTest {
@@ -37,47 +57,24 @@ class VectorLayoutTest {
         val frame: VirtualFrame = Truffle.getRuntime().createVirtualFrame(emptyArray(), layout.build())
     }
     private fun fill(layout: VectorLayout, slots: Slots) {
-        for (index in 0 until layout.lanes) when {
-            layout.lane.isFloat -> FrameAccess.writeFloat(slots.frame, slots.slots[index],
-                Float.fromBits(intArrayOf(Int.MIN_VALUE, 1, 0x7fc01234, 0x7f800000)[index % 4]))
-            layout.lane.isDouble -> FrameAccess.writeDouble(slots.frame, slots.slots[index],
-                Double.fromBits(longArrayOf(Long.MIN_VALUE, 1L, 0x7ff8000000001234L, 0x7ff0000000000000L)[index % 4]))
-            else -> {
-                val value = -1L - index * 104729L
-                val narrowed = when (layout.lane.primReps!!.single()) {
-                    "Int8Rep" -> value.toByte().toLong(); "Word8Rep" -> value and 255L
-                    "Int16Rep" -> value.toShort().toLong(); "Word16Rep" -> value and 65535L
-                    "Int32Rep" -> value.toInt().toLong(); "Word32Rep" -> value and 4294967295L
-                    else -> value
-                }
-                FrameAccess.writeLong(slots.frame, slots.slots[index], narrowed)
-            }
-        }
+        layout.write(slots.frame, slots.slots, 0, rawVectorTestValue(layout.proof))
     }
     private fun same(layout: VectorLayout, expected: Slots, actual: Slots) {
-        for (index in 0 until layout.lanes) when {
-            layout.lane.isFloat -> assertEquals(expected.frame.getFloat(expected.slots[index]).toRawBits(),
-                actual.frame.getFloat(actual.slots[index]).toRawBits())
-            layout.lane.isDouble -> assertEquals(expected.frame.getDouble(expected.slots[index]).toRawBits(),
-                actual.frame.getDouble(actual.slots[index]).toRawBits())
-            else -> assertEquals(expected.frame.getLong(expected.slots[index]), actual.frame.getLong(actual.slots[index]))
-        }
+        assertSame(layout.read(expected.frame, expected.slots, 0), layout.read(actual.frame, actual.slots, 0))
     }
     @Test fun allShapesPreserveBitsAcrossCarriersDenseStorageAndCompletion() = withLanguage { language ->
         for (proof in vectors()) {
             val vector = VectorLayout(proof)
-            val original = Slots(vector.lanes); fill(vector, original)
-            val copied = Slots(vector.lanes)
+            val original = Slots(1); fill(vector, original)
+            val copied = Slots(1)
             vector.write(copied.frame, copied.slots, 0, vector.read(original.frame, original.slots, 0))
             same(vector, original, copied)
             val shape = TupleShape(proof, language)
-            assertEquals(vector.lanes, shape.width)
-            val lane = vector.lane.primReps!!.single()
-            val narrow = lane in setOf("Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep")
-            if (narrow) assertTrue(shape.layout.reps.all { it.endsWith("-lane") })
+            assertEquals(1, shape.width)
+            assertTrue(shape.layout.isObject(0)); assertFalse(shape.layout.isLong(0))
             val result = shape.finish(copied.frame, copied.slots)
             assertEquals(1, language.handoffState.get().results.depth)
-            val consumed = Slots(vector.lanes)
+            val consumed = Slots(1)
             shape.consume(consumed.frame, result, consumed.slots, 0)
             same(vector, original, consumed)
             assertEquals(0, language.handoffState.get().results.depth)
@@ -85,19 +82,19 @@ class VectorLayoutTest {
             // A deoptimized result is private storage, not a live pool loan.
             val fresh = shape.layout.create()
             val source = AstInputSource(ArgumentLayout.fromProofs(listOf(proof))!!, original.slots)
-            source.copy(original.frame, object : Node() {}, null, 0, fresh, 0, vector.lanes)
+            source.copy(original.frame, object : Node() {}, null, 0, fresh, 0, 1)
             shape.consume(consumed.frame, fresh, consumed.slots, 0)
             same(vector, original, consumed)
         }
     }
-    @Test fun papPrefixesOwnPrimitiveLanesAfterCallerLocalsAreReused() = withLanguage { language ->
+    @Test fun papPrefixesOwnImmutableVectorReferencesAfterCallerLocalsAreReused() = withLanguage { language ->
         val target = object : RootNode(language) {
             override fun execute(frame: VirtualFrame): Any = error("PAP construction must not enter the callee")
         }.callTarget
         val node = object : Node() {}
         for (proof in vectors()) for (generic in listOf(false, true)) {
             val vector = VectorLayout(proof)
-            val original = Slots(vector.lanes); fill(vector, original)
+            val original = Slots(1); fill(vector, original)
             val source = AstInputSource(ArgumentLayout.fromProofs(listOf(proof))!!, original.slots)
             val input = TypedInputLayout.create(language,
                 ArgumentLayout.fromProofs(listOf(proof, proof, integer)), false)!!
@@ -111,22 +108,15 @@ class VectorLayoutTest {
             assertEquals(1, first.suppliedCount); assertEquals(2, second.suppliedCount)
             assertSame(NO_PAP_ARGUMENTS, first.supplied); assertSame(NO_PAP_ARGUMENTS, second.supplied)
             assertNotSame(first.typedSupplied, second.typedSupplied)
-            val expected = Slots(vector.lanes)
+            val expected = Slots(1)
             vector.write(expected.frame, expected.slots, 0, vector.read(original.frame, original.slots, 0))
             original.slots.forEach(original.frame::clear)
             for (function in listOf(first, second)) {
                 val storage = function.typedSupplied!!
                 assertFalse(storage.live); assertEquals(0, storage.inputMode)
                 for (part in 0 until function.suppliedCount) {
-                    val restored = Slots(vector.lanes)
-                    for (index in 0 until vector.lanes) {
-                        val field = part * vector.lanes + index
-                        when {
-                            vector.lane.isFloat -> FrameAccess.writeFloat(restored.frame, restored.slots[index], storage.layout.getFloat(storage, field))
-                            vector.lane.isDouble -> FrameAccess.writeDouble(restored.frame, restored.slots[index], storage.layout.getDouble(storage, field))
-                            else -> FrameAccess.writeLong(restored.frame, restored.slots[index], storage.layout.getLong(storage, field))
-                        }
-                    }
+                    val restored = Slots(1)
+                    vector.write(restored.frame, restored.slots, 0, storage.layout.getObject(storage, part))
                     same(vector, expected, restored)
                 }
             }
@@ -151,6 +141,37 @@ class VectorLayoutTest {
             assertThrows(RuntimeFault::class.java) { ArgumentLayout.validate(input, 0, null, 0, 1) }
         }
     }
+    @Test fun rawSpeciesAreCheckedAndReleasedAsReferencesOnSuccessAndFailure() = withLanguage { language ->
+        val all = vectors()
+        for (proof in all) {
+            val vector = VectorLayout(proof)
+            val shape = TupleShape(proof, language)
+            val slots = Slots(1)
+            val raw = rawVectorTestValue(proof)
+            for (other in all) {
+                val candidate = rawVectorTestValue(other)
+                if (candidate.species() == raw.species()) {
+                    assertSame(candidate, vector.require(candidate))
+                    assertSame(shape.layout, TupleShape(other, language).layout)
+                } else {
+                    assertThrows(RuntimeFault::class.java) { vector.write(slots.frame, slots.slots, 0, candidate) }
+                    assertThrows(RuntimeFault::class.java) { shape.layout.setObject(shape.layout.create(), 0, candidate) }
+                }
+            }
+            for (wrong in listOf(null, 1L, longArrayOf(1L), Any()))
+                assertThrows(RuntimeFault::class.java) { vector.write(slots.frame, slots.slots, 0, wrong) }
+            val pool = language.handoffState.get().arguments
+            val loan = pool.acquire(shape.layout)
+            shape.layout.setObject(loan, 0, raw)
+            assertEquals(1, pool.retainedReferences())
+            pool.release(loan)
+            assertEquals(0, pool.depth); assertEquals(0, pool.retainedReferences())
+            FrameAccess.writeObject(slots.frame, slots.slots[0], Any())
+            assertThrows(RuntimeFault::class.java) { shape.finish(slots.frame, slots.slots) }
+            assertEquals(0, language.handoffState.get().results.depth)
+            assertEquals(0, language.handoffState.get().results.retainedReferences())
+        }
+    }
     @Test fun physicalVectorAnnotationDoesNotEraseLogicalTupleIdentity() {
         val scalar = mapOf("kind" to "vector", "evaluated" to true, "primReps" to listOf("VecRep 4 FloatElemRep"),
             "vector" to mapOf("lanes" to 4, "element" to "FloatElemRep"))
@@ -158,7 +179,7 @@ class VectorLayoutTest {
         val tuple = scalar + mapOf("kind" to "unknown", "aggregate" to "unboxed-tuple", "components" to listOf(state, scalar))
         val proof = CoreRepresentations.parse(tuple)
         assertTrue(proof.isTuple); assertFalse(proof.isVector)
-        assertEquals(4, TupleShape.flatten(proof).size)
+        assertEquals(1, TupleShape.flatten(proof).size)
         assertFalse(TupleShape.compatible(proof, CoreRepresentations.parse(scalar)))
         for (wrong in listOf(mapOf("lanes" to 2, "element" to "DoubleElemRep"),
             mapOf("lanes" to 4, "element" to "Word32ElemRep")))

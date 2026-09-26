@@ -517,7 +517,7 @@ internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frame
     @CompilationFinal private var destinationOffset = -1
     private val vector = shape?.proof?.takeIf(CoreRepresentation::isVector)?.let(::VectorLayout)
     @field:CompilationFinal(dimensions = 1) private val vectorSlots = vector?.let { layout ->
-        IntArray(layout.lanes) { frameLayout.bind("<vector result $it>") }
+        IntArray(layout.width) { frameLayout.bind("<vector result $it>") }
     }
     init { representation = shape?.proof?.copy(evaluated = true) ?: CoreRepresentation(CoreKind.UNKNOWN, evaluated = true) }
     override fun execute(frame: VirtualFrame): Any? {

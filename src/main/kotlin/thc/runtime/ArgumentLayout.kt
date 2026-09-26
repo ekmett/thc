@@ -7,7 +7,7 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 
 internal val EMPTY_TUPLE_SLOTS = intArrayOf()
 
-/** Logical tuple identity is independent of flattened physical argument positions.
+/** Logical tuple identity is independent of physical argument positions; vectors stay atomic.
  * A null layout preserves the scalar-only convention, with identity offsets. */
 internal class ArgumentLayout private constructor(
     @field:CompilationFinal(dimensions = 1) private val proofs: Array<CoreRepresentation>,
