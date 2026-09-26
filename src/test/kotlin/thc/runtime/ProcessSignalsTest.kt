@@ -419,6 +419,18 @@ object ProcessSignalJvmProbe {
         check(ManagedSignals.hasReducedVmSignals())
         if (args.contentEquals(arrayOf("unrelocated"))) {
             check(!NativeSignalTransport.userSignalAvailable())
+            // Changing the environment after VM startup must not masquerade as
+            // releasing HotSpot's existing USR2 disposition. This child alone
+            // owns the environment mutation; no signal handler is changed.
+            java.lang.foreign.Arena.ofConfined().use { arena ->
+                val linker = java.lang.foreign.Linker.nativeLinker()
+                val setenv = linker.downcallHandle(linker.defaultLookup().find("setenv").orElseThrow(),
+                    java.lang.foreign.FunctionDescriptor.of(java.lang.foreign.ValueLayout.JAVA_INT,
+                        java.lang.foreign.ValueLayout.ADDRESS, java.lang.foreign.ValueLayout.ADDRESS,
+                        java.lang.foreign.ValueLayout.JAVA_INT))
+                check(setenv.invokeExact(arena.allocateFrom("_JAVA_SR_SIGNUM"), arena.allocateFrom("64"), 1) as Int == 0)
+            }
+            check(!NativeSignalTransport.userSignalAvailable())
             NativeSignalTransport().use { transport ->
                 val failure = runCatching { transport.install(12, -4) }.exceptionOrNull()
                 check(failure is RuntimeFault && failure.message!!.contains("_JAVA_SR_SIGNUM=64"))
