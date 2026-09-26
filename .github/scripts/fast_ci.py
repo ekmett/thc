@@ -181,6 +181,16 @@ def haskell_suites(selection):
     return suites
 
 
+def haskell_compile_targets(selection):
+    selected = selection.get("haskell")
+    require(isinstance(selected, dict), "Invalid Haskell compilation selection")
+    targets = selected.get("compileTargets", [])
+    require(isinstance(targets, list) and all(isinstance(target, str) and
+            re.fullmatch(r"test:[a-z][a-z0-9-]*-full-core", target) for target in targets)
+            and len(targets) == len(set(targets)), "Invalid or duplicate Haskell compilation target")
+    return targets
+
+
 def preserve_previous(root, destination, task="test"):
     # Move only the exact test task output, not build/ or unrelated user data.
     require(task in ("test", "polyglotTest"), "Unknown test task output")
@@ -259,6 +269,7 @@ def execute(recorder, base, head, identity_path):
     gradle_command(selection)  # Fail closed before preparing or running anything.
     polyglot = polyglot_command(selection)
     selected_haskell = haskell_suites(selection)
+    compile_targets = haskell_compile_targets(selection)
     recorder.data["selection"] = {key: selection[key] for key in ("mode", "reasons")}
     recorder.data.update(requestedBase=base, selectionBase=base)
     # Check generated documentation against the actual pinned GHC API on hits
@@ -271,6 +282,12 @@ def execute(recorder, base, head, identity_path):
     recorder.data["nativeInputs"] = inputs
     recorder.save()
     failures = []
+    if compile_targets:
+        try:
+            recorder.command("haskell-compile", ["cabal", "build", *compile_targets,
+                                                 "-fdevelopment", "-ffull-core-tests"])
+        except RuntimeError as error:
+            failures.append("haskell-compile: " + str(error))
     if selected_haskell:
         try:
             recorder.command("driver-plugin", ["compiler/build.sh"])

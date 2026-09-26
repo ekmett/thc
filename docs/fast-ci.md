@@ -22,6 +22,17 @@ or unmapped dependencies run the full test inventory. A changed test is never
 dropped to meet a time budget. The ownership rules are in
 `.github/scripts/fast-tests.json`.
 
+Adding a full-Core regression can stay narrow when its Cabal stanza matches the
+closed `full-core-tests` template, the existing flag remains manual and disabled
+by default, and every existing Cabal block is unchanged. The new harness and
+listed fixture files must be additions in a new directory owned by that test.
+Fast compiles the exact test target with `-fdevelopment -ffull-core-tests` and
+keeps the compiled JVM smoke suite. It does not execute the full-Core regression
+or widen into JavaScript tests solely for that verified addition. Changed existing
+stanzas, shared helpers, production dependencies, unknown conditions, or unowned
+files retain their ordinary wider selection. The separate full-Core gate still
+supplies execution evidence.
+
 Generated SIMD min/max additions use the shared SIMD smoke and family checks
 when layouts and the generator are unchanged and the capability entries and
 generated Java/Kotlin blocks match exactly. Changes to existing operations,

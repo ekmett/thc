@@ -575,6 +575,111 @@ def additive_simd_primops(old_spec, new_spec, old_cap, new_cap,
     return names
 
 
+
+# This deliberately recognizes one closed Cabal addition profile, not arbitrary
+# Cabal syntax. All pre-existing blocks must remain equivalent.
+FULL_CORE_TEST_BODY = """  type: exitcode-stdio-1.0
+  if !flag(full-core-tests)
+    buildable: False
+  main-is: {main}
+  hs-source-dirs: test/haskell-driver
+  other-modules: TestSupport
+  build-tool-depends: thc:thc
+  build-depends:
+    base >= 4.22 && < 4.23,
+    aeson >= 2.3 && < 2.4,
+    bytestring >= 0.12.2 && < 0.13,
+    directory >= 1.3.10 && < 1.4,
+    filepath >= 1.5.4 && < 1.6,
+    HUnit >= 1.6 && < 1.7,
+    process >= 1.6.26 && < 1.7,
+    text >= 2.1 && < 2.2,
+    vector >= 0.13 && < 0.14,
+    zip-archive >= 0.4.3.2 && < 0.5
+  default-language: Haskell2010
+  ghc-options: -Wall
+  if flag(development)
+    ghc-options: -Werror"""
+
+
+def additive_full_core_tests(before, after, statuses, old_paths):
+    """Prove ownership for new disabled tests and their new fixture files.
+
+    Unknown fields/conditions, changed existing stanzas, and shared fixture
+    directories fail closed. The runner compiles the test without executing it.
+    """
+    def blocks(source):
+        if "\t" in source or "\r" in source:
+            raise ValueError("unreviewed Cabal layout")
+        result = []
+        for line in source.splitlines():
+            line = line.rstrip()
+            if not line or line.lstrip().startswith("--"):
+                continue
+            if not line.startswith(" "):
+                result.append([line, []])
+            elif not result:
+                raise ValueError("Cabal continuation without a field")
+            else:
+                result[-1][1].append(line)
+        if len(result) != len({header for header, _ in result}):
+            raise ValueError("duplicate Cabal block")
+        return result
+
+    try:
+        old, new = blocks(before), blocks(after)
+        old_map, new_map = dict(old), dict(new)
+        flag = old_map.get("flag full-core-tests", [])
+        if (len(flag) != 3 or not flag[0].startswith("  description: ")
+                or flag[1:] != ["  default: False", "  manual: True"]
+                or statuses.get("thc.cabal") != "M"):
+            return None
+        added = [header for header, _ in new if header not in old_map]
+        if not added:
+            return None
+        owned, targets, prefixes = {"thc.cabal"}, [], []
+        for header in added:
+            match = re.fullmatch(r"test-suite ([a-z][a-z0-9-]*-full-core)", header)
+            body = new_map[header]
+            mains = [line[11:] for line in body if line.startswith("  main-is: ")]
+            if (not match or len(mains) != 1
+                    or not re.fullmatch(r"[A-Z][A-Za-z0-9_]*FullCore\.hs", mains[0])
+                    or body != FULL_CORE_TEST_BODY.format(main=mains[0]).splitlines()):
+                return None
+            name = match[1]
+            harness = "test/haskell-driver/" + mains[0]
+            prefix = "test/fixtures/run-" + name.removesuffix("-full-core") + "/"
+            if harness in owned or any(path.startswith(prefix) for path in old_paths):
+                return None
+            owned.add(harness)
+            prefixes.append(prefix)
+            targets.append("test:" + name)
+        old_extra, new_extra = old_map["extra-source-files:"], new_map["extra-source-files:"]
+        additions = [line for line in new_extra if line not in old_extra]
+        if not additions or len(additions) != len(set(additions)):
+            return None
+        for line in additions:
+            if not re.fullmatch(r"  test/fixtures/run-[a-z0-9-]+/[A-Za-z0-9_./-]+", line):
+                return None
+            path = line[2:]
+            if (str(PurePosixPath(path)) != path or ".." in PurePosixPath(path).parts
+                    or not any(path.startswith(prefix) for prefix in prefixes)):
+                return None
+            owned.add(path)
+        for prefix in prefixes:
+            if not {prefix + "cabal.project", prefix + prefix.split("/")[-2] + ".cabal",
+                    prefix + "app/Main.hs"} <= owned:
+                return None
+        restored = [[header, old_extra if header == "extra-source-files:" else body]
+                    for header, body in new if header not in added]
+        if (restored != old or [line for line in new_extra if line not in additions] != old_extra
+                or any(statuses.get(path) != "A" for path in owned - {"thc.cabal"})):
+            return None
+        return {"paths": owned, "targets": sorted(targets)}
+    except (KeyError, ValueError):
+        return None
+
+
 def select(repo, base_ref, head_ref):
     repo = Path(repo).resolve()
     reasons = []
@@ -706,6 +811,17 @@ def select(repo, base_ref, head_ref):
     additive_primop_paths = set()
     comment_only_paths = set()
     changed = {path for record in records for path in record["paths"]}
+    full_core_paths, compile_targets = set(), []
+    if policy and base and head and "thc.cabal" in changed:
+        try:
+            statuses = {record["paths"][0]: record["status"] for record in records if len(record["paths"]) == 1}
+            proof = additive_full_core_tests(git(repo, "show", base + ":thc.cabal").decode("utf-8"),
+                                            text("thc.cabal"), statuses, tree(repo, base))
+            if proof and all(files[path][:2] in (("100644", "blob"), ("100755", "blob"))
+                             for path in proof["paths"]):
+                full_core_paths, compile_targets = proof["paths"], proof["targets"]
+        except (KeyError, SelectionError, UnicodeError):
+            pass
     simd_additions = None
     if (policy and base and head and SIMD_ADDITIVE <= changed and SIMD_GENERATOR not in changed
             and all(record["status"] == "M" for record in records if record["paths"][0] in SIMD_ADDITIVE)):
@@ -726,7 +842,9 @@ def select(repo, base_ref, head_ref):
             mode, kind, _ = files[path]
             if mode not in ("100644", "100755") or kind != "blob":
                 widen("nonregular-changed-path", path)
-            if policy and simd_additions and path in SIMD_ADDITIVE:
+            if path in full_core_paths:
+                pass  # Exact opt-in addition; compile its harness below.
+            elif policy and simd_additions and path in SIMD_ADDITIVE:
                 group = policy["primopFamilies"]["simd-generated-primops"]
                 affected_junit.update(group["junit"])
                 affected_python.update(group["python"])
@@ -821,7 +939,7 @@ def select(repo, base_ref, head_ref):
     changed_paths = {path for record in records for path in record["paths"]}
     uncertain_diff = (base is None or head is None or head != checkout
                       or any(reason["code"] == "base-not-ancestor" for reason in reasons))
-    polyglot_required = any(path not in additive_primop_paths and path not in comment_only_paths
+    polyglot_required = any(path not in full_core_paths and path not in additive_primop_paths and path not in comment_only_paths
                             and polyglot_input(path, policy["leafSources"] if policy else {})
                             for path in changed_paths) or (bool(polyglot_classes) and uncertain_diff)
     if polyglot_required and not polyglot_classes:
@@ -859,7 +977,7 @@ def select(repo, base_ref, head_ref):
                 polyglot=dict(required=polyglot_required, classes=sorted(polyglot_classes) if polyglot_required else []),
                 python=dict(commands=[["python3", path] for path in sorted(selected_python)],
                             files=sorted(selected_python), count=len(selected_python)),
-                haskell=dict(suites=sorted(selected_haskell), count=len(selected_haskell)))
+                haskell=dict(suites=sorted(selected_haskell), count=len(selected_haskell), compileTargets=compile_targets))
 
 
 def main():
