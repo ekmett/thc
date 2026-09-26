@@ -106,7 +106,8 @@ using the same full-Core environment and backend/startup distinction above.
 ## Run real applications
 
 The following Linux x86_64 examples run the original **Happy 2.2.1** parser
-generator and **HsColour 1.25** highlighter inside THC. Their generated files
+generator, **HsColour 1.25** highlighter and **Alex 3.5.4.2** lexer generator
+inside THC. Their generated files
 have been compared byte-for-byte with native GHC in both backends and both
 handoff modes. These command lines select bytecode, which runs the complete
 executable startup/shutdown. Happy and HsColour also pass that full lifecycle
@@ -236,6 +237,13 @@ runs the generated lexer. Keep `alex_datadir` set for later guest invocations.
 Doctest and Pandoc remain development targets, not demonstrated runnable commands
 here. Native baselines, strict Core admission and actual THC execution are
 reported separately in the application notes.
+
+For library-based programs, the [lens example](../examples/standard-apps/lens/README.md)
+has 14 passing public-API checks, and the [ad Kahn example](../examples/standard-apps/ad/README.md)
+has ten passing differentiation and sharing checks. Both run their original
+libraries with full startup/shutdown in both backends and handoff modes; the
+linked recipes distinguish these guest successes from the larger upstream
+test suites still being brought up.
 
 ## Build and exercise
 
