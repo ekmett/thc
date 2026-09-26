@@ -96,8 +96,10 @@ The following Linux x86_64 examples run the original **Happy 2.2.1** parser
 generator and **HsColour 1.25** highlighter inside THC. Their generated files
 have been compared byte-for-byte with native GHC in both backends and both
 handoff modes. These command lines select bytecode, which runs the complete
-executable startup/shutdown. The AST checks use the original raw `Main.main`
-instead; they are not a general executable-lifecycle claim. See the
+executable startup/shutdown. Happy and HsColour also pass that full lifecycle
+on AST with explicit `-Dthc.asyncExceptions=true`; earlier synchronous AST
+checks used raw `Main.main`. This establishes these workloads, not arbitrary
+executable compatibility or whole-program JIT retention. See the
 [application results and pinned source hashes](../examples/standard-apps/README.md).
 
 Start in a built THC checkout with the complete-Core GHC 9.14.1 installation
@@ -159,6 +161,23 @@ THC_BACKEND=bytecode "$THC_ROOT/build/install/thc/bin/thc" \
 ```
 
 Keep `happy_lib_datadir` set and retain the manifest's referenced Core bundles.
+
+For the verified AST startup/shutdown path, use the same generated main and
+shutdown entries, with asynchronous exceptions explicitly enabled:
+
+```sh
+THC_BACKEND=ast JAVA_OPTS="${JAVA_OPTS:-} -Dthc.asyncExceptions=true" \
+  "$THC_ROOT/build/install/thc/bin/thc" \
+  --run-executable "@$THC_APPS/happy-guest/packages.json" \
+  main::Main.main ghc-internal:GHC.Internal.TopHandler.flushStdHandles -- \
+  happy -o "$THC_OUTPUT/Parser-ast.hs" "$THC_ROOT/examples/standard-apps/TinyParser.y"
+```
+
+The same environment selection works for the HsColour command below. AST still
+defaults to synchronous mode; bytecode still defaults to asynchronous mode.
+Keep the Linux launcher's `-Xrs` setting: original GHC startup installs its
+[process signal handlers](process-signals.md), under the same explicit
+launcher authority on either backend.
 
 ### HsColour: generate HTML
 
