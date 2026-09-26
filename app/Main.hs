@@ -68,8 +68,8 @@ runOptions =
   [ Option [] ["exe"] (ReqArg (\name r -> Right r {runExecutable = name}) "NAME") "Selected Cabal executable"
   , Option [] ["thc-root"] (ReqArg (\path r -> Right r {runThcRoot = path}) "DIR") "THC source/build root"
   , Option [] ["runtime"] (ReqArg (\path r -> Right r {runRuntime = Just path}) "PATH") "Installed THC JVM launcher"
-  , Option [] ["sulong-mode"] (ReqArg (\value r -> (\mode -> r {runSulongMode = Just mode}) <$> parseSulongMode value)
-      "native|managed") "Sulong execution mode (launcher default: native); managed requires a supporting GraalVM installation"
+  , Option [] ["ffi"] (ReqArg (\value r -> (\mode -> r {runFfiMode = Just mode}) <$> parseFfiMode value)
+      "native|managed") "FFI mode (runtime integration pending; planned default: native)"
   , Option [] ["installed-core"] (ReqArg (\policy r -> Right r {runInstalledCore = policy}) "required|pinned") "Project boot-library provider (default: limited pinned sources); required never silently falls back"
   , Option [] ["ghc-source"] (ReqArg (\path r -> Right r {runGhcSource = Just path}) "DIR") "Matching configured GHC 9.14.1 source tree for missing installed foreign annotations (required provider only)"
   ] ++ map liftPlanOption options
