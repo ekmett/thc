@@ -125,6 +125,11 @@ test or benchmark in the project. An unrelated unbuildable executable therefore
 does not block the selected workload. The driver
 reads `plan.json` and Cabal's `--enable-build-info` records, retaining exact
 unit IDs and GHC arguments for a separate post-Tidy export of local dependencies.
+For Cabal's grouped library records, including Custom Setup packages, the
+runtime closure follows `components.lib.depends`. The separate
+`components.setup.depends` graph belongs to native Setup execution, not the
+guest; it must neither hide transitive library dependencies nor pull host-only
+Setup packages into the Core manifest.
 It writes one compressed Core ZIP per local component under
 `<dist-dir>/native/cache/thc/core-bundles/v1`, inside Cabal's build directory,
 and a checked `packages.json` manifest. `cabal clean --builddir <dist-dir>/native`

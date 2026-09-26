@@ -672,7 +672,16 @@ withProjectLock output = withLock (output </> ".lock")
 readUnit :: Value -> IO Unit
 readUnit value = do
   identifier <- field value "id"
-  dependencies <- optionalField value "depends" []
+  dependencies <- case jsonField value "depends" :: Maybe Value of
+    Just _ -> field value "depends"
+    Nothing -> case jsonField value "components" :: Maybe Value of
+      Nothing -> pure []
+      Just components -> do
+        -- Cabal's non-per-component library records (including Custom Setup)
+        -- group runtime dependencies under lib. Setup runs on the host and its
+        -- separate dependency graph must not become part of the guest closure.
+        library <- field components "lib"
+        field library "depends"
   kind <- optionalField value "type" ("" :: String)
   style <- optionalField value "style" ("" :: String)
   pure (Unit identifier value dependencies (kind == "configured" && style == "local"))

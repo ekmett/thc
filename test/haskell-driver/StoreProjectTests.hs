@@ -19,7 +19,7 @@ import TestSupport
 import THC.Driver.GhcProxy (ghcProxyCommand)
 
 tests :: Env -> Test
-tests env = TestList [proxyOptionsTest env, storeProjectTest env]
+tests env = TestList [proxyOptionsTest env, storeProjectTest env, customStoreProjectTest env]
 
 proxyOptionsTest :: Env -> Test
 proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay provenance" $ TestCase $
@@ -158,6 +158,91 @@ storeProjectTest env = TestLabel "source-built Cabal store Core" $ TestCase $
     assertBool "changed source has a new ZIP"
       (string (field (bundle changedManifest changedId) "path") /= firstPath)
     assertReachable output changedId
+
+customStoreProjectTest :: Env -> Test
+customStoreProjectTest env = TestLabel "Custom Setup library retains runtime-only transitive closure" $ TestCase $
+  withFixtureNamed env "test/fixtures/run-store-project" "custom project" $ \project ->
+  withCache (takeDirectory project </> "cache") $ do
+    let base = takeDirectory project
+        dependency = base </> "dependency-source"
+        leaf = base </> "leaf-source"
+        setupOnly = base </> "setup-source"
+        output = base </> "output"
+        invoke backend = run env base (Just backend) 240
+          ["run", project, "--exe", "completed", "--thc-root", thcRoot env,
+           "--runtime", runtime env, "--dist-dir", output]
+        planned plan name = one ((== name) . string . (`field` "pkg-name")) (objects plan "install-plan")
+        described manifest identifier = one ((== identifier) . string . (`field` "id")) (objects manifest "units")
+    copyTree (project </> "dep-data") dependency
+    removePathForcibly (project </> "dep-data")
+    Directory.createDirectoryIfMissing True leaf
+    writeText (leaf </> "runtime-leaf.cabal") $ unlines
+      ["cabal-version: 3.0", "name: runtime-leaf", "version: 0.1.0.0",
+       "license: BSD-3-Clause", "build-type: Simple", "library",
+       "  exposed-modules: RuntimeLeaf", "  build-depends: base >=4.22 && <4.23",
+       "  default-language: Haskell2010"]
+    writeText (leaf </> "RuntimeLeaf.hs") $ unlines
+      ["module RuntimeLeaf (leafValue) where", "leafValue :: Int", "leafValue = 42",
+       "{-# OPAQUE leafValue #-}"]
+    Directory.createDirectoryIfMissing True setupOnly
+    writeText (setupOnly </> "setup-only.cabal") $ unlines
+      ["cabal-version: 3.0", "name: setup-only", "version: 0.1.0.0",
+       "license: BSD-3-Clause", "build-type: Simple", "library",
+       "  exposed-modules: SetupOnly", "  build-depends: base >=4.22 && <4.23",
+       "  default-language: Haskell2010"]
+    writeText (setupOnly </> "SetupOnly.hs")
+      "module SetupOnly (prepare) where\nprepare :: IO ()\nprepare = pure ()\n"
+    let descriptionPath = dependency </> "dep-data.cabal"
+    description <- readText descriptionPath
+    writeText descriptionPath (replaceText "build-type: Simple" "build-type: Custom"
+      (replaceText "build-depends: base >=4.22 && <4.23"
+        "build-depends: base >=4.22 && <4.23, runtime-leaf ==0.1.0.0" description) ++ unlines
+      ["", "custom-setup", "  setup-depends: base, Cabal, setup-only ==0.1.0.0"])
+    writeText (dependency </> "Setup.hs") $ unlines
+      ["import Distribution.Simple (defaultMain)", "import SetupOnly (prepare)",
+       "main :: IO ()", "main = prepare >> defaultMain"]
+    writeText (dependency </> "src/SafeDependency.hs") $ unlines
+      ["module SafeDependency (stableValue) where", "import RuntimeLeaf (leafValue)",
+       "stableValue :: Int", "stableValue = leafValue"]
+    mapM_ (\source -> sourceDist env source project) [leaf, setupOnly, dependency]
+    writeText (project </> "cabal.project") $ unlines
+      ["packages: app/app.cabal dep-data-0.1.0.0.tar.gz runtime-leaf-0.1.0.0.tar.gz setup-only-0.1.0.0.tar.gz"]
+    first <- invoke "ast"
+    assertSuccess first
+    assertNoStdout first
+    assertBackend "ast" first
+    plan <- readJson (output </> "native/cache/plan.json")
+    let custom = planned plan "dep-data"
+        identifier = string (field custom "id")
+        leafId = string (field (planned plan "runtime-leaf") "id")
+        setupId = string (field (planned plan "setup-only") "id")
+        components = field custom "components"
+        runtimeDeps = array (field (field components "lib") "depends")
+        setupDeps = array (field (field components "setup") "depends")
+        executable = string (field (planned plan "app-store") "bin-file")
+    native <- runExe env project Nothing 60 executable []
+    assertSuccess native
+    assertEqual "Custom Setup native and THC output" (out native) (out first)
+    assertBool "real Cabal grouped library dependencies include transitive leaf"
+      (leafId `elem` map string runtimeDeps)
+    assertBool "real Custom Setup uses its host-only package" (setupId `elem` map string setupDeps)
+    manifest <- readJson (output </> "packages.json")
+    assertEqual "guest dependencies are exactly the library component's"
+      runtimeDeps (array (field (described manifest identifier) "depends"))
+    assertBool "Setup-only library is absent from guest closure"
+      (all ((/= setupId) . string . (`field` "id")) (objects manifest "units"))
+    let leafBundle = string (field (field (described manifest leafId) "bundle") "path")
+    stamp <- getModificationTime leafBundle
+    assertReachable output identifier
+    audit <- readJson (output </> "audit.json")
+    assertBool "transitive OPAQUE value is genuinely reached" $ any
+      ((== leafId ++ ":RuntimeLeaf.leafValue") . string . (`field` "id"))
+      (objects audit "reachableBindings")
+    second <- invoke "bytecode"
+    assertSuccess second
+    assertNoStdout second
+    assertBackend "bytecode" second
+    assertEqual "transitive captured bundle is reused" stamp =<< getModificationTime leafBundle
 
 sourceDist :: Env -> FilePath -> FilePath -> IO ()
 sourceDist env source project = do
