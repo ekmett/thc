@@ -1,12 +1,32 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
-module THC.Driver.NativeLibrarySources (zlibChecksumSources) where
+module THC.Driver.NativeLibrarySources (zlibChecksumSources, nativeMathSymbols, validateNativeMathIR) where
 
 import Control.Monad (forM_, unless)
 import qualified Crypto.Hash.SHA256 as SHA
 import qualified Data.ByteString as BS
+import Data.List (isPrefixOf)
 import Numeric (showHex)
 import System.FilePath ((</>))
+
+nativeMathSymbols :: [String]
+nativeMathSymbols = ["erf", "erfc", "erff", "erfcf"]
+
+-- These standard libm entries take one floating scalar and return the same
+-- width. Check the linked LLVM declaration too, including package-owned C
+-- callers: a familiar spelling alone cannot establish a native ABI.
+validateNativeMathIR :: [String] -> String -> Either String ()
+validateNativeMathIR symbols source = forM_ symbols $ \symbol -> do
+  unless (symbol `elem` nativeMathSymbols) (Left "unsupported native math symbol")
+  let rep = if symbol `elem` ["erf", "erfc"] then "double" else "float"
+      declarations = [(before, drop (length symbol + 2) after) |
+        line <- lines source, "declare " `isPrefixOf` line,
+        let (before,after) = break (== '@') line,
+        ("@" ++ symbol ++ "(") `isPrefixOf` after]
+      valid (before, after) = filter (/= "noundef") (words before) == ["declare", rep] &&
+        filter (/= "noundef") (words (takeWhile (/= ')') after)) == [rep]
+  unless (length declarations == 1 && all valid declarations)
+    (Left ("native libm declaration has unsupported ABI: " ++ symbol))
 
 -- Compile the original implementation with the package's actual configured
 -- zlib header. A mismatched installed version is a specific unsupported

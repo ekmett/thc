@@ -175,4 +175,38 @@ class PackageScalarLinksTest {
             assertThrows(IllegalArgumentException::class.java) { CoreModules.merge(listOf(variant(reps))) }
         }
     }
+
+    @Test fun scalarSafeMetadataMustAgreeAtEveryRetainedBoundary() {
+        fun native(rep: String, safety: String, result: String = "Int32Rep"): Map<String, Any?> {
+            val base = module()
+            val oldLink = base["packageScalarLink"] as Map<String, Any?>
+            val oldProof = base["staticForeignImports"] as Map<String, Any?>
+            val oldImport = (oldProof["imports"] as List<Map<String, Any?>>).single()
+            val oldEmitted = oldImport["emitted"] as Map<String, Any?>
+            val abi = mapOf("symbol" to "scalar_value", "entry" to "thc_native_${"a".repeat(64)}_0",
+                "convention" to "ccall", "safety" to safety, "arguments" to listOf(rep), "result" to result)
+            val imported = oldImport + mapOf("safety" to safety,
+                "emitted" to (oldEmitted + mapOf("safety" to safety, "arguments" to listOf(rep, "void"),
+                    "result" to listOf("void", result))))
+            return (base - "packageScalarLink") + mapOf(
+                "packageNativeLink" to (oldLink + mapOf("profile" to "thc-package-c-ffi-v1", "abi" to listOf(abi))),
+                "staticForeignImports" to (oldProof + ("imports" to listOf(imported))))
+        }
+        val accepted = native("Int32Rep", "safe")
+        assertEquals("safe", PackageScalarLinks.read(accepted)!!.link.abi.single().safety)
+        assertThrows(IllegalArgumentException::class.java) { PackageScalarLinks.read(native("Int32Rep", "safe", "AddrRep")) }
+        val proof = accepted["staticForeignImports"] as Map<String, Any?>
+        val imported = (proof["imports"] as List<Map<String, Any?>>).single()
+        val emitted = imported["emitted"] as Map<String, Any?>
+        for (changed in listOf(imported + ("safety" to "unsafe"),
+            imported + ("emitted" to (emitted + ("safety" to "unsafe"))))) {
+            assertThrows(IllegalArgumentException::class.java) {
+                PackageScalarLinks.read(accepted + ("staticForeignImports" to (proof + ("imports" to listOf(changed)))))
+            }
+        }
+        for ((rep, safety) in listOf("AddrRep" to "safe", "ByteArray#" to "safe", "MutableByteArray#" to "safe",
+            "Int32Rep" to "interruptible")) assertThrows(IllegalArgumentException::class.java) {
+            PackageScalarLinks.read(native(rep, safety))
+        }
+    }
 }

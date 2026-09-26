@@ -18,7 +18,7 @@ import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.Char (isAlpha, isAlphaNum)
-import Data.List (groupBy, isPrefixOf, nub, sort)
+import Data.List (groupBy, isPrefixOf, isSuffixOf, nub, sort)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Numeric (showHex)
@@ -28,7 +28,7 @@ import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import THC.Driver.ScalarBitcode (parseDependencies, sulongScalarTarget)
-import THC.Driver.NativeLibrarySources (zlibChecksumSources)
+import THC.Driver.NativeLibrarySources (zlibChecksumSources, nativeMathSymbols, validateNativeMathIR)
 
 -- (original emitted symbol, convention, safety, semantic carriers, result)
 type Signature = (String, String, String, [String], String)
@@ -79,12 +79,13 @@ nativeSignatures unit modules = do
       arguments <- field emitted "arguments"
       results <- field emitted "result"
       require (identifier symbol && member emitted "unit" == Just (toJSON unit) &&
-        convention `elem` ["ccall", "capi"] && safety == "unsafe" &&
-        not (null arguments) && last arguments == "void" && all inputCarrier (init arguments))
-        "package native call requires static unsafe C/CAPI and supported scalar/byte-array inputs"
+        convention `elem` ["ccall", "capi"] && not (null arguments) &&
+        (safety == "unsafe" || safety == "safe" && all (\rep -> scalarCarrier rep && rep /= "AddrRep") (init arguments)) &&
+        last arguments == "void" && all inputCarrier (init arguments))
+        "package native call requires static C/CAPI; safe calls require only scalar inputs, interruptible calls are unsupported"
       result <- case results of
         ["void"] -> Right "void"
-        ["void", value] | scalarCarrier value -> Right value
+        ["void", value] | scalarCarrier value && (safety /= "safe" || value /= "AddrRep") -> Right value
         _ -> Left "package native call requires State with zero or one scalar result"
       pure (symbol,convention,safety,init arguments,result)
 
@@ -362,18 +363,34 @@ finishPackageNative pieces directory unit currentObjects modules = do
       _ <- trim resolved
       pure ()
     externals <- unresolved
-    -- These are normal C memory operations supplied by Sulong/libc. This first
-    -- profile does not silently acquire arbitrary extra native libraries.
-    check (all (\name -> name `elem` ["memcpy","memmove","memset","memcmp","bcmp"] || "llvm." `isPrefixOf` name) externals)
+    -- Memory operations are supplied by Sulong/libc. Scalar native libm is an
+    -- explicit embedded-LLVM provider, never a managed-pointer native fallback.
+    check (all (\name -> name `elem` (["memcpy","memmove","memset","memcmp","bcmp"] ++ nativeMathSymbols) || "llvm." `isPrefixOf` name) externals)
       ("package native unresolved dependencies: " ++ show externals)
-    bytes <- BS.readFile final
+    let math = filter (`elem` nativeMathSymbols) externals
+        finalIR = directory </> "native/final.ll"
+    _ <- command directory opt ["-S","-passes=verify",final,"-o",finalIR]
+    ir <- readFile finalIR
+    either fail pure (validateNativeIR ir)
+    (artifact,format,libraries) <- if null math then pure (final,"llvm-bitcode",[]) else do
+      check ("-linux-gnu" `isSuffixOf` target) "native scalar libm provider currently requires Linux"
+      either fail pure (validateNativeMathIR math ir)
+      clang <- tool "THC_CLANG" "clang"
+      let container = directory </> "native/final.so"
+          arguments = ["--target=" ++ target,"-fembed-bitcode","-shared","-fPIC",final,"-lm","-o",container]
+      _ <- command directory clang arguments
+      compilerHash <- sha <$> BS.readFile clang
+      pure (container,"llvm-embedded-elf",[object ["provider" .= ("native-libm-scalars-v1"::String),
+        "symbols" .= math,"compiler" .= clang,"compilerSha256" .= compilerHash,"arguments" .= arguments]])
+    bytes <- BS.readFile artifact
     component <- get record "componentSha256" :: IO String
     providerInputs <- mapM (\value -> get value "inputs") providers
     let inputs = sourceInputs ++ providerInputs
-    let proof = object ["schema" .= (1::Int),"format" .= ("llvm-bitcode"::String),
+    let proof = object ["schema" .= (1::Int),"format" .= (format::String),
           "profile" .= ("thc-package-c-ffi-v1"::String),"unit" .= unit,"target" .= target,
           "componentSha256" .= component,"bitcodeSha256" .= sha bytes,"bitcodeHex" .= hex bytes,"abi" .= abi,
-          "buildInputs" .= object ["translationUnits" .= inputs,"providers" .= providers,"unresolved" .= externals]]
+          "buildInputs" .= object ["translationUnits" .= inputs,"providers" .= providers,
+            "nativeLibraries" .= libraries,"unresolved" .= externals]]
     writeJson (directory </> "native/inputs.json") (object ["sources" .= inputs,"unresolved" .= externals])
     forM modules $ \(name,bytes') -> do
       value <- either fail pure (eitherDecodeStrict' bytes')

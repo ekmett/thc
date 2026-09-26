@@ -48,7 +48,7 @@ internal class PackageScalarLibraries(private val env: TruffleLanguage.Env) {
                 if (!it.link.same(link)) fault("Conflicting package C component identity: ${link.unit}")
             } ?: Loaded(link, FutureTask {
                 val library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(link.bytes),
-                    "${link.componentSha256}.bc").build()).call()
+                    "${link.componentSha256}.${if (link.format == "llvm-embedded-elf") "so" else "bc"}").build()).call()
                 link.abi.associate { signature ->
                     if (!interop.isMemberReadable(library, signature.entry))
                         fault("Missing package C entry: ${signature.entry}")

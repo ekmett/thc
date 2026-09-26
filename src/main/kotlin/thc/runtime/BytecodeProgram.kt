@@ -1741,6 +1741,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         }
                         else -> fault("Invalid package C result representation")
                     }
+                    // Commit the result before the resumable guest cut. A pending
+                    // async exception never unwinds/replays the opaque foreign call.
+                    if (enableAsync && packageScalar.signature.safety == "safe") emitAsyncPoll(e)
                 }
             } else if (stableFree) {
                 CoreStablePointers.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)

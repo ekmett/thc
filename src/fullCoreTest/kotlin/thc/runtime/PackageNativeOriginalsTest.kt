@@ -4,13 +4,19 @@
 package thc.runtime
 
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.bytecode.Instruction
 import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.nodes.DirectCallNode
+import com.oracle.truffle.api.nodes.NodeUtil
 import com.oracle.truffle.api.nodes.RootNode
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.*
 import java.io.File
+import java.util.Collections
+import java.util.IdentityHashMap
 
 /** Original package source, typed retained imports, and an independent native
  * Haskell oracle. This checks common foreign adapters, not whole Pandoc Core. */
@@ -20,6 +26,89 @@ class PackageNativeOriginalsTest {
     private class Entry(language: Language, private val call: PackageScalarCall) : RootNode(language) {
         @Child private var access = PackageScalarAccess(call)
         override fun execute(frame: VirtualFrame): Any = access.executeLong(frame.arguments, Unit)
+    }
+
+    private fun targets(entry: RootCallTarget): List<RootCallTarget> {
+        val seen = Collections.newSetFromMap(IdentityHashMap<RootCallTarget, Boolean>())
+        val result = mutableListOf<RootCallTarget>()
+        fun visit(target: RootCallTarget) {
+            if (!seen.add(target)) return
+            val body = target.rootNode
+            val nodes = if (body is BytecodeRoot) listOf(body) + body.bytecodeNode.instructions.flatMap { it.arguments }
+                .filter { it.kind == Instruction.Argument.Kind.NODE_PROFILE }.mapNotNull { it.asCachedNode() } else listOf(body)
+            for (call in nodes.flatMap { NodeUtil.findAllNodeInstances(it, DirectCallNode::class.java) }) {
+                val next = call.currentCallTarget as? RootCallTarget ?: continue
+                if (next.rootNode is GuestRoot) visit(next)
+            }
+            result.add(target)
+        }
+        visit(entry); return result
+    }
+
+    @Test fun originalSafeErfImportsMatchNativeInBothFirstInstalledBackends() {
+        val manifest = Json.parse(File(directory, "manifest.json").readText()) as Map<String, Any?>
+        assertEquals(88L, manifest["erfNativeRows"])
+        OriginalStdioChecks.hashes(root, manifest["sourceHashes"], setOf(
+            "build/original-native/sources/erf-2.0.0.0/erf.cabal",
+            "build/original-native/sources/erf-2.0.0.0/src/Data/Number/Erf.hs"), "build/original-native/sources/")
+        OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf(
+            "compiler/test-fixtures/OriginalErfNative.hs", "compiler/test-fixtures/OriginalErfEntry.hs",
+            "test/haskell-fixtures/PackageNativeOriginalsFixtures.hs", "src/THC/Driver/PackageNative.hs",
+            "src/THC/Driver/NativeLibrarySources.hs"))
+        val modules = listOf("linked/erf-2.0.0.0-inplace/Data.Number.Erf.json",
+            "erf-entry/units/u-original-erf-entry/OriginalErfEntry.json")
+        OriginalStdioChecks.hashes(root, manifest["artifactHashes"],
+            (modules + listOf("erf-native.tsv", "erf-audit.json")).map { "build/original-native/$it" }.toSet(),
+            "build/original-native/")
+        val audit = Json.parse(File(directory, "erf-audit.json").readText()) as Map<*, *>
+        assertEquals(true, audit["accepted"])
+        val merged = CoreModules.merge(modules.map { Json.parse(File(directory, it).readText()) as Map<String, Any?> })
+        val link = (merged["packageScalarLinks"] as List<PackageScalarLink>).single()
+        assertEquals("llvm-embedded-elf", link.format)
+        assertEquals(setOf("erf", "erfc", "erff", "erfcf"), link.abi.map { it.symbol }.toSet())
+        assertTrue(link.abi.all { it.safety == "safe" && it.arguments == listOf(it.result) })
+        val names = mapOf("erf" to "erfDouble", "erfc" to "erfcDouble", "erff" to "erfFloat", "erfcf" to "erfcFloat")
+            .mapValues { "original-erf-entry:OriginalErfEntry.${it.value}" }
+        val rows = File(directory, "erf-native.tsv").readLines().map { it.split('\t') }
+        assertEquals(88, rows.size)
+        for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").allowNativeAccess(true)
+            .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build().use { context ->
+                context.initialize("thc"); context.enter()
+                try {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val owner = Language.currentState()
+                    owner.packageCbits.link(link)
+                    val source = CoreModules.reachable(merged, names.values.toList(), true) + ("instrument" to true)
+                    val program: ExecutableProgram = if (backend == "ast") Program(language, source)
+                        else BytecodeProgram(language, source, enableAsync = true)
+                    val entries = names.mapValues { program.entryTarget(it.value) }
+                    owner.threads.enterCurrent()
+                    try {
+                        fun check(row: List<String>) {
+                            val argument = row[1].toULong().toLong()
+                            val expected = row[2].toULong().toLong()
+                            val actual = Calls.target(entries.getValue(row[0]), arrayOf(0L, argument))
+                            assertEquals(expected, actual, "$backend/$row")
+                            val handoff = language.handoffState.get()
+                            assertEquals(0, handoff.arguments.depth); assertEquals(0, handoff.results.depth)
+                            assertEquals(0, handoff.arguments.retainedReferences()); assertEquals(0, handoff.results.retainedReferences())
+                        }
+                        rows.forEach(::check)
+                        val installed = entries.values.flatMap(::targets).distinct()
+                        installed.forEach { target ->
+                            target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                            assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                        }
+                        rows.asReversed().forEach { row ->
+                            val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                            check(row)
+                            assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() > before)
+                            installed.forEach { assertEquals(true, it.javaClass.getMethod("isValidLastTier").invoke(it),
+                                "$backend/${it.rootNode.name} retains first-installed code") }
+                        }
+                    } finally { owner.threads.leaveCurrent() }
+                } finally { context.leave() }
+            }
     }
 
     @Test fun originalDigestCxxAndZlibMatchNativeAcrossOffsetsAndLoopBoundaries() {
@@ -34,7 +123,7 @@ class PackageNativeOriginalsTest {
             "build/original-native/sources/digest-0.0.2.1/Data/Digest/CRC32C.hs",
             "build/original-native/sources/digest-0.0.2.1/external/crc32c/src/crc32c.cc",
             "build/original-native/sources/digest-0.0.2.1/external/crc32c/src/crc32c_portable.cc"),
-            "build/original-native/sources/digest-0.0.2.1/")
+            "build/original-native/sources/")
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf(
             "compiler/test-fixtures/OriginalDigestNative.hs", "test/haskell-fixtures/PackageNativeOriginalsFixtures.hs",
             "src/THC/Driver/PackageNative.hs", "src/THC/Driver/NativeLibrarySources.hs"))
