@@ -331,6 +331,9 @@ internal abstract class GenericDispatch : Node() {
                     val next = offset + count
                     val result = try { caller.call(frame, function.target, packet, false) }
                     catch (cut: AstCapture) {
+                        // Snapshot the interrupted suffix outside compiled code;
+                        // ordinary calls retain their installed target.
+                        CompilerDirectives.transferToInterpreter()
                         val savedArguments = arguments.copyOf()
                         throw cut.append(object : AstResumeStep {
                             override fun resume(frame: VirtualFrame, input: Any?): Any? =
@@ -340,6 +343,7 @@ internal abstract class GenericDispatch : Node() {
                     }
                     val forced = try { AstControl.force(frame, node, force, result) }
                     catch (cut: AstCapture) {
+                        CompilerDirectives.transferToInterpreter()
                         val savedArguments = arguments.copyOf()
                         throw cut.append(object : AstResumeStep {
                             override fun resume(frame: VirtualFrame, input: Any?): Any? =
@@ -357,6 +361,7 @@ internal abstract class GenericDispatch : Node() {
                         DelimitedControl.captureBytecode(answer, null)
                         answer
                     } catch (cut: DelimitedCut) {
+                        CompilerDirectives.transferToInterpreter()
                         val remainingArguments = arguments.copyOf()
                         val next = offset + count
                         throw cut.append(frame, object : DelimitedStep {
