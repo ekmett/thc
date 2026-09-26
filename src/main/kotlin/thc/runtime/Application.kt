@@ -201,6 +201,18 @@ internal abstract class Dispatch(
             function.supplied, prefixSize, arguments, ArgumentLayout.width(argumentLayout, arity))
         if (hasEnvironment) packet[1] = function.environment
         // There is pending application work, so this first call is not tail.
+        if (AstControl.enabled(this)) {
+            val result = try { caller.call(frame, packet, false) }
+            catch (cut: AstCapture) {
+                val remaining = arguments.copyOfRange(ArgumentLayout.offset(argumentLayout, arity), arguments.size)
+                throw cut.append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Any? =
+                        resumeOverapplication(frame, input, remaining, rest, force)
+                })
+            }
+            val remaining = arguments.copyOfRange(ArgumentLayout.offset(argumentLayout, arity), arguments.size)
+            return resumeOverapplication(frame, result, remaining, rest, force)
+        }
         val result = if (!DelimitedControl.enabled(this)) force.execute(frame, caller.call(frame, packet, false))
             else try {
                 val answer = caller.call(frame, packet, false)
@@ -218,6 +230,18 @@ internal abstract class Dispatch(
                 })
             }
         val remaining = arguments.copyOfRange(ArgumentLayout.offset(argumentLayout, arity), arguments.size)
+        return rest.execute(frame, requireClosure(result), remaining)
+    }
+
+    private fun resumeOverapplication(frame: VirtualFrame, value: Any?, remaining: Array<Any?>,
+                                      rest: Dispatch, force: Force): Any? {
+        val result = try { AstControl.force(frame, this, force, value) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? =
+                    rest.execute(frame, requireClosure(input), remaining)
+            })
+        }
         return rest.execute(frame, requireClosure(result), remaining)
     }
 
@@ -303,6 +327,30 @@ internal abstract class GenericDispatch : Node() {
                 if (exact.profile(node, count == remaining)) {
                     return caller.call(frame, function.target, packet, tailCall)
                 }
+                if (AstControl.enabled(node)) {
+                    val next = offset + count
+                    val result = try { caller.call(frame, function.target, packet, false) }
+                    catch (cut: AstCapture) {
+                        val savedArguments = arguments.copyOf()
+                        throw cut.append(object : AstResumeStep {
+                            override fun resume(frame: VirtualFrame, input: Any?): Any? =
+                                resumeOverapplication(frame, node, input, savedArguments, logicalCount, layout,
+                                    tailCall, metrics, next, caller, force, typed, underapplied, exact)
+                        })
+                    }
+                    val forced = try { AstControl.force(frame, node, force, result) }
+                    catch (cut: AstCapture) {
+                        val savedArguments = arguments.copyOf()
+                        throw cut.append(object : AstResumeStep {
+                            override fun resume(frame: VirtualFrame, input: Any?): Any? =
+                                apply(frame, node, requireClosure(input), savedArguments, logicalCount, layout,
+                                    tailCall, metrics, next, caller, force, typed, underapplied, exact)
+                        })
+                    }
+                    function = requireClosure(forced)
+                    offset = next
+                    continue
+                }
                 val result = if (!DelimitedControl.enabled(node)) caller.call(frame, function.target, packet, false)
                     else try {
                         val answer = caller.call(frame, function.target, packet, false)
@@ -325,6 +373,22 @@ internal abstract class GenericDispatch : Node() {
                 offset += count
                 function = requireClosure(force.execute(frame, result))
             }
+        }
+
+        private fun resumeOverapplication(frame: VirtualFrame, node: Node, value: Any?, arguments: Array<Any?>,
+            logicalCount: Int, layout: ArgumentLayout?, tailCall: Boolean, metrics: Metrics, next: Int,
+            caller: IndirectCallerNode, force: Force, typed: GenericInputCall,
+            underapplied: InlinedConditionProfile, exact: InlinedConditionProfile): Any? {
+            val result = try { AstControl.force(frame, node, force, value) }
+            catch (cut: AstCapture) {
+                throw cut.append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Any? =
+                        apply(frame, node, requireClosure(input), arguments, logicalCount, layout,
+                            tailCall, metrics, next, caller, force, typed, underapplied, exact)
+                })
+            }
+            return apply(frame, node, requireClosure(result), arguments, logicalCount, layout,
+                tailCall, metrics, next, caller, force, typed, underapplied, exact)
         }
 
         @JvmStatic fun createCaller(metrics: Metrics) = IndirectCallerNode.create(metrics)
@@ -381,6 +445,7 @@ internal class DirectCallerNode(val target: RootCallTarget, private val metrics:
                                knownEvaluated: BooleanArray = booleanArrayOf(), prefixSize: Int = 0) : Node() {
     @Child private var entryArguments = EntryArguments(target, metrics, knownEvaluated, prefixSize)
     @Child private var leadingCaseReturn: LeadingCaseReturnNode? = (target.rootNode as? GuestRoot)
+        ?.takeUnless { it is FunctionRoot && it.enableAsync }
         ?.leadingCaseReturn?.let { LeadingCaseReturnNode(it, metrics) }
     @Child private var callNode = DirectCallNode.create(target)
     @Child private var handoff: HandoffCaller? = (target.rootNode as? FunctionRoot)?.handoff?.let { HandoffCaller(target, it, metrics) }
@@ -395,13 +460,12 @@ internal class DirectCallerNode(val target: RootCallTarget, private val metrics:
         entryArguments.execute(frame, arguments)
         // All CBV marks (including unused formals and PAP prefixes) run before the shortcut.
         leadingCaseReturn?.execute(arguments)?.let { return it }
-        if (tailCall) {
+        val result = if (tailCall) {
             if (handoff != null && (rootNode as? FunctionRoot)?.handoffDestination(frame)?.let { it >= 0 } == true)
                 return handoff!!.call(frame, arguments, callNode, true)
             tailCheck.check(frame, target, arguments)
-            return Calls.direct(callNode, arguments)
-        }
-        return try {
+            Calls.direct(callNode, arguments)
+        } else try {
             arguments[0] = 0L
             val result = if (handoff != null) handoff!!.call(frame, arguments, callNode, false) else Calls.direct(callNode, arguments)
             normalProfile.enter()
@@ -410,6 +474,7 @@ internal class DirectCallerNode(val target: RootCallTarget, private val metrics:
             tailProfile.enter()
             loop.execute(tail)
         }
+        return if (AstControl.enabled(this)) AstControl.complete(this, result, target) else result
     }
 
     companion object {
@@ -428,11 +493,10 @@ internal class IndirectCallerNode(private val metrics: Metrics) : Node() {
     fun call(frame: VirtualFrame, target: RootCallTarget, arguments: Array<Any?>, tailCall: Boolean): Any? {
         entryArguments.execute(frame, target, arguments)
         if (metrics.enabled) metrics.incrementIndirectCalls()
-        if (tailCall) {
+        val result = if (tailCall) {
             tailCheck.check(frame, target, arguments)
-            return Calls.indirect(callNode, target, arguments)
-        }
-        return try {
+            Calls.indirect(callNode, target, arguments)
+        } else try {
             arguments[0] = 0L
             val result = Calls.indirect(callNode, target, arguments)
             normalProfile.enter()
@@ -441,6 +505,7 @@ internal class IndirectCallerNode(private val metrics: Metrics) : Node() {
             tailProfile.enter()
             loop.execute(tail)
         }
+        return if (AstControl.enabled(this)) AstControl.complete(this, result, target) else result
     }
 
     companion object { @JvmStatic fun create(metrics: Metrics) = IndirectCallerNode(metrics) }
@@ -483,7 +548,11 @@ internal class TailCallRepeatingNode(val descriptor: FrameDescriptor, private va
             dispatch.call(target, arguments)
         }
         frame.setObject(FrameLayout.TAIL_RESULT,
-            if (result is com.oracle.truffle.api.bytecode.ContinuationResult) TailYield(result, target) else result)
+            when (result) {
+                is com.oracle.truffle.api.bytecode.ContinuationResult -> TailYield(result, target)
+                is SavedGuestContinuation -> AstTailYield(result, target)
+                else -> result
+            })
         false
     } catch (tail: TailCall) {
         setNext(frame, tail)
