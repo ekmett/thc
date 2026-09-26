@@ -742,7 +742,7 @@ prepareGlobalBundles context project units = do
     located <- forM units $ \unit -> do
       (buildKey, exportKey, path) <- globalLocation context unit
       cached <- doesFileExist path
-      hit <- if cached then readGlobalBundle path (unitId unit) buildKey exportKey
+      hit <- if cached then readGlobalBundle path (unitId unit) (unitDepends unit) buildKey exportKey
              else pure Nothing
       pure (unit, buildKey, exportKey, path, hit)
     let missing = [(unit, buildKey, exportKey, path)
@@ -752,7 +752,7 @@ prepareGlobalBundles context project units = do
       bundle <- case hit of
         Just value -> pure value
         Nothing -> do
-          ready <- readGlobalBundle path (unitId unit) buildKey exportKey
+          ready <- readGlobalBundle path (unitId unit) (unitDepends unit) buildKey exportKey
           maybe (fail ("Cabal store Core bundle was not published: " ++ unitId unit)) pure ready
       pure (unitId unit, bundle)
     pure (Map.fromList pairs)
@@ -814,15 +814,25 @@ captureGlobalUnits context project requested missing = do
         ("isolated Cabal build changed store identity for " ++ unitId unit)
       createDirectoryIfMissing True (takeDirectory path)
       withLock (path ++ ".lock") $
-        packGlobalBundle capture unit buildKey exportKey path
+        packGlobalBundle store capture unit buildKey exportKey path
     ) `finally` cleanup
 
-packGlobalBundle :: FilePath -> Unit -> String -> String -> FilePath -> IO ()
-packGlobalBundle capture unit buildKey exportKey destination = do
+packGlobalBundle :: FilePath -> FilePath -> Unit -> String -> String -> FilePath -> IO ()
+packGlobalBundle store capture unit buildKey exportKey destination = do
   let core = capture </> unitId unit </> "core"
   exported <- filter ((== ".json") . takeExtension) <$> recursiveFiles core
-  require (not (null exported))
-    ("Cabal store build did not export Core for " ++ unitId unit)
+  empty <- if not (null exported) then pure [] else do
+    -- Inspect only this freshly rebuilt private store, never the original
+    -- native store or a guessed empty module. Cabal owns the compiler partition.
+    partitions <- listDirectory store
+    registrations <- filterM doesFileExist
+      [store </> partition </> "package.db" </> unitId unit <.> "conf" | partition <- partitions]
+    bytes <- case registrations of
+      [path] -> BS.readFile path
+      _ -> fail ("isolated Cabal store lacks a unique registration for " ++ unitId unit)
+    require (emptyRegistration (unitId unit) (unitDepends unit) bytes)
+      ("Cabal store build did not export Core for nonempty unit " ++ unitId unit)
+    pure ["emptyRegistration" .= Text.decodeUtf8 bytes]
   checked <- forM exported $ \path -> do
     value <- readJson path
     foundUnit <- field value "unit"
@@ -841,14 +851,14 @@ packGlobalBundle capture unit buildKey exportKey destination = do
       modules = [object ["name" .= name, "boundary" .= boundary,
                          "path" .= member, "sha256" .= shaHex bytes]
                 | ((name, bytes), (member, _)) <- zip sorted members]
-      inner = object ["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
+      inner = object (["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
                       "unit" .= unitId unit, "buildKey" .= buildKey,
-                      "exportKey" .= exportKey, "modules" .= modules]
+                      "exportKey" .= exportKey, "modules" .= modules] ++ empty)
   archive <- either fail pure (encodeZip (("manifest.json", BL.toStrict (encode inner)) : members))
   atomicBytes destination (BL.toStrict archive)
 
-readGlobalBundle :: FilePath -> String -> String -> String -> IO (Maybe Bundle)
-readGlobalBundle path unit buildKey exportKey = do
+readGlobalBundle :: FilePath -> String -> [String] -> String -> String -> IO (Maybe Bundle)
+readGlobalBundle path unit dependencies buildKey exportKey = do
   bytes <- BS.readFile path
   decoded <- decodeZip bytes
   pure $ do
@@ -856,7 +866,10 @@ readGlobalBundle path unit buildKey exportKey = do
     raw <- lookup "manifest.json" entries
     inner <- either (const Nothing) Just (eitherDecodeStrict' raw)
     modules <- jsonField inner "modules" :: Maybe [Value]
-    let names = [name | Just name <- map (`jsonField` "name") modules :: [Maybe String]]
+    let validInventory = case jsonField inner "emptyRegistration" :: Maybe Text.Text of
+          Nothing -> not (null modules)
+          Just receipt -> null modules && emptyRegistration unit dependencies (Text.encodeUtf8 receipt)
+        names = [name | Just name <- map (`jsonField` "name") modules :: [Maybe String]]
         paths = [member | Just member <- map (`jsonField` "path") modules :: [Maybe String]]
         validModule item = do
           name <- jsonField item "name" :: Maybe String
@@ -875,7 +888,7 @@ readGlobalBundle path unit buildKey exportKey = do
         jsonField inner "unit" == Just unit &&
         jsonField inner "buildKey" == Just buildKey &&
         jsonField inner "exportKey" == Just exportKey &&
-        not (null modules) && length names == length modules &&
+        validInventory && length names == length modules &&
         length paths == length modules && length names == length (nub names) &&
         sort (map fst entries) == sort ("manifest.json" : paths) &&
         all (== Just True) (map validModule modules))

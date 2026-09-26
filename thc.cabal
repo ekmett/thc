@@ -350,6 +350,7 @@ test-suite driver-tests
     RunTests
     ProjectTests
     StoreProjectTests
+    EmptyStoreProjectTests
     ScalarBitcodeTests
     NativeRecipeTests
     InstalledForeignTests
