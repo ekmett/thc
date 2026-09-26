@@ -298,6 +298,9 @@ checkDriver root directory ghc ghcPkg helper baseUnit = do
   check (map fst (Installed.installedInterfaces unit) == ["CBVCoercionAudit", "InterfaceLibrary"])
     "Driver selected undeclared or missing installed modules"
   Installed.validateReexports [unit]
+  serialCore <- Installed.acquireInstalledWithJobs 1 full unit
+  parallelCore <- Installed.acquireInstalledWithJobs 2 full unit
+  check (serialCore == parallelCore) "Parallel hydration changed original Core bytes, owner or inventory order"
   first <- loaded =<< acquire full unit
   let artifact = Project.installedBundle first
       location = splitDirectories (makeRelative cache (Project.bundlePath artifact))
@@ -316,6 +319,9 @@ checkDriver root directory ghc ghcPkg helper baseUnit = do
     "Unchanged installed Core did not reuse the content-addressed bundle"
   thin <- context "thin"
   thinUnit <- Installed.discoverInstalled thin unitName
+  serialMissing <- Installed.acquireInstalledWithJobs 1 thin thinUnit
+  parallelMissing <- Installed.acquireInstalledWithJobs 2 thin thinUnit
+  check (serialMissing == parallelMissing) "Parallel hydration changed the first missing interface"
   missing <- acquire thin thinUnit
   case missing of
     Left value -> check (Installed.missingUnit value == unitName) "Missing capability lost registration"
