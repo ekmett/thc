@@ -597,7 +597,7 @@ for ((taskName, dense) in listOf("packageNativeOriginalsDefault" to false, "pack
         testClassesDirs = fullCoreTests.output.classesDirs
         classpath = fullCoreTests.runtimeClasspath
         systemProperty("thc.handoffSlabs", dense.toString())
-        inputs.files(fileTree("build/original-native") { include("linked/**/*.json", "*-native.tsv", "erf-entry/**/*.json", "erf-audit.json", "manifest.json", "sources/**") })
+        inputs.files(fileTree("build/original-native") { include("linked/**/*.json", "*-native.tsv", "erf-entry/**/*.json", "primitive-entry/**/*.json", "*-audit.json", "manifest.json", "sources/**") })
         useJUnitPlatform()
         filter { includeTestsMatching("thc.runtime.PackageNativeOriginalsTest") }
         outputs.upToDateWhen { false }
