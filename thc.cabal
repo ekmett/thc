@@ -733,6 +733,7 @@ executable thc-fixtures
   main-is: Main.hs
   other-modules:
     AggregateFixtures
+    AggregateHeapFixtures
     GraphFixtures
     IntegerCompletionFixtures
     ContinuationFixtures
