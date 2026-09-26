@@ -37,11 +37,11 @@ class FloatingAddressTest {
         val floatIndex = node(FloatingAddressOp.INDEX_FLOAT, operand(base), operand(2L))
         val floatMiss = assertThrows(UnexpectedResultException::class.java) { floatIndex.executeDouble(frame) }
         assertTrue(floatMiss.result is Float)
-        assertEquals(0x80000000L, RawBitCasts.floatToWord32(floatMiss.result as Float))
+        assertEquals(0x80000000L, (java.lang.Float.floatToRawIntBits(floatMiss.result as Float).toLong() and 0xffffffffL))
         val doubleIndex = node(FloatingAddressOp.INDEX_DOUBLE, operand(base), operand(2L))
         val doubleMiss = assertThrows(UnexpectedResultException::class.java) { doubleIndex.executeFloat(frame) }
         assertTrue(doubleMiss.result is Double)
-        assertEquals(Long.MIN_VALUE, RawBitCasts.doubleToWord64(doubleMiss.result as Double))
+        assertEquals(Long.MIN_VALUE, java.lang.Double.doubleToRawLongBits(doubleMiss.result as Double))
         var stateEvaluations = 0
         val state = object : Expr() {
             override fun execute(frame: VirtualFrame): Any { stateEvaluations++; return Unit }
@@ -54,7 +54,7 @@ class FloatingAddressTest {
         val write = node(FloatingAddressOp.WRITE_FLOAT, operand(base), operand(2L), operand(1.0f), state)
         assertThrows(RuntimeFault::class.java) { write.executeDouble(frame) }
         assertEquals(0, stateEvaluations)
-        assertEquals(0x80000000L, RawBitCasts.floatToWord32(FloatingAddresses.readFloat(base, 2)))
+        assertEquals(0x80000000L, (java.lang.Float.floatToRawIntBits(FloatingAddresses.readFloat(base, 2)).toLong() and 0xffffffffL))
     }
 
     @Test fun nativeEndianFloatingStoragePreservesBitsAndChecksWholeElement() {
@@ -63,10 +63,10 @@ class FloatingAddressTest {
         base.writeAddressElementIndex(1, target)
         val floatBits = 0x7fc01234L
         val doubleBits = 0x7ff8000000001234L
-        FloatingAddresses.writeFloat(base, 4, RawBitCasts.word32ToFloat(floatBits))
-        FloatingAddresses.writeDouble(base, 3, RawBitCasts.word64ToDouble(doubleBits))
-        assertEquals(floatBits, RawBitCasts.floatToWord32(FloatingAddresses.readFloat(base.plus(20), -1)))
-        assertEquals(doubleBits, RawBitCasts.doubleToWord64(FloatingAddresses.readDouble(base.plus(32), -1)))
+        FloatingAddresses.writeFloat(base, 4, java.lang.Float.intBitsToFloat((floatBits).toInt()))
+        FloatingAddresses.writeDouble(base, 3, java.lang.Double.longBitsToDouble(doubleBits))
+        assertEquals(floatBits, (java.lang.Float.floatToRawIntBits(FloatingAddresses.readFloat(base.plus(20), -1)).toLong() and 0xffffffffL))
+        assertEquals(doubleBits, java.lang.Double.doubleToRawLongBits(FloatingAddresses.readDouble(base.plus(32), -1)))
         val expected = ByteBuffer.allocate(64).order(ByteOrder.nativeOrder())
             .putInt(16, floatBits.toInt()).putLong(24, doubleBits).array()
         for (index in (16..19).plus(24..31))
