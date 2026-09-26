@@ -85,6 +85,33 @@ class FixturePreparationTest(unittest.TestCase):
         (self.root / 'build/scalar-memory-utilities/native/oracle').write_text('mutated')
         with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
 
+    def test_delimited_continuations_retain_closed_command_and_native_evidence(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        cache = fast_fixtures.fast_inputs
+        group = manifest['groups']['delimited-continuations']
+        self.assertEqual('delimited-continuations', owners['thc.runtime.DelimitedContinuationsTest'])
+        self.assertIn('examples/DelimitedContinuations.hs', group['sources'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'delimited-continuations']}], group['commands'])
+        self.assertIn('"$fixture_bin" delimited-continuations', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertEqual(90, len(cache.DELIMITED_OUTPUTS))
+        self.assertTrue(cache.DELIMITED_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
+        name = 'build/delimited-continuations/manifest.json'
+        artifacts = {}
+        for item in cache.DELIMITED_OUTPUTS - {name}:
+            path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
+        receipt = dict(schema=1, ghc='9.14.1', entries=list(cache.DELIMITED_ENTRIES), stages=['pre', 'post'],
+                       arguments=[-2, 0, 7], native=[0] * 27, artifactHashes=artifacts)
+        (self.root / name).write_text(json.dumps(receipt))
+        self.assertEqual(cache.DELIMITED_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+        for bad in (dict(receipt, schema=True), dict(receipt, ghc='9.12.2'), dict(receipt, entries=[]),
+                    dict(receipt, native=[0] * 26), dict(receipt, native=[False] * 27),
+                    dict(receipt, stages=['pre']), dict(receipt, artifactHashes={})):
+            with self.assertRaises(cache.CacheMiss): cache.delimited_artifact_hashes(bad)
+        (self.root / 'build/delimited-continuations/commands/native-run.stdout').write_text('mutated')
+        with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+
     def test_thread_inventory_owns_exact_native_outputs_and_rejects_partial_receipts(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

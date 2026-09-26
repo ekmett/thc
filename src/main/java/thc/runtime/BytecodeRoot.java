@@ -453,6 +453,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             TailYield tail = result instanceof TailYield yielded ? yielded : null;
             ContinuationResult continuation = tail == null
                     ? result instanceof ContinuationResult resumed ? resumed : null : tail.getContinuation();
+            DelimitedControl.captureBytecode(result, null);
             if (continuation == null) {
                 if (SynchronousMasking.current(node) != callerMask) {
                     SynchronousMasking.set(node, callerMask);
@@ -598,6 +599,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation public static final class ParkCallMask {
+        @Specialization public static DelimitedCut parkDelimited(DelimitedCut cut,
+                MaskingState rootEntry, MaskingState callerActive) { return cut; }
         @Specialization public static CallSegmentSuspended park(CallSegmentSuspended suspended,
                 MaskingState rootEntry, MaskingState callerActive, @Bind("$node") Node node) {
             try {
@@ -613,16 +616,20 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation public static final class ReenterCallMask {
-        @Specialization public static Object reenter(Object resumed, MaskingState callerActive,
+        @Specialization public static DelimitedResume reenterDelimited(DelimitedResume resumed,
+                MaskingState callerActive) { return resumed; }
+        @Specialization(guards = "!isDelimited(resumed)") public static Object reenterOrdinary(Object resumed, MaskingState callerActive,
                 @Bind("$node") Node node) {
             SynchronousMasking.set(node, callerActive);
             return resumed;
         }
+        public static boolean isDelimited(Object value) { return value instanceof DelimitedResume; }
     }
 
     @Operation
     public static final class CallSuspensionOnly {
         @Specialization public static Object capture(AbstractTruffleException failure) {
+            if (failure instanceof DelimitedCut cut) return cut;
             if (failure instanceof CapturedCallSuspension captured) return new CallSegmentSuspended(captured.getSegment());
             if (failure instanceof AsyncBlocked blocked) return blocked.getRequest();
             throw failure;
@@ -631,6 +638,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     public static final class ResumeApplication {
+        @Specialization public static Object resumeDelimited(DelimitedCut cut, DelimitedResume resumed) {
+            return resumed.get();
+        }
         @Specialization public static Object resume(CallSegmentSuspended suspended, ChildResume resumed) {
             if (resumed.getFailure() != null) throw resumed.getFailure();
             CallSegment call = suspended.getSegment();
@@ -2417,6 +2427,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     public static final class ResumeTupleApplication {
+        @Specialization public static void resumeDelimited(VirtualFrame frame, BytecodeTupleSlots destination,
+                DelimitedCut cut, DelimitedResume resumed, @Bind Node node) {
+            destination.consume(frame, node, resumed.get());
+        }
         @Specialization public static void resume(VirtualFrame frame, BytecodeTupleSlots destination,
                 CallSegmentSuspended suspended, ChildResume resumed, @Bind Node node) {
             if (resumed.getFailure() != null) throw resumed.getFailure();
@@ -2437,6 +2451,63 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object payload(AbstractTruffleException failure) {
             if (failure instanceof GuestException guest) return guest.getPayload();
             throw failure;
+        }
+    }
+
+    @Operation public static final class NewPromptTag {
+        @Specialization public static PromptTag create(Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            return new PromptTag(Language.currentState(node));
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = TupleShape.class, name = "shape")
+    public static final class CaptureDelimited {
+        @Specialization public static DelimitedCut capture(TupleShape shape, Object tag, Object handler,
+                Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            return new DelimitedCut(DelimitedControl.tag(node, tag), handler, shape,
+                    SynchronousMasking.current(node), node);
+        }
+    }
+
+    @Operation public static final class DelimitedOnly {
+        @Specialization public static DelimitedCut capture(AbstractTruffleException failure) {
+            if (failure instanceof DelimitedCut cut) return cut;
+            throw failure;
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    public static final class ConsumeDelimited {
+        @Specialization public static void consume(VirtualFrame frame, BytecodeTupleSlots destination,
+                Object result, @Bind Node node) {
+            destination.consume(frame, node, result instanceof DelimitedResume resumed ? resumed.get() : result);
+        }
+    }
+
+    /** Java declaration is required by the Bytecode DSL; semantics live in the shared Kotlin site. */
+    @Operation
+    @ConstantOperand(type = String.class, name = "name")
+    @ConstantOperand(type = TupleShape.class, name = "shape")
+    @ConstantOperand(type = Language.class, name = "language")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class DelimitedBoundary {
+        @Specialization public static Object invoke(VirtualFrame frame, String name, TupleShape shape,
+                Language language, Metrics metrics, Object first, Object second, Object state,
+                @Cached(value = "create(language, metrics)", neverDefault = true) DelimitedActionSite site) {
+            return switch (name) {
+                case "prompt#" -> site.prompt(frame, first, second, state, shape);
+                case "catch#" -> site.caught(frame, first, second, state, shape);
+                case "maskAsyncExceptions#" -> site.masked(frame, first, state, shape, MaskingState.MASKED_INTERRUPTIBLE);
+                case "maskUninterruptible#" -> site.masked(frame, first, state, shape, MaskingState.MASKED_UNINTERRUPTIBLE);
+                default -> site.masked(frame, first, state, shape, MaskingState.UNMASKED);
+            };
+        }
+        public static DelimitedActionSite create(Language language, Metrics metrics) {
+            return new DelimitedActionSite(language, metrics);
         }
     }
 

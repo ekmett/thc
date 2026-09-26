@@ -310,8 +310,17 @@
       ],
       "python": []
     },
+    "examples/DelimitedContinuations.hs": {
+      "junit": ["thc.runtime.DelimitedContinuationsTest"], "python": []
+    },
+    "compiler/test-fixtures/DelimitedContinuationsNative.hs": {
+      "junit": ["thc.runtime.DelimitedContinuationsTest"], "python": []
+    },
+    "test/haskell-fixtures/DelimitedContinuationsFixtures.hs": {
+      "junit": ["thc.runtime.DelimitedContinuationsTest"], "python": []
+    },
     "src/test/kotlin/thc/runtime/ThreadInventoryCoreEvidence.kt": {
-      "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
+      "junit": ["thc.runtime.ThreadInventoryNativeTest", "thc.runtime.DelimitedContinuationsTest"], "python": []
     },
     "test/haskell-fixtures/HintTraceFixtures.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
     "compiler/test-fixtures/HintTraceAudit.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
@@ -935,6 +944,7 @@
       "junit": [
         "thc.runtime.AtomicAddressTest",
         "thc.runtime.AtomicIntArrayTest",
+        "thc.runtime.DelimitedContinuationsTest",
         "thc.runtime.ThreadInventoryNativeTest",
         "thc.runtime.AlignedScalarMemoryTest",
         "thc.runtime.IntegerCompletionTest",
@@ -1323,6 +1333,7 @@
         "thc.runtime.PinnedAddressTest",
         "thc.runtime.AddressArrayCopyTest",
         "thc.runtime.HintTraceTest",
+        "thc.runtime.DelimitedContinuationsTest",
         "thc.runtime.BigNatLiteralTest",
         "thc.runtime.FloatDecodeTest",
         "thc.runtime.ScalarBitCastTest",

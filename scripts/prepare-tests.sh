@@ -76,6 +76,7 @@ python3 scripts/prepare-synchronous-exceptions.py
 "$fixture_bin" thread-async
 "$fixture_bin" thread-status
 "$fixture_bin" thread-inventory
+"$fixture_bin" delimited-continuations
 "$fixture_bin" thread-label
 "$fixture_bin" hint-trace
 "$fixture_bin" uncaught-self
