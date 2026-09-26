@@ -90,6 +90,22 @@ C prototypes still reject. `ByteArray#`/`MutableByteArray#` variants that erase
 to the same call shape remain ambiguous: the current descriptor cannot choose
 a read/write policy from those erased representations alone.
 
+Within each module, retained CAPI stubs and their adapters compile separately
+from direct `ccall` adapters, just as GHC emits those calls outside the CAPI C
+stub. A CAPI header can declare opaque struct pointers and narrow C parameters
+for neighboring `ccall` functions; combining those declarations with the exact
+GHC caller prototypes in one C file would create spurious conflicting-type
+errors. Separation preserves both the original callee definition and the
+emitted caller ABI, without rewriting either declaration or guessing a header
+prototype. Both translation units and their real header dependencies contribute
+to the native component identity. The mixed-header fixture compares an existing
+managed buffer passed as an opaque struct pointer and 8/32-bit argument-boundary
+behavior against native GHC with exact-width Haskell arguments. The retained
+machine-word caller variant also succeeds natively, but currently fails in
+Sulong when an i64 caller enters an i8/i32 C definition. A separate control retains the current rejection
+when an unowned static C pointer is returned and passed into another call; TU
+separation does not grant byte ownership to that numeric address.
+
 The checksum source provider recognizes retained `zlib.h` imports for `adler32`
 and `crc32`, compiles unchanged upstream zlib 1.2.11 source with the package's
 configured header, and rejects a header-version or source-hash mismatch. It

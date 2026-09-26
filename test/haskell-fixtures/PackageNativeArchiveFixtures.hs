@@ -14,6 +14,7 @@ import InstalledCoreFixtures (field, readJson)
 import System.Directory
 import System.Environment (lookupEnv, unsetEnv)
 import System.FilePath
+import Text.Read (readMaybe)
 import THC.Driver.GhcProxy (ghcProxyCommand)
 import THC.Driver.PackageNative (finishPackageNative)
 
@@ -64,7 +65,15 @@ preparePackageNativeArchives root = do
   oracle <- case executables of
     [binary] -> execute "native-oracle" [] binary []
     _ -> fail "expected one actual native archive oracle"
-  unless (commandStdout oracle == "40\n99\n1\n7\nTrue\n") (fail "native archive oracle differs")
+  let oracleLines = BSC.lines (commandStdout oracle)
+  unless (take 5 oracleLines == ["40","99","1","7","True"]) (fail "native archive oracle differs")
+  observations <- case drop 5 oracleLines of
+    [row] -> maybe (fail "native mixed-header oracle is malformed") pure
+      (readMaybe (BSC.unpack row) :: Maybe [(Integer,Integer,Integer,Integer)])
+    _ -> fail "missing native mixed-header oracle"
+  unless (length observations == 20) (fail "native mixed-header oracle row count differs")
+  unless (all (\(_,_,typed,wide) -> typed == wide) observations)
+    (fail "native typed and machine-register argument calls differ")
   linked <- concat <$> forM units (\unit -> do
     paths <- sort . filter ((== ".json") . takeExtension) <$> files (capture </> unit </> "core")
     modules <- mapM (\path -> (,) (takeFileName path) <$> BS.readFile path) paths
@@ -79,6 +88,8 @@ preparePackageNativeArchives root = do
   accepted <- execute "supported-audit" [] "python3" (audit (mixed ++ "allowed") "supported-audit")
   mixedWidth <- execute "mixed-width-audit" [] "python3"
     (audit (mixedUnit ++ ":Narrow.allowed") "mixed-width-audit")
+  mixedHeader <- execute "mixed-header-audit" [] "python3"
+    (audit (mixedUnit ++ ":CapiMix.mixedProbe#") "mixed-header-audit")
   negatives <- forM [(mixed ++ "blocked","interruptible"),(mixedUnit ++ ":Unknown.other","non-static"),
     (mixedUnit ++ ":Narrow.narrow","narrow-conflict"),(mixedUnit ++ ":Wide.wide","wide-conflict"),
     (unresolvedUnit ++ ":Unresolved.process","unresolved")] $ \(entry,label) -> do
@@ -92,10 +103,11 @@ preparePackageNativeArchives root = do
     ["test/haskell-fixtures/PackageNativeArchiveFixtures.hs","src/THC/Driver/PackageNative.hs",
      "scripts/core_package_manifest.py","scripts/audit-core.py"])
   artifacts <- hashes root (linked ++ [relative </> name <.> "json" | name <-
-    ["supported-audit","mixed-width-audit","interruptible","non-static","narrow-conflict","wide-conflict","unresolved"]])
+    ["supported-audit","mixed-width-audit","mixed-header-audit","interruptible","non-static","narrow-conflict","wide-conflict","unresolved"]])
   writeJson (output </> "manifest.json") (object ["schema" .= (1::Int),"driverSha256" .= driverHash,
     "modules" .= linked,"inputHashes" .= inputs,"artifactHashes" .= artifacts,
-    "commands" .= map commandRecord ([built,acquired,oracle,accepted,mixedWidth] ++ negatives)])
+    "mixedHeaderObservations" .= observations,
+    "commands" .= map commandRecord ([built,acquired,oracle,accepted,mixedWidth,mixedHeader] ++ negatives)])
   putStrLn "package-native-archives: supported mixed imports admitted; interruptible, non-static, conflicting-width and unresolved imports archived and rejected when reachable"
   where
     line bytes = case BSC.lines bytes of [value] -> BSC.unpack value; _ -> error "expected one tool result"

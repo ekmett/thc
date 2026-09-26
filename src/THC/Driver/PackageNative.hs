@@ -411,15 +411,21 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
           provisional = sha (BL.toStrict (encode inputIdentity))
           makeEntries component = [(signature,"thc_native_" ++ component ++ "_" ++ show index) | (index,signature) <- zip [0::Int ..] signatures]
           -- GHC compiles each module's CAPI stubs as its own translation unit.
+          -- Direct ccall adapters must not enter that CAPI header namespace:
+          -- GHC emits those calls independently, and a header may name struct
+          -- pointers or narrower C parameters than the emitted caller ABI.
           -- Preserve private helpers, macros and header include boundaries.
           -- Repeated direct ccall imports need just one component adapter.
           compileUnits component = forM
-            [(index,source,entries) | (index,(source,ownedSignatures)) <- zip [0::Int ..] (zip sources perModule),
+            [(index,convention,if convention == "capi" then source else "",entries) |
+              (index,(source,ownedSignatures)) <- zip [0::Int ..] (zip sources perModule),
+              convention <- ["ccall","capi"],
               let earlier = concat (take index perModule),
-              let entries = [entry | entry@(signature,_) <- makeEntries component,
+              let entries = [entry | entry@(signature@(_,callConvention,_,_,_),_) <- makeEntries component,
+                    callConvention == convention,
                     signature `elem` ownedSignatures && signature `notElem` earlier],
-              not (null entries)] $ \(index,source,entries) -> do
-                let output = nativeDirectory </> show index
+              not (null entries)] $ \(index,convention,source,entries) -> do
+                let output = nativeDirectory </> show index </> convention
                 createDirectoryIfMissing True output
                 wrappers <- either fail pure (nativeWrapperSource
                   [(signature,entry,wrapperHeader symbol) | (signature@(symbol,_,_,_,_),entry) <- entries])
