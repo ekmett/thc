@@ -66,8 +66,8 @@ preparePackageNativeArchives root = do
     [binary] -> execute "native-oracle" [] binary []
     _ -> fail "expected one actual native archive oracle"
   let oracleLines = BSC.lines (commandStdout oracle)
-  unless (take 5 oracleLines == ["40","99","1","7","True"]) (fail "native archive oracle differs")
-  observations <- case drop 5 oracleLines of
+  unless (take 6 oracleLines == ["40","99","1","7","True","True"]) (fail "native archive oracle differs")
+  observations <- case drop 6 oracleLines of
     [row] -> maybe (fail "native mixed-header oracle is malformed") pure
       (readMaybe (BSC.unpack row) :: Maybe [(Integer,Integer,Integer,Integer,Integer)])
     _ -> fail "missing native mixed-header oracle"

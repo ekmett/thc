@@ -98,7 +98,14 @@ GHC caller prototypes in one C file would create spurious conflicting-type
 errors. Separation preserves both the original callee definition and the
 emitted caller ABI, without rewriting either declaration or guessing a header
 prototype. Both translation units and their real header dependencies contribute
-to the native component identity. The mixed-header fixture compares an existing
+to the native component identity.
+
+Direct caller translation units include only `HsFFI.h` for the emitted scalar
+types, not the broad `Rts.h` header. This also prevents unrelated libc
+declarations such as `FILE*` prototypes from colliding with opaque `Addr#`
+caller signatures. The original `fdopen`/`fclose` shape is exercised natively;
+unresolved libc execution remains archive-only, not implicitly linked by this
+source-capture correction. The mixed-header fixture compares an existing
 managed buffer passed as an opaque struct pointer and 8/32-bit argument-boundary
 behavior against native GHC with exact-width Haskell arguments. The retained
 machine-word caller variant uses an explicit x86_64 Linux argument bridge when
