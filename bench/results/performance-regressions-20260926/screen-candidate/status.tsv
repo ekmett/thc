@@ -1,0 +1,8 @@
+map-check	bytecode-false	0
+map-phases	bytecode-false	0
+map-check	bytecode-true	0
+map-phases	bytecode-true	0
+map-check	ast-false	0
+map-phases	ast-false	0
+map-check	ast-true	0
+map-phases	ast-true	0
