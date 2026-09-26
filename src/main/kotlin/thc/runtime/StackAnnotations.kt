@@ -53,7 +53,10 @@ internal class AnnotatedTuple(@field:Child private var annotation: Expr,
         requireVoidCarrier(state.execute(frame))
         val prior = StackAnnotations.enter(this, value)
         return try { body.executeTuple(frame, slots, offset) }
-        catch (cut: DelimitedCut) { throw cut.append(frame, DelimitedAnnotationStep(this, prior)) }
+        catch (cut: DelimitedCut) {
+            if (!DelimitedControl.enabled(this)) throw cut
+            throw cut.append(frame, DelimitedAnnotationStep(this, prior))
+        }
         finally { StackAnnotations.set(this, prior) }
     }
 }
@@ -78,6 +81,20 @@ internal object StackAnnotations {
     }
 }
 
+/** The annotation return is a scope: an exception from an earlier resumed step
+ * must restore it just as a successful action does. */
+private class AstAnnotationScope(private val node: Node, private val prior: StackAnnotationState,
+                                  private val steps: List<AstResumeStep>) : AstResumeStep {
+    override fun resume(frame: VirtualFrame, input: Any?): Any? =
+        withAstAnnotationRestore(node, prior) { resumeAstSteps(frame, steps, input) }
+}
+
+private inline fun <T> withAstAnnotationRestore(node: Node, prior: StackAnnotationState, body: () -> T): T {
+    return try { body() }
+    catch (cut: AstCapture) { throw cut.enclose { AstAnnotationScope(node, prior, it) } }
+    finally { StackAnnotations.set(node, prior) }
+}
+
 /** The lexical return must remain present even when the action is in tail position. */
 internal class AnnotatedAction(private val shape: TupleShape,
     @field:Child private var annotation: Expr, @field:Child private var action: Expr,
@@ -88,50 +105,82 @@ internal class AnnotatedAction(private val shape: TupleShape,
     override fun execute(frame: VirtualFrame): Nothing = fault("annotateStack# requires a tuple destination")
 
     private fun invoke(frame: VirtualFrame, action: Any?): Any? {
-        val closure = try { requireClosure(force.execute(frame, action)) }
-        catch (signal: ThunkSuspended) {
-            throw AstCapture(signal, SynchronousMasking.current(this)).append(object : AstResumeStep {
+        val closure = try { requireClosure(AstControl.force(frame, this, force, action)) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? = call(frame, requireClosure(input))
+            })
+        }
+        return call(frame, closure)
+    }
+
+    private fun call(frame: VirtualFrame, closure: Closure): Any? {
+        val result = try {
+            val returned = dispatch.execute(frame, closure, arrayOf(Unit))
+            DelimitedControl.captureBytecode(returned, shape)
+            AstControl.complete(this, returned, closure.target, shape)
+        } catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? = ownedTupleResult(input, shape)
+            })
+        }
+        return ownedTupleResult(result, shape)
+    }
+
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val value = try { annotation.execute(frame) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? = loadAction(frame, input, slots, offset)
+            })
+        }
+        return loadAction(frame, value, slots, offset)
+    }
+
+    private fun loadAction(frame: VirtualFrame, value: Any?, slots: IntArray, offset: Int): Any? {
+        val function = try { action.execute(frame) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? = loadState(frame, value, input, slots, offset)
+            })
+        }
+        return loadState(frame, value, function, slots, offset)
+    }
+
+    private fun loadState(frame: VirtualFrame, value: Any?, function: Any?, slots: IntArray, offset: Int): Any? {
+        val token = try { state.execute(frame) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
                 override fun resume(frame: VirtualFrame, input: Any?): Any? {
-                    val resumed = input as? ChildResume ?: fault("Invalid annotation action resume")
-                    resumed.failure?.let { throw it }
-                    return invoke(frame, resumed.value)
+                    requireVoidCarrier(input)
+                    return runAction(frame, value, function, slots, offset)
                 }
             })
         }
-        return complete(frame, dispatch.execute(frame, closure, arrayOf(Unit)))
+        requireVoidCarrier(token)
+        return runAction(frame, value, function, slots, offset)
     }
-    private fun complete(frame: VirtualFrame, result: Any?): Any? {
-        if (result is AstContinuation) {
-            throw AstCapture(result.yielded, SynchronousMasking.current(this)).append(object : AstResumeStep {
-                override fun resume(frame: VirtualFrame, input: Any?): Any? =
-                    complete(frame, result.continueWith(input))
-            })
-        }
-        DelimitedControl.captureBytecode(result, shape)
-        return ownedTupleResult(result, shape)
-    }
-    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        val value = annotation.execute(frame)
-        val function = action.execute(frame)
-        requireVoidCarrier(state.execute(frame))
+
+    private fun runAction(frame: VirtualFrame, value: Any?, function: Any?, slots: IntArray, offset: Int): Any? {
         val prior = StackAnnotations.enter(this, value)
-        try {
+        return withAstAnnotationRestore(this, prior) {
             val result = try { invoke(frame, function) }
             catch (cut: AstCapture) {
                 throw cut.append(object : AstResumeStep {
                     override fun resume(frame: VirtualFrame, input: Any?): Any? {
-                        try { shape.consume(frame, input, slots, offset); return null }
-                        finally { StackAnnotations.set(this@AnnotatedAction, prior) }
+                        shape.consume(frame, input, slots, offset)
+                        return null
                     }
                 })
             }
             catch (cut: DelimitedCut) {
+                if (!DelimitedControl.enabled(this)) throw cut
                 throw cut.append(frame, DelimitedAnnotationStep(this, prior))
                     .append(frame, DelimitedTupleStep(AstTupleDestination(shape, slots, offset), this))
             }
             shape.consume(frame, result, slots, offset)
-            return null
-        } finally { StackAnnotations.set(this, prior) }
+            null
+        }
     }
 }
 
