@@ -113,6 +113,21 @@ class FastSelectionTest(unittest.TestCase):
         self.assertEqual(result, self.plan())
 
 
+    def test_store_project_tests_select_driver_suite_without_full_jvm_run(self):
+        path = "test/haskell-driver/StoreProjectTests.hs"
+        policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
+        self.policy["owners"][path] = policy["owners"][path]
+        self.write(select.POLICY, json.dumps(self.policy))
+        self.write(path, "module StoreProjectTests where\nexample = False\n")
+        self.base = self.commit()
+        self.write(path, "module StoreProjectTests where\nexample = True\n")
+        self.commit()
+        result = self.plan()
+        self.assertEqual("narrow", result["mode"], result["reasons"])
+        self.assertEqual(["driver-tests"], result["haskell"]["suites"])
+        self.assertEqual(["example.SmokeTest"], result["junit"]["classes"])
+        self.assertEqual([], result["affected"]["junit"])
+
     def full_core_addition(self):
         before = ("cabal-version: 3.0\nname: example\nversion: 0.1\n"
                   "extra-source-files:\n  README.md\n"

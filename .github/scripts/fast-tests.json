@@ -1840,6 +1840,11 @@
       "python": [],
       "haskell": ["driver-tests"]
     },
+    "test/haskell-driver/StoreProjectTests.hs": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
     "test/haskell-driver/RunTests.hs": {
       "junit": [],
       "python": [],
