@@ -83,6 +83,7 @@ import PackageNativeArchiveFixtures (preparePackageNativeArchives)
 import GetEntropyFixtures (prepareGetEntropy)
 import WcwidthFixtures (prepareWcwidth)
 import TextCbitsFixtures (prepareTextCbits)
+import UnixWaitStatusFixtures (prepareUnixWaitStatus)
 import HashableFfiFixtures (prepareHashableFfi)
 import OriginalTermiosFixtures (prepareOriginalTermios)
 import OriginalTcsetattrFixtures (prepareOriginalTcsetattr)
@@ -974,6 +975,7 @@ main = do
     ["getentropy"] -> prepareGetEntropy root
     ["wcwidth"] -> prepareWcwidth root
     ["text-cbits"] -> prepareTextCbits root
+    ["unix-wait-status"] -> prepareUnixWaitStatus root
     ["hashable-ffi"] -> prepareHashableFfi root
     ["libdw-unavailable"] -> prepareLibdwUnavailable root
     ["original-termios"] -> prepareOriginalTermios root
