@@ -33,7 +33,8 @@ class BoxedArrayExtensionsTest {
         .option("engine.CompilationFailureAction", "Throw").option("compiler.Inlining", inlining.toString()).build()
     private fun program(language: Language, module: Map<String, Any?>, backend: String): ExecutableProgram =
         if (backend == "ast") Program(language, module) else BytecodeProgram(language, module)
-    private fun valid(target: RootCallTarget) = assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+    private fun valid(target: RootCallTarget, label: String = "") = assertEquals(true,
+        target.javaClass.getMethod("isValidLastTier").invoke(target), "$label/${target.rootNode.name}")
     private fun compile(target: RootCallTarget) {
         target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
         valid(target)
@@ -433,7 +434,8 @@ class BoxedArrayExtensionsTest {
                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                         check(row)
                         assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() > before)
-                        assertEquals(targets, activeTargets(host)); targets.forEach(::valid)
+                        assertEquals(targets, activeTargets(host))
+                        targets.forEach { valid(it, "$stage/$backend/$name/inline=$inlining/$row") }
                     }
                     for (counter in listOf("unsupportedTraps", "blackholes")) assertEquals(0L, (program.diagnostics().getValue(counter) as Number).toLong())
                 } finally { context.leave() }
