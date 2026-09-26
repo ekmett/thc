@@ -65,8 +65,8 @@ preparePackageScalar root = do
         maybe [] (\path -> ["--ghc-source",path]) sourceRoot)
     plan <- readJson (root </> output </> "native/cache/plan.json")
     units <- field plan "install-plan" :: IO [Value]
-    executable <- unique "oracle component" =<< matching "component-name" "exe:oracle" units
-    binary <- field executable "bin-file"
+    oracleComponent <- unique "oracle component" =<< matching "component-name" "exe:oracle" units
+    binary <- field oracleComponent "bin-file"
     native <- execute (name ++ "-native-run") [] binary []
     unless (commandStdout managed == commandStdout native)
       (die ("package-scalar-cbits: ordinary THC/native stdout differs for " ++ name))

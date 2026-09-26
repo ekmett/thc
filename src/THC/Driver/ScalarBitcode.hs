@@ -18,19 +18,13 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Char (isAlpha, isAlphaNum, isSpace)
 import Data.List (intercalate, isInfixOf, isPrefixOf, isSuffixOf, nub, sort, sortOn)
 import qualified Data.Text as T
-import Distribution.Compiler (CompilerFlavor(GHC))
-import Distribution.PackageDescription
+import Distribution.PackageDescription (buildType, BuildType(Simple), packageDescription)
+import Distribution.PackageDescription.Parsec (parseGenericPackageDescriptionMaybe)
+import Distribution.InstalledPackageInfo (parseInstalledPackageInfo)
 import Distribution.Pretty (prettyShow)
-import qualified Distribution.Simple.Compiler as Compiler
-import Distribution.Simple.Configure (getPersistBuildConfig)
-import Distribution.Simple.Flag (toFlag)
-import Distribution.Simple.GHC (componentCcGhcOptions)
-import Distribution.Simple.LocalBuildInfo
-import Distribution.Simple.Program (ghcProgram, lookupProgram, programPath)
-import Distribution.Simple.Program.GHC (GhcOptions(..), renderGhcOptions)
-import Distribution.Simple.Program.Run (programInvocation, progInvokeArgs, progInvokeEnv)
-import Distribution.Utils.Path (getSymbolicPath, makeSymbolicPath)
-import Distribution.Verbosity (silent)
+import qualified Distribution.Types.InstalledPackageInfo as Package
+import qualified Data.Text.Encoding as Text
+import THC.Driver.NativeRecipe
 import Numeric (showHex)
 import System.Directory
 import System.Environment (getEnvironment, lookupEnv)
@@ -46,48 +40,58 @@ data ScalarBitcode = ScalarBitcode
   , scalarDefinitions :: [(String, [String], String)]
   , scalarTools :: (FilePath, FilePath), scalarInputs :: [(FilePath,String)] }
 
-withScalarBitcode :: FilePath -> FilePath -> String -> Value -> (Maybe ScalarBitcode -> IO a) -> IO a
-withScalarBitcode dist ghc unit component action = do
-  lbi <- getPersistBuildConfig Nothing (makeSymbolicPath dist)
-  clbi <- case [c | c <- allComponentsInBuildOrder lbi, prettyShow (componentUnitId c) == unit] of
-    [value] -> pure value
-    _ -> fail "scalar cbits: setup-config component differs from Cabal plan"
-  let selected = getComponent (localPkgDescr lbi) (componentLocalName clbi)
-      info = componentBuildInfo selected
-  if null (cSources info) then action Nothing else do
+withScalarBitcode :: FilePath -> FilePath -> [FilePath] -> FilePath -> FilePath -> String -> Value -> (Maybe ScalarBitcode -> IO a) -> IO a
+withScalarBitcode nativeRoot dist roots ghc packageTool unit component action = do
+  objects <- componentNativeObjects nativeRoot dist roots component
+  declarations <- componentNativeDeclarations component
+  check (null declarations || not (null objects)) "scalar cbits: declared native sources have no actual compiler receipts"
+  if null objects then action Nothing else do
     root <- get component "src-dir" >>= canonicalizePath
-    check (buildType (localPkgDescr lbi) == Simple && length (cSources info) == 1 &&
-      null (cxxSources info) && null (asmSources info) && null (cmmSources info) && null (jsSources info) &&
-      null (extraLibs info) && null (extraLibsStatic info) && null (extraGHCiLibs info) &&
-      null (ldOptions info) && null (frameworks info))
-      "scalar cbits requires one local C translation unit and no other native products or libraries"
-    check (not (withProfExe lbi || withProfLib lbi || withDynExe lbi) &&
-      prettyShow (Compiler.compilerId (compiler lbi)) == "ghc-9.14.1")
-      "scalar cbits requires the selected GHC9.14.1 vanilla component"
-    source <- case cSources info of
-      [path] -> pure (getSymbolicPath path)
-      _ -> fail "scalar cbits requires one C source"
-    let targetDir = case selected of
-          CLib{} -> getSymbolicPath (componentBuildDir lbi clbi)
-          _ -> ""
-    check (not (null targetDir) && not (isAbsolute source) && takeExtension source == ".c" &&
-      ".." `notElem` splitDirectories source) "scalar cbits requires a registered local library with a package-relative C source"
-    let options = (componentCcGhcOptions silent lbi info clbi (makeSymbolicPath targetDir)
-                    (makeSymbolicPath source)) { ghcOptFPic = toFlag True }
-    configured <- maybe (fail "scalar cbits: configured GHC missing") pure (lookupProgram ghcProgram (withPrograms lbi))
-    actualGhc <- canonicalizePath (programPath configured)
-    expectedGhc <- canonicalizePath ghc
-    check (actualGhc == expectedGhc) "scalar cbits: configured GHC differs from build-info"
-    let invocation = programInvocation configured (renderGhcOptions (compiler lbi) (hostPlatform lbi) options)
-        arguments = progInvokeArgs invocation
-    check (all ((== "PATH") . fst) (progInvokeEnv invocation) && all allowedCc (ghcOptCcOptions options) &&
-      not (any (\flag -> any (`isPrefixOf` flag) ["-optc", "-pgma", "-pgml", "-pgmP", "-B"])
-        (hcOptions GHC info))) "scalar cbits: unsupported configured native options or environment"
-    cc <- case [path | (flag,path) <- zip arguments (drop 1 arguments), flag == "-pgmc"] of
-      [] -> fail "scalar cbits: configured Clang must be explicit in the C recipe"
-      paths -> do
-        check (isAbsolute (last paths)) "scalar cbits requires an absolute configured Clang path"
-        resolveTool (last paths)
+    kind <- get component "type" :: IO String
+    check (kind == "lib") "scalar cbits requires a registered local library"
+    cabalFile <- get component "cabal-file"
+    description <- parseGenericPackageDescriptionMaybe <$> BS.readFile (root </> cabalFile)
+    check (maybe False ((== Simple) . buildType . packageDescription) description)
+      "scalar cbits requires an ordinary Simple package"
+    recipes <- forM objects $ \path -> readNativeRecipe (nativeRoot </> "cache/thc/native-recipes-v1") ghc path >>=
+      maybe (fail ("scalar cbits: missing or stale native compiler receipt: " ++ path)) pure
+    vanilla <- case [recipe | recipe <- recipes, takeExtension (recipeObject recipe) == ".o"] of
+      [recipe] -> pure recipe
+      _ -> fail "scalar cbits requires exactly one vanilla native object"
+    let arguments = recipeArguments vanilla
+        actualGhc = recipeCompiler vanilla
+        original = recipeObject vanilla
+        originalHash = recipeObjectHash vanilla
+    (source,configuredCc,ccOptions) <- either fail pure (cRecipeOptions arguments)
+    sourcePath <- canonicalizePath (root </> source)
+    declaredPaths <- mapM (canonicalizePath . (root </>)) declarations
+    check (declaredPaths == [sourcePath])
+      "scalar cbits requires one observed C declaration; ambiguous conditional native branches are outside the profile"
+    check (recipeDirectory vanilla == root && recipeSource vanilla == sourcePath)
+      "scalar cbits: native recipe source or working directory differs from its component"
+    -- Dynamic copies may accompany the vanilla object; no second source,
+    -- assembler/Cmm/C++ product, foreign stub, or profiling way is admitted.
+    forM_ recipes $ \recipe -> do
+      let dynamic = takeExtension (recipeObject recipe) == ".dyn_o"
+          stripDynamic ("-osuf":"dyn_o":rest) = stripDynamic rest
+          stripDynamic ("-dynamic":rest) = stripDynamic rest
+          stripDynamic (flag:rest) = flag : stripDynamic rest
+          stripDynamic [] = []
+      check (recipe == vanilla || dynamic && recipeDirectory recipe == root &&
+        recipeSource recipe == sourcePath && stripDynamic (recipeArguments recipe) == arguments)
+        "scalar cbits requires one C translation unit and its matching vanilla/dynamic objects"
+    let databases = [path | (flag,path) <- zip arguments (drop 1 arguments), flag == "-package-db"]
+    registrationText <- command root packageTool (["--global", "--no-user-package-db", "--expand-pkgroot"] ++
+      concatMap (\path -> ["--package-db",path]) databases ++ ["--ipid","describe",unit])
+    registration <- case parseInstalledPackageInfo (Text.encodeUtf8 (T.pack registrationText)) of
+      Left errors -> fail ("scalar cbits: invalid native package registration: " ++ show errors)
+      Right (_,value) -> pure value
+    check (prettyShow (Package.installedUnitId registration) == unit &&
+      null (Package.extraLibraries registration) && null (Package.extraLibrariesStatic registration) &&
+      null (Package.extraGHCiLibraries registration) && null (Package.ldOptions registration) &&
+      null (Package.frameworks registration))
+      "scalar cbits requires a registration without extra native libraries, linker options, or frameworks"
+    cc <- resolveTool configuredCc
     ccVersion <- command root cc ["--version"]
     check ("clang version" `isInfixOf` ccVersion) "scalar cbits requires configured Clang; GCC is not substituted"
     link <- llvmTool "THC_LLVM_LINK" "llvm-link"
@@ -96,8 +100,6 @@ withScalarBitcode dist ghc unit component action = do
     linkVersion <- command root link ["--version"]
     optVersion <- command root opt ["--version"]
     nmVersion <- command root nm ["--version"]
-    original <- canonicalizePath (root </> targetDir </> replaceExtension source "o")
-    originalHash <- digest original
     externalSymbols <- command root nm ["--undefined-only","--format=posix",original]
     check (all isSpace externalSymbols) "scalar cbits: Cabal's native object has external dependencies"
     withDirectory dist $ \temporary -> do
@@ -106,13 +108,12 @@ withScalarBitcode dist ghc unit component action = do
           disassembly = temporary </> "original.ll"
           native = temporary </> "certified.o"
       -- No compiler substitution, C macro rewriting, or guessed include path.
-      _ <- commandWithEnv (progInvokeEnv invocation) root actualGhc (arguments ++ ["-o",bitcode,"-optc-emit-llvm",
+      _ <- command root actualGhc (arguments ++ ["-o",bitcode,"-optc-emit-llvm",
         "-optc-MD","-optc-MF","-optc" ++ dependencies,"-optc-MT","-optcthc_scalar_input",
         "-optc-Werror=date-time"])
       dependencyText <- readFile dependencies
       paths <- either fail pure (parseDependencies dependencyText)
       inputs <- observe =<< mapM (canonicalizePath . (root </>)) paths
-      sourcePath <- canonicalizePath (root </> source)
       check (sourcePath `elem` map fst inputs) "scalar cbits: dependency inventory omitted its source"
       _ <- command root cc ["-S","-emit-llvm",bitcode,"-o",disassembly]
       ir <- readFile disassembly
@@ -122,14 +123,14 @@ withScalarBitcode dist ghc unit component action = do
         _ -> fail "scalar cbits: LLVM target missing or ambiguous"
       -- This deliberately conservative equality also rejects a stale native
       -- object, nondeterministic C expansion, or unsupported backend options.
-      _ <- command root cc (["-c",bitcode,"-o",native,"-fPIC","--target=" ++ target] ++ ghcOptCcOptions options)
+      _ <- command root cc (["-c",bitcode,"-o",native,"-fPIC","--target=" ++ target] ++ ccOptions)
       certified <- digest native
       check (certified == originalHash) "scalar cbits: bitcode does not reproduce Cabal's native object"
       verify inputs
       actualHash <- digest original
       check (actualHash == originalHash) "scalar cbits: native object changed"
       let recipe = object ["schema" .= (1::Int),"profile" .= ("thc-local-scalar-ccall-v1"::String),
-            "ghcArguments" .= arguments,"ghcEnvironment" .= progInvokeEnv invocation,
+            "ghcArguments" .= arguments,"nativeRegistration" .= registrationText,
             "clang" .= cc,"clangVersion" .= ccVersion,
             "llvmLink" .= linkVersion,"llvmOpt" .= optVersion,"llvmNm" .= nmVersion,"target" .= target,
             "nativeObject" .= object ["path" .= original,"sha256" .= originalHash],
@@ -139,9 +140,6 @@ withScalarBitcode dist ghc unit component action = do
       result <- action (Just prepared)
       verify (scalarInputs prepared)
       pure result
-  where
-    allowedCc flag = flag `elem` ["-O0","-O1","-O2","-O3","-std=c11","-std=c17","-std=gnu11","-std=gnu17",
-      "-fno-strict-aliasing"] || any (`isPrefixOf` flag) ["-D","-U","-W"]
 
 linkScalarBitcode :: ScalarBitcode -> String -> [(String,BS.ByteString)] -> IO [(String,BS.ByteString)]
 linkScalarBitcode recipe componentHash modules = do

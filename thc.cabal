@@ -292,6 +292,7 @@ executable thc
     THC.Driver.Cabal
     THC.Driver.Cache
     THC.Driver.ForeignBitcode
+    THC.Driver.NativeRecipe
     THC.Driver.ScalarBitcode
     THC.Driver.GhcProxy
     THC.Driver.Installed
@@ -331,9 +332,11 @@ test-suite driver-tests
     ProjectTests
     StoreProjectTests
     ScalarBitcodeTests
+    NativeRecipeTests
     InstalledForeignTests
     THC.Driver.Installed
     THC.Driver.InstalledForeign
+    THC.Driver.NativeRecipe
     THC.Driver.ScalarBitcode
   build-tool-depends: thc:thc
   build-depends:
@@ -500,6 +503,7 @@ executable thc-fixtures
     THC.Driver.Cabal
     THC.Driver.Cache
     THC.Driver.ForeignBitcode
+    THC.Driver.NativeRecipe
     THC.Driver.ScalarBitcode
     THC.Driver.Installed
     THC.Driver.InstalledForeign
