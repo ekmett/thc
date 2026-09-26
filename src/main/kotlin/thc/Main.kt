@@ -47,12 +47,16 @@ internal fun Context.Builder.withContextProfile(profile: ContextProfile): Contex
  *
  * @param fileIO request host file IO and, on supported hosts, the native command-line provider.
  * The fallback still grants full polyglot file IO when this is true.
+ * FFI selection follows `thc.ffiMode`, then `THC_FFI_MODE`, then native.
+ * A managed request fails before context/native-provider initialization.
  */
-fun executionContext(fileIO: Boolean = false): Context {
-    if (fileIO && NativeIO.supportedHost()) return NativeIO.commandLineContext()
+fun executionContext(fileIO: Boolean = false): Context = executionContext(fileIO, FfiMode.configured())
+
+internal fun executionContext(fileIO: Boolean, ffiMode: FfiMode): Context {
+    if (fileIO && NativeIO.supportedHost()) return NativeIO.commandLineContext(ffiMode)
     return Context.newBuilder("thc").allowNativeAccess(true)
         .allowIO(if (fileIO) IOAccess.ALL else IOAccess.NONE)
-        .withContextProfile(ContextProfile.LAUNCHER).build()
+        .withContextProfile(ContextProfile.LAUNCHER).withFfiMode(ffiMode).build()
 }
 
 /**
@@ -93,6 +97,10 @@ fun loadManagedExports(context: Context, modules: List<String>, backend: String 
 /** JVM launcher implementation; ordinary package users should invoke the Haskell `thc run` driver. */
 fun main(args: Array<String>) {
     try { launch(args) }
+    catch (failure: FfiConfigurationException) {
+        System.err.println("thc: ${failure.message}")
+        exitProcess(2)
+    }
     catch (exit: PolyglotException) {
         if (!exit.isExit) throw exit
         // All owning context.use scopes have closed before terminating the CLI.
@@ -118,13 +126,27 @@ private fun initializeArguments(context: Context, arguments: Pair<String, Array<
     finally { context.leave() }
 }
 
-private fun launch(args: Array<String>) {
+internal fun launch(rawArgs: Array<String>) {
+    var prefix = 0
+    var selected: FfiMode? = null
+    while (prefix < rawArgs.size) {
+        val option = rawArgs[prefix]
+        if (option == "--ffi") {
+            if (++prefix == rawArgs.size) throw FfiConfigurationException("--ffi requires native or managed")
+            selected = FfiMode.parse(rawArgs[prefix++], "--ffi")
+        } else if (option.startsWith("--ffi=")) {
+            selected = FfiMode.parse(option.substringAfter('='), "--ffi")
+            prefix++
+        } else break
+    }
+    val ffiMode = selected ?: FfiMode.configured()
+    val args = rawArgs.copyOfRange(prefix, rawArgs.size)
     if (args.firstOrNull() == "--run-executable") {
         require(args.size >= 4) {
             "Usage: thc --run-executable MODULE.json[,MODULE.json...] ENTRY SHUTDOWN_ENTRY [-- PROGRAM_NAME ARG...]"
         }
         val arguments = launcherArguments(args, 4)
-        executionContext(fileIO = true).use { context ->
+        executionContext(fileIO = true, ffiMode = ffiMode).use { context ->
             initializeArguments(context, arguments)
             val action = loadEntry(context, args[1].split(','), args[2], ioMain = true, shutdownEntry = args[3])
             check(action.invokeMember("runIO").asBoolean()) { "Executable IO did not complete" }
@@ -137,7 +159,7 @@ private fun launch(args: Array<String>) {
         require(args.size >= 3) { "Usage: thc --run-io MODULE.json[,MODULE.json...] ENTRY [-- PROGRAM_NAME ARG...]" }
         val arguments = launcherArguments(args, 3)
         val modules = args[1].split(',')
-        executionContext(fileIO = true).use { context ->
+        executionContext(fileIO = true, ffiMode = ffiMode).use { context ->
             initializeArguments(context, arguments)
             val action = loadEntry(context, modules, args[2], ioMain = true)
             check(action.invokeMember("runIO").asBoolean()) { "IO main did not complete" }
@@ -150,7 +172,7 @@ private fun launch(args: Array<String>) {
     val modules = args[0].split(',')
     val entry = args[1]
     val input = args[2].toLong()
-    executionContext().use { context ->
+    executionContext(fileIO = false, ffiMode = ffiMode).use { context ->
         val function = loadEntry(context, modules, entry)
         if (args.drop(3).contains("--compile")) {
             repeat(40) { function.execute(input + (it and 3)).asLong() }

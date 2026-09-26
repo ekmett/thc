@@ -69,6 +69,6 @@ tests env = TestLabel "runtime-only FFI selection" $ TestList
       assertSuccess result
       assertContains "--ffi" (out result)
       assertContains "native|managed" (out result)
-      assertContains "runtime integration pending" (out result)
+      assertContains "unavailable managed execution fails explicitly" (out result)
       assertBool "old spelling is absent from help" (not ("--sulong-mode" `isInfixOf` out result))
   ]

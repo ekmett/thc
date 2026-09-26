@@ -19,9 +19,10 @@ tests env = TestLabel "single-package native versus THC run" $ TestCase $
         -- still re-exports/audits Core and executes both THC and the native oracle.
         -- Later edits use this same directory, exercising actual invalidation.
         output = base </> "output"
-        invoke backend = run env base backend 180
-          ["run", package </> "run-pure.cabal", "--exe", "completed", "--dist-dir", output,
-           "--thc-root", thcRoot env, "--runtime", runtime env]
+        invokeFfi backend ffi = run env base backend 180
+          (["run", package </> "run-pure.cabal", "--exe", "completed", "--dist-dir", output,
+            "--thc-root", thcRoot env, "--runtime", runtime env] ++ ffi)
+        invoke backend = invokeFfi backend ["--ffi", "native"]
         exported = output </> "thc-run/completed"
         native = output </> "build/completed/completed"
     cold <- doesDirectoryExist output
@@ -57,6 +58,11 @@ tests env = TestLabel "single-package native versus THC run" $ TestCase $
       nativeResult <- runExe env package Nothing 60 native []
       assertSuccess nativeResult
       assertEqual "native stdout" (out nativeResult) (out result)
+
+    managed <- invokeFfi Nothing ["--ffi", "managed"]
+    assertFailure managed
+    assertNoStdout managed
+    assertContains "--ffi managed is unavailable" (err managed)
 
     original <- readText source
     assertContains "answer ==# 42#" original

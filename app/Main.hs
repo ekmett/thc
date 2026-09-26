@@ -69,7 +69,7 @@ runOptions =
   , Option [] ["thc-root"] (ReqArg (\path r -> Right r {runThcRoot = path}) "DIR") "THC source/build root"
   , Option [] ["runtime"] (ReqArg (\path r -> Right r {runRuntime = Just path}) "PATH") "Installed THC JVM launcher"
   , Option [] ["ffi"] (ReqArg (\value r -> (\mode -> r {runFfiMode = Just mode}) <$> parseFfiMode value)
-      "native|managed") "FFI mode (runtime integration pending; planned default: native)"
+      "native|managed") "Runtime FFI mode (default: native); unavailable managed execution fails explicitly"
   , Option [] ["installed-core"] (ReqArg (\policy r -> Right r {runInstalledCore = policy}) "required|pinned") "Project boot-library provider (default: limited pinned sources); required never silently falls back"
   , Option [] ["ghc-source"] (ReqArg (\path r -> Right r {runGhcSource = Just path}) "DIR") "Matching configured GHC 9.14.1 source tree for missing installed foreign annotations (required provider only)"
   ] ++ map liftPlanOption options
