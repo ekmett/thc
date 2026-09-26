@@ -3394,7 +3394,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         definitions.forEach { definition ->
             definition.parameters.forEach {
                 val proof = CoreRepresentations.binder(it)
-                CoreRepresentations.requireJoinInput(proof)
+                CoreRepresentations.requireInput(proof)
                 if (proof.isTypedTransport && representation(it)) throw RuntimeFault("Typed join formal must be unlifted")
             }
             val formals = definition.parameters.map { it["id"] as String }.toSet()

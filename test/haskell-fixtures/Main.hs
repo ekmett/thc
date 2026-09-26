@@ -102,6 +102,7 @@ import SumJoinFixtures (prepareSumJoins)
 import TupleJoinFixtures (prepareTupleJoins)
 import SumInputFixtures (prepareSumInputs)
 import TupleCaptureFixtures (prepareTupleCaptures)
+import SumJoinInputFixtures (prepareSumJoinInputs)
 import WeakFixtures (prepareWeaks)
 import ShrinkByteArrayFixtures (prepareShrinkByteArrays)
 import ByteArrayFixtures (prepareByteArrayFamily)
@@ -1013,6 +1014,7 @@ main = do
     ["tuple-join", "--local"] -> prepareTupleJoins False root
     ["sum-input"] -> prepareSumInputs root
     ["tuple-capture"] -> prepareTupleCaptures root
+    ["sum-join-input"] -> prepareSumJoinInputs root
     ["aggregate-heap"] -> prepareAggregateHeap root False
     ["aggregate-heap", "--export-only"] -> prepareAggregateHeap root True
     ["weak-explicit"] -> prepareWeaks root

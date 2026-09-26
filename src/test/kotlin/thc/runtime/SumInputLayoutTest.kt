@@ -35,7 +35,11 @@ class SumInputLayoutTest {
         assertSame(input.packet, other.packet)
         assertThrows(RuntimeFault::class.java) { ArgumentLayout.validate(formal, 0, changed, 0, 3) }
         assertThrows(RuntimeFault::class.java) { ArgumentLayout.validate(formal, 1, null, 0, 1) }
-        assertThrows(UnsupportedCore::class.java) { CoreRepresentations.requireJoinInput(sum) }
+        CoreRepresentations.requireInput(sum)
+        CoreRepresentations.requireJoinArgument(sum, sum)
+        assertThrows(RuntimeFault::class.java) { CoreRepresentations.requireJoinArgument(sum, sum.copy(alternatives = listOf(reference, word))) }
+        assertThrows(RuntimeFault::class.java) { CoreRepresentations.requireJoinArgument(sum, integer) }
+        assertThrows(RuntimeFault::class.java) { CoreRepresentations.requireJoinArgument(integer, sum) }
         ArgumentLayout.validate(formal, 1, formal.suffix(1), 0, 2)
         assertEquals(4, input.prefix(2).reps.size)
         assertThrows(RuntimeFault::class.java) { CoreRepresentations.requireInput(sum.copy(tagSlot = 1)) }

@@ -243,9 +243,9 @@ class SumAuditTest(unittest.TestCase):
                     join=binding('j',lam([binder('n',proof if mode=='join-formal' else INT)],body,INT))
                     join.update(joinValueArity=1,joinResultRep=INT,info=dict(joinArity=1))
                     case[3][0][3]=['let',False,[join],lit(),dict(rep=INT)]
-                if mode=='capture':
+                if mode in ('capture', 'join-capture', 'join-formal'):
                     self.accepted(module)
-                    disabled=dict(ENABLED, aggregateInputs=[], aggregateCaptures=[])
+                    disabled=dict(ENABLED, aggregateInputs=[], aggregateCaptures=[], aggregateJoinInputs=[], aggregateJoinCaptures=[])
                     report=run(module,cap=disabled)
                     self.assertFalse(report['accepted'])
                 elif mode=='argument':

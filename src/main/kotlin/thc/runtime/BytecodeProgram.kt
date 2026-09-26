@@ -1312,7 +1312,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         definitions.forEach { definition ->
             definition.parameters.forEach {
                 val proof = CoreRepresentations.binder(it)
-                CoreRepresentations.requireJoinInput(proof)
+                CoreRepresentations.requireInput(proof)
                 if (proof.isTypedTransport && representation(it))
                     throw RuntimeFault(if (proof.isVector) "Vector join formal must be unlifted" else "Tuple join formal must be unlifted")
             }

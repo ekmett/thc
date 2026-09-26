@@ -513,6 +513,21 @@ for ((taskName, dense) in listOf("tupleCaptureFullCoreTest" to false, "tupleCapt
         doFirst { check(file("build/tuple-capture/manifest.json").isFile) { "Run thc-fixtures tuple-capture" } }
     }
 }
+for ((taskName, dense) in listOf("sumJoinInputFullCoreTest" to false, "sumJoinInputFullCoreDenseTest" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests original sum join inputs/captures against native GHC."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.SumJoinInputNativeTest") }
+        inputs.files(fileTree("build/sum-join-input") { include("**/*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Native and first-compiled sum join checks require a fresh process") { true }
+        doFirst { check(file("build/sum-join-input/manifest.json").isFile) { "Run thc-fixtures sum-join-input" } }
+    }
+}
 tasks.register<Test>("graphWorkloadTest") {
     group = "verification"
     description = "Checks the real containers BFS example against native GHC and an independent shortest-distance model."

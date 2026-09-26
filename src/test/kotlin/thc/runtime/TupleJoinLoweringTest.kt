@@ -70,6 +70,51 @@ class TupleJoinLoweringTest {
             assertThrows(RuntimeFault::class.java) { CoreRepresentations.requireJoinArgument(expected, actual) }
     }
 
+    @Test fun sumSwapsMoveTagsAndInactiveReferencesTogetherAndClearScratchRoots() {
+        Context.newBuilder("thc").build().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val descriptor = FrameDescriptor.newBuilder().also { builder ->
+                    repeat(12) { builder.addSlot(FrameSlotKind.Illegal, "sum field $it", null) }
+                }.build()
+                val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), descriptor)
+                val marker = Any()
+                val shape = CoreRepresentation(CoreKind.UNKNOWN, true, true,
+                    listOf("WordRep", "BoxedRep (Just Lifted)", "WordRep"),
+                    alternatives = listOf(reference, long), tagSlot = 0, alternativeSlots = listOf(listOf(1), listOf(2)))
+                FrameAccess.writeLong(frame, 0, 1); FrameAccess.write(frame, 1, marker); FrameAccess.writeLong(frame, 2, 0)
+                FrameAccess.writeLong(frame, 3, 2); FrameAccess.write(frame, 4, null); FrameAccess.writeLong(frame, 5, Long.MIN_VALUE)
+                val target = LocalJoinTarget(Any(), 1, intArrayOf(-1, -1), arrayOf(shape, shape),
+                    typedSlots = arrayOf(intArrayOf(0, 1, 2), intArrayOf(3, 4, 5)))
+                fun operand(source: Int) = object : Expr() {
+                    override fun execute(frame: VirtualFrame): Any? = error("No sum Object carrier")
+                    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+                        assertEquals(1L, frame.getLong(0)); assertSame(marker, frame.getObject(1))
+                        assertEquals(2L, frame.getLong(3)); assertNull(frame.getObject(4))
+                        FrameAccess.writeLong(frame, slots[offset], frame.getLong(source))
+                        FrameAccess.write(frame, slots[offset + 1], frame.getObject(source + 1))
+                        FrameAccess.writeLong(frame, slots[offset + 2], frame.getLong(source + 2))
+                        return null
+                    }
+                }
+                val metrics = Metrics(true)
+                val call = LocalJoinCall(language, target, arrayOf(operand(3), operand(0)),
+                    intArrayOf(-1, -1), metrics, arrayOf(intArrayOf(6, 7, 8), intArrayOf(9, 10, 11)))
+                assertSame(target.jump, assertThrows(LocalJoinJump::class.java) { call.execute(frame) })
+                assertEquals(2L, frame.getLong(0)); assertNull(frame.getObject(1)); assertEquals(Long.MIN_VALUE, frame.getLong(2))
+                assertEquals(1L, frame.getLong(3)); assertSame(marker, frame.getObject(4)); assertEquals(0L, frame.getLong(5))
+                val references = frame.javaClass.getDeclaredField("indexedLocals").also { it.isAccessible = true }.get(frame) as Array<*>
+                for (slot in 6..11) {
+                    assertEquals(FrameSlotKind.Illegal.tag, frame.getTag(slot)); assertNull(references[slot])
+                }
+                assertEquals(1L, metrics.localJoinTransfers)
+                assertEquals(0, language.handoffState.get().arguments.depth)
+                assertEquals(0, language.handoffState.get().results.depth)
+            } finally { context.leave() }
+        }
+    }
+
     @Test fun emptyTupleCasesRunTheScrutineeAndTrapIfMalformedCoreReturns() {
         val scalar = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
         val closure = mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)

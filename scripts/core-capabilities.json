@@ -1840,8 +1840,8 @@
     "unboxed-tuple",
     "unboxed-sum"
   ],
-  "aggregateJoinInputs": ["empty-unboxed-tuple", "unboxed-tuple"],
-  "aggregateJoinCaptures": ["unboxed-tuple"],
+  "aggregateJoinInputs": ["empty-unboxed-tuple", "unboxed-tuple", "unboxed-sum"],
+  "aggregateJoinCaptures": ["unboxed-tuple", "unboxed-sum"],
   "aggregateJoinResults": [
     "unboxed-tuple",
     "unboxed-sum"
