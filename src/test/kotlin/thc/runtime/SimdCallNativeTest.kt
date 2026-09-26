@@ -18,9 +18,22 @@ import java.security.MessageDigest
 class SimdCallNativeTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = File(root, "build/simd-calls")
-    private fun model(name: String, x: Long): Long = if (name == "overCase")
-        if (x.toShort().toLong() == 0L) 30L else 44L
-        else x.toShort().toLong() + 13L
+    private fun model(name: String, x: Long): Long = when (name) {
+        "overCase" -> if (x.toShort().toLong() == 0L) 30L else 44L
+        "chainCase", "loopCase" -> (0 until 8).sumOf { lane ->
+            val seed = (x + lane * 17).toShort().toLong()
+            val result = if (name == "chainCase") {
+                ((seed + 7) * 3 - seed).toShort().toLong()
+            } else {
+                var value = seed
+                for (remaining in ((x and 7) + 1).toInt() downTo 1)
+                    value = ((value + remaining) * 3).toShort().toLong()
+                value
+            }
+            result * (lane + 1)
+        }
+        else -> x.toShort().toLong() + 13L
+    }
     private fun valid(target: Any) = assertEquals(true,
         target.javaClass.getMethod("isValidLastTier").invoke(target))
     private fun nodes(value: Any?): Sequence<List<*>> = sequence {
@@ -219,9 +232,9 @@ class SimdCallNativeTest {
         }
         val entries = manifest["entries"] as List<String>
         assertEquals(setOf("directCase", "papCase", "nestedTupleCase", "joinCase", "overCase",
-            "heapCase", "heapPapCase", "capturedCase", "thunkCase"), entries.toSet())
+            "heapCase", "heapPapCase", "capturedCase", "thunkCase", "chainCase", "loopCase"), entries.toSet())
         val cases = entries.flatMap { name -> (manifest["inputs"] as List<Number>).map { input -> name to input.toLong() } }
-        assertEquals(81, cases.size)
+        assertEquals(99, cases.size)
         val nativeRows = manifest["nativeRows"] as Number?
         val rows = if (nativeRows != null) File(directory, "oracle.tsv").readLines().map { line ->
             val parts = line.split('\t')
