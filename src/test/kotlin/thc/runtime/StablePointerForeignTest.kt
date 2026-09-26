@@ -81,6 +81,10 @@ class StablePointerForeignTest {
                 assertEquals(pinnedBits + 7, returnedPinned.toNativeBits())
                 assertEquals(pinnedBits, pinned.nativeSegment()!!.address())
                 assertThrows(RuntimeFault::class.java) { returnedPinned.readWord8(0) }
+                val forwardedPinned = calls.getValue("stable_identity").call(returnedPinned) as ManagedAddress
+                assertEquals(pinnedBits + 7, forwardedPinned.toNativeBits())
+                assertEquals(1L, calls.getValue("stable_equal").call(returnedPinned, forwardedPinned))
+                assertEquals(pinnedBits + 9, (calls.getValue("stable_identity").call(returnedPinned.plus(2)) as ManagedAddress).toNativeBits())
                 val heap = ManagedAllocation.mutable(16, 8)
                 assertThrows(RuntimeFault::class.java) {
                     calls.getValue("stable_identity").call(ManagedAddress.fromAllocation(heap))
@@ -89,11 +93,18 @@ class StablePointerForeignTest {
                 assertNull(heap.nativeSegment())
                 if (System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in setOf("amd64", "x86_64")) {
                     val allocation = state.nativeAllocations.malloc(8)
+                    lateinit var returnedAllocation: ManagedAddress
                     try {
-                        val returnedAllocation = calls.getValue("stable_identity").call(allocation) as ManagedAddress
+                        returnedAllocation = calls.getValue("stable_identity").call(allocation) as ManagedAddress
                         assertEquals(allocation.toNativeBits(), returnedAllocation.toNativeBits())
                         assertThrows(RuntimeFault::class.java) { returnedAllocation.readWord8(0) }
+                        assertEquals(1L, calls.getValue("stable_equal").call(allocation, returnedAllocation))
+                        ManagedAddress.withNativeBorrows(listOf(returnedAllocation)) {
+                            assertThrows(RuntimeFault::class.java) { state.nativeAllocations.free(allocation) }
+                        }
                     } finally { state.nativeAllocations.free(allocation) }
+                    assertThrows(RuntimeFault::class.java) { calls.getValue("stable_identity").call(returnedAllocation) }
+                    assertThrows(RuntimeFault::class.java) { returnedAllocation.toNativeBits() }
                 }
                 val referent = Any()
                 val first = state.stablePointers.make(referent)
@@ -111,6 +122,24 @@ class StablePointerForeignTest {
                 val unrelated = calls.getValue("stable_unknown").call() as ManagedAddress
                 assertThrows(RuntimeFault::class.java) { unrelated.readWord8(0) }
                 assertThrows(RuntimeFault::class.java) { state.stablePointers.dereference(unrelated) }
+                val forwardedStatic = calls.getValue("stable_identity").call(unrelated) as ManagedAddress
+                assertEquals(1L, calls.getValue("stable_equal").call(unrelated, forwardedStatic))
+                assertThrows(RuntimeFault::class.java) {
+                    calls.getValue("stable_identity").call(ManagedAddress.unownedNumeric(unrelated.toNativeBits()))
+                }
+                context().use { other ->
+                    other.initialize("thc"); other.enter()
+                    try {
+                        val otherLanguage = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                        val otherState = Language.currentState()
+                        otherState.packageCbits.link(link)
+                        val identity = abi.single { it.symbol == "stable_identity" }
+                        val otherCall = Entry(otherLanguage, PackageScalarCall(link, identity)).callTarget
+                        val rejected = assertThrows(RuntimeFault::class.java) { otherCall.call(unrelated) }
+                        assertTrue(rejected.message!!.contains("Returned package C pointer belongs to another context"))
+                        assertThrows(RuntimeFault::class.java) { unrelated.toNativeBits() }
+                    } finally { other.leave() }
+                }
                 calls.getValue("stable_clear").call()
                 assertSame(ManagedAddress.nullAddress(), calls.getValue("stable_load").call())
                 val token = state.stablePointers.nativeTransport(first)
@@ -120,6 +149,8 @@ class StablePointerForeignTest {
                 assertThrows(RuntimeFault::class.java) { state.stablePointers.dereference(returned) }
                 assertThrows(RuntimeFault::class.java) { calls.getValue("stable_store").call(first) }
                 state.stablePointers.free(second)
+                state.packageCbits.close()
+                assertThrows(RuntimeFault::class.java) { unrelated.toNativeBits() }
             } finally { context.leave() }
         }
     }

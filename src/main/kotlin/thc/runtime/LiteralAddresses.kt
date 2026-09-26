@@ -33,7 +33,8 @@ internal class ManagedAddress private constructor(
     private val native: ManagedNativeAllocations.Owner? = null,
     private val capabilities: GuestThreads? = null,
     private val heap: HeapAddresses.Handle? = null,
-    private val compiler: CompilerRts? = null
+    private val compiler: CompilerRts? = null,
+    private val foreign: PackageReturnedAddress? = null
 ) {
     /** This is an RTS data label, not a projection of a JVM or native pointer. */
     internal fun readCapabilitiesWord32(elementOffset: Long, width: Int): Long? {
@@ -47,6 +48,7 @@ internal class ManagedAddress private constructor(
         }
     }
     internal fun nativeAllocation(): ManagedNativeAllocations.Owner? = native
+    internal fun returnedAddress(): PackageReturnedAddress? = foreign
     internal fun hasNativeStorage(): Boolean = native != null || owner?.isPinned == true
     internal fun isNativeBase(): Boolean = native != null && offset == 0L
     /** Keep native storage alive across a complete operation, including calls
@@ -88,6 +90,7 @@ internal class ManagedAddress private constructor(
         ?: fault("Native image requires static literal or runtime metadata storage")
     fun toNativeBits(): Long {
         compiler?.requireCurrent()
+        foreign?.requireCurrent()
         if (heap != null) fault("Opaque guest heap address has no native pointer bits")
         if (capabilities != null) fault("RTS data label has no numeric guest address")
         if (finalizer != null) fault("Opaque C function label has no numeric guest address")
@@ -240,6 +243,7 @@ internal class ManagedAddress private constructor(
             if (displacement != 0L) fault("RTS data label cannot be offset")
             return this
         }
+        if (foreign != null) return fromReturnedAddress(foreign.plus(displacement))
         if (numeric != null) return NativeAddresses.current(null).recover(numeric + displacement)
         requireBytes()
         if (this === NULL) {
@@ -710,7 +714,7 @@ internal class ManagedAddress private constructor(
         private val NATIVE_BORROW_TIE = Any()
         /** Hold every distinct native owner for one synchronous multi-pointer call. */
         internal fun <T> withNativeBorrows(addresses: List<ManagedAddress>, body: () -> T): T {
-            val owners = addresses.mapNotNull { it.native }.distinct().sortedWith { first, second ->
+            val owners = addresses.mapNotNull { it.native ?: it.foreign?.backing?.nativeAllocation() }.distinct().sortedWith { first, second ->
                 Integer.compareUnsigned(System.identityHashCode(first), System.identityHashCode(second))
             }
             fun acquire(index: Int): T = if (index == owners.size) body()
@@ -724,6 +728,8 @@ internal class ManagedAddress private constructor(
             ManagedAddress(null, null, 0L, native = owner)
         internal fun unownedNumeric(bits: Long): ManagedAddress = if (bits == 0L) NULL
             else ManagedAddress(null, null, 0L, numeric = bits)
+        internal fun fromReturnedAddress(address: PackageReturnedAddress): ManagedAddress =
+            if (address.bits == 0L) NULL else ManagedAddress(null, null, 0L, numeric = address.bits, foreign = address)
         internal fun fromNativeImageSource(source: Any, offset: Long): ManagedAddress = when (source) {
             is ManagedAllocation -> fromAllocation(source).plus(offset)
             is ByteArray -> ManagedAddress(source, null, offset)

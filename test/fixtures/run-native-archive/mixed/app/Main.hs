@@ -17,6 +17,6 @@ main = do
   print (I# (process 0#) > 0)
   observations <- forM [(rounds,keylen) | rounds <- [-1,0,255,256,32767,32768,65535,65536,4294967298],
     keylen <- [-1,0,4294967297,2147483648]] $ \(rounds,keylen) -> do
-      (typed,wide,word16) <- mixed rounds keylen
-      pure (rounds,keylen,typed,wide,word16)
+      (typed,wide,word16,staticPointer) <- mixed rounds keylen
+      pure (rounds,keylen,typed,wide,word16,staticPointer)
   print observations

@@ -87,17 +87,15 @@ class PackageNativeArchiveFullCoreTest {
                             assertEquals(0L, effectCount(), "$backend/$entry must not enter native code")
                         }
                         assertEquals(46L, Calls.target(allowed, arrayOf(0L, 9L)))
-                        val staticFailure = assertThrows(RuntimeFault::class.java) {
-                            Calls.target(program.entryTarget(staticPointer), arrayOf(0L, 1L, 2L))
-                        }
-                        assertTrue(staticFailure.message!!.contains("Unowned numeric Addr# is not byte-addressable"))
                         val stateBytes = ByteArray(8).also { it[0] = 7 }
                         val stateAddress = ManagedAddress.fromByteArray(stateBytes)
-                        for ((name,column) in listOf(mixedHeader to 2, wideHeader to 3, word16Header to 4)) {
+                        for ((name,column) in listOf(mixedHeader to 2, wideHeader to 3, word16Header to 4, staticPointer to 5)) {
                             val headerEntry = program.entryTarget(name)
                             fun checkHeader(row: List<Number>) {
                                 assertEquals(row[2].toLong(), row[3].toLong(), "native GHC typed/wide caller agreement")
-                                assertEquals(row[column].toLong(), Calls.target(headerEntry, arrayOf(0L, stateAddress, row[0].toLong(), row[1].toLong())),
+                                val inputs = if (name == staticPointer) arrayOf(0L, row[0].toLong(), row[1].toLong())
+                                    else arrayOf(0L, stateAddress, row[0].toLong(), row[1].toLong())
+                                assertEquals(row[column].toLong(), Calls.target(headerEntry, inputs),
                                     "$backend/$name original native CAPI/ccall declaration boundary $row")
                             }
                             observations.forEach(::checkHeader)

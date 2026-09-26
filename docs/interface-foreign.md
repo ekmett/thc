@@ -110,9 +110,21 @@ negative and high-bit values, including signed/unsigned 16-bit parameters.
 The original LLVM definition lines, bridge source/hash and linked input hash
 are retained in build inputs. No return conversion, pointer conversion,
 variadic or non-C convention adaptation is inferred. Unrecognized signatures
-keep the original adapter. A separate control retains the current rejection
-when an unowned static C pointer is returned and passed into another call; TU
-separation does not grant byte ownership to that numeric address.
+keep the original adapter.
+
+A genuine native pointer returned by package C code receives a context/lifetime
+tag and may be forwarded to another package call without projecting it as byte
+storage. This does not grant guest byte reads or writes. Arbitrary numeric
+`int2Addr#` values remain unforwardable. Returned aliases of known malloc,
+pinned or immutable native-image storage retain their existing backing for
+lifetime validation; synchronous calls hold the same ordered malloc borrows.
+Forwarding after a known malloc owner is freed, after registry closure or into
+another context rejects. Ownership managed entirely inside an external C API
+still follows that API's lifetime contract.
+Alias recovery happens before releasing the returning call's original borrows.
+No managed buffer is copied or pinned by this path. Non-native Sulong managed
+pointer results still reject; forwarding those requires a separate alias-aware
+managed-pointer implementation.
 
 The checksum source provider recognizes retained `zlib.h` imports for `adler32`
 and `crc32`, compiles unchanged upstream zlib 1.2.11 source with the package's
