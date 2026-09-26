@@ -57,6 +57,17 @@ class PackageNativeVariantsTest(unittest.TestCase):
             with self.subTest(reps=reps), self.assertRaises(ValueError):
                 core_package_manifest.package_scalar_link(self.module(reps))
 
+    def test_ccall_header_is_retained_without_changing_emitted_symbol(self):
+        module = self.module(['AddrRep', 'ByteArray#'])
+        for imported in module['staticForeignImports']['imports']:
+            imported['header'] = 'original.h'
+        link, proved = core_package_manifest.package_scalar_link(module)
+        self.assertEqual({entry['entry'] for entry in link['abi']}, proved)
+        for malformed in ('', 'bad\0header', 7):
+            module['staticForeignImports']['imports'][0]['header'] = malformed
+            with self.subTest(header=malformed), self.assertRaises(ValueError):
+                core_package_manifest.package_scalar_link(module)
+
 
 class PackageManifestTest(unittest.TestCase):
     def setUp(self):

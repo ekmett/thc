@@ -455,7 +455,8 @@ def package_scalar_link(module):
         require(binder['unit'] == unit and binder['module'] == module.get('module') and binder['namespace'] == 'value' and binder not in binders, 'import binder')
         binders.append(binder)
         convention = item['convention']
-        require((item['header'] is None or native and convention == 'capi' and isinstance(item['header'], str)) and
+        require((item['header'] is None or native and isinstance(item['header'], str) and
+            item['header'] and '\0' not in item['header']) and
             item['unit'] in (None, unit) and (item['isFunction'] is True or native and convention == 'capi' and item['isFunction'] is False) and
             convention in (('ccall', 'capi') if native else ('ccall',)) and item['safety'] == 'unsafe' and
             item['normalizationRole'] == 'representational', 'static unsafe C import')

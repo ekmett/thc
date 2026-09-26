@@ -162,6 +162,11 @@ class PackageScalarLinksTest {
         assertEquals(1, (CoreModules.merge(listOf(native))["packageScalarLinks"] as List<*>).size)
         val proof = native["staticForeignImports"] as Map<String, Any?>
         val imports = proof["imports"] as List<*>
+        fun header(value: Any?) = native + ("staticForeignImports" to (proof +
+            ("imports" to imports.map { (it as Map<String, Any?>) + ("header" to value) })))
+        assertEquals(admitted.proved, PackageScalarLinks.read(header("original.h"))!!.proved)
+        for (invalid in listOf("", "bad\u0000header", 7L))
+            assertThrows(IllegalArgumentException::class.java) { PackageScalarLinks.read(header(invalid)) }
         for (one in imports) assertThrows(IllegalArgumentException::class.java) {
             CoreModules.merge(listOf(native + ("staticForeignImports" to (proof + ("imports" to listOf(one))))))
         }

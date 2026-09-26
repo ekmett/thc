@@ -167,7 +167,10 @@ internal object PackageScalarLinks {
             val binder = identity(item["binder"])
             check(binder["unit"] == unit && binder["module"] == module["module"] && binder["namespace"] == "value" && binders.add(binder), "import binder")
             val convention = item["convention"]
-            check((item["header"] == null || native && convention == "capi" && item["header"] is String) &&
+            // A ccall declaration may retain a header name too. It does not
+            // change the emitted C symbol or imply a generated CAPI wrapper.
+            check((item["header"] == null || native && item["header"] is String &&
+                (item["header"] as String).isNotEmpty() && '\u0000' !in (item["header"] as String)) &&
                 item["unit"] in listOf(null, unit) && (item["isFunction"] == true || native && convention == "capi" && item["isFunction"] == false) &&
                 convention in (if (native) setOf("ccall", "capi") else setOf("ccall")) && item["safety"] == "unsafe" &&
                 item["normalizationRole"] == "representational", "static unsafe C import")

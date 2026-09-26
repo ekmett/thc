@@ -37,10 +37,10 @@ metadata; a schema-1 document cannot hide a `foreign` field. The strict Core
 auditor applies the same reachability and global-obligation boundary. This
 does not change the ordinary source-plugin foreign-output contract.
 
-## Package-owned C and CAPI calls
+## Package-owned C, C++ and CAPI calls
 
 The `thc-package-c-ffi-v1` profile acquires ordinary local and Cabal-store
-packages without a package-name whitelist. It compiles the configured C sources
+packages without a package-name whitelist. It compiles the configured C/C++ sources
 and GHC's genuine retained CAPI wrappers with Clang, then links their LLVM into
 the Core bundle. Native Cabal compilation still uses the selected GHC and its
 configured native compiler. LLVM acquisition is a sensible second compilation,
@@ -51,8 +51,11 @@ Initial support is static, unsafe `ccall`/`capi`, scalar arguments, `Addr#`,
 imports and IO imports both retain GHC's actual State-token worker ABI. Pointer
 results, callbacks, safe/interruptible calls, additional foreign-file products,
 initializers/finalizers and extra native libraries remain outside this profile.
-Ordinary memory helpers supplied by Sulong/libc are allowed. C++ and assembly
-sources are not acquired by this initial C implementation.
+Ordinary memory helpers supplied by Sulong/libc are allowed. C++ `.cc`, `.cpp`
+and `.cxx` sources retain their actual Cabal compiler arguments, including
+`-optcxx` options, and replay through GHC's C++ compiler phase. The LLVM link
+still rejects constructors/destructors and unresolved C++ runtime dependencies;
+this does not admit arbitrary C++ programs. Assembly sources remain unsupported.
 
 The source capture runs while Cabal's unpacked sources and generated headers
 still exist. `thc-interface --home-interfaces DIR` reads the exact just-emitted
@@ -66,7 +69,9 @@ derived from their GHC types, not guessed from an unlifted boxed RuntimeRep.
 entry ABI and retained `buildInputs` compiler/source/header observations. Header
 content participates in the wrapper component identity; the final bitcode
 digest covers linked C implementations too. Actual CAPI definitions supply
-their C prototypes. Same-unit inlined calls share the component link and resolve
+their C prototypes. Ordinary `ccall` header metadata is retained too; a header
+name does not change the emitted symbol or manufacture a CAPI wrapper.
+Same-unit inlined calls share the component link and resolve
 against the complete unit's real declaration inventory, even when their own
 module declares no imports. Libraries and mutable byte-array backing storage
 remain context-owned; this profile does not authorize raw JVM addresses.
@@ -80,7 +85,8 @@ to the same call shape remain ambiguous: the current descriptor cannot choose
 a read/write policy from those erased representations alone.
 
 The genuine Pandoc dependency probe exposes remaining boundaries, not implicit
-allowlists: `digest-0.0.2.1` also needs its C++ CRC32C sources and zlib linkage;
+allowlists: the unchanged `digest-0.0.2.1` C++ CRC32C sources now acquire LLVM,
+but its zlib linkage remains outstanding;
 `erf-2.0.0.0` has source-pure imports whose emitted State-threaded calls are
 `safe`, and needs a libm provider. Those obligations are not satisfied by
 pointer-variant support, and safe calls are not relabeled unsafe.

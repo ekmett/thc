@@ -106,10 +106,11 @@ ensureNativeRecipes native dist roots compiler component rebuild = do
   runtimeShim <- componentRuntimeShim component
   -- The active declarations must satisfy the bounded profile before consulting
   -- warm objects. One surviving receipt cannot conceal a second missing TU.
-  let relativeC source = takeExtension source == ".c" && not (isAbsolute source) &&
+  let relativeC source = takeExtension source `elem`
+        (if runtimeShim then [".c"] else [".c", ".cc", ".cpp", ".cxx"]) && not (isAbsolute source) &&
         ".." `notElem` splitDirectories source
   unless (all relativeC declarations && (not runtimeShim || not (null declarations)))
-    (fail "package native profile requires relative C sources; runtime shims require nonempty C sources")
+    (fail "package native profile requires relative C/C++ sources; runtime shims require nonempty C sources")
   let receipts = native </> "cache/thc/native-recipes-v1"
   sourceRoot <- field component "src-dir" >>= canonicalizePath
   sources <- mapM (canonicalizePath . (sourceRoot </>)) declarations
