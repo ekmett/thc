@@ -25,6 +25,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                            private val checkpoint: BytecodeCheckpoint?,
                                            internal val enableAsync: Boolean) : ExecutableProgram {
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
+    private val rubbishLiterals = RubbishLiterals(language)
     private val foreignLinks = moduleData["foreignLinks"] as? List<thc.ForeignBitcode> ?: emptyList()
     private val packageScalarLinks = moduleData["packageScalarLinks"] as? List<thc.PackageScalarLink> ?: emptyList()
     constructor(language: Language, moduleData: Map<String, Any?>) : this(language, moduleData, null, false)
@@ -793,6 +794,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> lowered(); else -> delay(expr, scope, label) }
     }
     private fun literal(kind: String, value: String, proof: CoreRepresentation? = null): Any = when (kind) {
+        "rubbish" -> rubbishLiterals.decode(requireNotNull(proof))
         "int8" -> int8Literal(value)
         "int16" -> int16Literal(value)
         "int32" -> int32Literal(value)
@@ -1425,7 +1427,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         }
         "lit" -> constant(literal(expr[1] as String, expr[2] as String, CoreRepresentations.expression(expr))).let {
             if (expr[1] in listOf("int8", "word8", "int16", "word16", "int32", "word32")) ProvenExpression(it, CoreRepresentations.narrowLiteralProof(expr))
-            else if (expr[1] == "bignat") ProvenExpression(it, BigNatLiterals.proof(expr)) else it
+            else if (expr[1] == "bignat") ProvenExpression(it, BigNatLiterals.proof(expr))
+            else if (expr[1] == "rubbish") ProvenExpression(it, RubbishLiterals.proof(expr)) else it
         }
         "void" -> constant(Unit)
         "lam" -> {
@@ -3559,7 +3562,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 val child = local.child(); val kind = alt[0] as String
                 val value = when (kind) {
                     "lit" -> (alt[1] as List<String>).let {
-                        if (it[0] == "bignat") throw UnsupportedCore("BigNat literal alternatives are invalid GHC Core")
+                        if (it[0] in setOf("bignat", "rubbish")) throw UnsupportedCore("BigNat/rubbish literal alternatives are invalid GHC Core")
                         if (it[0] in setOf("float", "double")) throw UnsupportedCore("Floating literal alternatives are invalid GHC Core")
                         literal(it[0], it[1])
                     }

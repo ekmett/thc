@@ -306,6 +306,13 @@
       "outputs": ["build/rts-shutdown"],
       "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/haskell-fixtures/RtsShutdownFixtures.hs", "compiler/test-fixtures/RtsShutdownNative.hs"]
     },
+    "rubbish-literals": {
+      "junit": ["thc.runtime.RubbishLiteralTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "rubbish-literals"]}],
+      "outputs": ["build/rubbish-literals"],
+      "sources": ["compiler/test-fixtures/RubbishLiteralAudit.hs", "test/haskell-fixtures/RubbishLiteralFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "original-rts-locks": {
       "junit": ["thc.runtime.OriginalRtsLocksTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-rts-locks", "--require-supported"]}],

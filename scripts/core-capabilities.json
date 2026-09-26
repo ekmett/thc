@@ -137,6 +137,7 @@
   ],
   "tagToEnum": "concrete-nullary-family",
   "literalKinds": [
+    "rubbish",
     "bignat",
     "float",
     "double",

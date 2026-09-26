@@ -19,6 +19,23 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_rubbish_native_fixture_owns_complete_bounded_outputs(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        self.assertEqual('rubbish-literals', owners['thc.runtime.RubbishLiteralTest'])
+        group = manifest['groups']['rubbish-literals']
+        self.assertEqual(['build/rubbish-literals'], group['outputs'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'rubbish-literals']}], group['commands'])
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        required = fast_fixtures.fast_inputs.RUBBISH_OUTPUTS
+        self.assertEqual(30, len(required))
+        self.assertTrue(required <= fast_fixtures.FULL_REQUIRED)
+        self.assertTrue(required <= set(fast_fixtures.fast_inputs.REQUIRED))
+        self.assertIn('build/rubbish-literals', fast_fixtures.FULL_OUTPUT_ROOTS)
+        for path in required:
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path, {}), path)
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/rubbish-literals/unowned.json', {}))
+
     def test_recent_native_producers_remain_fail_closed_full_preparation_inputs(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
