@@ -25,6 +25,35 @@ Embedded callers can still read the `diagnostics` member directly. This output
 setting does not change instrumentation, strict admission, or shutdown behavior.
 The low-level integer-kernel launcher retains its diagnostic report.
 
+Pass guest command-line arguments after a literal `--`:
+
+```sh
+cabal run thc -- run test/fixtures/run-arguments --exe arguments \
+  --thc-root "$PWD" --installed-core required --ghc-source "$GHC_SOURCE" \
+  -- "two words" "" "lambda-λ" --help
+```
+
+The driver preserves the suffix as separate arguments, including empty strings
+and option-looking values. `getProgName` starts with the selected executable's
+name (also for `PACKAGE:exe:NAME` selectors); no host JVM arguments leak into the
+guest. The original GHC `getArgs`, `getProgName`, `withArgs` and `withProgName`
+implementations call the context-owned `getProgArgv`/`setProgArgv` adapter. On the
+existing Linux x86_64 native-allocation backend it owns a real NUL-terminated
+`char **` vector, including `argv[0]` and the terminal null pointer. Updating the
+arguments copies the input strings before retiring the old native image; context
+disposal releases the final image. CLI strings are UTF-8 and cannot contain NUL.
+This does not provide process-global RTS arguments or `getFullProgArgv`.
+
+The opt-in `cabal test arguments-full-core -ffull-core-tests` compares the actual
+ordinary program with native GHC, including nested overrides and exception
+restoration. It uses the complete installation variables described below and
+reuses the same exported package closure for AST/bytecode and default/dense
+runtime runs. Bytecode runs the generated executable entry and shutdown; AST
+runs the original raw `Main.main` with explicit flushing, because its process
+signal startup is not supported. This is not an AST executable-lifecycle claim.
+The low-level launchers retain their previous no-argument syntax;
+their optional suffix is `-- PROGRAM_NAME ARG...`.
+
 ## Build and exercise
 
 Use GHC 9.14.1 with its bundled Cabal/Cabal-syntax 3.16. The API bounds are narrow

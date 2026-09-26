@@ -9,6 +9,8 @@
   ],
   "externalBindings": [],
   "managedForeignCalls": [
+    "getProgArgv",
+    "setProgArgv",
     "localeEncoding",
     "hs_iconv_open",
     "hs_iconv_close",

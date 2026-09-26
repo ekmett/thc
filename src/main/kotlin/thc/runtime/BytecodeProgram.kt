@@ -205,6 +205,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         CoreBoundThreadForeign.validateHeads(bindings)
         CoreStringRtsForeign.validateHeads(bindings)
         CoreRtsDiagnosticForeign.validateHeads(bindings)
+        CoreRtsArgumentsForeign.validateHeads(bindings)
         CoreManagedFiles.validateHeads(bindings)
         CoreMd5Foreign.validateHeads(bindings)
         CoreGmpForeign.validateHeads(bindings)
@@ -1448,6 +1449,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val rtsDiagnostic = CoreRtsDiagnosticForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val rtsArguments = CoreRtsArgumentsForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val managedFile = CoreManagedFiles.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val javascript = if (packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && managedFile == null) CoreJavaScript.validate(expr, defined) else null
@@ -1466,7 +1469,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val polyglot = if (packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
-                !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
+                !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -1699,6 +1702,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     e.builder.beginRtsSharedCAFStore(destination.single(), sharedCAF)
                     operands.forEach { it.emit(e) }
                     e.builder.endRtsSharedCAFStore()
+                }
+            } else if (rtsArguments != null) {
+                CoreRtsArgumentsForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreRtsArgumentsForeign.validateOperand(rtsArguments, index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    if (destination.isNotEmpty()) fault("Program-arguments call has no result field")
+                    if (rtsArguments == RtsArgumentsOp.GET) e.builder.beginGetProgramArguments()
+                    else e.builder.beginSetProgramArguments()
+                    operands.forEach { it.emit(e) }
+                    if (rtsArguments == RtsArgumentsOp.GET) e.builder.endGetProgramArguments()
+                    else e.builder.endSetProgramArguments()
                 }
             } else if (rtsDiagnostic != null) {
                 CoreRtsDiagnosticForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)

@@ -11,6 +11,12 @@
     ]
   },
   "leafSources": {
+    "src/main/kotlin/thc/runtime/GuestArguments.kt": {
+      "junit": ["thc.runtime.GuestArgumentsTest"], "python": []
+    },
+    "src/main/kotlin/thc/runtime/CoreRtsArgumentsForeign.kt": {
+      "junit": ["thc.runtime.GuestArgumentsTest"], "python": ["scripts/test-audit-core.py"]
+    },
     "src/main/kotlin/thc/runtime/HintTracePrimops.kt": {
       "junit": ["thc.runtime.HintTraceTest"], "python": []
     },

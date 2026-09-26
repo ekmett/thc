@@ -3044,6 +3044,24 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    public static final class GetProgramArguments {
+        @Specialization public static void get(ManagedAddress argc, ManagedAddress argv,
+                Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            GuestArguments.current(node).get(argc, argv);
+        }
+    }
+
+    @Operation
+    public static final class SetProgramArguments {
+        @Specialization public static void set(long argc, ManagedAddress argv,
+                Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            GuestArguments.current(node).set(argc, argv);
+        }
+    }
+
+    @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class InstallProcessSignal {
         @Specialization public static void install(VirtualFrame frame, LocalAccessor destination,

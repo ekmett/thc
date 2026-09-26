@@ -585,8 +585,21 @@ internal class ManagedAddress private constructor(
         else if (numeric != null) "Addr#(unowned numeric address)"
         else "Addr#(${if (literalBytes != null) "literal" else "managed"}+$offset)"
 
-    /** Pointer cells contain references, not process address bits. */
+    /** Managed cells retain references; owned native cells contain actual
+     * pointer bits. Unknown recovered bits remain opaque and non-dereferenceable. */
     @JvmOverloads fun readAddressElementIndex(elementOffset: Long, byteOffset: Boolean = false): ManagedAddress {
+        if (native != null) {
+            val stride = if (byteOffset) 1L else 8L
+            if (elementOffset < Long.MIN_VALUE / stride || elementOffset > Long.MAX_VALUE / stride)
+                fault("Native Addr# element offset overflow")
+            val displacement = elementOffset * stride
+            val bits = native.access { segment ->
+                requireRange(displacement, 8)
+                segment.get(ValueLayout.JAVA_LONG_UNALIGNED, offset + displacement)
+            }
+            return Language.currentState().nativeAllocations.recoverAddress(bits)
+                ?: NativeAddresses.current(null).recover(bits)
+        }
         val allocation = owner ?: fault("Addr# has no allocation-owned pointer cells")
         val width = allocation.addressWidth.toLong()
         val stride = if (byteOffset) 1L else width
@@ -598,6 +611,12 @@ internal class ManagedAddress private constructor(
     }
 
     @JvmOverloads fun writeAddressElementIndex(elementOffset: Long, value: ManagedAddress, byteOffset: Boolean = false) {
+        if (native != null) {
+            // A real native pointer cell cannot retain an arbitrary JVM object.
+            // Projection remains restricted to existing native/immutable owners.
+            writeNativeScalar(elementOffset, 8, value.toNativeBits(), byteOffset)
+            return
+        }
         val allocation = owner ?: fault("Addr# has no allocation-owned pointer cells")
         val width = allocation.addressWidth.toLong()
         val stride = if (byteOffset) 1L else width
