@@ -434,6 +434,21 @@ for ((taskName, dense) in listOf("floatForeignFullCoreTest" to false, "floatFore
         doFirst { check(file("build/float-foreign/manifest.json").isFile) { "Run thc-fixtures float-foreign with complete installed GHC Core" } }
     }
 }
+for ((taskName, dense) in listOf("aggregateHeapFullCoreTest" to false, "aggregateHeapFullCoreDenseTest" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests genuine boxed tuple/sum fields, including GHC BoxedRep, against native GHC."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.AggregateHeapNativeTest") }
+        inputs.files(fileTree("build/aggregate-heap") { include("**/*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Aggregate heap native/first-entry checks require a fresh process") { true }
+        doFirst { check(file("build/aggregate-heap/manifest.json").isFile) { "Run thc-fixtures aggregate-heap" } }
+    }
+}
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("main"))
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("test"))
 tasks.register<Test>("graphWorkloadTest") {

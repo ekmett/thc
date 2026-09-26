@@ -74,8 +74,9 @@ Float/Double leaves, local join results and zero-width State components.
 [Typed tuple inputs](tuple-inputs.md) preserve logical arity across direct calls,
 PAPs, overapplication and tail transfers. [Empty inputs](empty-tuple-inputs.md)
 and [empty join inputs](empty-tuple-joins.md) have no physical payload fields.
-Nonempty aggregate join inputs, aggregate captures and heap fields remain
-unsupported.
+Nonempty aggregate join inputs and ordinary aggregate captures remain unsupported.
+[Aggregate constructor fields](aggregate-heap-fields.md) flatten exact tuple and
+binary-sum layouts into owned typed heap properties.
 
 [Binary sum results](sum-results.md) use typed destinations and explicit tags.
 Local sum join results use those same destinations. Sum inputs, captures,

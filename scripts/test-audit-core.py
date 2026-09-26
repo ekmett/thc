@@ -42,6 +42,44 @@ CLOSURE = dict(REFERENCE, kind='closure', evaluated=True)
 TUPLE_CAP = dict(CAP, aggregateResults=['unboxed-tuple'])
 
 
+class AggregateHeapFieldTest(unittest.TestCase):
+    empty = dict(kind='unknown', evaluated=True, aggregate='unboxed-tuple', components=[], primReps=[])
+    sum_rep = dict(kind='unknown', evaluated=True, aggregate='unboxed-sum',
+                   alternatives=[empty, REFERENCE], primReps=['WordRep', 'BoxedRep (Just Lifted)'],
+                   tagSlot=0, alternativeSlots=[[], [1]])
+
+    def check(self, proof, mutation=None, saturated=True, cap=None):
+        info = dict(id='Box', name='Box', kind='boxed', arity=1, fieldTypes=[proof],
+                    fieldReps=[proof['primReps']], fieldLifted=[False], strictFields=[True])
+        argument = ['var', 'payload', dict(rep=copy.deepcopy(proof))]
+        expression = ['app', ['con', 'Box', 1], [argument], [False], False, False, dict(rep=dict(REFERENCE, evaluated=True))]
+        if mutation:
+            mutation(info, expression)
+        audit = audit_core.Audit([('heap.json', dict(schema=1, ghc='9.14.1', bindings=[], constructors=[info]))], cap or CAP)
+        audit.walk(expression if saturated else expression[1], {'payload': proof}, 'root', '/expr')
+        return audit.issues
+
+    def test_direct_saturated_sum_empty_and_nested_tuple_fields(self):
+        nested = dict(self.empty, components=[LONG, dict(self.empty, components=[REFERENCE], primReps=REFERENCE['primReps'])],
+                      primReps=LONG['primReps'] + REFERENCE['primReps'])
+        address = dict(kind='address', evaluated=True, primReps=['AddrRep'])
+        address_tuple = dict(self.empty, components=[address], primReps=['AddrRep'])
+        for proof in (self.empty, self.sum_rep, nested, address_tuple):
+            self.assertEqual([], self.check(proof))
+            self.assertTrue(self.check(proof, cap=dict(CAP, aggregateHeapFields=[])))
+            self.assertTrue(self.check(proof, saturated=False))
+
+    def test_constructor_shape_arity_and_levity_stay_checked(self):
+        mutations = [lambda info, expr: info.update(fieldReps=[['WordRep']]),
+                     lambda info, expr: info.update(fieldLifted=[True]),
+                     lambda info, expr: expr[3].__setitem__(0, True),
+                     lambda info, expr: expr[2][0][2].update(rep=LONG),
+                     lambda info, expr: info.update(fieldTypes=[dict(self.sum_rep, alternativeSlots=[[], [0]])]),
+                     lambda info, expr: info.update(arity=2)]
+        for mutation in mutations:
+            self.assertTrue(self.check(copy.deepcopy(self.sum_rep), mutation))
+
+
 class ReportStreamTest(unittest.TestCase):
     def test_report_stream_matches_previous_format_without_one_large_write(self):
         class Sink(io.StringIO):

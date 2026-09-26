@@ -12,8 +12,9 @@ reference. Neither is flattened. A lifted leaf inside an unboxed tuple stays laz
 including when the tuple parameter is strict or unused. Unknown layouts or levity,
 sums and vectors are excluded from this tuple-input slice. An exact evaluated
 `AddrRep` leaf carries only a checked `ManagedAddress`, never a native pointer.
-Aggregate captures, heap fields, ordinary let bindings and local-join arguments/captures are
+Aggregate captures, ordinary let bindings and nonempty local-join arguments are
 still rejected, as are aggregate parameters and results at the public host entry.
+Saturated boxed constructors support [owned tuple/sum fields](aggregate-heap-fields.md).
 Scalar-only and exact-empty-only calls retain their existing conventions.
 
 A typed call passes a single precise generated storage object in the outer Truffle

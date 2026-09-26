@@ -7,6 +7,8 @@ Sum arguments, aggregate join arguments/captures, ordinary aggregate captures an
 unresolved layouts remain explicit boundaries. [Binary sum results](sum-results.md)
 use the placement evidence below. Exact tuple join results use local destination
 slots within the same root.
+Saturated boxed constructors also support [aggregate fields](aggregate-heap-fields.md),
+including the original compiler's unpacked `BoxedRep` payload.
 The metadata fixtures below test these boundaries independently of execution.
 
 Boxed tuples such as `(Int, Int)`, boxed unit `()`, and `Solo Box` retain one

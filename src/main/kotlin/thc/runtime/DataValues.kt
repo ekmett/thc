@@ -44,7 +44,8 @@ class DataLayout private constructor(
     val name: String,
     fieldReps: Array<String>,
     referenceTypes: Array<Class<*>?>,
-    vectorProofs: Array<CoreRepresentation?>
+    vectorProofs: Array<CoreRepresentation?>,
+    private val logicalFields: CoreFields? = null
 ) {
     constructor(language: TruffleLanguage<*>, id: String, name: String, fieldReps: Array<String>,
         referenceTypes: Array<Class<*>?> = arrayOfNulls(fieldReps.size)) :
@@ -52,12 +53,17 @@ class DataLayout private constructor(
 
     companion object {
         internal fun fromFields(language: TruffleLanguage<*>, id: String, name: String, fields: CoreFields): DataLayout =
-            DataLayout(language, id, name, fields.storage, fields.referenceTypes, fields.vectorProofs)
+            DataLayout(language, id, name, fields.storage, fields.referenceTypes, fields.vectorProofs, fields)
     }
     init { require(referenceTypes.size == fieldReps.size && vectorProofs.size == fieldReps.size) }
     @CompilationFinal(dimensions = 1)
     private val fields: Array<Field>
     val arity: Int = fieldReps.size
+    internal val logicalArity: Int = logicalFields?.logicalProofs?.size ?: arity
+    internal fun fieldOffset(index: Int): Int = logicalFields?.offsets?.get(index) ?: index
+    internal fun logicalProof(index: Int): CoreRepresentation? = logicalFields?.logicalProofs?.get(index)
+    internal fun logicalWidth(index: Int): Int = fieldOffset(index + 1) - fieldOffset(index)
+    internal val hasAggregateFields: Boolean = logicalFields?.hasAggregates == true
     private val exactFieldReps = fieldReps.copyOf()
     internal fun hasFieldRepresentation(index: Int, rep: String): Boolean =
         index in exactFieldReps.indices && exactFieldReps[index] == rep
@@ -108,7 +114,7 @@ class DataLayout private constructor(
         ownedCarrier = if (reserved) sample.javaClass else null
         constructorClass = ConstructorClassIdentity(sample.javaClass)
         nullaryValue = if (arity == 0) sample else null
-        val range = if (!java.lang.Boolean.getBoolean(BOXED_VALUE_CACHE_PROPERTY) || fieldReps.size != 1) null
+        val range = if (!java.lang.Boolean.getBoolean(BOXED_VALUE_CACHE_PROPERTY) || fieldReps.size != 1 || hasAggregateFields) null
         else when {
             id == BOXED_INT_CONSTRUCTOR_ID && name == "I#" && fieldReps[0] == "IntRep" -> INTLIKE_MIN..INTLIKE_MAX
             id == BOXED_CHAR_CONSTRUCTOR_ID && name == "C#" && fieldReps[0] == "WordRep" -> CHARLIKE_MIN..CHARLIKE_MAX
@@ -247,6 +253,18 @@ class DataLayout private constructor(
      * pointers to guest closures and therefore do not enter the traversal. */
     internal fun compactPointer(index: Int): Boolean =
         exactFieldReps[index] == "LiftedRep" || exactFieldReps[index] == "UnliftedRep"
+    /** Inactive sum reference registers are null padding, never guest roots. */
+    internal fun inactiveSumReference(value: DataValue, index: Int): Boolean {
+        if (!compactPointer(index)) return false
+        val logical = logicalFields ?: return false
+        for (field in logical.logicalProofs.indices) {
+            val proof = logical.logicalProofs[field]
+            if (!proof.isSum || index < logical.offsets[field] || index >= logical.offsets[field + 1]) continue
+            val tag = SumShape.checkedTag(readLong(value, logical.offsets[field]))
+            return index - logical.offsets[field] !in proof.alternativeSlots!![tag - 1]
+        }
+        return false
+    }
     /** Images are untrusted bytes, unlike well-formed lowered Core. Check the
      * actual JVM field carrier before a final typed property is initialized. */
     internal fun acceptsCompactPointer(index: Int, value: Any?): Boolean = fields[index].acceptsReference(value)
@@ -294,7 +312,7 @@ class DataLayout private constructor(
 
     /** The RTS selector in atomicModifyMutVar2# requires a lifted first field. */
     internal fun readFirstLifted(value: DataValue): Any? {
-        if (fields.firstOrNull()?.isLifted != true)
+        if (logicalFields?.logicalProofs?.firstOrNull()?.isAggregate == true || fields.firstOrNull()?.isLifted != true)
             fault("atomicModifyMutVar2# requires a lifted first record field")
         return read(value, 0)
     }

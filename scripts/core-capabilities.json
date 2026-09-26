@@ -1817,6 +1817,10 @@
     "SIMD guest transport admits the 30 exact vectorRepresentations through arguments, results, PAP prefixes, tail transfers, local calls, join arguments/results, same-frame join captures, unboxed tuple fields, nonrecursive unlifted let bindings, owned closure/thunk captures and boxed constructor fields. Exact VecRep identity remains distinct from equal-width tuples and other vector shapes. Recursive or lifted vector let bindings, sum fields and public host vector arguments/results remain unsupported. Transport does not expand the existing SIMD operation families.",
     "Binary unboxed sum results, local join results and immediate cases support exact machine Int/Word, Float, Double, known reference, void and tuple payloads. Local joins reuse typed tag/payload destinations within the same activation, including recursive and zero-arity transfers. Nested sums, width-changing payload casts, vector/address or unknown leaves, sum inputs/captures/heap fields/ordinary local lets/host results remain unsupported."
   ],
+  "aggregateHeapFields": [
+    "unboxed-tuple",
+    "unboxed-sum"
+  ],
   "aggregateInputs": [
     "empty-unboxed-tuple",
     "unboxed-tuple"
