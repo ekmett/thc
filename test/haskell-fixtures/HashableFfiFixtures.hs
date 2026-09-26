@@ -43,7 +43,7 @@ prepareHashableFfi root = do
     [path] -> pure (BS.unpack path)
     _ -> die "hashable-ffi: expected one selected-GHC driver"
   managed <- execute "thc-run" [("THC_BACKEND", "bytecode")] driver
-    (["run", root </> fixture, "--exe", "run-hashable-ffi:exe:oracle", "--thc-root", root,
+    (["run", "--project-dir", root </> fixture, "run-hashable-ffi:exe:oracle", "--thc-root", root,
       "--runtime", runtime, "--dist-dir", root </> acquired, "--installed-core", "required",
       "--with-ghc", ghc, "--with-ghc-pkg", ghcPkg] ++
       maybe [] (\path -> ["--ghc-source", path]) sourceRoot)

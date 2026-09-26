@@ -159,7 +159,7 @@ prepareWindowsDriver root = do
         output = root </> logs </> ("dist with spaces " ++ label)
     result <- runLogged 180 root logs label
       [("THC_BACKEND", backend), ("JAVA_OPTS", "-Dthc.diagnostics=true -Dthc.handoffSlabs=" ++ dense)]
-      driver ["run", root </> package </> "run-pure.cabal", "--exe", "completed",
+      driver ["run", "--project-dir", root </> package, "completed",
               "--thc-root", root, "--dist-dir", output]
     unless (commandStdout result == commandStdout observed) (die "driver output differs from native GHC")
     let diagnostics = [fields | line <- BSC.lines (commandStderr result),

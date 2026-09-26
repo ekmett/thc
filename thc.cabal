@@ -261,6 +261,12 @@ extra-source-files:
   test/fixtures/run-pure/run-pure.cabal
   test/fixtures/run-pure/app/Main.hs
   test/fixtures/run-pure/app/Answer.hs
+  test/fixtures/run-benchmark/cabal.project
+  test/fixtures/run-benchmark/run-benchmark.cabal
+  test/fixtures/run-benchmark/src/Answer.hs
+  test/fixtures/run-benchmark/bench/Main.hs
+  test/fixtures/run-benchmark/bench/Check.hs
+  test/fixtures/run-benchmark/detailed/Detailed.hs
   test/fixtures/run-project/cabal.project
   test/fixtures/run-project/dep-data/dep-data.cabal
   test/fixtures/run-project/dep-data/src/Answer.hs
@@ -480,6 +486,7 @@ test-suite driver-tests
     PlanTests
     RunTests
     RunOptionsTests
+    BenchmarkTests
     ProjectTests
     StoreProjectTests
     EmptyStoreProjectTests

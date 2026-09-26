@@ -9,6 +9,7 @@ import Test.HUnit (Test(..), Counts(..), runTestTT)
 import qualified PlanTests
 import qualified RunTests
 import qualified RunOptionsTests
+import qualified BenchmarkTests
 import qualified ProjectTests
 import qualified StoreProjectTests
 import qualified EmptyStoreProjectTests
@@ -34,6 +35,7 @@ runTests arguments = do
   env <- setup
   selected <- case arguments of
     ["--installed-hydration-only"] -> pure [InstalledHydrationTests.tests]
+    ["--runnable-targets-only"] -> pure [RunOptionsTests.tests env, BenchmarkTests.tests env]
     ["--acquire-project-only"] -> pure [ProjectTests.acquisitionTests env]
     ["--run-options-only"] -> pure [RunOptionsTests.tests env]
     ["--run-ffi-only"] -> pure [RunOptionsTests.tests env, RunTests.tests env]
@@ -52,10 +54,11 @@ runTests arguments = do
       , PlanTests.tests env
       , RunTests.tests env
       , RunOptionsTests.tests env
+      , BenchmarkTests.tests env
       , ProjectTests.tests env
       , StoreProjectTests.tests env
       , EmptyStoreProjectTests.tests env
       ]
-    _ -> die "Usage: driver-tests [--acquire-project-only|--run-options-only|--run-ffi-only|--store-inventory-only|--installed-hydration-only|--package-native-only]"
+    _ -> die "Usage: driver-tests [--runnable-targets-only|--acquire-project-only|--run-options-only|--run-ffi-only|--store-inventory-only|--installed-hydration-only|--package-native-only]"
   counts <- runTestTT $ TestList selected
   if errors counts + failures counts == 0 then pure () else exitFailure

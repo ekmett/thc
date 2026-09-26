@@ -189,7 +189,7 @@ tests env = TestList
       help <- invoke True ["--help"]
       assertContains "plan-package" (out help)
       assertContains "run" (out help)
-      _ <- reject ["run"] "run requires --exe NAME"
+      _ <- reject ["run"] "run requires --thc-root DIR"
       forM_ [["build", "--dry-run"], ["repl"], ["plan-package", "--unknown"], ["plan-package", "a", "b"]] $ \arguments ->
         reject arguments "Usage:"
 

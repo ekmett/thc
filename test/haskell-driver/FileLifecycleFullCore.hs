@@ -30,7 +30,7 @@ fixture environment = TestLabel "original System.IO executable lifecycle" $ Test
         -- GHC's generated wrapper reaches signal startup, whose general
         -- fork# path is currently supported by the bytecode backend only.
         invoke = run environment project (Just "bytecode") 900 $
-          ["run", project, "--exe", "lifecycle", "--installed-core", "required",
+          ["run", "--project-dir", project, "lifecycle", "--installed-core", "required",
            "--thc-root", thcRoot environment,
            "--runtime", runtime environment, "--dist-dir", output] ++
           maybe [] (\compilerPath -> ["--with-ghc", compilerPath]) installedGhc ++

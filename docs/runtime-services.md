@@ -207,8 +207,9 @@ The [multi-package smoke program](../test/fixtures/run-runtime-services/Main.hs)
 depends on the real `thc:runtime` library and checks runtime-specific invariants
 across all six modules, including explicit JIT opt-in and nested Unicode spans.
 It does not compare variable JVM counters against native-GHC zeroes. Its
-`cabal.project` uses relative paths; it can be passed to `thc run` with complete
-installed Core and the configured GHC source provider described in the
+`cabal.project` uses relative paths; select it with `--project-dir` or
+`--project-file` when invoking `thc run`, with complete installed Core and the
+configured GHC source provider described in the
 [driver guide](driver.md). A successful native run alone does not establish
 that its entire original Core closure is accepted by THC.
 
@@ -226,8 +227,8 @@ With the [pinned full-Core toolchain](driver.md) configured, reproduce acquisiti
 and the bytecode run from the repository root:
 
 ```sh
-THC_BACKEND=bytecode thc run test/fixtures/run-runtime-services \
-  --exe runtime-services-smoke:exe:completed \
+THC_BACKEND=bytecode thc run runtime-services-smoke:exe:completed \
+  --project-dir test/fixtures/run-runtime-services \
   --thc-root "$PWD" --runtime "$PWD/build/install/thc/bin/thc" \
   --dist-dir "$PWD/build/runtime-services-smoke" \
   --installed-core required --ghc-source "$THC_GHC_SOURCE"
