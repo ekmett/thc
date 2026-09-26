@@ -239,7 +239,7 @@ scalarFunctions ir = do
           (name,parameters) = break (== '(') (drop 1 rest)
           (args,suffix) = break (== ')') (drop 1 parameters)
       unless (identifier name && not (null parameters) && not (null suffix) &&
-        not (any (\word -> "cc" `isSuffixOf` word || word `elem` ["cc","inreg","sret",
+        not (any (\word -> "cc" `isSuffixOf` word || word `elem` ["cc","inreg","sret","signext","zeroext",
           "weak","weak_odr","linkonce","linkonce_odr","extern_weak","available_externally"])
           (words prefix)) && "{" `isSuffixOf` line)
         (Left "scalar cbits LLVM has an unsupported function declaration")
@@ -248,7 +248,9 @@ scalarFunctions ir = do
       pure (name,inputs,result)
     parameter text = case words text of
       value:attributes -> do
-        unless (all (\attribute -> attribute `elem` ["noundef","signext","zeroext","returned"] || "%" `isPrefixOf` attribute) attributes)
+        -- The wrappers preserve scalar types, not ABI-affecting extension
+        -- attributes. Only semantic attributes that can be omitted are allowed.
+        unless (all (\attribute -> attribute `elem` ["noundef","returned"] || "%" `isPrefixOf` attribute) attributes)
           (Left "scalar cbits LLVM parameter attributes are unsupported")
         rep value
       _ -> Left "LLVM parameter missing"
