@@ -2,7 +2,7 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 module THC.Driver.Run
-  ( RunOptions(..), SulongMode(..), parseSulongMode, runtimeLaunchArguments, runPackage
+  ( RunOptions(..), FfiMode(..), parseFfiMode, runtimeLaunchArguments, runPackage
   ) where
 
 import Control.Monad (unless, when)
@@ -35,25 +35,25 @@ data RunOptions = RunOptions
   , runRuntime :: Maybe FilePath
   , runInstalledCore :: String
   , runGhcSource :: Maybe FilePath
-  , runSulongMode :: Maybe SulongMode
+  , runFfiMode :: Maybe FfiMode
   , runArguments :: [String]
   }
 
-data SulongMode = NativeSulong | ManagedSulong deriving (Eq, Show)
+data FfiMode = NativeFfi | ManagedFfi deriving (Eq, Show)
 
-parseSulongMode :: String -> Either String SulongMode
-parseSulongMode "native" = Right NativeSulong
-parseSulongMode "managed" = Right ManagedSulong
-parseSulongMode value = Left ("--sulong-mode must be native or managed; got " ++ show value)
+parseFfiMode :: String -> Either String FfiMode
+parseFfiMode "native" = Right NativeFfi
+parseFfiMode "managed" = Right ManagedFfi
+parseFfiMode value = Left ("--ffi must be native or managed; got " ++ show value)
 
 -- Runtime selection belongs before the entry command, never in GHC flags or
 -- after the guest delimiter. No explicit choice leaves launcher defaults and
 -- its environment/property configuration intact.
-runtimeLaunchArguments :: Maybe SulongMode -> [String] -> String -> [String] -> [String]
+runtimeLaunchArguments :: Maybe FfiMode -> [String] -> String -> [String] -> [String]
 runtimeLaunchArguments mode entry program arguments =
-  maybe [] (\selected -> ["--sulong-mode", case selected of
-    NativeSulong -> "native"
-    ManagedSulong -> "managed"]) mode ++ entry ++ ["--", program] ++ arguments
+  maybe [] (\selected -> ["--ffi", case selected of
+    NativeFfi -> "native"
+    ManagedFfi -> "managed"]) mode ++ entry ++ ["--", program] ++ arguments
 
 -- This first run slice uses the package configuration that Cabal itself
 -- elaborated. Native build output is never executed; the exported GHC Core is.
@@ -146,7 +146,7 @@ runPackage opts target = do
   unless (not (null modules)) $ fail "GHC plugin exported no Core modules"
   checked True python ([thcRoot </> "scripts/audit-core.py", "--entry", "main:Main.main", "--io-main",
                       "--output", output </> "audit.json"] ++ modules) thcRoot inherited
-  checked False runtime (runtimeLaunchArguments (runSulongMode opts)
+  checked False runtime (runtimeLaunchArguments (runFfiMode opts)
     ["--run-io", intercalate "," modules, "main:Main.main"] selectedName (runArguments opts)) thcRoot inherited
 
 filterMFile :: (a -> IO Bool) -> [a] -> IO [a]

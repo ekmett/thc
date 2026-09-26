@@ -25,18 +25,21 @@ Embedded callers can still read the `diagnostics` member directly. This output
 setting does not change instrumentation, strict admission, or shutdown behavior.
 The low-level integer-kernel launcher retains its diagnostic report.
 
-Select Sulong execution with `thc run --sulong-mode native` or
-`thc run --sulong-mode managed`. Native is the launcher's default. The managed
-choice requires a GraalVM installation providing managed LLVM execution; the
-ordinary `llvm-community` dependency does not provide that engine. An unavailable
-managed engine is an error, not a silent fallback to native execution.
+The driver accepts `thc run --ffi native` or `thc run --ffi managed` and
+forwards that choice to the JVM launcher. **The JVM hookup is still pending:**
+this driver checkpoint does not yet provide an end-to-end runtime mode switch.
+The planned default is native. Managed-only execution requires a supporting
+GraalVM installation; the ordinary `llvm-community` dependency cannot provide
+it. The planned managed mode must reject an unavailable engine rather than
+silently fall back to native execution.
 
 This is a runtime-only option on both the single-package and project paths: it
 does not change GHC flags, Core export, native build settings, or cache identities.
-When the option is omitted, the driver passes no override; the launcher can
-instead select its mode from `-Dthc.sulongMode` or `THC_SULONG_MODE`. The driver
-does not modify either setting. Put a guest's own `--sulong-mode` argument after
-the literal `--`, where it is preserved without interpretation.
+When the option is omitted, the driver passes no override. The planned runtime
+configuration names are `-Dthc.ffiMode` and `THC_FFI_MODE`; they are not yet
+hooked up by this change, and the driver does not modify either setting. Put a
+guest's own `--ffi` argument after the literal `--`, where it is preserved
+without interpretation.
 
 Pass guest command-line arguments after a literal `--`:
 
