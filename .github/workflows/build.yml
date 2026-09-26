@@ -204,7 +204,6 @@ jobs:
           python3 scripts/test-int8x16-model.py
           python3 scripts/test-word8x16-model.py
           python3 scripts/test-word16x8-model.py
-          python3 scripts/test-scalar-bitcasts.py
           python3 scripts/test-word32x4-model.py
           python3 scripts/test-int32x4-multiply-model.py
           python3 scripts/test-int32x4-bytearray-model.py

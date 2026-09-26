@@ -1198,6 +1198,19 @@ class FixturePreparationTest(unittest.TestCase):
                     self.assertEqual([group_id], prepare()["rebuilt"])
                     self.assertEqual([], prepare()["rebuilt"])
 
+    def test_scalar_bitcasts_use_haskell_producer_and_keep_native_inputs(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest["groups"]["scalar-bitcasts"]
+        self.assertEqual("scalar-bitcasts", owners["thc.runtime.ScalarBitCastTest"])
+        self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "scalar-bitcasts"]}], group["commands"])
+        self.assertEqual(["build/scalar-bitcasts"], group["outputs"])
+        self.assertEqual({"test/haskell-fixtures/ScalarBitCastFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+                          "test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/ScalarBitCastAudit.hs",
+                          "compiler/test-fixtures/ScalarBitCastNative.hs"}, set(group["sources"]))
+        self.assertTrue(all((project / name).is_file() for name in group["sources"]))
+        self.assertIn('"$fixture_bin" scalar-bitcasts', (project / "scripts/prepare-tests.sh").read_text().splitlines())
+
     def test_original_stack_has_portable_focused_and_full_preparation(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

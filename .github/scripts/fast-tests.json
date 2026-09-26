@@ -7,8 +7,7 @@
       "thc.runtime.HostEntryCompilationTest"
     ],
     "python": [
-      ".github/scripts/test_fast_select.py",
-      "scripts/test-scalar-bitcasts.py"
+      ".github/scripts/test_fast_select.py"
     ]
   },
   "leafSources": {
@@ -111,7 +110,6 @@
         "scripts/test-doublex2-model.py",
         "scripts/test-floatx4-bytearray-model.py",
         "scripts/test-floatx4-model.py",
-        "scripts/test-scalar-bitcasts.py",
         "scripts/test-sum-layout.py",
         "scripts/test-tuple-inputs.py"
       ]
@@ -155,7 +153,6 @@
         "scripts/test-doublex2-model.py",
         "scripts/test-floatx4-bytearray-model.py",
         "scripts/test-floatx4-model.py",
-        "scripts/test-scalar-bitcasts.py",
         "scripts/test-sum-layout.py",
         "scripts/test-tuple-inputs.py"
       ]
@@ -252,6 +249,9 @@
     }
   },
   "owners": {
+    "test/haskell-fixtures/ScalarBitCastFixtures.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
+    "compiler/test-fixtures/ScalarBitCastAudit.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
+    "compiler/test-fixtures/ScalarBitCastNative.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
     "test/haskell-fixtures/RtsShutdownFixtures.hs": {"junit": ["thc.runtime.RtsShutdownTest"], "python": []},
     "compiler/test-fixtures/RtsShutdownNative.hs": {"junit": ["thc.runtime.RtsShutdownTest"], "python": []},
     "src/main/kotlin/thc/ManagedImportMetadata.kt": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
@@ -1125,6 +1125,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.ScalarBitCastTest",
         "thc.runtime.RtsDiagnosticsTest",
         "thc.runtime.RtsShutdownTest",
         "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest",

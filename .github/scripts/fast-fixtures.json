@@ -368,9 +368,9 @@
     },
     "scalar-bitcasts": {
       "junit": ["thc.runtime.ScalarBitCastTest"],
-      "commands": [{"argv": ["python3", "scripts/prepare-scalar-bitcasts.py"]}],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "scalar-bitcasts"]}],
       "outputs": ["build/scalar-bitcasts"],
-      "sources": ["scripts/prepare-scalar-bitcasts.py", "scripts/scalar_bitcast_model.py", "scripts/test-scalar-bitcasts.py", "compiler/test-fixtures/ScalarBitCastAudit.hs"]
+      "sources": ["test/haskell-fixtures/ScalarBitCastFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/ScalarBitCastAudit.hs", "compiler/test-fixtures/ScalarBitCastNative.hs"]
     },
     "sum-results": {
       "junit": ["thc.SumLayoutMetadataTest", "thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"],

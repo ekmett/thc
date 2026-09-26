@@ -198,8 +198,10 @@ and the pinned scalar signature table reject contradictory exact argument or
 result proofs, including machine-Word substitutions. No vector or call ABI is
 added.
 
-`scripts/prepare-scalar-bitcasts.py` retains 13,555 native/model rows across ten
-pre/post-Tidy roots. Integer-only models cover signed zeros, infinities,
+`cabal run exe:thc-fixtures --offline -- scalar-bitcasts` retains 13,555 native/model
+rows across ten pre/post-Tidy roots. The Haskell producer retains the existing
+shared Core auditor dependency; bitcast-specific Python producers and models are
+removed. Integer-only Kotlin models cover signed zeros, infinities,
 subnormals and signed quiet/signalling NaNs. The fixtures retain opaque calls,
 floating constructor fields with an unused recursive bottom, and primitive
 closure captures. Separate encode and decode roots compare through native-order
