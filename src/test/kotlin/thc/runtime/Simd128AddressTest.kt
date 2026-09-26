@@ -13,7 +13,7 @@ import java.nio.ByteOrder
 class Simd128AddressTest {
     private val families = setOf(VectorMemoryFamily.INT8, VectorMemoryFamily.WORD8,
         VectorMemoryFamily.INT16, VectorMemoryFamily.WORD16, VectorMemoryFamily.INT64, VectorMemoryFamily.WORD64)
-    private val operations = VectorMemoryOp.entries.filter { it.isAddress && it.family in families }
+    private val operations = VectorMemoryOp.entries.filter { it.isAddress && it.vectorBytes == 16 && it.family in families }
     private fun scalar(kind: String, rep: String?) = mapOf("kind" to kind,
         "primReps" to listOfNotNull(rep), "evaluated" to true)
     private val state = scalar("void", null)

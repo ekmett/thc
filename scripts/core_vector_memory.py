@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Exact 128-bit ByteArray/Addr# vector memory; no escaping State/vector read tuple.
+"""Exact ByteArray/Addr# vector memory; no escaping State/vector read tuple.
 
 The pinned exporter places its sole physical vector annotation on the logical
 State/vector tuple too. Only an immediate, exactly checked read case accepts it.
@@ -39,7 +39,8 @@ VECTOR_PROOFS = {**dict.fromkeys(SIGNED_OPERATIONS, VECTOR32_REP),
 
 # Memory moves bits: signedness remains an exact VecRep contract, while the
 # underlying public JVM carrier is shared by each signed/unsigned pair.
-for scalar, lanes in (('Int8', 16), ('Word8', 16), ('Int16', 8),
+for scalar, lanes in (('Int32', 4), ('Word32', 4), ('Float', 4), ('Double', 2),
+                      ('Int8', 16), ('Word8', 16), ('Int16', 8),
                       ('Word16', 8), ('Int64', 2), ('Word64', 2),
                       ('Int16', 16), ('Word16', 16), ('Int32', 8), ('Word32', 8), ('Int32', 16), ('Word32', 16), ('Int64', 4), ('Word64', 4), ('Int64', 8), ('Word64', 8), ('Float', 8), ('Float', 16), ('Double', 4), ('Double', 8)):
     shape = scalar + 'X' + str(lanes)
@@ -47,8 +48,6 @@ for scalar, lanes in (('Int8', 16), ('Word8', 16), ('Int16', 8),
     for verb, operations in (('index', INDICES), ('read', READS), ('write', WRITES)):
         for suffix in (shape + 'Array#', scalar + 'ArrayAs' + shape + '#',
                        shape + 'OffAddr#', scalar + 'OffAddrAs' + shape + '#'):
-            if 'OffAddr' in suffix and (scalar, lanes) not in (('Int8',16), ('Word8',16), ('Int16',8), ('Word16',8), ('Int64',2), ('Word64',2)):
-                continue
             name = verb + suffix
             operations.add(name)
             VECTOR_PROOFS[name] = proof

@@ -85,6 +85,32 @@ class FixturePreparationTest(unittest.TestCase):
         (self.root / 'build/scalar-memory-utilities/native/oracle').write_text('mutated')
         with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
 
+    def test_simd_address_closed_native_outputs_and_stale_receipts(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        cache = fast_fixtures.fast_inputs
+        group = manifest['groups']['simd-address-families']
+        self.assertEqual('simd-address-families', owners['thc.runtime.SimdAddressFamiliesTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'simd-address-families']}], group['commands'])
+        self.assertIn('"$fixture_bin" simd-address-families', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertTrue(cache.SIMD_ADDRESS_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        name = 'build/simd-address-families/manifest.json'
+        artifacts = {}
+        for item in cache.SIMD_ADDRESS_OUTPUTS - {name}:
+            path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
+        receipt = dict(schema=1, ghc='9.14.1', entries=list(cache.SIMD_ADDRESS_ENTRIES), scalarRows=2592,
+            nativeVector128Rows=576 if cache.SIMD_ADDRESS_NATIVE128 else 0,
+            stages={stage: {} for stage, _ in cache.SIMD_ADDRESS_STAGES}, artifactHashes=artifacts)
+        (self.root / name).write_text(json.dumps(receipt))
+        self.assertEqual(cache.SIMD_ADDRESS_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+        for bad in (dict(receipt, schema=True), dict(receipt, ghc='9.12.2'), dict(receipt, entries=[]),
+                    dict(receipt, scalarRows=2591), dict(receipt, stages={}), dict(receipt, artifactHashes={})):
+            with self.assertRaises(cache.CacheMiss): cache.simd_address_artifact_hashes(bad)
+        (self.root / 'build/simd-address-families/source/SimdAddressAudit.hs').write_text('mutated')
+        with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+
     def test_thread_inventory_owns_exact_native_outputs_and_rejects_partial_receipts(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
