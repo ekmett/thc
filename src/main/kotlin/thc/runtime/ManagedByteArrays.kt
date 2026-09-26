@@ -291,14 +291,15 @@ internal object ManagedByteArray {
         count: Long): Long {
         if (first is ByteArray && second is ByteArray)
             return compare(first, firstOffset, second, secondOffset, count)
-        fun segment(value: Any?, offset: Long): ByteArray {
-            val length = sizeGuest(value)
-            if (offset < 0 || offset > length || count < 0 || count > length - offset)
-                fault("ByteArray# comparison range outside its backing storage")
-            return if (value is ManagedAllocation) value.copyBytesOut(offset, count)
-            else require(value).copyOfRange(offset.toInt(), (offset + count).toInt())
+        return when {
+            first is ManagedAllocation && second is ManagedAllocation ->
+                first.compareBytes(second, firstOffset, secondOffset, count)
+            first is ManagedAllocation && second is ByteArray ->
+                first.compareBytes(second, firstOffset, secondOffset, count)
+            first is ByteArray && second is ManagedAllocation ->
+                -second.compareBytes(first, secondOffset, firstOffset, count)
+            else -> fault("Expected a managed ByteArray#")
         }
-        return java.util.Arrays.compareUnsigned(segment(first, firstOffset), segment(second, secondOffset)).toLong()
     }
     @JvmStatic fun allocate(size: Long): ByteArray {
         if (size < 0 || size > Int.MAX_VALUE.toLong()) fault("ByteArray# size outside the managed allocation domain")

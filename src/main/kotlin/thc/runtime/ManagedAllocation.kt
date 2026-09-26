@@ -325,6 +325,25 @@ internal class ManagedAllocation private constructor(
         MemorySegment.copy(segment, sourceOffset, destination, destinationOffset, count)
     }
 
+    /** Inspect both complete ranges before mismatch can stop at the first byte.
+     * Keep the original storage private and both owners locked through the scan.
+     * FFM's cold bounds/error paths must not expand during guest compilation. */
+    @TruffleBoundary
+    internal fun compareBytes(other: ManagedAllocation, offset: Long, otherOffset: Long, count: Long): Long =
+        withOrderedLocks(other) {
+            requireByteRegion(offset, count, false)
+            other.requireByteRegion(otherOffset, count, false)
+            compareSegments(segment, offset, other.segment, otherOffset, count)
+        }
+
+    @Synchronized @TruffleBoundary
+    internal fun compareBytes(other: ByteArray, offset: Long, otherOffset: Long, count: Long): Long {
+        requireByteRegion(offset, count, false)
+        if (otherOffset < 0 || otherOffset > other.size.toLong() || count > other.size.toLong() - otherOffset)
+            fault("ByteArray# comparison range outside its backing storage")
+        return compareSegments(segment, offset, MemorySegment.ofArray(other), otherOffset, count)
+    }
+
     @Synchronized fun fill(offset: Long, count: Long, value: Long) {
         mutable()
         val start = range(offset, count)
@@ -334,7 +353,7 @@ internal class ManagedAllocation private constructor(
 
     /** Snapshot cells before memmove, including a copy within this allocation. */
     fun copyFrom(source: ManagedAllocation, sourceOffset: Long, destinationOffset: Long, count: Long) {
-        fun copyLocked() {
+        withOrderedLocks(source) {
             mutable()
             if (pointerBytes != source.pointerBytes) fault("Cannot copy between different target pointer widths")
             val from = source.range(sourceOffset, count)
@@ -354,14 +373,18 @@ internal class ManagedAllocation private constructor(
                 cells().putAll(copied)
             }
         }
-        val fromId = System.identityHashCode(source)
-        val toId = System.identityHashCode(this)
-        when {
-            source === this -> synchronized(this) { copyLocked() }
-            fromId < toId -> synchronized(source) { synchronized(this) { copyLocked() } }
-            fromId > toId -> synchronized(this) { synchronized(source) { copyLocked() } }
+    }
+
+    /** Copy and comparison must share the same collision lock and owner order. */
+    private inline fun <T> withOrderedLocks(other: ManagedAllocation, action: () -> T): T {
+        val otherId = System.identityHashCode(other)
+        val thisId = System.identityHashCode(this)
+        return when {
+            other === this -> synchronized(this) { action() }
+            otherId < thisId -> synchronized(other) { synchronized(this) { action() } }
+            otherId > thisId -> synchronized(this) { synchronized(other) { action() } }
             else -> synchronized(COPY_TIE_LOCK) {
-                synchronized(source) { synchronized(this) { copyLocked() } }
+                synchronized(other) { synchronized(this) { action() } }
             }
         }
     }
@@ -414,6 +437,15 @@ internal class ManagedAllocation private constructor(
 
     companion object {
         private val COPY_TIE_LOCK = Any()
+        private fun compareSegments(first: MemorySegment, firstOffset: Long,
+            second: MemorySegment, secondOffset: Long, count: Long): Long {
+            val mismatch = MemorySegment.mismatch(first, firstOffset, firstOffset + count,
+                second, secondOffset, secondOffset + count)
+            if (mismatch < 0) return 0
+            val left = first.get(ValueLayout.JAVA_BYTE, firstOffset + mismatch).toInt() and 255
+            val right = second.get(ValueLayout.JAVA_BYTE, secondOffset + mismatch).toInt() and 255
+            return (left - right).toLong()
+        }
         // FFM layouts lazily construct access handles. Resolve this immutable
         // metadata once, outside guest partial evaluation: a cold layout path
         // otherwise expands LayoutPath.rootLayout recursively during compilation.
