@@ -10,6 +10,7 @@ module Main (main) where
 import AggregateFixtures (prepareAggregate)
 import Simd128ArrayFixtures (prepareSimd128Arrays)
 import SimdWideArrayFixtures (prepareSimdWideArrays)
+import SimdArithmeticFixtures (prepareSimdArithmetic)
 import WordFloatingFixtures (prepareWordFloating)
 import ScalarBitCastFixtures (prepareScalarBitCasts)
 import BigNatLiteralFixtures (prepareBigNatLiterals)
@@ -883,6 +884,7 @@ main = do
     ["scalar-bitcasts"] -> prepareScalarBitCasts root
     ["simd128-arrays"] -> prepareSimd128Arrays root
     ["simd-wide-arrays"] -> prepareSimdWideArrays root
+    ["simd-arithmetic"] -> prepareSimdArithmetic root
     ["bignat-literals"] -> prepareBigNatLiterals root False
     ["bignat-literals", "--check-only"] -> prepareBigNatLiterals root True
     ["floating-address"] -> prepareFloatingAddress root

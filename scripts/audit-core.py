@@ -21,7 +21,7 @@ from pathlib import Path
 import sys
 
 from core_sums import is_sum, contains_sum, lifted_payload, proof_error as sum_proof_error, constructor_tag as sum_constructor_tag
-from core_vectors import OPERATIONS as VECTOR_OPERATIONS, is_vector, proof_error as vector_proof_error, signature_matches as vector_signature_matches
+from core_vectors import OPERATIONS as VECTOR_OPERATIONS, is_vector, proof_error as vector_proof_error, signature_matches as vector_signature_matches, shuffle_indices
 from core_tuple_inputs import contains_tuple, proof_error as tuple_input_proof_error
 from core_vector_memory import OPERATIONS as VECTOR_MEMORY_OPERATIONS, read_case as vector_read_case, validate_direct as validate_vector_memory
 
@@ -1589,6 +1589,11 @@ class Audit:
                     validate_vector_memory(vector_memory, arguments, flags, proof)
                 if vector_operation:
                     expected, result = VECTOR_OPERATIONS[vector_operation]
+                    if vector_operation.startswith('shuffle') and len(arguments) == 3:
+                        try:
+                            shuffle_indices(arguments[2], result['vector']['lanes'])
+                        except ValueError as error:
+                            self.issue('vector-shape', owner, path, str(error))
                     if not isinstance(flags, list) or len(flags) != len(arguments) or any(flag is not False for flag in flags):
                         self.issue('vector-shape', owner, path, 'Vector primitive operands must be unlifted')
                     if len(arguments) != len(expected):

@@ -160,11 +160,34 @@ for family in json.loads((Path(__file__).with_name('simd-families.json')).read_t
                 evaluated=True, primReps=[family['laneRep']])
     packed = dict(kind='unknown', evaluated=True, aggregate='unboxed-tuple',
                   primReps=lane['primReps'] * family['lanes'], components=[lane] * family['lanes'])
+    index = dict(kind='long', evaluated=True, primReps=['IntRep'])
+    indices = dict(kind='unknown', evaluated=True, aggregate='unboxed-tuple',
+                   primReps=['IntRep'] * family['lanes'], components=[index] * family['lanes'])
     if family['newCarrier']:
         GENERATED_SHAPES.append(shape)
     for operation in family['operations']:
-        arguments = [packed] if operation == 'pack' else [lane] if operation == 'broadcast' else [vector, lane, dict(kind='long', evaluated=True, primReps=['IntRep'])] if operation == 'insert' else [vector] * (2 if operation in ('plus', 'minus', 'times', 'divide', 'min', 'max') else 1)
+        arguments = [packed] if operation == 'pack' else [lane] if operation == 'broadcast' else [vector, lane, index] if operation == 'insert' else [vector, vector, indices] if operation == 'shuffle' else [vector] * (2 if operation in ('plus', 'minus', 'times', 'divide', 'min', 'max', 'quot', 'rem') else 1)
         OPERATIONS[operation + family['name'] + '#'] = (arguments, packed if operation == 'unpack' else vector)
+
+def shuffle_indices(expression, lanes):
+    """Pinned GHC shuffle indices are literal Int# fields in the two-input range."""
+    if (not isinstance(expression, list) or len(expression) < 6 or expression[0] != 'app'
+            or not isinstance(expression[1], list) or expression[1][:1] != ['con']
+            or expression[5] is not True or not isinstance(expression[2], list)
+            or len(expression[2]) != lanes):
+        raise ValueError('Vector shuffle requires a literal index tuple')
+    indices = []
+    for literal in expression[2]:
+        if not isinstance(literal, list) or len(literal) < 3 or literal[:2] != ['lit', 'int']:
+            raise ValueError('Vector shuffle index is not a literal Int#')
+        try:
+            value = int(literal[2])
+        except (ValueError, TypeError):
+            raise ValueError('Invalid vector shuffle literal') from None
+        if not 0 <= value < 2 * lanes:
+            raise ValueError('Vector shuffle index outside concatenated inputs')
+        indices.append(value)
+    return indices
 
 def is_vector(rep): return isinstance(rep, dict) and rep.get('kind') == 'vector'
 def signature_matches(expected, actual):

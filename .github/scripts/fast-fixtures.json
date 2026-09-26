@@ -48,6 +48,12 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "simd-arithmetic": {
+      "junit": ["thc.runtime.SimdArithmeticTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd-arithmetic"]}],
+      "outputs": ["build/simd-arithmetic"],
+      "sources": ["test/haskell-fixtures/SimdArithmeticFixtures.hs", "scripts/simd-families.json", "scripts/generate-simd-families.py"]
+    },
     "simd-wide-arrays": {
       "junit": ["thc.runtime.SimdWideArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd-wide-arrays"]}],

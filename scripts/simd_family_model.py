@@ -116,10 +116,12 @@ def float_operation(operation, left, right, width):
 
 def result(family, operation, lane, a, b):
     width = family['bits'] // family['lanes']
-    left = signed(a + lane * 104729)
-    right = signed(b - lane * 7919)
+    selected = family['lanes'] - 1 - lane if operation == 'shuffle' else lane
+    left = signed(a + selected * 104729)
+    right = signed(b - selected * 7919)
     if family['laneRep'] in ('FloatRep', 'DoubleRep'):
-        value = (float_operation('broadcast', b, 0, width) if operation == 'insert' else
+        value = (float_operation('broadcast', right if lane % 2 else left, 0, width) if operation == 'shuffle' else
+                 float_operation('broadcast', b, 0, width) if operation == 'insert' else
                  float_operation(operation, a if operation == 'broadcast' else left, right, width))
     else:
         if family['laneRep'].startswith('Word'):
@@ -128,10 +130,13 @@ def result(family, operation, lane, a, b):
         else:
             left = signed(left, width)
             right = signed(right, width)
+        quotient = lambda: (abs(left) // abs(right)) * (-1 if (left < 0) != (right < 0) else 1)
         value = {'broadcast': lambda: a, 'insert': lambda: b, 'negate': lambda: -left,
                  'plus': lambda: left + right, 'minus': lambda: left - right,
                  'times': lambda: left * right, 'min': lambda: min(left, right),
-                 'max': lambda: max(left, right)}[operation]()
+                 'max': lambda: max(left, right), 'quot': quotient,
+                 'rem': lambda: left - quotient() * right,
+                 'shuffle': lambda: right if lane % 2 else left}[operation]()
         value = value & ((1 << width) - 1) if family['laneRep'].startswith('Word') else signed(value, width)
     # Public wrappers retain an OPAQUE scalar worker and a post-call addition.
     return signed(value + 17)
@@ -140,6 +145,22 @@ def result(family, operation, lane, a, b):
 INTEGER_EDGES = [-(1 << 63), -(1 << 63) + 1, -(1 << 32), -(1 << 31), -(1 << 31) + 1,
                  -65537, -1, 0, 1, 2, 65537, (1 << 31) - 1, 1 << 31, (1 << 32) - 1,
                  (1 << 63) - 1]
+
+
+def defined_division(family, a, b):
+    """Native GHC does not define zero divisors or signed quotient overflow."""
+    width = family['bits'] // family['lanes']
+    unsigned = family['laneRep'].startswith('Word')
+    for lane in range(family['lanes']):
+        left, right = a + lane * 104729, b - lane * 7919
+        if unsigned:
+            left &= (1 << width) - 1
+            right &= (1 << width) - 1
+        else:
+            left, right = signed(left, width), signed(right, width)
+        if right == 0 or not unsigned and left == -(1 << (width - 1)) and right == -1:
+            return False
+    return True
 
 
 def cases(family, operation=None):
@@ -166,15 +187,16 @@ def cases(family, operation=None):
         pairs = [(a, b) for a in INTEGER_EDGES for b in INTEGER_EDGES]
     # Shift each selected lane back to the edge pattern. Other lanes carry
     # distinct dynamic values, so every position and sign-extension is observed.
-    return [(lane, signed(a if operation == 'broadcast' else a - lane * 104729),
-             signed(b + lane * 7919))
-            for lane in range(family['lanes']) for a, b in pairs]
+    candidates = [(lane, signed(a if operation == 'broadcast' else a - lane * 104729),
+                   signed(b + lane * 7919))
+                  for lane in range(family['lanes']) for a, b in pairs]
+    return [row for row in candidates if operation not in ('quot', 'rem') or defined_division(family, row[1], row[2])]
 
 
 def rows():
     for name, family, operation in entries():
         operations = [op for op in family['operations'] if op not in ('pack', 'unpack')] if operation == 'composite' else [operation]
         for index, selected in enumerate(operations):
-            for lane, a, b in cases(family, selected if operation == 'composite' or selected in ('min', 'max') else None):
+            for lane, a, b in cases(family, selected if operation == 'composite' or selected in ('min', 'max', 'quot', 'rem', 'shuffle') else None):
                 selector = index * family['lanes'] + lane if operation == 'composite' else lane
                 yield name, selector, a, b, result(family, selected, lane, a, b)

@@ -239,6 +239,8 @@ tasks.withType<Test>().configureEach {
             "simd-int16x8/**/*.json", "simd-int16x8/*.tsv", "simd-int16x8/native/int16x8-oracle",
             "simd-wide-arrays/manifest.json", "simd-wide-arrays/*.tsv", "simd-wide-arrays/*-core/*.json",
             "simd-wide-arrays/*-audit.json", "simd-wide-arrays/native/oracle", "simd-wide-arrays/commands/*",
+            "simd-arithmetic/manifest.json", "simd-arithmetic/*.tsv", "simd-arithmetic/pre-core/*.json",
+            "simd-arithmetic/*-audit.json", "simd-arithmetic/native/oracle", "simd-arithmetic/commands/*", "simd-arithmetic/sources/*.hs",
             "simd128-arrays/manifest.json", "simd128-arrays/*.tsv", "simd128-arrays/*-core/*.json",
             "simd128-arrays/*-audit.json", "simd128-arrays/native/oracle", "simd128-arrays/commands/*",
             "simd-int8x16/**/*.json", "simd-int8x16/*.tsv", "simd-int8x16/native/int8x16-oracle",

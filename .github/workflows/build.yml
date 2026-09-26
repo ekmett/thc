@@ -374,6 +374,7 @@ jobs:
             build/boxed-array-extensions/
             build/simd128-arrays/
             build/simd-wide-arrays/
+            build/simd-arithmetic/
             build/original-stack-formatter/
             build/original-posix-stat/
             build/original-posix-dup/

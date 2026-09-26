@@ -35,7 +35,7 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 # preparers. An additional recorded runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
-MANIFEST_DIRS = """simd-wide-arrays simd128-arrays address-fields array-slices bignat-literals bit-primops
+MANIFEST_DIRS = """simd-arithmetic simd-wide-arrays simd128-arrays address-fields array-slices bignat-literals bit-primops
 thread-status thread-label boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array
@@ -44,6 +44,18 @@ show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls s
 SIMD_FLOAT_FMA_OUTPUTS = frozenset("build/simd-floatx4-fma/" + name for name in (
     "manifest.json", "oracle.txt", "pre-core/SimdFloatFma.json", "post-core/SimdFloatFma.json",
     "pre-audit.json", "post-audit.json", "pre-double-audit.json", "post-double-audit.json"))
+SIMD_ARITHMETIC_SHAPES = ["Word64X2","Word32X8","Int32X8","Int32X16","Int64X2","FloatX4","DoubleX2","FloatX8","DoubleX4","Int64X4","Int64X8","Word64X4","Word64X8","Word32X16","FloatX16","DoubleX8","Int8X16","Int16X8","Int32X4","Word8X16","Word16X8","Word32X4","Int16X16","Word16X16"]
+SIMD_ARITHMETIC_ENTRIES = tuple(op + shape + suffix for shape in SIMD_ARITHMETIC_SHAPES
+    for op in (("shuffle",) if shape.startswith(("Float", "Double")) else ("quot", "rem", "shuffle"))
+    for suffix in (("Pattern0", "Pattern1", "Pattern2") if op == "shuffle" else ("",)))
+SIMD_ARITHMETIC_COMMANDS = ("ghc-version", "native-build", "native-oracle", "pre-export",
+    *(name + "-audit" for name in SIMD_ARITHMETIC_ENTRIES))
+SIMD_ARITHMETIC_OUTPUTS = frozenset("build/simd-arithmetic/" + name for name in (
+    "manifest.json", "inputs.tsv", "oracle.tsv", "native/oracle", "pre-core/SimdArithmeticAudit.json",
+    "sources/SimdArithmeticAudit.hs", "sources/SimdArithmeticScalar.hs", "sources/Native.hs",
+    *(name + "-audit.json" for name in SIMD_ARITHMETIC_ENTRIES),
+    *("commands/" + command + "." + suffix for command in SIMD_ARITHMETIC_COMMANDS
+      for suffix in ("stdout", "stderr", "command.json"))))
 SIMD_WIDE_ARRAY_ENTRIES = tuple(shape + operation + mode
     for shape in ("int16X16","word16X16","int32X8","word32X8","int32X16","word32X16","int64X4","word64X4","int64X8","word64X8","floatX8","floatX16","doubleX4","doubleX8")
     for operation in ("Index", "Read", "Write") for mode in ("Packed", "Scalar"))
@@ -128,7 +140,7 @@ MAX_FILE_BYTES = 256 * 1024 * 1024
 MAX_TOTAL_BYTES = 3 * 1024 * 1024 * 1024
 MAX_MANIFEST_BYTES = 16 * 1024 * 1024
 MAX_JSON_BYTES = 384 * 1024 * 1024
-NATIVE_EXECUTABLES = frozenset({"build/simd-wide-arrays/native/oracle", "build/unsafe-equality/api/predicate",
+NATIVE_EXECUTABLES = frozenset({"build/simd-arithmetic/native/oracle", "build/simd-wide-arrays/native/oracle", "build/unsafe-equality/api/predicate",
     "build/simd128-arrays/native/oracle",
     "build/simd-capability-smoke/native/simd-smoke-oracle",
     "build/original-stdio/native/original-stdio-oracle",
@@ -914,6 +926,8 @@ def allowed_payload(name, pins):
         return name in ("build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json", "build/libdw-unavailable/foreign-labels.json")
     if parts[1] == "native-addresses":
         return name in ("build/native-addresses/manifest.json", "build/native-addresses/oracle.json")
+    if parts[1] == "simd-arithmetic":
+        return name in SIMD_ARITHMETIC_OUTPUTS
     if parts[1] == "simd-wide-arrays":
         return name in SIMD_WIDE_ARRAY_OUTPUTS
     if parts[1] == "simd128-arrays":

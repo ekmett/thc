@@ -123,7 +123,7 @@ class SimdFamiliesTest(unittest.TestCase):
 
     def test_exact_machine_contracts_and_recursive_lanes(self):
         families = GEN.families()
-        self.assertEqual(237, len(GEN.contracts(families)))
+        self.assertEqual(297, len(GEN.contracts(families)))
         for family in families:
             for operation in family['operations']:
                 name = operation + family['name'] + '#'
@@ -237,7 +237,7 @@ class SimdFamiliesTest(unittest.TestCase):
         original = json.loads(GEN.SPEC.read_text())
         variants = [dict(lanes=True), dict(lanes=4), dict(bits=512), dict(element='Word32ElemRep'),
                     dict(laneRep='WordRep'), dict(newCarrier=1), dict(operations=['times', 'times']),
-                    dict(operations=['divide']), dict(operations=['shuffle'])]
+                    dict(operations=['divide']), dict(operations=['not-a-vector-operation'])]
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / 'families.json'
             for mutation in variants:

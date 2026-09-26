@@ -11,6 +11,10 @@
     ]
   },
   "leafSources": {
+    "src/main/kotlin/thc/runtime/VectorIntegerDivision.kt": {
+      "junit": ["thc.runtime.SimdArithmeticTest"],
+      "python": []
+    },
     "src/main/kotlin/thc/runtime/ManagedNativeAllocations.kt": {
       "junit": ["thc.runtime.NativeFileBuffersTest", "thc.runtime.NativeMallocTest"],
       "python": []
@@ -159,6 +163,7 @@
     },
     "src/main/kotlin/thc/runtime/IntegerVectorPrimitives.kt": {
       "junit": [
+        "thc.runtime.SimdArithmeticTest",
         "thc.runtime.SimdWideArrayNativeTest",
         "thc.runtime.SimdWideArrayProofTest",
         "thc.runtime.Simd128ArrayNativeTest",
@@ -194,6 +199,7 @@
     },
     "src/main/kotlin/thc/runtime/FloatingVectorPrimitives.kt": {
       "junit": [
+        "thc.runtime.SimdArithmeticTest",
         "thc.runtime.SimdWideArrayNativeTest",
         "thc.runtime.SimdWideArrayProofTest",
         "thc.runtime.DoubleVectorMemoryProofTest",
@@ -1067,6 +1073,7 @@
     },
     "scripts/generate-simd-families.py": {
       "junit": [
+        "thc.runtime.SimdArithmeticTest",
         "thc.runtime.SimdCapabilitySmokeTest"
       ],
       "python": [
@@ -1111,6 +1118,7 @@
     },
     "scripts/simd-families.json": {
       "junit": [
+        "thc.runtime.SimdArithmeticTest",
         "thc.runtime.SimdWideArrayNativeTest",
         "thc.runtime.Simd128ArrayNativeTest",
         "thc.runtime.SimdCapabilitySmokeTest"
