@@ -84,10 +84,11 @@ class EmptyJoinInputTest {
         }
         val rows=File(root,"build/empty-join-input/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
         assertEquals(58,rows.values.sumOf { it.size });assertEquals(9,rows.size)
-        // Each retained OPAQUE helper occurs once; effectCase also invokes its retained runRW lambda.
-        // Preparation proves that lambda and the effectful actuals survive in both stages. Local joins are not guest entries.
+        // Each retained OPAQUE helper occurs once. The exporter retains effectCase's
+        // runRW lambda, but CoreStateApplications lowers it in-frame on both backends.
+        // Neither that scalar State application nor a local join is a guest entry.
         val entries=mapOf("branchCase" to 1L,"swapCase" to 2L,"swapDepth" to 1L,"mutualCase" to 2L,
-            "mutualDepth" to 1L,"nestedCase" to 1L,"lazyCase" to 2L,"effectCase" to 3L,"throwCase" to 3L)
+            "mutualDepth" to 1L,"nestedCase" to 1L,"lazyCase" to 2L,"effectCase" to 2L,"throwCase" to 3L)
         for(stage in listOf("pre","post"))for((name,cases) in rows)for(backend in listOf("ast","bytecode"))context(inlining).use { context->
             context.initialize("thc");context.enter()
             try {
@@ -112,11 +113,16 @@ class EmptyJoinInputTest {
         }
     }
     @Test fun emptyOperandRunsInLogicalOrderBeforeParallelMovesAndFailureTransfersNothing() {
+        context(false).use { context ->
+        context.initialize("thc"); context.enter()
+        try {
+        val language=TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
         val layout=FrameLayout();val a=layout.bind("a");val b=layout.bind("b");val first=layout.bind("first");val last=layout.bind("last")
         val frame=Truffle.getRuntime().createVirtualFrame(emptyArray(),layout.build())
         val scalar=CoreRepresentation(CoreKind.LONG,true,true,listOf("IntRep"))
         val zero=CoreRepresentation(CoreKind.UNKNOWN,true,true,emptyList(),emptyList())
-        val target=LocalJoinTarget(Any(),1,intArrayOf(a,-1,b),arrayOf(scalar,zero,scalar));val events=mutableListOf<String>();val metrics=Metrics(true)
+        val typed=arrayOf<IntArray?>(null,intArrayOf(),null)
+        val target=LocalJoinTarget(Any(),1,intArrayOf(a,-1,b),arrayOf(scalar,zero,scalar),typedSlots=typed);val events=mutableListOf<String>();val metrics=Metrics(true)
         fun scalarRead(label: String,slot: Int)=object: Expr() {
             override fun execute(frame: VirtualFrame): Any=executeLong(frame)
             override fun executeLong(frame: VirtualFrame): Long { events.add(label);return frame.getLong(slot) }
@@ -132,7 +138,7 @@ class EmptyJoinInputTest {
                     return null
                 }
             }
-            val call=LocalJoinCall(target,arrayOf(scalarRead("first",b),zeroExpr,scalarRead("last",a)),intArrayOf(first,-1,last),metrics)
+            val call=LocalJoinCall(language,target,arrayOf(scalarRead("first",b),zeroExpr,scalarRead("last",a)),intArrayOf(first,-1,last),metrics,typed)
             val before=metrics.localJoinTransfers
             if(throws) {
                 assertThrows(RuntimeFault::class.java) { call.execute(frame) };assertEquals(listOf("first","empty"),events)
@@ -144,6 +150,8 @@ class EmptyJoinInputTest {
             }
         }
         assertEquals(8,frame.frameDescriptor.numberOfSlots,"Four fixed frame slots plus two scalar formals and two scalar temporaries")
+        } finally { context.leave() }
+        }
     }
     @Test fun exactEmptyInputHasNoLocalSlotOnEitherBackendAndKeepsLogicalArity() {
         for(backend in listOf("ast","bytecode"))context(false).use { context->

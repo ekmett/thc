@@ -973,6 +973,16 @@ class AuditTest(unittest.TestCase):
             report = audit_core.Audit([('join', module)], oldcap).run(['root'])
             self.assertIn('aggregate-boundary', {i['code'] for i in report['issues']})
 
+    def test_empty_tuple_case_evaluates_bottom_without_requiring_a_fabricated_alternative(self):
+        module = tuple_fixture(tuple_rep(LONG))
+        case = module['bindings'][0]['expr'][2]
+        self.assertEqual('case', case[0])
+        case[3] = []
+        self.assertTrue(run_tuple(module)['accepted'])
+        case[3] = [['default', None, [], lit(0)], ['default', None, [], lit(0)]]
+        self.assertIn('unboxed-tuple requires at most one alternative',
+                      [issue['detail'] for issue in run_tuple(module)['issues']])
+
     def test_tuple_join_result_lambda_and_call_proofs_must_agree(self):
         for location in ('join', 'lambda', 'call'):
             module, join = tuple_join_fixture()

@@ -115,6 +115,10 @@ jobs:
         run: |
           cabal run exe:thc-fixtures --offline -- aggregate-heap
           ./gradlew aggregateHeapFullCoreTest aggregateHeapFullCoreDenseTest
+      - name: Check tuple join arguments and bottoming tuple cases
+        run: |
+          cabal run exe:thc-fixtures --offline -- tuple-join --local
+          ./gradlew tupleJoinFullCoreTest tupleJoinFullCoreDenseTest
       - name: Check Haskell calls into JavaScript
         run: |
           python3 scripts/test-polyglot-audit.py
@@ -463,6 +467,7 @@ jobs:
             build/int16-arrays/*/*.audit.json
             build/int16-arrays/*/*/core/*.json
             build/tuple-join/
+            build/tuple-join-input/
             build/tuple-arithmetic/
             build/integer-primops/manifest.json
             build/integer-primops/oracle.tsv

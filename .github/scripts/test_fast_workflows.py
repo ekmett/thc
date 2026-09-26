@@ -28,6 +28,14 @@ def embedded_python(delimiter):
 
 
 class FastWorkflowGuardsTest(unittest.TestCase):
+    def test_tuple_join_ci_uses_stock_core_subset_and_both_modes(self):
+        workflow = (WORKFLOW.parent / "build.yml").read_text()
+        block = workflow.split("name: Check tuple join arguments and bottoming tuple cases", 1)[1].split("      - name:", 1)[0]
+        self.assertIn("cabal run exe:thc-fixtures --offline -- tuple-join --local", block)
+        self.assertIn("./gradlew tupleJoinFullCoreTest tupleJoinFullCoreDenseTest", block)
+        self.assertIn("build/tuple-join-input/", workflow)
+        self.assertNotIn("continue-on-error", block)
+
     def test_windows_ci_covers_direct_main_pushes_and_preserves_evidence(self):
         workflow = (WORKFLOW.parent / "windows.yml").read_text()
         self.assertIn("  push:\n    branches: [main]", workflow)

@@ -3289,7 +3289,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val slots = IntArray(shape.width) { local.layout.bind("<tuple case $it>") }
         local.bindTuple(expr[2] as String, proof, slots)
         val alternatives = expr[3] as List<List<Any?>>
-        if (alternatives.size != 1) throw RuntimeFault("Tuple case requires one alternative")
+        if (alternatives.isEmpty()) return TupleCase(scrutinee, slots,
+            EmptyCaseResult(CoreRepresentations.expression(expr)))
+        if (alternatives.size != 1) throw RuntimeFault("Tuple case requires at most one alternative")
         val alt = alternatives.single()
         val ids = alt[2] as List<String>
         if (alt[0] == "data") {
@@ -3317,21 +3319,20 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val nodes = args.mapIndexed { index, arg ->
             val lifted = flags.getOrNull(index) as? Boolean ?: throw RuntimeFault("Missing join argument levity")
             argument(arg, scope, lifted && !callStrict[index] && !target.entryStrict[index],
-                allowEmpty = target.proofs[index].isEmptyTuple, declaredLifted = lifted).also {
+                allowEmpty = target.proofs[index].isTuple, declaredLifted = lifted).also {
                 CoreRepresentations.requireJoinArgument(target.proofs[index], it.representation)
             }
         }.toTypedArray()
-        val vectorTemps = arrayOfNulls<IntArray>(nodes.size)
+        val typedTemps = arrayOfNulls<IntArray>(nodes.size)
         val temps = IntArray(nodes.size) { index ->
-            if (target.proofs[index].isVector) {
-                vectorTemps[index] = IntArray(TupleShape.flatten(target.proofs[index]).size) {
-                    scope.layout.bind("<join vector argument $index lane $it>")
+            if (target.proofs[index].isTypedTransport) {
+                typedTemps[index] = IntArray(TupleShape.flatten(target.proofs[index]).size) {
+                    scope.layout.bind("<join typed argument $index field $it>")
                 }
                 -1
-            } else if (target.proofs[index].isEmptyTuple) -1
-            else scope.layout.bind("<join argument $index>")
+            } else scope.layout.bind("<join argument $index>")
         }
-        return LocalJoinCall(target, nodes, temps, metrics, vectorTemps)
+        return LocalJoinCall(language as thc.Language, target, nodes, temps, metrics, typedTemps)
     }
     private fun compileJoins(expr: List<Any?>, outer: Scope, tail: Boolean,
                              definitions: List<CoreJoinDefinition>): Expr {
@@ -3369,13 +3370,12 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             definition.parameters.forEachIndexed { index, parameter ->
                 val lifted = representation(parameter)
                 val proof = CoreRepresentations.binder(parameter).let { if (lifted) it.copy(evaluated = entryStrict[index]) else it }
-                if (proof.isVector) {
+                if (proof.isTypedTransport) {
                     val lanes = IntArray(TupleShape.flatten(proof).size) {
-                        scope.layout.bind("${parameter["id"]} join vector lane $it")
+                        scope.layout.bind("${parameter["id"]} join typed field $it")
                     }
                     scope.bindTuple(parameter["id"] as String, proof.copy(evaluated = true), lanes)
-                } else if (proof.isEmptyTuple) scope.bindTuple(parameter["id"] as String, proof.copy(evaluated = true), intArrayOf())
-                else scope.bind(parameter["id"] as String, !lifted && parameter["coercion"] != true, proof)
+                } else scope.bind(parameter["id"] as String, !lifted && parameter["coercion"] != true, proof)
             }
             scope
         }
@@ -3383,7 +3383,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val parameters = definition.parameters.map { bodyScopes[index].locals.getValue(it["id"] as String) }
             LocalJoinTarget(identity, index + 1, parameters.map { it.slot }.toIntArray(),
                 parameters.map { it.proof }.toTypedArray(), entryContracts[index], definition.result,
-                parameters.map { parameter -> if (parameter.proof.isVector) parameter.tupleSlots else null }.toTypedArray())
+                parameters.map { parameter -> if (parameter.proof.isTypedTransport) parameter.tupleSlots else null }.toTypedArray())
         }
         definitions.forEachIndexed { index, definition -> local.bindJoin(definition.id, targets[index]) }
         if (recursive) bodyScopes.forEachIndexed { index, scope ->
