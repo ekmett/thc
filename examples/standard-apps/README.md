@@ -76,6 +76,25 @@ This is execution of the original generator in THC, not native delegation,
 but does not establish general AST executable startup or whole-program JIT
 retention. The generated parsers themselves were tested with native GHC.
 
+### Alex
+
+A fresh re-audit of the retained original Alex 3.5.4.2 package capture passes:
+104,454 supplied bindings, 5,092 reachable, zero missing globals and zero issues.
+On runtime `a8774e09`, full-bytecode `--version` matches native stdout.
+The AST backend's original raw `alex-3.5.4.2-inplace-alex:Main.main` generates
+the lexer from `TinyLexer.x` successfully in both handoff modes. Both generated
+sources match the native 34,688-byte output byte-for-byte when given the same
+absolute input path (Alex includes that path in line pragmas). Native GHC
+compiles both lexers, which print `["sum","+","42"]` followed by a newline.
+
+The same generator workload currently fails in both bytecode handoff modes at
+that runtime checkpoint: Graal reports `GraphTooBigBailoutException` while
+compiling the original Handle output lambda, with graph size 100,004 against the
+100,000 limit. Its output is truncated at 16,384 bytes. Compiler limits were not
+relaxed and the failures are retained; successful admission and `--version` do
+not establish successful bytecode lexer generation. The AST result is not a
+general executable-startup or whole-program JIT-retention claim.
+
 ## Toolchain
 
 Use the supported GHC 9.14.1 complete-Core installation, matching ghc-pkg,
