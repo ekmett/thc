@@ -31,10 +31,31 @@ thc run examples/standard-apps/ghc-api --exe ghc-faststring \
   -- "THC λ" "GHC API"
 ```
 
-These are development probes, not a claim that GHC runs under THC. The first
-THC attempt acquired thirteen installed dependency bundles through
-`transformers`, but ended before compiler-library acquisition, audit or guest
-execution; its termination cause is unknown. Preserve the installed-Core cache
-when resuming. Compiler RTS hook tests are separate from these end-to-end runs.
+The existing Haskell fixture runner can retain the native output, ordinary THC
+run, strict audit and provenance together:
+
+```sh
+export THC_INSTALLED_CORE_GHC_SOURCE=/path/to/ghc-9.14.1
+cabal run exe:thc-fixtures -- ghc-api faststring
+# After the preceding probe succeeds:
+cabal run exe:thc-fixtures -- ghc-api session load
+```
+
+`THC_TEST_DRIVER` may select an already-built production driver and
+`THC_TEST_RUNTIME` an installed runtime launcher. This permits runtime-only
+iteration without unnecessarily changing acquisition-tool identities. A failed
+probe retains its command logs under `build/ghc-api/guest-PROBE/logs` and does
+not publish a success manifest. Successful probes require a strict audit and
+byte-for-byte native stdout equality. The default runs all three probes in order.
+
+These are development probes, not a claim that GHC runs under THC. The resumed
+THC attempt on 2026-09-26 acquired all dependencies and all 822 compiler-library
+interfaces. Its strict audit found 370,600 supplied bindings, 2,098 reachable
+bindings, no missing globals, and twelve duplicate global IDs. Those collisions
+came from discarding GHC's constructor-qualified record-field namespace; the
+exporter now preserves GHC's own mangled names. A fresh complete acquisition
+and guest execution remain necessary before reporting end-to-end success.
+Preserve the installed-Core cache when resuming. Compiler RTS hook tests are
+separate from these end-to-end runs.
 `runGhc` itself temporarily installs process signal handlers; merely importing
 the `ghc` package does not.

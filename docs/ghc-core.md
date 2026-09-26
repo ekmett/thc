@@ -92,6 +92,14 @@ instead of retaining all such trees until the entire package is archived; the
 GHC library alone contains over 800 interfaces. This does not change archive
 bytes, cache identities, or interface validation.
 
+Executable IDs use GHC's mangled occurrence spelling. In GHC 9.14, a record
+selector such as `field` has a constructor-qualified namespace represented by
+`$fld:Constructor:field`; it is distinct from another constructor's selector or
+an ordinary exported alias named `field`. Display names remain unchanged. The
+`thc-fixtures record-fields` controls cover two separately compiled modules at
+both plugin boundaries and after interface hydration, with native comparisons
+on both runtimes. Exporter identity changes invalidate older cached payloads.
+
 Hydration reads the raw interface before GHC's package cache strips
 complete Core. It privately retains interface pragmas/source ticks and keeps
 existing knot lookups for other modules. Use a fresh session retaining pragmas for dependency

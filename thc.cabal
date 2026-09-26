@@ -728,6 +728,7 @@ executable thc-fixtures
     OriginalFdReadyFixtures
     OriginalRtsLocksFixtures
     CompilerRtsFixtures
+    GhcApiFixtures
     RtsDiagnosticFixtures
     OriginalOpenFixtures
     PackageScalarFixtures
