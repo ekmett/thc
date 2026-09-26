@@ -17,6 +17,7 @@ import thc.*
 import java.io.File
 import java.util.Collections
 import java.util.IdentityHashMap
+import java.util.HexFormat
 
 /** Original package source, typed retained imports, and an independent native
  * Haskell oracle. This checks common foreign adapters, not whole Pandoc Core. */
@@ -26,6 +27,13 @@ class PackageNativeOriginalsTest {
     private class Entry(language: Language, private val call: PackageScalarCall) : RootNode(language) {
         @Child private var access = PackageScalarAccess(call)
         override fun execute(frame: VirtualFrame): Any = access.executeLong(frame.arguments, Unit)
+    }
+    private class Setter(language: Language, call: PackageScalarCall) : RootNode(language) {
+        @Child private var access = PackageScalarAccess(call)
+        override fun execute(frame: VirtualFrame): Any {
+            access.executeVoid(frame.arguments, Unit)
+            return Unit
+        }
     }
 
     private fun targets(entry: RootCallTarget): List<RootCallTarget> {
@@ -79,7 +87,7 @@ class PackageNativeOriginalsTest {
                     val owner = Language.currentState()
                     owner.packageCbits.link(link)
                     val source = CoreModules.reachable(merged, names.values.toList(), true) + ("instrument" to true)
-                    val program: ExecutableProgram = if (backend == "ast") Program(language, source)
+                    val program: ExecutableProgram = if (backend == "ast") Program(language, source, enableAsync = true)
                         else BytecodeProgram(language, source, enableAsync = true)
                     val entries = names.mapValues { program.entryTarget(it.value) }
                     owner.threads.enterCurrent()
@@ -174,6 +182,62 @@ class PackageNativeOriginalsTest {
                         check(row)
                         entries.values.forEach { assertEquals(true, it.javaClass.getMethod("isValidLastTier").invoke(it),
                             "each first installed call and subsequent comparison retains code") }
+                    }
+                } finally { context.leave() }
+            }
+    }
+
+    @Test fun originalPrimitiveSignednessAdaptersMatchNativeWithoutCopyingManagedStorage() {
+        val manifest = Json.parse(File(directory, "manifest.json").readText()) as Map<String, Any?>
+        assertEquals(720L, manifest["primitiveNativeRows"])
+        OriginalStdioChecks.hashes(root, manifest["sourceHashes"], setOf(
+            "build/original-native/sources/primitive-0.9.1.0/primitive.cabal",
+            "build/original-native/sources/primitive-0.9.1.0/Data/Primitive/Internal/Operations.hs",
+            "build/original-native/sources/primitive-0.9.1.0/cbits/primitive-memops.c",
+            "build/original-native/sources/primitive-0.9.1.0/cbits/primitive-memops.h"), "build/original-native/sources/")
+        OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf(
+            "compiler/test-fixtures/OriginalPrimitiveNative.hs", "test/haskell-fixtures/PackageNativeOriginalsFixtures.hs",
+            "src/THC/Driver/PackageNative.hs"))
+        val moduleFiles = File(directory, "linked/primitive-0.9.1.0-inplace").listFiles()!!.sortedBy { it.name }
+        assertEquals(14, moduleFiles.size)
+        OriginalStdioChecks.hashes(root, manifest["artifactHashes"],
+            (moduleFiles.map { it.relativeTo(root).path } + "build/original-native/primitive-native.tsv").toSet(),
+            "build/original-native/")
+        val merged = CoreModules.merge(moduleFiles.map { Json.parse(it.readText()) as Map<String, Any?> })
+        val link = (merged["packageScalarLinks"] as List<PackageScalarLink>).single()
+        val setters = link.abi.filter { it.symbol.startsWith("hsprimitive_memset_Word") }
+        assertEquals(20, setters.size)
+        assertEquals(10, setters.map { it.arguments.last() }.distinct().size)
+        val rows = File(directory, "primitive-native.tsv").readLines().map { it.split('\t') }
+        assertEquals(720, rows.size)
+        Context.newBuilder("thc").allowNativeAccess(true).withContextProfile(ContextProfile.SYNCHRONOUS_TEST)
+            .build().use { context ->
+                context.initialize("thc"); context.enter()
+                try {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    Language.currentState().packageCbits.link(link)
+                    val entries = setters.associateWith { Setter(language, PackageScalarCall(link, it)).callTarget }
+                    fun check(row: List<String>) {
+                        val rep = row[0]; val carrier = row[1]
+                        val expected = HexFormat.of().parseHex(row[5])
+                        val bytes = ByteArray(expected.size) { 0xa5.toByte() }
+                        val pointer: Any = if (carrier == "AddrRep") ManagedAddress.fromByteArray(bytes) else bytes
+                        val signature = setters.single { it.arguments.first() == carrier && it.arguments.last() == rep }
+                        val value = row[4].toBigInteger().toLong()
+                        val argument = if (rep in setOf("IntRep", "WordRep", "Int64Rep", "Word64Rep")) value
+                            else packageCInteger(rep, value)
+                        entries.getValue(signature).call(pointer, row[2].toLong(), row[3].toLong(), argument)
+                        assertArrayEquals(expected, bytes, row.take(5).toString())
+                    }
+                    rows.forEach(::check)
+                    entries.values.forEach {
+                        it.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(it, true)
+                        assertEquals(true, it.javaClass.getMethod("isValidLastTier").invoke(it))
+                    }
+                    rows.asReversed().forEach { row ->
+                        check(row)
+                        entries.values.forEach { assertEquals(true, it.javaClass.getMethod("isValidLastTier").invoke(it),
+                            "original primitive first-installed adapter retains code") }
                     }
                 } finally { context.leave() }
             }

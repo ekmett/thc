@@ -94,6 +94,28 @@ class PackageNativeVariantsTest(unittest.TestCase):
             with self.subTest(rep=rep, safety=safety), self.assertRaises(ValueError):
                 core_package_manifest.package_scalar_link(make(rep, safety))
 
+    def test_signedness_adapters_require_headers_and_keep_integer_widths(self):
+        for width in ('', '8', '16', '32', '64'):
+            module = self.module(['Int' + width + 'Rep', 'Word' + width + 'Rep'])
+            with self.assertRaises(ValueError):
+                core_package_manifest.package_scalar_link(module)
+            for imported in module['staticForeignImports']['imports']:
+                imported['header'] = 'primitive-memops.h'
+            link, proved = core_package_manifest.package_scalar_link(module)
+            self.assertEqual(2, len(proved))
+            self.assertEqual([['Int' + width + 'Rep'], ['Word' + width + 'Rep']],
+                             [entry['arguments'] for entry in link['abi']])
+            for bad in ('', 'bad\nheader', 'bad"header', 'bad\\header', None):
+                module['staticForeignImports']['imports'][0]['header'] = bad
+                with self.subTest(width=width, header=bad), self.assertRaises(ValueError):
+                    core_package_manifest.package_scalar_link(module)
+        for reps in (['Int8Rep', 'Word16Rep'], ['IntRep', 'Word64Rep']):
+            module = self.module(reps)
+            for imported in module['staticForeignImports']['imports']:
+                imported['header'] = 'primitive-memops.h'
+            with self.subTest(reps=reps), self.assertRaises(ValueError):
+                core_package_manifest.package_scalar_link(module)
+
 
 class PackageManifestTest(unittest.TestCase):
     def setUp(self):

@@ -59,6 +59,20 @@ preparePackageNativeOriginals root = do
   retainedErf <- files erfSource
   unless (map (makeRelative originalErf) originalErfFiles == map (makeRelative erfSource) retainedErf)
     (fail "original erf source inventory changed; use a fresh fixture output directory")
+  suppliedPrimitive <- maybe (output </> "primitive-0.9.1.0") id <$> lookupEnv "THC_PRIMITIVE_SOURCE"
+  originalPrimitive <- canonicalizePath suppliedPrimitive
+  let primitiveSource = output </> "sources/primitive-0.9.1.0"
+      primitiveUnit = "primitive-0.9.1.0-inplace"
+  originalPrimitiveFiles <- files originalPrimitive
+  unless (originalPrimitive </> "primitive.cabal" `elem` originalPrimitiveFiles)
+    (fail "package-native-originals requires unchanged primitive-0.9.1.0 sources via THC_PRIMITIVE_SOURCE")
+  forM_ originalPrimitiveFiles $ \path -> do
+    let destination = primitiveSource </> makeRelative originalPrimitive path
+    createDirectoryIfMissing True (takeDirectory destination)
+    when (path /= destination) (copyFile path destination)
+  retainedPrimitive <- files primitiveSource
+  unless (map (makeRelative originalPrimitive) originalPrimitiveFiles == map (makeRelative primitiveSource) retainedPrimitive)
+    (fail "original primitive source inventory changed; use a fresh fixture output directory")
   built <- execute "driver-build" [] cabal ["build","--offline","-j2","exe:thc","lib:thc","exe:thc-interface"]
   driver <- locate execute cabal "exe:thc"
   helper <- locate execute cabal "exe:thc-interface"
@@ -68,7 +82,7 @@ preparePackageNativeOriginals root = do
   plugin <- line . commandStdout <$> execute "plugin-unit" [] ghcPkg
     ["--package-db",pluginDb,"field","thc","id","--simple-output"]
   sourceFiles <- files source
-  sourceHashes <- hashes root (map (makeRelative root) (sourceFiles ++ retainedErf))
+  sourceHashes <- hashes root (map (makeRelative root) (sourceFiles ++ retainedErf ++ retainedPrimitive))
   let key = take 16 driverHash
       native = output </> ("native-" ++ key)
       capture = output </> ("capture-" ++ key)
@@ -76,21 +90,21 @@ preparePackageNativeOriginals root = do
       wrapper = output </> ("ghc-proxy-" ++ key) <.> "sh"
       project = output </> "digest.project"
       unit = "digest-0.0.2.1-inplace"
-  writeFile project $ unlines ["packages: " ++ show source ++ " " ++ show erfSource,"jobs: 1","tests: False","benchmarks: False"]
+  writeFile project $ unlines ["packages: " ++ unwords (map show [source,erfSource,primitiveSource]),"jobs: 1","tests: False","benchmarks: False"]
   writeFile wrapper ("#!/bin/sh\n" ++ ghcProxyCommand)
   permissions <- getPermissions wrapper
   setPermissions wrapper permissions {executable=True}
   let environment = [("THC_PROXY_DRIVER",driver),("THC_PROXY_ROOT",root),("THC_PROXY_GHC",ghc),
-        ("THC_PROXY_GLOBAL_UNITS",unlines [unit,erfUnit]),("THC_PROXY_CAPTURE",capture),("THC_PROXY_PLUGIN_DB",pluginDb),
+        ("THC_PROXY_GLOBAL_UNITS",unlines [unit,erfUnit,primitiveUnit]),("THC_PROXY_CAPTURE",capture),("THC_PROXY_PLUGIN_DB",pluginDb),
         ("THC_PROXY_PLUGIN_UNIT",plugin),("THC_PROXY_INTERFACE_HELPER",helper),
         ("THC_PROXY_INTERFACE_LIBDIR",libdir),("THC_PROXY_NATIVE_PIECES",pieces)]
   acquired <- execute "digest-acquisition" environment cabal
     ["build","--offline","--project-file=" ++ project,"--builddir=" ++ native,
-     "--with-compiler=" ++ wrapper,"lib:digest","lib:erf"]
+     "--with-compiler=" ++ wrapper,"lib:digest","lib:erf","lib:primitive"]
   plan <- readJson (native </> "cache/plan.json")
   planned <- field plan "install-plan" :: IO [Value]
   names <- mapM (\value -> field value "id") planned
-  unless (all (`elem` (names :: [String])) [unit,erfUnit]) (fail "original package Cabal unit differs")
+  unless (all (`elem` (names :: [String])) [unit,erfUnit,primitiveUnit]) (fail "original package Cabal unit differs")
   modulePaths <- filter ((== ".json") . takeExtension) <$> files (capture </> unit </> "core")
   modules <- forM modulePaths $ \path -> (,) (takeFileName path) <$> BS.readFile path
   unless (sort (map fst modules) == ["Data.Digest.Adler32.json","Data.Digest.CRC32.json","Data.Digest.CRC32C.json"])
@@ -106,6 +120,13 @@ preparePackageNativeOriginals root = do
   let erfLinkedDirectory = output </> "linked" </> erfUnit
   createDirectoryIfMissing True erfLinkedDirectory
   forM_ erfLinked $ \(name,bytes) -> BS.writeFile (erfLinkedDirectory </> name) bytes
+  primitiveModulePaths <- filter ((== ".json") . takeExtension) <$> files (capture </> primitiveUnit </> "core")
+  primitiveModules <- forM primitiveModulePaths $ \path -> (,) (takeFileName path) <$> BS.readFile path
+  unless (length primitiveModules == 14) (fail "original primitive retained module inventory differs")
+  primitiveLinked <- finishPackageNative pieces (capture </> primitiveUnit) primitiveUnit Nothing primitiveModules
+  let primitiveLinkedDirectory = output </> "linked" </> primitiveUnit
+  createDirectoryIfMissing True primitiveLinkedDirectory
+  forM_ primitiveLinked $ \(name,bytes) -> BS.writeFile (primitiveLinkedDirectory </> name) bytes
   compiled <- execute "digest-native-build" [] ghc
     ["-O1","-package-db",native </> "packagedb/ghc-9.14.1","-package-id",unit,
      "compiler/test-fixtures/OriginalDigestNative.hs","-outputdir",output </> "oracle-objects",
@@ -120,6 +141,13 @@ preparePackageNativeOriginals root = do
   erfOracle <- execute "erf-native-run" [] (output </> "erf-oracle") []
   unless (length (BSC.lines (commandStdout erfOracle)) == 88) (fail "original erf native row inventory differs")
   BS.writeFile (output </> "erf-native.tsv") (commandStdout erfOracle)
+  primitiveCompiled <- execute "primitive-native-build" [] ghc
+    ["-O1","-package-db",native </> "packagedb/ghc-9.14.1","-package-id",primitiveUnit,
+     "compiler/test-fixtures/OriginalPrimitiveNative.hs","-outputdir",output </> "primitive-oracle-objects",
+     "-o",output </> "primitive-oracle"]
+  primitiveOracle <- execute "primitive-native-run" [] (output </> "primitive-oracle") []
+  unless (length (BSC.lines (commandStdout primitiveOracle)) == 720) (fail "original primitive native row inventory differs")
+  BS.writeFile (output </> "primitive-native.tsv") (commandStdout primitiveOracle)
   let entryOutput = output </> "erf-entry"
   createDirectoryIfMissing True entryOutput
   entryCompiled <- execute "erf-entry-export" [] ghc
@@ -135,15 +163,16 @@ preparePackageNativeOriginals root = do
      concatMap (\name -> ["--entry","original-erf-entry:OriginalErfEntry." ++ name])
        ["erfDouble","erfcDouble","erfFloat","erfcFloat"] ++
      [erfLinkedDirectory </> "Data.Number.Erf.json",entryOutput </> "units/u-original-erf-entry/OriginalErfEntry.json"])
-  inputs <- hashes root ["compiler/test-fixtures/OriginalDigestNative.hs",
+  inputs <- hashes root ["compiler/test-fixtures/OriginalDigestNative.hs","compiler/test-fixtures/OriginalPrimitiveNative.hs",
     "compiler/test-fixtures/OriginalErfNative.hs","compiler/test-fixtures/OriginalErfEntry.hs",
     "test/haskell-fixtures/PackageNativeOriginalsFixtures.hs","src/THC/Driver/PackageNative.hs",
     "src/THC/Driver/NativeLibrarySources.hs","src/THC/Driver/GhcProxy.hs",
     "scripts/audit-core.py","scripts/core_package_manifest.py","scripts/core-capabilities.json"]
-  artifacts <- hashes root ([relative </> "digest-native.tsv",relative </> "erf-native.tsv",
+  artifacts <- hashes root ([relative </> "digest-native.tsv",relative </> "erf-native.tsv",relative </> "primitive-native.tsv",
     relative </> "erf-entry/units/u-original-erf-entry/OriginalErfEntry.json",relative </> "erf-audit.json"] ++
     [relative </> "linked" </> unit </> name | (name,_) <- linked] ++
-    [relative </> "linked" </> erfUnit </> name | (name,_) <- erfLinked])
+    [relative </> "linked" </> erfUnit </> name | (name,_) <- erfLinked] ++
+    [relative </> "linked" </> primitiveUnit </> name | (name,_) <- primitiveLinked])
   implementations <- zlibChecksumSources root
   implementation <- case implementations of
     (_,sourceText):_ -> pure sourceText
@@ -171,11 +200,13 @@ preparePackageNativeOriginals root = do
     _ -> fail "changed upstream checksum source was not rejected"
   writeJson (output </> "manifest.json") $ object
     ["schema" .= (1::Int),"scope" .= ("original-package-foreign-adapters"::String),
-     "unit" .= unit,"nativeRows" .= (270::Int),"erfNativeRows" .= (88::Int),"driverSha256" .= driverHash,"inputHashes" .= inputs,
+     "unit" .= unit,"nativeRows" .= (270::Int),"erfNativeRows" .= (88::Int),"primitiveNativeRows" .= (720::Int),
+     "driverSha256" .= driverHash,"inputHashes" .= inputs,
      "sourceHashes" .= sourceHashes,"artifactHashes" .= artifacts,
      "rejectedChangedSource" .= True,"rejectedHeaderMismatch" .= True,
-     "commands" .= map commandRecord [built,acquired,compiled,oracle,erfCompiled,erfOracle,entryCompiled,audited,badHeader]]
-  putStrLn "package-native-originals: original digest C++/zlib and erf safe/libm acquisition; 270 + 88 native observations"
+     "commands" .= map commandRecord [built,acquired,compiled,oracle,erfCompiled,erfOracle,
+       primitiveCompiled,primitiveOracle,entryCompiled,audited,badHeader]]
+  putStrLn "package-native-originals: original digest, erf and primitive acquisition; 270 + 88 + 720 native observations"
   where
     line bytes = case BSC.lines bytes of [value] -> BSC.unpack value; _ -> error "expected exactly one tool result"
     locate execute cabal target = line . commandStdout <$> execute
