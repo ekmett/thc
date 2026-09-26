@@ -11,6 +11,9 @@ internal enum class MemorySearchOp(val symbol: String, val second: String, val r
 
 /** Original installed CInt/CSize declarations; no arbitrary libc ABI inference. */
 internal object CoreMemorySearchForeign {
+    // The installed-unit rule used by the ByteString fixture producers.
+    // Retain the original FCall's full unit ID, including its installation suffix.
+    private val bytestringUnit = Regex("bytestring-0\\.12\\.2\\.0(?:-[A-Za-z0-9]+)?")
     private val scalarKeys = setOf("kind", "primReps", "evaluated")
     private val tupleKeys = scalarKeys + setOf("aggregate", "components")
     private val descriptorKeys = setOf("schema", "target", "convention", "safety", "arity", "suppliedArity", "argumentReps", "resultRep")
@@ -39,12 +42,13 @@ internal object CoreMemorySearchForeign {
         val meta = metadata as? Map<*, *> ?: return null
         val call = meta["foreignCall"] as? Map<*, *> ?: return null
         val target = call["target"] as? Map<*, *> ?: return null
+        val unit = target["unit"]
         val operation = MemorySearchOp.entries.firstOrNull { it.symbol == target["symbol"] } ?: return null
         requireProof(call.keys == descriptorKeys && exact(call["schema"], 1), "descriptor schema")
         requireProof(target.keys == setOf("kind", "symbol", "unit", "isFunction") &&
             target["kind"] == "static" && target["isFunction"] == true &&
-            (target["unit"] == "bytestring-0.12.2.0-inplace" ||
-                operation == MemorySearchOp.COMPARE && target["unit"] == "ghc-internal"), "exact installed target")
+            (unit is String && bytestringUnit.matches(unit) ||
+                operation == MemorySearchOp.COMPARE && unit == "ghc-internal"), "supported installed target")
         requireProof(call["convention"] == "ccall" && call["safety"] == "unsafe" &&
             exact(call["arity"], 4) && exact(call["suppliedArity"], 4), "convention, safety or arity")
         val declared = call["argumentReps"] as? List<*>

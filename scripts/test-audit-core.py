@@ -2015,13 +2015,20 @@ class OriginalMemorySearchDeclarationTest(unittest.TestCase):
             declaration = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='bytestring-0.12.2.0-inplace', isFunction=True),
                 convention='ccall', safety='unsafe', arity=4, suppliedArity=4,
                 argumentReps=list(map(scalar, ['AddrRep', second, 'Word64Rep', None])), resultRep=output)
-            self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'])
-            disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != symbol])
-            self.assertFalse(fixture.audit(fixture.fixture(declaration), disabled)['accepted'])
+            for unit in ('bytestring-0.12.2.0-inplace', 'bytestring-0.12.2.0-119b',
+                         'bytestring-0.12.2.0-5637', 'bytestring-0.12.2.0-3f3f', 'bytestring-0.12.2.0'):
+                declaration['target']['unit'] = unit
+                self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'], (symbol, unit))
+                disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != symbol])
+                self.assertFalse(fixture.audit(fixture.fixture(declaration), disabled)['accepted'], (symbol, unit))
             for key, value in [('safety', 'safe'), ('convention', 'capi'), ('arity', 3), ('schema', True)]:
                 bad = copy.deepcopy(declaration); bad[key] = value
                 self.assertFalse(fixture.audit(fixture.fixture(bad))['accepted'])
-            for unit in ['foreign', 'ghc-internal']:
+            for unit in ['foreign', 'ghc-internal', 'bytestring-0.12.1.0-119b',
+                         'bytestring-0.12.2.0-119b-extra', 'bytestring-0.12.2.0-',
+                         'bytestring-0.12.2.0-119b extra', 'bytestring-0.12.2.0-119b:forged',
+                         'bytestring-0.12.2.0-119b\n', 'other-bytestring-0.12.2.0-119b',
+                         None, ['bytestring-0.12.2.0-119b']]:
                 bad = copy.deepcopy(declaration); bad['target']['unit'] = unit
                 self.assertEqual(unit == 'ghc-internal' and symbol == 'memcmp', fixture.audit(fixture.fixture(bad))['accepted'])
             bad = copy.deepcopy(declaration); bad['argumentReps'][2] = scalar('WordRep')

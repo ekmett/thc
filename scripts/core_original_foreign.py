@@ -7,6 +7,8 @@ Recognition is separate from capability admission and runtime frame-kind checks.
 These declarations alone do not enable complete decoding or remote capture.
 """
 
+import re
+
 STACK_CLONE = 'stg_cloneMyStackzh'
 WAIT_STATUS_OPERATIONS = {
     f'ghczuwrapperZC{index}ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZC{name}':
@@ -253,6 +255,12 @@ LIBRARY_OPERATIONS = {
 }
 
 
+def memory_search_unit(unit):
+    # Match the installed-unit rule in prepare-short-bytes-slices.py without
+    # rewriting the original FCall's provenance to a source-build unit.
+    return isinstance(unit, str) and re.fullmatch(r'bytestring-0\.12\.2\.0(?:-[A-Za-z0-9]+)?', unit) is not None
+
+
 def operation(target):
     unit, symbol = target.get('unit'), target['symbol']
     return (LIBRARY_OPERATIONS.get((unit, symbol), OPERATIONS[symbol])
@@ -340,7 +348,7 @@ def validate(metadata, argument_reps, flags, result_rep):
         return None
     convention, safety, expected, output = operation(target)
     if symbol == 'memchr':
-        require(target.get('unit') == 'bytestring-0.12.2.0-inplace', 'exact bytestring unit')
+        require(memory_search_unit(target.get('unit')), 'supported installed bytestring unit')
     if symbol in TEXT_OPERATIONS:
         require(target.get('unit') == 'text-2.1.3-inplace', 'exact text unit')
     if symbol in WAIT_STATUS_OPERATIONS:
@@ -353,6 +361,7 @@ def validate(metadata, argument_reps, flags, result_rep):
     require(target.keys() == {'kind', 'symbol', 'unit', 'isFunction'} and target.get('kind') == 'static'
             and target.get('isFunction') is True
             and (target.get('unit') == 'ghc-internal' or
+                 symbol in ('memcmp', 'memchr') and memory_search_unit(target.get('unit')) or
                  isinstance(target.get('unit'), str) and (target['unit'], symbol) in LIBRARY_OPERATIONS),
             'static supported installed-library function target')
     allowed_safety = safety if isinstance(safety, tuple) else (safety,)

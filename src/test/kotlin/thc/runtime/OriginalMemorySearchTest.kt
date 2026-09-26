@@ -163,6 +163,38 @@ class OriginalMemorySearchTest {
         }
     }
 
+    @Test fun installedByteStringUnitIdentityRetainsTheSupportedPackageAndVersion() {
+        val source = module("pre")
+        val installed = listOf("bytestring-0.12.2.0-inplace", "bytestring-0.12.2.0-119b",
+            "bytestring-0.12.2.0-5637", "bytestring-0.12.2.0-3f3f", "bytestring-0.12.2.0")
+        val rejected = listOf("bytestring-0.12.1.0-119b", "bytestring-0.12.2.0-",
+            "bytestring-0.12.2.0-119b-extra", "bytestring-0.12.2.0-119b extra",
+            "bytestring-0.12.2.0-119b:forged", "bytestring-0.12.2.0-119b\n",
+            "other-bytestring-0.12.2.0-119b", null)
+        for (backend in listOf("ast", "bytecode")) inside { language ->
+            for (original in OriginalStdioChecks.foreignCalls(source)) {
+                val raw = OriginalStdioChecks.rawModule(original, source)
+                for (unit in installed + rejected + "ghc-internal") {
+                    val candidate = Json.parse(Json.stringify(raw)) as Map<String, Any?>
+                    val call = OriginalStdioChecks.foreignCalls(candidate).single()
+                    val descriptor = (call[6] as Map<*, *>)["foreignCall"] as Map<*, *>
+                    val target = descriptor["target"] as MutableMap<String, Any?>
+                    target["unit"] = unit
+                    if (unit in installed || unit == "ghc-internal" && target["symbol"] == "memcmp") {
+                        val program = load(language, backend, candidate)
+                        val bytes = ManagedAddress.fromByteArray(byteArrayOf(1, 2))
+                        val second: Any = if (target["symbol"] == "memcmp") bytes else 1L
+                        val result = Calls.target(program.entryTarget("entry"), arrayOf(0L, bytes, second, 2L, Unit))
+                        if (target["symbol"] == "memcmp") assertEquals(0L, result, "$backend/$unit")
+                        else assertTrue((result as ManagedAddress).sameLocation(bytes), "$backend/$unit")
+                    } else {
+                        assertThrows(RuntimeFault::class.java, { load(language, backend, candidate) }, "$backend/$unit")
+                    }
+                }
+            }
+        }
+    }
+
     @Test fun malformedOriginalABIsAndStateCarriersRejectBothBackends() {
         val source = module("pre")
         for (backend in listOf("ast", "bytecode")) inside { language ->
