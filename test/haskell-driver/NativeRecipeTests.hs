@@ -4,6 +4,7 @@
 module NativeRecipeTests (tests) where
 
 import Control.Exception (bracket)
+import Control.Monad (forM_)
 import Data.Aeson (Value, object, (.=))
 import Data.Either (isLeft)
 import Data.IORef
@@ -140,6 +141,69 @@ tests = TestLabel "actual native compiler receipts" $ TestList
       hidden <- tryIOError $ withScalarBitcode native dist [build] compiler "/unused" "scalar-first-inplace-oracle"
         component (const (pure ()))
       assertBool "executable declaration guard rejects hidden C after receipt loss" (isLeft hidden)
+  , TestCase $ withScratch $ \root -> withCurrentDirectory root $ do
+      let native = root </> "native"
+          dist = native </> "build/app-run-0.1.0.0/l/bridge"
+          build = dist </> "build"
+          artifacts = build </> "bridge"
+          receipts = native </> "cache/thc/native-recipes-v1"
+          -- Recorded Cabal 3.16.1 build-info from the genuine run-project
+          -- fixture: lib:bridge reports the base, but writes below bridge/.
+          metadataFor name = object
+            ["type" .= ("lib" :: String), "name" .= (name :: String),
+             "modules" .= (["Bridge", "Paths_app_run", "Nested.Part"] :: [String]),
+             "src-files" .= ([] :: [String]), "hs-src-dirs" .= (["src"] :: [String]),
+             "src-dir" .= root, "cabal-file" .= ("app-run.cabal" :: String),
+             "compiler-args" .= ["-outputdir",build,"-odir",build,"-hidir",build,
+               "-hiedir",build </> "extra-compilation-artifacts/hie","-stubdir",build]]
+          component = metadataFor "lib:bridge"
+          inventory = componentNativeObjects native dist [build] component
+      createDirectoryIfMissing True (artifacts </> "Nested")
+      writeFile (root </> "app-run.cabal") $ unlines
+        ["cabal-version: 3.0","name: app-run","version: 0.1.0.0","build-type: Simple",
+         "library bridge","  exposed-modules: Bridge","  other-modules: Paths_app_run, Nested.Part",
+         "  hs-source-dirs: src","  build-depends: base"]
+      forM_ ["Bridge", "Paths_app_run", "Nested/Part"] $ \name ->
+        forM_ ["o", "hi", "dyn_o", "dyn_hi"] $ \suffix ->
+          writeFile (artifacts </> name <.> suffix) suffix
+      assertEqual "named library excludes only its declared paired Haskell objects" [] =<< inventory
+      ensureNativeRecipes native dist [build] "/unused" component (fail "no-C named library must not rebuild")
+      noC <- withScalarBitcode native dist [build] "/unused" "/unused" "app-run-inplace-bridge"
+        component (pure . maybe True (const False))
+      assertBool "ordinary named library requires no C recipe or native tools" noC
+      wrongName <- componentNativeObjects native dist [build] (metadataFor "lib:other")
+      assertEqual "another parsed component name cannot exempt bridge objects" 6 (length wrongName)
+      invalid <- tryIOError $ componentNativeObjects native dist [build] (metadataFor "exe:bridge")
+      assertBool "library kind requires a parsed library name" (isLeft invalid)
+      forM_ [build </> "other/Bridge", artifacts </> "Unlisted"] $ \unknown -> do
+        createDirectoryIfMissing True (takeDirectory unknown)
+        writeFile (unknown <.> "o") "unknown object"
+        writeFile (unknown <.> "hi") "interface"
+        assertEqual "unknown root or undeclared module still requires a receipt" [unknown <.> "o"] =<< inventory
+        removeFile (unknown <.> "o")
+        removeFile (unknown <.> "hi")
+      let child = artifacts </> "child/child-tmp"
+      createDirectoryIfMissing True child
+      writeFile (child </> "foreign.o") "another component"
+      assertEqual "nested component ownership survives the named-library layout" [] =<<
+        componentNativeObjects native dist [build,child] component
+      removeFile (child </> "foreign.o")
+      compiler <- canonicalizePath "/usr/bin/true"
+      writeFile "Bridge.c" "int hidden_native_state;"
+      forM_ [("o", "hi"), ("dyn_o", "dyn_hi")] $ \(objectSuffix, interfaceSuffix) -> do
+        let output = artifacts </> "Bridge" <.> objectSuffix
+            interface = artifacts </> "Bridge" <.> interfaceSuffix
+        removeFile interface
+        assertEqual "named-library object without matching interface requires a receipt" [output] =<< inventory
+        writeFile interface "interface"
+        captureNativeRecipe receipts compiler ["-c","Bridge.c","-o",output]
+        collision <- tryIOError inventory
+        assertBool "named-library interface cannot conceal a native receipt" (isLeft collision)
+        removeFile (recipePath receipts output)
+      appendFile (root </> "app-run.cabal") "  c-sources: Bridge.c\n"
+      hidden <- tryIOError $ withScalarBitcode native dist [build] compiler "/unused" "app-run-inplace-bridge"
+        component (const (pure ()))
+      assertBool "named-library declaration guard rejects hidden C after receipt loss" (isLeft hidden)
   , TestCase $ withScratch $ \root -> do
       let native = root </> "native"; dist = native </> "build"; component = metadata root dist
       createDirectoryIfMissing True dist

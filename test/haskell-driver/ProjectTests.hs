@@ -12,6 +12,7 @@ import System.Directory (canonicalizePath, copyFile, createDirectoryIfMissing,
 import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.FilePath ((</>), splitDirectories, takeDirectory, takeFileName)
 import Test.HUnit (Test(..), assertBool, assertEqual)
+import qualified THC.Driver.NativeRecipe as NativeRecipe
 import TestSupport
 
 tests :: Env -> Test
@@ -297,8 +298,18 @@ forBackends env invoke output project entryOf unit bundleRef modulePath = go Not
       let depArgs = strings (field (one (const True) $ objects depInfo "components") "compiler-args")
       assertBool "CPP args from Cabal" ("-optP-DPROJECT_RECENT" `elem` depArgs)
       bridgeInfo <- readJson (string $ field bridge "build-info")
-      let bridgeArgs = strings (field (one (const True) $ objects bridgeInfo "components") "compiler-args")
+      let bridgeComponent = one (const True) $ objects bridgeInfo "components"
+          bridgeArgs = strings (field bridgeComponent "compiler-args")
+          bridgeDist = string (field bridge "dist-dir")
       assertBool "native TH helper in compiler args" (helperId `elem` bridgeArgs)
+      assertEqual "genuine named library build-info" "lib:bridge" (string $ field bridgeComponent "name")
+      bridgeRoots <- NativeRecipe.componentRoots bridgeDist bridgeComponent
+      assertEqual "genuine bridge Haskell outputs do not require native receipts" [] =<<
+        NativeRecipe.componentNativeObjects (output </> "native") bridgeDist bridgeRoots bridgeComponent
+      -- Keep the actual Cabal record after the fixture's deliberate clean, not
+      -- just a hand-written shape in the bounded inventory regression.
+      copyFile (string $ field bridge "build-info")
+        (scratch env </> ("project-bridge-" ++ backend ++ "-build-info.json"))
 
       manifest <- readJson (output </> "packages.json")
       assertBool "unbuilt optional benchmark is outside the executable Core closure" $
