@@ -8,6 +8,7 @@
 module Main (main) where
 
 import AggregateFixtures (prepareAggregate)
+import AggregateHeapFixtures (prepareAggregateHeap)
 import CompactRegionsFixtures (prepareCompactRegions, prepareCompactSerialization)
 import GraphFixtures (prepareGraph)
 import IntegerCompletionFixtures (prepareIntegerCompletion)
@@ -995,6 +996,8 @@ main = do
     ["record-fields"] -> prepareRecordFields root
     ["stable-names"] -> prepareStableNames root
     ["sum-join"] -> prepareSumJoins root
+    ["aggregate-heap"] -> prepareAggregateHeap root False
+    ["aggregate-heap", "--export-only"] -> prepareAggregateHeap root True
     ["weak-explicit"] -> prepareWeaks root
     ["shrink-bytearrays"] -> prepareShrinkByteArrays root
     [family] | family `elem` ["bytearray", "mutable-bytearrays", "resize-bytearrays", "mutable-bytearray-size", "compare-byte-arrays"] -> prepareByteArrayFamily root family
