@@ -14,6 +14,10 @@ plugins {
 }
 repositories { mavenCentral() }
 
+val windowsHost = System.getProperty("os.name").startsWith("Windows")
+// Existing Python generators remain until their Haskell/Kotlin migrations land.
+val python = providers.environmentVariable("THC_PYTHON").orElse(if (windowsHost) "python" else "python3")
+
 kapt {
     javacOptions { option("--add-modules", "jdk.incubator.vector") }
 }
@@ -58,7 +62,7 @@ val generateSimdFamilies = tasks.register<Exec>("generateSimdFamilies") {
     inputs.files("scripts/generate-simd-families.py", "scripts/simd-families.json",
         "src/main/java/thc/runtime/BytecodeRoot.java", "src/main/kotlin/thc/runtime/BytecodeProgram.kt")
     outputs.dir(layout.buildDirectory.dir("generated/simd"))
-    commandLine("python3", "scripts/generate-simd-families.py", "--check")
+    commandLine(python.get(), "scripts/generate-simd-families.py", "--check")
 }
 kotlin.sourceSets.main { kotlin.srcDir(layout.buildDirectory.dir("generated/simd/kotlin")) }
 tasks.matching { it.name in setOf("compileKotlin", "compileJava", "kaptGenerateStubsKotlin") }.configureEach {
@@ -572,7 +576,7 @@ val compileCbits by tasks.registering(Exec::class) {
     inputs.files(fileTree("compiler/pinned-ghc-rts") { include("*.c", "*.h") })
     outputs.dir(layout.buildDirectory.dir("generated/cbits"))
     outputs.upToDateWhen { false }
-    commandLine("python3", "scripts/build-cbits.py", "--output", layout.buildDirectory.dir("generated/cbits").get().asFile)
+    commandLine(python.get(), "scripts/build-cbits.py", "--output", layout.buildDirectory.dir("generated/cbits").get().asFile)
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/cbits")) }
 tasks.processResources { dependsOn(compileCbits) }
@@ -824,3 +828,37 @@ val generateSigsetAbi by tasks.registering {
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/sigset-abi")) }
 tasks.processResources { dependsOn(generateSigsetAbi) }
+
+// These providers implement POSIX contracts, including LP64 CLong and termios.
+// Windows must not publish guessed POSIX ABI receipts. Managed Core and portable
+// original C resources are independent of these optional providers.
+if (windowsHost) {
+    listOf("generateStdioAbi", "generatePosixStatAbi", "generateTermiosAbi", "generateSigsetAbi",
+        "compileNativeAtomics", "compileNativeFiles", "compileNativeOpenRequests", "compileNativeSignals", "compileNativeProcessSignals")
+        .forEach { name -> tasks.named(name) { onlyIf("POSIX provider is unavailable on Windows") { false } } }
+    tasks.processResources {
+        // Reject stale resources copied from a build for a different host, too.
+        exclude("thc/native/**", "thc/cbits/strerror*.bc", "thc/cbits/iconv.bc", "thc/cbits/*.so")
+    }
+}
+
+// Native Windows checkpoint: the default test task keeps its complete contract.
+// Both tasks consume fresh thc-fixtures windows-smoke and native MD5 inputs.
+for ((name, dense) in listOf("windowsSmokeTest" to false, "windowsDenseSmokeTest" to true)) {
+    tasks.register<Test>(name) {
+        group = "verification"
+        description = "Native-oracle runtime and C ABI smoke checks (dense handoff=$dense)."
+        testClassesDirs = sourceSets.test.get().output.classesDirs
+        classpath = sourceSets.test.get().runtimeClasspath
+        systemProperty("thc.handoffSlabs", dense.toString())
+        filter {
+            listOf("thc.FastSmokeTest", "thc.RuntimeTest", "thc.BytecodeBackendTest",
+                "thc.CoreRequestTest", "thc.FramesTest", "thc.CStringTest",
+                "thc.runtime.ManagedMd5Test", "thc.WindowsDistributionTest").forEach(::includeTestsMatching)
+        }
+        inputs.files("build/windows-smoke/provenance.json", "build/windows-driver/provenance.json")
+        dependsOn(tasks.installDist)
+        maxParallelForks = 1
+    }
+}
+tasks.named("windowsDenseSmokeTest") { mustRunAfter("windowsSmokeTest") }

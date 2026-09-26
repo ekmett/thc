@@ -40,7 +40,9 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
         val manifest = SulongCbits::class.java.getResourceAsStream("/thc/cbits/manifest.json")?.use {
             thc.Json.parse(it.reader().readText()) as Map<*, *>
         } ?: fault("Missing original C build manifest")
-        val system = System.getProperty("os.name").let { if (it.startsWith("Mac")) "Darwin" else it }
+        val system = System.getProperty("os.name").let {
+            when { it.startsWith("Mac") -> "Darwin"; it.startsWith("Windows") -> "Windows"; else -> it }
+        }
         fun architecture(value: String) = when (value.lowercase()) {
             "arm64" -> "aarch64"
             "amd64" -> "x86_64"
@@ -49,7 +51,8 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
         if (manifest["system"] != system || architecture(manifest["architecture"] as String) != architecture(System.getProperty("os.arch")))
             fault("Original C bitcode does not match this runtime platform")
     }
-    private val library = load(env, "md5")
+    private val windows = System.getProperty("os.name").startsWith("Windows")
+    private val library by lazy { load(env, "md5") }
     private val iconvTask = FutureTask { load(env, "iconv") }
     private val strerrorTask = FutureTask { load(env, "strerror") }
     private val strerrorLocaleTask = FutureTask { load(env, "strerror-locale") }
@@ -121,9 +124,9 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
                 TruffleSafepoint.InterruptibleFunction<FutureTask<Any>, Any> { it.get() }, iconvTask)
         } catch (failure: ExecutionException) { throw (failure.cause ?: failure) }
     }
-    private val init = interop.readMember(library, "thc_md5_init")
-    private val update = interop.readMember(library, "thc_md5_update")
-    private val finish = interop.readMember(library, "thc_md5_final")
+    private val init by lazy { interop.readMember(library, "thc_md5_init") }
+    private val update by lazy { interop.readMember(library, "thc_md5_update") }
+    private val finish by lazy { interop.readMember(library, "thc_md5_final") }
     // Arrays have identity equality. Both sides are weak: a cached view must not
     // keep its weak key alive. A live LLVM pointer strongly retains its view.
     private val buffers = WeakHashMap<Any, WeakReference<CbitsBuffer>>()
@@ -227,13 +230,16 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
             LongSupplier { address.cbitsSize() }, address.cbitsOffset(), nativeImage)
     }
     fun init(context: ManagedAddress) {
-        executeWithOwners(init, transport(context), context.cbitsOffset())
+        if (windows) WindowsMd5.init(context)
+        else executeWithOwners(init, transport(context), context.cbitsOffset())
     }
     fun update(context: ManagedAddress, input: ManagedAddress, length: Int) {
-        executeWithOwners(update, transport(context), context.cbitsOffset(), transport(input), input.cbitsOffset(), length)
+        if (windows) WindowsMd5.update(context, input, length)
+        else executeWithOwners(update, transport(context), context.cbitsOffset(), transport(input), input.cbitsOffset(), length)
     }
     fun finish(output: ManagedAddress, context: ManagedAddress) {
-        executeWithOwners(finish, transport(output), output.cbitsOffset(), transport(context), context.cbitsOffset())
+        if (windows) WindowsMd5.finish(output, context)
+        else executeWithOwners(finish, transport(output), output.cbitsOffset(), transport(context), context.cbitsOffset())
     }
     companion object {
         @JvmStatic fun current(node: Node?): SulongCbits = Language.currentState(node).cbits()

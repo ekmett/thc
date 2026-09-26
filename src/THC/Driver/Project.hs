@@ -6,7 +6,7 @@
 module THC.Driver.Project
   (runProject, Bundle(..), InstalledBundle(..), prepareInstalledBundle, installedRecords) where
 
-import Control.Exception (bracket, evaluate, finally)
+import Control.Exception (evaluate, finally)
 import Control.Monad (filterM, forM, forM_, unless, when)
 import Data.Char (isAlphaNum, isHexDigit)
 import qualified Crypto.Hash.SHA256 as SHA
@@ -31,10 +31,10 @@ import System.Exit (ExitCode(..))
 import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
 import System.FilePath ((</>), (<.>), pathSeparator, isAbsolute, makeRelative, normalise, splitDirectories,
                         takeDirectory, takeExtension, takeFileName, joinPath, replaceExtension)
-import System.IO (IOMode(ReadMode), SeekMode(AbsoluteSeek), hClose, hGetContents,
+import System.IO (IOMode(ReadMode), hClose, hGetContents,
                   hSetEncoding, openTempFile, stderr, utf8, withFile)
 import System.IO.Error (tryIOError)
-import qualified System.Posix.IO as Posix
+import THC.Driver.Lock (withLock)
 import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, waitForProcess,
                        readCreateProcessWithExitCode)
 import THC.Driver.Cabal (PlanOptions(..))
@@ -662,12 +662,6 @@ wiredGhcInternal context thcRoot = do
 withProjectLock :: FilePath -> IO a -> IO a
 withProjectLock output = withLock (output </> ".lock")
 
-withLock :: FilePath -> IO a -> IO a
-withLock path action =
-  bracket (Posix.openFd path Posix.ReadWrite
-             (Posix.defaultFileFlags {Posix.creat = Just 0o600})) Posix.closeFd $ \descriptor -> do
-    Posix.waitToSetLock descriptor (Posix.WriteLock, AbsoluteSeek, 0, 0)
-    action
 
 readUnit :: Value -> IO Unit
 readUnit value = do

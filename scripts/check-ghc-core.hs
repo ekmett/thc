@@ -35,6 +35,7 @@ import System.Environment (getArgs, lookupEnv)
 import System.Exit (ExitCode (ExitSuccess), exitFailure)
 import System.FilePath (dropExtension, makeRelative, takeDirectory, (</>))
 import System.IO (hPutStrLn, stderr)
+import System.Info (os)
 import System.Process (readProcessWithExitCode)
 
 data Mode = Check | Advisory | Probe FilePath
@@ -205,7 +206,8 @@ selectPackageManager ghc = do
     _ -> do
       version <- oneLine ghc ["--numeric-version"]
       let directory = takeDirectory ghc
-          candidates = [directory </> ("ghc-pkg-" ++ version), directory </> "ghc-pkg"]
+          suffix = if os == "mingw32" then ".exe" else ""
+          candidates = [directory </> (name ++ suffix) | name <- ["ghc-pkg-" ++ version, "ghc-pkg"]]
       available <- filterM doesFileExist candidates
       case available of
         sibling : _ -> canonicalizePath sibling

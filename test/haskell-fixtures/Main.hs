@@ -74,6 +74,7 @@ import OriginalIconvFixtures (prepareOriginalIconv)
 import MutVarFixtures (prepareMutVar)
 import STMFixtures (prepareSTM)
 import HintTraceFixtures (prepareHintTrace)
+import WindowsSmokeFixtures (prepareWindowsSmoke, prepareWindowsDriver)
 import StablePointerFixtures (prepareStablePointers)
 import StableNameFixtures (prepareStableNames)
 import WeakFixtures (prepareWeaks)
@@ -901,6 +902,8 @@ main = do
     _ -> pure False
   unless handled $ case args of
     ["integer-completion"] -> prepareIntegerCompletion root
+    ["windows-smoke"] -> prepareWindowsSmoke root
+    ["windows-driver"] -> prepareWindowsDriver root
     ["word-floating"] -> prepareWordFloating root
     ["scalar-bitcasts"] -> prepareScalarBitCasts root
     ["simd128-addresses"] -> prepareSimd128Addresses root

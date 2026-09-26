@@ -21,7 +21,8 @@ import tempfile
 
 
 OUTPUT_NAME = 'managed-md5-native'
-LEGACY_FILES = frozenset({'managed-md5-native', 'provenance.json'} | {
+EXECUTABLE_NAME = OUTPUT_NAME + ('.exe' if os.name == 'nt' else '')
+LEGACY_FILES = frozenset({EXECUTABLE_NAME, 'provenance.json'} | {
     f'{step}.{suffix}' for step in ('cc-version', 'ghc-libdir', 'compile', 'native')
     for suffix in ('command.txt', 'stdout', 'stderr', 'exit-status.txt')})
 OWNER_NAME = 'attempt-owner.json'
@@ -48,7 +49,7 @@ def require_owned_attempt(output):
             provenance.get('contextOffsets') != [0, 16, 24] or provenance.get('contextAlignment') != 4 or
             provenance.get('referenceGitBlobs') != expected_blobs or
             provenance.get('independentModelMatched') is not True or
-            shlex.split((output / 'native.command.txt').read_text()) != [str(output / OUTPUT_NAME)]):
+            shlex.split((output / 'native.command.txt').read_text()) != [str(output / EXECUTABLE_NAME)]):
         raise ValueError(f'Ambiguous legacy MD5 provenance: {output}')
     artifacts = provenance.get('artifacts')
     expected = {'build/' + OUTPUT_NAME + '/' + name: digest(output / name)
@@ -88,7 +89,7 @@ def prepare_output(root, requested):
         output.rename(archive)
         print(f'Archived prior MD5 attempt unchanged: {archive}', flush=True)
     output.mkdir(parents=True, exist_ok=False)
-    (output / OWNER_NAME).write_text(OWNER_TEXT)
+    (output / OWNER_NAME).write_text(OWNER_TEXT, encoding="utf-8", newline="\n")
     return output, archive
 
 
@@ -220,7 +221,7 @@ def main():
     headers = list(libdir.rglob("HsFFI.h"))
     if len(headers) != 1:
         raise ValueError(f"Expected one installed HsFFI.h, got {headers}")
-    executable = output / "managed-md5-native"
+    executable = output / EXECUTABLE_NAME
     driver = root / "compiler/test-fixtures/ManagedMd5Native.c"
     run("compile", [cc, "-std=c11", "-O2", "-fno-strict-aliasing", "-Wall", "-Wextra",
                     "-I", reference, "-I", headers[0].parent, driver, reference / "md5.c", "-o", executable])
@@ -229,13 +230,16 @@ def main():
     def record(path):
         path = path.resolve()
         try:
-            name = str(path.relative_to(root))
+            name = path.relative_to(root).as_posix()
         except ValueError:
             name = str(path)
         return {"path": name, "sha256": digest(path)}
     sources = [Path(__file__), driver, reference / "md5.c", reference / "md5.h",
                root / "src/main/kotlin/thc/runtime/LiteralAddresses.kt",
                root / "src/main/kotlin/thc/runtime/ManagedMd5.kt",
+               root / "src/main/kotlin/thc/runtime/SulongCbits.kt",
+               root / "src/main/kotlin/thc/runtime/WindowsMd5.kt",
+               root / "src/main/c/md5-api.c", root / "scripts/build-cbits.py",
                root / "src/test/kotlin/thc/runtime/ManagedMd5Test.kt"]
     artifacts = sorted(p for p in output.iterdir() if p.is_file())
     provenance = {"schema": 1, "byteOrder": sys.byteorder, "contextSize": 88,

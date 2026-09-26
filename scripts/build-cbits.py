@@ -34,8 +34,9 @@ def compiler_target(clang, system, arch):
                "x86_64": {"x86_64"}, "AMD64": {"x86_64"}}
     parts = default_target.split("-")
     if (arch not in aliases or parts[0] not in aliases[arch] or len(parts) < 3 or
-            system not in ("Darwin", "Linux") or
-            not (parts[2].startswith("darwin") if system == "Darwin" else parts[2] == "linux")):
+            system not in ("Darwin", "Linux", "Windows") or
+            not (parts[2].startswith("darwin") if system == "Darwin" else
+                 parts[2:] == ["windows", "gnu"] if system == "Windows" else parts[2] == "linux")):
         raise SystemExit(f"Cbits must match this supported host platform: {system}/{arch}, clang={default_target}")
     command = [clang]
     target = default_target
@@ -88,9 +89,13 @@ def main():
     output = args.output.resolve() / "thc/cbits"
     output.mkdir(parents=True, exist_ok=True)
     commands = []
-    sources = {"md5": ROOT / "src/main/c/md5-api.c", "strerror": strerror,
-               "strerror-locale": ROOT / "src/main/c/strerror-locale.c",
+    sources = {"md5": ROOT / "src/main/c/md5-api.c",
                "libdw-unavailable": ROOT / "src/main/c/libdw-unavailable.c"}
+    # The locale scope is POSIX-specific. Windows errno/locale interoperability
+    # needs its own proof; compiling strerror_s alone would not provide it.
+    if system != "Windows":
+        sources["strerror"] = strerror
+        sources["strerror-locale"] = ROOT / "src/main/c/strerror-locale.c"
     if system == "Linux":
         sources["iconv"] = ROOT / "src/main/c/iconv-api.c"
     for name, source in sources.items():
@@ -103,6 +108,16 @@ def main():
         commands.append(command)
     source_files = [reference / n for n in PINNED] + [libdw / n for n in LIBDW_SHA256] + list(sources.values())
     artifacts = [output / (name + ".bc") for name in sources]
+    if system == "Windows":
+        # Sulong's PE dependency locator probes the guest filesystem even for
+        # system DLLs. This stateless native bridge preserves IOAccess.NONE.
+        artifact = output / "md5.dll"
+        command = [*compiler, "-std=c11", "-O2", "-fno-strict-aliasing", "-shared",
+                   "-I", str(reference), "-I", str(headers[0].parent),
+                   str(ROOT / "src/main/c/md5-api.c"), "-o", str(artifact)]
+        subprocess.run(command, cwd=ROOT, check=True)
+        commands.append(command)
+        artifacts.append(artifact)
     # The first native limb provider is intentionally Linux x86_64 only. Keep
     # the embedded LLVM container's DT_NEEDED entry: GMP receives real native
     # arena pointers, not the managed buffers used by original MD5.
