@@ -18,6 +18,19 @@ action. The complete installed-Core project provider instead runs GHC's generate
 using the same program and Handle CAFs. Standalone `build` and `repl` commands
 remain absent.
 
+`thc acquire DIR --exe NAME --thc-root DIR` uses the same `cabal.project` native
+build and complete dependency-closure export as `run`, but stops after atomically
+publishing `DIST/packages.json`. It does not invoke the reachable-Core auditor,
+the THC runtime, or the built native executable. This separates source acquisition
+from potentially expensive audit and execution for large application closures.
+Compiler/plugin setup, source and installed-Core provenance checks, typed native
+artifact admission, and manifest construction remain mandatory. A successful
+acquisition does **not** establish runtime support or an accepted reachable audit.
+An existing `audit.json` in a reused output directory is not refreshed or endorsed.
+Acquisition accepts the build/provider options shared with `run`, including
+`--dist-dir`, `--installed-core` and `--ghc-source`; it requires `cabal.project`
+and rejects runtime-only `--runtime`, `--ffi`, and the guest `--` suffix.
+
 IO launchers (`--run-io` and `--run-executable`) do not append runtime metrics to
 stderr by default. Guest output and failure reports are unchanged. To append the runtime metrics JSON after a successful action, set
 `JAVA_OPTS="${JAVA_OPTS:-} -Dthc.diagnostics=true"` when invoking `thc run`.
