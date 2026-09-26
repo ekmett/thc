@@ -1,7 +1,7 @@
 # Typed binary unboxed sum results
 
 Both backends execute saturated binary unboxed sum constructors, guest function
-results, forwarding and immediate cases. The exact logical alternatives remain
+results, local join results, forwarding and immediate cases. The exact logical alternatives remain
 separate from GHC's physical `primReps`, `tagSlot` and `alternativeSlots` evidence.
 Boxed `Either`, ordinary boxed tuples and unlifted boxed references keep their
 ordinary one-reference representation; none becomes an unboxed sum by name,
@@ -37,10 +37,17 @@ copy releases and clears the actual loan. A fresh carrier materialized by deopt
 remains unpooled and never releases a nonexistent loan. No sum `DataValue`, boxed
 payload array, or escaping guest frame is introduced.
 
+Local join results use the same exact sum shape, but stay within one activation:
+the AST copies typed tag/payload region slots to the enclosing destination and
+clears its private scratch slots; bytecode writes directly to that destination.
+Recursive backedges and zero-arity joins do not allocate sum closures or result
+loans. An outer sum-returning join is a lexical control target, not a captured
+sum value. Actual sum captures and sum join arguments remain unsupported.
+
 Nested sums, tuples containing sums, nonbinary sums, integer-width conversion,
 address/vector leaves, `BoxedRep Nothing` and unknown logical or physical layouts
 remain unsupported. Sum arguments, partial sum constructors, captured sums,
-ordinary sum let bindings, heap fields, join arguments/results/captures and
+ordinary sum let bindings, heap fields, join arguments/captures and
 public host sum results also remain unsupported. Function values returning sums
 may still pass through existing scalar/reference closure paths, but a sum value
 cannot cross those excluded boundaries. Top-level sum storage is rejected in
@@ -67,6 +74,15 @@ check inactive reference clearing, release on a shape mismatch, lazy pointer
 identity and actual deopt materialization between completion and consumption.
 These correctness controls are distinct from generated-code evidence; typed
 storage alone does not establish register passing or eliminated allocations.
+
+`cabal run thc-fixtures -- sum-join` adds genuine pre/post-Tidy GHC sum joins,
+18 native observations, strict audits and source/artifact hashes. The focused
+`SumJoinResultTest` compares an independent scalar model with native and guest
+results, exercises recursive and nested local transfers on both backends with
+inlining enabled/disabled, and checks zero-arity lazy identity, inactive
+reference clearing and malformed projection rejection. This slice was exposed
+by the unchanged `ad`/`data-reify` graph-reification path; passing these focused
+controls is not itself a claim that the complete `ad` test executable runs.
 
 The [production graph controls](../bench/experiments/sum-results/README.md) capture
 actual exported pair-payload and lazy-reference consumers on both backends, with

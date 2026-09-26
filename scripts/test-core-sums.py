@@ -226,9 +226,9 @@ class SumAuditTest(unittest.TestCase):
             report=self.rejected(module)
             self.assertTrue(any(i['detail']=='unboxed-sum global binding' for i in report['issues']))
 
-    def test_formals_arguments_captures_let_and_join_results_reject(self):
+    def test_formals_arguments_captures_let_and_join_inputs_reject(self):
         proof=summ()
-        for mode in ('formal','argument','capture','let','erased-let','heap-field','join','join-capture','join-formal'):
+        for mode in ('formal','argument','capture','let','erased-let','heap-field','join-capture','join-formal'):
             with self.subTest(mode=mode):
                 module=fixture();root=module['bindings'][0]['expr'];case=root[2]
                 if mode=='formal':root[1].append(binder('unused',proof))
@@ -239,10 +239,6 @@ class SumAuditTest(unittest.TestCase):
                 if mode=='heap-field':
                     module['constructors'].append(dict(id='Heap',kind='boxed',arity=1,fieldReps=[[sums.LIFTED]],strictFields=[False],fieldLifted=[True]))
                     case[3][0][3]=['app',['con','Heap',1,dict(rep=CLOSURE)],[var('case',proof)],[True],True,True,dict(rep=BOX)]
-                if mode=='join':
-                    join=binding('j',lam([binder('n',INT)],module['bindings'][1]['expr'][2],proof))
-                    join.update(joinValueArity=1,joinResultRep=proof,info=dict(joinArity=1))
-                    root[2]=['let',False,[join],lit(),dict(rep=INT)]
                 if mode in ('join-capture','join-formal'):
                     body=lit() if mode=='join-formal' else ['case',var('case',proof),'jcase',copy.deepcopy(case[3]),dict(rep=INT,binder=binder('jcase',proof))]
                     join=binding('j',lam([binder('n',proof if mode=='join-formal' else INT)],body,INT))
@@ -250,9 +246,30 @@ class SumAuditTest(unittest.TestCase):
                     case[3][0][3]=['let',False,[join],lit(),dict(rep=INT)]
                 report=self.rejected(module)
                 expected={'formal':'formal argument','argument':'argument','capture':'capture','let':'let binding',
-                          'erased-let':'let binding','heap-field':'argument','join':'join result',
+                          'erased-let':'let binding','heap-field':'argument',
                           'join-capture':'join capture','join-formal':'formal argument'}[mode]
                 self.assertTrue(any(i['detail']=='unboxed-sum '+expected for i in report['issues']),report['issues'])
+
+    def test_exact_sum_join_results_and_zero_arity_control_targets(self):
+        for arity in (0, 1):
+            module=fixture();producer=module['bindings'][1]['expr'];proof=summ()
+            value=producer[2]
+            join=binding('j',value if arity==0 else lam([binder('n',INT)],value,proof),
+                         proof if arity==0 else CLOSURE)
+            join.update(joinValueArity=arity,joinResultRep=proof,info=dict(joinArity=arity))
+            join['lifted']=arity!=0
+            call=var('j',proof) if arity==0 else ['app',var('j',CLOSURE),[lit()],[False],False,False,dict(rep=proof)]
+            # A nested join tail-calling a zero-arity outer join does not capture
+            # a sum value. Its tag/payload destinations remain in this activation.
+            inner=binding('inner',call,proof)
+            inner.update(lifted=False,joinValueArity=0,joinResultRep=proof,info=dict(joinArity=0))
+            producer[2]=['let',False,[join],['let',False,[inner],var('inner',proof),dict(rep=proof)],dict(rep=proof)]
+            self.accepted(module)
+            disabled=dict(ENABLED,aggregateJoinResults=['unboxed-tuple'])
+            self.assertTrue(any(i['detail']=='unboxed-sum join result' for i in run(module,cap=disabled)['issues']))
+            changed=copy.deepcopy(module)
+            changed['bindings'][1]['expr'][2][2][0]['joinResultRep']=summ(WORD,INT)
+            self.rejected(changed)
 
     def test_constructor_metadata_cannot_encode_a_sum_as_one_word_field(self):
         module=fixture();zero=summ(VOID,tup())

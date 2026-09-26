@@ -223,7 +223,8 @@ class Audit:
             if type(arity) is not int or arity < 0 or arity > available or type(raw) is not int or arity > raw:
                 self.issue('join-metadata', owner, path, 'Join prefix disagrees with erased lambdas/raw join arity')
             self.representation(binding.get('joinResultRep'), owner, path + '/joinResultRep')
-            if is_sum(binding.get('joinResultRep')):
+            if (is_sum(binding.get('joinResultRep')) and
+                    'unboxed-sum' not in self.cap.get('aggregateJoinResults', [])):
                 self.issue('aggregate-boundary', owner, path, 'unboxed-sum join result')
             if is_vector(binding.get('joinResultRep')) and not self.supported_vector(binding['joinResultRep'], 'join-results'):
                 self.issue('vector-boundary', owner, path, 'vector join result')
@@ -324,6 +325,11 @@ class Audit:
     @staticmethod
     def is_vector_value(rep):
         return is_vector(rep) and '_join_arity' not in rep
+
+    @staticmethod
+    def is_sum_value(rep):
+        # A zero-arity sum-returning join is control flow, not a captured sum.
+        return is_sum(rep) and '_join_arity' not in rep
 
     @classmethod
     def is_empty_tuple(cls, rep):
@@ -1141,7 +1147,7 @@ class Audit:
                         self.issue('application-levity', owner, path, 'Tuple formal must be unlifted')
                 captured = {key for key in (self.free_variables(expr[2]) - ids) & bound.keys()
                             if self.is_tuple_value(bound[key])}
-                if any(is_sum(bound[key]) for key in (self.free_variables(expr[2]) - ids) & bound.keys()):
+                if any(self.is_sum_value(bound[key]) for key in (self.free_variables(expr[2]) - ids) & bound.keys()):
                     self.issue('aggregate-boundary', owner, path, 'unboxed-sum capture')
                 # The consumed join lambda branches within its enclosing frame;
                 # a residual lambda still allocates an ordinary closure.
@@ -1811,7 +1817,8 @@ class Audit:
                 for index, binding in enumerate(group):
                     if not isinstance(binding, dict):
                         continue
-                    if is_sum(binding.get('rep')) or is_sum(self.expression_rep(binding.get('expr'))):
+                    if ('joinValueArity' not in binding and
+                            (is_sum(binding.get('rep')) or is_sum(self.expression_rep(binding.get('expr'))))):
                         self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-sum let binding')
                     if ('joinValueArity' not in binding and is_vector(binding.get('rep')) and
                             not self.supported_vector(binding['rep'], 'let-bindings')):
@@ -1824,7 +1831,7 @@ class Audit:
                         self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-tuple let binding')
                     if 'joinValueArity' in binding:
                         captured = (self.free_variables(binding['expr']) - (ids if recursive else set())) & bound.keys()
-                        if any(is_sum(bound[key]) for key in captured):
+                        if any(self.is_sum_value(bound[key]) for key in captured):
                             self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-sum join capture')
                         if any(self.is_vector_value(bound[key]) and not self.supported_vector(bound[key], 'join-captures')
                                for key in captured):

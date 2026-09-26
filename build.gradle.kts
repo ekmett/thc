@@ -134,6 +134,7 @@ tasks.withType<Test>().configureEach {
             "state-tuple/pre-core/**/*.json", "state-tuple/post-core/**/*.json", "state-tuple/oracle.tsv",
             "state-tuple/provenance.json", "state-tuple/*-audit.json", "state-tuple/native/**",
             "tuple-join/pre-core/**/*.json", "tuple-join/post-core/**/*.json", "tuple-join/oracle.tsv",
+            "sum-join/**/*.json", "sum-join/*.tsv", "sum-join/commands/**",
             "tuple-arithmetic/pre-core/**/*.json", "tuple-arithmetic/post-core/**/*.json",
             "tuple-arithmetic/manifest.json", "tuple-arithmetic/oracle.tsv", "tuple-arithmetic/call-oracle.tsv",
             "integer-completion/**/*.json", "integer-completion/*.tsv", "integer-completion/*.hs",

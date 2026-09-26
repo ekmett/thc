@@ -74,7 +74,8 @@ Nonempty aggregate join inputs, aggregate captures and heap fields remain
 unsupported.
 
 [Binary sum results](sum-results.md) use typed destinations and explicit tags.
-Sum inputs, storage, joins, nested sums and unresolved layouts remain rejected.
+Local sum join results use those same destinations. Sum inputs, captures,
+ordinary storage, nested sums and unresolved layouts remain rejected.
 These contracts distinguish lifted tuples, unboxed aggregates and scalar State.
 
 ### SIMD operations and guest transport
