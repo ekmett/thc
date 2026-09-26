@@ -24,6 +24,42 @@ demonstrates actual installed guest machine code. This is toolchain evidence,
 not a successful THC native image or Haskell AOT result. Source fix and detailed
 worker evidence are recorded in checkpoint `7ff52868`.
 
+## Language preparation and native bindings
+
+The next source checkpoint incorporates main `939c6487`, including the newer
+AST/STM and pinned/native-memory work. The pinned
+[`DeoptimizationUtils.createGraphChecker`](https://github.com/oracle/graal/blob/7b025988a922a73286d1326e1eddc1ca39d3f569/substratevm/src/com.oracle.svm.hosted/src/com/oracle/svm/hosted/code/DeoptimizationUtils.java#L505)
+rejects runtime/deoptimization graphs whose declaring class is not initialized,
+and rejects runtime graphs containing a class-initialization check. This prevents
+partial evaluation from folding fields before initialization. Merely making a
+method reachable in the ordinary executable is therefore insufficient.
+
+Explicit preparation of audited interop receiver classes exposed four concrete
+compilation-blocklist paths: export namespace map enumeration/lookup and bulk
+ByteBuffer reads. Their host operations now have Truffle boundaries; scalar
+buffer access and actual exported guest calls retain their existing paths.
+The new namespace test checks exact names, aliases, unknown-member rejection
+and rejection from another context. Together with `SulongCbitsTest`, this passes
+12 cases across default/dense modes.
+
+`NativeFileLease` previously resolved its native close handle in its class
+initializer. Its receiver class now contains only a stateless companion;
+native bindings live in a separate private holder first accessed when a real
+lease is constructed, before allocating its arena. Descriptor/arena ownership,
+capture-state handling, close ordering and readiness duplication are unchanged.
+`NativeFileProviderTest`, `NativeFdWaitTest` and `NativeFileBuffersTest` pass all
+52 cases across the two modes. Bytecode inspection confirms that preparing the
+receiver class no longer resolves a native handle.
+
+The receiver/companion initialization probe gets beyond those blocklist and
+image-heap failures but then fails in the pinned runtime-graph encoder while
+preparing `ManagedAddress.toNativeBits`: an `ImageHeapConstant` has no backing
+hosted constant. The cause is still under investigation; this is not a linked
+image or a successful Haskell/native result. Larger preparation lists must be
+derived from an initialization audit, not a package-wide build-time override.
+New raw diagnostics remain local; this checkpoint publishes source and concise
+results only.
+
 ## Execution models
 
 | Product | What is fixed when built | Guest execution |

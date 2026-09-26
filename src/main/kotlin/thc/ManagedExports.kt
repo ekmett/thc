@@ -70,15 +70,18 @@ internal class ManagedExportRegistry(private val owner: Language.State, private 
 internal class ManagedExportNamespace(private val registry: ManagedExportRegistry,
     private val description: String, private val members: () -> Map<String, Any>) : TruffleObject {
     @ExportMessage fun hasMembers(): Boolean { registry.checkOwner(); return true }
-    @ExportMessage fun getMembers(includeInternal: Boolean): Any {
+    @ExportMessage @CompilerDirectives.TruffleBoundary
+    fun getMembers(includeInternal: Boolean): Any {
         registry.checkOwner()
         return MemberNames(members().keys.toTypedArray())
     }
-    @ExportMessage fun isMemberReadable(member: String): Boolean {
+    @ExportMessage @CompilerDirectives.TruffleBoundary
+    fun isMemberReadable(member: String): Boolean {
         registry.checkOwner()
         return member in members()
     }
-    @ExportMessage fun readMember(member: String): Any {
+    @ExportMessage @CompilerDirectives.TruffleBoundary
+    fun readMember(member: String): Any {
         registry.checkOwner()
         return members()[member] ?: throw UnknownIdentifierException.create(member)
     }
