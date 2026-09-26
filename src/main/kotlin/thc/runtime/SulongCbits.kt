@@ -252,7 +252,7 @@ internal class CFinalizerFunction internal constructor(
 
 /** Byte interop over the original allocation; immutable views may acquire an owned native image. */
 @ExportLibrary(InteropLibrary::class)
-internal class CbitsBuffer(bytes: ByteArray, private val writable: Boolean,
+internal class CbitsBuffer @JvmOverloads constructor(bytes: ByteArray, private val writable: Boolean,
     private val logicalSize: LongSupplier = LongSupplier { bytes.size.toLong() },
     private val baseOffset: Long = 0,
     private val nativeImage: Supplier<NativeReadOnlyPointer>? = null) : TruffleObject {
