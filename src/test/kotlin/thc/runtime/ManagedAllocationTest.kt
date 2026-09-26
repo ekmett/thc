@@ -7,6 +7,27 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class ManagedAllocationTest {
+    @Test fun scalarAccessKeepsTheOwnerMonitorThroughTheOperationAndReleasesOnFailure() {
+        val storage = ManagedAllocation.mutable(16, 8)
+        val failure = IllegalStateException("failed scalar operation")
+        val element = assertThrows(IllegalStateException::class.java) {
+            storage.accessElement(0, 8, false) {
+                assertTrue(Thread.holdsLock(storage))
+                throw failure
+            }
+        }
+        assertSame(failure, element)
+        assertFalse(Thread.holdsLock(storage))
+        val byteRange = assertThrows(IllegalStateException::class.java) {
+            storage.accessByteRange(1, 4, true) {
+                assertTrue(Thread.holdsLock(storage))
+                throw failure
+            }
+        }
+        assertSame(failure, byteRange)
+        assertFalse(Thread.holdsLock(storage))
+    }
+
     @Test fun scalarArrayFieldsStayUsableBeforeAndAfterPointerInstallation() {
         val storage = ManagedAllocation.mutable(32, 8)
         val target = ManagedAddress.fromAllocation(storage).plus(24)

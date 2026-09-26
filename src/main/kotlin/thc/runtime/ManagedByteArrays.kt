@@ -175,75 +175,55 @@ internal object ManagedByteArray {
         val byte = if (value is ManagedAllocation) value.readByte(offset) else read(require(value), offset)
         return if (unsigned) byte else byte.toByte().toLong()
     }
+    private inline fun <T> withElement(value: Any?, index: Long, width: Int,
+        writable: Boolean, action: (ByteArray) -> T): T =
+        if (value is ManagedAllocation) value.accessElement(index, width, writable, action)
+        else action(require(value))
+
+    private inline fun <T> withByteRange(value: Any?, offset: Long, width: Int,
+        writable: Boolean, action: (ByteArray) -> T): T =
+        if (value is ManagedAllocation) value.accessByteRange(offset, width, writable, action)
+        else action(require(value))
+
     @JvmStatic fun readIntGuest(value: Any?, index: Long): Long =
-        if (value is ManagedAllocation) value.accessElement(index, 8, false) { readInt(it, index) }
-        else readInt(require(value), index)
+        withElement(value, index, 8, writable = false) { readInt(it, index) }
     @JvmStatic fun writeIntGuest(value: Any?, index: Long, integer: Long) =
-        if (value is ManagedAllocation) value.accessElement(index, 8, true) { writeInt(it, index, integer) }
-        else writeInt(require(value), index, integer)
+        withElement(value, index, 8, writable = true) { writeInt(it, index, integer) }
     @JvmStatic fun fetchAddIntGuest(value: Any?, index: Long, delta: Long): Long =
         (value as? ManagedAllocation
             ?: fault("fetchAddIntArray# requires an owned MutableByteArray#")).fetchAddInt(index, delta)
     @JvmStatic fun readDoubleGuest(value: Any?, index: Long): Double =
-        if (value is ManagedAllocation) value.accessElement(index, 8, false) { readDouble(it, index) }
-        else readDouble(require(value), index)
+        withElement(value, index, 8, writable = false) { readDouble(it, index) }
     @JvmStatic fun writeDoubleGuest(value: Any?, index: Long, number: Double) =
-        if (value is ManagedAllocation) value.accessElement(index, 8, true) { writeDouble(it, index, number) }
-        else writeDouble(require(value), index, number)
+        withElement(value, index, 8, writable = true) { writeDouble(it, index, number) }
     @JvmStatic fun readDoubleByteOffsetGuest(value: Any?, offset: Long): Double =
-        if (value is ManagedAllocation) value.accessByteRange(offset, 8, false) { readDoubleByteOffset(it, offset) }
-        else readDoubleByteOffset(require(value), offset)
+        withByteRange(value, offset, 8, writable = false) { readDoubleByteOffset(it, offset) }
     @JvmStatic fun writeDoubleByteOffsetGuest(value: Any?, offset: Long, number: Double) =
-        if (value is ManagedAllocation) value.accessByteRange(offset, 8, true) { writeDoubleByteOffset(it, offset, number) }
-        else writeDoubleByteOffset(require(value), offset, number)
+        withByteRange(value, offset, 8, writable = true) { writeDoubleByteOffset(it, offset, number) }
     @JvmStatic fun readFloatGuest(value: Any?, index: Long): Float =
-        if (value is ManagedAllocation) value.accessElement(index, 4, false) { readFloat(it, index) }
-        else readFloat(require(value), index)
+        withElement(value, index, 4, writable = false) { readFloat(it, index) }
     @JvmStatic fun writeFloatGuest(value: Any?, index: Long, number: Float) =
-        if (value is ManagedAllocation) value.accessElement(index, 4, true) { writeFloat(it, index, number) }
-        else writeFloat(require(value), index, number)
+        withElement(value, index, 4, writable = true) { writeFloat(it, index, number) }
     @JvmStatic fun readFloatByteOffsetGuest(value: Any?, offset: Long): Float =
-        if (value is ManagedAllocation) value.accessByteRange(offset, 4, false) { readFloatByteOffset(it, offset) }
-        else readFloatByteOffset(require(value), offset)
+        withByteRange(value, offset, 4, writable = false) { readFloatByteOffset(it, offset) }
     @JvmStatic fun writeFloatByteOffsetGuest(value: Any?, offset: Long, number: Float) =
-        if (value is ManagedAllocation) value.accessByteRange(offset, 4, true) { writeFloatByteOffset(it, offset, number) }
-        else writeFloatByteOffset(require(value), offset, number)
+        withByteRange(value, offset, 4, writable = true) { writeFloatByteOffset(it, offset, number) }
     @JvmStatic fun readInt16Guest(value: Any?, index: Long, unsigned: Boolean): Long =
-        if (value is ManagedAllocation) value.accessElement(index, 2, false) {
-            if (unsigned) readWord16(it, index) else readInt16(it, index)
-        } else if (unsigned) readWord16(require(value), index)
-        else readInt16(require(value), index)
+        withElement(value, index, 2, writable = false) { if (unsigned) readWord16(it, index) else readInt16(it, index) }
     @JvmStatic fun writeInt16Guest(value: Any?, index: Long, integer: Long) =
-        if (value is ManagedAllocation) value.accessElement(index, 2, true) { writeInt16(it, index, integer) }
-        else writeInt16(require(value), index, integer)
+        withElement(value, index, 2, writable = true) { writeInt16(it, index, integer) }
     @JvmStatic fun readInt16ByteOffsetGuest(value: Any?, offset: Long, unsigned: Boolean): Long =
-        if (value is ManagedAllocation) value.accessByteRange(offset, 2, false) {
-            if (unsigned) readWord16ByteOffset(it, offset)
-            else readInt16ByteOffset(it, offset)
-        } else if (unsigned) readWord16ByteOffset(require(value), offset)
-        else readInt16ByteOffset(require(value), offset)
+        withByteRange(value, offset, 2, writable = false) { if (unsigned) readWord16ByteOffset(it, offset) else readInt16ByteOffset(it, offset) }
     @JvmStatic fun writeInt16ByteOffsetGuest(value: Any?, offset: Long, integer: Long) =
-        if (value is ManagedAllocation) value.accessByteRange(offset, 2, true) {
-            writeInt16ByteOffset(it, offset, integer)
-        } else writeInt16ByteOffset(require(value), offset, integer)
+        withByteRange(value, offset, 2, writable = true) { writeInt16ByteOffset(it, offset, integer) }
     @JvmStatic fun readInt32Guest(value: Any?, index: Long, unsigned: Boolean): Long =
-        if (value is ManagedAllocation) value.accessElement(index, 4, false) {
-            if (unsigned) readWord32(it, index) else readInt32(it, index)
-        } else if (unsigned) readWord32(require(value), index)
-        else readInt32(require(value), index)
+        withElement(value, index, 4, writable = false) { if (unsigned) readWord32(it, index) else readInt32(it, index) }
     @JvmStatic fun writeInt32Guest(value: Any?, index: Long, integer: Long) =
-        if (value is ManagedAllocation) value.accessElement(index, 4, true) { writeInt32(it, index, integer) }
-        else writeInt32(require(value), index, integer)
+        withElement(value, index, 4, writable = true) { writeInt32(it, index, integer) }
     @JvmStatic fun readInt32ByteOffsetGuest(value: Any?, offset: Long, unsigned: Boolean): Long =
-        if (value is ManagedAllocation) value.accessByteRange(offset, 4, false) {
-            if (unsigned) readWord32ByteOffset(it, offset)
-            else readInt32ByteOffset(it, offset)
-        } else if (unsigned) readWord32ByteOffset(require(value), offset)
-        else readInt32ByteOffset(require(value), offset)
+        withByteRange(value, offset, 4, writable = false) { if (unsigned) readWord32ByteOffset(it, offset) else readInt32ByteOffset(it, offset) }
     @JvmStatic fun writeInt32ByteOffsetGuest(value: Any?, offset: Long, integer: Long) =
-        if (value is ManagedAllocation) value.accessByteRange(offset, 4, true) {
-            writeInt32ByteOffset(it, offset, integer)
-        } else writeInt32ByteOffset(require(value), offset, integer)
+        withByteRange(value, offset, 4, writable = true) { writeInt32ByteOffset(it, offset, integer) }
     @JvmStatic fun fillGuest(value: Any?, offset: Long, count: Long, byteValue: Long) = when (value) {
         is ManagedAllocation -> value.fill(offset, count, byteValue)
         else -> fill(require(value), offset, count, byteValue)
