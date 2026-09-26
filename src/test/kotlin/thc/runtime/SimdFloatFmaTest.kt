@@ -7,6 +7,9 @@ import jdk.incubator.vector.FloatVector
 import jdk.incubator.vector.DoubleVector
 
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.CallTarget
+import com.oracle.truffle.api.nodes.DirectCallNode
+import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -204,9 +207,13 @@ class SimdFloatFmaTest {
             for (row in native) same(model(names.indexOf(row[0]), lanes(row.subList(1,4).map(::parseBits))[row[4].toInt()]),
                 parseBits(row[5]), "Native ${row.take(5)}")
         }
+        fun compiled(target: CallTarget) = target.javaClass.getMethod("isValidLastTier").invoke(target) == true
         for (stage in manifest["stages"] as List<String>) for (backend in listOf("ast", "bytecode"))
+            for (inlining in listOf(false, true))
             Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("compiler.Inlining", inlining.toString())
+                .option("engine.SingleTierCompilationThreshold", "10000000")
                 .option("engine.CompilationFailureAction", "Throw").build().use { context ->
                 context.initialize("thc"); context.enter()
                 try {
@@ -215,20 +222,36 @@ class SimdFloatFmaTest {
                     for ((operation,name) in names.withIndex()) {
                         val linked = CoreModules.reachable(source, name) + mapOf("instrument" to true)
                         val program = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
+                        val label = "$stage/$backend/inlining=$inlining/$name"
+                        val host = program.hostEntryTarget(4)
                         val function = context.asValue(EntryValue(program, name, 4))
                         fun check(input: List<Long>, lane: Int) {
                             val expected = native?.first { row -> row.take(5) == listOf(name) + input.map(::unsigned) + lane.toString() }
                                 ?.last()?.let(::parseBits) ?: model(operation, lanes(input)[lane])
                             same(expected, function.execute(input[0],input[1],input[2],lane.toLong()).asLong(),
-                                "$stage/$backend/$name/$input/$lane")
+                                "$label/$input/$lane")
                         }
                         for (input in inputs) for (lane in 0 until laneCount) check(input, lane)
+                        // These entries may be CAFs returning closures. Snapshot
+                        // the resolved function, not its initial thunk root.
+                        val entry = program.entryTarget(name)
+                        fun activeEntries() = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
+                            .filter { it.callTarget === entry }.map { it.currentCallTarget }.distinct()
+                            .ifEmpty { listOf(entry) }
+                        val installedEntries = activeEntries()
                         assertTrue(function.invokeMember("compile").asBoolean())
+                        assertTrue(compiled(host), "$label host installation")
+                        installedEntries.forEach { assertTrue(compiled(it), "$label guest installation") }
                         for (input in inputs) for (lane in 0 until laneCount) {
                             val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                             check(input, lane)
                             assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() > before,
                                 "Every first-installed lane call must enter compiled code")
+                            assertSame(entry, program.entryTarget(name), "$label entry identity")
+                            assertSame(host, program.hostEntryTarget(4), "$label host identity")
+                            assertEquals(installedEntries, activeEntries(), "$label installed entry identities")
+                            assertTrue(compiled(host), "$label host retained")
+                            installedEntries.forEach { assertTrue(compiled(it), "$label guest retained") }
                             assertEquals(0L, program.diagnostics()["unsupportedTraps"])
                             assertEquals(0, language.handoffState.get().arguments.retainedReferences())
                             assertEquals(0, language.handoffState.get().results.retainedReferences())
@@ -236,12 +259,17 @@ class SimdFloatFmaTest {
                         }
                         // Compile the genuine vector worker itself as well: a
                         // compiled scalar wrapper alone could hide an interpreted FMA.
-                        val worker = program.entryTarget(name.removeSuffix("Case") + "Worker")
+                        val workerName = name.removeSuffix("Case") + "Worker"
+                        val worker = program.entryTarget(workerName)
                         val workerRoot = worker.rootNode as GuestRoot
                         val inputLayout = requireNotNull(workerRoot.typedInput)
                         val resultShape = requireNotNull(workerRoot.tupleResult)
                         assertEquals(3, inputLayout.logical.logicalArity)
                         assertEquals(3, inputLayout.logical.physicalArity)
+                        assertEquals(inputLayout.header + 3, inputLayout.packet.reps.size)
+                        assertEquals(1, resultShape.width)
+                        assertEquals(1, resultShape.layout.reps.size)
+                        assertTrue(resultShape.layout.isObject(0))
                         assertEquals(when {
                             vector512 && double -> GeneratedVectors.vectorDoubleX8
                             vector512 -> GeneratedVectors.vectorFloatX16
@@ -250,32 +278,69 @@ class SimdFloatFmaTest {
                             wide -> GeneratedVectors.vectorFloatX8
                             else -> CoreVector.FLOATX4
                         }, resultShape.proof.vector)
+                        for (argument in 0 until 3) {
+                            assertEquals(resultShape.proof.vector, inputLayout.logical.proof(argument).vector)
+                            assertEquals(argument, inputLayout.logical.offset(argument))
+                            assertTrue(inputLayout.packet.isObject(inputLayout.header + argument))
+                        }
+                        val doubleSpecies = when (laneCount) {
+                            2 -> DoubleVector.SPECIES_128
+                            4 -> DoubleVector.SPECIES_256
+                            else -> DoubleVector.SPECIES_512
+                        }
+                        val floatSpecies = when (laneCount) {
+                            4 -> FloatVector.SPECIES_128
+                            8 -> FloatVector.SPECIES_256
+                            else -> FloatVector.SPECIES_512
+                        }
+                        fun argumentVector(laneInputs: List<Triple<Double, Double, Double>>, argument: Int): Any {
+                            fun value(lane: Int) = when (argument) {
+                                0 -> laneInputs[lane].first
+                                1 -> laneInputs[lane].second
+                                else -> laneInputs[lane].third
+                            }
+                            if (double) return DoubleVector.fromArray(doubleSpecies, DoubleArray(laneCount, ::value), 0)
+                            return FloatVector.fromArray(floatSpecies, FloatArray(laneCount) { value(it).toFloat() }, 0)
+                        }
                         fun workerCall(input: List<Long>) {
                             val laneInputs = lanes(input)
+                            val arguments = List(3) { argumentVector(laneInputs, it) }
                             val loan = language.handoffState.get().arguments.acquire(inputLayout.packet)
                             loan.inputMode = 1
                             inputLayout.packet.setLong(loan, 0, 0L)
-                            for (index in 0 until laneCount) {
-                                laneInputs[index].toList().forEachIndexed { argument, value ->
-                                    val slot = inputLayout.header + argument * laneCount + index
-                                    if (double) inputLayout.packet.setDouble(loan, slot, value)
-                                    else inputLayout.packet.setFloat(loan, slot, value.toFloat())
-                                }
-                            }
+                            for (argument in arguments.indices)
+                                inputLayout.packet.setObject(loan, inputLayout.header + inputLayout.logical.offset(argument),
+                                    arguments[argument])
                             val result = ownedTupleResult(invokeTypedInput(worker, loan) { Calls.target(worker, it) }, resultShape)
-                            for (lane in 0 until laneCount) same(model(operation, laneInputs[lane]),
-                                bits(if (double) resultShape.layout.getDouble(result, lane)
-                                    else resultShape.layout.getFloat(result, lane).toDouble()), "$stage/$backend/$name worker lane $lane")
+                            val raw = resultShape.layout.getObject(result, 0)
+                            if (double) {
+                                val vector = assertInstanceOf(DoubleVector::class.java, raw)
+                                assertEquals(doubleSpecies, vector.species())
+                                assertEquals(laneCount, vector.length())
+                                for (lane in 0 until laneCount) same(model(operation, laneInputs[lane]),
+                                    bits(vector.lane(lane)), "$label worker lane $lane")
+                            } else {
+                                val vector = assertInstanceOf(FloatVector::class.java, raw)
+                                assertEquals(floatSpecies, vector.species())
+                                assertEquals(laneCount, vector.length())
+                                for (lane in 0 until laneCount) same(model(operation, laneInputs[lane]),
+                                    bits(vector.lane(lane).toDouble()), "$label worker lane $lane")
+                            }
                         }
                         inputs.forEach(::workerCall)
                         worker.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(worker, true)
+                        assertTrue(compiled(worker), "$label worker installation")
                         for (input in inputs) {
                             val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                             workerCall(input)
                             assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
-                            assertEquals(true, worker.javaClass.getMethod("isValidLastTier").invoke(worker))
+                            assertSame(worker, program.entryTarget(workerName), "$label worker identity")
+                            assertTrue(compiled(worker), "$label worker retained")
                             assertEquals(0, language.handoffState.get().arguments.depth)
                             assertEquals(0, language.handoffState.get().results.depth)
+                            assertEquals(0, language.handoffState.get().arguments.retainedReferences())
+                            assertEquals(0, language.handoffState.get().results.retainedReferences())
+                            assertNull(language.handoffState.get().pending)
                         }
                     }
                 } finally { context.leave() }
