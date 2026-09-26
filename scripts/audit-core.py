@@ -742,6 +742,9 @@ class Audit:
                         or symbol in (core_original_foreign.TCGETATTR_SYMBOL, core_original_foreign.TCSETATTR_SYMBOL)
                         or symbol in core_original_foreign.SIGSET_OPERATIONS
                         or symbol == 'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask'
+                        or symbol in ('isFloatNaN', 'isFloatInfinite', 'isFloatFinite', 'isFloatDenormalized', 'isFloatNegativeZero',
+                                      'isDoubleNaN', 'isDoubleInfinite', 'isDoubleFinite', 'isDoubleDenormalized', 'isDoubleNegativeZero',
+                                      'rintFloat', 'rintDouble')
                         or symbol in ('getOrSetSystemEventThreadEventManagerStore',
                                       'getOrSetGHCConcSignalSignalHandlerStore',
                                       'getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',
