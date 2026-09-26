@@ -7,6 +7,15 @@ terms in [LICENSE.txt](LICENSE.txt). Edward Kmett's copyright notice extends
 through 2026; the Oracle notices are unchanged. Third-party components retain
 the terms identified below.
 
+## zlib checksum source provider
+
+`compiler/pinned-zlib/1.2.11` contains unchanged checksum sources and supporting
+headers from zlib 1.2.11. They retain the zlib license and original Mark Adler /
+Jean-loup Gailly notices in `zlib.h` and `README`. The acquisition source and
+archive digest are recorded in `compiler/pinned-zlib/README.md`. THC compiles
+these functions as LLVM over managed buffers; it does not replace them with
+handwritten checksum implementations.
+
 ## Cadenza runtime adaptation
 
 THC's frame, closure and application runtime is a close adaptation of Edward

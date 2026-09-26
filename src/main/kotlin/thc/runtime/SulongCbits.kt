@@ -4,6 +4,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.interop.InteropLibrary
 import com.oracle.truffle.api.interop.InvalidBufferOffsetException
 import com.oracle.truffle.api.interop.TruffleObject
@@ -302,7 +303,7 @@ internal class CbitsBuffer @JvmOverloads constructor(bytes: ByteBuffer, private 
     private fun requireWritable() { if (!writable) throw UnsupportedMessageException.create() }
     private fun view(order: ByteOrder): ByteBuffer = if (order == ByteOrder.LITTLE_ENDIAN) little else big
 
-    @ExportMessage @Throws(InvalidBufferOffsetException::class)
+    @ExportMessage @TruffleBoundary @Throws(InvalidBufferOffsetException::class)
     fun readBuffer(offset: Long, destination: ByteArray, destinationOffset: Int, length: Int) {
         little.get(index(offset, length), destination, destinationOffset, length)
     }

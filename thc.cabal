@@ -12,6 +12,13 @@ maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  compiler/test-fixtures/OriginalDigestNative.hs
+  compiler/test-fixtures/OriginalErfNative.hs
+  compiler/test-fixtures/OriginalErfEntry.hs
+  compiler/pinned-zlib/README.md
+  compiler/pinned-zlib/1.2.11/README
+  compiler/pinned-zlib/1.2.11/*.c
+  compiler/pinned-zlib/1.2.11/*.h
   test/fixtures/run-native-variants/cabal.project
   test/fixtures/run-native-variants/native-variants.cabal
   test/fixtures/run-native-variants/Main.hs
@@ -397,6 +404,7 @@ executable thc
     THC.Driver.NativeCache
     THC.Driver.NativeRecipe
     THC.Driver.PackageNative
+    THC.Driver.NativeLibrarySources
     THC.Driver.ScalarBitcode
     THC.Driver.RuntimeShim
     THC.Driver.GhcProxy
@@ -456,6 +464,7 @@ test-suite driver-tests
     THC.Driver.NativeCache
     THC.Driver.NativeRecipe
     THC.Driver.PackageNative
+    THC.Driver.NativeLibrarySources
     THC.Driver.ScalarBitcode
     THC.Driver.RuntimeShim
   build-tool-depends: thc:thc
@@ -726,6 +735,7 @@ executable thc-fixtures
     OriginalOpenFixtures
     PackageScalarFixtures
     StablePtrFFIFixtures
+    PackageNativeOriginalsFixtures
     HashableFfiFixtures
     OriginalTermiosFixtures
     OriginalTcsetattrFixtures
@@ -759,6 +769,7 @@ executable thc-fixtures
     THC.Driver.NativeCache
     THC.Driver.NativeRecipe
     THC.Driver.PackageNative
+    THC.Driver.NativeLibrarySources
     THC.Driver.ScalarBitcode
     THC.Driver.Installed
     THC.Driver.RuntimeShim

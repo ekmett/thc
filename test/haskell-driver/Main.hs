@@ -28,6 +28,7 @@ main = do
   selected <- case arguments of
     ["--run-options-only"] -> pure [RunOptionsTests.tests env]
     ["--run-ffi-only"] -> pure [RunOptionsTests.tests env, RunTests.tests env]
+    ["--store-inventory-only"] -> pure [EmptyStoreProjectTests.tests env]
     [] -> pure
       [ InstalledForeignTests.tests
       , ScalarBitcodeTests.tests
@@ -44,6 +45,6 @@ main = do
       , StoreProjectTests.tests env
       , EmptyStoreProjectTests.tests env
       ]
-    _ -> die "Usage: driver-tests [--run-options-only|--run-ffi-only]"
+    _ -> die "Usage: driver-tests [--run-options-only|--run-ffi-only|--store-inventory-only]"
   counts <- runTestTT $ TestList selected
   if errors counts + failures counts == 0 then pure () else exitFailure

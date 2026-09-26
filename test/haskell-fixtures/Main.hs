@@ -71,6 +71,7 @@ import CompilerRtsFixtures (prepareCompilerRts)
 import RtsDiagnosticFixtures (prepareRtsDiagnostics)
 import OriginalOpenFixtures (prepareOriginalOpen)
 import PackageScalarFixtures (preparePackageScalar)
+import PackageNativeOriginalsFixtures (preparePackageNativeOriginals)
 import HashableFfiFixtures (prepareHashableFfi)
 import OriginalTermiosFixtures (prepareOriginalTermios)
 import OriginalTcsetattrFixtures (prepareOriginalTcsetattr)
@@ -955,6 +956,7 @@ main = do
     ["original-open"] -> prepareOriginalOpen root
     ["package-scalar-cbits"] -> preparePackageScalar root
     ["stableptr-ffi"] -> prepareStablePtrFFI root
+    ["package-native-originals"] -> preparePackageNativeOriginals root
     ["hashable-ffi"] -> prepareHashableFfi root
     ["libdw-unavailable"] -> prepareLibdwUnavailable root
     ["original-termios"] -> prepareOriginalTermios root

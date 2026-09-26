@@ -90,6 +90,99 @@ actual guest execution and reporting original-package closure blockers.
 `array` freeze/thaw and `bytestring` CString paths exposed by these applications,
 using the same full-Core environment and backend/startup distinction above.
 
+## Run real applications
+
+The following Linux x86_64 examples run the original **Happy 2.2.1** parser
+generator and **HsColour 1.25** highlighter inside THC. Their generated files
+have been compared byte-for-byte with native GHC in both backends and both
+handoff modes. These command lines select bytecode, which runs the complete
+executable startup/shutdown. The AST checks use the original raw `Main.main`
+instead; they are not a general executable-lifecycle claim. See the
+[application results and pinned source hashes](../examples/standard-apps/README.md).
+
+Start in a built THC checkout with the complete-Core GHC 9.14.1 installation
+and matching `ghc-pkg` on `PATH`. Set `GHC_SOURCE` to its matching configured
+source tree as described in [GHC library Core](ghc-core.md). These are ordinary
+project-directory runs; the default partial installed-library provider is not
+enough for these programs.
+
+```sh
+export THC_ROOT="$PWD"
+export GHC="$(command -v ghc)"
+export GHC_PKG="$(command -v ghc-pkg)"
+export GHC_SOURCE=/absolute/path/to/configured/ghc-9.14.1
+THC_DRIVER=$(cabal list-bin exe:thc)
+THC_APPS="$THC_ROOT/build/real-programs"
+THC_OUTPUT="$THC_APPS/output"
+mkdir -p "$THC_OUTPUT"
+
+cabal get happy-2.2.1 happy-lib-2.2.1 hscolour-1.25 \
+  --index-state=2026-09-24T12:38:18Z --destdir="$THC_APPS"
+for package in happy-2.2.1 hscolour-1.25; do
+  printf '%s\n' 'packages: .' 'tests: False' 'benchmarks: False' \
+    'index-state: 2026-09-24T12:38:18Z' > "$THC_APPS/$package/cabal.project"
+done
+```
+
+Run that source preparation once in a fresh directory; keep the downloaded
+licenses and the generated build/cache directories for subsequent runs.
+
+### Happy: generate a parser
+
+Point Happy at its original packaged templates, then run its real command line:
+
+```sh
+export happy_lib_datadir="$THC_APPS/happy-lib-2.2.1/data"
+THC_BACKEND=bytecode "$THC_DRIVER" run "$THC_APPS/happy-2.2.1" \
+  --exe happy --thc-root "$THC_ROOT" --dist-dir "$THC_APPS/happy-guest" \
+  --with-ghc "$GHC" --with-ghc-pkg "$GHC_PKG" \
+  --installed-core required --ghc-source "$GHC_SOURCE" -- \
+  -o "$THC_OUTPUT/Parser.hs" "$THC_ROOT/examples/standard-apps/TinyParser.y"
+
+"$GHC" -O1 -outputdir "$THC_OUTPUT/parser-objects" \
+  "$THC_OUTPUT/Parser.hs" -o "$THC_OUTPUT/parser"
+"$THC_OUTPUT/parser"
+```
+
+The parser prints `3`. Happy itself runs in THC; the last two commands use
+native GHC to compile and run the Haskell source Happy generated. To check its
+version, use the same `thc run` command with `-- --version` as its suffix.
+
+Once acquired, its exact Core manifest can also be launched directly without
+invoking Cabal or the exporter again:
+
+```sh
+THC_BACKEND=bytecode "$THC_ROOT/build/install/thc/bin/thc" \
+  --run-executable "@$THC_APPS/happy-guest/packages.json" \
+  main::Main.main ghc-internal:GHC.Internal.TopHandler.flushStdHandles -- \
+  happy -o "$THC_OUTPUT/Parser-again.hs" "$THC_ROOT/examples/standard-apps/TinyParser.y"
+```
+
+Keep `happy_lib_datadir` set and retain the manifest's referenced Core bundles.
+
+### HsColour: generate HTML
+
+HsColour needs the checked metadata-only patch listing its existing home
+modules. Apply it to the freshly unpacked copy; no Haskell source is changed:
+
+```sh
+(cd "$THC_APPS/hscolour-1.25" && \
+  git apply "$THC_ROOT/examples/standard-apps/hscolour-1.25-home-modules.patch")
+THC_BACKEND=bytecode "$THC_DRIVER" run "$THC_APPS/hscolour-1.25" \
+  --exe HsColour --thc-root "$THC_ROOT" --dist-dir "$THC_APPS/hscolour-guest" \
+  --with-ghc "$GHC" --with-ghc-pkg "$GHC_PKG" \
+  --installed-core required --ghc-source "$GHC_SOURCE" -- \
+  -html "-o$THC_OUTPUT/TinyMath.html" "$THC_ROOT/examples/standard-apps/TinyMath.hs"
+```
+
+Open `build/real-programs/output/TinyMath.html` to see the highlighted file.
+An unchanged HsColour package still has the declared-module inventory limitation;
+the patch is explicit, not an automatic source rewrite by THC.
+
+Doctest and Pandoc remain development targets, not demonstrated runnable commands
+here. Native baselines, strict Core admission and actual THC execution are
+reported separately in the application notes.
+
 ## Build and exercise
 
 Use GHC 9.14.1 with its bundled Cabal/Cabal-syntax 3.16. The API bounds are narrow
@@ -214,6 +307,17 @@ The empty Core bundle retains the complete registration, including native librar
 metadata, and revalidates it on cache reads. Referenced foreign calls still pass
 the normal strict audit. A missing capture for a library with Haskell modules
 still fails; no replacement Core is invented.
+
+A reexport-only store library, such as the top-level `happy-lib` component,
+also owns no Core. Its bundle retains the original registration separately as
+`reexportRegistration`. The driver accepts only definite reexports, preserves
+their exposed names and original provider unit/module identities, and checks
+each provider against the resolved dependency closure and captured module
+inventory before writing the executable manifest. Renaming an exposed module
+does not rename or synthesize its provider's Core. Hidden or ordinary owned
+modules still require actual exports. `cabal test driver-tests
+--test-options=--store-inventory-only --test-show-details=direct` exercises empty,
+C-only and renamed-reexport store dependencies, both backends, and cache reuse.
 
 This is a bounded executable path. Native code remains necessary for Template
 Haskell and build tools. THC still rejects unsupported runtime dependencies;

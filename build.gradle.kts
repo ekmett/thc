@@ -589,6 +589,24 @@ for ((taskName, dense) in listOf("stablePtrFfiFullCoreDefault" to false, "stable
         }
     }
 }
+for ((taskName, dense) in listOf("packageNativeOriginalsDefault" to false, "packageNativeOriginalsDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Checks original digest C++/zlib and safe erf/libm against native Haskell observations."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        systemProperty("thc.handoffSlabs", dense.toString())
+        inputs.files(fileTree("build/original-native") { include("linked/**/*.json", "*-native.tsv", "erf-entry/**/*.json", "erf-audit.json", "manifest.json", "sources/**") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.PackageNativeOriginalsTest") }
+        outputs.upToDateWhen { false }
+        doFirst {
+            check(file("build/original-native/manifest.json").isFile) {
+                "Missing original digest fixture: set THC_DIGEST_SOURCE and run cabal run exe:thc-fixtures -- package-native-originals"
+            }
+        }
+    }
+}
 for ((taskName, dense) in listOf("hashableFfiFullCoreDefault" to false, "hashableFfiFullCoreDense" to true)) {
     tasks.register<Test>(taskName) {
         group = "verification"
