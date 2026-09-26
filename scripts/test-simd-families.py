@@ -232,6 +232,9 @@ class SimdFamiliesTest(unittest.TestCase):
         self.assertEqual(list(range(len(entries))), sorted(i for group in groups.values() for i in group))
         for group in groups.values():
             self.assertLessEqual(sum(entries[i][0]['lanes'] for i in group), 112)
+            if any(entries[i][0]['laneRep'] in ('FloatRep', 'DoubleRep') and
+                   entries[i][0]['bits'] > 128 for i in group):
+                self.assertEqual(1, len(group))
 
     def test_contradictory_tables_are_rejected(self):
         original = json.loads(GEN.SPEC.read_text())
