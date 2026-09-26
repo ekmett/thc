@@ -660,6 +660,16 @@ internal class ManagedAddress private constructor(
 
     companion object {
         private val NATIVE_BORROW_TIE = Any()
+        /** Hold every distinct native owner for one synchronous multi-pointer call. */
+        internal fun <T> withNativeBorrows(addresses: List<ManagedAddress>, body: () -> T): T {
+            val owners = addresses.mapNotNull { it.native }.distinct().sortedWith { first, second ->
+                Integer.compareUnsigned(System.identityHashCode(first), System.identityHashCode(second))
+            }
+            fun acquire(index: Int): T = if (index == owners.size) body()
+                else owners[index].borrow().use { acquire(index + 1) }
+            val collision = owners.zipWithNext().any { (a, b) -> System.identityHashCode(a) == System.identityHashCode(b) }
+            return if (collision) synchronized(NATIVE_BORROW_TIE) { acquire(0) } else acquire(0)
+        }
         private val NULL = ManagedAddress(null, null, 0L)
         fun nullAddress(): ManagedAddress = NULL
         internal fun fromNativeAllocation(owner: ManagedNativeAllocations.Owner): ManagedAddress =

@@ -1319,6 +1319,20 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = BytecodePackageScalarArguments.class, name = "arguments")
+    public static final class LinkedPackageVoid {
+        @Specialization public static void call(VirtualFrame frame, BytecodePackageScalarArguments arguments,
+                @Bind("$node") Node node,
+                @Cached(value = "createAccess(arguments)", neverDefault = true) PackageScalarAccess access) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            access.executeVoid(arguments.read(bytecode, frame), arguments.state(bytecode, frame));
+        }
+        public static PackageScalarAccess createAccess(BytecodePackageScalarArguments arguments) {
+            return new PackageScalarAccess(arguments.getCall());
+        }
+    }
+
+    @Operation
     public static final class NativeFree {
         @Specialization public static void apply(ManagedAddress address, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);

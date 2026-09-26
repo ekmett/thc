@@ -88,4 +88,52 @@ class PackageScalarLinksTest {
             CoreModules.merge(listOf(first, module("separate-unit", digest = "a".repeat(64))))
         }
     }
+
+    @Test fun nativeCapiRetainsWrappersAndAdmitsOnlyDeclaredByteArrayCarriers() {
+        val base = module()
+        val oldLink = base["packageScalarLink"] as Map<String, Any?>
+        val oldProof = base["staticForeignImports"] as Map<String, Any?>
+        val oldImport = (oldProof["imports"] as List<Map<String, Any?>>).single()
+        val scalarType = oldImport["declaredType"]
+        val quantified = mapOf("kind" to "forall", "binderKind" to scalarType,
+            "body" to mapOf("kind" to "bound-variable", "index" to 0L))
+        val abi = mapOf("symbol" to "wrapper", "entry" to "thc_native_${"a".repeat(64)}_0",
+            "convention" to "capi", "safety" to "unsafe", "arguments" to listOf("MutableByteArray#", "ByteArray#"),
+            "result" to "void")
+        val link = oldLink + mapOf("profile" to "thc-package-c-ffi-v1", "abi" to listOf(abi))
+        val foreign = mapOf("schema" to 1L, "execution" to "not-linked", "files" to emptyList<Any>(),
+            "stubs" to mapOf("header" to "", "source" to "void wrapper(void *s, void *p) { update(s,p); }",
+                "initializers" to emptyList<Any>(), "finalizers" to emptyList<Any>()))
+        val imported = oldImport + mapOf("header" to "original.h", "convention" to "capi",
+            "declaredType" to quantified, "normalizedType" to quantified,
+            "emitted" to mapOf("symbol" to "wrapper", "unit" to base["unit"], "convention" to "capi", "safety" to "unsafe",
+                "arguments" to listOf("MutableByteArray#", "ByteArray#", "void"), "result" to listOf("void")))
+        val proof = oldProof + mapOf("expectedForeign" to foreign, "imports" to listOf(imported))
+        val native = (base - "packageScalarLink") + mapOf("schema" to 2L, "foreign" to foreign,
+            "staticForeignImports" to proof, "staticForeignImportStubs" to proof, "packageNativeLink" to link)
+        assertEquals(setOf("wrapper"), PackageScalarLinks.read(native)!!.proved)
+        assertNotNull(PackageScalarLinks.read(native + ("packageNativeLink" to (link + ("buildInputs" to emptyMap<String, Any>())))))
+        assertEquals(1, (CoreModules.merge(listOf(native))["packageScalarLinks"] as List<*>).size)
+        val inlined = (base - "packageScalarLink" - "staticForeignImports") +
+            mapOf("module" to "Inlined", "packageNativeLink" to link)
+        assertEquals(emptySet<String>(), PackageScalarLinks.read(inlined)!!.proved)
+        assertThrows(IllegalArgumentException::class.java) { CoreModules.merge(listOf(inlined)) }
+        assertEquals(1, (CoreModules.merge(listOf(native, inlined))["packageScalarLinks"] as List<*>).size)
+        fun abiChange(change: Map<String, Any?>) = native + ("packageNativeLink" to (link + ("abi" to listOf(abi + change))))
+        val bad = listOf(
+            native - "foreign",
+            native - "staticForeignImports",
+            native + ("staticForeignImportStubs" to (proof + ("imports" to emptyList<Any>()))),
+            native + ("foreign" to (foreign + ("files" to listOf("unlinked.c")))),
+            abiChange(mapOf("arguments" to listOf("BoxedRep (Just Unlifted)"))),
+            abiChange(mapOf("result" to "AddrRep")),
+            abiChange(mapOf("safety" to "safe")))
+        bad.forEachIndexed { index, altered -> assertThrows(IllegalArgumentException::class.java,
+            { CoreModules.merge(listOf(altered)) }, "native mutation $index") }
+        val freeType = mapOf("kind" to "bound-variable", "index" to 0L)
+        val freeProof = proof + ("imports" to listOf(imported + ("declaredType" to freeType)))
+        assertThrows(IllegalArgumentException::class.java) {
+            CoreModules.merge(listOf(native + mapOf("staticForeignImports" to freeProof, "staticForeignImportStubs" to freeProof)))
+        }
+    }
 }

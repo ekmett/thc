@@ -24,22 +24,29 @@ internal object CorePackageScalarForeign {
         null -> CoreKind.VOID
         "FloatRep" -> CoreKind.FLOAT
         "DoubleRep" -> CoreKind.DOUBLE
+        "AddrRep" -> CoreKind.ADDRESS
+        "ByteArray#", "MutableByteArray#" -> CoreKind.OBJECT
         else -> CoreKind.LONG
+    }
+    private fun primReps(rep: String?): List<String> = when (rep) {
+        null -> emptyList()
+        "ByteArray#", "MutableByteArray#" -> listOf("BoxedRep (Just Unlifted)")
+        else -> listOf(rep)
     }
     private fun scalar(value: Any?, rep: String?, declared: Boolean = false): Boolean {
         val raw = value as? Map<*, *> ?: return false
         return raw.keys == setOf("kind", "primReps", "evaluated") &&
-            raw["kind"] == kind(rep).name.lowercase() && raw["primReps"] == listOfNotNull(rep) &&
+            raw["kind"] == kind(rep).name.lowercase() && raw["primReps"] == primReps(rep) &&
             raw["evaluated"] is Boolean && (!declared || raw["evaluated"] == false)
     }
     private fun result(value: Any?, rep: String, declared: Boolean = false): Boolean {
         val raw = value as? Map<*, *> ?: return false
         val fields = raw["components"] as? List<*> ?: return false
+        val reps = if (rep == "void") listOf(null) else listOf(null, rep)
         return raw.keys == setOf("kind", "primReps", "evaluated", "aggregate", "components") &&
-            raw["kind"] == "unknown" && raw["aggregate"] == "unboxed-tuple" && raw["primReps"] == listOf(rep) &&
-            raw["evaluated"] is Boolean && (!declared || raw["evaluated"] == false) && fields.size == 2 &&
-            scalar(fields[0], null) && scalar(fields[1], rep) &&
-            (fields[0] as Map<*, *>)["evaluated"] == true && (fields[1] as Map<*, *>)["evaluated"] == true
+            raw["kind"] == "unknown" && raw["aggregate"] == "unboxed-tuple" && raw["primReps"] == reps.filterNotNull() &&
+            raw["evaluated"] is Boolean && (!declared || raw["evaluated"] == false) && fields.size == reps.size &&
+            fields.indices.all { scalar(fields[it], reps[it]) && (fields[it] as Map<*, *>)["evaluated"] == true }
     }
     fun validate(metadata: Any?, arguments: List<*>, flags: List<*>, output: Any?,
                  links: List<PackageScalarLink>): PackageScalarCall? {
@@ -52,7 +59,7 @@ internal object CorePackageScalarForeign {
         check(descriptor.keys == setOf("schema", "target", "convention", "safety", "arity", "suppliedArity", "argumentReps", "resultRep") &&
             number(descriptor["schema"], 1) && target.keys == setOf("kind", "symbol", "unit", "isFunction") &&
             target["kind"] == "static" && target["isFunction"] == true &&
-            descriptor["convention"] == "ccall" && descriptor["safety"] == "unsafe", "static unsafe declaration")
+            descriptor["convention"] == signature.convention && descriptor["safety"] == "unsafe", "static unsafe declaration")
         val expected = signature.arguments + null
         val declared = descriptor["argumentReps"] as? List<*> ?: fault("Missing package C declared arguments")
         check(number(descriptor["arity"], expected.size) && number(descriptor["suppliedArity"], expected.size) &&
@@ -65,10 +72,10 @@ internal object CorePackageScalarForeign {
     fun validateOperand(call: PackageScalarCall, index: Int, lowered: CoreRepresentation, stored: CoreRepresentation?) {
         val rep = call.arguments.getOrNull(index)
         check(lowered.present && !lowered.isAggregate && !lowered.isVector &&
-            lowered.kind == kind(rep) && lowered.primReps == listOfNotNull(rep), "lowered operand $index")
+            lowered.kind == kind(rep) && lowered.primReps == primReps(rep), "lowered operand $index")
         if (stored?.present == true) check(!stored.isAggregate && !stored.isVector &&
             stored.kind in setOf(kind(rep), CoreKind.UNKNOWN) &&
-            (stored.primReps == null || stored.primReps == listOfNotNull(rep)), "stored operand $index")
+            (stored.primReps == null || stored.primReps == primReps(rep)), "stored operand $index")
     }
 }
 
@@ -80,17 +87,21 @@ internal class PackageScalarExpression(private val call: PackageScalarCall,
     @ExplodeLoop override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val values = arrayOfNulls<Any>(call.arguments.size)
         for (index in values.indices) values[index] = when (call.arguments[index]) {
-            "Int32Rep" -> packageScalarInt32(operands[index].executeRequiredLong(frame))
-            "Int64Rep" -> operands[index].executeRequiredLong(frame)
+            "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep" ->
+                packageCInteger(call.arguments[index], operands[index].executeRequiredLong(frame))
+            "IntRep", "WordRep", "Int64Rep", "Word64Rep" -> operands[index].executeRequiredLong(frame)
             "FloatRep" -> operands[index].executeRequiredFloat(frame)
             "DoubleRep" -> operands[index].executeRequiredDouble(frame)
+            "AddrRep", "ByteArray#", "MutableByteArray#" -> operands[index].execute(frame)
             else -> fault("Invalid package C operand")
         }
         val state = operands.last().execute(frame)
         when (call.result) {
-            "Int32Rep", "Int64Rep" -> FrameAccess.writeLong(frame, slots[offset], access.executeLong(values, state))
+            "IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep" ->
+                FrameAccess.writeLong(frame, slots[offset], access.executeLong(values, state))
             "FloatRep" -> FrameAccess.writeFloat(frame, slots[offset], access.executeFloat(values, state))
             "DoubleRep" -> FrameAccess.writeDouble(frame, slots[offset], access.executeDouble(values, state))
+            "void" -> access.executeVoid(values, state)
             else -> fault("Invalid package C result")
         }
         return null
@@ -103,10 +114,12 @@ internal class BytecodePackageScalarArguments(val call: PackageScalarCall,
     @ExplodeLoop fun read(bytecode: BytecodeNode, frame: VirtualFrame): Array<Any?> {
         val values = arrayOfNulls<Any>(slots.size)
         for (index in slots.indices) values[index] = when (call.arguments[index]) {
-            "Int32Rep" -> packageScalarInt32(slots[index].getLong(bytecode, frame))
-            "Int64Rep" -> slots[index].getLong(bytecode, frame)
+            "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep" ->
+                packageCInteger(call.arguments[index], slots[index].getLong(bytecode, frame))
+            "IntRep", "WordRep", "Int64Rep", "Word64Rep" -> slots[index].getLong(bytecode, frame)
             "FloatRep" -> slots[index].getFloat(bytecode, frame)
             "DoubleRep" -> slots[index].getDouble(bytecode, frame)
+            "AddrRep", "ByteArray#", "MutableByteArray#" -> slots[index].getObject(bytecode, frame)
             else -> fault("Invalid package C argument local")
         }
         return values
