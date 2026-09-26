@@ -2091,14 +2091,21 @@ def main():
         report = Audit(modules, json.loads(args.capabilities.read_text())).run(args.entry, io_main=args.io_main)
     except (OSError, ValueError, TypeError) as error:
         parser.error(str(error))
-    text = json.dumps(report, indent=2) + '\n'
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(text)
+        with args.output.open('w') as stream:
+            write_report(report, stream)
     else:
-        print(text, end='')
+        write_report(report, sys.stdout)
     print(json.dumps(dict(accepted=report['accepted'], **report['summary'])), file=sys.stderr)
     return 0 if report['accepted'] else 1
+
+
+def write_report(report, stream):
+    # Large application reports must not materialize both the encoder's full
+    # chunk list and a second, joined JSON string beside the loaded Core.
+    json.dump(report, stream, indent=2)
+    stream.write('\n')
 
 
 if __name__ == '__main__':
