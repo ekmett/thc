@@ -173,6 +173,29 @@ THC_TASTY_SOURCE=/path/to/tasty-1.5.4 cabal run exe:thc-fixtures -- wcwidth
 ./gradlew --continue wcwidthDefault wcwidthDense
 ```
 
+The seven original `unix-2.8.8.0-inplace` wait-status CAPI declarations
+(`WCOREDUMP`, `WSTOPSIG`, `WIFSTOPPED`, `WTERMSIG`, `WIFSIGNALED`,
+`WEXITSTATUS`, `WIFEXITED`) execute wrappers compiled against the installed
+`HsUnix.h` on Linux x86-64. They reuse the checked scalar foreign-call path
+with the exact original unit, wrapper symbol, CInt width, and hidden
+State/result tuple. Raw macro results are preserved, including `WCOREDUMP`'s
+`128` mask; there is no JVM status formula or guest process/fork emulation.
+The context must permit native access.
+
+The `unix-wait-status` fixture recovers genuine declarations from the installed
+`System.Posix.Process.Internals` Core, specializes typed consumers with those
+FCallIds, and compiles the same calls with native GHC. Its 280 observations
+cover exit/signal/stop encodings, flags, signed CInt edges, and outer Int
+narrowing. Both backends compare pre/post-tidy Core interpreted and from the
+first installed compiled call, with inlining enabled and disabled. These
+leaf checks do not claim full process management or a completed AD test run.
+
+```sh
+cabal run exe:thc-fixtures -- unix-wait-status
+./gradlew --continue testDefault --tests thc.runtime.UnixWaitStatusTest \
+  testDense --tests thc.runtime.UnixWaitStatusTest
+```
+
 Installed `text-2.1.3-inplace` also has two closed original-C adapters on Linux
 x86-64: `_hs_text_memchr` and `_hs_text_measure_off`. Their exact unsafe
 State-threaded declarations retain the `ByteArray#`, size/byte and signed

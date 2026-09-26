@@ -58,6 +58,20 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
     private val strerrorTask = FutureTask { load(env, "strerror") }
     private val strerrorLocaleTask = FutureTask { load(env, "strerror-locale") }
     private val textTask = FutureTask { load(env, "text") }
+    private val waitStatusTask = FutureTask { load(env, "wait-status") }
+    internal fun waitStatus(operation: OriginalStdioOp, status: Int): Long {
+        if (System.getProperty("os.name") != "Linux" || System.getProperty("os.arch") !in setOf("amd64", "x86_64"))
+            fault("Original unix wait status currently requires Linux x86_64")
+        waitStatusTask.run()
+        val library = try {
+            if (waitStatusTask.isDone) waitStatusTask.get()
+            else TruffleSafepoint.setBlockedThreadInterruptibleFunction(null,
+                TruffleSafepoint.InterruptibleFunction<FutureTask<Any>, Any> { it.get() }, waitStatusTask)
+        } catch (failure: ExecutionException) { throw (failure.cause ?: failure) }
+        val result = interop.execute(interop.readMember(library, "thc_wait_${operation.name}"), status)
+        if (!interop.fitsInInt(result)) fault("Original unix wait-status result is not CInt")
+        return interop.asInt(result).toLong()
+    }
     internal fun textFunction(operation: TextForeignOp): Any {
         if (System.getProperty("os.name") != "Linux" || System.getProperty("os.arch") !in setOf("amd64", "x86_64"))
             fault("Original text cbits currently require Linux x86_64")

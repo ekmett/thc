@@ -6,9 +6,16 @@ package thc.runtime
 import com.oracle.truffle.api.nodes.Node
 import thc.Language
 
-/** Exact pinned GHC declarations, not aliases for arbitrary POSIX imports. */
+/** Exact pinned GHC/unix declarations, not aliases for arbitrary POSIX imports. */
 internal enum class OriginalStdioOp(val symbol: String, val convention: String, val safety: String,
-    val arguments: List<String?>, val result: String?) {
+    val arguments: List<String?>, val result: String?, val unit: String = "ghc-internal") {
+    WCOREDUMP("ghczuwrapperZC0ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWCOREDUMP", "capi", "unsafe", listOf("Int32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
+    WSTOPSIG("ghczuwrapperZC1ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWSTOPSIG", "capi", "unsafe", listOf("Int32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
+    WIFSTOPPED("ghczuwrapperZC2ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWIFSTOPPED", "capi", "unsafe", listOf("Int32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
+    WTERMSIG("ghczuwrapperZC3ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWTERMSIG", "capi", "unsafe", listOf("Int32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
+    WIFSIGNALED("ghczuwrapperZC4ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWIFSIGNALED", "capi", "unsafe", listOf("Int32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
+    WEXITSTATUS("ghczuwrapperZC5ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWEXITSTATUS", "capi", "unsafe", listOf("Int32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
+    WIFEXITED("ghczuwrapperZC6ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWIFEXITED", "capi", "unsafe", listOf("Int32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
     GET_SAVED_TERMIOS("__hscore_get_saved_termios", "ccall", "unsafe", listOf("Int32Rep", null), "AddrRep"),
     SET_SAVED_TERMIOS("__hscore_set_saved_termios", "ccall", "unsafe", listOf("Int32Rep", "AddrRep", null), null),
     SIGPROCMASK("ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask", "capi", "unsafe",
@@ -93,6 +100,8 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     STRERROR("base_strerror_r", "ccall", "safe", listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int32Rep");
 
     val readiness: Boolean get() = this == READY_SAFE || this == READY_UNSAFE
+    val waitStatus: Boolean get() = this == WCOREDUMP || this == WSTOPSIG || this == WIFSTOPPED ||
+        this == WTERMSIG || this == WIFSIGNALED || this == WEXITSTATUS || this == WIFEXITED
     val duplication: Boolean get() = this == DUP || this == DUP2
     val locking: Boolean get() = this == LOCK || this == UNLOCK
     // Keep the operation a PE constant: enum `when` reads Kotlin's mutable
@@ -118,6 +127,14 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
 }
 
 internal object CoreOriginalStdio {
+    @JvmStatic @com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
+    fun waitStatus(node: Node?, operation: OriginalStdioOp, status: Long): Long {
+        requireProof(operation.waitStatus, "wait-status operation")
+        val state = Language.currentState(node)
+        val previous = state.threads.enterForeign()
+        try { return state.cbits().waitStatus(operation, status.toInt()) }
+        finally { state.threads.leaveForeign(previous) }
+    }
     @JvmStatic fun current(node: Node): ManagedStdio = Language.currentState(node).stdio
     @JvmStatic fun locks(node: Node): RtsFileLocks = Language.currentState(node).rtsFileLocks
     @JvmStatic fun iconv(node: Node): ManagedIconv = Language.currentState(node).iconv
@@ -136,7 +153,7 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation == OriginalStdioOp.UNLINK || operation.flagConstant || operation.fcntl || operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation == OriginalStdioOp.TCSETATTR || operation.opening || operation.iconv || operation.strerror || operation.duplication || operation.locking,
+        requireProof(operation.waitStatus || operation == OriginalStdioOp.UNLINK || operation.flagConstant || operation.fcntl || operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation == OriginalStdioOp.TCSETATTR || operation.opening || operation.iconv || operation.strerror || operation.duplication || operation.locking,
             "strict operand operation")
         val primitive = operation.arguments[index]
         val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }
@@ -205,8 +222,8 @@ internal object CoreOriginalStdio {
             ?: throw RuntimeFault("Invalid original stdio call: calling convention/safety")
         requireProof(descriptor.keys == descriptorKeys && exactInteger(descriptor["schema"], 1), "descriptor schema")
         requireProof(target.keys == setOf("kind", "symbol", "unit", "isFunction") &&
-            target["kind"] == "static" && target["unit"] == "ghc-internal" && target["isFunction"] == true,
-            "static ghc-internal function target")
+            target["kind"] == "static" && target["unit"] == operation.unit && target["isFunction"] == true,
+            "static original installed-library function target")
         requireProof(descriptor["convention"] == operation.convention && descriptor["safety"] == operation.safety,
             "calling convention/safety")
         val expected = operation.arguments
