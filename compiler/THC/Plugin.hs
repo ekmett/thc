@@ -978,10 +978,12 @@ importProvenanceFields owner annotations original core = do
     calls _ = []
     identity (Exports.ExportName unit modName occurrence namespace) = O
       [("unit",S unit),("module",S modName),("occurrence",S occurrence),("namespace",S namespace)]
-    ty (Exports.ExportTyCon name arguments) = O [("kind",S "tycon"),("name",identity name),("arguments",A (map ty arguments))]
-    ty (Exports.ExportApp function argument) = O [("kind",S "application"),("function",ty function),("argument",ty argument)]
-    ty (Exports.ExportArrow multiplicity argument result) = O
+    ty (ImportProvenance.ImportTyCon name arguments) = O [("kind",S "tycon"),("name",identity name),("arguments",A (map ty arguments))]
+    ty (ImportProvenance.ImportApp function argument) = O [("kind",S "application"),("function",ty function),("argument",ty argument)]
+    ty (ImportProvenance.ImportArrow multiplicity argument result) = O
       [("kind",S "function"),("multiplicity",ty multiplicity),("argument",ty argument),("result",ty result)]
+    ty (ImportProvenance.ImportVariable index) = O [("kind",S "bound-variable"),("index",num index)]
+    ty (ImportProvenance.ImportForall kind body) = O [("kind",S "forall"),("binderKind",ty kind),("body",ty body)]
     imported (ImportProvenance.Import binder header symbol unit function conv safe declared normalized emitted) = O
       [("binder",identity binder),("header",maybe Z S header),("symbol",S symbol),("unit",maybe Z S unit),
        ("isFunction",B function),("convention",S conv),("safety",S safe),("declaredType",ty declared),
