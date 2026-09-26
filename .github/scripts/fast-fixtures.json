@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.Simd128ArrayProofTest",
     "thc.LauncherDiagnosticsTest",
     "thc.runtime.EnabledCapabilitiesTest",
     "thc.runtime.SavedTermiosTest",
@@ -46,6 +47,13 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "simd128-arrays": {
+      "junit": ["thc.runtime.Simd128ArrayNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd128-arrays"]}],
+      "outputs": ["build/simd128-arrays"],
+      "sources": ["compiler/test-fixtures/Simd128ArrayAudit.hs", "compiler/test-fixtures/Simd128ArrayNative.hs",
+        "test/haskell-fixtures/Simd128ArrayFixtures.hs", "scripts/simd-families.json"]
+    },
     "thread-label": {
       "junit": ["thc.runtime.ThreadLabelNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-label"]}],

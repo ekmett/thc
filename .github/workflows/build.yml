@@ -372,6 +372,7 @@ jobs:
             build/mutvar/*/core/*.json
             build/boxed-arrays/
             build/boxed-array-extensions/
+            build/simd128-arrays/
             build/original-stack-formatter/
             build/original-posix-stat/
             build/original-posix-dup/

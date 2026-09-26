@@ -4,6 +4,9 @@
 package thc.runtime
 
 import jdk.incubator.vector.IntVector
+import jdk.incubator.vector.ByteVector
+import jdk.incubator.vector.ShortVector
+import jdk.incubator.vector.LongVector
 import jdk.incubator.vector.FloatVector
 import jdk.incubator.vector.DoubleVector
 
@@ -286,6 +289,18 @@ internal object ManagedByteArray {
         if (value is ManagedAllocation)
             value.accessVector(index, scalarOffset, scalarWidth, writable, action)
         else action(require(value))
+    @JvmStatic fun readByteVectorGuest(value: Any?, index: Long, scalarOffset: Boolean): ByteVector =
+        vectorGuest(value, index, scalarOffset, 1, false) { readByteVectorArray(it, index, scalarOffset) }
+    @JvmStatic fun writeByteVectorGuest(value: Any?, index: Long, vector: ByteVector, scalarOffset: Boolean) =
+        vectorGuest(value, index, scalarOffset, 1, true) { writeByteVectorArray(it, index, vector, scalarOffset) }
+    @JvmStatic fun readShortVectorGuest(value: Any?, index: Long, scalarOffset: Boolean): ShortVector =
+        vectorGuest(value, index, scalarOffset, 2, false) { readShortVectorArray(it, index, scalarOffset) }
+    @JvmStatic fun writeShortVectorGuest(value: Any?, index: Long, vector: ShortVector, scalarOffset: Boolean) =
+        vectorGuest(value, index, scalarOffset, 2, true) { writeShortVectorArray(it, index, vector, scalarOffset) }
+    @JvmStatic fun readLongVectorGuest(value: Any?, index: Long, scalarOffset: Boolean): LongVector =
+        vectorGuest(value, index, scalarOffset, 8, false) { readLongVectorArray(it, index, scalarOffset) }
+    @JvmStatic fun writeLongVectorGuest(value: Any?, index: Long, vector: LongVector, scalarOffset: Boolean) =
+        vectorGuest(value, index, scalarOffset, 8, true) { writeLongVectorArray(it, index, vector, scalarOffset) }
     @JvmStatic fun readInt32VectorGuest(value: Any?, index: Long, scalarOffset: Boolean): IntVector =
         vectorGuest(value, index, scalarOffset, 4, false) { readIntVectorArray(it, index, scalarOffset, "Int32X4") }
     @JvmStatic fun writeInt32VectorGuest(value: Any?, index: Long, vector: IntVector, scalarOffset: Boolean) =

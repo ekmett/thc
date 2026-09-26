@@ -8,6 +8,7 @@
 module Main (main) where
 
 import AggregateFixtures (prepareAggregate)
+import Simd128ArrayFixtures (prepareSimd128Arrays)
 import WordFloatingFixtures (prepareWordFloating)
 import ScalarBitCastFixtures (prepareScalarBitCasts)
 import BigNatLiteralFixtures (prepareBigNatLiterals)
@@ -879,6 +880,7 @@ main = do
   unless handled $ case args of
     ["word-floating"] -> prepareWordFloating root
     ["scalar-bitcasts"] -> prepareScalarBitCasts root
+    ["simd128-arrays"] -> prepareSimd128Arrays root
     ["bignat-literals"] -> prepareBigNatLiterals root False
     ["bignat-literals", "--check-only"] -> prepareBigNatLiterals root True
     ["floating-address"] -> prepareFloatingAddress root

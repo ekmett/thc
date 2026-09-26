@@ -7,6 +7,8 @@ package thc.runtime
 
 import java.nio.ByteOrder
 import jdk.incubator.vector.ByteVector
+import jdk.incubator.vector.ShortVector
+import jdk.incubator.vector.LongVector
 import jdk.incubator.vector.IntVector
 import jdk.incubator.vector.FloatVector
 import jdk.incubator.vector.DoubleVector
@@ -18,6 +20,40 @@ private fun byteOffset(bytes: ByteArray, index: Long, scalarOffset: Boolean, lan
     if (bytes.size < 16 || index < 0 || index > (bytes.size - 16).toLong() / stride)
         fault("$name ByteArray# range outside its backing storage")
     return (index * stride).toInt()
+}
+
+internal fun readByteVectorArray(bytes: ByteArray, index: Long, scalarOffset: Boolean): ByteVector {
+    val offset = byteOffset(bytes, index, scalarOffset, 1, "Byte128")
+    val bits = ByteVector.fromArray(ByteVector.SPECIES_128, bytes, offset)
+    return bits
+}
+internal fun writeByteVectorArray(bytes: ByteArray, index: Long, value: ByteVector, scalarOffset: Boolean) {
+    val offset = byteOffset(bytes, index, scalarOffset, 1, "Byte128")
+    val vector = CoreVectors.requireByte(value, ByteVector.SPECIES_128)
+    val bits = vector
+    bits.reinterpretAsBytes().intoArray(bytes, offset)
+}
+internal fun readShortVectorArray(bytes: ByteArray, index: Long, scalarOffset: Boolean): ShortVector {
+    val offset = byteOffset(bytes, index, scalarOffset, 2, "Short128")
+    val bits = ByteVector.fromArray(ByteVector.SPECIES_128, bytes, offset).reinterpretAsShorts()
+    return if (ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN) bits.lanewise(VectorOperators.REVERSE_BYTES) else bits
+}
+internal fun writeShortVectorArray(bytes: ByteArray, index: Long, value: ShortVector, scalarOffset: Boolean) {
+    val offset = byteOffset(bytes, index, scalarOffset, 2, "Short128")
+    val vector = CoreVectors.requireShort(value, ShortVector.SPECIES_128)
+    val bits = if (ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN) vector.lanewise(VectorOperators.REVERSE_BYTES) else vector
+    bits.reinterpretAsBytes().intoArray(bytes, offset)
+}
+internal fun readLongVectorArray(bytes: ByteArray, index: Long, scalarOffset: Boolean): LongVector {
+    val offset = byteOffset(bytes, index, scalarOffset, 8, "Long128")
+    val bits = ByteVector.fromArray(ByteVector.SPECIES_128, bytes, offset).reinterpretAsLongs()
+    return if (ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN) bits.lanewise(VectorOperators.REVERSE_BYTES) else bits
+}
+internal fun writeLongVectorArray(bytes: ByteArray, index: Long, value: LongVector, scalarOffset: Boolean) {
+    val offset = byteOffset(bytes, index, scalarOffset, 8, "Long128")
+    val vector = CoreVectors.requireLong(value, LongVector.SPECIES_128)
+    val bits = if (ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN) vector.lanewise(VectorOperators.REVERSE_BYTES) else vector
+    bits.reinterpretAsBytes().intoArray(bytes, offset)
 }
 
 internal fun readIntVectorArray(bytes: ByteArray, index: Long, scalarOffset: Boolean, name: String): IntVector {

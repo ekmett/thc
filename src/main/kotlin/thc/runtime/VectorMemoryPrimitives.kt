@@ -6,6 +6,9 @@
 package thc.runtime
 
 import jdk.incubator.vector.IntVector
+import jdk.incubator.vector.ByteVector
+import jdk.incubator.vector.ShortVector
+import jdk.incubator.vector.LongVector
 import jdk.incubator.vector.FloatVector
 import jdk.incubator.vector.DoubleVector
 
@@ -13,18 +16,60 @@ import com.oracle.truffle.api.frame.VirtualFrame
 
 /** Closed local memory families with exact vector representation proofs. */
 internal enum class VectorMemoryFamily {
-    INT32, WORD32, FLOAT32, DOUBLE64;
+    INT8, WORD8, INT16, WORD16, INT32, WORD32, INT64, WORD64, FLOAT32, DOUBLE64;
     val vectorProof: CoreRepresentation get() = when (this) {
         INT32 -> CoreVectors.proof32
         WORD32 -> CoreVectors.proofWord32
         FLOAT32 -> CoreVectors.proofFloat
         DOUBLE64 -> CoreVectors.proofDouble
+        INT8 -> CoreVectors.proof8
+        WORD8 -> CoreVectors.proofWord8
+        INT16 -> CoreVectors.proof16
+        WORD16 -> CoreVectors.proofWord16
+        INT64 -> CoreVectors.proof
+        WORD64 -> GeneratedVectors.proofWord64X2
     }
 }
 
 /** These are local intrinsics, not vector function or aggregate ABIs. */
 internal enum class VectorByteArrayOp(val primitive: String, val scalarOffset: Boolean,
     val family: VectorMemoryFamily = VectorMemoryFamily.INT32) {
+    INDEX_INT8("indexInt8X16Array#", false, VectorMemoryFamily.INT8),
+    INDEX_INT8_SCALAR("indexInt8ArrayAsInt8X16#", true, VectorMemoryFamily.INT8),
+    READ_INT8("readInt8X16Array#", false, VectorMemoryFamily.INT8),
+    READ_INT8_SCALAR("readInt8ArrayAsInt8X16#", true, VectorMemoryFamily.INT8),
+    WRITE_INT8("writeInt8X16Array#", false, VectorMemoryFamily.INT8),
+    WRITE_INT8_SCALAR("writeInt8ArrayAsInt8X16#", true, VectorMemoryFamily.INT8),
+    INDEX_WORD8("indexWord8X16Array#", false, VectorMemoryFamily.WORD8),
+    INDEX_WORD8_SCALAR("indexWord8ArrayAsWord8X16#", true, VectorMemoryFamily.WORD8),
+    READ_WORD8("readWord8X16Array#", false, VectorMemoryFamily.WORD8),
+    READ_WORD8_SCALAR("readWord8ArrayAsWord8X16#", true, VectorMemoryFamily.WORD8),
+    WRITE_WORD8("writeWord8X16Array#", false, VectorMemoryFamily.WORD8),
+    WRITE_WORD8_SCALAR("writeWord8ArrayAsWord8X16#", true, VectorMemoryFamily.WORD8),
+    INDEX_INT16("indexInt16X8Array#", false, VectorMemoryFamily.INT16),
+    INDEX_INT16_SCALAR("indexInt16ArrayAsInt16X8#", true, VectorMemoryFamily.INT16),
+    READ_INT16("readInt16X8Array#", false, VectorMemoryFamily.INT16),
+    READ_INT16_SCALAR("readInt16ArrayAsInt16X8#", true, VectorMemoryFamily.INT16),
+    WRITE_INT16("writeInt16X8Array#", false, VectorMemoryFamily.INT16),
+    WRITE_INT16_SCALAR("writeInt16ArrayAsInt16X8#", true, VectorMemoryFamily.INT16),
+    INDEX_WORD16("indexWord16X8Array#", false, VectorMemoryFamily.WORD16),
+    INDEX_WORD16_SCALAR("indexWord16ArrayAsWord16X8#", true, VectorMemoryFamily.WORD16),
+    READ_WORD16("readWord16X8Array#", false, VectorMemoryFamily.WORD16),
+    READ_WORD16_SCALAR("readWord16ArrayAsWord16X8#", true, VectorMemoryFamily.WORD16),
+    WRITE_WORD16("writeWord16X8Array#", false, VectorMemoryFamily.WORD16),
+    WRITE_WORD16_SCALAR("writeWord16ArrayAsWord16X8#", true, VectorMemoryFamily.WORD16),
+    INDEX_INT64("indexInt64X2Array#", false, VectorMemoryFamily.INT64),
+    INDEX_INT64_SCALAR("indexInt64ArrayAsInt64X2#", true, VectorMemoryFamily.INT64),
+    READ_INT64("readInt64X2Array#", false, VectorMemoryFamily.INT64),
+    READ_INT64_SCALAR("readInt64ArrayAsInt64X2#", true, VectorMemoryFamily.INT64),
+    WRITE_INT64("writeInt64X2Array#", false, VectorMemoryFamily.INT64),
+    WRITE_INT64_SCALAR("writeInt64ArrayAsInt64X2#", true, VectorMemoryFamily.INT64),
+    INDEX_WORD64("indexWord64X2Array#", false, VectorMemoryFamily.WORD64),
+    INDEX_WORD64_SCALAR("indexWord64ArrayAsWord64X2#", true, VectorMemoryFamily.WORD64),
+    READ_WORD64("readWord64X2Array#", false, VectorMemoryFamily.WORD64),
+    READ_WORD64_SCALAR("readWord64ArrayAsWord64X2#", true, VectorMemoryFamily.WORD64),
+    WRITE_WORD64("writeWord64X2Array#", false, VectorMemoryFamily.WORD64),
+    WRITE_WORD64_SCALAR("writeWord64ArrayAsWord64X2#", true, VectorMemoryFamily.WORD64),
     INDEX("indexInt32X4Array#", false),
     INDEX_SCALAR("indexInt32ArrayAsInt32X4#", true),
     READ("readInt32X4Array#", false),
@@ -50,12 +95,9 @@ internal enum class VectorByteArrayOp(val primitive: String, val scalarOffset: B
     WRITE_DOUBLE("writeDoubleX2Array#", false, VectorMemoryFamily.DOUBLE64),
     WRITE_DOUBLE_SCALAR("writeDoubleArrayAsDoubleX2#", true, VectorMemoryFamily.DOUBLE64);
 
-    val isRead: Boolean get() = this == READ || this == READ_SCALAR || this == READ_WORD || this == READ_WORD_SCALAR ||
-        this == READ_FLOAT || this == READ_FLOAT_SCALAR || this == READ_DOUBLE || this == READ_DOUBLE_SCALAR
-    val isWrite: Boolean get() = this == WRITE || this == WRITE_SCALAR || this == WRITE_WORD || this == WRITE_WORD_SCALAR ||
-        this == WRITE_FLOAT || this == WRITE_FLOAT_SCALAR || this == WRITE_DOUBLE || this == WRITE_DOUBLE_SCALAR
-    val isIndex: Boolean get() = this == INDEX || this == INDEX_SCALAR || this == INDEX_WORD || this == INDEX_WORD_SCALAR ||
-        this == INDEX_FLOAT || this == INDEX_FLOAT_SCALAR || this == INDEX_DOUBLE || this == INDEX_DOUBLE_SCALAR
+    val isRead: Boolean = primitive.startsWith("read")
+    val isWrite: Boolean = primitive.startsWith("write")
+    val isIndex: Boolean = primitive.startsWith("index")
     val vectorProof: CoreRepresentation get() = family.vectorProof
     internal fun validateArguments(actual: List<CoreRepresentation>, flags: List<*>) {
         val expected = listOf(CoreVectorMemory.arrayProof, CoreVectorMemory.indexProof) + when {
@@ -175,6 +217,21 @@ internal class VectorByteArrayExpression(private val operation: VectorByteArrayO
             // A subject enum when creates a mutable switch-map array load that
             // prevents partial evaluation from selecting this node's family.
             when {
+                operation.family === VectorMemoryFamily.INT8 || operation.family === VectorMemoryFamily.WORD8 -> {
+                    val value = CoreVectors.requireByte(arguments[2].execute(frame), ByteVector.SPECIES_128)
+                    ManagedByteArray.requireState(arguments[3].execute(frame))
+                    ManagedByteArray.writeByteVectorGuest(array, index, value, operation.scalarOffset)
+                }
+                operation.family === VectorMemoryFamily.INT16 || operation.family === VectorMemoryFamily.WORD16 -> {
+                    val value = CoreVectors.requireShort(arguments[2].execute(frame), ShortVector.SPECIES_128)
+                    ManagedByteArray.requireState(arguments[3].execute(frame))
+                    ManagedByteArray.writeShortVectorGuest(array, index, value, operation.scalarOffset)
+                }
+                operation.family === VectorMemoryFamily.INT64 || operation.family === VectorMemoryFamily.WORD64 -> {
+                    val value = CoreVectors.requireLong(arguments[2].execute(frame), LongVector.SPECIES_128)
+                    ManagedByteArray.requireState(arguments[3].execute(frame))
+                    ManagedByteArray.writeLongVectorGuest(array, index, value, operation.scalarOffset)
+                }
                 operation.family === VectorMemoryFamily.INT32 -> {
                     val value = CoreVectors.requireInt(arguments[2].execute(frame), IntVector.SPECIES_128)
                     ManagedByteArray.requireState(arguments[3].execute(frame))
@@ -202,6 +259,12 @@ internal class VectorByteArrayExpression(private val operation: VectorByteArrayO
         if (operation.isRead) ManagedByteArray.requireState(arguments[2].execute(frame))
         // Return each public carrier directly; a value-producing when joins at the inaccessible AbstractVector.
         when {
+            operation.family === VectorMemoryFamily.INT8 || operation.family === VectorMemoryFamily.WORD8 ->
+                return ManagedByteArray.readByteVectorGuest(array, index, operation.scalarOffset)
+            operation.family === VectorMemoryFamily.INT16 || operation.family === VectorMemoryFamily.WORD16 ->
+                return ManagedByteArray.readShortVectorGuest(array, index, operation.scalarOffset)
+            operation.family === VectorMemoryFamily.INT64 || operation.family === VectorMemoryFamily.WORD64 ->
+                return ManagedByteArray.readLongVectorGuest(array, index, operation.scalarOffset)
             operation.family === VectorMemoryFamily.INT32 -> return ManagedByteArray.readInt32VectorGuest(array, index, operation.scalarOffset)
             operation.family === VectorMemoryFamily.WORD32 -> return ManagedByteArray.readWord32VectorGuest(array, index, operation.scalarOffset)
             operation.family === VectorMemoryFamily.FLOAT32 -> return ManagedByteArray.readFloatVectorGuest(array, index, operation.scalarOffset)
