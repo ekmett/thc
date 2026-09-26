@@ -69,6 +69,15 @@ class StablePointerForeignTest {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 state.packageCbits.link(link)
                 val calls = abi.associate { it.symbol to Entry(language, PackageScalarCall(link, it)).callTarget }
+                assertSame(ManagedAddress.nullAddress(), calls.getValue("stable_identity").call(ManagedAddress.nullAddress()))
+                if (System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in setOf("amd64", "x86_64")) {
+                    val allocation = state.nativeAllocations.malloc(8)
+                    try {
+                        val returnedAllocation = calls.getValue("stable_identity").call(allocation) as ManagedAddress
+                        assertEquals(allocation.toNativeBits(), returnedAllocation.toNativeBits())
+                        assertThrows(RuntimeFault::class.java) { returnedAllocation.readWord8(0) }
+                    } finally { state.nativeAllocations.free(allocation) }
+                }
                 val referent = Any()
                 val first = state.stablePointers.make(referent)
                 val second = state.stablePointers.make(referent)

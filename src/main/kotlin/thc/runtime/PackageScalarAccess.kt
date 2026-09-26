@@ -95,7 +95,8 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
         val threads = entry.owner.threads
         val previous = threads.enterForeign()
         try {
-            return if (pointers) invokePointers(entry, arguments) else Calls.interop(calls, entry.receiver, arguments)
+            return if (pointers) invokePointers(entry, arguments)
+                else normalizeResult(entry, Calls.interop(calls, entry.receiver, arguments))
         } finally {
             threads.leaveForeign(previous)
             Reference.reachabilityFence(arguments)
@@ -166,7 +167,9 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
                         else -> entry.owner.packageCbits.pointer(views.getValue(address).transport!!, address.cbitsOffset())
                     }
                 }
-                Calls.interop(calls, entry.receiver, converted)
+                // Pointer results can alias call-scoped native transports. Read
+                // their bits before releasing leases and allocation borrows.
+                normalizeResult(entry, Calls.interop(calls, entry.receiver, converted))
             } finally {
                 lease.open = false
                 Reference.reachabilityFence(addresses)
@@ -227,7 +230,11 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
     fun executeAddress(arguments: Array<Any?>, state: Any?): ManagedAddress {
         if (!addressResult) fault("Package C result is not a pointer ABI")
         val entry = prepare(arguments, state)
-        val result = invoke(entry, arguments)
+        return invoke(entry, arguments) as ManagedAddress
+    }
+
+    private fun normalizeResult(entry: PackageScalarFunction, result: Any?): Any? {
+        if (!addressResult) return result
         if (numbers.isNull(result)) return ManagedAddress.nullAddress()
         if (!numbers.isPointer(result)) fault("Package C returned a non-native opaque pointer")
         val bits = numbers.asPointer(result)
