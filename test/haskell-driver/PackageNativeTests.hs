@@ -67,7 +67,7 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
         (nativeSignatures "fixture-unit" [moduleWith [entry "identity_pointer" "ccall" ["AddrRep","void"] ["void","AddrRep"]]])
       assertEqual "pointer adapter uses pointers, not integer addresses"
         (Right "extern void * identity_pointer(void *);\nvoid * thc_native_pointer_0(void * a0) { return identity_pointer(a0); }\n")
-        (nativeWrapperSource [(signature,"thc_native_pointer_0")])
+        (nativeWrapperSource [(signature,"thc_native_pointer_0",Nothing)])
   , TestCase $ mapM_ (\value -> assertBool "retained proof mismatch rejected"
       (isLeft (nativeSignatures "fixture-unit" [value])))
       [ set "unit" "other-unit" (moduleWith [ordinary])
@@ -77,14 +77,29 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       , set "staticForeignImportStubs" (object []) (moduleWith [ordinary])
       ]
   , TestCase $ case nativeWrapperSource
-      [(("read_bytes","capi","unsafe",["ByteArray#","Word64Rep"],"Word64Rep"),"thc_native_test_0"),
-       (("write_state","ccall","unsafe",["MutableByteArray#","AddrRep"],"void"),"thc_native_test_1")] of
+      [(("read_bytes","capi","unsafe",["ByteArray#","Word64Rep"],"Word64Rep"),"thc_native_test_0",Nothing),
+       (("write_state","ccall","unsafe",["MutableByteArray#","AddrRep"],"void"),"thc_native_test_1",Nothing)] of
       Left message -> assertFailure message
       Right source -> do
         assertBool "C compiler supplies the ABI for word results"
           ("HsWord64 thc_native_test_0(void * a0, HsWord64 a1) { return read_bytes(a0, a1); }" `isInfixOf` source)
         assertBool "void calls do not manufacture a result"
           ("void thc_native_test_1(void * a0, void * a1) { write_state(a0, a1); }" `isInfixOf` source)
+  , TestCase $ do
+      let signed = ("fill","ccall","unsafe",["MutableByteArray#","Int16Rep"],"void")
+          unsigned = ("fill","ccall","unsafe",["MutableByteArray#","Word16Rep"],"void")
+          declarations = [entry "fill" "ccall" ["MutableByteArray#",rep,"void"] ["void"] | rep <- ["Int16Rep","Word16Rep"]]
+          withHeader header = map (set "header" (toJSON (header::String))) declarations
+      assertEqual "signedness adapters retain their exact typed carriers" (Right [signed,unsigned])
+        (nativeSignatures "fixture-unit" [moduleWith (withHeader "original.h")])
+      assertBool "missing configured callee prototype rejected" (isLeft (nativeSignatures "fixture-unit" [moduleWith declarations]))
+      mapM_ (\header -> assertBool "header injection rejected" (isLeft (nativeSignatures "fixture-unit" [moduleWith (withHeader header)])))
+        ["", "bad\nheader", "bad\"header", "bad\\header"]
+      assertEqual "actual header owns callee signedness, adapters retain Haskell types"
+        (Right "#include \"original.h\"\n#undef fill\nvoid thc_native_signed_0(void * a0, HsInt16 a1) { fill(a0, a1); }\n")
+        (nativeWrapperSource [(signed,"thc_native_signed_0",Just "original.h")])
+      assertBool "different widths still conflict" $ isLeft $ nativeSignatures "fixture-unit"
+        [moduleWith [set "header" "original.h" (entry "fill" "ccall" [rep,"void"] ["void"]) | rep <- ["Int8Rep","Word16Rep"]]]
   , TestCase $ assertEqual "actual configured C/package arguments survive Haskell flag filtering"
       (Right ["-hide-all-packages","-Iinclude","-optc-DREAL=1","-package-db","/db","-package-id","base-unit"])
       (nativeCompilerArguments ["--make","-hide-all-packages","-Iinclude","-O2","-odir","/build",

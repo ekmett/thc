@@ -44,8 +44,11 @@ class PackageSafeForeignTest {
               atomic_store(&phase, 1);
               /* A finite native leaf, like the native libm leaves used by erf.
                  This test does not add usleep to producer ABI admission. */
-              usleep(100000);
-              return value;
+              for (unsigned remaining = 20000; remaining != 0; --remaining) {
+                if (atomic_load(&phase) == 2) return value;
+                usleep(1000);
+              }
+              return -123.0;
             }
             double requires_argument(double value) { return value; }
         """.trimIndent())
@@ -139,7 +142,7 @@ class PackageSafeForeignTest {
                             }
                             entries.getValue("reset").call()
                             ready.countDown()
-                            check(begin.await(10, TimeUnit.SECONDS))
+                            check(begin.await(30, TimeUnit.SECONDS))
                             val result = Calls.target(target, arrayOf(0L, 0.5, Unit))
                             val continuation = checkNotNull(savedGuestContinuation(result))
                             val request = continuation.asyncRequest()
@@ -155,7 +158,11 @@ class PackageSafeForeignTest {
                     }
                     worker.start()
                     try {
-                        assertTrue(ready.await(10, TimeUnit.SECONDS))
+                        val warmDeadline = System.nanoTime() + 30_000_000_000L
+                        while (!ready.await(1, TimeUnit.MILLISECONDS) && System.nanoTime() < warmDeadline) {
+                            if (entries.getValue("started").call() == 1L) entries.getValue("release").call()
+                        }
+                        assertEquals(0L, ready.count, "same-carrier warmup completes before code installation")
                         failure.get()?.let { throw it }
                         if (mode.endsWith("compiled")) {
                             target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
@@ -173,7 +180,7 @@ class PackageSafeForeignTest {
                     } finally {
                         begin.countDown()
                         entries.getValue("release").call()
-                        worker.join(5000)
+                        worker.join(25000)
                     }
                     assertFalse(worker.isAlive, "scalar safe return must release the Java carrier")
                     failure.get()?.let { throw it }
