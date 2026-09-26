@@ -748,7 +748,7 @@ exporterIdentity context = do
                  "driverHash" .= contextDriverHash context,
                  "options" .= (["post-tidy", "unit-qualified", "source-notes",
                                 "foreign-import-provenance",
-                                "-g", "-dynamic", "-dcore-lint"] :: [String])]
+                                "native-debug-info", "-dynamic", "-dcore-lint"] :: [String])]
 
 prepareGlobalBundles :: ExportContext -> FilePath -> String -> [Unit] -> IO (Map.Map String Bundle)
 prepareGlobalBundles _ _ _ [] = pure Map.empty
@@ -961,7 +961,7 @@ exportConfiguredUnit context keys unit component scalar = do
                          "driverHash" .= contextDriverHash context,
                          "options" .= (["post-tidy", "unit-qualified", "source-notes",
                                          "foreign-import-provenance",
-                                         "-g", "-dynamic", "-dcore-lint"] :: [String])] ++
+                                         "native-debug-info", "-dynamic", "-dcore-lint"] :: [String])] ++
                      maybe [] (\digest -> ["scalarInterfaceHelperSha256" .= digest,
                        "scalarInterfaceOptions" .= (["-fwrite-if-simplified-core", "-hisuf", "hi"] :: [String])]) helperHash
       exportKey = shaHex (BL.toStrict (encode ("thc-core-export-v1" :: String, buildKey, exporter)))
@@ -1005,7 +1005,7 @@ freshExport context component unit scalar helper buildKey exportKey buildInputs 
            "-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:unit-qualified",
            "-fplugin-opt=THC.Plugin:source-notes",
            "-fplugin-opt=THC.Plugin:foreign-import-provenance",
-           "-g", "-dynamic", "-fforce-recomp", "-dcore-lint"] ++
+           "-dynamic", "-fforce-recomp", "-dcore-lint"] ++
           maybe [] (const ["-fwrite-if-simplified-core", "-hisuf", "hi"]) scalar ++
           map snd (componentSources component)
     sourceDir <- field (componentValue component) "src-dir"

@@ -46,6 +46,8 @@ proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay 
                 , (False, ["--numeric-version", "+RTS", "-A8m", "-RTS", "--",
                            "space and café", "", "line\nbreak", "\"quoted\"", "$literal"])
                 , (True, ["@" ++ response])
+                , (True, ["--make", "-this-unit-id", "sample", "-g0"])
+                , (True, ["--make", "-this-unit-id", "sample", "-g2"])
                 , (False, ["--numeric-version", "--RTS", "+RTS", "-A8m", "-RTS"])
                 ]
     forM_ cases $ \(replays, supplied) -> do
@@ -63,6 +65,9 @@ proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay 
       if replays then do
         assertEqual "Core replay retains original arguments exactly" supplied
           (take (length supplied) (drop 1 replay))
+        assertBool "replay does not change native debug settings or hidden binder identities"
+          (all (`notElem` ["-g", "-g0", "-g1", "-g2", "-g3"])
+            (drop (length supplied) (drop 1 replay)))
         assertEqual "replayed compiler receives exactly one provenance opt-in" 1
           (length $ filter (== flag) replay)
       else pure ()
@@ -73,7 +78,7 @@ proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay 
 
 storeProjectTest :: Env -> Test
 storeProjectTest env = TestLabel "source-built Cabal store Core" $ TestCase $
-  -- Post-Tidy export uses -g; its Linux assembler cannot quote double quotes in paths.
+  -- Keep assembler output paths portable; proxy-only cases above cover quotes.
   withFixtureNamed env "test/fixtures/run-store-project" "project café" $ \project ->
   withCache (takeDirectory project </> "cache") $ do
     let base = takeDirectory project

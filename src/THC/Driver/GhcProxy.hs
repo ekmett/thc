@@ -48,7 +48,9 @@ runGhcProxy arguments = do
          "-fplugin-opt=THC.Plugin:" ++ core,
          "-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:unit-qualified",
          "-fplugin-opt=THC.Plugin:source-notes",
-         "-fplugin-opt=THC.Plugin:foreign-import-provenance", "-g", "-dcore-lint"])
+         -- Adding -g only to the replay can change CSE/tidied helper names.
+         -- Consumers use the native interfaces, so preserve their debug flags.
+         "-fplugin-opt=THC.Plugin:foreign-import-provenance", "-dcore-lint"])
       unless (exported == ExitSuccess) (exitWith exported)
     _ -> pure ()
 
