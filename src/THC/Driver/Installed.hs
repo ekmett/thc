@@ -286,7 +286,11 @@ acquireInstalled context unit = go [] (installedInterfaces unit)
                   valueAt core "ghc" == Just ("9.14.1" :: String) &&
                   valueAt core "boundary" == Just ("optimized-Core-after-Tidy-before-CorePrep" :: String))
             (fail "thc-interface returned inconsistent Core identity/boundary")
-          go ((owner, name, BL.toStrict (encode core)) : modules) rest
+          -- Force each strict payload before visiting the next interface. A
+          -- lazy tuple field otherwise retains every decoded Aeson Core tree
+          -- until the whole package is packaged (notably the compiler itself).
+          let bytes = BL.toStrict (encode core)
+          bytes `seq` go ((owner, name, bytes) : modules) rest
         (ExitFailure 3, Just "unavailable") -> do
           unless (valueAt response "capability" == Just ("complete-interface-core" :: String) &&
                   valueAt response "unit" == Just (registeredId unit) &&
