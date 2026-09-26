@@ -17,19 +17,11 @@ import java.io.File
 import java.security.MessageDigest
 import java.util.zip.ZipFile
 
-class CompactRegionsNativeTest {
+private class CompactLibraryFixture(private val directory: String, private val entries: List<String>,
+    private val expected: (String, Long) -> Long, private val compiledEntry: String) {
     private val root = File(System.getProperty("thc.projectRoot"))
-    private val directory = "build/compact-regions"
-    private val entries = listOf("ordinary", "sharing", "cycleCase", "rejectedObjects", "frozenArray")
     private fun read(path: String) = Json.parse(File(root, path).readText()) as Map<String, Any?>
-    private fun expected(entry: String, input: Long): Long = when (entry) {
-        "ordinary", "sharing" -> 4 * input + 106
-        "cycleCase" -> input + 100
-        "rejectedObjects" -> input + 1111
-        "frozenArray" -> 2 * input
-        else -> error(entry)
-    }
-    @Test fun originalCompactLibraryMatchesNativeForGraphsCyclesArraysAndExceptionsOnBothBackends() {
+    fun run() {
         val manifest = read("$directory/manifest.json")
         assertEquals(entries, manifest["entries"])
         for (kind in listOf("inputHashes", "artifactHashes")) for ((path, hash) in manifest[kind] as Map<String, String>) {
@@ -72,7 +64,7 @@ class CompactRegionsNativeTest {
                             val function = context.asValue(EntryValue(program, entry, 1))
                             for (input in listOf(-31L, 0L, 17L, 4097L))
                                 assertEquals(expected(entry, input), function.execute(input).asLong(), "$stage/$backend/$entry/$input")
-                            if (entry == "ordinary") {
+                            if (entry == compiledEntry) {
                                 assertTrue(function.invokeMember("compile").asBoolean())
                                 val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                                 assertEquals(expected(entry, 43), function.execute(43L).asLong())
@@ -86,5 +78,34 @@ class CompactRegionsNativeTest {
                     } finally { context.leave() }
                 }
         }
+    }
+}
+
+class CompactRegionsNativeTest {
+    @Test fun originalCompactLibraryMatchesNativeForGraphsCyclesArraysAndExceptionsOnBothBackends() {
+        CompactLibraryFixture("build/compact-regions",
+            listOf("ordinary", "sharing", "cycleCase", "rejectedObjects", "frozenArray"), { entry, input ->
+                when (entry) {
+                    "ordinary", "sharing" -> 4 * input + 106
+                    "cycleCase" -> input + 100
+                    "rejectedObjects" -> input + 1111
+                    "frozenArray" -> 2 * input
+                    else -> error(entry)
+                }
+            }, "ordinary").run()
+    }
+}
+
+class CompactSerializedNativeTest {
+    @Test fun originalSerializedApiRoundTripsCopiedBlocksSharingCyclesAndStaticRoots() {
+        CompactLibraryFixture("build/compact-serialization",
+            listOf("roundTrip", "cycleRoundTrip", "multipleBlocks", "emptyRoundTrip"), { entry, input ->
+                when (entry) {
+                    "roundTrip" -> 4 * input + 1006
+                    "cycleRoundTrip", "emptyRoundTrip" -> input + 100
+                    "multipleBlocks" -> 8192 * input + 33550436
+                    else -> error(entry)
+                }
+            }, "roundTrip").run()
     }
 }

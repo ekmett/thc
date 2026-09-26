@@ -2467,6 +2467,34 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         e.builder.beginPutMVar(false); operands.forEach { it.emit(e) }; e.builder.endPutMVar()
                     }
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && CompactImageOp.named(fn[1] as String) != null) {
+                val operation = CompactImageOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                tupleExpression(tupleProof) { e, destination ->
+                    when (operation) {
+                        CompactImageOp.FIRST, CompactImageOp.NEXT -> {
+                            e.builder.beginReadCompactBlock(destination[0], destination[1], operation == CompactImageOp.FIRST)
+                            operands[0].emit(e)
+                            if (operation == CompactImageOp.FIRST) e.builder.emitLoadConstant(Unit) else operands[1].emit(e)
+                            operands.last().emit(e); e.builder.endReadCompactBlock()
+                        }
+                        CompactImageOp.ALLOCATE -> {
+                            e.builder.beginAllocateCompactBlock(destination[0]); operands.forEach { it.emit(e) }
+                            e.builder.endAllocateCompactBlock()
+                        }
+                        CompactImageOp.FIXUP -> {
+                            e.builder.beginFixupCompact(destination[0], destination[1]); operands.forEach { it.emit(e) }
+                            e.builder.endFixupCompact()
+                        }
+                        CompactImageOp.TO_ADDRESS, CompactImageOp.FROM_ADDRESS -> {
+                            e.builder.beginObjectAddress(destination[0], operation == CompactImageOp.FROM_ADDRESS)
+                            operands.forEach { it.emit(e) }
+                            if (operation == CompactImageOp.FROM_ADDRESS) e.builder.emitLoadConstant(Unit)
+                            e.builder.endObjectAddress()
+                        }
+                    }
+                }
             } else if (fn[0] == "prim" && CompactOp.named(fn[1] as String) != null) {
                 val operation = CompactOp.named(fn[1] as String)!!
                 if (enableAsync && operation.adds)

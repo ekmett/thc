@@ -42,6 +42,32 @@ TUPLE_CAP = dict(CAP, aggregateResults=['unboxed-tuple'])
 
 
 class CompactSignatureTest(unittest.TestCase):
+    def test_compact_image_and_heap_address_signatures(self):
+        roles = {
+            'state': dict(kind='void', primReps=[], evaluated=True),
+            'word': dict(kind='long', primReps=['WordRep'], evaluated=True),
+            'address': dict(kind='address', primReps=['AddrRep'], evaluated=True),
+            'region': dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True),
+            'lifted': REFERENCE, 'boxed': REFERENCE,
+        }
+        self.assertEqual(6, len(CAP['managedCompactImagePrimitives']))
+        for name, signature in CAP['managedCompactImagePrimitives'].items():
+            arguments = [['var', str(i), dict(rep=roles[role])] for i, role in enumerate(signature['arguments'])]
+            fields = [roles[role] for role in signature['result']]
+            output = dict(kind='unknown', primReps=[r for rep in fields for r in rep['primReps']],
+                          evaluated=True, aggregate='unboxed-tuple', components=fields)
+            expression = ['app', ['prim', name], arguments,
+                          [r == 'lifted' for r in signature['arguments']], False, False, dict(rep=output)]
+            bound = {str(i): roles[role] for i, role in enumerate(signature['arguments'])}
+            audit = audit_core.Audit([], CAP)
+            audit.walk(expression, bound, 'root', 'root', tuple_result=output)
+            self.assertEqual([], audit.issues, (name, audit.issues))
+            bad = copy.deepcopy(expression)
+            bad[2][0][2]['rep'] = dict(kind='double', primReps=['DoubleRep'], evaluated=True)
+            audit = audit_core.Audit([], CAP)
+            audit.walk(bad, bound, 'root', 'root', tuple_result=output)
+            self.assertIn('invalid compact signature', str(audit.issues), name)
+
     def test_seven_compact_signatures_and_wrong_scalar_carriers(self):
         roles = {
             'state': dict(kind='void', primReps=[], evaluated=True),

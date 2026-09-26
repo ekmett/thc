@@ -1394,7 +1394,8 @@ class Audit:
                             proof.get('primReps') == ['AddrRep']):
                         self.issue('primitive-representation', owner, path,
                                    'getCurrentCCS#: exact lifted dummy, State# and State#/Addr# tuple required')
-                compact = self.cap.get('managedCompactPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
+                compact = (self.cap.get('managedCompactPrimitives', {}).get(function[1]) or
+                           self.cap.get('managedCompactImagePrimitives', {}).get(function[1])) if function[0] == 'prim' else None
                 if compact is not None:
                     def compact_role(rep, role):
                         if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):
@@ -1406,6 +1407,11 @@ class Audit:
                             return kind == 'long' and reps == [('Int' if role == 'int' else 'Word') + 'Rep']
                         if role == 'region':
                             return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
+                        if role == 'address':
+                            return kind == 'address' and reps == ['AddrRep']
+                        if role == 'boxed':
+                            return kind in ('data', 'object', 'closure') and reps in (
+                                ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)'])
                         return kind in ('data', 'object', 'closure') and reps == ['BoxedRep (Just Lifted)']
                     expected = compact['arguments']
                     valid_args = (len(arguments) == len(expected) and flags == [r == 'lifted' for r in expected] and
@@ -1415,6 +1421,11 @@ class Audit:
                         self.is_tuple(proof) and isinstance(fields, list) and len(fields) == 2 and
                         compact_role(fields[0], 'state') and compact_role(fields[1], compact['result']) and
                         proof.get('primReps') == fields[1].get('primReps'))
+                    if isinstance(compact['result'], list):
+                        valid_result = (self.is_tuple(proof) and isinstance(fields, list) and
+                            len(fields) == len(compact['result']) and
+                            all(compact_role(rep, role) for rep, role in zip(fields, compact['result'])) and
+                            proof.get('primReps') == [r for rep in fields for r in rep['primReps']])
                     if not valid_args or not valid_result:
                         self.issue('primitive-representation', owner, path, function[1] + ': invalid compact signature')
                 if function[0] == 'prim' and function[1] == 'noDuplicate#':

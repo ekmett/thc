@@ -192,6 +192,14 @@
     "compactContainsAny#": {"arguments": ["lifted", "state"], "result": "int"},
     "compactSize#": {"arguments": ["region", "state"], "result": "word"}
   },
+  "managedCompactImagePrimitives": {
+    "compactGetFirstBlock#": {"arguments": ["region", "state"], "result": ["state", "address", "word"]},
+    "compactGetNextBlock#": {"arguments": ["region", "address", "state"], "result": ["state", "address", "word"]},
+    "compactAllocateBlock#": {"arguments": ["word", "address", "state"], "result": ["state", "address"]},
+    "compactFixupPointers#": {"arguments": ["address", "address", "state"], "result": ["state", "region", "address"]},
+    "anyToAddr#": {"arguments": ["lifted", "state"], "result": ["state", "address"]},
+    "addrToAny#": {"arguments": ["address"], "result": ["boxed"]}
+  },
   "managedSTMPrimitives": {
     "atomically#": {"arguments": ["action", "state"], "result": ["state", "boxed"]},
     "retry#": {"arguments": ["state"], "result": ["state", "boxed"]},
@@ -242,6 +250,12 @@
   "strictLiftedFields": true,
   "dataToTag": "concrete-algebraic-family-64",
   "primitives": {
+    "compactGetFirstBlock#": 2,
+    "compactGetNextBlock#": 3,
+    "compactAllocateBlock#": 3,
+    "compactFixupPointers#": 3,
+    "anyToAddr#": 2,
+    "addrToAny#": 1,
     "compactNew#": 2,
     "compactResize#": 3,
     "compactAdd#": 3,
