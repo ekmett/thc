@@ -1503,6 +1503,7 @@
         "thc.runtime.OriginalStdioSeekNativeTest",
         "thc.runtime.OriginalStdioTruncateNativeTest",
         "thc.runtime.OriginalStrerrorNativeTest",
+        "thc.runtime.OriginalMemorySearchTest",
         "thc.runtime.OriginalHandleReadinessNativeTest",
         "thc.runtime.OriginalPosixStatTest",
         "thc.runtime.OriginalFstatTest",
