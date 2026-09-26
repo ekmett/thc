@@ -124,6 +124,72 @@ class ThreadedThunkTest {
         }
     }
 
+    @Test fun spuriousWakeupsDoNotStealOwnershipOrPublishAnAnswer() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            val started = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            val evaluations = AtomicInteger()
+            val (thunk, driver) = entered(context) {
+                Thunk(object : RootNode(null) {
+                    override fun execute(frame: VirtualFrame): Any {
+                        evaluations.incrementAndGet()
+                        started.countDown()
+                        assertTrue(release.await(5, TimeUnit.SECONDS))
+                        return 43L
+                    }
+                }.callTarget, null) to Driver(Metrics(true))
+            }
+            assertSame(thunk, thunk.monitor)
+            assertNotSame(thunk.monitor, Thunk(thunk.target!!, null).monitor)
+            val threads = java.lang.management.ManagementFactory.getThreadMXBean()
+            val waiterThread = AtomicReference<Thread>()
+            Executors.newFixedThreadPool(2).use { pool ->
+                val owner = pool.submit<Any?> { entered(context) { driver.force(thunk) } }
+                try {
+                    assertTrue(started.await(5, TimeUnit.SECONDS))
+                    val originalOwner = synchronized(thunk.monitor) { thunk.owner }
+                    assertNotNull(originalOwner)
+                    val waiter = pool.submit<Any?> { entered(context) {
+                        waiterThread.set(Thread.currentThread())
+                        driver.force(thunk)
+                    } }
+                    var waits = -1L
+                    repeat(3) {
+                        // Confirm that each notification was consumed and the
+                        // reader actually re-entered the same owner wait.
+                        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+                        while (true) {
+                            val info = waiterThread.get()?.let { threads.getThreadInfo(it.threadId(), 32) }
+                            if (info?.threadState == Thread.State.WAITING && info.waitedCount > waits &&
+                                info.stackTrace.any { it.className == Force::class.java.name && it.methodName == "awaitOwner" }) {
+                                waits = info.waitedCount
+                                break
+                            }
+                            assertTrue(System.nanoTime() < deadline, "Reader did not re-enter the thunk wait")
+                            Thread.sleep(1)
+                        }
+                        synchronized(thunk.monitor) {
+                            assertEquals(1, thunk.state)
+                            assertSame(originalOwner, thunk.owner)
+                            assertNull(thunk.value)
+                            thunk.monitor.notifyAll()
+                        }
+                        assertThrows(TimeoutException::class.java) { waiter.get(20, TimeUnit.MILLISECONDS) }
+                    }
+                    release.countDown()
+                    assertEquals(43L, owner.get(5, TimeUnit.SECONDS))
+                    assertEquals(43L, waiter.get(5, TimeUnit.SECONDS))
+                } finally { release.countDown() }
+            }
+            assertEquals(1, evaluations.get())
+            assertEquals(2, thunk.state)
+            assertNull(thunk.owner)
+            assertNull(thunk.target)
+            assertNull(thunk.environment)
+        }
+    }
+
     @Test fun unexpectedHostUnwindWakesWaiterWithoutReplayingEffects() {
         executionContext().use { context ->
             context.initialize("thc")

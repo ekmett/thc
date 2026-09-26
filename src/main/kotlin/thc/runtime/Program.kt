@@ -114,7 +114,10 @@ internal class Thunk(target: RootCallTarget, var environment: CapturedFrame?) {
     @Volatile var state = 0
     var value: Any? = null
     var owner: Thread? = null
-    val monitor = java.lang.Object()
+    // Thunks are internal runtime values, not host-interoperable lock objects.
+    // Keep one stable monitor per thunk without allocating a second object.
+    @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
+    val monitor: java.lang.Object get() = this as java.lang.Object
 }
 /** A cold, one-shot call continuation. Unlike a thunk update, its answer may itself be lazy. */
 internal class CallSegment @JvmOverloads constructor(
