@@ -382,6 +382,9 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
  * publishes only after its worker joins. Linux consumes close even on EINTR. */
 @ExportLibrary(InteropLibrary::class)
 internal class NativeFileLease : AutoCloseable, TruffleObject {
+    // Resolve host bindings when a lease is created, not when Native Image
+    // prepares this interop receiver's class for guest compilation.
+    init { NativeCalls.closeFd }
     private val arena = Arena.ofShared()
     private val slot = arena.allocate(ValueLayout.JAVA_INT)
     // IO owns this lease's monitor. Readiness never waits on a blocking read:
@@ -405,10 +408,10 @@ internal class NativeFileLease : AutoCloseable, TruffleObject {
         if (closed || slot.get(ValueLayout.JAVA_INT, 0) < 0) throw ClosedChannelException()
         try {
             Arena.ofConfined().use { call ->
-                val errors = call.allocate(capture)
+                val errors = call.allocate(NativeCalls.capture)
                 val result = WaitDuplicate.fcntl.invokeExact(errors,
                     slot.get(ValueLayout.JAVA_INT, 0), 1030, 0) as Int // Linux F_DUPFD_CLOEXEC.
-                if (result < 0) throw NativeFileException("duplicate readiness lease", errors.get(ValueLayout.JAVA_INT, errno))
+                if (result < 0) throw NativeFileException("duplicate readiness lease", errors.get(ValueLayout.JAVA_INT, NativeCalls.errno))
                 result
             }
         } catch (failure: Throwable) { failed("Native readiness duplication failed", failure) }
@@ -422,9 +425,9 @@ internal class NativeFileLease : AutoCloseable, TruffleObject {
                 slot.set(ValueLayout.JAVA_INT, 0, -1)
                 if (fd >= 0) try {
                     Arena.ofConfined().use { call ->
-                        val errors = call.allocate(capture)
-                        val result = closeFd.invokeExact(errors, fd) as Int
-                        if (result != 0) throw NativeFileException("close", errors.get(ValueLayout.JAVA_INT, errno))
+                        val errors = call.allocate(NativeCalls.capture)
+                        val result = NativeCalls.closeFd.invokeExact(errors, fd) as Int
+                        if (result != 0) throw NativeFileException("close", errors.get(ValueLayout.JAVA_INT, NativeCalls.errno))
                     }
                 } catch (failure: Throwable) { failed("Native close invocation failed", failure) }
             } finally { arena.close() }
@@ -436,15 +439,17 @@ internal class NativeFileLease : AutoCloseable, TruffleObject {
         return slot.address()
     }
     companion object {
-        private val capture = Linker.Option.captureStateLayout()
-        private val errno = capture.byteOffset(MemoryLayout.PathElement.groupElement("errno"))
-        private val closeFd = Linker.nativeLinker().downcallHandle(
-            Linker.nativeLinker().defaultLookup().find("close").orElseThrow(),
-            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT), Linker.Option.captureCallState("errno"))
         private fun failed(message: String, failure: Throwable): Nothing {
             if (failure is IOException || failure is RuntimeException || failure is Error) throw failure
             throw IOException(message, failure)
         }
+    }
+    private object NativeCalls {
+        val capture = Linker.Option.captureStateLayout()
+        val errno = capture.byteOffset(MemoryLayout.PathElement.groupElement("errno"))
+        val closeFd = Linker.nativeLinker().downcallHandle(
+            Linker.nativeLinker().defaultLookup().find("close").orElseThrow(),
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT), Linker.Option.captureCallState("errno"))
     }
     private object WaitDuplicate {
         val fcntl = Linker.nativeLinker().downcallHandle(
