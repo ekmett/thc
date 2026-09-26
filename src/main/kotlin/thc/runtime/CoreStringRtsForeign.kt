@@ -11,7 +11,10 @@ internal enum class StringRtsOp(val symbol: String, val arguments: List<String?>
     STRLEN("strlen", listOf("AddrRep", null)),
     STRLEN_CSIZE("strlen", listOf("AddrRep", null), "bytestring-0.12.2.0-inplace", "Word64Rep"),
     THREADED("rts_isThreaded", listOf(null)),
-    KEEP_CAFS("keepCAFsForGHCi", listOf(null), "ghc-9.14.1-inplace")
+    KEEP_CAFS("keepCAFsForGHCi", listOf(null), "ghc-9.14.1-inplace");
+
+    fun acceptsUnit(value: Any?): Boolean =
+        if (this == STRLEN_CSIZE) isOriginalByteStringUnit(value) else value == unit
 }
 
 internal object CoreStringRtsForeign {
@@ -82,11 +85,11 @@ internal object CoreStringRtsForeign {
         val target = descriptor["target"] as? Map<*, *> ?: return null
         val candidates = StringRtsOp.entries.filter { it.symbol == target["symbol"] }
         if (candidates.isEmpty()) return null
-        val operation = candidates.firstOrNull { it.unit == target["unit"] }
+        val operation = candidates.firstOrNull { it.acceptsUnit(target["unit"]) }
             ?: fault("Invalid original Posix string/RTS call: exact installed GHC target")
         requireProof(descriptor.keys == descriptorKeys && exact(descriptor["schema"], 1), "descriptor schema")
         requireProof(target.keys == setOf("kind", "symbol", "unit", "isFunction") &&
-            target["kind"] == "static" && target["unit"] == operation.unit && target["isFunction"] == true,
+            target["kind"] == "static" && target["isFunction"] == true,
             "exact installed GHC target")
         requireProof(descriptor["convention"] == "ccall" && descriptor["safety"] == "unsafe" &&
             exact(descriptor["arity"], operation.arguments.size) &&

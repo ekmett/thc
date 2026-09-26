@@ -2145,6 +2145,30 @@ class OriginalGcStatsDeclarationTest(unittest.TestCase):
 
 
 class OriginalLibraryMemoryDeclarationTest(unittest.TestCase):
+    def test_bytestring_strlen_keeps_csize_abi_for_installed_units(self):
+        fixture = LibdwUnavailableAuditTest()
+        declaration = json.loads((ROOT.parent / 'src/test/resources/core/original-bytestring-strlen-descriptor.json').read_text())
+        signed = json.loads((ROOT.parent / 'src/test/resources/core/original-string-rts-descriptors.json').read_text())['strlen']
+        for unit in ('bytestring-0.12.2.0-inplace', 'bytestring-0.12.2.0', 'bytestring-0.12.2.0-319833abde312f'):
+            with self.subTest(unit=unit):
+                installed = copy.deepcopy(declaration)
+                installed['target']['unit'] = unit
+                report = fixture.audit(fixture.fixture(installed))
+                self.assertTrue(report['accepted'], report)
+                self.assertEqual(['strlen'], [call['symbol'] for call in report['foreignCalls']])
+                self.assertEqual(unit, installed['target']['unit'])
+                disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != 'strlen'])
+                self.assertFalse(fixture.audit(fixture.fixture(installed), disabled)['accepted'])
+                wrong = copy.deepcopy(installed)
+                wrong['resultRep'] = signed['resultRep']
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+        for unit in (None, ['bytestring-0.12.2.0'], 'ghc-internal', 'foreign',
+                     'bytestring-0.12.1.0', 'bytestring-0.12.2.0-', 'bytestring-0.12.2.0-hash-extra',
+                     'bytestring-0.12.2.0 hash', 'bytestring-0.12.2.0:hash', 'bytestring-0.12.2.0\n'):
+            wrong = copy.deepcopy(declaration)
+            wrong['target']['unit'] = unit
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], unit)
+
     def test_original_library_carriers_and_abis_remain_distinct(self):
         fixture = LibdwUnavailableAuditTest()
         for resource in ('original-array-memcpy-descriptor.json', 'original-bytestring-strlen-descriptor.json'):

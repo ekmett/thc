@@ -65,8 +65,13 @@ class OriginalStringRtsTest {
         // module SHA-256 e341553bb7289341df45e43917d9dc17a3f7e67074c9afbd315326480175a26b.
         val original = Json.parse(javaClass.getResource("/core/original-bytestring-strlen-descriptor.json")!!.readText())
             as Map<String, Any?>
+        val originalTarget = original.getValue("target") as Map<String, Any?>
+        // Exercise the same original CSize ABI under source-build and installed
+        // unit identities. Only these variants change the copied descriptor.
+        for (unit in listOf("bytestring-0.12.2.0-inplace", "bytestring-0.12.2.0", "bytestring-0.12.2.0-319833abde312f"))
         for (backend in listOf("ast", "bytecode")) inside { language ->
-            val guest = program(language, backend, module("strlen", original, original))
+            val declaration = original + ("target" to (originalTarget + ("unit" to unit)))
+            val guest = program(language, backend, module("strlen", declaration, original))
             val target = guest.entryTarget("strlen")
             val text = ManagedAddress.fromByteArray(byteArrayOf(65, -50, -69, 0, 66))
             fun length(address: ManagedAddress) = Calls.target(target, arrayOf(0L, address, Unit)) as Long
@@ -79,8 +84,19 @@ class OriginalStringRtsTest {
             assertEquals(before + 1, (guest.diagnostics().getValue("compiledEntries") as Number).toLong())
             valid(target)
             assertThrows(RuntimeFault::class.java) { length(ManagedAddress.fromByteArray(byteArrayOf(65))) }
-            val wrong = original + ("resultRep" to descriptors.getValue("strlen").getValue("resultRep"))
+            val wrong = declaration + ("resultRep" to descriptors.getValue("strlen").getValue("resultRep"))
             assertThrows(RuntimeFault::class.java) { program(language, backend, module("strlen", wrong, original)) }
+            assertEquals(unit, (declaration.getValue("target") as Map<*, *>)["unit"])
+            assertEquals(0, language.handoffState.get().arguments.depth)
+            assertEquals(0, language.handoffState.get().results.depth)
+        }
+        for (backend in listOf("ast", "bytecode")) inside { language ->
+            for (unit in listOf(null, listOf("bytestring-0.12.2.0"), "ghc-internal", "foreign",
+                "bytestring-0.12.1.0", "bytestring-0.12.2.0-", "bytestring-0.12.2.0-hash-extra",
+                "bytestring-0.12.2.0 hash", "bytestring-0.12.2.0:hash", "bytestring-0.12.2.0\n")) {
+                val wrong = original + ("target" to (originalTarget + ("unit" to unit)))
+                assertThrows(RuntimeFault::class.java) { program(language, backend, module("strlen", wrong, original)) }
+            }
         }
     }
 
