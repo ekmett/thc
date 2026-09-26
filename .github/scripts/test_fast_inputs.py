@@ -1439,7 +1439,7 @@ class FastInputTests(unittest.TestCase):
         with self.assertRaises(cache.CacheMiss):cache.safe_mode(0o755,"build/core/Fixture.json")
 
     def test_pack_sanitizes_write_permissions_without_overwriting_existing_modes(self):
-        name = "build/bytearray/oracle.tsv"
+        name = "build/data-to-tag/oracle.tsv"
         path = self.root / name
         original = path.read_bytes()
         path.chmod(0o664)
