@@ -1,0 +1,28 @@
+cabal-version: 3.0
+name: ghc-api-thc-check
+version: 0.1.0.0
+build-type: Simple
+license: BSD-3-Clause
+extra-source-files: subjects/Probe.hs
+
+common probe
+  default-language: Haskell2010
+  ghc-options: -O1 -Wall
+  build-depends: base >= 4.22 && < 4.23, ghc == 9.14.1
+
+executable ghc-faststring
+  import: probe
+  hs-source-dirs: faststring
+  main-is: Main.hs
+
+executable ghc-session
+  import: probe
+  hs-source-dirs: session
+  main-is: Main.hs
+  build-depends: transformers >= 0.6 && < 0.7
+
+executable ghc-load
+  import: probe
+  hs-source-dirs: load
+  main-is: Main.hs
+  build-depends: transformers >= 0.6 && < 0.7

@@ -1,0 +1,5 @@
+packages: .
+
+jobs: 2
+tests: False
+benchmarks: False
