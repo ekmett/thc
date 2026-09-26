@@ -116,9 +116,9 @@ THC_APPS="$THC_ROOT/build/real-programs"
 THC_OUTPUT="$THC_APPS/output"
 mkdir -p "$THC_OUTPUT"
 
-cabal get happy-2.2.1 happy-lib-2.2.1 hscolour-1.25 \
+cabal get happy-2.2.1 happy-lib-2.2.1 alex-3.5.4.2 hscolour-1.25 \
   --index-state=2026-09-24T12:38:18Z --destdir="$THC_APPS"
-for package in happy-2.2.1 hscolour-1.25; do
+for package in happy-2.2.1 alex-3.5.4.2 hscolour-1.25; do
   printf '%s\n' 'packages: .' 'tests: False' 'benchmarks: False' \
     'index-state: 2026-09-24T12:38:18Z' > "$THC_APPS/$package/cabal.project"
 done
@@ -178,6 +178,28 @@ THC_BACKEND=bytecode "$THC_DRIVER" run "$THC_APPS/hscolour-1.25" \
 Open `build/real-programs/output/TinyMath.html` to see the highlighted file.
 An unchanged HsColour package still has the declared-module inventory limitation;
 the patch is explicit, not an automatic source rewrite by THC.
+
+### Alex: generate a lexer
+
+Alex 3.5.4.2 uses its original packaged templates, without an application-source
+patch. The full-bytecode workload below passed both handoff modes on public
+runtime `981b360c`; the application notes retain the earlier failing checkpoint.
+
+```sh
+export alex_datadir="$THC_APPS/alex-3.5.4.2/data"
+THC_BACKEND=bytecode "$THC_DRIVER" run "$THC_APPS/alex-3.5.4.2" \
+  --exe alex --thc-root "$THC_ROOT" --dist-dir "$THC_APPS/alex-guest" \
+  --with-ghc "$GHC" --with-ghc-pkg "$GHC_PKG" \
+  --installed-core required --ghc-source "$GHC_SOURCE" -- \
+  -o "$THC_OUTPUT/Lexer.hs" "$THC_ROOT/examples/standard-apps/TinyLexer.x"
+
+"$GHC" -O1 -outputdir "$THC_OUTPUT/lexer-objects" \
+  "$THC_OUTPUT/Lexer.hs" -o "$THC_OUTPUT/lexer"
+"$THC_OUTPUT/lexer"
+```
+
+The lexer prints `["sum","+","42"]`. Alex runs in THC; native GHC compiles and
+runs the generated lexer. Keep `alex_datadir` set for later guest invocations.
 
 Doctest and Pandoc remain development targets, not demonstrated runnable commands
 here. Native baselines, strict Core admission and actual THC execution are
