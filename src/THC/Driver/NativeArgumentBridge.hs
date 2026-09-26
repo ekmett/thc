@@ -4,7 +4,7 @@ module THC.Driver.NativeArgumentBridge (nativeArgumentBridge) where
 
 import Control.Monad (guard)
 import Data.Char (isSpace)
-import Data.List (isInfixOf, isPrefixOf, nub)
+import Data.List (isPrefixOf, nub)
 
 -- LLVM permits a direct call whose integer argument widths differ from the
 -- definition. GHC's x86_64 ccall ABI uses the low bits of each integer slot,
@@ -23,8 +23,7 @@ nativeArgumentBridge target symbol entry source = do
   let bodyLines = map (dropWhile isSpace) . takeWhile (/= "}") . drop 1 $
         dropWhile (/= callerLine) (lines source)
   case bodyLines of
-    [callLine,returnLine] -> guard ("call" `elem` words callLine &&
-      ("@" ++ symbol ++ "(") `isInfixOf` callLine && "ret " `isPrefixOf` returnLine)
+    [callLine,returnLine] -> passthroughCall symbol caller callLine returnLine
     _ -> Nothing
   guard (result caller == result callee && length (parameters caller) == length (parameters callee))
   let pairs = zip (parameters caller) (parameters callee)
@@ -60,7 +59,27 @@ nativeArgumentBridge target symbol entry source = do
     width _ = 8
 
 data Parameter = Parameter { scalar :: String, extension :: String } deriving Eq
-data Definition = Definition { result :: Parameter, parameters :: [Parameter] }
+data Definition = Definition { result :: Parameter, parameters :: [Parameter], argumentNames :: [String] }
+
+passthroughCall :: String -> Definition -> String -> String -> Maybe ()
+passthroughCall symbol caller callLine returnLine = do
+  let (assigned,rest) = break (== "call") (words callLine)
+  called <- case rest of "call":tokens -> pure (unwords tokens); _ -> Nothing
+  let (before,after) = break (== '@') called
+      prefix = words before
+  guard (not (null prefix) && ("@" ++ symbol ++ "(") `isPrefixOf` after)
+  returned <- scalarParameter (last prefix) (init prefix)
+  guard (returned == result caller && all (`elem` ["ccc","noundef","noalias","nonnull","signext","zeroext"]) (init prefix))
+  actuals <- splitParameters (drop (length symbol + 2) after) >>= mapM parseParameter
+  guard (map fst actuals == parameters caller && map snd actuals == argumentNames caller)
+  let assignment = case reverse assigned of
+        "tail":tokens -> reverse tokens
+        "notail":tokens -> reverse tokens
+        _ -> assigned
+  if scalar returned == "void" then guard (null assignment && words returnLine == ["ret","void"])
+    else case assignment of
+      [value,"="] -> guard ("%" `isPrefixOf` value && words returnLine == ["ret",scalar returned,value])
+      _ -> Nothing
 
 -- A bounded recognizer over already verified LLVM, not an LLVM parser. Missing
 -- or unfamiliar shapes leave the original adapter untouched. In particular,
@@ -77,15 +96,16 @@ parseDefinition line = do
   let arguments = drop 1 (dropWhile (/= '(') after)
   raw <- splitParameters arguments
   args <- mapM parseParameter raw
-  guard (all ((/= "void") . scalar) args)
-  pure (Definition returned args)
+  guard (all ((/= "void") . scalar . fst) args)
+  pure (Definition returned (map fst args) (map snd args))
 
-parseParameter :: String -> Maybe Parameter
+parseParameter :: String -> Maybe (Parameter,String)
 parseParameter source = case words source of
   ty:attributes -> do
     guard (not (null attributes) && "%" `isPrefixOf` last attributes)
     guard (all allowed (init attributes))
-    scalarParameter ty (init attributes)
+    parameter <- scalarParameter ty (init attributes)
+    pure (parameter,last attributes)
   _ -> Nothing
   where
     allowed token = token `elem` ["noundef","noalias","nocapture","readonly","writeonly","readnone",

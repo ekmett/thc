@@ -55,7 +55,13 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       mapM_ (\body -> assertEqual "do not replace unrelated or effectful adapter work" Nothing
         (nativeArgumentBridge "x86_64-unknown-linux-gnu" "callee" "caller" (candidate body)))
         ["  %1 = call i64 @different(i64 %0)\n  ret i64 %1\n",
-         "  store volatile i8 1, ptr @counter\n  %1 = call i64 @callee(i64 %0)\n  ret i64 %1\n"]
+         "  store volatile i8 1, ptr @counter\n  %1 = call i64 @callee(i64 %0)\n  ret i64 %1\n",
+         "  %1 = call i64 @callee(i64 7)\n  ret i64 %1\n",
+         "  %1 = call i64 @callee(i64 %0)\n  ret i64 0\n",
+         "  %1 = call fastcc i64 @callee(i64 %0)\n  ret i64 %1\n"]
+      let swapped = "define i64 @caller(i64 %0, i64 %1) {\n  %2 = call i64 @callee(i64 %1, i64 %0)\n  ret i64 %2\n}\ndefine i64 @callee(i8 %0, i8 %1) {"
+      assertEqual "original argument ordering is required" Nothing
+        (nativeArgumentBridge "x86_64-unknown-linux-gnu" "callee" "caller" swapped)
   , TestCase $ do
       let validate = validateNativeWidthIR "x86_64-unknown-linux-gnu"
       mapM_ (assertEqual "exact signed wchar_t/int ABI" (Right ()) . validate)
