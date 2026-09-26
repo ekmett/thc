@@ -110,6 +110,10 @@ internal class PackageReturnedAddress(val owner: Language.State, private val ali
         if (!alive.isValid) fault("Returned package C pointer registry is closed")
         backing?.requireByteRegion(0)
     }
+    // Backing arithmetic can dispatch through ManagedAddress.plus again. Keep
+    // this uncommon foreign-provenance path outside recursive partial evaluation;
+    // ordinary managed and pinned address arithmetic remains compiled.
+    @TruffleBoundary
     fun plus(displacement: Long): PackageReturnedAddress {
         requireCurrent()
         return if (displacement == 0L) this else
