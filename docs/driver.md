@@ -76,8 +76,10 @@ ordinary program with native GHC, including nested overrides and exception
 restoration. It uses the complete installation variables described below and
 reuses the same exported package closure for AST/bytecode and default/dense
 runtime runs. Bytecode runs the generated executable entry and shutdown; AST
-runs the original raw `Main.main` with explicit flushing, because its process
-signal startup is not supported. This is not an AST executable-lifecycle claim.
+runs the original raw `Main.main` with explicit flushing. That test retains its
+synchronous AST setup; [process signal dispatch](process-signals.md) now supports
+AST with `-Dthc.asyncExceptions=true`. The arguments test is not an AST
+generated executable-lifecycle claim.
 The low-level launchers retain their previous no-argument syntax;
 their optional suffix is `-- PROGRAM_NAME ARG...`.
 

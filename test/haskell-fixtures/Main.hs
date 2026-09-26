@@ -61,6 +61,7 @@ import OriginalPosixStatFixtures (prepareOriginalPosixStat)
 import LibdwUnavailableFixtures (prepareLibdwUnavailable)
 import NativeAddressFixtures (prepareNativeAddress)
 import ProcessSignalFixtures (prepareProcessSignals)
+import SignalDispatchFixtures (prepareSignalDispatch)
 import RtsShutdownFixtures (prepareRtsShutdown)
 import OriginalGmpFixtures (prepareOriginalGmp)
 import OriginalFdReadyFixtures (prepareOriginalFdReady)
@@ -963,6 +964,7 @@ main = do
     ["original-sigset"] -> prepareOriginalSigset root
     ["native-addresses"] -> prepareNativeAddress root
     ["process-signals"] -> prepareProcessSignals root
+    ["signal-dispatch"] -> prepareSignalDispatch root
     ["rts-shutdown"] -> prepareRtsShutdown root
     ["original-gmp"] -> prepareOriginalGmp root False
     ["original-gmp", "--require-supported"] -> prepareOriginalGmp root True

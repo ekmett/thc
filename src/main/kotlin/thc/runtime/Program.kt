@@ -2515,7 +2515,14 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 ManagedFileExpression(managedFile, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
             } else if (processSignal != null) {
-                throw UnsupportedCore("Original process signal delivery requires the bytecode backend")
+                CoreSignalForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreSignalForeign.validateOperand(processSignal, index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                InstallProcessSignal(operands.toTypedArray(), tupleProof)
             } else if (nativeAllocation != null) {
                 CoreNativeAllocationForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
