@@ -73,8 +73,8 @@ prepareStablePtrFFI root = do
   unless accepted (die "stableptr-ffi: production audit did not accept original executable")
   packages <- readJson (root </> directory </> "packages.json")
   records <- field packages "units" :: IO [Value]
-  forM_ records $ \record -> do
-    bundle <- field record "bundle"
+  -- Compatibility/reexport units may legitimately have no owned bundle.
+  forM_ [bundle | Object fields <- records, Just bundle <- [KM.lookup "bundle" fields]] $ \bundle -> do
     path <- field bundle "path"
     expected <- field bundle "sha256"
     actual <- hashFile path
