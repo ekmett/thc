@@ -37,8 +37,19 @@ thc run . --exe ad-thc-check:exe:ad-regression \
   -- --quickcheck-replay=20260926 --num-threads=1
 ```
 
-Guest execution is under investigation; native success is not a THC success
-claim. The first guest acquisition exposed and now has a fix for treating
-disabled conditional C sources as mandatory. Further guest frontiers are
-recorded as they are reached rather than bypassing audits or changing upstream
-tests.
+The original `ADKahn.hs` passes all ten checks as a THC guest on both AST and
+bytecode, with both default and dense handoffs. This checkpoint replays the
+unchanged, hash-checked full-Core package manifest captured from the original
+application; the current strict audit accepts all 2,259 reachable bindings
+without missing globals or unsupported operations. It uses the executable
+lifecycle, including original `runMainIO` initialization and `flushStdHandles`,
+and explicitly enables `-Dthc.asyncExceptions=true` for AST signal delivery.
+Both backends report zero blackholes and zero unsupported traps. This short
+application does not reach JIT compilation; separate focused sum-join and GMP
+tests cover compiled execution.
+
+That guest result is distinct from the native 89-test upstream baseline.
+Fresh acquisition and guest execution of the unchanged `ad-regression` suite
+remain under investigation. Earlier acquisition blockers included disabled
+conditional C sources and the original safe `erf` imports; further frontiers
+are recorded rather than bypassing audits or changing upstream tests.
