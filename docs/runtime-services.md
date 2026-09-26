@@ -71,7 +71,9 @@ negotiation scheme.
 `runtimeCapabilities :: IO RuntimeCapabilities` reports native-access and
 thread-creation permissions for this THC context, and its initial CPU capacity.
 CPU capacity is not the number of live Haskell threads, does not shrink when a
-child is pinned, and is not dynamic GHC `setNumCapabilities` support.
+child is pinned, and is independent of the logical count changed by original
+`setNumCapabilities`. That count does not resize JVM pools; see
+[RTS capabilities](rts-event-capabilities.md).
 
 ## `THC.Thread`
 

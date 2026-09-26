@@ -390,6 +390,21 @@ configurations[fullCoreTests.runtimeOnlyConfigurationName].extendsFrom(configura
 fullCoreTests.compileClasspath += sourceSets.test.get().output
 fullCoreTests.runtimeClasspath += sourceSets.test.get().output
 
+for ((taskName, dense) in listOf("rtsEventFullCoreTest" to false, "rtsEventFullCoreDenseTest" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests original GHC event prerequisites and context-local logical capabilities."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.RtsEventNativeTest") }
+        inputs.files(fileTree("build/rts-event") { include("*.json") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original event prerequisites require fresh first-compiled-entry checks") { true }
+        doFirst { check(file("build/rts-event/manifest.json").isFile) { "Run thc-fixtures rts-event with complete installed GHC Core" } }
+    }
+}
 for ((taskName, dense) in listOf("gcStatsFullCoreTest" to false, "gcStatsFullCoreDenseTest" to true)) {
     tasks.register<Test>(taskName) {
         group = "verification"
@@ -964,14 +979,15 @@ val generateStdioAbi by tasks.registering {
         val executable = temporaryDir.resolve("stdio-abi-probe")
         run(command + listOf("-std=c11", source.path, "-o", executable.path))
         val probe = JsonSlurper().parseText(run(listOf(executable.path))) as Map<*, *>
-        require(probe.keys == setOf("widths", "errno", "seek", "open")) { "Malformed native stdio ABI probe" }
+        require(probe.keys == setOf("widths", "errno", "seek", "open", "siginfoBytes")) { "Malformed native stdio ABI probe" }
         // The C probe asserts widths; runtime Kotlin validates all exact fields and errno values.
         val manifest = linkedMapOf<String, Any?>("schema" to 1, "system" to system,
             "architecture" to arch, "target" to target, "compilerDefaultTarget" to defaultTarget,
             "compilerVersion" to run(listOf(compiler, "--version")),
             "sourceSha256" to MessageDigest.getInstance("SHA-256").digest(source.readBytes())
                 .joinToString("") { "%02x".format(it) },
-            "widths" to probe["widths"], "errno" to probe["errno"], "seek" to probe["seek"], "open" to probe["open"])
+            "widths" to probe["widths"], "errno" to probe["errno"], "seek" to probe["seek"], "open" to probe["open"],
+            "siginfoBytes" to probe["siginfoBytes"])
         val destination = output.get().asFile.resolve("thc/native/stdio-host-abi.json")
         destination.parentFile.mkdirs()
         destination.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n")

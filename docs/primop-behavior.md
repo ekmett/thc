@@ -29,7 +29,7 @@ test commands.
 | `numSparks#` | Always returns `0`; there is no spark queue. |
 | `getSpark#` | Always returns failure flag `0` and the pinned GHC boxed `False` filler; no work is dequeued. |
 | `fork#` | Creates a real Java platform thread rather than a lightweight GHC scheduler thread. Thread creation must be allowed by the embedding. Attempts to clear inherited CPU affinity to the context baseline. Resumable external delivery requires `asyncExceptions: true`; see `killThread#` below. |
-| `forkOn#` | Same thread and delivery requirements as `fork#`. Chooses a dense logical capability modulo the context's snapshotted CPU capacity. Native affinity is **best effort**: Linux requests a per-thread pin; Windows requests advisory CPU Sets and declines unresolved multi-group topology; macOS, unavailable native access, or a rejected request run unpinned without failing the fork. |
+| `forkOn#` | Same thread and delivery requirements as `fork#`. Chooses a dense logical capability modulo the context's current logical capability count, then maps modulo its immutable eligible CPU capacity. Native affinity is **best effort**: Linux requests a per-thread pin; Windows requests advisory CPU Sets and declines unresolved multi-group topology; macOS, unavailable native access, or a rejected request run unpinned without failing the fork. |
 | `threadStatus#` | Capability is a context-local assignment, not a measurement of the currently executing physical CPU. The lock flag records a `forkOn#` request, **not successful OS affinity**. Ordinary threads share logical capabilities. |
 | `listThreads#` | Lists context-owned guest identities, not every JVM thread. Retained completed identities and host carriers between guest invocations can appear; ordering is unspecified. |
 | `isCurrentThreadBound#` | Always returns `0`. Platform threads and CPU affinity do not provide GHC's bound-thread/foreign-TLS contract. |
@@ -266,8 +266,11 @@ Details: [hints and tracing](hints-and-tracing.md).
 
 ## Related limits that are not individual primops
 
-The `enabled_capabilities` RTS data label reports snapshotted CPU capacity, not
-the number of guest threads. Dynamic `setNumCapabilities`, GHC `-N` scheduling,
+The `enabled_capabilities` RTS data label reports the context-local logical count,
+initially snapshotted CPU capacity and mutable through original `setNumCapabilities`.
+The eligible CPU count remains fixed; JVM pools and existing affinity are unchanged.
+See [RTS event prerequisites and capabilities](rts-event-capabilities.md).
+GHC `-N` scheduling,
 bound `forkOS`/foreign TLS, general native RTS memory/stack decoding, arbitrary
 FFI callbacks and full GHC eventlog/profiling services are separate runtime work.
 The original allocation-counter getter reports the same target bytes as the

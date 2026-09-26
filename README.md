@@ -128,8 +128,10 @@ keeps its continuation, so another thread can resume it without repeating
 completed work. Thread identities are Java thread IDs scoped to their THC context.
 
 `forkOn#` requests best-effort CPU affinity; ordinary `fork#` clears an inherited
-pin, and capability queries report available CPU capacity rather than guest-thread
-count. The base-only public [`THC` module](docs/cpu-affinity-api.md) exposes support
+pin. The logical capability count initially matches eligible CPU capacity and can
+be changed per context by original `setNumCapabilities`; it is not a guest-thread
+count or JVM pool size. See [RTS capabilities](docs/rts-event-capabilities.md).
+The base-only public [`THC` module](docs/cpu-affinity-api.md) exposes support
 and per-fork acceptance queries. See [scheduling](docs/thread-scheduling.md) for
 Linux/Windows behavior and the local Graal compiler-worker affinity reset.
 
