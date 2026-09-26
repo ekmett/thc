@@ -398,11 +398,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             } else {
                 BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
                 if (local.getObject(bytecode, frame) == thunk) {
-                    if (result instanceof Long number) local.setLong(bytecode, frame, number);
-                    else if (result instanceof Float floating) local.setFloat(bytecode, frame, floating);
-                    else if (result instanceof Double doubleValue) local.setDouble(bytecode, frame, doubleValue);
-                    else if (result instanceof Boolean bool) local.setBoolean(bytecode, frame, bool);
-                    else local.setObject(bytecode, frame, result);
+                    // Reuse the thunk's boxed result in an object-profiled local.
+                    // The generic DSL setter also preserves existing primitive
+                    // slot profiles; typed setters would unbox and rebox here.
+                    local.setObject(bytecode, frame, result);
                 }
             }
         }
