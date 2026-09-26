@@ -2424,10 +2424,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 smallArrayExpression(operation, tupleProof,
                     args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }.toTypedArray())
-            } else if (fn[0] == "prim" && VectorByteArrayOp.named(fn[1] as String) != null) {
-                val operation = VectorByteArrayOp.named(fn[1] as String)!!
+            } else if (fn[0] == "prim" && VectorMemoryOp.named(fn[1] as String) != null) {
+                val operation = VectorMemoryOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
-                VectorByteArrayExpression(operation, args.map { compile(it, scope, false) }.toTypedArray())
+                if (operation.isAddress) VectorAddressExpression(operation, args.map { compile(it, scope, false) }.toTypedArray())
+                else VectorByteArrayExpression(operation, args.map { compile(it, scope, false) }.toTypedArray())
             } else if (fn[0] == "prim" && fn[1] in prefetchArities) {
                 if (args.size != prefetchArities[fn[1]]) fault("Wrong prefetch arity")
                 PrefetchExpression(argument(args[0], scope, flags[0] as Boolean),
@@ -2795,7 +2796,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val lanes = IntArray(TupleShape.flatten(vectorProof).size) { local.layout.bind("<vector read lane $it>") }
         local.bindTuple(read.vectorBinder, vectorProof, lanes)
         val operands = read.arguments.map { compile(it, scope, false) }.toTypedArray()
-        val value = VectorByteArrayExpression(read.operation, operands).located(currentSource)
+        val value = (if (read.operation.isAddress) VectorAddressExpression(read.operation, operands)
+            else VectorByteArrayExpression(read.operation, operands)).located(currentSource)
         val body = compile(read.body, local, tail)
         // The whole tuple binder is deliberately absent from local scope.
         // Store the vector only after all operand/State checks and the load finish.

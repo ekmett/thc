@@ -2568,10 +2568,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         else -> e.builder.endSizeSmallArray()
                     }
                 }, tupleProof.copy(evaluated = true))
-            } else if (fn[0] == "prim" && VectorByteArrayOp.named(fn[1] as String) != null) {
-                val operation = VectorByteArrayOp.named(fn[1] as String)!!
+            } else if (fn[0] == "prim" && VectorMemoryOp.named(fn[1] as String) != null) {
+                val operation = VectorMemoryOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
-                vectorByteArray(operation, args.map { compile(it, scope, false) })
+                vectorMemory(operation, args.map { compile(it, scope, false) })
             } else if (fn[0] == "prim" && fn[1] in prefetchArities) {
                 if (args.size != prefetchArities[fn[1]]) fault("Wrong prefetch arity")
                 val value = argument(args[0], scope, flags[0] as Boolean)
@@ -3855,21 +3855,33 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             fields.forEach { e.locals.remove(it.id) }
         }, result.copy(evaluated = arms.all { it.body.proof.evaluated }))
     }
-    private fun vectorByteArray(operation: VectorByteArrayOp, operands: List<Expression>): Expression =
+    private fun vectorMemory(operation: VectorMemoryOp, operands: List<Expression>): Expression =
         ProvenExpression(Expression { e ->
             val b = e.builder
             when (operation.family) {
-                VectorMemoryFamily.INT8, VectorMemoryFamily.WORD8 -> when {
+                VectorMemoryFamily.INT8, VectorMemoryFamily.WORD8 -> if (operation.isAddress) when {
+                    operation.isWrite -> b.beginWriteVectorByteAddress(operation.scalarOffset)
+                    operation.isRead -> b.beginReadVectorByteAddress(operation.scalarOffset)
+                    else -> b.beginIndexVectorByteAddress(operation.scalarOffset)
+                } else when {
                     operation.isWrite -> b.beginWriteVectorByteArray(operation.scalarOffset, operation.vectorBytes)
                     operation.isRead -> b.beginReadVectorByteArray(operation.scalarOffset, operation.vectorBytes)
                     else -> b.beginIndexVectorByteArray(operation.scalarOffset, operation.vectorBytes)
                 }
-                VectorMemoryFamily.INT16, VectorMemoryFamily.WORD16 -> when {
+                VectorMemoryFamily.INT16, VectorMemoryFamily.WORD16 -> if (operation.isAddress) when {
+                    operation.isWrite -> b.beginWriteVectorShortAddress(operation.scalarOffset)
+                    operation.isRead -> b.beginReadVectorShortAddress(operation.scalarOffset)
+                    else -> b.beginIndexVectorShortAddress(operation.scalarOffset)
+                } else when {
                     operation.isWrite -> b.beginWriteVectorShortArray(operation.scalarOffset, operation.vectorBytes)
                     operation.isRead -> b.beginReadVectorShortArray(operation.scalarOffset, operation.vectorBytes)
                     else -> b.beginIndexVectorShortArray(operation.scalarOffset, operation.vectorBytes)
                 }
-                VectorMemoryFamily.INT64, VectorMemoryFamily.WORD64 -> when {
+                VectorMemoryFamily.INT64, VectorMemoryFamily.WORD64 -> if (operation.isAddress) when {
+                    operation.isWrite -> b.beginWriteVectorLongAddress(operation.scalarOffset)
+                    operation.isRead -> b.beginReadVectorLongAddress(operation.scalarOffset)
+                    else -> b.beginIndexVectorLongAddress(operation.scalarOffset)
+                } else when {
                     operation.isWrite -> b.beginWriteVectorLongArray(operation.scalarOffset, operation.vectorBytes)
                     operation.isRead -> b.beginReadVectorLongArray(operation.scalarOffset, operation.vectorBytes)
                     else -> b.beginIndexVectorLongArray(operation.scalarOffset, operation.vectorBytes)
@@ -3897,17 +3909,29 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             }
             operands.forEach { it.emit(e) }
             when (operation.family) {
-                VectorMemoryFamily.INT8, VectorMemoryFamily.WORD8 -> when {
+                VectorMemoryFamily.INT8, VectorMemoryFamily.WORD8 -> if (operation.isAddress) when {
+                    operation.isWrite -> b.endWriteVectorByteAddress()
+                    operation.isRead -> b.endReadVectorByteAddress()
+                    else -> b.endIndexVectorByteAddress()
+                } else when {
                     operation.isWrite -> b.endWriteVectorByteArray()
                     operation.isRead -> b.endReadVectorByteArray()
                     else -> b.endIndexVectorByteArray()
                 }
-                VectorMemoryFamily.INT16, VectorMemoryFamily.WORD16 -> when {
+                VectorMemoryFamily.INT16, VectorMemoryFamily.WORD16 -> if (operation.isAddress) when {
+                    operation.isWrite -> b.endWriteVectorShortAddress()
+                    operation.isRead -> b.endReadVectorShortAddress()
+                    else -> b.endIndexVectorShortAddress()
+                } else when {
                     operation.isWrite -> b.endWriteVectorShortArray()
                     operation.isRead -> b.endReadVectorShortArray()
                     else -> b.endIndexVectorShortArray()
                 }
-                VectorMemoryFamily.INT64, VectorMemoryFamily.WORD64 -> when {
+                VectorMemoryFamily.INT64, VectorMemoryFamily.WORD64 -> if (operation.isAddress) when {
+                    operation.isWrite -> b.endWriteVectorLongAddress()
+                    operation.isRead -> b.endReadVectorLongAddress()
+                    else -> b.endIndexVectorLongAddress()
+                } else when {
                     operation.isWrite -> b.endWriteVectorLongArray()
                     operation.isRead -> b.endReadVectorLongArray()
                     else -> b.endIndexVectorLongArray()
@@ -3936,7 +3960,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         }, if (operation.isWrite) CoreVectorMemory.stateProof else operation.vectorProof)
     private fun vectorReadCase(read: VectorReadCase, scope: Scope, tail: Boolean): Expression {
         val operands = read.arguments.map { compile(it, scope, false) }
-        val value = vectorByteArray(read.operation, operands)
+        val value = vectorMemory(read.operation, operands)
         val local = scope.child()
         local.bindVoid(read.stateBinder, CoreVectorMemory.stateProof)
         val vectorProof = read.operation.vectorProof

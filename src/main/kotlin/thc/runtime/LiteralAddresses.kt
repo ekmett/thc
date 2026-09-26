@@ -10,6 +10,7 @@ import thc.Language
 import java.lang.ref.Reference
 import java.lang.ref.ReferenceQueue
 import java.lang.ref.WeakReference
+import jdk.incubator.vector.ByteVector
 import java.nio.ByteOrder
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
@@ -347,6 +348,45 @@ internal class ManagedAddress private constructor(
             val shift = (if (little) index else width - 1 - index) * 8
             bytes[start + index] = (value ushr shift).toByte()
         }
+    }
+
+    /** A vector is one checked 16-byte access. The owner monitor/native borrow
+     * spans validation and transfer: no raw backing escape or per-byte partial store. */
+    fun readVectorBytes(elementOffset: Long, stride: Int): ByteVector {
+        val displacement = vectorDisplacement(elementOffset, stride)
+        native?.let { allocation -> return allocation.access { segment ->
+            requireRange(displacement, 16)
+            ByteVector.fromMemorySegment(ByteVector.SPECIES_128, segment, offset + displacement, ByteOrder.nativeOrder())
+        } }
+        requireRange(displacement, 16)
+        val start = offset + displacement
+        owner?.let { allocation -> return allocation.accessVector(start, true, 1, false) { bytes ->
+            ByteVector.fromArray(ByteVector.SPECIES_128, bytes, start.toInt())
+        } }
+        return ByteVector.fromArray(ByteVector.SPECIES_128,
+            literalBytes ?: mutableBytes ?: fault("Null Addr# has no backing storage"), start.toInt())
+    }
+
+    fun writeVectorBytes(elementOffset: Long, stride: Int, value: ByteVector) {
+        val vector = CoreVectors.requireByte(value, ByteVector.SPECIES_128)
+        val displacement = vectorDisplacement(elementOffset, stride)
+        native?.let { allocation -> allocation.access { segment ->
+            requireRange(displacement, 16, writable = true)
+            vector.intoMemorySegment(segment, offset + displacement, ByteOrder.nativeOrder())
+        }; return }
+        requireRange(displacement, 16, writable = true)
+        val start = offset + displacement
+        owner?.let { allocation -> allocation.accessVector(start, true, 1, true) { bytes ->
+            vector.intoArray(bytes, start.toInt())
+        }; return }
+        vector.intoArray(mutableBytes ?: fault("Cannot write through an immutable literal Addr#"), start.toInt())
+    }
+
+    private fun vectorDisplacement(elementOffset: Long, stride: Int): Long {
+        if (stride != 1 && stride != 2 && stride != 8 && stride != 16) fault("Invalid vector address stride")
+        if (elementOffset < Long.MIN_VALUE / stride || elementOffset > Long.MAX_VALUE / stride)
+            fault("Managed Addr# vector offset overflow")
+        return elementOffset * stride
     }
 
     fun writeWord16(elementOffset: Long, value: Long) = writeNativeScalar(elementOffset, 2, value)

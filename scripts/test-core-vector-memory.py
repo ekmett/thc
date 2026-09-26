@@ -8,6 +8,7 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
+import core_vector_memory as memory
 
 from core_vector_memory import ARRAY, INDEX, STATE, SIGNED_OPERATIONS as OPERATIONS, SIGNED_READS as READS, SIGNED_INDICES as INDICES, SIGNED_WRITES as WRITES, read_case, validate_direct
 from core_vectors import VECTOR32_REP, VECTOR_WORD32_REP, TUPLE32_REP, LANE32_REP, proof_error
@@ -76,6 +77,31 @@ def check(module):
 
 
 class VectorMemoryProofTest(unittest.TestCase):
+    def test_all_36_address_signatures_keep_exact_auditor_carriers(self):
+        names = sorted(name for name in memory.OPERATIONS if 'OffAddr' in name)
+        self.assertEqual(36, len(names))
+        for name in names:
+            vector = memory.vector_proof(name)
+            proofs = [memory.ADDRESS, INDEX]
+            if name in memory.READS:
+                proofs += [STATE]
+            elif name in memory.WRITES:
+                proofs += [vector, STATE]
+            args = [var(str(index), proof) for index, proof in enumerate(proofs)]
+            flags = [False] * len(args)
+            self.assertEqual(len(args), CAP['primitives'][name])
+            memory.validate_arguments(name, args, flags)
+            if name not in memory.READS:
+                memory.validate_direct(name, args, flags, STATE if name in memory.WRITES else vector)
+            for index, wrong in ((0, ARRAY), (1, dict(INDEX, primReps=['WordRep'])),
+                                 (1, dict(kind='double', primReps=['DoubleRep'], evaluated=True))):
+                bad = copy.deepcopy(args)
+                bad[index] = var(str(index), wrong)
+                with self.assertRaises(ValueError):
+                    memory.validate_arguments(name, bad, flags)
+            with self.assertRaises(ValueError):
+                memory.validate_arguments(name, args, [True] + flags[1:])
+
     def test_all_six_contracts_and_no_generic_field_expansion(self):
         self.assertEqual(len(OPERATIONS), 6)
         for name in sorted(OPERATIONS):
