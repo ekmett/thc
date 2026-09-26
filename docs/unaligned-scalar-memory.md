@@ -32,8 +32,9 @@ Owned native malloc remains restricted to the verified Linux x86_64 ABI.
 
 Addr and StablePtr memory cells use retained ManagedAddress references inside
 allocation-owned storage, including unaligned cells. They do not fabricate
-process pointer bits. Raw-exposed arrays and native storage cannot hold these
-managed cells. Owned native Addr cells can instead hold real native pointer bits;
+process pointer bits. Raw-exposed arrays and separately owned native malloc
+storage cannot hold these managed cells. Owned native malloc Addr cells can
+instead hold real native pointer bits;
 StablePtr cells use context-owned opaque native identities, recovering only exact
 live stable handles without granting access to their referent's memory. These operations count as
 implemented; [pointer interoperability limits](primop-behavior.md#addresses-pinning-and-pointer-containing-storage)

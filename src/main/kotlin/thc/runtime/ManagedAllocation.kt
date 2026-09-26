@@ -32,6 +32,8 @@ internal class ManagedAllocation private constructor(
     val addressWidth: Int get() = pointerBytes
     val isWritable: Boolean get() = writable
     internal fun ownsStorage(candidate: ByteArray): Boolean = bytes === candidate
+    /** C identity includes permitted raw heap aliases; locking still starts at the owner. */
+    internal fun storageKey(): Any = bytes ?: this
     internal fun nativeSegment(): MemorySegment? = if (isPinned) segment else null
 
     /** Both interop views refer to the allocation itself, never a staging copy. */

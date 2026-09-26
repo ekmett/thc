@@ -44,7 +44,7 @@ internal class SulongLimbProvider(env: TruffleLanguage.Env) : LimbProvider {
         address.cbitsSegment() // Reject pointer-bearing storage before native execution.
     }
     private fun LimbRegion.snapshot(scope: NativeLimbScope): NativeLimbScope.Pointer =
-        synchronized(address.cbitsStorageKey()) {
+        synchronized(address.cbitsOwner() ?: address.cbitsStorageKey()) {
             address.requireRange(0, byteSize)
             if (address.cbitsOwner()?.isPinned == true) scope.borrow(address, byteSize)
             else scope.snapshot(address.cbitsBacking(), address.cbitsOffset().toInt(), byteSize.toInt())
@@ -52,7 +52,7 @@ internal class SulongLimbProvider(env: TruffleLanguage.Env) : LimbProvider {
     private fun LimbRegion.destination(scope: NativeLimbScope): NativeLimbScope.Pointer =
         if (address.cbitsOwner()?.isPinned == true) scope.borrow(address, byteSize) else scope.allocate(byteSize)
     private fun LimbRegion.copyFrom(pointer: NativeLimbScope.Pointer) {
-        synchronized(address.cbitsStorageKey()) {
+        synchronized(address.cbitsOwner() ?: address.cbitsStorageKey()) {
             requireOutput(limbs)
             if (!pointer.aliases(address)) pointer.copyTo(address.cbitsSegment(), address.cbitsOffset(), byteSize)
         }

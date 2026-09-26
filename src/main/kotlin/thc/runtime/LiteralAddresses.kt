@@ -18,7 +18,7 @@ import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
 
 /** An Addr# carrier with managed storage or an unowned numeric bit pattern.
- * Immutable storage may acquire a real, context-owned native image. Storage-backed
+ * Static literals may acquire a real, context-owned native image. Storage-backed
  * addresses have exactly one final backing reference. Literal contents are immutable compilation constants;
  * mutable contents are ordinary array elements, even after unsafeFreezeByteArray#.
  * Each derived address strongly retains its allocation without exposing it. */
@@ -106,7 +106,7 @@ internal class ManagedAddress private constructor(
             ?: mutableBytes?.let(MemorySegment::ofArray) ?: fault("Address has no managed buffer storage")
     }
     internal fun cbitsBuffer(): ByteBuffer = cbitsSegment().asByteBuffer()
-    internal fun cbitsStorageKey(): Any = owner ?: literalBytes ?: mutableBytes
+    internal fun cbitsStorageKey(): Any = owner?.storageKey() ?: literalBytes ?: mutableBytes
         ?: fault("Address has no managed buffer storage")
     internal fun cbitsWritable(): Boolean { requireBytes(); native?.requireLive(); return native != null || (owner?.isWritable ?: (mutableBytes != null)) }
     internal fun cbitsOffset(): Long { size(); return offset }
@@ -705,8 +705,8 @@ internal class ManagedAddress private constructor(
         internal fun enabledCapabilities(threads: GuestThreads): ManagedAddress =
             ManagedAddress(null, null, 0L, capabilities = threads)
 
-        /** Logical pinning means stable managed backing and a strong lifetime,
-         * not physical pinning or a process address. Do not copy: views must alias. */
+        /** Views retain their existing storage, including native pinned arrays.
+         * Creating an address never copies or promotes a moving heap array. */
         fun fromByteArray(bytes: ByteArray): ManagedAddress = ManagedAddress(null, bytes, 0L)
         fun fromAllocation(allocation: ManagedAllocation): ManagedAddress = ManagedAddress(null, null, 0L, allocation)
         fun fromGuestByteArray(value: Any?): ManagedAddress = when (value) {

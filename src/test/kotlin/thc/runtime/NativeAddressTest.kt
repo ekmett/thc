@@ -80,6 +80,12 @@ class NativeAddressTest {
                 }
                 val literal = ManagedAddress.fromHex("616263")
                 val header = ManagedAddress.fromHex("07090b0d")
+                val pinned = PinnedMemory.allocate(16, 64)
+                pinned.writeByte(7, 93)
+                val pinnedBase = ManagedAddress.fromAllocation(pinned)
+                val stablePointers = Language.currentState().stablePointers
+                val referent = Any()
+                val stable = stablePointers.make(referent)
                 var literalBits: Long? = null
                 fun exercise() {
                     for (bits in listOf(Long.MIN_VALUE, -4096L, -1L, 0L, 1L, 4096L, Long.MAX_VALUE))
@@ -97,6 +103,16 @@ class NativeAddressTest {
                     }
                     val bits = call("toBits", literal) as Long
                     literalBits?.let { assertEquals(it, bits) }; literalBits = bits
+                    for (offset in listOf(0L, 7L, 16L)) {
+                        val pinnedBits = call("toBits", pinnedBase.plus(offset)) as Long
+                        assertEquals(pinned.nativeSegment()!!.address() + offset, pinnedBits)
+                        val alias = call("fromBits", pinnedBits) as ManagedAddress
+                        assertTrue(alias.sameLocation(pinnedBase.plus(offset)))
+                        if (offset == 7L) assertEquals(93L, alias.readWord8(0))
+                    }
+                    val recovered = call("fromBits", call("toBits", stable)!!) as ManagedAddress
+                    assertTrue(stablePointers.equal(stable, recovered))
+                    assertSame(referent, stablePointers.dereference(recovered))
                 }
                 repeat(3) { exercise() }
                 val runtime = Truffle.getRuntime()
@@ -117,6 +133,7 @@ class NativeAddressTest {
                 assertEquals(0, language.handoffState.get().results.depth)
                 assertEquals(0, language.handoffState.get().arguments.retainedReferences())
                 assertEquals(0, language.handoffState.get().results.retainedReferences())
+                stablePointers.free(stable)
             } finally { context.leave() }
         }
     }

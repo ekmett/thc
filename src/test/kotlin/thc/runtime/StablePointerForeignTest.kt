@@ -70,6 +70,19 @@ class StablePointerForeignTest {
                 state.packageCbits.link(link)
                 val calls = abi.associate { it.symbol to Entry(language, PackageScalarCall(link, it)).callTarget }
                 assertSame(ManagedAddress.nullAddress(), calls.getValue("stable_identity").call(ManagedAddress.nullAddress()))
+                val pinned = PinnedMemory.allocate(16, 64)
+                val pinnedAddress = ManagedAddress.fromAllocation(pinned).plus(7)
+                val pinnedBits = pinned.nativeSegment()!!.address()
+                val returnedPinned = calls.getValue("stable_identity").call(pinnedAddress) as ManagedAddress
+                assertEquals(pinnedBits + 7, returnedPinned.toNativeBits())
+                assertEquals(pinnedBits, pinned.nativeSegment()!!.address())
+                assertThrows(RuntimeFault::class.java) { returnedPinned.readWord8(0) }
+                val heap = ManagedAllocation.mutable(16, 8)
+                assertThrows(RuntimeFault::class.java) {
+                    calls.getValue("stable_identity").call(ManagedAddress.fromAllocation(heap))
+                }
+                assertFalse(heap.isPinned)
+                assertNull(heap.nativeSegment())
                 if (System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in setOf("amd64", "x86_64")) {
                     val allocation = state.nativeAllocations.malloc(8)
                     try {

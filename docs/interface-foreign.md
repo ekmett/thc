@@ -170,16 +170,17 @@ must not receive a temporary snapshot when it may retain a pointer, observe
 aliases, or mutate state used by later calls. Nor can a general adapter infer
 a buffer's required size or retention rules from an `AddrRep` alone.
 
-The intended general path is stable native backing for pinned/FFI allocations,
-accessed by THC primops, Sulong and host C as the same allocation. Ordinary
-non-escaping storage can remain managed. Scoped copies remain useful for
+Explicitly pinned arrays have stable native backing from allocation, accessed
+by THC primops, Sulong and host C as the same allocation. Ordinary heap arrays
+remain managed and reject native pointer projection, including after unsafe
+freeze. Scoped copies remain useful for
 explicitly bounded interfaces, such as the existing GMP limb provider, but
 are not a universal FFI policy. Opaque guest objects need handles and a
 separate re-entry contract, not pointer reinterpretation.
 
-Current support is narrower: managed package-C buffer views and separately
-owned native `malloc` addresses are implemented; generic native-backed pinned
-byte arrays, general retained-buffer lifetimes and native callbacks remain work.
+Managed package-C buffer views, native-backed pinned byte arrays and separately
+owned native `malloc` addresses are implemented; general retained-buffer lifetime
+contracts and native callbacks remain work.
 The package-C acquisition path must eventually carry declared external native
 dependencies as well as bitcode. This design direction is not a claim that
 arbitrary mixed native packages already run.
@@ -227,7 +228,8 @@ callbacks, foreign exports, initialization/finalization or arbitrary extra
 native libraries. Within one call, aliases share their allocation transport and
 a small C bridge produces Sulong's allocation-relative pointer, preserving C
 pointer equality, distances, and backward access from an interior address.
-Read-only and writable arguments to the same allocation share identity; a
+Read-only and writable arguments to the same allocation share identity,
+including an ordinary heap allocation's permitted raw byte-array aliases; a
 permitted writable alias permits writes to that shared storage, while genuinely
 immutable allocations remain read-only. The original Hashable XXH3 end-to-end
 fixture remains integration work; focused C buffer tests alone are not evidence
