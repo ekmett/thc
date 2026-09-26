@@ -69,6 +69,7 @@ class HandoffLayout(language: Language, val id: Int, val reps: List<String>) {
             4, 5 -> Byte::class.javaPrimitiveType!!
             6, 7 -> Short::class.javaPrimitiveType!!
             8, 9 -> Int::class.javaPrimitiveType!!
+            10 -> vectors[i]!!.carrierType
             else -> Any::class.java
         }, false) }
     }.build(HandoffStorage::class.java, HandoffFactory::class.java)

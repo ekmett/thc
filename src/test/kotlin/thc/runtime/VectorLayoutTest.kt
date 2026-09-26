@@ -81,6 +81,7 @@ class VectorLayoutTest {
             assertEquals(0, language.handoffState.get().results.retainedReferences())
             // A deoptimized result is private storage, not a live pool loan.
             val fresh = shape.layout.create()
+            assertEquals(vector.carrierType, fresh.javaClass.getDeclaredField("handoff_0").type)
             val source = AstInputSource(ArgumentLayout.fromProofs(listOf(proof))!!, original.slots)
             source.copy(original.frame, object : Node() {}, null, 0, fresh, 0, 1)
             shape.consume(consumed.frame, fresh, consumed.slots, 0)

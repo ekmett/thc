@@ -31,6 +31,15 @@ internal class VectorLayout(val proof: CoreRepresentation) {
         else -> 64
     }
     private val shape = VectorShape.forBitSize(lanes * elementBits)
+    val carrierType: Class<*> = when (vector.element) {
+        "Int8ElemRep", "Word8ElemRep" -> ByteVector::class.java
+        "Int16ElemRep", "Word16ElemRep" -> ShortVector::class.java
+        "Int32ElemRep", "Word32ElemRep" -> IntVector::class.java
+        "Int64ElemRep", "Word64ElemRep" -> LongVector::class.java
+        "FloatElemRep" -> FloatVector::class.java
+        "DoubleElemRep" -> DoubleVector::class.java
+        else -> fault("Unknown vector lane representation")
+    }
     val species: VectorSpecies<*> = when (vector.element) {
         "Int8ElemRep", "Word8ElemRep" -> ByteVector.SPECIES_128.withShape(shape)
         "Int16ElemRep", "Word16ElemRep" -> ShortVector.SPECIES_128.withShape(shape)
