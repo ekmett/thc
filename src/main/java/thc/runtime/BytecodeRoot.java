@@ -2331,7 +2331,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return literal instanceof Long number && number.longValue() == value;
         }
         @Specialization(guards = "!isLong(value)") public static boolean object(Object literal, Object value) {
-            return java.util.Objects.equals(literal, value);
+            // Lowering rejects floating/BigNat alternatives. The remaining
+            // ManagedAddress literal carrier has identity equality, as in AST
+            // cases; do not expose arbitrary Object.equals to guest compilation.
+            return literal == value;
         }
         public static boolean isLong(Object value) { return value instanceof Long; }
     }
