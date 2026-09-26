@@ -49,8 +49,7 @@ class OriginalStackFormatterTest {
             "scripts/core_original_foreign.py", "scripts/core_package_manifest.py", "scripts/core_sums.py",
             "scripts/core_tuple_inputs.py", "scripts/core_vector_memory.py", "scripts/core_vectors.py")
     }
-    private val labels = listOf("ghc-version", "plugin-build", "original-source-export", "pre-export", "post-export",
-        "native-compile", "native-observations", "pre-audit", "post-audit")
+    private val labels = OriginalStackFormatterCommands.labels
     private fun contained(path: String, input: Boolean): File {
         require(!File(path).isAbsolute && path.split('/').none { it in setOf("", ".", "..") })
         require(input || path.startsWith(prefix))
@@ -93,8 +92,7 @@ class OriginalStackFormatterTest {
         require(value["originals"] == expectedOriginals && value["stages"] == expectedStages && value["audits"] == expectedAudits)
         val artifacts = value["artifactHashes"] as Map<String, String>
         require(artifacts.keys == expectedArtifacts.toSet())
-        val commands = value["commands"] as List<Map<String, Any?>>
-        require(commands.size == labels.size && commands.all { it.keys == setOf("argv", "environment", "exit") && it["exit"] == 0L })
+        val commands = OriginalStackFormatterCommands.checked(value["commands"])
         for ((kind, records) in listOf("input" to inputs, "artifact" to artifacts)) for ((path, digest) in records) {
             require(Regex("[0-9a-f]{64}").matches(digest))
             require(hash(contained(path, kind == "input")) == digest) { "Stale $kind: $path" }
