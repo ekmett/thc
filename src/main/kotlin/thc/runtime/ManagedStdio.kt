@@ -63,13 +63,39 @@ internal class ManagedStdio(private val files: ManagedFiles) {
     @TruffleBoundary fun flagConstant(operation: OriginalStdioOp): Long = hostAbi.flagConstant(operation)
     @TruffleBoundary fun siginfoSize(): Long = hostAbi.siginfoBytes
 
+    @TruffleBoundary fun eventfd(initial: Long, flags: Long): Long {
+        val abi = hostAbi
+        if (initial != initial.toInt().toLong() || flags != flags.toInt().toLong())
+            fault("Original eventfd requires canonical CInt operands")
+        val result = files.eventfd(initial.toInt(), flags.toInt())
+        if (result < 0) lastError.set(fileError(abi))
+        return result
+    }
+
+    @TruffleBoundary fun pipe(destination: ManagedAddress): Long {
+        val abi = hostAbi
+        val result = files.pipe(destination)
+        if (result < 0) lastError.set(fileError(abi))
+        return result
+    }
+
+    @TruffleBoundary fun eventfdWrite(fd: Long, value: Long): Long {
+        val abi = hostAbi
+        if (fd != fd.toInt().toLong()) fault("Original eventfd_write requires a canonical CInt descriptor")
+        val result = files.eventfdWrite(fd, value)
+        if (result < 0) lastError.set(fileError(abi))
+        return result
+    }
+
     @TruffleBoundary fun fcntl(fd: Long, command: Long, argument: Long, write: Boolean): Long {
         val abi = hostAbi
         if (fd != fd.toInt().toLong() || command != command.toInt().toLong())
             fault("Original fcntl requires canonical signed CInt descriptor and command")
         val expected = abi.flagConstant(if (write) OriginalStdioOp.F_SETFL else OriginalStdioOp.F_GETFL)
-        if (command != expected) fault("Original fcntl supports only F_GETFL/F_SETFL with the matching arity")
-        val result = files.fcntl(fd, argument, write)
+        val descriptorFlags = write && command == abi.flagConstant(OriginalStdioOp.F_SETFD)
+        if (command != expected && !descriptorFlags)
+            fault("Original fcntl supports F_GETFL/F_SETFL/F_SETFD with the matching arity")
+        val result = files.fcntl(fd, argument, write, descriptorFlags)
         if (result < 0) lastError.set(fileError(abi))
         return result
     }

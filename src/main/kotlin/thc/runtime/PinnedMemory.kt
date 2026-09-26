@@ -294,18 +294,21 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
             ManagedAddress.fromGuestByteArray(operands[0].execute(frame))
         else super.executeAddress(frame)
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        when (operation) {
-            PinnedMemoryOp.NEW, PinnedMemoryOp.NEW_ALIGNED -> {
+        // The node's operation is constant during partial evaluation. An enum
+        // subject switch introduces Kotlin's mutable mapping array, retaining
+        // incompatible object/long frame writes in the same compiled branch.
+        when {
+            operation == PinnedMemoryOp.NEW || operation == PinnedMemoryOp.NEW_ALIGNED -> {
                 val size = operands[0].executeRequiredLong(frame)
                 val alignment = if (operation == PinnedMemoryOp.NEW_ALIGNED) operands[1].executeRequiredLong(frame) else 1L
                 ManagedByteArray.requireState(operands.last().execute(frame))
                 FrameAccess.write(frame, slots[offset], PinnedMemory.allocate(size, alignment))
             }
-            PinnedMemoryOp.READ, PinnedMemoryOp.READ_INT8, PinnedMemoryOp.READ_CHAR,
-            PinnedMemoryOp.READ_WORD16, PinnedMemoryOp.READ_INT16,
-            PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WIDE_CHAR, PinnedMemoryOp.READ_WORD,
-            PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT,
-            PinnedMemoryOp.READ_INT64, PinnedMemoryOp.READ_WORD64 -> {
+            operation == PinnedMemoryOp.READ || operation == PinnedMemoryOp.READ_INT8 || operation == PinnedMemoryOp.READ_CHAR ||
+            operation == PinnedMemoryOp.READ_WORD16 || operation == PinnedMemoryOp.READ_INT16 ||
+            operation == PinnedMemoryOp.READ_WORD32 || operation == PinnedMemoryOp.READ_WIDE_CHAR || operation == PinnedMemoryOp.READ_WORD ||
+            operation == PinnedMemoryOp.READ_INT32 || operation == PinnedMemoryOp.READ_INT ||
+            operation == PinnedMemoryOp.READ_INT64 || operation == PinnedMemoryOp.READ_WORD64 -> {
                 val address = operands[0].executeRequiredAddress(frame)
                 val index = operands[1].executeRequiredLong(frame)
                 ManagedByteArray.requireState(operands[2].execute(frame))
@@ -313,7 +316,7 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
                     ?: address.readWord8(index).let { if (operation == PinnedMemoryOp.READ_INT8) it.toByte().toLong() else it }
                 FrameAccess.writeLong(frame, slots[offset], value)
             }
-            PinnedMemoryOp.READ_ADDR -> {
+            operation == PinnedMemoryOp.READ_ADDR -> {
                 val address = operands[0].executeRequiredAddress(frame)
                 val index = operands[1].executeRequiredLong(frame)
                 ManagedByteArray.requireState(operands[2].execute(frame))

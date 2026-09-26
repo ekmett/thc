@@ -388,6 +388,81 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         }
     }
 
+    /** Anonymous kernel descriptors use the same namespace, aliases and close
+     * protocol as original open. Reserve every result before native acquisition;
+     * partial acquisition and failed publication close every acquired lease. */
+    private fun anonymousDescriptors(pipe: Boolean, initial: Int, flags: Int,
+                                     publish: (LongArray) -> Unit): LongArray {
+        val claims = mutableListOf<OpenClaim>()
+        val provider = synchronized(this) {
+            if (disposed) fail(4, "THC file context is closed")
+            val provider = nativeProvider ?: fail(7, "Event descriptors require the explicit NativeIO context")
+            try {
+                repeat(if (pipe) 2 else 1) {
+                    val claim = OpenClaim(null, !pipe || it == 1, unusedDescriptor(0))
+                    claims.add(claim); opening.add(claim)
+                }
+            } catch (failure: Throwable) {
+                claims.forEach { opening.remove(it); it.finished.countDown() }
+                throw failure
+            }
+            provider
+        }
+        var acquired = emptyList<NativeFileResource>()
+        try {
+            acquired = if (pipe) provider.pipe().let { listOf(it.first, it.second) }
+                else listOf(provider.eventfd(initial, flags))
+            val owners = acquired.mapIndexed { index, resource -> OpenDescription(channel = resource,
+                native = resource, readable = !pipe || index == 0, writable = !pipe || index == 1,
+                canExtend = false, readiness = Readiness.NATIVE_UNCLASSIFIED) }
+            val fds = claims.map { it.reserved!! }.toLongArray()
+            synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                publish(fds)
+                for (index in owners.indices) {
+                    this.owners.add(owners[index]); descriptors[fds[index]] = Descriptor(owners[index])
+                    opening.remove(claims[index])
+                }
+            }
+            acquired = emptyList()
+            return fds
+        } catch (failure: Throwable) {
+            acquired.forEach { try { it.close() } catch (closing: Throwable) { failure.addSuppressed(closing) } }
+            throw failure
+        } finally {
+            synchronized(this) { claims.forEach { opening.remove(it) } }
+            claims.forEach { it.finished.countDown() }
+        }
+    }
+
+    @TruffleBoundary internal fun eventfd(initial: Int, flags: Int): Long = result {
+        anonymousDescriptors(false, initial, flags) {}.single()
+    }
+
+    @TruffleBoundary internal fun pipe(destination: ManagedAddress): Long {
+        destination.requireByteRegion(8, writable = true)
+        fun acquire(): Long = result {
+            destination.requireByteRegion(8, writable = true)
+            anonymousDescriptors(true, 0, 0) { fds ->
+                for (index in fds.indices) for (byte in 0..3)
+                    destination.writeWord8((index * 4 + byte).toLong(), fds[index] ushr (byte * 8))
+            }
+            0L
+        }
+        // No descriptor is visible before the output image has been published.
+        return destination.withNativeBorrow {
+            val allocation = destination.cbitsOwner()
+            if (allocation == null) acquire() else synchronized(allocation) { acquire() }
+        }
+    }
+
+    @TruffleBoundary internal fun eventfdWrite(fd: Long, value: Long): Long = result {
+        withDescriptor(fd) { entry ->
+            val resource = entry.native ?: fail(7, "THC descriptor has no native event capability: $fd")
+            resource.writeEvent(value)
+        }
+    }
+
     @TruffleBoundary internal fun unlinkOriginal(path: ManagedAddress): Long {
         val bytes = originalPathBytes(path)
         return result {
@@ -555,10 +630,11 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
 
     /** Status flags belong to the shared open description. Keep the same owner
      * monitor and authenticated lease as byte IO, dup aliases and retirement. */
-    @TruffleBoundary internal fun fcntl(fd: Long, argument: Long, write: Boolean): Long = result {
+    @TruffleBoundary internal fun fcntl(fd: Long, argument: Long, write: Boolean, descriptorFlags: Boolean = false): Long = result {
         withDescriptor(fd) { entry ->
             val resource = entry.native ?: fail(7, "THC descriptor has no native fcntl capability: $fd")
-            if (write) resource.setStatusFlags(argument) else resource.statusFlags()
+            if (descriptorFlags) resource.setDescriptorFlags(argument)
+            else if (write) resource.setStatusFlags(argument) else resource.statusFlags()
         }
     }
 

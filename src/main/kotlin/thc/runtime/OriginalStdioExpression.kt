@@ -53,7 +53,18 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
             return null
         }
         // Direct enum comparison remains constant during partial evaluation.
-        val result = if (operation.waitStatus) {
+        val result = if (operation.eventPair) {
+            val first = operands[0].executeRequiredLong(frame)
+            val second = operands[1].executeRequiredLong(frame)
+            requireVoidCarrier(operands[2].execute(frame))
+            val stdio = CoreOriginalStdio.current(this)
+            if (operation == OriginalStdioOp.EVENTFD) stdio.eventfd(first, second)
+            else stdio.eventfdWrite(first, second)
+        } else if (operation == OriginalStdioOp.PIPE) {
+            val destination = operands[0].executeRequiredAddress(frame)
+            requireVoidCarrier(operands[1].execute(frame))
+            CoreOriginalStdio.current(this).pipe(destination)
+        } else if (operation.waitStatus) {
             val status = operands[0].executeRequiredLong(frame)
             requireVoidCarrier(operands[1].execute(frame))
             CoreOriginalStdio.waitStatus(this, operation, status)

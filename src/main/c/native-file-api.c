@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/eventfd.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -19,6 +20,29 @@ _Static_assert(sizeof(int) == 4 && sizeof(off_t) == 8 && sizeof(size_t) == 8 && 
 
 int64_t thc_file_stat_size(void) { return sizeof(struct stat); }
 int64_t thc_file_termios_size(void) { return sizeof(struct termios); }
+
+// Acquired descriptors are published into host-owned lease slots before the
+// call returns. Guest descriptor numbers are assigned separately by the context.
+int64_t thc_file_eventfd(int *lease, uint32_t initial, int flags, int64_t *error) {
+  int fd = eventfd(initial, flags);
+  *error = fd < 0 ? errno : 0;
+  if (fd >= 0) *lease = fd;
+  return fd < 0 ? -1 : 0;
+}
+
+int64_t thc_file_pipe(int *reader, int *writer, int64_t *error) {
+  int descriptors[2];
+  int result = pipe(descriptors);
+  *error = result < 0 ? errno : 0;
+  if (result == 0) { *reader = descriptors[0]; *writer = descriptors[1]; }
+  return result;
+}
+
+int64_t thc_file_eventfd_write(const int *lease, uint64_t value, int64_t *error) {
+  int result = eventfd_write(*lease, value);
+  *error = result < 0 ? errno : 0;
+  return result;
+}
 
 // The caller seeds the complete image. Preserve libc's actual writes (including
 // unchanged padding and failure paths), rather than inventing an output image.
@@ -107,6 +131,12 @@ int64_t thc_file_getfl(const int *lease, int64_t *error) {
 
 int64_t thc_file_setfl(const int *lease, int64_t flags, int64_t *error) {
   int result = fcntl(*lease, F_SETFL, (long)flags);
+  *error = result < 0 ? errno : 0;
+  return result;
+}
+
+int64_t thc_file_setfd(const int *lease, int64_t flags, int64_t *error) {
+  int result = fcntl(*lease, F_SETFD, (long)flags);
   *error = result < 0 ? errno : 0;
   return result;
 }

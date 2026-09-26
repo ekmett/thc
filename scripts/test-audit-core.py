@@ -2737,6 +2737,11 @@ class OriginalGmpAuditTest(unittest.TestCase):
 
 class OriginalDupAuditTest(unittest.TestCase):
     """Original scalar/State controls; genuine declarations live in Haskell fixtures."""
+    event_descriptors = {
+        'eventfd': (('Int32Rep', 'Int32Rep', None), 'Int32Rep'),
+        'eventfd_write': (('Int32Rep', 'Word64Rep', None), 'Int32Rep'),
+        'pipe': (('AddrRep', None), 'Int32Rep'),
+    }
     termios = {
         '__hscore_get_saved_termios': (('Int32Rep', None), 'AddrRep'),
         '__hscore_set_saved_termios': (('Int32Rep', 'AddrRep', None), None),
@@ -2753,7 +2758,7 @@ class OriginalDupAuditTest(unittest.TestCase):
         'ghczuwrapperZC12ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigaddset': (('AddrRep', 'Int32Rep', None), 'Int32Rep'),
         'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask': (('Int32Rep', 'AddrRep', 'AddrRep', None), 'Int32Rep'),
     }
-    symbols = (core_original_foreign.TCSETATTR_SYMBOL, core_original_foreign.TCGETATTR_SYMBOL, 'dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile', *termios, *sigset)
+    symbols = (core_original_foreign.TCSETATTR_SYMBOL, core_original_foreign.TCGETATTR_SYMBOL, 'dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile', *termios, *sigset, *event_descriptors)
     def fixture(self, symbol):
         arguments = (('Int32Rep', 'Int32Rep', 'AddrRep', None) if symbol == core_original_foreign.TCSETATTR_SYMBOL else
                      ('Word64Rep', 'Word64Rep', 'Word64Rep', 'Int32Rep', None) if symbol == 'lockFile' else
@@ -2761,7 +2766,7 @@ class OriginalDupAuditTest(unittest.TestCase):
                      ('Int32Rep', 'AddrRep', None) if symbol in ('__hscore_fstat', core_original_foreign.TCGETATTR_SYMBOL) else
                      ('AddrRep', 'Int32Rep', 'Word32Rep', None) if symbol == '__hscore_open' else
                      ('Int32Rep', None) if symbol == 'dup' else ('Int32Rep', 'Int32Rep', None))
-        arguments, output = (self.termios | self.sigset).get(symbol, (arguments, 'Int32Rep'))
+        arguments, output = (self.termios | self.sigset | self.event_descriptors).get(symbol, (arguments, 'Int32Rep'))
         scalar = lambda rep, evaluated: dict(kind='void' if rep is None else 'address' if rep == 'AddrRep' else 'long',
             primReps=[] if rep is None else [rep], evaluated=evaluated)
         parameters = [dict(id=f'a{i}', lifted=False, rep=scalar(p, True)) for i, p in enumerate(arguments)]

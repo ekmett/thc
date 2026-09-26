@@ -5,7 +5,9 @@ package thc.runtime
 
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.Truffle
+import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
@@ -14,6 +16,7 @@ import thc.CoreModules
 import thc.EntryValue
 import thc.Json
 import thc.Language
+import thc.ContextProfile
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.CompletableFuture
@@ -41,6 +44,66 @@ class RtsEventNativeTest {
         val state = language.handoffState.get()
         assertEquals(0, state.results.depth); assertEquals(0, state.results.retainedReferences())
         assertEquals(0, state.arguments.depth); assertEquals(0, state.arguments.retainedReferences())
+    }
+
+    @Test fun originalPipeAndEventfdLifecyclesMatchNativeAtFirstCompiledEntry() {
+        val manifest = json(File(directory, "manifest.json"))
+        val entries = (manifest["descriptorEntries"] as List<List<String>>).associate { it[0] to it[1] }
+        val rows = (json(File(directory, "oracle.json"))["descriptorRows"] as List<List<Any?>>).groupBy { it[0] as String }
+        assertEquals(setOf("eventfdCycle", "pipeCycle"), entries.keys)
+        assertEquals(entries.keys, rows.keys)
+        assertEquals(6, rows.values.sumOf { it.size })
+        for (stage in listOf("pre", "post")) for ((entry, cases) in rows)
+            for (backend in listOf("ast", "bytecode"))
+                NativeFileProvider.createContext(emptySet(), ContextProfile.SYNCHRONOUS_TEST).use { context ->
+                context.enter()
+                try {
+                    assertEquals(true, json(File(directory, "$entry-$stage.audit.json"))["accepted"])
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val module = json(File(directory, "$entry-$stage.json"))
+                    for (call in calls(module)) {
+                        val meta = call.last() as Map<String, Any?>
+                        val descriptor = meta["foreignCall"] as Map<String, Any?>
+                        val target = descriptor["target"] as Map<String, Any?>
+                        val operands = (call[2] as List<List<Any?>>).map { CoreRepresentations.metadata(it)?.get("rep") }
+                        assertNotNull(CoreOriginalStdio.validate(meta, operands, call[3] as List<*>, meta["rep"]))
+                        assertThrows(RuntimeFault::class.java) {
+                            CoreOriginalStdio.validate(meta + ("foreignCall" to (descriptor +
+                                ("target" to (target + ("unit" to "main"))))), operands, call[3] as List<*>, meta["rep"])
+                        }
+                    }
+                    val p = program(language, backend, entry, stage)
+                    val callable = context.asValue(EntryValue(p, entries.getValue(entry), 1))
+                    fun invoke(row: List<Any?>) {
+                        val input = (row[1] as Number).toLong()
+                        val expected = (row[2] as Number).toLong()
+                        assertEquals(if (entry == "eventfdCycle") 2 * input + 5 else input + 13, expected)
+                        assertEquals(expected, callable.execute(input).asLong(), "$stage/$backend/$entry/$input")
+                        released(language)
+                    }
+                    cases.forEach(::invoke)
+                    assertTrue(callable.invokeMember("compile").asBoolean())
+                    val host = p.hostEntryTarget(1)
+                    val original = p.entryTarget(entries.getValue(entry))
+                    // Public compilation follows the active split, not merely
+                    // the closure's original call-target identity.
+                    val installed = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
+                        .filter { it.callTarget === original }.map { it.currentCallTarget as RootCallTarget }
+                        .ifEmpty { listOf(original) } + host
+                    fun installed() = installed.forEach { target ->
+                        assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target),
+                            "$stage/$backend/$entry/${target.rootNode.name} remains installed")
+                    }
+                    installed()
+                    for (row in cases) {
+                        val before = (p.diagnostics().getValue("compiledEntries") as Number).toLong()
+                        invoke(row)
+                        assertEquals(before + 1, (p.diagnostics().getValue("compiledEntries") as Number).toLong(),
+                            "$stage/$backend/$entry must enter its installed root immediately")
+                        installed()
+                    }
+                } finally { context.leave() }
+            }
     }
 
     @Test fun astSafeCompletionPublishesOnceAndHonorsEveryLogicalMask() {

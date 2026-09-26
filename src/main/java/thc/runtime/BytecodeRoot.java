@@ -1451,6 +1451,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             else if (operation == OriginalStdioOp.ISATTY) result = CoreOriginalStdio.current(node).isTerminal(fd);
             else if (operation == OriginalStdioOp.CLOSE) result = CoreOriginalStdio.current(node).close(fd);
             else if (operation == OriginalStdioOp.UNLINK) result = CoreOriginalStdio.current(node).unlink(address);
+            else if (operation == OriginalStdioOp.PIPE) result = CoreOriginalStdio.current(node).pipe(address);
             else if (operation == OriginalStdioOp.DUP) result = CoreOriginalStdio.current(node).duplicate(fd);
             else throw new RuntimeFault("Invalid original stdio status operation");
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
@@ -1466,6 +1467,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             TupleResultsKt.requireVoidCarrier(state);
             long result;
             if (operation == OriginalStdioOp.LOCK) result = CoreOriginalStdio.locks(node).lock(fd, writing, milliseconds, socket);
+            else if (operation == OriginalStdioOp.EVENTFD) result = CoreOriginalStdio.current(node).eventfd(fd, writing);
+            else if (operation == OriginalStdioOp.EVENTFD_WRITE) result = CoreOriginalStdio.current(node).eventfdWrite(fd, writing);
             else if (operation.getFcntl()) result = CoreOriginalStdio.current(node).fcntl(fd, writing, milliseconds,
                 operation == OriginalStdioOp.FCNTL_WRITE);
             else if (operation.getReadiness()) result = CoreOriginalStdio.current(node).ready(fd, writing, milliseconds, socket, node);

@@ -182,6 +182,9 @@ OPERATIONS = {
         ('capi', 'unsafe', ('Int32Rep', 'Int32Rep', 'Int64Rep', None), (None, 'Int32Rep')),
     **{symbol: ('capi', 'unsafe', (None,), (None, 'Int32Rep')) for symbol in SEEK_CONSTANTS},
     'close': ('ccall', 'unsafe', ('Int32Rep', None), (None, 'Int32Rep')),
+    'eventfd': ('ccall', 'unsafe', ('Int32Rep', 'Int32Rep', None), (None, 'Int32Rep')),
+    'eventfd_write': ('ccall', 'unsafe', ('Int32Rep', 'Word64Rep', None), (None, 'Int32Rep')),
+    'pipe': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Int32Rep')),
     'dup': ('ccall', 'unsafe', ('Int32Rep', None), (None, 'Int32Rep')),
     'dup2': ('ccall', 'unsafe', ('Int32Rep', 'Int32Rep', None), (None, 'Int32Rep')),
     'ghczuwrapperZC19ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZClseek':
