@@ -4519,6 +4519,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val fields = shape.leaves.mapIndexed { index, field -> Local(nextLocal++, "tuple field $index", field.isLong, field) }
         scope.bindTuple(expr[2] as String, proof, fields)
         val alternatives = expr[3] as List<List<Any?>>
+        if (alternatives.isEmpty() && proof.isTuple) return ProvenExpression(ResultExpression { e, _ ->
+            val b = e.builder
+            b.beginBlock()
+            val slots = fields.map { b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
+            scrutinee.emitTuple(e, slots)
+            b.emitFailCase()
+            b.endBlock()
+        }, CoreRepresentations.expression(expr))
         if (alternatives.size != 1) throw RuntimeFault("Tuple or vector case requires one alternative")
         val alt = alternatives.single()
         val ids = alt[2] as List<String>

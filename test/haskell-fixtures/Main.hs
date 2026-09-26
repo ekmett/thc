@@ -99,6 +99,7 @@ import StablePointerFixtures (prepareStablePointers)
 import StablePtrFFIFixtures (prepareStablePtrFFI)
 import StableNameFixtures (prepareStableNames)
 import SumJoinFixtures (prepareSumJoins)
+import TupleJoinFixtures (prepareTupleJoins)
 import WeakFixtures (prepareWeaks)
 import ShrinkByteArrayFixtures (prepareShrinkByteArrays)
 import ByteArrayFixtures (prepareByteArrayFamily)
@@ -1006,6 +1007,8 @@ main = do
     ["record-fields"] -> prepareRecordFields root
     ["stable-names"] -> prepareStableNames root
     ["sum-join"] -> prepareSumJoins root
+    ["tuple-join"] -> prepareTupleJoins True root
+    ["tuple-join", "--local"] -> prepareTupleJoins False root
     ["aggregate-heap"] -> prepareAggregateHeap root False
     ["aggregate-heap", "--export-only"] -> prepareAggregateHeap root True
     ["weak-explicit"] -> prepareWeaks root

@@ -355,6 +355,11 @@ class Audit:
     def supported_empty_join_input(self, rep):
         return self.is_empty_tuple(rep) and 'empty-unboxed-tuple' in self.cap.get('aggregateJoinInputs', [])
 
+    def supported_tuple_join_input(self, rep):
+        return (self.supported_empty_join_input(rep) or
+                'unboxed-tuple' in self.cap.get('aggregateJoinInputs', []) and tuple_input_proof_error(rep,
+                    allow_vectors='join-arguments' in self.cap.get('vectorTransport', [])) is None)
+
     def supported_tuple_input(self, rep):
         return (self.supported_empty_input(rep) or
                 'unboxed-tuple' in self.cap.get('aggregateInputs', []) and tuple_input_proof_error(rep,
@@ -1197,7 +1202,7 @@ class Audit:
                     if is_vector(binder.get('rep')) and binder.get('lifted') is not False:
                         self.issue('application-levity', owner, path, 'Vector formal must be unlifted')
                     if self.is_tuple(binder.get('rep')) and not (
-                            self.supported_empty_join_input(binder.get('rep')) if index < join_prefix else
+                            self.supported_tuple_join_input(binder.get('rep')) if index < join_prefix else
                             self.supported_tuple_input(binder.get('rep'))):
                         self.issue('aggregate-boundary', owner, path, 'unboxed-tuple formal argument')
                     if self.is_tuple(binder.get('rep')) and binder.get('lifted') is not False:
@@ -1867,7 +1872,7 @@ class Audit:
                         if self.is_tuple(argument_rep) or self.is_tuple(stored):
                             join = isinstance(target, dict) and '_join_arity' in target
                             ordinary = function[0] not in ('prim', 'con') and not join
-                            supported = self.supported_empty_join_input(argument_rep) if join else (
+                            supported = self.supported_tuple_join_input(argument_rep) if join else (
                                 heap_aggregate or ordinary and self.supported_tuple_input(argument_rep) or
                                 arithmetic_exception and self.is_empty_tuple(argument_rep))
                             if not supported:
@@ -1937,8 +1942,8 @@ class Audit:
                 if is_sum(binder_proof) and not expr[3]:
                     self.issue('aggregate-shape', owner, path, 'Empty sum case')
                 if self.is_tuple(binder_proof):
-                    if len(expr[3]) != 1:
-                        self.issue('aggregate-boundary', owner, path, 'unboxed-tuple requires one alternative')
+                    if len(expr[3]) > 1:
+                        self.issue('aggregate-boundary', owner, path, 'unboxed-tuple requires at most one alternative')
                 arm_proofs = [self.literal_rep(alt[3]) or self.expression_rep(alt[3]) for alt in expr[3]]
                 floating = next((proof for proof in [self.expression_rep(expr), *arm_proofs]
                                  if isinstance(proof, dict) and proof.get('kind') in ('float', 'double')), None)

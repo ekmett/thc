@@ -466,6 +466,22 @@ for ((taskName, dense) in listOf("aggregateHeapFullCoreTest" to false, "aggregat
     }
 }
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("main"))
+for ((taskName, dense) in listOf("tupleJoinFullCoreTest" to false, "tupleJoinFullCoreDenseTest" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests original roundTo tuple joins and bottoming empty tuple cases against native GHC."
+        maxHeapSize = "6g"
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.TupleJoinNativeTest") }
+        inputs.files(fileTree("build/tuple-join-input") { include("**/*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Native and first-compiled tuple join checks require a fresh process") { true }
+        doFirst { check(file("build/tuple-join-input/manifest.json").isFile) { "Run thc-fixtures tuple-join" } }
+    }
+}
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("test"))
 tasks.register<Test>("graphWorkloadTest") {
     group = "verification"
