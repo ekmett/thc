@@ -62,12 +62,29 @@ Ordinary contexts do not acquire this authority merely by allowing IO/native acc
 `F_SETFD` updates the owned native resource. Logical dup aliases share that
 resource; THC does not expose a separate fork/exec descriptor-inheritance model.
 
-`epoll_create`, `epoll_ctl`, `epoll_wait`, `poll`,
+Original `epoll_create`, `epoll_ctl`, `epoll_wait` and `poll` use real Linux
+kernel sets/readiness. Both safe and unsafe installed wait declarations lower
+through typed AST and bytecode paths. Poll snapshots translate context descriptors
+to private native duplicates and copy back only `revents`; negative descriptors
+are ignored and unknown nonnegative descriptors report `POLLNVAL`. Zero-count
+poll accepts a null image and retains its timeout/cancellation behavior.
+
+Epoll preserves the opaque 64-bit event data and real ADD/MOD/DEL, level/edge and
+one-shot semantics. Distinct logical dup aliases can have separate registrations;
+closing one alias preserves existing registrations until the final guest owner
+closes. Reusing its number cannot modify the old registration. Waits preserve a
+single timeout deadline and wake on logical close or context cancellation.
+Native errno is retained, including EEXIST, ENOENT and invalid arguments.
+
 `setIOManagerWakeupFd`, `setIOManagerControlFd` and
-`setTimerManagerControlFd` remain unsupported original event-manager leaves.
-They need an owned descriptor and wakeup/shutdown protocol; THC does not return
-invented descriptors or silently accept control-fd registration. Existing
-managed I/O readiness and process-signal delivery retain their own protocols.
+`setTimerManagerControlFd` retain context-owned nonblocking eventfd/pipe writers.
+Replacement and `-1` unregister are supported. Closing a registered descriptor
+unregisters its logical identity before its number can be reused. Context shutdown
+writes GHC's eventfd wake value `0xff` and control-pipe die byte `0xfe`, then clears
+the registrations. Ordinary embedding streams cannot acquire this authority.
+The existing original process-signal dispatcher remains the only signal delivery
+path. Capability count changes do not create JVM schedulers or restart event
+manager threads automatically.
 
 `cabal run exe:thc-fixtures -- rts-event` recovers the prerequisite and descriptor declarations from
 installed full Core, specializes typed consumers, records the original interface
@@ -75,6 +92,10 @@ and source hashes, executes independent native controls, and strictly audits
 pre/post exports. `rtsEventFullCoreTest` and `rtsEventFullCoreDenseTest` check both
 backends and first installed calls. Native controls query existing event slots
 without installing test objects into the host RTS.
-The same producer runs complete original-import pipe/eventfd lifecycles against
-native GHC. Both backends compare those results before and immediately after
-compilation, without a settling call or retry.
+The producer runs complete original-import pipe/eventfd, poll/epoll and control
+registration lifecycles against native GHC: 45 native rows and 30 pre/post audits.
+Control setters execute in disposable native producer subprocesses because they
+alter global RTS slots. Both backends compare those results before and immediately
+after compilation, without a settling call or retry. Runtime controls additionally
+cover cancellation, close/reuse, aliases, real errno, one-shot rearming and the
+exact shutdown bytes.

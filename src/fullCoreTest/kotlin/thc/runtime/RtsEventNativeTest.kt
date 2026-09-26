@@ -50,9 +50,9 @@ class RtsEventNativeTest {
         val manifest = json(File(directory, "manifest.json"))
         val entries = (manifest["descriptorEntries"] as List<List<String>>).associate { it[0] to it[1] }
         val rows = (json(File(directory, "oracle.json"))["descriptorRows"] as List<List<Any?>>).groupBy { it[0] as String }
-        assertEquals(setOf("eventfdCycle", "pipeCycle"), entries.keys)
+        assertEquals(setOf("eventfdCycle", "pipeCycle", "epollCycle", "epollSafeCycle", "pollCycle", "pollSafeCycle", "controlCycle"), entries.keys)
         assertEquals(entries.keys, rows.keys)
-        assertEquals(6, rows.values.sumOf { it.size })
+        assertEquals(21, rows.values.sumOf { it.size })
         for (stage in listOf("pre", "post")) for ((entry, cases) in rows)
             for (backend in listOf("ast", "bytecode"))
                 NativeFileProvider.createContext(emptySet(), ContextProfile.SYNCHRONOUS_TEST).use { context ->
@@ -71,13 +71,32 @@ class RtsEventNativeTest {
                             CoreOriginalStdio.validate(meta + ("foreignCall" to (descriptor +
                                 ("target" to (target + ("unit" to "main"))))), operands, call[3] as List<*>, meta["rep"])
                         }
+                        if (CoreOriginalStdio.validate(meta, operands, call[3] as List<*>, meta["rep"])!!.eventManager) {
+                            for (bad in listOf(descriptor + ("arity" to 0L), descriptor + ("safety" to "interruptible"),
+                                descriptor + ("target" to (target + ("isFunction" to false))),
+                                descriptor + ("resultRep" to mapOf("kind" to "long", "primReps" to listOf("IntRep")))))
+                                assertThrows(RuntimeFault::class.java) {
+                                    CoreOriginalStdio.validate(meta + ("foreignCall" to bad), operands, call[3] as List<*>, meta["rep"])
+                                }
+                            val wrong = (operands[0] as Map<String, Any?>) + ("primReps" to listOf("IntRep"))
+                            assertThrows(RuntimeFault::class.java) {
+                                CoreOriginalStdio.validate(meta, listOf(wrong) + operands.drop(1), call[3] as List<*>, meta["rep"])
+                            }
+                        }
                     }
                     val p = program(language, backend, entry, stage)
                     val callable = context.asValue(EntryValue(p, entries.getValue(entry), 1))
                     fun invoke(row: List<Any?>) {
                         val input = (row[1] as Number).toLong()
                         val expected = (row[2] as Number).toLong()
-                        assertEquals(if (entry == "eventfdCycle") 2 * input + 5 else input + 13, expected)
+                        val model = when (entry) {
+                            "eventfdCycle" -> 2 * input + 5
+                            "pipeCycle" -> input + 13
+                            "epollCycle", "epollSafeCycle" -> input + 31
+                            "pollCycle", "pollSafeCycle" -> input + 17
+                            else -> input
+                        }
+                        assertEquals(model, expected)
                         assertEquals(expected, callable.execute(input).asLong(), "$stage/$backend/$entry/$input")
                         released(language)
                     }

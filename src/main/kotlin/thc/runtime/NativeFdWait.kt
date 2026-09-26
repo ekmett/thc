@@ -136,7 +136,7 @@ internal class NativeFdWait private constructor(private val descriptor: Int, pri
 /** Loaded only by the explicitly Linux x86_64 native-file capability. Keeping
  * lookup lazy avoids eventfd linkage (and Linux headers) in macOS builds. The
  * constants and pollfd layout here are the Linux ABI, not portable POSIX values. */
-private object NativePollApi {
+internal object NativePollApi {
     private val linker = Linker.nativeLinker()
     val capture: MemoryLayout = Linker.Option.captureStateLayout()
     private val errnoOffset = capture.byteOffset(MemoryLayout.PathElement.groupElement("errno"))
@@ -158,9 +158,9 @@ private object NativePollApi {
         if (fd < 0) throw NativeFileException("eventfd", errno(errors))
         fd
     }
-    fun poll(descriptors: MemorySegment, timeout: Int): Int = Arena.ofConfined().use { arena ->
+    fun poll(descriptors: MemorySegment, timeout: Int, count: Long = 2L): Int = Arena.ofConfined().use { arena ->
         val errors = arena.allocate(capture)
-        val result = poll.invokeWithArguments(errors, descriptors, 2L, timeout) as Int
+        val result = poll.invokeWithArguments(errors, descriptors, count, timeout) as Int
         if (result < 0) {
             val error = errno(errors)
             if (error == 4) throw InterruptedException() // EINTR: retry through a safepoint.

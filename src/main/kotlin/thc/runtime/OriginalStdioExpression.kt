@@ -12,6 +12,38 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
     override fun execute(frame: VirtualFrame): Nothing = fault("Original stdio call requires a State/result tuple destination")
 
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        if (operation.eventManager) {
+            val stdio = CoreOriginalStdio.current(this)
+            val result = if (operation.poll) {
+                val address = operands[0].executeRequiredAddress(frame)
+                val count = operands[1].executeRequiredLong(frame)
+                val timeout = operands[2].executeRequiredLong(frame)
+                requireVoidCarrier(operands[3].execute(frame))
+                stdio.poll(address, count, timeout, this)
+            } else if (operation.epollWait) {
+                val fd = operands[0].executeRequiredLong(frame)
+                val address = operands[1].executeRequiredAddress(frame)
+                val maximum = operands[2].executeRequiredLong(frame)
+                val timeout = operands[3].executeRequiredLong(frame)
+                requireVoidCarrier(operands[4].execute(frame))
+                stdio.epollWait(fd, address, maximum, timeout, this)
+            } else if (operation == OriginalStdioOp.EPOLL_CTL) {
+                val fd = operands[0].executeRequiredLong(frame)
+                val command = operands[1].executeRequiredLong(frame)
+                val target = operands[2].executeRequiredLong(frame)
+                val address = operands[3].executeRequiredAddress(frame)
+                requireVoidCarrier(operands[4].execute(frame))
+                stdio.epollControl(fd, command, target, address)
+            } else {
+                val first = operands[0].executeRequiredLong(frame)
+                val second = if (operation == OriginalStdioOp.IO_CONTROL_FD) operands[1].executeRequiredLong(frame) else 0L
+                requireVoidCarrier(operands.last().execute(frame))
+                if (operation == OriginalStdioOp.EPOLL_CREATE) stdio.epollCreate(first)
+                else { stdio.controlFd(operation, first, second); 0L }
+            }
+            if (operation.result != null) FrameAccess.writeLong(frame, slots[offset], result)
+            return null
+        }
         if (operation == OriginalStdioOp.SIGPROCMASK) {
             val how = operands[0].executeRequiredLong(frame)
             val set = operands[1].executeRequiredAddress(frame)

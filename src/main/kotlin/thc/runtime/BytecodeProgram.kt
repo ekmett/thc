@@ -1612,6 +1612,30 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     val b = e.builder
                     val result = if (originalStdio.result != null) destination.single()
                         else b.createLocal("unused original State destination", "primitive")
+                    if (originalStdio.eventManager) {
+                        // Retain source operand order before selecting typed lanes.
+                        val values = operands.dropLast(1).mapIndexed { index, operand ->
+                            b.createLocal("original event operand $index", if (originalStdio.arguments[index] == "AddrRep") "object" else "primitive").also {
+                                b.beginStoreLocal(it); operand.emit(e); b.endStoreLocal()
+                            }
+                        }
+                        b.beginOriginalEvent(result, originalStdio)
+                        if (originalStdio.poll) {
+                            b.emitLoadLocal(values[1]); b.emitLoadLocal(values[2]); b.emitLoadConstant(0L)
+                            b.emitLoadLocal(values[0])
+                        } else if (originalStdio.epollWait) {
+                            b.emitLoadLocal(values[0]); b.emitLoadLocal(values[2]); b.emitLoadLocal(values[3])
+                            b.emitLoadLocal(values[1])
+                        } else if (originalStdio == OriginalStdioOp.EPOLL_CTL) {
+                            values.forEach { b.emitLoadLocal(it) }
+                        } else {
+                            b.emitLoadLocal(values[0])
+                            if (originalStdio == OriginalStdioOp.IO_CONTROL_FD) b.emitLoadLocal(values[1]) else b.emitLoadConstant(0L)
+                            b.emitLoadConstant(0L); b.emitLoadConstant(ManagedAddress.nullAddress())
+                        }
+                        operands.last().emit(e); b.endOriginalEvent()
+                        return@tupleExpression
+                    }
                     // OPEN declares Addr#, CInt, Word32, State. Preserve that
                     // evaluation order while sharing the transfer instruction's
                     // long/address/long lanes (no extra BytecodeDSL family).

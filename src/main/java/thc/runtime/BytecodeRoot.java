@@ -1479,6 +1479,25 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
+    public static final class OriginalEvent {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                OriginalStdioOp operation, long first, long second, long third,
+                ManagedAddress address, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedStdio stdio = CoreOriginalStdio.current(node);
+            long result;
+            if (operation.getPoll()) result = stdio.poll(address, first, second, node);
+            else if (operation.getEpollWait()) result = stdio.epollWait(first, address, second, third, node);
+            else if (operation == OriginalStdioOp.EPOLL_CTL) result = stdio.epollControl(first, second, third, address);
+            else if (operation == OriginalStdioOp.EPOLL_CREATE) result = stdio.epollCreate(first);
+            else { stdio.controlFd(operation, first, second); return; }
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class FileOpen {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 ManagedAddress path, long mode, Object state, @Bind("$node") Node node) {
