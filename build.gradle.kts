@@ -525,6 +525,26 @@ tasks.register<Test>("packageScalarFullCoreTest") {
         }
     }
 }
+for ((taskName, dense) in listOf("hashableFfiFullCoreDefault" to false, "hashableFfiFullCoreDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests original Hashable byte-backed instances against native GHC, including first compiled entries."
+        maxHeapSize = "4g"
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        inputs.files(fileTree("build/hashable-ffi") { include("**/*.json", "bundles/*.zip", "logs/*.stdout", "logs/*.stderr") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.HashableFfiFullCoreTest") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Native Hashable FFI and first-compiled evidence requires a fresh process") { true }
+        doFirst {
+            check(file("build/hashable-ffi/manifest.json").isFile) {
+                "Select full-Core GHC 9.14.1/configured Clang and run cabal run exe:thc-fixtures -- hashable-ffi"
+            }
+        }
+    }
+}
 tasks.register<Test>("simdFamiliesExperimentTest") {
     group = "verification"
     description = "Runs the prepared generated SIMD Core, native-oracle, and compiled-path experiment."
