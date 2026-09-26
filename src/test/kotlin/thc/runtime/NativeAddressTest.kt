@@ -19,6 +19,34 @@ import java.lang.foreign.ValueLayout
 import java.lang.ref.Reference
 
 class NativeAddressTest {
+    @Test fun staticMetadataRetainsPrivateReadOnlyBytesAndExactSize() {
+        val source = byteArrayOf(0, -1, 127)
+        val address = ManagedAddress.fromStaticBytes(source)
+        source.fill(17)
+        assertEquals(3L, address.availableBytes())
+        assertEquals(listOf(0L, 255L, 127L), (0L..2L).map(address::readWord8))
+        assertThrows(RuntimeFault::class.java) { address.readWord8(3) }
+        assertThrows(RuntimeFault::class.java) { address.writeWord8(0, 1) }
+        address.rawBacking().fill(19)
+        assertEquals(0L, address.readWord8(0))
+        lateinit var view: NativeReadOnlyPointer
+        context().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val registry = NativeAddresses.current(null)
+                val bits = address.toNativeBits()
+                view = registry.transport(address)!!
+                assertEquals(bits + 3, address.plus(3).toNativeBits())
+                assertTrue(address.plus(3).sameLocation(registry.recover(bits + 3)))
+                assertArrayEquals(byteArrayOf(0, -1, 127),
+                    MemorySegment.ofAddress(bits).reinterpret(3).toArray(ValueLayout.JAVA_BYTE))
+                assertEquals(bits, address.toNativeBits())
+            } finally { context.leave() }
+        }
+        assertFalse(InteropLibrary.getUncached().isPointer(view))
+        assertEquals(255L, address.readWord8(1), "managed static bytes outlive a retired native view")
+    }
+
     private val address = mapOf("kind" to "address", "primReps" to listOf("AddrRep"), "evaluated" to true)
     private val integer = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
     private val closure = mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)

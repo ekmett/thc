@@ -81,11 +81,11 @@ internal class ManagedAddress private constructor(
         if (finalizer != null) fault("Opaque C function label is not byte-addressable")
         if (numeric != null) fault("Unowned numeric Addr# is not byte-addressable")
     }
-    /** Only static literals have a native image. Dynamic heap arrays never
+    /** Static literals and runtime metadata have a native image. Dynamic heap arrays never
      * acquire a second allocation merely because their address escapes. */
-    internal fun nativeImageKey(): Any? = literalBytes
-    internal fun nativeImageBytes(): ByteArray = literalBytes
-        ?: fault("Native image requires static literal storage")
+    internal fun nativeImageKey(): Any? = literalBytes ?: owner?.takeIf { it.isStaticImage }
+    internal fun nativeImageBytes(): ByteArray = literalBytes ?: owner?.takeIf { it.isStaticImage }?.let { it.copyBytesOut(0, it.size) }
+        ?: fault("Native image requires static literal or runtime metadata storage")
     fun toNativeBits(): Long {
         compiler?.requireCurrent()
         if (heap != null) fault("Opaque guest heap address has no native pointer bits")
@@ -715,6 +715,11 @@ internal class ManagedAddress private constructor(
         internal fun compilerCell(bytes: ByteArray, compiler: CompilerRts): ManagedAddress =
             ManagedAddress(null, bytes, 0L, compiler = compiler)
         fun fromAllocation(allocation: ManagedAllocation): ManagedAddress = ManagedAddress(null, null, 0L, allocation)
+        /** Runtime info tables are static images, not movable guest arrays.
+         * Copy once into private read-only bytes; unlike LitString, add no NUL.
+         * Numeric projection then uses the existing context-owned static image. */
+        internal fun fromStaticBytes(bytes: ByteArray, pointerBytes: Int = 8): ManagedAddress =
+            fromAllocation(ManagedAllocation.immutable(bytes, pointerBytes, staticImage = true))
         fun fromGuestByteArray(value: Any?): ManagedAddress = when (value) {
             is ManagedAllocation -> fromAllocation(value)
             is ByteArray -> fromByteArray(value)

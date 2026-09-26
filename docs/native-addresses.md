@@ -11,7 +11,11 @@ Buffer-only interop and native pointer views share this same storage. Ordinary
 mutable and immutable heap allocations remain moving JVM arrays and reject
 numeric projection; unsafe freeze does not promote storage.
 
-Static literals can acquire their read-only native materialization. The current
+Static literals and explicitly constructed runtime info-table images can acquire
+their read-only native materialization. Static info tables retain their allocation
+identity for weak stack-provenance lookup; ordinary immutable guest arrays remain
+unprojectable. This classification neither pins nor copies a guest array.
+The current
 context owns a weak backing-to-image index; every
 image owns a shared FFM arena and its address is `MemorySegment.address()`,
 never an identity hash or an encoded handle. Aliases share one image and offsets.
