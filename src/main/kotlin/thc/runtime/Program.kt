@@ -903,7 +903,16 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
         else -> forceResult(frame, value.execute(frame))
     }
     private fun executeAsync(frame: VirtualFrame): Any? {
-        val original = try { value.execute(frame) }
+        // Preserve proof-directed primitive access even when child edges can
+        // suspend, keeping primitive frame accesses visible at loop headers.
+        val original = try {
+            when {
+                value.representation.isLong -> value.executeRequiredLong(frame)
+                value.representation.isFloat -> value.executeRequiredFloat(frame)
+                value.representation.isDouble -> value.executeRequiredDouble(frame)
+                else -> value.execute(frame)
+            }
+        }
         catch (cut: AstCapture) {
             if (value.representation.evaluated) throw cut
             throw cut.append(object : AstResumeStep {
@@ -1548,6 +1557,7 @@ private class FunctionBody(expression: Expr, metrics: Metrics, result: CoreRepre
         if (shape != null) {
             try { value.executeTuple(frame, tupleSlots, 0) }
             catch (cut: DelimitedCut) {
+                if (!DelimitedControl.enabled(this)) throw cut
                 throw cut.append(frame, object : DelimitedStep {
                     override fun resume(frame: MaterializedFrame, input: DelimitedResume,
                                         ambient: MaskingState, outerMask: DelimitedStep?): Any? {
@@ -1634,9 +1644,11 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     @field:CompilationFinal(dimensions = 1)
     private val argumentReferences = argumentProofs.map { it.referenceCarrier() }.toTypedArray()
     @field:CompilationFinal(dimensions = 1)
-    private val strictSlots = argumentSlots.indices.filter {
+    private val strictArguments = BooleanArray(argumentSlots.size) {
         enableAsync && argumentIndices[it] + entryArgumentOffset in strictArgumentPositions
-    }.toIntArray()
+    }
+    @field:CompilationFinal(dimensions = 1)
+    private val strictSlots = argumentSlots.indices.filter { strictArguments[it] }.toIntArray()
     @Child private var entryForce = Force(metrics, enableAsync)
     @field:CompilationFinal private var hasSelfTail = false
     private val tailCallProfile = BranchProfile.create()
@@ -1648,7 +1660,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         for (i in argumentSlots.indices) {
             val value = arguments[argumentIndices[i] + offset]
             val reference = argumentReferences.getOrNull(i)
-            if (enableAsync && i in strictSlots) FrameAccess.write(frame, argumentSlots[i], value)
+            if (strictArguments[i]) FrameAccess.write(frame, argumentSlots[i], value)
             else if (reference != null)
                 FrameAccess.write(frame, argumentSlots[i], requireReferenceCarrier(value, reference))
             else if (i < argumentProofs.size && argumentProofs[i].isLong)
@@ -1706,8 +1718,9 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
 
     fun pollBeforeBody(node: Node) {
         if (!enableAsync) return
+        val enteredCompiled = CompilerDirectives.inCompiledCode()
         val request = GuestThreads.pollCurrent(node, false) ?: return
-        request.compiledCapture = CompilerDirectives.inCompiledCode()
+        request.compiledCapture = enteredCompiled
         throw AstCapture(request, SynchronousMasking.current(node)).append(ResumeBody(this))
     }
 
@@ -1751,7 +1764,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                 else {
                     val value = entry.packet.getObject(input, from)
                     val expected = argumentReferences.getOrNull(i)
-                    writeInputReference(frame, to, if (expected == null || enableAsync && i in strictSlots) value else requireReferenceCarrier(value, expected))
+                    writeInputReference(frame, to, if (expected == null || strictArguments[i]) value else requireReferenceCarrier(value, expected))
                 }
             }
             if (captureLayout != null) {
@@ -1934,8 +1947,8 @@ private data class FunctionSpec(val target: RootCallTarget, val captureLayout: C
  * lexical bindings to indexed invocation-frame slots, as Cadenza does; resulting
  * nodes operate on the runtime's shared value and capture representations.
  *
- * Async AST admission is opt-in for internal proofs; Language.parse keeps it disabled
- * until every public closure/call boundary can consume a saved continuation.
+ * Public requests may select captured asynchronous execution. The default AST
+ * mode remains synchronous for subsystems with explicit continuation barriers.
  */
 class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>,
               internal val enableAsync: Boolean = false) : ExecutableProgram {
@@ -1951,19 +1964,22 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private var operandBuilder: OperandBuilder? = null
     private inner class OperandBuilder(private val layout: FrameLayout) {
         private val bindings = ArrayList<LocalBinding>()
+        private val temporaries = ArrayList<Int>()
         fun operand(value: Expr): Expr {
             val proof = value.representation
             if (proof.isTypedTransport) {
                 val shape = TupleShape(proof, language as thc.Language)
                 val slots = IntArray(shape.width) { layout.bind("<async operand field $it>") }
+                temporaries.addAll(slots.toList())
                 bindings += LocalBinding(-1, value, false, slots)
                 return TupleLocalRead(shape, slots)
             }
             val slot = layout.bind("<async operand ${bindings.size}>")
+            temporaries += slot
             bindings += LocalBinding(slot, value, proof.isLong)
             return LocalRead(slot, false).proven(proof)
         }
-        fun finish(body: Expr): Expr = if (bindings.isEmpty()) body else AstOperands(bindings.toTypedArray(), body)
+        fun finish(body: Expr): Expr = if (bindings.isEmpty()) body else AstOperands(bindings.toTypedArray(), temporaries.toIntArray(), body)
     }
     private var attachedRootCount = 0
     private fun <T> withSource(location: CoreSourceLocation?, action: () -> T): T {
@@ -1992,6 +2008,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
     private val globalArityCertificates = bindings.associate { it["id"] as String to CoreApplicationCertificates.binding(it) }
     init {
+        if (enableAsync && delimited)
+            throw UnsupportedCore("Delimited continuations do not yet preserve AST async captures")
         if (enableAsync) AstAsyncAdmission.validate(bindings)
         ArrayOp.validateApplications(bindings)
         CoreStackForeign.validateHeads(bindings)
@@ -2047,7 +2065,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         return when (value) { is Closure -> value.target; is Thunk -> value.target ?: hostEntryTarget(0); else -> hostEntryTarget(0) }
     }
     override fun diagnostics(): Map<String, Any> = linkedMapOf(
-        "backend" to "ast", "sourceNotesEnabled" to sources.enabled, "sourceSpanCount" to sources.spanCount,
+        "backend" to "ast", "asyncExceptions" to enableAsync, "sourceNotesEnabled" to sources.enabled, "sourceSpanCount" to sources.spanCount,
         "sourceRootCount" to attachedRootCount, "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkCountsSnapshot(),
         "compiledEntries" to metrics.compiledEntries, "leadingCaseReturns" to metrics.leadingCaseReturns, "thunkEvaluations" to metrics.thunkEvaluations,
         "thunkHits" to metrics.thunkHits, "blackholes" to metrics.blackholes, "directCacheMisses" to metrics.directCacheMisses,
@@ -2057,7 +2075,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "unsupportedPolicy" to (if (diagnosticUnsupported) "diagnostic-traps" else "reject-at-load"),
         "deferredUnsupported" to deferredUnsupported.toList(), "unsupportedTraps" to metrics.unsupportedTraps,
         "frames" to "indexed primitive slots; selective StaticShape captures",
-        "stackPolicy" to "tail-safe; non-tail calls and nested thunk forcing use host stack", "threadPolicy" to "context-owned Java threads; AST forks reject external asynchronous delivery")
+        "stackPolicy" to "tail-safe; non-tail calls and nested thunk forcing use host stack", "threadPolicy" to
+            if (enableAsync) "context-owned Java threads; captured asynchronous delivery"
+            else "context-owned Java threads; external asynchronous delivery disabled")
     private fun representation(binding: Map<String, Any?>): Boolean = binding["lifted"] as? Boolean
         ?: throw UnsupportedCore("Unknown levity for ${binding["id"]}")
     private fun freeVariables(expr: List<Any?>): Set<String> = when (expr[0]) {
@@ -2541,6 +2561,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }.toTypedArray()).proven(tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && fn[1] in setOf("newBCO#", "mkApUpd0#")) {
                 val name = fn[1] as String
+                if (enableAsync)
+                    throw UnsupportedCore("GHC BCO frames do not yet preserve AST async captures")
                 GhcBCO.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
                 GhcBCOExpression(name, args.mapIndexed { index, value ->
                     argument(value, scope, flags[index] as Boolean)

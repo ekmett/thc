@@ -152,6 +152,30 @@ class ThreadAsyncNativeTest {
     @Test fun astForkedChildOwnsAndResumesTheSharedLazyActionHead() =
         exercise("lazyFork", listOf(52, 53), "LazyForkAudit", "ast")
 
+    @Test fun publicRequestValidatesAndSelectsSynchronousOrAsyncExecution() {
+        checkReceipt()
+        val core = File(root, "build/thread-async/post/core/ThreadAsyncAudit.json")
+        for (backend in listOf("ast", "bytecode")) for (mode in listOf(null, false, true)) {
+            Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").build().use { context ->
+                val request = CoreModules.request(listOf(core.path), "yieldProbe", backend = backend, asyncExceptions = mode)
+                val entry = context.eval("thc", request)
+                assertTrue(entry.invokeMember("compile").asBoolean())
+                assertEquals(37L, entry.execute(0L).asLong(), "$backend/$mode first installed entry")
+                val diagnostics = Json.parse(entry.getMember("diagnostics").asString()) as Map<*, *>
+                assertEquals(backend, diagnostics["backend"])
+                assertEquals(mode ?: (backend == "bytecode"), diagnostics["asyncExceptions"])
+                @Suppress("UNCHECKED_CAST")
+                val document = Json.parse(request) as Map<String, Any?>
+                val failure = assertThrows(org.graalvm.polyglot.PolyglotException::class.java) {
+                    context.eval("thc", Json.stringify(document + ("asyncExceptions" to "true")))
+                }
+                assertTrue(failure.message!!.contains("asyncExceptions must be a Boolean"))
+            }
+        }
+    }
+
     @Test fun yieldPreservesStateAndMaskInCompiledAstAndBytecode() {
         checkReceipt()
         for (stage in listOf("pre", "post")) for (backend in listOf("ast", "bytecode")) {

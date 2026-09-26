@@ -87,7 +87,8 @@ AST lowering sequences primitive and constructor operands into frame locals
 before executing the operation. Calls preserve already evaluated arguments,
 pending strict forces and typed destinations. Typed argument loans are released
 after their values have entered the callee frame; saved tuple results use owned
-storage. `catch#`, masks, annotations and `keepAlive#` retain their lexical
+storage. Operand temporaries remain live across a cut and clear when the saved
+expression completes. `catch#`, masks, annotations and `keepAlive#` retain their lexical
 handler or cleanup scope around resumed child steps. Recursive local joins poll
 before executing the next selected body.
 

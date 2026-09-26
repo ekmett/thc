@@ -36,8 +36,9 @@ internal object CoreKeepAlive {
                 throw RuntimeFault("keepAlive#: continuation requires a logical State operand")
             if (continuation.first.size == 1) {
                 result.refine(continuation.second)
-                if (result.isAggregate || continuation.second.isAggregate)
-                    TupleShape.requireCompatible(result, continuation.second)
+                // keepAlive# preserves the continuation's exact logical result,
+                // including scalar widths that share THC's Long carrier.
+                TupleShape.requireCompatible(result, continuation.second, component = true)
             } else if (!reference(result) || result.primReps != listOf("BoxedRep (Just Lifted)"))
                 throw RuntimeFault("keepAlive#: partially applied continuation must return a lifted function")
         }

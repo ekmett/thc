@@ -53,7 +53,10 @@ internal class AnnotatedTuple(@field:Child private var annotation: Expr,
         requireVoidCarrier(state.execute(frame))
         val prior = StackAnnotations.enter(this, value)
         return try { body.executeTuple(frame, slots, offset) }
-        catch (cut: DelimitedCut) { throw cut.append(frame, DelimitedAnnotationStep(this, prior)) }
+        catch (cut: DelimitedCut) {
+            if (!DelimitedControl.enabled(this)) throw cut
+            throw cut.append(frame, DelimitedAnnotationStep(this, prior))
+        }
         finally { StackAnnotations.set(this, prior) }
     }
 }
@@ -171,6 +174,7 @@ internal class AnnotatedAction(private val shape: TupleShape,
                 })
             }
             catch (cut: DelimitedCut) {
+                if (!DelimitedControl.enabled(this)) throw cut
                 throw cut.append(frame, DelimitedAnnotationStep(this, prior))
                     .append(frame, DelimitedTupleStep(AstTupleDestination(shape, slots, offset), this))
             }

@@ -146,6 +146,7 @@ private class LocalJoinRepeater(private val group: Any, private val selector: In
                 }
             })
         } catch (cut: DelimitedCut) {
+            if (!delimited) throw cut
             throw cut.append(frame, object : DelimitedStep {
                 override fun resume(frame: MaterializedFrame, input: DelimitedResume, ambient: MaskingState,
                                     outerMask: DelimitedStep?): Any? {
@@ -204,8 +205,9 @@ private class LocalJoinRepeater(private val group: Any, private val selector: In
     override fun executeRepeating(frame: VirtualFrame): Boolean {
         try {
             val selected = frame.getLong(selector)
+            val enteredCompiled = CompilerDirectives.inCompiledCode()
             if (AstControl.enabled(this)) GuestThreads.pollCurrent(this, false)?.let { request ->
-                request.compiledCapture = CompilerDirectives.inCompiledCode()
+                request.compiledCapture = enteredCompiled
                 throw AstCapture(request, SynchronousMasking.current(this)).append(object : AstResumeStep {
                     override fun resume(frame: VirtualFrame, input: Any?): Any? {
                         if (input !== Unit) fault("Local join loop continuation requires Unit")
@@ -243,7 +245,10 @@ internal class LocalJoinRegion(private val group: Any, private val selector: Int
         if (!delimited && !AstControl.enabled(this)) return runUninterrupted(frame)
         try { runUninterrupted(frame) }
         catch (cut: AstCapture) { throw cut.enclose { ResumeAsyncRegion(this, it, slots, offset) } }
-        catch (cut: DelimitedCut) { throw cut.append(frame, ResumeRegion(this, slots, offset)) }
+        catch (cut: DelimitedCut) {
+            if (!delimited) throw cut
+            throw cut.append(frame, ResumeRegion(this, slots, offset))
+        }
     }
 
     /** Restored operands can perform a lexical transfer. The region enclosing

@@ -3,12 +3,14 @@
 
 package thc.runtime
 
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.ExplodeLoop
 
 /** Lowering lifts primitive operands into locals before entering the primitive.
  * A cut owns the completed prefix; no committed operation is executed twice. */
 internal class AstOperands(@field:Children private var operands: Array<LocalBinding>,
+                           @field:CompilationFinal(dimensions = 1) private val temporaries: IntArray,
                            @field:Child private var body: Expr) : Expr() {
     init { representation = body.representation }
 
@@ -36,15 +38,36 @@ internal class AstOperands(@field:Children private var operands: Array<LocalBind
         }
     }
 
-    override fun execute(frame: VirtualFrame): Any? { prepareBody(frame); return body.execute(frame) }
-    override fun executeLong(frame: VirtualFrame): Long { prepareBody(frame); return body.executeLong(frame) }
-    override fun executeFloat(frame: VirtualFrame): Float { prepareBody(frame); return body.executeFloat(frame) }
-    override fun executeDouble(frame: VirtualFrame): Double { prepareBody(frame); return body.executeDouble(frame) }
-    override fun executeClosure(frame: VirtualFrame): Closure { prepareBody(frame); return body.executeClosure(frame) }
-    override fun executeDataValue(frame: VirtualFrame): DataValue { prepareBody(frame); return body.executeDataValue(frame) }
-    override fun executeAddress(frame: VirtualFrame): ManagedAddress { prepareBody(frame); return body.executeAddress(frame) }
-    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+    @ExplodeLoop private fun clear(frame: VirtualFrame) { for (slot in temporaries) frame.clear(slot) }
+
+    private class Cleanup(private val owner: AstOperands, private val steps: List<AstResumeStep>) : AstResumeStep {
+        override fun resume(frame: VirtualFrame, input: Any?): Any? = owner.scoped(frame) {
+            resumeAstSteps(frame, steps, input)
+        }
+    }
+
+    private inline fun <T> scoped(frame: VirtualFrame, action: () -> T): T {
+        var suspended = false
+        try { return action() }
+        catch (cut: AstCapture) {
+            suspended = true
+            throw cut.enclose { Cleanup(this, it) }
+        } finally {
+            // The operand values belong to this expression, not its caller or
+            // next loop iteration. A parked suffix alone keeps them live.
+            if (!suspended) clear(frame)
+        }
+    }
+
+    override fun execute(frame: VirtualFrame): Any? = scoped(frame) { prepareBody(frame); body.execute(frame) }
+    override fun executeLong(frame: VirtualFrame): Long = scoped(frame) { prepareBody(frame); body.executeLong(frame) }
+    override fun executeFloat(frame: VirtualFrame): Float = scoped(frame) { prepareBody(frame); body.executeFloat(frame) }
+    override fun executeDouble(frame: VirtualFrame): Double = scoped(frame) { prepareBody(frame); body.executeDouble(frame) }
+    override fun executeClosure(frame: VirtualFrame): Closure = scoped(frame) { prepareBody(frame); body.executeClosure(frame) }
+    override fun executeDataValue(frame: VirtualFrame): DataValue = scoped(frame) { prepareBody(frame); body.executeDataValue(frame) }
+    override fun executeAddress(frame: VirtualFrame): ManagedAddress = scoped(frame) { prepareBody(frame); body.executeAddress(frame) }
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? = scoped(frame) {
         prepareBody(frame, slots, offset)
-        return body.executeTuple(frame, slots, offset)
+        body.executeTuple(frame, slots, offset)
     }
 }

@@ -262,7 +262,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         return when (value) { is Closure -> value.target; is Thunk -> value.target ?: hostEntryTarget(0); else -> hostEntryTarget(0) }
     }
     override fun diagnostics(): Map<String, Any> = linkedMapOf(
-        "backend" to "bytecode", "bytecodeRootCount" to roots.size,
+        "backend" to "bytecode", "asyncExceptions" to enableAsync, "bytecodeRootCount" to roots.size,
         "sourceNotesEnabled" to sources.enabled, "sourceSpanCount" to sources.spanCount,
         "sourceRootCount" to roots.count { it.bytecodeNode.hasSourceInformation() && it.sourceSection != null }, "localJoinCount" to localJoinCount,
         "localJoinTransfers" to metrics.localJoinTransfers,

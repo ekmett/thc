@@ -195,6 +195,7 @@ internal class TupleDispatch @JvmOverloads constructor(private val destination: 
     fun execute(frame: VirtualFrame, function: Closure, arguments: Array<Any?>) {
         try { executeCall(frame, function, arguments) }
         catch (cut: DelimitedCut) {
+            if (!DelimitedControl.enabled(this)) throw cut
             throw DelimitedControl.tupleCut(cut, frame.materialize(), destination, this)
         }
     }
@@ -599,6 +600,7 @@ internal class TupleCase(@field:Child private var scrutinee: Expr,
             })
         }
         catch (cut: DelimitedCut) {
+            if (!DelimitedControl.enabled(this)) throw cut
             throw cut.append(frame, object : DelimitedStep {
                 override fun resume(frame: MaterializedFrame, input: DelimitedResume,
                                     ambient: MaskingState, outerMask: DelimitedStep?): Any? {

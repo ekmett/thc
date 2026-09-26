@@ -589,12 +589,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                     TupleResultsKt.requireVoidCarrier(second);
                     // A lifted fork action may still be a thunk. Only the new
                     // child may enter it; the parent must return after registration.
-                    yield GuestThreadOps.fork(node, first, true);
+                    yield GuestThreadOps.fork(node, first, ((BytecodeRoot) node.getRootNode()).isAsyncEnabled());
                 }
                 case FORK_ON -> {
                     TupleResultsKt.requireVoidCarrier(third);
                     if (!(first instanceof Long capability)) throw fail("forkOn# requires Int#");
-                    yield GuestThreadOps.fork(node, second, true, capability);
+                    yield GuestThreadOps.fork(node, second, ((BytecodeRoot) node.getRootNode()).isAsyncEnabled(), capability);
                 }
                 case BEGIN_KILL -> {
                     TupleResultsKt.requireVoidCarrier(third);

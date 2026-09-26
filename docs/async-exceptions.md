@@ -106,8 +106,9 @@ cabal run thc-fixtures --offline -- thread-async
 cabal run thc-fixtures --offline -- uncaught-self
 ```
 
-STM transaction frames, compact traversal, opaque foreign execution and mixed
-asynchronous/delimited capture retain their separate continuation barriers.
+STM transaction frames, compact traversal, GHC BCO interpreter frames, opaque
+foreign execution and mixed asynchronous/delimited capture retain their separate
+continuation barriers.
 Arbitrary JVM/native frames and blocking file operations do not gain resumable
 interruption from the public option. See the
 [primop-by-primop behavior reference](primop-behavior.md#exceptions-blocking-and-transactions)

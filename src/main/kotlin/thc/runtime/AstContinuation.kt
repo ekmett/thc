@@ -3,6 +3,7 @@
 
 package thc.runtime
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.frame.MaterializedFrame
 import com.oracle.truffle.api.nodes.ControlFlowException
 import com.oracle.truffle.api.frame.VirtualFrame
@@ -18,13 +19,13 @@ internal class AstCapture(val yielded: Any?, val logicalMask: MaskingState) : Co
     private val annotations = StackAnnotations.current(null)
     private val steps = ArrayList<AstResumeStep>()
 
-    fun append(step: AstResumeStep): AstCapture {
+    @TruffleBoundary fun append(step: AstResumeStep): AstCapture {
         steps.add(step)
         return this
     }
 
     /** Retain the lexical exception/cleanup scope around the saved child work. */
-    fun enclose(wrapper: (List<AstResumeStep>) -> AstResumeStep): AstCapture {
+    @TruffleBoundary fun enclose(wrapper: (List<AstResumeStep>) -> AstResumeStep): AstCapture {
         val scope = wrapper(steps.toList())
         steps.clear()
         steps.add(scope)
@@ -38,10 +39,10 @@ internal class AstCapture(val yielded: Any?, val logicalMask: MaskingState) : Co
         else -> null
     }
 
-    fun freeze(sourceRoot: GuestRoot, frame: MaterializedFrame): AstContinuation =
+    @TruffleBoundary fun freeze(sourceRoot: GuestRoot, frame: MaterializedFrame): AstContinuation =
         AstContinuation(sourceRoot, yielded, logicalMask, frame, steps.toList(), annotations)
 
-    fun appendRemaining(old: List<AstResumeStep>, first: Int): AstCapture {
+    @TruffleBoundary fun appendRemaining(old: List<AstResumeStep>, first: Int): AstCapture {
         for (i in first until old.size) steps.add(old[i])
         return this
     }
@@ -70,7 +71,7 @@ internal class AstContinuation(
     override val identity: Any get() = this
     private val claimed = AtomicBoolean()
 
-    override fun continueWith(input: Any?): Any? {
+    @TruffleBoundary override fun continueWith(input: Any?): Any? {
         if (!claimed.compareAndSet(false, true)) fault("AST continuation was already resumed")
         val ambient = SynchronousMasking.current(sourceRoot)
         val ambientAnnotations = StackAnnotations.current(sourceRoot)

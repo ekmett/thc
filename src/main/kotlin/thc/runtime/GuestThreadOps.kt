@@ -140,16 +140,17 @@ internal class KillThread(@field:Child private var identity: Expr, @field:Child 
             throw AstCapture(blocked.request, SynchronousMasking.current(this))
                 .append(ResumeWait(this, sent))
         }
+        val polledCompiled = CompilerDirectives.inCompiledCode()
         GuestThreads.pollCurrent(this, false)?.let { incoming ->
             if (sent.forceSelf) {
                 if (incoming !== sent) fault("Self-directed killThread# claimed a different request")
-                incoming.compiledCapture = CompilerDirectives.inCompiledCode()
+                incoming.compiledCapture = polledCompiled
                 if (captureWait) throw AstCapture(incoming, SynchronousMasking.current(this)).append(ResumeCompleted())
                 throw AsyncDelivery(incoming, this)
             }
             if (incoming === sent) fault("killThread# claimed its completed outbound request")
             if (!captureWait) fault("Nonresumable AST sender claimed an external request")
-            incoming.compiledCapture = CompilerDirectives.inCompiledCode()
+            incoming.compiledCapture = polledCompiled
             throw AstCapture(incoming, SynchronousMasking.current(this)).append(ResumeCompleted())
         }
         if (sent.forceSelf) fault("Self-directed killThread# was not delivered at its guest poll")
@@ -266,8 +267,8 @@ internal object GuestThreadOps {
         if (asyncEnabled) {
             if (!(root is BytecodeRoot && root.isAsyncEnabled || root is FunctionRoot && root.enableAsync))
                 fault("fork# action has no async continuation capture")
-        } else if (root !is FunctionRoot || root.enableAsync) {
-            throw UnsupportedCore("fork# AST action must use ordinary nonresumable AST execution")
+        } else if (!(root is FunctionRoot && !root.enableAsync || root is BytecodeRoot && !root.isAsyncEnabled)) {
+            throw UnsupportedCore("fork# synchronous action requires nonresumable guest execution")
         }
         val shape = root.tupleResult ?: fault("fork# action has no tuple result proof")
         val fields = shape.proof.components
