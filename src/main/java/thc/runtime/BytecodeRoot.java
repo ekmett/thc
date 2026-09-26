@@ -2887,6 +2887,62 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
     @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "addressDestination")
+    @ConstantOperand(type = LocalAccessor.class, name = "sizeDestination")
+    @ConstantOperand(type = boolean.class, name = "first")
+    public static final class ReadCompactBlock {
+        @Specialization public static void execute(VirtualFrame frame, LocalAccessor addressDestination,
+                LocalAccessor sizeDestination, boolean first, Object region, Object previous, Object state,
+                @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            Language.State context = Language.currentState(node);
+            ManagedCompact compact = context.compactRegions.require(region);
+            if (!first && !(previous instanceof ManagedAddress)) throw fail("Expected a compact block Addr#");
+            ManagedAddress address = first ? context.compactImages.first(compact)
+                : context.compactImages.next(compact, (ManagedAddress) previous);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            addressDestination.setObject(bytecode, frame, address);
+            sizeDestination.setLong(bytecode, frame, address == ManagedAddress.Companion.nullAddress() ? 0L : address.availableBytes());
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class AllocateCompactBlock {
+        @Specialization public static void execute(VirtualFrame frame, LocalAccessor destination,
+                long size, ManagedAddress previous, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    Language.currentState(node).compactImages.allocate(size, previous));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "regionDestination")
+    @ConstantOperand(type = LocalAccessor.class, name = "rootDestination")
+    public static final class FixupCompact {
+        @Specialization public static void execute(VirtualFrame frame, LocalAccessor regionDestination,
+                LocalAccessor rootDestination, ManagedAddress first, ManagedAddress oldRoot, Object state,
+                @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            CompactImages.Fixed fixed = Language.currentState(node).compactImages.fixup(first, oldRoot);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            regionDestination.setObject(bytecode, frame, fixed.getRegion());
+            rootDestination.setObject(bytecode, frame, fixed.getRoot());
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = boolean.class, name = "fromAddress")
+    public static final class ObjectAddress {
+        @Specialization public static void execute(VirtualFrame frame, LocalAccessor destination,
+                boolean fromAddress, Object value, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            HeapAddresses heap = Language.currentState(node).heapAddresses;
+            if (fromAddress && !(value instanceof ManagedAddress)) throw fail("Expected a guest heap Addr#");
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    fromAddress ? heap.dereference((ManagedAddress) value) : heap.address(value));
+        }
+    }
+    @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = CompactOp.class, name = "operation")
     public static final class InspectCompact {

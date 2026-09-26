@@ -128,6 +128,21 @@ internal class OwnedVectorFields(val proof: CoreRepresentation, name: String) {
             else -> putLong(target, index, getLong(source, index))
         }
     }
+    /** Target image format stores exact lane bits, not Vector API objects. */
+    internal fun writeImage(owner: Any, output: java.io.DataOutputStream) {
+        for (index in 0 until lanes) when (lane) {
+            "FloatRep" -> output.writeInt(properties[index].getFloat(owner).toRawBits())
+            "DoubleRep" -> output.writeLong(properties[index].getDouble(owner).toRawBits())
+            else -> output.writeLong(getLong(owner, index))
+        }
+    }
+    internal fun readImage(owner: Any, input: java.io.DataInputStream) {
+        for (index in 0 until lanes) when (lane) {
+            "FloatRep" -> properties[index].setFloat(owner, Float.fromBits(input.readInt()))
+            "DoubleRep" -> properties[index].setDouble(owner, Double.fromBits(input.readLong()))
+            else -> putLong(owner, index, input.readLong())
+        }
+    }
     fun restore(owner: Any, frame: Frame, slots: IntArray, offset: Int) {
         checkSlots(slots.size, offset)
         FrameAccess.writeObject(frame, slots[offset], restoreRaw(owner))

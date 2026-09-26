@@ -900,7 +900,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
         self.assertEqual({"GuestEnvironment", "CoreEnvironmentForeign", "GuestArguments", "CoreRtsArgumentsForeign", "AddressIdentity", "AtomicAddresses", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArrays", "ManagedMutVars", "ManagedNativeAllocations", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
-                         "VectorAddresses", "VectorIntegerDivision", "IntegerVectorPrimitives", "FloatingVectorPrimitives", "FloatDecodePrimitives", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopy", "AtomicIntArrays", "ThreadObservation", "ManagedSTM", "ManagedCompacts", "STMPrimops", "HintTracePrimops"},
+                         "VectorAddresses", "VectorIntegerDivision", "IntegerVectorPrimitives", "FloatingVectorPrimitives", "FloatDecodePrimitives", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopy", "AtomicIntArrays", "ThreadObservation", "ManagedSTM", "ManagedCompacts", "CompactImages", "HeapAddresses", "CoreCompactImages", "STMPrimops", "HintTracePrimops"},
                          {Path(path).stem for path in self.families})
         for path, group in self.families.items():
             with self.subTest(path=path):

@@ -8,7 +8,7 @@
 module Main (main) where
 
 import AggregateFixtures (prepareAggregate)
-import CompactRegionsFixtures (prepareCompactRegions)
+import CompactRegionsFixtures (prepareCompactRegions, prepareCompactSerialization)
 import GraphFixtures (prepareGraph)
 import IntegerCompletionFixtures (prepareIntegerCompletion)
 import AddressArrayCopyFixtures (prepareAddressArrayCopy)
@@ -1000,6 +1000,7 @@ main = do
     ["thread-label"] -> prepareThreadLabel root
     ["thread-status"] -> prepareThreadStatus root
     ["compact-regions"] -> prepareCompactRegions root
+    ["compact-serialization"] -> prepareCompactSerialization root
     ["thread-inventory"] -> prepareThreadInventory root
     ["scalar-memory-utilities"] -> prepareScalarMemoryUtilities root
     ["thread-async"] -> prepareThreadAsync root

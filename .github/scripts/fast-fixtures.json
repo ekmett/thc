@@ -2,6 +2,7 @@
   "schema": 1,
   "fixtureFreeJunit": [
     "thc.runtime.ManagedCompactsTest",
+    "thc.runtime.CompactImagesTest",
     "thc.runtime.ManagedSTMTest",
     "thc.runtime.SimdWideArrayProofTest",
     "thc.runtime.Simd128AddressTest",

@@ -460,24 +460,27 @@ tasks.register<Test>("arithmeticExceptionsFullCoreTest") {
         }
     }
 }
-for ((taskName, dense) in listOf("compactRegionsFullCoreDefault" to false, "compactRegionsFullCoreDense" to true)) {
+for ((taskName, dense) in listOf("compactRegionsFullCoreDefault" to false, "compactRegionsFullCoreDense" to true,
+        "compactSerializedFullCoreDefault" to false, "compactSerializedFullCoreDense" to true)) {
+    val serialized = taskName.startsWith("compactSerialized")
+    val fixtureDirectory = if (serialized) "compact-serialization" else "compact-regions"
     tasks.register<Test>(taskName) {
         group = "verification"
         description = "Tests original ghc-compact with explicitly prepared complete GHC Core."
         maxHeapSize = "4g"
         testClassesDirs = fullCoreTests.output.classesDirs
         classpath = fullCoreTests.runtimeClasspath
-        inputs.files(fileTree("build/compact-regions") {
+        inputs.files(fileTree("build/$fixtureDirectory") {
             include("**/*.json", "oracle.tsv", "installed/bundles/*.zip", "native/oracle")
         })
         useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.CompactRegionsNativeTest") }
+        filter { includeTestsMatching("thc.runtime.${if (serialized) "CompactSerializedNativeTest" else "CompactRegionsNativeTest"}") }
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Original compact-region evidence requires a fresh process") { true }
         doFirst {
-            check(file("build/compact-regions/manifest.json").isFile) {
-                "Select full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- compact-regions"
+            check(file("build/$fixtureDirectory/manifest.json").isFile) {
+                "Select full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- $fixtureDirectory"
             }
         }
     }

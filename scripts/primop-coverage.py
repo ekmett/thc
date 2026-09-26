@@ -82,6 +82,7 @@ def classify(data, capability, scalars):
                                ('managedThreadPrimitives', 'Thread operation'),
                                ('managedSTMPrimitives', 'STM operation'),
                                ('managedCompactPrimitives', 'Compact-region operation'),
+                               ('managedCompactImagePrimitives', 'Compact image or heap-address operation'),
                                ('managedMVarPrimitives', 'MVar operation'),
                                ('managedPinnedMemoryPrimitives', 'Pointer or pinned-memory operation')):
                 if name in capability.get(key, {}):

@@ -243,6 +243,9 @@ class DataLayout private constructor(
      * pointers to guest closures and therefore do not enter the traversal. */
     internal fun compactPointer(index: Int): Boolean =
         exactFieldReps[index] == "LiftedRep" || exactFieldReps[index] == "UnliftedRep"
+    /** Images are untrusted bytes, unlike well-formed lowered Core. Check the
+     * actual JVM field carrier before a final typed property is initialized. */
+    internal fun acceptsCompactPointer(index: Int, value: Any?): Boolean = fields[index].acceptsReference(value)
     internal fun compactBytes(): Long = 8L + fields.indices.sumOf { index ->
         fields[index].vector?.let { it.proof.vector!!.lanes.toLong() *
             when (it.proof.vector.element) {
@@ -257,6 +260,28 @@ class DataLayout private constructor(
         val field = fields[index]
         if (field.vector != null) field.vector.copy(source, target)
         else field.initialize(target, field.read(source))
+    }
+    internal fun writeCompactScalar(value: DataValue, index: Int, output: java.io.DataOutputStream) {
+        val field = fields[index]
+        if (field.vector != null) field.vector.writeImage(value, output)
+        else when (exactFieldReps[index]) {
+            "VoidRep" -> Unit
+            "AddrRep" -> output.writeLong((field.read(value) as ManagedAddress).toNativeBits())
+            "FloatRep" -> output.writeInt(field.readFloat(value).toRawBits())
+            "DoubleRep" -> output.writeLong(field.readDouble(value).toRawBits())
+            else -> output.writeLong(field.readLong(value))
+        }
+    }
+    internal fun readCompactScalar(value: DataValue, index: Int, input: java.io.DataInputStream) {
+        val field = fields[index]
+        if (field.vector != null) field.vector.readImage(value, input)
+        else field.initialize(value, when (exactFieldReps[index]) {
+            "VoidRep" -> Unit
+            "AddrRep" -> NativeAddresses.current(null).recover(input.readLong())
+            "FloatRep" -> Float.fromBits(input.readInt())
+            "DoubleRep" -> Double.fromBits(input.readLong())
+            else -> input.readLong()
+        })
     }
 
     /** Cold closure inspection preserves a raw vector field instead of entering it. */
@@ -391,6 +416,7 @@ class DataLayout private constructor(
         fun isFloat(): Boolean = kind == FLOAT
         fun isDouble(): Boolean = kind == DOUBLE
         fun isVoid(): Boolean = kind == VOID
+        fun acceptsReference(value: Any?): Boolean = kind == OBJECT && !address && referenceType.isInstance(value)
 
         fun readLong(value: DataValue): Long {
             if (kind != LONG) fault("Constructor field is not primitive Long")

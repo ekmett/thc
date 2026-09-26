@@ -6,12 +6,12 @@ GHC 9.14.1 exposes **1491 primops** on the pinned 64-bit target. This list is
 generated from `allThePrimOps`, the [runtime capabilities](../scripts/core-capabilities.json)
 and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signatures.json).
 
-**Implementation coverage: 1474 / 1491 (98.9%).**
+**Implementation coverage: 1480 / 1491 (99.3%).**
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Implemented | 1474 | A runtime implementation is registered in the capability inventory. |
-| Missing | 17 | No runtime implementation is registered. |
+| Implemented | 1480 | A runtime implementation is registered in the capability inventory. |
+| Missing | 11 | No runtime implementation is registered. |
 
 Implemented means translating the GHC operation to a sensible runtime implementation and
 checking it with ordinary tests. It does not require formal proof or exhaustive input testing.
@@ -111,12 +111,14 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `addIntC#` — arity 2 — Scalar tuple result
 - [x] `addWordC#` — arity 2 — Scalar tuple result
 - [x] `addr2Int#` — arity 1 — Pointer scalar signature
+- [x] `addrToAny#` — arity 1 — Compact image or heap-address operation
 - [x] `and#` — arity 2 — Numeric scalar signature
 - [x] `and64#` — arity 2 — Numeric scalar signature
 - [x] `andI#` — arity 2 — Numeric scalar signature
 - [x] `andWord16#` — arity 2 — Numeric scalar signature
 - [x] `andWord32#` — arity 2 — Numeric scalar signature
 - [x] `andWord8#` — arity 2 — Numeric scalar signature
+- [x] `anyToAddr#` — arity 2 — Compact image or heap-address operation
 - [x] `asinDouble#` — arity 1 — Numeric scalar signature
 - [x] `asinFloat#` — arity 1 — Numeric scalar signature
 - [x] `asinhDouble#` — arity 1 — Numeric scalar signature
@@ -210,8 +212,12 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `clz8#` — arity 1 — Numeric scalar signature
 - [x] `compactAdd#` — arity 3 — Compact-region operation
 - [x] `compactAddWithSharing#` — arity 3 — Compact-region operation
+- [x] `compactAllocateBlock#` — arity 3 — Compact image or heap-address operation
 - [x] `compactContains#` — arity 3 — Compact-region operation
 - [x] `compactContainsAny#` — arity 2 — Compact-region operation
+- [x] `compactFixupPointers#` — arity 3 — Compact image or heap-address operation
+- [x] `compactGetFirstBlock#` — arity 2 — Compact image or heap-address operation
+- [x] `compactGetNextBlock#` — arity 3 — Compact image or heap-address operation
 - [x] `compactNew#` — arity 2 — Compact-region operation
 - [x] `compactResize#` — arity 3 — Compact-region operation
 - [x] `compactSize#` — arity 2 — Compact-region operation
@@ -1563,13 +1569,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 <details>
 <summary>Remaining GHC primops, in name order</summary>
 
-- [ ] `addrToAny#` — arity 1
 - [ ] `annotateStack#` — arity 3
-- [ ] `anyToAddr#` — arity 2
-- [ ] `compactAllocateBlock#` — arity 3
-- [ ] `compactFixupPointers#` — arity 3
-- [ ] `compactGetFirstBlock#` — arity 2
-- [ ] `compactGetNextBlock#` — arity 3
 - [ ] `delay#` — arity 2
 - [ ] `forkOn#` — arity 3
 - [ ] `getSpark#` — arity 1

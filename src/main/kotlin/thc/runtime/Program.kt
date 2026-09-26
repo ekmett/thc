@@ -2515,6 +2515,12 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
                 operation.validate(operands.map { it.representation }, flags, tupleProof)
                 mVarExpression(operation, tupleProof, operands.toTypedArray(), enableAsync)
+            } else if (fn[0] == "prim" && CompactImageOp.named(fn[1] as String) != null) {
+                val operation = CompactImageOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                CompactImageExpression(operation, args.mapIndexed { index, value ->
+                    argument(value, scope, flags[index] as Boolean)
+                }.toTypedArray()).proven(tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && CompactOp.named(fn[1] as String) != null) {
                 val operation = CompactOp.named(fn[1] as String)!!
                 if (enableAsync && operation.adds)

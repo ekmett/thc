@@ -30,7 +30,8 @@ internal class ManagedAddress private constructor(
     private val numeric: Long? = null,
     private val finalizer: CFinalizerFunction? = null,
     private val native: ManagedNativeAllocations.Owner? = null,
-    private val capabilities: GuestThreads? = null
+    private val capabilities: GuestThreads? = null,
+    private val heap: HeapAddresses.Handle? = null
 ) {
     /** This is an RTS data label, not a projection of a JVM or native pointer. */
     internal fun readCapabilitiesWord32(elementOffset: Long, width: Int): Long? {
@@ -64,8 +65,10 @@ internal class ManagedAddress private constructor(
         }
     }
     internal fun stableHandle(): StablePointers.Handle? = stable
+    internal fun heapHandle(): HeapAddresses.Handle? = heap
     internal fun finalizerFunction(): CFinalizerFunction? = finalizer
     private fun requireBytes() {
+        if (heap != null) fault("Opaque guest heap address is not byte-addressable")
         if (capabilities != null) fault("RTS data label is not byte-addressable")
         if (stable != null) fault("Opaque StablePtr# is not byte-addressable")
         if (finalizer != null) fault("Opaque C function label is not byte-addressable")
@@ -76,6 +79,7 @@ internal class ManagedAddress private constructor(
     internal fun nativeImageBytes(): ByteArray = owner?.takeIf { !it.isWritable }?.let { it.copyBytesOut(0, it.size) }
         ?: literalBytes?.copyOf() ?: fault("Native image requires immutable byte storage")
     fun toNativeBits(): Long {
+        if (heap != null) fault("Opaque guest heap address has no native pointer bits")
         if (capabilities != null) fault("RTS data label has no numeric guest address")
         if (finalizer != null) fault("Opaque C function label has no numeric guest address")
         native?.let { return it.access { segment -> segment.address() + offset } }
@@ -93,7 +97,7 @@ internal class ManagedAddress private constructor(
     internal fun cbitsOffset(): Long { size(); return offset }
     internal fun cbitsOwner(): ManagedAllocation? = owner
     internal fun cbitsSize(): Long = size()
-    internal fun availableBytes(): Long = size() - offset
+    fun availableBytes(): Long = size() - offset
 
     /** Validate byte-only transport without exposing allocation storage. */
     internal fun requireByteRegion(count: Long, writable: Boolean = false) {
@@ -108,6 +112,11 @@ internal class ManagedAddress private constructor(
 
     /** GHC pointer equality compares allocation identity and byte offset. */
     fun sameLocation(other: ManagedAddress): Boolean {
+        if (heap != null || other.heap != null) {
+            val registry = HeapAddresses.current()
+            heap?.let(registry::require); other.heap?.let(registry::require)
+            return heap != null && heap === other.heap
+        }
         if (capabilities != null || other.capabilities != null) {
             val current = Language.currentState(null).threads
             if (capabilities != null && capabilities !== current ||
@@ -176,6 +185,7 @@ internal class ManagedAddress private constructor(
     /** Only offsets within one allocation have a portable managed ordering.
      * Comparing unrelated native pointer values would invent host addresses. */
     fun compareWithinAllocation(other: ManagedAddress): Int {
+        if (heap != null || other.heap != null) fault("Opaque guest heap addresses have no ordering")
         if (capabilities != null || other.capabilities != null)
             fault("RTS data label has no address ordering")
         native?.requireLive(); other.native?.requireLive()
@@ -199,6 +209,11 @@ internal class ManagedAddress private constructor(
 
     /** Like pointer arithmetic within this allocation, including its one-past address. */
     fun plus(displacement: Long): ManagedAddress {
+        if (heap != null) {
+            HeapAddresses.current().require(heap)
+            if (displacement != 0L) fault("Opaque guest heap address cannot be offset")
+            return this
+        }
         if (capabilities != null) {
             readCapabilitiesWord32(0, 4)
             if (displacement != 0L) fault("RTS data label cannot be offset")
@@ -580,7 +595,8 @@ internal class ManagedAddress private constructor(
     }
 
     @TruffleBoundary
-    override fun toString(): String = if (stable != null) "Addr#(opaque StablePtr)" else if (this === NULL) "Addr#(null)"
+    override fun toString(): String = if (heap != null) "Addr#(opaque guest heap)"
+        else if (stable != null) "Addr#(opaque StablePtr)" else if (this === NULL) "Addr#(null)"
         else if (capabilities != null) "Addr#(enabled_capabilities)"
         else if (numeric != null) "Addr#(unowned numeric address)"
         else "Addr#(${if (literalBytes != null) "literal" else "managed"}+$offset)"
@@ -650,6 +666,8 @@ internal class ManagedAddress private constructor(
         }
         internal fun fromStableHandle(handle: StablePointers.Handle): ManagedAddress =
             ManagedAddress(null, null, 0L, stable = handle)
+        internal fun fromHeapHandle(handle: HeapAddresses.Handle): ManagedAddress =
+            ManagedAddress(null, null, 0L, heap = handle)
         internal fun fromCFinalizer(function: CFinalizerFunction): ManagedAddress =
             ManagedAddress(null, null, 0L, finalizer = function)
         internal fun enabledCapabilities(threads: GuestThreads): ManagedAddress =

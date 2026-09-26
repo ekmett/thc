@@ -19,6 +19,13 @@ internal class ManagedCompact(val owner: ManagedCompacts, requested: Long) {
     private var capacity = blockSize
     private var available = blockSize - HEADER_BYTES
     private var adding = false
+    internal var generation = 0L
+        private set
+
+    @Synchronized internal fun <T> snapshot(action: (List<Any>) -> T): T {
+        if (adding) fault("Cannot serialize a compact region while adding to it")
+        return action(objects)
+    }
 
     @Synchronized fun size(): Long = capacity
     @Synchronized fun resize(requested: Long) {
@@ -26,6 +33,7 @@ internal class ManagedCompact(val owner: ManagedCompacts, requested: Long) {
         blockSize = blockSize(requested)
         capacity = Math.addExact(capacity, blockSize)
         available = blockSize - HEADER_BYTES
+        generation++
     }
     @Synchronized internal fun begin() {
         if (adding) fault("Concurrent or reentrant compactAdd# on one region")
@@ -41,6 +49,7 @@ internal class ManagedCompact(val owner: ManagedCompacts, requested: Long) {
             available -= bytes
             objects.add(value)
         }
+        generation++
     }
     @Synchronized internal fun end() { adding = false }
 

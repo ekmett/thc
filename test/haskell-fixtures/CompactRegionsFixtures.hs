@@ -1,7 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
-module CompactRegionsFixtures (prepareCompactRegions) where
+module CompactRegionsFixtures (prepareCompactRegions, prepareCompactSerialization) where
 
 import Control.Monad (forM, unless, when)
 import Codec.Archive.Zip (findEntryByPath, fromEntry, toArchiveOrFail)
@@ -17,15 +17,19 @@ import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath
 
-entries :: [String]
-entries = ["ordinary", "sharing", "cycleCase", "rejectedObjects", "frozenArray"]
-
 prepareCompactRegions :: FilePath -> IO ()
-prepareCompactRegions root = do
-  let directory = "build/compact-regions"
-      manifest = root </> directory </> "manifest.json"
-      source = "compiler/test-fixtures/CompactRegionsAudit.hs"
-      driver = "compiler/test-fixtures/CompactRegionsNative.hs"
+prepareCompactRegions root = prepareCompactFixture root "build/compact-regions"
+  "compiler/test-fixtures/CompactRegionsAudit.hs" "compiler/test-fixtures/CompactRegionsNative.hs"
+  ["ordinary", "sharing", "cycleCase", "rejectedObjects", "frozenArray"]
+
+prepareCompactSerialization :: FilePath -> IO ()
+prepareCompactSerialization root = prepareCompactFixture root "build/compact-serialization"
+  "compiler/test-fixtures/CompactSerializedAudit.hs" "compiler/test-fixtures/CompactSerializedNative.hs"
+  ["roundTrip", "cycleRoundTrip", "multipleBlocks", "emptyRoundTrip"]
+
+prepareCompactFixture :: FilePath -> FilePath -> FilePath -> FilePath -> [String] -> IO ()
+prepareCompactFixture root directory source driver entries = do
+  let manifest = root </> directory </> "manifest.json"
       logs = directory </> "commands"
   createDirectoryIfMissing True (root </> directory)
   present <- doesFileExist manifest
@@ -34,7 +38,7 @@ prepareCompactRegions root = do
   installed <- prepareInstalledCoreUnits root directory ["ghc-compact"]
   stages <- forM ["pre", "post"] $ \stage -> do
     let stageDir = directory </> stage
-        consumer = stageDir </> "core/CompactRegionsAudit.json"
+        consumer = stageDir </> "core" </> takeBaseName source ++ ".json"
     _ <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> stageDir </> "core"), ("THC_GHC_OUT", root </> stageDir </> "ghc")]
       "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
@@ -103,4 +107,4 @@ prepareCompactRegions root = do
   writeJson manifest (object ["schema" .= (1 :: Int), "entries" .= entries,
     "stages" .= Map.fromList [(stage, modules) | (stage, modules, _) <- stages],
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes])
-  putStrLn "compact-regions: original ghc-compact examples, native oracle and strict pre/post Core"
+  putStrLn (directory ++ ": original ghc-compact examples, native oracle and strict pre/post Core")
