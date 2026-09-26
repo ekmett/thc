@@ -13,6 +13,69 @@ tested source fix, and the staged plan below. Pure scalar and constructor Core
 were checked against native GHC on the JVM; Sulong image/FFI execution was not
 attempted because the pure image had not built.
 
+**Second-phase checkpoint:** the `Node.<init>` compiler assertion is resolved
+by an interpreter transition before lazy-fork dispatch installation. The real
+THC image now passes analysis and reaches native method compilation, but still
+does not link: Substrate VM reports unprepared deoptimization methods in interop
+receivers. A separate minimal Truffle image demonstrably executes installed
+guest machine code; this is toolchain evidence, not a successful THC image.
+
+## Resolving the constructor assertion
+
+The builder's error handler can obscure an earlier analysis error: its
+`RuntimeCompilationFeature.reportAnalysisError` calls the Truffle blocklist
+checker before reporting the original exception. Exception logging exposed
+generated interop classes retained in the image heap but initialized at run
+time. Initializing the eleven audited generated export families described below,
+and exporting `com.oracle.truffle.runtime` from `org.graalvm.truffle.runtime`,
+lets analysis complete. It still reports the constructor assertion, now from
+the normal `TruffleFeature.afterAnalysis` check.
+
+A read-only hosted diagnostic enumerated runtime variants of Node-subclass
+constructors. Besides `Node.<init>`, only the two Kotlin constructor forms of
+`TupleDispatch` had been prepared. The lazy branch in `ForkActionRoot.execute`
+installed that dispatch tree without first leaving guest compilation. Adding
+`CompilerDirectives.transferToInterpreterAndInvalidate()` immediately before
+installation is the same discipline used by the other lazy AST dispatch sites.
+The child still owns and forces the lazy action; its tuple-shape discovery,
+async behavior and handoff ownership are unchanged.
+
+Verification for this correction:
+
+- `GuestThreadsTest` (13 tests) and `ThreadedThunkTest` (6 tests), each in default
+  and dense handoff modes: 38 passes.
+- Fresh `thread-async` fixtures produced by the existing Haskell tool, including
+  strict pre/post Core audits and independent GHC results `52,53` for lazy fork.
+  `ThreadAsyncNativeTest`: 10 tests per mode, 20 passes, including original
+  lazy-fork ownership/resumption and the first call after explicit compilation.
+- The real optimizing image passes the unchanged Truffle compiler-assertion
+  checks and completes analysis, universe construction, parsing and inlining.
+  It fails at native method compilation after 85.51 seconds / 3,238,792 KiB RSS.
+  The next error is `ManagedExportNamespace.hasMembers%%D` not seen during
+  bytecode parsing, with thirteen more interop getter/lambda deoptimization
+  variants in the error report. This remains an image-integration blocker.
+
+An earlier explicit loader-boundary experiment did not fix the constructor
+assertion and was reverted. No compiler assertion or blocklist check was
+disabled; no fallback interpreter was substituted. These are shared-host
+compatibility measurements, not performance comparisons.
+
+The independent control uses a stateless RootNode whose execute method returns
+`42` in the interpreter and `43` only when `inCompiledCode()` is true. With that
+specific class initialized at build time, the linked native executable obtains
+a valid last-tier target and returns `43` after compilation. Without that class
+initialization, a separately retained control links but guest compilation fails
+with a frame-materialization bailout. This establishes both actual runtime JIT
+support in this toolchain and the need to audit preparation/initialization of
+language methods. It does not justify initializing all of `thc`, particularly
+the random request-signing key, native handles or process configuration.
+
+The [second-phase evidence bundle](../bench/results/native-image/2026-09-26/README.md)
+retains the diagnostic sources, failed controls, completed image-build attempt,
+fixture receipt and test XML. The hosted diagnostic is not included in the
+real THC image invocation. Native THC results, native guest JIT and Sulong/FFI
+remain unverified at this checkpoint.
+
 ## Execution models
 
 | Product | What is fixed when built | Guest execution |
