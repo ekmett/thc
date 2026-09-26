@@ -5,7 +5,7 @@
 -- LLVM; its native roundtrip must equal Cabal's actual object before admission.
 module THC.Driver.ScalarBitcode
   ( ScalarBitcode, withScalarBitcode, scalarBuildInputs, linkScalarBitcode
-  , parseDependencies, scalarFunctions ) where
+  , parseDependencies, scalarFunctions, sulongScalarTarget ) where
 
 import Control.Exception (bracket)
 import Control.Monad (forM, forM_, unless)
@@ -115,15 +115,26 @@ withScalarBitcode nativeRoot dist roots ghc packageTool unit component action = 
       paths <- either fail pure (parseDependencies dependencyText)
       inputs <- observe =<< mapM (canonicalizePath . (root </>)) paths
       check (sourcePath `elem` map fst inputs) "scalar cbits: dependency inventory omitted its source"
-      _ <- command root cc ["-S","-emit-llvm",bitcode,"-o",disassembly]
+      -- Read the module's own target: Clang can override it with its host target
+      -- even when asked only to emit textual LLVM.
+      _ <- command root opt ["-S","-passes=verify",bitcode,"-o",disassembly]
       ir <- readFile disassembly
       definitions <- either fail pure (scalarFunctions ir)
-      target <- case [value | line <- lines ir, Just value <- [quoted "target triple = " line]] of
-        [value] -> pure value
-        _ -> fail "scalar cbits: LLVM target missing or ambiguous"
+      nativeTarget <- targetTriple ir
+      let target = sulongScalarTarget nativeTarget
+      admitted <- if target == nativeTarget then pure bitcode else do
+        let adjusted = temporary </> "sulong.bc"
+            adjustedIr = temporary </> "sulong.ll"
+        -- Only the proven Linux x86_64 vendor alias changes. Keep the actual C
+        -- preprocessing/IR and certify the adjusted module against Cabal below.
+        _ <- command root opt ["-passes=verify","--mtriple=" ++ target,bitcode,"-o",adjusted]
+        _ <- command root opt ["-S","-passes=verify",adjusted,"-o",adjustedIr]
+        actualTarget <- targetTriple =<< readFile adjustedIr
+        check (actualTarget == target) "scalar cbits: adjusted LLVM target differs"
+        pure adjusted
       -- This deliberately conservative equality also rejects a stale native
       -- object, nondeterministic C expansion, or unsupported backend options.
-      _ <- command root cc (["-c",bitcode,"-o",native,"-fPIC","--target=" ++ target] ++ ccOptions)
+      _ <- command root cc (["-c",admitted,"-o",native,"-fPIC","--target=" ++ target] ++ ccOptions)
       certified <- digest native
       check (certified == originalHash) "scalar cbits: bitcode does not reproduce Cabal's native object"
       verify inputs
@@ -132,14 +143,27 @@ withScalarBitcode nativeRoot dist roots ghc packageTool unit component action = 
       let recipe = object ["schema" .= (1::Int),"profile" .= ("thc-local-scalar-ccall-v1"::String),
             "ghcArguments" .= arguments,"nativeRegistration" .= registrationText,
             "clang" .= cc,"clangVersion" .= ccVersion,
-            "llvmLink" .= linkVersion,"llvmOpt" .= optVersion,"llvmNm" .= nmVersion,"target" .= target,
+            "llvmLink" .= linkVersion,"llvmOpt" .= optVersion,"llvmNm" .= nmVersion,
+            "nativeTarget" .= nativeTarget,"target" .= target,
             "nativeObject" .= object ["path" .= original,"sha256" .= originalHash],
             "inputs" .= [object ["path" .= path,"sha256" .= hash] | (path,hash) <- inputs]]
-          prepared = ScalarBitcode recipe root temporary bitcode target unit definitions (link,opt)
+          prepared = ScalarBitcode recipe root temporary admitted target unit definitions (link,opt)
             ((original,originalHash):inputs)
       result <- action (Just prepared)
       verify (scalarInputs prepared)
       pure result
+
+-- Sulong 25.3.4.1 compares the vendor as well as architecture, system and ABI.
+-- This one vendor spelling is admitted only with exact native-object equality;
+-- other architectures, vendors, operating systems and ABIs are not normalized.
+sulongScalarTarget :: String -> String
+sulongScalarTarget "x86_64-pc-linux-gnu" = "x86_64-unknown-linux-gnu"
+sulongScalarTarget target = target
+
+targetTriple :: String -> IO String
+targetTriple ir = case [value | line <- lines ir, Just value <- [quoted "target triple = " line]] of
+  [value] -> pure value
+  _ -> fail "scalar cbits: LLVM target missing or ambiguous"
 
 linkScalarBitcode :: ScalarBitcode -> String -> [(String,BS.ByteString)] -> IO [(String,BS.ByteString)]
 linkScalarBitcode recipe componentHash modules = do
