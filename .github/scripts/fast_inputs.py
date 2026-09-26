@@ -132,7 +132,8 @@ SIMD_WIDE_ARRAY_OUTPUTS = frozenset("build/simd-wide-arrays/" + name for name in
     *("pre-" + name + "-audit.json" for name in SIMD_WIDE_ARRAY_ENTRIES),
     *("commands/" + command + "." + suffix for command in SIMD_WIDE_ARRAY_COMMANDS
       for suffix in ("stdout", "stderr", "command.json"))))
-SIMD_ADDRESS_SHAPES = ("int32X4", "word32X4", "floatX4", "doubleX2", "int16X16", "word16X16",
+SIMD_ADDRESS_SHAPES = ("int8X32", "word8X32", "int8X64", "word8X64", "int16X32", "word16X32",
+    "int32X4", "word32X4", "floatX4", "doubleX2", "int16X16", "word16X16",
     "int32X8", "word32X8", "int32X16", "word32X16", "int64X4", "word64X4", "int64X8", "word64X8",
     "floatX8", "floatX16", "doubleX4", "doubleX8")
 SIMD_ADDRESS_ENTRIES = tuple(shape + operation + mode for shape in SIMD_ADDRESS_SHAPES
@@ -1166,7 +1167,7 @@ def bytearray_artifact_hashes(family, manifest):
 def simd_address_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
             manifest.get("ghc") == "9.14.1" and manifest.get("entries") == list(SIMD_ADDRESS_ENTRIES) and
-            type(manifest.get("scalarRows")) is int and manifest["scalarRows"] == 2592 and
+            type(manifest.get("scalarRows")) is int and manifest["scalarRows"] == 3456 and
             type(manifest.get("nativeVector128Rows")) is int and
             manifest["nativeVector128Rows"] == (576 if SIMD_ADDRESS_NATIVE128 else 0), "Invalid vector-address provenance")
     require(isinstance(manifest.get("stages"), dict) and set(manifest["stages"]) == {stage for stage, _ in SIMD_ADDRESS_STAGES},

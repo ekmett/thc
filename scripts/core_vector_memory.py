@@ -47,10 +47,8 @@ for scalar, lanes in (('Int8', 32), ('Word8', 32), ('Int8', 64), ('Word8', 64), 
     shape = scalar + 'X' + str(lanes)
     proof = VECTOR_OPERATIONS['broadcast' + shape + '#'][1]
     for verb, operations in (('index', INDICES), ('read', READS), ('write', WRITES)):
-        suffixes = (shape + 'Array#', scalar + 'ArrayAs' + shape + '#')
-        if (scalar, lanes) not in (('Int8', 32), ('Word8', 32), ('Int8', 64), ('Word8', 64), ('Int16', 32), ('Word16', 32)):
-            suffixes += (shape + 'OffAddr#', scalar + 'OffAddrAs' + shape + '#')
-        for suffix in suffixes:
+        for suffix in (shape + 'Array#', scalar + 'ArrayAs' + shape + '#',
+                       shape + 'OffAddr#', scalar + 'OffAddrAs' + shape + '#'):
             name = verb + suffix
             operations.add(name)
             VECTOR_PROOFS[name] = proof

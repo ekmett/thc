@@ -23,11 +23,12 @@ import java.security.MessageDigest
 import java.util.Collections
 import java.util.IdentityHashMap
 
-/** One original-Core corpus for the 18 already supported vector shapes. */
+/** One original-Core corpus for 24 shapes; the other six have SIMD128 coverage. */
 class SimdAddressFamiliesTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = "build/simd-address-families"
-    private val names = listOf("int32X4","word32X4","floatX4","doubleX2",
+    private val names = listOf("int8X32","word8X32","int8X64","word8X64","int16X32","word16X32",
+        "int32X4","word32X4","floatX4","doubleX2",
         "int16X16","word16X16","int32X8","word32X8","int32X16","word32X16",
         "int64X4","word64X4","int64X8","word64X8","floatX8","floatX16","doubleX4","doubleX8")
     private val entries = names.flatMap { shape -> listOf("Index","Read","Write").flatMap { operation ->
@@ -35,18 +36,20 @@ class SimdAddressFamiliesTest {
     } }
     private val seeds = listOf(Long.MIN_VALUE,-129L,-1L,0L,1L,127L,65535L,Long.MAX_VALUE)
     // Every shape and every typed carrier/operation is compiled; the entire
-    // 108-operation corpus is interpreted against both independent models.
-    private val compiled = setOf("int32X4IndexPacked","word32X4ReadScalar","floatX4WritePacked","doubleX2IndexScalar",
+    // 144-operation corpus is interpreted against both independent models.
+    private val compiled = setOf("int8X32IndexPacked","word8X32ReadScalar","int8X64WritePacked",
+        "word8X64IndexScalar","int16X32ReadPacked","word16X32WriteScalar",
+        "int32X4IndexPacked","word32X4ReadScalar","floatX4WritePacked","doubleX2IndexScalar",
         "int16X16IndexPacked","word16X16ReadScalar","word16X16WritePacked","int32X8WritePacked",
         "word32X8IndexScalar","int32X16ReadPacked","word32X16WriteScalar","int64X4IndexPacked",
         "word64X4ReadScalar","int64X8WritePacked","word64X8IndexScalar","floatX8ReadPacked",
         "floatX16IndexScalar","doubleX4WritePacked","doubleX8ReadScalar")
-    private val pattern = Regex("(int16|word16|int32|word32|int64|word64|float|double)X(2|4|8|16)(Index|Read|Write)(Packed|Scalar)")
+    private val pattern = Regex("(int8|word8|int16|word16|int32|word32|int64|word64|float|double)X(2|4|8|16|32|64)(Index|Read|Write)(Packed|Scalar)")
     private class Shape(name: String, pattern: Regex) {
         val groups = pattern.matchEntire(name)!!.groupValues
         val scalar = groups[1]
         val lanes = groups[2].toInt()
-        val width = when (scalar) { "float" -> 4; "double" -> 8; else -> scalar.takeLast(2).toInt()/8 }
+        val width = when (scalar) { "float" -> 4; "double" -> 8; else -> scalar.dropWhile { !it.isDigit() }.toInt()/8 }
         val bytes = lanes * width
         val stride = if (groups[4] == "Scalar") width else bytes
         val write = groups[3] == "Write"
@@ -83,7 +86,7 @@ class SimdAddressFamiliesTest {
         assertEquals(ByteOrder.LITTLE_ENDIAN,ByteOrder.nativeOrder(),"Native corpus target byte order")
         val data = read("$directory/manifest.json")
         assertEquals(1L,data["schema"]); assertEquals("9.14.1",data["ghc"])
-        assertEquals(entries,data["entries"]); assertEquals(2592L,data["scalarRows"])
+        assertEquals(entries,data["entries"]); assertEquals(3456L,data["scalarRows"])
         val primitives = entries.map { name ->
             val shape = Shape(name,pattern)
             val scalar = shape.scalar.replaceFirstChar { it.uppercaseChar() }

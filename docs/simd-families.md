@@ -27,6 +27,11 @@ lane and observed lane.
 Wide pack/unpack instructions group their immutable local-slot metadata into
 one bytecode operand; lane values still use typed primitive reads/writes. This
 avoids exceeding the JVM method-size limit in generated instruction metadata.
+All six shapes also support packed and scalar-offset ByteArray and address
+index/read/write operations through the shared exact-width memory paths. The
+existing [array](simd-wide-array-memory.md) and
+[address](simd-address-families.md) corpora include their native scalar models
+and full-width storage checks.
 
 The current generator emits typed AST nodes and exact proof checks under
 `build/generated/simd`. It emits no nominal vector carrier classes or arithmetic

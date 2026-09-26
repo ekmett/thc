@@ -150,7 +150,7 @@ class FastInputTests(unittest.TestCase):
             self.put(path, b'{}\n' if path.endswith('.json') else b'fixture\n')
         (self.root / binary).chmod(0o755)
         original = json.dumps(dict(schema=1, ghc='9.14.1', entries=list(cache.SIMD_ADDRESS_ENTRIES),
-            scalarRows=2592, nativeVector128Rows=576 if cache.SIMD_ADDRESS_NATIVE128 else 0,
+            scalarRows=3456, nativeVector128Rows=576 if cache.SIMD_ADDRESS_NATIVE128 else 0,
             stages={stage: {} for stage, _ in cache.SIMD_ADDRESS_STAGES}, inputHashes=self.manifest['inputHashes'],
             artifactHashes={path: cache.digest(self.root / path) for path in artifacts}))
         self.put(name, original)
