@@ -189,6 +189,8 @@ tasks.withType<Test>().configureEach {
             "native-malloc/manifest.json", "native-malloc/oracle.txt",
             "process-signals/manifest.json", "process-signals/oracle.txt", "process-signals/native-controls.txt",
             "original-gmp/**/*.json", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
+            "original-memory-search/**/*.json", "original-memory-search/native/oracle",
+            "original-memory-search/logs/*.stdout", "original-memory-search/logs/*.stderr",
             "original-gmp/logs/*.stdout", "original-gmp/logs/*.stderr",
             "original-stdio-close/**/*.json", "original-stdio-close/results/*.txt", "original-stdio-close/results/*.private",
             "original-stdio-close/native/**", "original-stdio-close/logs/*.stdout", "original-stdio-close/logs/*.stderr",

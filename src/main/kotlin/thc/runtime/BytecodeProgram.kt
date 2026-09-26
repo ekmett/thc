@@ -1497,9 +1497,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val memcpy = CoreMemcpyForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val memorySearch = CoreMemorySearchForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (runtimeService != null) {
@@ -1960,6 +1962,21 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (nativeAllocation == NativeAllocationOp.MALLOC) e.builder.endNativeMalloc()
                     else if (nativeAllocation == NativeAllocationOp.REALLOC) e.builder.endNativeRealloc()
                     else e.builder.endNativeFree()
+                }
+            } else if (memorySearch != null) {
+                CoreMemorySearchForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreMemorySearchForeign.validateOperand(memorySearch, index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    if (memorySearch == MemorySearchOp.COMPARE) e.builder.beginOriginalMemcmp(destination.single())
+                    else e.builder.beginOriginalMemchr(destination.single())
+                    operands.forEach { it.emit(e) }
+                    if (memorySearch == MemorySearchOp.COMPARE) e.builder.endOriginalMemcmp()
+                    else e.builder.endOriginalMemchr()
                 }
             } else if (memmove) {
                 CoreMemmoveForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)

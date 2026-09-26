@@ -353,6 +353,35 @@ internal class ManagedAddress private constructor(
         return if (allocation == null) scan() else synchronized(allocation) { scan() }
     }
 
+    /** Original memcmp compares unsigned bytes; only the result sign is a C
+     * contract. No snapshot, native pointer projection or temporary pin. */
+    @TruffleBoundary
+    fun compareBytes(other: ManagedAddress, count: Long): Long = withNativeBorrows(other) {
+        if (this !== NULL || count != 0L) requireByteRegion(count)
+        if (other !== NULL || count != 0L) other.requireByteRegion(count)
+        var index = 0L
+        while (index < count) {
+            val difference = readWord8(index) - other.readWord8(index)
+            if (difference != 0L) return@withNativeBorrows difference
+            index++
+        }
+        0L
+    }
+
+    /** Return the first interior view or null. The view retains exactly the
+     * source owner, offset, mutability and context/lifetime checks. */
+    @TruffleBoundary
+    fun findByte(value: Long, count: Long): ManagedAddress = withNativeBorrow {
+        if (this !== NULL || count != 0L) requireByteRegion(count)
+        val needle = value and 255L
+        var index = 0L
+        while (index < count) {
+            if (readWord8(index) == needle) return@withNativeBorrow plus(index)
+            index++
+        }
+        NULL
+    }
+
     /** The caller evaluates State# before reaching storage. Invalid writes have
      * no effect; the value contributes only its low eight bits, like writeWord8Array#. */
     fun writeWord8(displacement: Long, value: Long) {
