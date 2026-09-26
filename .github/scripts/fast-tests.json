@@ -253,8 +253,17 @@
     }
   },
   "owners": {
+    "examples/DelimitedContinuations.hs": {
+      "junit": ["thc.runtime.DelimitedContinuationsTest"], "python": []
+    },
+    "compiler/test-fixtures/DelimitedContinuationsNative.hs": {
+      "junit": ["thc.runtime.DelimitedContinuationsTest"], "python": []
+    },
+    "test/haskell-fixtures/DelimitedContinuationsFixtures.hs": {
+      "junit": ["thc.runtime.DelimitedContinuationsTest"], "python": []
+    },
     "src/test/kotlin/thc/runtime/ThreadInventoryCoreEvidence.kt": {
-      "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
+      "junit": ["thc.runtime.ThreadInventoryNativeTest", "thc.runtime.DelimitedContinuationsTest"], "python": []
     },
     "examples/ThreadInventory.hs": {
       "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
@@ -791,6 +800,7 @@
     },
     "src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt": {
       "junit": [
+        "thc.runtime.DelimitedContinuationsTest",
         "thc.runtime.ThreadInventoryNativeTest",
         "thc.runtime.BoxedArrayExtensionsTest",
         "thc.runtime.ArrayCoreEvidenceTest",
@@ -1154,6 +1164,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.DelimitedContinuationsTest",
         "thc.runtime.BigNatLiteralTest",
         "thc.runtime.ScalarBitCastTest",
         "thc.runtime.RtsDiagnosticsTest",

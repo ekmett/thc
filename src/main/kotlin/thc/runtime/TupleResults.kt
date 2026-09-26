@@ -8,6 +8,7 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleSafepoint
 import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.frame.MaterializedFrame
 import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.IndirectCallNode
 import com.oracle.truffle.api.nodes.ExplodeLoop
@@ -177,7 +178,14 @@ internal class TupleDispatch @JvmOverloads constructor(private val destination: 
     @CompilationFinal private var megamorphic = false
     @Child @Volatile private var typed: InputDispatch? = null
 
-    @ExplodeLoop fun execute(frame: VirtualFrame, function: Closure, arguments: Array<Any?>) {
+    fun execute(frame: VirtualFrame, function: Closure, arguments: Array<Any?>) {
+        try { executeCall(frame, function, arguments) }
+        catch (cut: DelimitedCut) {
+            if (destination is AstTupleDestination) cut.append(frame, DelimitedTupleStep(destination, this))
+            throw cut
+        }
+    }
+    @ExplodeLoop private fun executeCall(frame: VirtualFrame, function: Closure, arguments: Array<Any?>) {
         if ((function.target.rootNode as? GuestRoot)?.typedInput != null) {
             val child = typed ?: run {
                 CompilerDirectives.transferToInterpreterAndInvalidate()
@@ -430,7 +438,18 @@ internal class TupleCase(@field:Child private var scrutinee: Expr,
     @field:CompilationFinal(dimensions = 1) private val slots: IntArray,
     @field:Child private var body: Expr) : Expr() {
     init { representation = body.representation }
-    private fun prepare(frame: VirtualFrame) { scrutinee.executeTuple(frame, slots, 0) }
+    private fun prepare(frame: VirtualFrame, destination: IntArray? = null, offset: Int = 0) {
+        try { scrutinee.executeTuple(frame, slots, 0) }
+        catch (cut: DelimitedCut) {
+            throw cut.append(frame, object : DelimitedStep {
+                override fun resume(frame: MaterializedFrame, input: DelimitedResume,
+                                    ambient: MaskingState, outerMask: DelimitedStep?): Any? {
+                    input.get()
+                    return if (destination == null) body.execute(frame) else body.executeTuple(frame, destination, offset)
+                }
+            })
+        }
+    }
     private class ResumeLong(private val owner: TupleCase) : AstResumeStep {
         override fun resume(frame: VirtualFrame, input: Any?): Any? {
             if (input != null) fault("Invalid AST tuple-case resume value")
@@ -448,7 +467,7 @@ internal class TupleCase(@field:Child private var scrutinee: Expr,
     override fun executeClosure(frame: VirtualFrame): Closure { prepare(frame); return body.executeClosure(frame) }
     override fun executeDataValue(frame: VirtualFrame): DataValue { prepare(frame); return body.executeDataValue(frame) }
     override fun executeAddress(frame: VirtualFrame): ManagedAddress { prepare(frame); return body.executeAddress(frame) }
-    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? { prepare(frame); return body.executeTuple(frame, slots, offset) }
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? { prepare(frame, slots, offset); return body.executeTuple(frame, slots, offset) }
 }
 
 /** Replay-specific BytecodeLocal accessors, never a frame or guest payload. */
@@ -504,6 +523,7 @@ internal class BytecodeTupleSlots(shape: TupleShape,
 internal class ContinuationTupleDestination(private val destination: BytecodeTupleSlots) :
     TupleDestination(destination.shape) {
     override fun consume(frame: VirtualFrame, node: Node, result: Any?) {
+        DelimitedControl.captureBytecode(result, shape)
         if (result is TailYield) throw TupleCallYield(result.continuation, true, result.target)
         if (result is com.oracle.truffle.api.bytecode.ContinuationResult)
             throw TupleCallYield(result)

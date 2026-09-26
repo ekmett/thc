@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "27b7a6c8ace5d7d6eebed568c59112c45ba402e101d2d00229ffafd565af1ad9"
+FULL_PREPARATION_PLAN = "eff7c11fc55cbd4f398302527a815bda2ea3094c1fd146f43207053da0e314a7"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -34,6 +34,7 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
     "build/original-fd-ready", "build/simd-calls",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    *fast_inputs.DELIMITED_OUTPUTS,
     *fast_inputs.THREAD_INVENTORY_OUTPUTS,
     "build/native-malloc/oracle.txt",
     "build/simd-calls/manifest.json", "build/simd-calls/pre-core/SimdCallAudit.json",
@@ -291,6 +292,10 @@ def cache_key(root, group_id, group, toolchain):
 
 
 def _output_hashes(root, group):
+    if group["outputs"] == ["build/delimited-continuations"]:
+        name = "build/delimited-continuations/manifest.json"
+        expected = fast_inputs.delimited_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/thread-inventory"]:
         name = "build/thread-inventory/manifest.json"
         expected = fast_inputs.thread_inventory_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))

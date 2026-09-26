@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 505 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 677 | No declared lowering. |
+| Partial | 508 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 674 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -40,6 +40,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 
 ## Current aggregate and address limits
 
+- Delimited continuations are an initial synchronous IO slice on both backends: opaque context-owned prompt identities, nearest matching prompts, reusable copied control frames, shared heap effects, escaped resumptions, and captured catch/mask boundaries. General resumed tail/join transfers, overapplication, and composition with one-shot asynchronous suspension are not yet established. Capturing through a thunk update rejects. See docs/delimited-continuations.md; this is not a claim of complete control0# support.
 - Original stg_sig_install is limited to SIGINT with DFL/IGN/HAN/RST and a null mask on Linux x86_64 glibc. Only the standalone NativeIO launcher can own the process signal handler, once per JVM lifetime; ordinary native-enabled embeddings cannot acquire it. A native signal-safe pipe transports actual siginfo bytes to the original GHC runHandlersPtr on a Truffle thread. Delivery requires the bytecode backend; other signals, non-null masks and general AST fork support remain unavailable.
 - Original RTS diagnostic leaves write context stderr and return: reportStackOverflow identifies the actual guest Java thread and reports that its JVM stack limit is unavailable; reportHeapOverflow identifies the actual shared JVM maximum heap size. No native GHC TSO sizes or -K/-M advice are invented. errorBelch2 supports the original callers' %s CString format, preserving raw bytes, offset/NUL boundaries and the appended newline; other printf varargs formats reject before output. No program-name prefix is invented for an embedding that has not registered one.
 - Original safe shutdownHaskellAndExit/shutdownHaskellAndSignal close the owning polyglot context with the first CInt status/fast request retained. Host resources are disposed in both modes; guest shutdown finalizers are not implemented. Exit codes use their low eight bits; signals 1..64 use negative polyglot exit codes, with other signed CInt signal values mapping to 255. Only the standalone launcher terminates its JVM or re-raises the requested signal after context cleanup; embedded callers receive PolyglotException.isExit.
@@ -418,6 +419,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `cloneSmallArray#` — arity 3 — Managed lifted arrays
 - [ ] `cloneSmallMutableArray#` — arity 4 — Managed lifted arrays
 - [ ] `compareByteArrays#` — arity 5 — Managed byte storage
+- [ ] `control0#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `copyAddrToAddrNonOverlapping#` — arity 4 — Managed byte storage
 - [ ] `copyArray#` — arity 6 — Managed lifted arrays
 - [ ] `copyByteArray#` — arity 6 — Managed byte storage
@@ -652,6 +654,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `newMVar#` — arity 1 — Managed blocking cells; backend and continuation limits apply
 - [ ] `newMutVar#` — arity 2 — Managed lazy reference cells
 - [ ] `newPinnedByteArray#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `newPromptTag#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `newSmallArray#` — arity 3 — Managed lifted arrays
 - [ ] `noDuplicate#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -704,6 +707,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `plusWord64X4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `plusWord64X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `plusWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `prompt#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `putMVar#` — arity 3 — Managed blocking cells; backend and continuation limits apply
 - [ ] `quotRemInt#` — arity 2 — Exact tuple arithmetic
 - [ ] `quotRemWord#` — arity 2 — Exact tuple arithmetic
@@ -944,7 +948,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `compactNew#` — arity 2
 - [ ] `compactResize#` — arity 3
 - [ ] `compactSize#` — arity 2
-- [ ] `control0#` — arity 3
 - [ ] `copyAddrToAddr#` — arity 4
 - [ ] `copyAddrToByteArray#` — arity 5
 - [ ] `copyByteArrayToAddr#` — arity 5
@@ -1145,7 +1148,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `negateInt8X32#` — arity 1
 - [ ] `negateInt8X64#` — arity 1
 - [ ] `newBCO#` — arity 6
-- [ ] `newPromptTag#` — arity 1
 - [ ] `newTVar#` — arity 2
 - [ ] `numSparks#` — arity 1
 - [ ] `packInt16X32#` — arity 1
@@ -1177,7 +1179,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `prefetchValue1#` — arity 2
 - [ ] `prefetchValue2#` — arity 2
 - [ ] `prefetchValue3#` — arity 2
-- [ ] `prompt#` — arity 3
 - [ ] `quotInt16X16#` — arity 2
 - [ ] `quotInt16X32#` — arity 2
 - [ ] `quotInt16X8#` — arity 2

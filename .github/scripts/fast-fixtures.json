@@ -47,6 +47,14 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "delimited-continuations": {
+      "junit": ["thc.runtime.DelimitedContinuationsTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "delimited-continuations"]}],
+      "outputs": ["build/delimited-continuations"],
+      "sources": ["examples/DelimitedContinuations.hs", "compiler/test-fixtures/DelimitedContinuationsNative.hs",
+        "test/haskell-fixtures/DelimitedContinuationsFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "thread-inventory": {
       "junit": ["thc.runtime.ThreadInventoryNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-inventory"]}],

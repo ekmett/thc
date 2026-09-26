@@ -445,6 +445,7 @@ executable thc-fixtures
   other-modules:
     AggregateFixtures
     ContinuationFixtures
+    DelimitedContinuationsFixtures
     LiveAsyncFixtures
     ThreadLabelFixtures
     ThreadStatusFixtures

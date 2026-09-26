@@ -1283,6 +1283,28 @@ class Audit:
                             self.compare_shapes(proof, returned, owner, path + '/continuation-result', component=True)
                         elif not kept_reference(proof) or proof.get('primReps') != ['BoxedRep (Just Lifted)']:
                             self.issue('primitive-representation', owner, path, 'keepAlive#: partial continuation returns a lifted function')
+                if function[0] == 'prim' and function[1] in ('newPromptTag#', 'prompt#', 'control0#'):
+                    def continuation_role(rep, role):
+                        if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):
+                            return False
+                        if role == 'state':
+                            return rep.get('kind') == 'void' and rep.get('primReps') == []
+                        if role == 'tag':
+                            return rep.get('kind') == 'object' and rep.get('primReps') == ['BoxedRep (Just Unlifted)']
+                        return rep.get('kind') == 'closure' and rep.get('primReps') == ['BoxedRep (Just Lifted)']
+                    roles = ['state'] if function[1] == 'newPromptTag#' else ['tag', 'closure', 'state']
+                    actual = [self.expression_rep(argument) for argument in arguments]
+                    if (len(actual) != len(roles) or flags != [role == 'closure' for role in roles] or
+                            any(not continuation_role(rep, role) for rep, role in zip(actual, roles))):
+                        self.issue('primitive-representation', owner, path, function[1] + ': prompt/action/State# contract')
+                    fields = proof.get('components') if isinstance(proof, dict) else None
+                    if not (self.is_tuple(proof) and isinstance(fields, list) and len(fields) == 2 and
+                            continuation_role(fields[0], 'state')):
+                        self.issue('primitive-representation', owner, path, function[1] + ': State#/result tuple required')
+                    elif function[1] == 'newPromptTag#' and not continuation_role(fields[1], 'tag'):
+                        self.issue('primitive-representation', owner, path, 'newPromptTag#: PromptTag# result required')
+                    elif function[1] == 'prompt#' and fields[1].get('primReps') != ['BoxedRep (Just Lifted)']:
+                        self.issue('primitive-representation', owner, path, 'prompt#: lifted result required')
                 if function[0] == 'prim' and function[1] in ('raiseIO#', 'catch#',
                         'unmaskAsyncExceptions#', 'maskAsyncExceptions#', 'maskUninterruptible#', 'getMaskingState#'):
                     def exception_role(rep, role):

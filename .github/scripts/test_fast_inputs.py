@@ -21,6 +21,14 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def test_delimited_continuation_closed_outputs_exclude_native_binaries_and_extras(self):
+        self.assertEqual(90, len(cache.DELIMITED_OUTPUTS))
+        self.assertIn('build/delimited-continuations/manifest.json', DECLARED_REQUIRED)
+        for path in cache.DELIMITED_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+        for suffix in ('native/oracle', 'other.json', 'pre/core/Other.json', 'commands/extra.stdout'):
+            self.assertFalse(cache.allowed_payload('build/delimited-continuations/' + suffix, {}))
+
     def test_thread_inventory_exact_closed_archive_roundtrip_and_missing_member(self):
         self.assertEqual(20, len(cache.THREAD_INVENTORY_OUTPUTS))
         self.assertIn('build/thread-inventory/manifest.json', DECLARED_REQUIRED)

@@ -32,7 +32,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         this(language, moduleData, null, enableAsync)
     internal constructor(language: Language, moduleData: Map<String, Any?>, checkpoint: BytecodeCheckpoint) :
         this(language, moduleData, checkpoint, false)
-    private val resumable = checkpoint != null || enableAsync
+    private val delimited = DelimitedControl.contains(moduleData["bindings"])
+    private val resumable = checkpoint != null || enableAsync || delimited
     private val stackTargetLayout = moduleData["targetLayout"]
     private val callDemandsEnabled = java.lang.Boolean.getBoolean(CALL_DEMANDS_PROPERTY)
     private val sources = CoreSources(moduleData)
@@ -2006,6 +2007,52 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (destination != null) b.endStoreLocal()
                     b.endBlock()
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && (fn[1] in setOf("newPromptTag#", "prompt#", "control0#") ||
+                    delimited && fn[1] in setOf("catch#", "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#"))) {
+                val name = fn[1] as String
+                if (name in setOf("newPromptTag#", "prompt#", "control0#"))
+                    DelimitedControl.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                else CoreSynchronousExceptions.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                val shape = TupleShape(tupleProof, language)
+                tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    val slots = tupleSlots(shape, destination)
+                    when (name) {
+                        "newPromptTag#" -> {
+                            b.beginStoreLocal(destination.single())
+                            b.beginNewPromptTag(); operands.single().emit(e); b.endNewPromptTag()
+                            b.endStoreLocal()
+                        }
+                        "control0#" -> {
+                            b.beginConsumeDelimited(slots)
+                            b.beginYield()
+                            b.beginCaptureDelimited(shape); operands.forEach { it.emit(e) }; b.endCaptureDelimited()
+                            b.endYield()
+                            b.endConsumeDelimited()
+                        }
+                        else -> {
+                            b.beginBlock()
+                            val result = b.createLocal("delimited boundary result", null)
+                            b.beginTryCatch()
+                            b.beginStoreLocal(result)
+                            b.beginDelimitedBoundary(name, shape, language, metrics)
+                            operands[0].emit(e)
+                            if (operands.size == 3) operands[1].emit(e) else b.emitLoadNull()
+                            operands.last().emit(e)
+                            b.endDelimitedBoundary()
+                            b.endStoreLocal()
+                            b.beginBlock()
+                            b.beginStoreLocal(result)
+                            b.beginYield(); b.beginDelimitedOnly(); b.emitLoadException(); b.endDelimitedOnly(); b.endYield()
+                            b.endStoreLocal()
+                            b.endBlock()
+                            b.endTryCatch()
+                            b.beginConsumeDelimited(slots); b.emitLoadLocal(result); b.endConsumeDelimited()
+                            b.endBlock()
+                        }
+                    }
+                }
             } else if (fn[0] == "prim" && fn[1] in setOf("raiseIO#", "catch#", "getMaskingState#",
                     "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#")) {
                 val name = fn[1] as String

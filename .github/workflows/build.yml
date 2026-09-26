@@ -378,6 +378,7 @@ jobs:
             build/original-rts-locks/
             build/thread-label/**/*.json
             build/thread-label/oracle.txt
+            build/delimited-continuations/
             build/rts-diagnostics/*.json
             build/rts-diagnostics/logs/
             build/rts-shutdown/*.json
