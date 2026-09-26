@@ -59,7 +59,9 @@ or conversion into a Haskell exception.
 
 Explicit test-checkpoint and delimited-continuation capture across a transaction
 remain unsupported. Async abort/restart does not make an arbitrary STM log a
-multi-shot continuation. Synchronous calls from multiple Java carriers in the
+multi-shot continuation. Admission is currently conservative: a linked program
+containing delimited control rejects transactional operations even when the
+intended paths are disjoint. Synchronous calls from multiple Java carriers in the
 same context continue to share transactions and retry wakeups correctly.
 `newTVar#` and `readTVarIO#` need no transaction frame.
 
