@@ -204,6 +204,7 @@ object CoreModules {
                     val name = expr[1] as String
                     if (thc.runtime.CoreFileWait.named(name)) reference(thc.runtime.CoreFileWait.badFd, emptySet())
                     CoreArithmeticExceptions.payload(name)?.let { reference(it, emptySet()) }
+                    if (name == "atomically#") reference(thc.runtime.STMOp.NESTED, emptySet())
                 }
                 "lam" -> {
                     val ids = (expr[1] as List<Map<String, Any?>>).map { it["id"] as String }
@@ -385,6 +386,7 @@ class Language : TruffleLanguage<Language.State>() {
         internal val packageCbits = thc.runtime.PackageScalarLibraries(env)
         internal val maskingState = ThreadLocal.withInitial { thc.runtime.MaskingState.UNMASKED }
         internal val threads = thc.runtime.GuestThreads(env, maskingState)
+        @JvmField internal val stm = thc.runtime.ManagedSTM()
         internal val files = thc.runtime.ManagedFiles(env, threads)
         internal val rtsFileLocks = thc.runtime.RtsFileLocks()
         // Installed only by the explicit fixed-filesystem NativeIO factory.
@@ -483,7 +485,7 @@ class Language : TruffleLanguage<Language.State>() {
         context.foreignRoots.close()
         context.savedTermios.close()
         try {
-            try { context.threads.close() } finally {
+            try { try { context.stm.close() } finally { context.threads.close() } } finally {
                 try { context.capturedAsyncRequests.close() } finally {
                     try { context.files.dispose() } finally {
                         try { context.stdio.dispose() } finally {

@@ -2076,6 +2076,50 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void check(Object state) { TupleResultsKt.requireVoidCarrier(state); }
     }
 
+    /** Java is required for these Truffle Bytecode DSL declarations; the transaction
+     * algorithms and callback boundaries live in Kotlin and are shared with the AST. */
+    @Operation
+    @ConstantOperand(type = STMOp.class, name = "operation")
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class InvokeSTM {
+        @Specialization public static void run(VirtualFrame frame, STMOp operation,
+                BytecodeTupleSlots destination, Metrics metrics, Object action, Object alternative,
+                Object nested, Object state,
+                @Cached(value = "create(operation, destination, metrics)", neverDefault = true) STMCall call) {
+            TupleResultsKt.requireVoidCarrier(state);
+            call.execute(frame, action, alternative, nested);
+        }
+        public static STMCall create(STMOp operation, BytecodeTupleSlots destination, Metrics metrics) {
+            return new STMCall(operation, destination, metrics);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = STMOp.class, name = "operation")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class TVarAccess {
+        @Specialization public static void run(VirtualFrame frame, STMOp operation, LocalAccessor destination,
+                Object value, Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedSTM stm = thc.Language.currentState(node).stm;
+            Object result = switch (operation) {
+                case NEW -> stm.newTVar(value);
+                case READ -> stm.read(value);
+                case READ_IO -> stm.readIO(value);
+                case RETRY -> stm.retry();
+                default -> throw new IllegalStateException("Not a TVar tuple operation");
+            };
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation public static final class WriteTVar {
+        @Specialization public static Object run(Object cell, Object value, Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            thc.Language.currentState(node).stm.write(cell, value);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+
     /** Called inside a DSL TryCatch; its typed tuple destination is unchanged. */
     @Operation
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")

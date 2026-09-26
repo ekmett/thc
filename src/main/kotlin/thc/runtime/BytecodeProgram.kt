@@ -2335,6 +2335,34 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     b.endThreadPrimitive()
                     b.endStoreLocal()
                 }
+            } else if (fn[0] == "prim" && STMOp.named(fn[1] as String) != null) {
+                val operation = STMOp.named(fn[1] as String)!!
+                if (resumable && operation != STMOp.NEW && operation != STMOp.READ_IO)
+                    throw UnsupportedCore("STM transaction frames do not yet support resumable async/checkpoint delivery")
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                operation.validate(operands.map { it.proof }, flags, tupleProof)
+                val nested = if (operation == STMOp.ATOMICALLY) globals[STMOp.NESTED]
+                    ?: throw UnsupportedCore("atomically# requires original nestedAtomically payload") else null
+                if (operation == STMOp.WRITE) ProvenExpression(Expression { e ->
+                    e.builder.beginWriteTVar(); operands.forEach { it.emit(e) }; e.builder.endWriteTVar()
+                }, tupleProof.copy(evaluated = true))
+                else tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    if (operation.callback) {
+                        b.beginInvokeSTM(operation, tupleSlots(TupleShape(tupleProof, language), destination), metrics)
+                        operands[0].emit(e)
+                        if (operands.size == 3) operands[1].emit(e) else b.emitLoadNull()
+                        if (nested != null) b.emitReadGlobal(nested) else b.emitLoadNull()
+                        operands.last().emit(e)
+                        b.endInvokeSTM()
+                    } else {
+                        b.beginTVarAccess(operation, destination[0])
+                        if (operation == STMOp.RETRY) b.emitLoadNull() else operands[0].emit(e)
+                        operands.last().emit(e)
+                        b.endTVarAccess()
+                    }
+                }
             } else if (fn[0] == "prim" && MVarOp.named(fn[1] as String) != null) {
                 val operation = MVarOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

@@ -130,6 +130,7 @@ tasks.withType<Test>().configureEach {
             "tuple-arithmetic/manifest.json", "tuple-arithmetic/oracle.tsv", "tuple-arithmetic/call-oracle.tsv",
             "integer-primops/core/**/*.json", "integer-primops/manifest.json", "integer-primops/oracle.tsv",
             "mutvar/**/*.json", "mutvar/oracle.tsv", "mutvar/NativeMutVar.hs",
+            "stm/**/*.json", "stm/*.tsv", "stm/installed/bundles/*.zip", "stm/native/**",
             "stable-pointers/**/*.json", "stable-pointers/oracle.tsv", "stable-pointers/NativeStablePointer.hs",
             "weak-explicit/**/*.json", "weak-explicit/oracle.tsv", "weak-explicit/NativeWeak.hs",
             "shrink-bytearrays/**/*.json", "shrink-bytearrays/oracle.tsv", "shrink-bytearrays/NativeShrinkByteArrays.hs",
@@ -370,6 +371,25 @@ tasks.register<Test>("arithmeticExceptionsFullCoreTest") {
     doFirst {
         check(file("build/arithmetic-exceptions/manifest.json").isFile) {
             "Missing arithmetic-exceptions fixture: select a full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- arithmetic-exceptions"
+        }
+    }
+}
+tasks.register<Test>("stmFullCoreTest") {
+    group = "verification"
+    description = "Tests original STM transactions and nestedAtomically using explicitly prepared complete GHC Core."
+    maxHeapSize = "4g"
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    inputs.files(fileTree("build/stm") {
+        include("**/*.json", "*.tsv", "installed/bundles/*.zip", "logs/*.stdout", "logs/*.stderr", "native/stm-oracle")
+    })
+    useJUnitPlatform()
+    filter { includeTestsMatching("thc.runtime.STMFullCoreTest") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Original STM native/first-entry evidence requires a fresh process") { true }
+    doFirst {
+        check(file("build/stm/manifest.json").isFile) {
+            "Missing STM fixture: select full-Core GHC 9.14.1 and run cabal run exe:thc-fixtures -- stm (docs/stm.md)"
         }
     }
 }

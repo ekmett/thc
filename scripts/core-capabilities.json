@@ -456,6 +456,14 @@
     "raiseUnderflow#": 1,
     "raiseIO#": 2,
     "catch#": 3,
+    "atomically#": 2,
+    "retry#": 1,
+    "catchRetry#": 3,
+    "catchSTM#": 3,
+    "newTVar#": 2,
+    "readTVar#": 2,
+    "readTVarIO#": 2,
+    "writeTVar#": 3,
     "unmaskAsyncExceptions#": 2,
     "maskAsyncExceptions#": 2,
     "maskUninterruptible#": 2,
@@ -1034,6 +1042,7 @@
     "subWordC#": 2
   },
   "limitations": [
+    "STM/TVar primops admit synchronous transactions in both backends with context-owned lazy boxed cells, validated buffered writes, atomic commit, real retry wakeup and nested catch/orElse rollback. Transaction frames reject resumable async/checkpoint modes; GC-driven BlockedIndefinitelyOnSTM detection is unavailable. Empty-read-set retries wait until cancellation/disposal. Nested atomically raises the original implicit GHC exception closure.",
     "Original stg_sig_install is limited to SIGINT with DFL/IGN/HAN/RST and a null mask on Linux x86_64 glibc. Only the standalone NativeIO launcher can own the process signal handler, once per JVM lifetime; ordinary native-enabled embeddings cannot acquire it. A native signal-safe pipe transports actual siginfo bytes to the original GHC runHandlersPtr on a Truffle thread. Delivery requires the bytecode backend; other signals, non-null masks and general AST fork support remain unavailable.",
     "Original RTS diagnostic leaves write context stderr and return: reportStackOverflow identifies the actual guest Java thread and reports that its JVM stack limit is unavailable; reportHeapOverflow identifies the actual shared JVM maximum heap size. No native GHC TSO sizes or -K/-M advice are invented. errorBelch2 supports the original callers' %s CString format, preserving raw bytes, offset/NUL boundaries and the appended newline; other printf varargs formats reject before output. No program-name prefix is invented for an embedding that has not registered one.",
     "Original safe shutdownHaskellAndExit/shutdownHaskellAndSignal close the owning polyglot context with the first CInt status/fast request retained. Host resources are disposed in both modes; guest shutdown finalizers are not implemented. Exit codes use their low eight bits; signals 1..64 use negative polyglot exit codes, with other signed CInt signal values mapping to 255. Only the standalone launcher terminates its JVM or re-raises the requested signal after context cleanup; embedded callers receive PolyglotException.isExit.",
@@ -3590,6 +3599,16 @@
       "arguments": ["threadId", "payload", "state"],
       "result": "state"
     }
+  },
+  "managedSTMPrimitives": {
+    "atomically#": {"arguments": ["action", "state"], "result": ["state", "boxed"]},
+    "retry#": {"arguments": ["state"], "result": ["state", "boxed"]},
+    "catchRetry#": {"arguments": ["action", "action", "state"], "result": ["state", "boxed"]},
+    "catchSTM#": {"arguments": ["action", "action", "state"], "result": ["state", "boxed"]},
+    "newTVar#": {"arguments": ["boxed", "state"], "result": ["state", "tvar"]},
+    "readTVar#": {"arguments": ["tvar", "state"], "result": ["state", "boxed"]},
+    "readTVarIO#": {"arguments": ["tvar", "state"], "result": ["state", "boxed"]},
+    "writeTVar#": {"arguments": ["tvar", "boxed", "state"], "result": "state"}
   },
   "managedMVarPrimitives": {
     "newMVar#": {

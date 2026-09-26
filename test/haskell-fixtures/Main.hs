@@ -57,6 +57,7 @@ import OriginalSigprocmaskFixtures (prepareOriginalSigprocmask)
 import OriginalSigsetFixtures (prepareOriginalSigset)
 import OriginalIconvFixtures (prepareOriginalIconv)
 import MutVarFixtures (prepareMutVar)
+import STMFixtures (prepareSTM)
 import StablePointerFixtures (prepareStablePointers)
 import WeakFixtures (prepareWeaks)
 import ShrinkByteArrayFixtures (prepareShrinkByteArrays)
@@ -923,6 +924,7 @@ main = do
     ["original-rts-locks", "--require-supported"] -> prepareOriginalRtsLocks root True
     ["original-iconv"] -> prepareOriginalIconv root
     ["mutvar"] -> prepareMutVar root
+    ["stm"] -> prepareSTM root
     ["stable-pointers"] -> prepareStablePointers root
     ["weak-explicit"] -> prepareWeaks root
     ["shrink-bytearrays"] -> prepareShrinkByteArrays root

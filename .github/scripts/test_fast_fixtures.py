@@ -19,6 +19,20 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_stm_keeps_original_exception_proof_in_explicit_fail_closed_full_core_gate(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        self.assertIn('thc.runtime.ManagedSTMTest', manifest['fixtureFreeJunit'])
+        self.assertNotIn('thc.runtime.STMFullCoreTest', owners)
+        self.assertNotIn('"$fixture_bin" stm', (project / 'scripts/prepare-tests.sh').read_text())
+        self.assertNotIn('build/stm/manifest.json', fast_fixtures.FULL_REQUIRED)
+        self.assertTrue((project / 'src/fullCoreTest/kotlin/thc/runtime/STMFullCoreTest.kt').is_file())
+        build = (project / 'build.gradle.kts').read_text()
+        self.assertIn('tasks.register<Test>("stmFullCoreTest")', build)
+        self.assertIn('includeTestsMatching("thc.runtime.STMFullCoreTest")', build)
+        self.assertIn('check(file("build/stm/manifest.json").isFile)', build)
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+
     def test_thread_label_uses_its_native_core_fixture_and_baseline_registration(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

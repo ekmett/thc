@@ -366,6 +366,7 @@ jobs:
             build/state-tuple/*-audit.json
             build/state-tuple/*-core/*.json
             build/mutvar/manifest.json
+            build/stm/
             build/mutvar/oracle.tsv
             build/mutvar/NativeMutVar.hs
             build/mutvar/*/*.audit.json

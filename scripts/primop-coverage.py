@@ -82,6 +82,7 @@ def classify(data, capability, scalars):
                                ('managedByteArrayPrimitives', 'Managed byte storage'),
                                ('managedArrayPrimitives', 'Managed lifted arrays'),
                                ('managedMutVarPrimitives', 'Managed lazy reference cells'),
+                               ('managedSTMPrimitives', 'Context-owned synchronous transactions; no resumable async/checkpoint frames or GC deadlock detection'),
                                ('managedStablePtrPrimitives', 'Context-owned opaque stable handles; no pointer memory access'),
                                ('managedWeakPrimitives', 'Retained registrations and explicit Haskell/C finalization; restricted C labels, no GC or ephemerons'),
                                ('managedMVarPrimitives', 'Managed blocking cells; backend and continuation limits apply')):

@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 503 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 679 | No declared lowering. |
+| Partial | 511 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 671 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -40,6 +40,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 
 ## Current aggregate and address limits
 
+- STM/TVar primops admit synchronous transactions in both backends with context-owned lazy boxed cells, validated buffered writes, atomic commit, real retry wakeup and nested catch/orElse rollback. Transaction frames reject resumable async/checkpoint modes; GC-driven BlockedIndefinitelyOnSTM detection is unavailable. Empty-read-set retries wait until cancellation/disposal. Nested atomically raises the original implicit GHC exception closure.
 - Original stg_sig_install is limited to SIGINT with DFL/IGN/HAN/RST and a null mask on Linux x86_64 glibc. Only the standalone NativeIO launcher can own the process signal handler, once per JVM lifetime; ordinary native-enabled embeddings cannot acquire it. A native signal-safe pipe transports actual siginfo bytes to the original GHC runHandlersPtr on a Truffle thread. Delivery requires the bytecode backend; other signals, non-null masks and general AST fork support remain unavailable.
 - Original RTS diagnostic leaves write context stderr and return: reportStackOverflow identifies the actual guest Java thread and reports that its JVM stack limit is unavailable; reportHeapOverflow identifies the actual shared JVM maximum heap size. No native GHC TSO sizes or -K/-M advice are invented. errorBelch2 supports the original callers' %s CString format, preserving raw bytes, offset/NUL boundaries and the appended newline; other printf varargs formats reject before output. No program-name prefix is invented for an embedding that has not registered one.
 - Original safe shutdownHaskellAndExit/shutdownHaskellAndSignal close the owning polyglot context with the first CInt status/fast request retained. Host resources are disposed in both modes; guest shutdown finalizers are not implemented. Exit codes use their low eight bits; signals 1..64 use negative polyglot exit codes, with other signed CInt signal values mapping to 255. Only the standalone launcher terminates its JVM or re-raises the requested signal after context cleanup; embedded callers receive PolyglotException.isExit.
@@ -386,6 +387,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `addr2Int#` — arity 1 — Managed addresses with operation-specific storage restrictions
 - [ ] `atomicModifyMutVar2#` — arity 3 — Managed lazy reference cells
 - [ ] `atomicSwapMutVar#` — arity 3 — Managed lazy reference cells
+- [ ] `atomically#` — arity 2 — Context-owned synchronous transactions; no resumable async/checkpoint frames or GC deadlock detection
 - [ ] `broadcastDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `broadcastDoubleX4#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `broadcastDoubleX8#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -412,6 +414,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `broadcastWord8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `byteArrayContents#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `catch#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `catchRetry#` — arity 3 — Context-owned synchronous transactions; no resumable async/checkpoint frames or GC deadlock detection
+- [ ] `catchSTM#` — arity 3 — Context-owned synchronous transactions; no resumable async/checkpoint frames or GC deadlock detection
 - [ ] `cloneArray#` — arity 3 — Managed lifted arrays
 - [ ] `cloneMutableArray#` — arity 4 — Managed lifted arrays
 - [ ] `cloneSmallArray#` — arity 3 — Managed lifted arrays
@@ -650,6 +654,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `newMutVar#` — arity 2 — Managed lazy reference cells
 - [ ] `newPinnedByteArray#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `newSmallArray#` — arity 3 — Managed lifted arrays
+- [ ] `newTVar#` — arity 2 — Context-owned synchronous transactions; no resumable async/checkpoint frames or GC deadlock detection
 - [ ] `noDuplicate#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packDoubleX4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -737,6 +742,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readMVar#` — arity 2 — Managed blocking cells; backend and continuation limits apply
 - [ ] `readMutVar#` — arity 2 — Managed lazy reference cells
 - [ ] `readSmallArray#` — arity 3 — Managed lifted arrays
+- [ ] `readTVar#` — arity 2 — Context-owned synchronous transactions; no resumable async/checkpoint frames or GC deadlock detection
+- [ ] `readTVarIO#` — arity 2 — Context-owned synchronous transactions; no resumable async/checkpoint frames or GC deadlock detection
 - [ ] `readWideCharOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readWord16Array#` — arity 3 — Managed byte storage
 - [ ] `readWord16OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
@@ -758,6 +765,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readWordOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `reallyUnsafePtrEquality#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `resizeMutableByteArray#` — arity 3 — Managed byte storage
+- [ ] `retry#` — arity 1 — Context-owned synchronous transactions; no resumable async/checkpoint frames or GC deadlock detection
 - [ ] `setByteArray#` — arity 5 — Managed byte storage
 - [ ] `shrinkMutableByteArray#` — arity 3 — Managed byte storage
 - [ ] `sizeofArray#` — arity 1 — Managed lifted arrays
@@ -863,6 +871,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeIntOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeMutVar#` — arity 3 — Managed lazy reference cells
 - [ ] `writeSmallArray#` — arity 4 — Managed lifted arrays
+- [ ] `writeTVar#` — arity 3 — Context-owned synchronous transactions; no resumable async/checkpoint frames or GC deadlock detection
 - [ ] `writeWideCharOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeWord16Array#` — arity 4 — Managed byte storage
 - [ ] `writeWord16OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
@@ -911,7 +920,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `atomicReadWordAddr#` — arity 2
 - [ ] `atomicWriteIntArray#` — arity 4
 - [ ] `atomicWriteWordAddr#` — arity 3
-- [ ] `atomically#` — arity 2
 - [ ] `broadcastInt16X32#` — arity 1
 - [ ] `broadcastInt8X32#` — arity 1
 - [ ] `broadcastInt8X64#` — arity 1
@@ -926,8 +934,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `casIntArray#` — arity 5
 - [ ] `casMutVar#` — arity 4
 - [ ] `casSmallArray#` — arity 5
-- [ ] `catchRetry#` — arity 3
-- [ ] `catchSTM#` — arity 3
 - [ ] `clearCCS#` — arity 2
 - [ ] `closureSize#` — arity 1
 - [ ] `compactAdd#` — arity 3
@@ -1145,7 +1151,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `negateInt8X64#` — arity 1
 - [ ] `newBCO#` — arity 6
 - [ ] `newPromptTag#` — arity 1
-- [ ] `newTVar#` — arity 2
 - [ ] `numSparks#` — arity 1
 - [ ] `packInt16X32#` — arity 1
 - [ ] `packInt8X32#` — arity 1
@@ -1276,8 +1281,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readInt8X64OffAddr#` — arity 3
 - [ ] `readStablePtrArray#` — arity 3
 - [ ] `readStablePtrOffAddr#` — arity 3
-- [ ] `readTVar#` — arity 2
-- [ ] `readTVarIO#` — arity 2
 - [ ] `readWideCharArray#` — arity 3
 - [ ] `readWord16ArrayAsWord16X16#` — arity 3
 - [ ] `readWord16ArrayAsWord16X32#` — arity 3
@@ -1372,7 +1375,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `remWord8X16#` — arity 2
 - [ ] `remWord8X32#` — arity 2
 - [ ] `remWord8X64#` — arity 2
-- [ ] `retry#` — arity 1
 - [ ] `setAddrRange#` — arity 4
 - [ ] `setOtherThreadAllocationCounter#` — arity 3
 - [ ] `setThreadAllocationCounter#` — arity 2
@@ -1498,7 +1500,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeInt8X64OffAddr#` — arity 4
 - [ ] `writeStablePtrArray#` — arity 4
 - [ ] `writeStablePtrOffAddr#` — arity 4
-- [ ] `writeTVar#` — arity 3
 - [ ] `writeWideCharArray#` — arity 4
 - [ ] `writeWord16ArrayAsWord16X16#` — arity 4
 - [ ] `writeWord16ArrayAsWord16X32#` — arity 4

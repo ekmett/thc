@@ -2350,6 +2350,17 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (fn[0] == "prim" && fn[1] == "getCurrentCCS#") {
                 CoreCurrentCCS.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 GetCurrentCCS(argument(args[0], scope, true), argument(args[1], scope, false), tupleProof)
+            } else if (fn[0] == "prim" && STMOp.named(fn[1] as String) != null) {
+                val operation = STMOp.named(fn[1] as String)!!
+                if (enableAsync && operation != STMOp.NEW && operation != STMOp.READ_IO)
+                    throw UnsupportedCore("STM transaction frames do not yet support resumable asynchronous delivery")
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                operation.validate(operands.map { it.representation }, flags, tupleProof)
+                val nested = if (operation == STMOp.ATOMICALLY) GlobalRead(globals[STMOp.NESTED]
+                    ?: throw UnsupportedCore("atomically# requires original nestedAtomically payload")) else null
+                STMExpression(operation, tupleProof, operands.toTypedArray(),
+                    if (operation.callback) TupleShape(tupleProof, language as thc.Language) else null, metrics, nested)
             } else if (fn[0] == "prim" && MVarOp.named(fn[1] as String) != null) {
                 val operation = MVarOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
