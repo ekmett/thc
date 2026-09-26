@@ -60,6 +60,7 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     SEEK_CUR("ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR", "capi", "unsafe", listOf(null), "Int32Rep"),
     SEEK_END("ghczuwrapperZC0ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuEND", "capi", "unsafe", listOf(null), "Int32Rep"),
     CLOSE("close", "ccall", "unsafe", listOf("Int32Rep", null), "Int32Rep"),
+    UNLINK("unlink", "ccall", "unsafe", listOf("AddrRep", null), "Int32Rep"),
     OPEN("__hscore_open", "ccall", "unsafe", listOf("AddrRep", "Int32Rep", "Word32Rep", null), "Int32Rep"),
     OPEN_SAFE("__hscore_open", "ccall", "safe", listOf("AddrRep", "Int32Rep", "Word32Rep", null), "Int32Rep"),
     OPEN_INTERRUPTIBLE("__hscore_open", "ccall", "interruptible", listOf("AddrRep", "Int32Rep", "Word32Rep", null), "Int32Rep"),
@@ -135,7 +136,7 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation.flagConstant || operation.fcntl || operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation == OriginalStdioOp.TCSETATTR || operation.opening || operation.iconv || operation.strerror || operation.duplication || operation.locking,
+        requireProof(operation == OriginalStdioOp.UNLINK || operation.flagConstant || operation.fcntl || operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation == OriginalStdioOp.TCSETATTR || operation.opening || operation.iconv || operation.strerror || operation.duplication || operation.locking,
             "strict operand operation")
         val primitive = operation.arguments[index]
         val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }

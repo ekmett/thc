@@ -94,6 +94,13 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return closed
     }
 
+    @TruffleBoundary fun unlink(path: ManagedAddress): Long {
+        val abi = hostAbi
+        val result = files.unlinkOriginal(path)
+        if (result < 0) lastError.set(fileError(abi))
+        return result
+    }
+
     @TruffleBoundary fun open(path: ManagedAddress, flags: Long, mode: Long,
         operation: OriginalStdioOp = OriginalStdioOp.OPEN, node: Node? = null): Long {
         val abi = hostAbi

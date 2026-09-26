@@ -1709,6 +1709,25 @@ class NativeMallocDeclarationTest(unittest.TestCase):
             self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
 
 
+class OriginalUnlinkDeclarationTest(unittest.TestCase):
+    def test_original_path_and_cint_result_contract(self):
+        primitive = lambda kind, rep, evaluated: dict(kind=kind, primReps=[] if rep is None else [rep], evaluated=evaluated)
+        state = primitive('void', None, True)
+        address = primitive('address', 'AddrRep', False)
+        result = dict(kind='unknown', primReps=['Int32Rep'], evaluated=False,
+                      aggregate='unboxed-tuple', components=[state, primitive('long', 'Int32Rep', True)])
+        descriptor = dict(schema=1, target=dict(kind='static', symbol='unlink', unit='ghc-internal', isFunction=True),
+                          convention='ccall', safety='unsafe', arity=2, suppliedArity=2,
+                          argumentReps=[address, primitive('void', None, False)], resultRep=result)
+        fixture = LibdwUnavailableAuditTest()
+        self.assertTrue(fixture.audit(fixture.fixture(descriptor))['accepted'])
+        disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != 'unlink'])
+        self.assertFalse(fixture.audit(fixture.fixture(descriptor), disabled)['accepted'])
+        for key, value in [('convention', 'capi'), ('safety', 'safe'), ('arity', 1), ('resultRep', LONG)]:
+            wrong = copy.deepcopy(descriptor); wrong[key] = value
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+
+
 class OriginalMemmoveDeclarationTest(unittest.TestCase):
     def test_exact_original_descriptor_and_checked_capability(self):
         resource = ROOT.parent / 'src/test/resources/core/original-memmove-descriptor.json'

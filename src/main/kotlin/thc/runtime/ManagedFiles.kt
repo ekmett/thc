@@ -376,6 +376,29 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         }
     }
 
+    private fun originalPathBytes(path: ManagedAddress): ByteArray {
+        fun snapshot(): ByteArray {
+            val length = path.cStringLength()
+            if (length >= Int.MAX_VALUE) fault("Native path exceeds managed byte capacity")
+            return ByteArray(length.toInt() + 1) { path.readWord8(it.toLong()).toByte() }
+        }
+        val allocation = path.cbitsOwner()
+        return path.withNativeBorrow {
+            if (allocation == null) snapshot() else synchronized(allocation) { snapshot() }
+        }
+    }
+
+    @TruffleBoundary internal fun unlinkOriginal(path: ManagedAddress): Long {
+        val bytes = originalPathBytes(path)
+        return result {
+            val provider = synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                nativeProvider ?: fail(7, "Original unlink requires the explicit native filesystem")
+            }
+            provider.unlinkRaw(bytes)
+        }
+    }
+
     /** Original open has no private admission claim or RTS lock. Reserve
      * the lowest descriptor before creation/truncation, but hold no registry
      * monitor over native acquisition. A completed result is never polled here. */
@@ -385,18 +408,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         nativeAbi.requireOpenAbi()
         if (flags != flags.toInt().toLong() || mode !in 0L..0xffffffffL)
             fault("Original open requires canonical CInt flags and Word32 mode")
-        fun snapshot(): ByteArray {
-            var length = 0L
-            while (true) {
-                path.requireByteRegion(length + 1)
-                if (path.readWord8(length++) == 0L) break
-            }
-            return ByteArray(length.toInt()) { path.readWord8(it.toLong()).toByte() }
-        }
-        val allocation = path.cbitsOwner()
-        val bytes = path.withNativeBorrow {
-            if (allocation == null) snapshot() else synchronized(allocation) { snapshot() }
-        }
+        val bytes = originalPathBytes(path)
         return result {
             val (provider, claim) = synchronized(this) {
                 if (disposed) fail(4, "THC file context is closed")
