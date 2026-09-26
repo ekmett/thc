@@ -22,9 +22,8 @@ jobs:
     timeout-minutes: 30
     env:
       GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-user-home
-      # Publish the locally built and link-checked current-main snapshot.
-      # Keep this source pin stable while independent runtime batches advance main.
-      DOCS_REVISION: 7cbeeb5df8eeaeab0079bb1b1a458053a77d2b89
+      # Build, link-check and publish the exact main revision that triggered this run.
+      DOCS_REVISION: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
