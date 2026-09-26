@@ -155,6 +155,8 @@ OPERATIONS = {
     'hs_free_stable_ptr': ('ccall', 'unsafe', ('AddrRep', None), (None,)),
     'getOrSetSystemEventThreadEventManagerStore': ('ccall', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
     'getOrSetGHCConcSignalSignalHandlerStore': ('ccall', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
+    'getOrSetLibHSghcFastStringTable': ('ccall', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
+    'keepCAFsForGHCi': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
     'rts_setMainThread': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', None), (None,)),
     STACK_CLONE: ('prim', 'safe', (None,), (None, 'BoxedRep (Just Unlifted)')),
     'getStackInfoTableAddrzh': ('prim', 'safe', ('BoxedRep (Just Unlifted)',), 'AddrRep'),
@@ -183,6 +185,8 @@ DESCRIPTOR_KEYS = {'schema', 'target', 'convention', 'safety', 'arity', 'supplie
 # Same libc symbols, but different physical operands or result ABI from the
 # ghc-internal declarations above. Do not infer these from caller binding names.
 LIBRARY_OPERATIONS = {
+    ('ghc-9.14.1-inplace', 'getOrSetLibHSghcFastStringTable'): OPERATIONS['getOrSetLibHSghcFastStringTable'],
+    ('ghc-9.14.1-inplace', 'keepCAFsForGHCi'): OPERATIONS['keepCAFsForGHCi'],
     ('array-0.5.8.0-inplace', 'memcpy'):
         ('ccall', 'unsafe', (GMP_ARRAY, GMP_ARRAY, 'Word64Rep', None), (None, 'AddrRep')),
     ('bytestring-0.12.2.0-inplace', 'strlen'):
@@ -276,6 +280,8 @@ def validate(metadata, argument_reps, flags, result_rep):
     if symbol not in OPERATIONS:
         return None
     convention, safety, expected, output = operation(target)
+    if symbol in ('getOrSetLibHSghcFastStringTable', 'keepCAFsForGHCi'):
+        require(target.get('unit') == 'ghc-9.14.1-inplace', 'exact compiler unit')
     require(descriptor.keys() == DESCRIPTOR_KEYS and type(descriptor.get('schema')) is int and descriptor['schema'] == 1,
             'descriptor schema')
     require(target.keys() == {'kind', 'symbol', 'unit', 'isFunction'} and target.get('kind') == 'static'

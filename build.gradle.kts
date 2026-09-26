@@ -378,6 +378,22 @@ configurations[fullCoreTests.implementationConfigurationName].extendsFrom(config
 configurations[fullCoreTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
 fullCoreTests.compileClasspath += sourceSets.test.get().output
 fullCoreTests.runtimeClasspath += sourceSets.test.get().output
+
+for ((taskName, dense) in listOf("compilerRtsFullCoreTest" to false, "compilerRtsFullCoreDenseTest" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests genuine compiler RTS declarations and unique cells against native GHC."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.CompilerRtsNativeTest") }
+        inputs.files(fileTree("build/compiler-rts") { include("*.json", "*.tsv", "UniqueOracle.hs", "unique-oracle") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original compiler RTS native/first-entry checks require a fresh process") { true }
+        doFirst { check(file("build/compiler-rts/manifest.json").isFile) { "Run thc-fixtures compiler-rts with complete installed GHC Core" } }
+    }
+}
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("main"))
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("test"))
 tasks.register<Test>("graphWorkloadTest") {

@@ -409,6 +409,7 @@ class Language : TruffleLanguage<Language.State>() {
         @JvmField internal val closureInfo = thc.runtime.ClosureInfoTables()
         internal val capturedAsyncRequests = thc.runtime.CapturedAsyncRequests()
         internal val stablePointers = thc.runtime.StablePointers()
+        internal val compilerRts = thc.runtime.CompilerRts()
         internal val stableNames = thc.runtime.StableNames()
         @JvmField internal val compactRegions = thc.runtime.ManagedCompacts()
         @JvmField internal val heapAddresses = thc.runtime.HeapAddresses()
@@ -493,6 +494,7 @@ class Language : TruffleLanguage<Language.State>() {
         try { context.signals.close() } finally { context.iconv.dispose() }
     }
     override fun disposeContext(context: State) {
+        context.compilerRts.close()
         try { context.runtimeJit.close() } finally { context.runtimeTrace.close() }
         context.compactImages.close()
         context.heapAddresses.close()

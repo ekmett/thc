@@ -27,6 +27,7 @@ are different claims; each report identifies which it establishes.
 | Threads | [Asynchronous exceptions and resumable thunk evaluation](async-exceptions.md); [thread snapshots and boundness](thread-inventory.md); Java thread identities, masking and interruptible MVar waits |
 | Delimited continuations | [Initial synchronous multi-shot slice](delimited-continuations.md); prompt identity, saved suffixes, shared effects, and catch/mask restoration |
 | GHC bytecode objects | [Executable scalar BCOs and updating wrappers](ghc-bco.md); real instruction decoding and guest application, with explicit opcode/ABI limits |
+| Compiler-library RTS hooks | [FastString shared CAF, CAF retention and unique-supply cells](compiler-rts.md); not the native GHC object loader |
 | ShortByteString | [Pack, length, unpack, uncons, comparison, prefix and suffix](bytearrays.md); [public slicing](library-coverage.md) |
 | Boxed arrays | [Public fixed-bounds STArray and lazy elements](core-evidence.md#lifted-boxed-array-storage); [clone, freeze and thaw slices](array-slices.md) |
 | Numeric arrays | [Int](int-arrays.md), [Double](double-arrays.md), [Float and machine Word](float-word-arrays.md), [Int32/Word32](int32-arrays.md), [Int16/Word16](int16-arrays.md), [Int8/Word8](int8-arrays.md) |

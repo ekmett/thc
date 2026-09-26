@@ -1838,11 +1838,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     }
                 }
                 tupleExpression(tupleProof) { e, destination ->
-                    if (stringRts != StringRtsOp.THREADED) e.builder.beginOriginalCStringLength(destination.single())
-                    else e.builder.beginOriginalRtsIsThreaded(destination.single())
+                    if (stringRts.arguments.size == 2) e.builder.beginOriginalCStringLength(destination.single())
+                    else e.builder.beginOriginalRtsConstant(destination.single(), if (stringRts == StringRtsOp.KEEP_CAFS) 1L else 0L)
                     operands.forEach { it.emit(e) }
-                    if (stringRts != StringRtsOp.THREADED) e.builder.endOriginalCStringLength()
-                    else e.builder.endOriginalRtsIsThreaded()
+                    if (stringRts.arguments.size == 2) e.builder.endOriginalCStringLength()
+                    else e.builder.endOriginalRtsConstant()
                 }
             } else if (shutdown != null) {
                 CoreRtsShutdown.validateHead(fn, defined)

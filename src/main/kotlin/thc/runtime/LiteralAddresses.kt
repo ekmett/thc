@@ -31,7 +31,8 @@ internal class ManagedAddress private constructor(
     private val finalizer: CFinalizerFunction? = null,
     private val native: ManagedNativeAllocations.Owner? = null,
     private val capabilities: GuestThreads? = null,
-    private val heap: HeapAddresses.Handle? = null
+    private val heap: HeapAddresses.Handle? = null,
+    private val compiler: CompilerRts? = null
 ) {
     /** This is an RTS data label, not a projection of a JVM or native pointer. */
     internal fun readCapabilitiesWord32(elementOffset: Long, width: Int): Long? {
@@ -68,6 +69,7 @@ internal class ManagedAddress private constructor(
     internal fun heapHandle(): HeapAddresses.Handle? = heap
     internal fun finalizerFunction(): CFinalizerFunction? = finalizer
     private fun requireBytes() {
+        compiler?.requireCurrent()
         if (heap != null) fault("Opaque guest heap address is not byte-addressable")
         if (capabilities != null) fault("RTS data label is not byte-addressable")
         if (stable != null) fault("Opaque StablePtr# is not byte-addressable")
@@ -79,6 +81,7 @@ internal class ManagedAddress private constructor(
     internal fun nativeImageBytes(): ByteArray = owner?.takeIf { !it.isWritable }?.let { it.copyBytesOut(0, it.size) }
         ?: literalBytes?.copyOf() ?: fault("Native image requires immutable byte storage")
     fun toNativeBits(): Long {
+        compiler?.requireCurrent()
         if (heap != null) fault("Opaque guest heap address has no native pointer bits")
         if (capabilities != null) fault("RTS data label has no numeric guest address")
         if (finalizer != null) fault("Opaque C function label has no numeric guest address")
@@ -112,6 +115,7 @@ internal class ManagedAddress private constructor(
 
     /** GHC pointer equality compares allocation identity and byte offset. */
     fun sameLocation(other: ManagedAddress): Boolean {
+        compiler?.requireCurrent(); other.compiler?.requireCurrent()
         if (heap != null || other.heap != null) {
             val registry = HeapAddresses.current()
             heap?.let(registry::require); other.heap?.let(registry::require)
@@ -229,7 +233,7 @@ internal class ManagedAddress private constructor(
         }
         size() // Preserve native lifetime/context validation, including plus zero.
         return if (displacement == 0L) this else ManagedAddress(literalBytes, mutableBytes,
-            displacedOffset(displacement), owner, native = native)
+            displacedOffset(displacement), owner, native = native, compiler = compiler)
     }
 
     private fun displacedOffset(displacement: Long): Long = try {
@@ -696,6 +700,8 @@ internal class ManagedAddress private constructor(
         /** Logical pinning means stable managed backing and a strong lifetime,
          * not physical pinning or a process address. Do not copy: views must alias. */
         fun fromByteArray(bytes: ByteArray): ManagedAddress = ManagedAddress(null, bytes, 0L)
+        internal fun compilerCell(bytes: ByteArray, compiler: CompilerRts): ManagedAddress =
+            ManagedAddress(null, bytes, 0L, compiler = compiler)
         fun fromAllocation(allocation: ManagedAllocation): ManagedAddress = ManagedAddress(null, null, 0L, allocation)
         fun fromGuestByteArray(value: Any?): ManagedAddress = when (value) {
             is ManagedAllocation -> fromAllocation(value)

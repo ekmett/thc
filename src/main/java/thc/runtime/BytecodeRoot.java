@@ -3377,14 +3377,15 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                     GuestEnvironment.current(node).environ());
         }
     }
-    /** The admitted FD scheduler follows the non-threaded GHC RTS branch. */
+    /** Exact RTS queries whose selected THC policy is fixed during lowering. */
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    public static final class OriginalRtsIsThreaded {
-        @Specialization public static void query(VirtualFrame frame, LocalAccessor destination,
+    @ConstantOperand(type = long.class, name = "value")
+    public static final class OriginalRtsConstant {
+        @Specialization public static void query(VirtualFrame frame, LocalAccessor destination, long value,
                 Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, 0L);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, value);
         }
     }
     @Operation

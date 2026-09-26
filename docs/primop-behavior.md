@@ -265,6 +265,9 @@ bound `forkOS`/foreign TLS, general native RTS memory/stack decoding, arbitrary
 FFI callbacks and full GHC eventlog/profiling services are separate runtime work.
 The original allocation-counter getter reports the same target bytes as the
 setter primops above. Context disposal is not GHC shutdown-finalizer execution.
+Compiler-library shared FastStrings, CAF retention and unique-counter data cells
+are documented separately in [compiler RTS services](compiler-rts.md); their
+support does not imply a native GHC object loader or complete GHC API coverage.
 
 Core transport also has restrictions independent of any one primop: see the
 [coverage guide](README.md#tuples-and-sums) for aggregate inputs/captures and the

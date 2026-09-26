@@ -79,6 +79,7 @@ extra-source-files:
   compiler/test-fixtures/FileWaitNative.hs
   compiler/test-fixtures/OriginalFdReadyAudit.hs
   compiler/test-fixtures/OriginalRtsLocksAudit.hs
+  compiler/test-fixtures/CompilerRtsAudit.hs
   compiler/test-fixtures/RtsDiagnosticsNative.hs
   compiler/test-fixtures/OriginalFcntlAudit.hs
   compiler/test-fixtures/OriginalFcntlNative.hs
@@ -697,6 +698,7 @@ executable thc-fixtures
     FileWaitFixtures
     OriginalFdReadyFixtures
     OriginalRtsLocksFixtures
+    CompilerRtsFixtures
     RtsDiagnosticFixtures
     OriginalOpenFixtures
     PackageScalarFixtures

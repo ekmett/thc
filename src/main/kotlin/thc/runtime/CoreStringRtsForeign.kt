@@ -10,7 +10,8 @@ internal enum class StringRtsOp(val symbol: String, val arguments: List<String?>
     val unit: String = "ghc-internal", val result: String = "IntRep") {
     STRLEN("strlen", listOf("AddrRep", null)),
     STRLEN_CSIZE("strlen", listOf("AddrRep", null), "bytestring-0.12.2.0-inplace", "Word64Rep"),
-    THREADED("rts_isThreaded", listOf(null))
+    THREADED("rts_isThreaded", listOf(null)),
+    KEEP_CAFS("keepCAFsForGHCi", listOf(null), "ghc-9.14.1-inplace")
 }
 
 internal object CoreStringRtsForeign {
@@ -107,9 +108,10 @@ internal class StringRtsExpression(private val operation: StringRtsOp,
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("Original Posix call requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        val address = if (operation != StringRtsOp.THREADED) operands[0].executeRequiredAddress(frame) else null
+        val address = if (operation.arguments.size == 2) operands[0].executeRequiredAddress(frame) else null
         requireVoidCarrier(operands.last().execute(frame))
-        FrameAccess.writeLong(frame, slots[offset], if (address == null) 0L else address.cStringLength())
+        // Live THC programs retain their global CAF cells; there is no native RTS CAF reversion.
+        FrameAccess.writeLong(frame, slots[offset], address?.cStringLength() ?: if (operation == StringRtsOp.KEEP_CAFS) 1L else 0L)
         return null
     }
 }
