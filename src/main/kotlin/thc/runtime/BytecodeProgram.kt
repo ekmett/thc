@@ -462,6 +462,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         }.getNode(0)
         root.setLabel(label)
         root.configureAsync(enableAsync)
+        root.configureDelimited(delimited)
         root.configureEntry(context.entryStrict, context.captureLayout != null)
         root.configureInput(context.inputLayout)
         root.configureTypedInput(context.typedInput)

@@ -50,6 +50,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @CompilerDirectives.CompilationFinal private boolean asyncEnabled;
     public final void configureAsync(boolean enabled) { asyncEnabled = enabled; }
     public final boolean isAsyncEnabled() { return asyncEnabled; }
+    @CompilerDirectives.CompilationFinal private boolean delimitedEnabled;
+    public final void configureDelimited(boolean enabled) { delimitedEnabled = enabled; }
+    public final boolean isDelimitedEnabled() { return delimitedEnabled; }
     @CompilerDirectives.CompilationFinal private LocalAccessor typedBloom;
     public final void configureTypedBloom(LocalAccessor bloom) { typedBloom = bloom; }
 

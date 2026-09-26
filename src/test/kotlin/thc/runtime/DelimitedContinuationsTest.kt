@@ -23,11 +23,13 @@ import java.security.MessageDigest
 class DelimitedContinuationsTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val entries = listOf("promptPure", "abortSuffix", "resumeTwice", "nestedPrompts", "sameTagNearest",
-        "capturedCatch", "capturedMask", "escapedResume", "ambientMask", "resumedTail", "resumedJoin", "resumedScalar", "recapturedMask")
+        "capturedCatch", "capturedMask", "escapedResume", "ambientMask", "resumedTail", "resumedJoin", "resumedScalar", "recapturedMask", "resumedApplication",
+        "resumedScalarApplication", "polymorphicApplications", "polymorphicScalarApplications")
     private val calls = mapOf("promptPure" to 3L, "abortSuffix" to 4L, "resumeTwice" to 6L,
         "nestedPrompts" to 7L, "sameTagNearest" to 5L, "capturedCatch" to 7L, "capturedMask" to 7L,
         "escapedResume" to 6L, "ambientMask" to 7L, "resumedTail" to 6L, "resumedJoin" to 5L,
-        "resumedScalar" to 6L, "recapturedMask" to 10L)
+        "resumedScalar" to 6L, "recapturedMask" to 10L, "resumedApplication" to 7L,
+        "resumedScalarApplication" to 7L, "polymorphicApplications" to 22L, "polymorphicScalarApplications" to 22L)
 
     private fun provenance(): List<Long> {
         val manifest = Json.parse(File(root, "build/delimited-continuations/manifest.json").readText()) as Map<*, *>
@@ -52,16 +54,23 @@ class DelimitedContinuationsTest {
         "capturedMask" -> n + 21
         "escapedResume" -> 2 * n + 14
         "ambientMask" -> n
-        "resumedTail", "resumedJoin", "resumedScalar" -> n + 117
+        "resumedTail", "resumedJoin", "resumedScalar", "resumedApplication", "resumedScalarApplication" -> n + 117
+        "polymorphicApplications", "polymorphicScalarApplications" -> 4 * n + 174
         "recapturedMask" -> n + 1
         else -> error(entry)
     }
 
-    @Test fun originalCoreRunsSavedSuffixesOnBothBackends() {
+    @Test fun originalCoreRunsSavedSuffixesOnBothBackends() = runEntries(entries, true)
+
+    @Test fun unsplitFourTargetApplicationsExerciseBothGenericResultPaths() =
+        runEntries(listOf("polymorphicApplications", "polymorphicScalarApplications"), false)
+
+    private fun runEntries(selected: List<String>, splitting: Boolean) {
         val native = provenance()
-        for (stage in listOf("pre", "post")) for (backend in listOf("ast", "bytecode")) for (entry in entries) {
+        for (stage in listOf("pre", "post")) for (backend in listOf("ast", "bytecode")) for (entry in selected) {
             Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.WarnInterpreterOnly", "false")
                 .option("compiler.Inlining", "false").option("engine.BackgroundCompilation", "false")
+                .option("engine.Splitting", splitting.toString())
                 .option("engine.MultiTier", "false").option("engine.SingleTierCompilationThreshold", "10000000")
                 .option("engine.CompilationFailureAction", "Throw").build().use { context ->
                 context.initialize("thc"); context.enter()
@@ -81,8 +90,33 @@ class DelimitedContinuationsTest {
                         assertEquals(arity.toInt(), (rhs[1] as List<*>).size)
                         joins.add(rhs)
                     }
-                    assertEquals(calls.getValue(entry), nodes.count { it.firstOrNull() == "lam" && it !in joins }.toLong(),
-                        "Each fixture executes every reachable source lambda once; resumes do not restart them")
+                    val lambdas = nodes.filter { it.firstOrNull() == "lam" && it !in joins }
+                    val polymorphic = entry in setOf("polymorphicApplications", "polymorphicScalarApplications")
+                    assertEquals(if (polymorphic) 19L else calls.getValue(entry), lambdas.size.toLong(),
+                        "Every reachable lambda runs once, except applyWorker runs four times; resumes never restart them")
+                    for (worker in source.bindings.filter { it["name"] in setOf("applicationWorker", "applicationWorker2",
+                            "applicationWorker3", "applicationWorker4", "scalarApplicationWorker", "scalarApplicationWorker2",
+                            "scalarApplicationWorker3", "scalarApplicationWorker4") }) {
+                        assertEquals(2, (worker["arity"] as Number).toInt(), "A genuine overapplication, not an eta-expanded worker")
+                        val lambda = worker["expr"] as List<*>
+                        assertEquals(2, (lambda[1] as List<*>).size)
+                        val body = lambda[2] as List<*>
+                        assertEquals("case", body[0])
+                        val returned = ((body[3] as List<*>).single() as List<*>)[3] as List<*>
+                        assertEquals("lam", returned[0]); assertEquals(1, (returned[1] as List<*>).size)
+                    }
+                    if (polymorphic) {
+                        val apply = source.bindings.single { it["name"] ==
+                            if (entry == "polymorphicApplications") "applyWorker" else "applyScalarWorker" }
+                        val formals = ((apply["expr"] as List<*>)[1] as List<*>).map { it as Map<*, *> }
+                        assertEquals(listOf("worker", "tag", "n", "s"), formals.map { it["name"] })
+                        val body = (apply["expr"] as List<*>)[2] as List<*>
+                        val call = if (body[0] == "case") body[1] as List<*> else body
+                        assertEquals(listOf("var", formals[0]["id"]), (call[1] as List<*>).take(2))
+                        assertEquals(3, (call[2] as List<*>).size)
+                        assertEquals(4, nodes.count { it.firstOrNull() == "app" &&
+                            (it.getOrNull(1) as? List<*>)?.take(2) == listOf("var", apply["id"]) })
+                    }
                     val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
                     val function = context.asValue(EntryValue(program, entry, 1))
                     for ((index, n) in listOf(-2L, 0L, 7L).withIndex()) {
@@ -95,9 +129,28 @@ class DelimitedContinuationsTest {
                         assertNull(handoff.pending)
                         assertEquals(MaskingState.UNMASKED, Language.currentState(null).maskingState.get())
                     }
-                    val targets = ThreadInventoryCoreEvidence.targets(program.entryTarget(entry)).filter {
-                        it.rootNode is FunctionRoot || it.rootNode is BytecodeRoot
-                    }
+                    // Megamorphic calls do not retain the fourth target in a
+                    // DirectCallNode. Seed all actual global lambdas, as the
+                    // thread inventory's floated-child proof already does.
+                    val seen = java.util.Collections.newSetFromMap(
+                        java.util.IdentityHashMap<com.oracle.truffle.api.RootCallTarget, Boolean>())
+                    val targets = source.bindings.filter { (it["expr"] as List<*>)[0] == "lam" }
+                        .flatMap { ThreadInventoryCoreEvidence.targets(program.entryTarget(it["id"] as String)) }
+                        .filter { (it.rootNode is FunctionRoot || it.rootNode is BytecodeRoot) && seen.add(it) }
+                    val labels = lambdas.map { lambda -> "lambda " + (lambda[1] as List<*>).joinToString {
+                        (it as Map<*, *>)["name"].toString()
+                    } }.sorted()
+                    val functions = targets.filter { it.rootNode.name.startsWith("lambda ") }
+                    // Truffle may split the higher-order helper at its four
+                    // callers. Install every clone, but compare source bodies
+                    // using the runtime's existing exact clone identity.
+                    val bodies = mutableListOf<com.oracle.truffle.api.RootCallTarget>()
+                    for (target in functions) if (bodies.none { (it.rootNode as GuestRoot).isSelf(target) }) bodies.add(target)
+                    assertEquals(labels, bodies.map { it.rootNode.name }.sorted(), "$stage/$backend/$entry exact source function bodies")
+                    val cafLabels = source.bindings.filter { (it["expr"] as List<*>)[0] != "lam" }.map { it["name"] }.toSet()
+                    for (target in targets - functions)
+                        assertTrue(target.rootNode.name in cafLabels,
+                            "Only already-forced source CAFs may accompany the exact function inventory")
                     val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                     val interpreted = ThreadInventoryCoreEvidence.interpretedCalls(targets)
                     ThreadInventoryCoreEvidence.install(targets)
