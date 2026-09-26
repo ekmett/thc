@@ -1314,13 +1314,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 val proof = CoreRepresentations.binder(it)
                 CoreRepresentations.requireInput(proof)
                 if (proof.isTypedTransport && representation(it))
-                    throw RuntimeFault(if (proof.isVector) "Vector join formal must be unlifted" else "Tuple join formal must be unlifted")
+                    throw RuntimeFault("Typed join formal must be unlifted")
             }
             val formals = definition.parameters.map { it["id"] as String }.toSet()
             (freeVariables(definition.body) - formals - shadowed).forEach { id ->
                 scope.tuples[id]?.let { (proof, fields) ->
                     CoreRepresentations.requireInput(proof)
-                    val leaves = TupleShape.flatten(proof)
+                    val leaves = ArgumentLayout.leaves(proof)
                     if (fields.size != leaves.size) throw RuntimeFault("Tuple join capture disagrees with its physical slots")
                     fields.forEachIndexed { index, field ->
                         if (!field.proof.present || !TupleShape.compatible(leaves[index], field.proof))

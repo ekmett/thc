@@ -4,8 +4,9 @@ Local GHC joins accept the exact `(# #)` logical argument. The capability is
 `empty-unboxed-tuple` entry in `aggregateJoinInputs`, independently of ordinary
 function inputs and join results. State tokens, boxed `()`, `(# State# s #)` and
 nested empty tuples are different shapes. [Nonempty tuple joins](tuple-joins.md)
-now use the companion `unboxed-tuple` capability; ordinary aggregate captures and
-sum join arguments remain unsupported.
+use the companion `unboxed-tuple` capability; [binary sum joins](sum-inputs.md) use
+`unboxed-sum`. Owned aggregate captures follow the [tuple](tuple-captures.md)
+and [sum](sum-inputs.md) contracts.
 
 Logical arity and exact saturation include the empty argument. Both compilers
 validate its proof and original unlifted flag, then evaluate its expression in

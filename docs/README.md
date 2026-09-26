@@ -76,14 +76,14 @@ PAPs, overapplication and tail transfers. [Empty inputs](empty-tuple-inputs.md)
 and [empty join inputs](empty-tuple-joins.md) have no physical payload fields.
 [Tuple join inputs](tuple-joins.md) use parallel typed frame moves, including
 the original GHC floating-formatting worker. [Ordinary tuple captures](tuple-captures.md)
-retain owned typed properties; sum join inputs remain unsupported.
+retain owned typed properties.
 [Aggregate constructor fields](aggregate-heap-fields.md) flatten exact tuple and
 binary-sum layouts into owned typed heap properties.
 
 [Binary sum results](sum-results.md) use typed destinations and explicit tags.
 Local sum join results use those same destinations. [Binary sum inputs](sum-inputs.md)
-support direct calls, PAPs, tail transfers and owned closure captures. Ordinary
-sum lets, join inputs/captures, nested sums and unresolved layouts remain rejected.
+support direct calls, PAPs, tail transfers, local join inputs/captures and owned
+closure captures. Ordinary sum lets, nested sums and unresolved layouts remain rejected.
 These contracts distinguish lifted tuples, unboxed aggregates and scalar State.
 
 ### SIMD operations and guest transport
