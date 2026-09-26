@@ -44,24 +44,77 @@ internal object CoreKeepAlive {
     }
 }
 
+/** A saved reference stays live through every child step, including repeated cuts. */
+private class AstKeepAliveScope(private val value: Any?, private val steps: List<AstResumeStep>) : AstResumeStep {
+    override fun resume(frame: VirtualFrame, input: Any?): Any? =
+        withKeptValue(value) { resumeAstSteps(frame, steps, input) }
+}
+
+private inline fun <T> withKeptValue(value: Any?, body: () -> T): T {
+    return try { body() }
+    catch (cut: AstCapture) { throw cut.enclose { AstKeepAliveScope(value, it) } }
+    finally { Reference.reachabilityFence(value) }
+}
+
 /** Do not tail-transfer the action: the fence belongs after its actual completion. */
 internal class KeepAliveExpression(@field:Child private var kept: Expr,
     @field:Child private var state: Expr, @field:Child private var action: Expr,
     proof: CoreRepresentation) : Expr() {
     init { representation = proof.copy(evaluated = true) }
-    private inline fun <T> retaining(frame: VirtualFrame, block: () -> T): T {
-        // The lifted expression is compiled as a lazy argument, never forced here.
-        val value = kept.execute(frame)
-        ManagedByteArray.requireState(state.execute(frame))
-        return try { block() } finally { Reference.reachabilityFence(value) }
+
+    private enum class Route { GENERIC, LONG, FLOAT, DOUBLE, ADDRESS, DATA, CLOSURE, TUPLE }
+
+    private class ResumeKept(private val node: KeepAliveExpression, private val route: Route,
+                             private val slots: IntArray?, private val offset: Int) : AstResumeStep {
+        override fun resume(frame: VirtualFrame, input: Any?): Any? = withKeptValue(input) {
+            node.loadState(frame, route, slots, offset)
+            node.resumeAction(frame, route, slots, offset)
+        }
     }
-    override fun execute(frame: VirtualFrame): Any? = retaining(frame) { action.execute(frame) }
-    override fun executeLong(frame: VirtualFrame): Long = retaining(frame) { action.executeLong(frame) }
-    override fun executeFloat(frame: VirtualFrame): Float = retaining(frame) { action.executeFloat(frame) }
-    override fun executeDouble(frame: VirtualFrame): Double = retaining(frame) { action.executeDouble(frame) }
-    override fun executeAddress(frame: VirtualFrame): ManagedAddress = retaining(frame) { action.executeAddress(frame) }
-    override fun executeDataValue(frame: VirtualFrame): DataValue = retaining(frame) { action.executeDataValue(frame) }
-    override fun executeClosure(frame: VirtualFrame): Closure = retaining(frame) { action.executeClosure(frame) }
+
+    private class ResumeState(private val node: KeepAliveExpression, private val route: Route,
+                              private val slots: IntArray?, private val offset: Int) : AstResumeStep {
+        override fun resume(frame: VirtualFrame, input: Any?): Any? {
+            ManagedByteArray.requireState(input)
+            return node.resumeAction(frame, route, slots, offset)
+        }
+    }
+
+    private fun loadState(frame: VirtualFrame, route: Route, slots: IntArray?, offset: Int) {
+        val token = try { state.execute(frame) }
+        catch (cut: AstCapture) { throw cut.append(ResumeState(this, route, slots, offset)) }
+        ManagedByteArray.requireState(token)
+    }
+
+    /** Only suspended operand edges select a route dynamically; normal calls stay typed. */
+    private fun resumeAction(frame: VirtualFrame, route: Route, slots: IntArray?, offset: Int): Any? = when (route) {
+        Route.GENERIC -> action.execute(frame)
+        Route.LONG -> action.executeLong(frame)
+        Route.FLOAT -> action.executeFloat(frame)
+        Route.DOUBLE -> action.executeDouble(frame)
+        Route.ADDRESS -> action.executeAddress(frame)
+        Route.DATA -> action.executeDataValue(frame)
+        Route.CLOSURE -> action.executeClosure(frame)
+        Route.TUPLE -> action.executeTuple(frame, slots!!, offset)
+    }
+
+    private inline fun <T> retaining(frame: VirtualFrame, route: Route,
+                                    slots: IntArray? = null, offset: Int = 0, block: () -> T): T {
+        // The lifted expression is compiled as a lazy argument, never forced here.
+        val value = try { kept.execute(frame) }
+        catch (cut: AstCapture) { throw cut.append(ResumeKept(this, route, slots, offset)) }
+        return withKeptValue(value) {
+            loadState(frame, route, slots, offset)
+            block()
+        }
+    }
+    override fun execute(frame: VirtualFrame): Any? = retaining(frame, Route.GENERIC) { action.execute(frame) }
+    override fun executeLong(frame: VirtualFrame): Long = retaining(frame, Route.LONG) { action.executeLong(frame) }
+    override fun executeFloat(frame: VirtualFrame): Float = retaining(frame, Route.FLOAT) { action.executeFloat(frame) }
+    override fun executeDouble(frame: VirtualFrame): Double = retaining(frame, Route.DOUBLE) { action.executeDouble(frame) }
+    override fun executeAddress(frame: VirtualFrame): ManagedAddress = retaining(frame, Route.ADDRESS) { action.executeAddress(frame) }
+    override fun executeDataValue(frame: VirtualFrame): DataValue = retaining(frame, Route.DATA) { action.executeDataValue(frame) }
+    override fun executeClosure(frame: VirtualFrame): Closure = retaining(frame, Route.CLOSURE) { action.executeClosure(frame) }
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? =
-        retaining(frame) { action.executeTuple(frame, slots, offset) }
+        retaining(frame, Route.TUPLE, slots, offset) { action.executeTuple(frame, slots, offset) }
 }
