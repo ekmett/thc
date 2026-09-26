@@ -229,15 +229,21 @@ class AddressFieldTest {
         val sum=mapOf("kind" to "unknown","aggregate" to "unboxed-sum","alternatives" to listOf(address,long),
             "primReps" to listOf("WordRep","WordRep"),"tagSlot" to 0,"alternativeSlots" to listOf(listOf(1),listOf(1)),"evaluated" to true)
         assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(sum) }
-        // A valid tag-only sum occupies one word, but is not a scalar heap field.
+        // A tag-only sum is one logical aggregate field flattened to its tag word.
         val state=mapOf("kind" to "void","primReps" to emptyList<String>(),"evaluated" to true)
         val empty=mapOf("kind" to "unknown","aggregate" to "unboxed-tuple","components" to emptyList<Any>(),
             "primReps" to emptyList<String>(),"evaluated" to true)
         val tagOnly=sum+("alternatives" to listOf(state,empty))+("primReps" to listOf("WordRep"))+
             ("alternativeSlots" to listOf(emptyList<Int>(),emptyList<Int>()))
         assertTrue(CoreRepresentations.parse(tagOnly).isSum)
-        assertThrows(UnsupportedCore::class.java) { CoreFields(mapOf("id" to "SumField","kind" to "boxed","arity" to 1,
+        val sumField=mapOf("id" to "SumField","kind" to "boxed","arity" to 1,
             "fieldReps" to listOf(listOf("WordRep")),"fieldTypes" to listOf(tagOnly),
-            "fieldLifted" to listOf(false),"strictFields" to listOf(false))) }
+            "fieldLifted" to listOf(false),"strictFields" to listOf(false))
+        val fields=CoreFields(sumField)
+        assertTrue(fields.hasAggregates)
+        assertTrue(fields.logicalProofs.single().isSum)
+        assertArrayEquals(arrayOf("WordRep"),fields.storage)
+        assertArrayEquals(intArrayOf(0,1),fields.offsets)
+        assertThrows(RuntimeFault::class.java) { CoreFields(sumField+("fieldReps" to listOf(listOf("IntRep")))) }
     }
 }
