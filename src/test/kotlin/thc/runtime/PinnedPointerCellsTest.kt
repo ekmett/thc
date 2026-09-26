@@ -145,8 +145,9 @@ class PinnedPointerCellsTest {
         assertEquals(0, base.compareWithinAllocation(alias))
         assertTrue(base.compareWithinAllocation(alias.plus(1)) < 0)
         assertTrue(base.plus(16).compareWithinAllocation(alias) > 0) // one past
-        assertThrows(RuntimeFault::class.java) { base.plus(Long.MAX_VALUE) }
-        assertThrows(RuntimeFault::class.java) { base.plus(-1) }
+        assertThrows(RuntimeFault::class.java) { base.plus(Long.MAX_VALUE).readWord8(0) }
+        assertTrue(base.plus(-1).compareWithinAllocation(alias) < 0)
+        assertThrows(RuntimeFault::class.java) { base.plus(-1).readWord8(0) }
         assertThrows(RuntimeFault::class.java) { base.compareWithinAllocation(nullAddress) }
         assertThrows(RuntimeFault::class.java) { nullAddress.compareWithinAllocation(base) }
         assertThrows(RuntimeFault::class.java) {

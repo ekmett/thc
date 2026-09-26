@@ -1805,6 +1805,21 @@ class OriginalMemmoveDeclarationTest(unittest.TestCase):
             self.assertFalse(fixture.audit(wrong)['accepted'])
 
 
+class OriginalLibraryMemoryDeclarationTest(unittest.TestCase):
+    def test_original_library_carriers_and_abis_remain_distinct(self):
+        fixture = LibdwUnavailableAuditTest()
+        for resource in ('original-array-memcpy-descriptor.json', 'original-bytestring-strlen-descriptor.json'):
+            with self.subTest(resource=resource):
+                declaration = json.loads((ROOT.parent / 'src/test/resources/core' / resource).read_text())
+                result = fixture.audit(fixture.fixture(declaration))
+                self.assertTrue(result['accepted'], result)
+                self.assertEqual([declaration['target']['symbol']], [call['symbol'] for call in result['foreignCalls']])
+                for unit in ('other', 'ghc-internal'):
+                    wrong = copy.deepcopy(declaration)
+                    wrong['target']['unit'] = unit
+                    self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+
+
 class OriginalMemcpyDeclarationTest(unittest.TestCase):
     def test_exact_original_descriptor_and_checked_capability(self):
         resource = ROOT.parent / 'src/test/resources/core/original-memcpy-descriptor.json'

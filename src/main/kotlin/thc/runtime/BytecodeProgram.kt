@@ -1780,10 +1780,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     }
                 }
                 tupleExpression(tupleProof) { e, destination ->
-                    if (stringRts == StringRtsOp.STRLEN) e.builder.beginOriginalCStringLength(destination.single())
+                    if (stringRts != StringRtsOp.THREADED) e.builder.beginOriginalCStringLength(destination.single())
                     else e.builder.beginOriginalRtsIsThreaded(destination.single())
                     operands.forEach { it.emit(e) }
-                    if (stringRts == StringRtsOp.STRLEN) e.builder.endOriginalCStringLength()
+                    if (stringRts != StringRtsOp.THREADED) e.builder.endOriginalCStringLength()
                     else e.builder.endOriginalRtsIsThreaded()
                 }
             } else if (shutdown != null) {
@@ -1896,15 +1896,20 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 }
             } else if (memcpy) {
                 CoreMemcpyForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val byteArrays = CoreMemcpyForeign.byteArrays(foreignMetadata)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         CoreMemcpyForeign.validateOperand(index, operand.proof,
-                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null, byteArrays)
                     }
                 }
                 tupleExpression(tupleProof) { e, destination ->
                     e.builder.beginOriginalMemcpy(destination.single())
-                    operands.forEach { it.emit(e) }
+                    operands.forEachIndexed { index, operand ->
+                        if (byteArrays && index < 2) e.builder.beginByteArrayContents()
+                        operand.emit(e)
+                        if (byteArrays && index < 2) e.builder.endByteArrayContents()
+                    }
                     e.builder.endOriginalMemcpy()
                 }
             } else if (libdw != null) {

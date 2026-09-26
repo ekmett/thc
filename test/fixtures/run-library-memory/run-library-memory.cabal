@@ -1,0 +1,11 @@
+cabal-version: 3.0
+name: run-library-memory
+version: 0.1.0.0
+build-type: Simple
+license: BSD-3-Clause
+
+executable library-memory
+  main-is: Main.hs
+  build-depends: base >= 4.22 && < 4.23, array == 0.5.8.0, bytestring == 0.12.2.0
+  default-language: Haskell2010
+  ghc-options: -O1 -Wall

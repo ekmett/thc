@@ -1,0 +1,39 @@
+cabal-version: 3.0
+name: lens-thc-check
+version: 0.1.0.0
+build-type: Simple
+license: UPL-1.0 AND BSD-3-Clause
+
+executable lens-public-api
+  main-is: LensExamples.hs
+  default-language: Haskell2010
+  build-depends: base, containers, lens, mtl
+  ghc-options: -O2 -Wall
+
+-- Run the unchanged upstream test sources as executable components because
+-- thc run currently selects executables, not Cabal test-suite components.
+executable lens-hunit
+  main-is: hunit.hs
+  hs-source-dirs: upstream-lens/tests
+  default-language: Haskell2010
+  build-depends: base, containers, lens, mtl, text, bytestring,
+    tasty >= 1.4 && < 1.6, tasty-hunit >= 0.10 && < 0.11
+  ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
+
+executable lens-properties
+  main-is: properties.hs
+  hs-source-dirs: upstream-lens/tests upstream-lens/lens-properties/src
+  other-modules: Control.Lens.Properties
+  include-dirs: upstream-lens/include
+  default-language: Haskell2010
+  build-depends: base, lens, QuickCheck >= 2.4, text,
+    tasty >= 1.4 && < 1.6, tasty-quickcheck >= 0.10 && < 0.12, transformers
+  ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
+
+executable lens-templates
+  main-is: templates.hs
+  hs-source-dirs: upstream-lens/tests
+  other-modules: BigRecord T799 T917 T972 T1024
+  default-language: Haskell2010
+  build-depends: base, lens
+  ghc-options: -Wall -threaded

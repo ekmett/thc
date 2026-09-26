@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "target": {"kind": "static", "symbol": "strlen", "unit": "bytestring-0.12.2.0-inplace", "isFunction": true},
+  "convention": "ccall", "safety": "unsafe", "arity": 2, "suppliedArity": 2,
+  "argumentReps": [
+    {"primReps": ["AddrRep"], "kind": "address", "evaluated": false},
+    {"primReps": [], "kind": "void", "evaluated": false}
+  ],
+  "resultRep": {
+    "primReps": ["Word64Rep"], "kind": "unknown", "evaluated": false, "aggregate": "unboxed-tuple",
+    "components": [
+      {"primReps": [], "kind": "void", "evaluated": true},
+      {"primReps": ["Word64Rep"], "kind": "long", "evaluated": true}
+    ]
+  }
+}

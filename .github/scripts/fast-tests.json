@@ -20,6 +20,12 @@
     "src/main/kotlin/thc/runtime/GhcBCO.kt": {
       "junit": ["thc.runtime.GhcBCOTest"], "python": []
     },
+    "src/main/kotlin/thc/runtime/CoreMemmoveForeign.kt": {
+      "junit": ["thc.runtime.OriginalMemcpyTest", "thc.runtime.OriginalMemmoveTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/kotlin/thc/runtime/CoreStringRtsForeign.kt": {
+      "junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["scripts/test-audit-core.py"]
+    },
     "src/main/kotlin/thc/runtime/GuestArguments.kt": {
       "junit": ["thc.runtime.GuestArgumentsTest"], "python": []
     },
@@ -325,6 +331,12 @@
     },
     "test/haskell-fixtures/GhcBCOFixtures.hs": {
       "junit": ["thc.runtime.GhcBCOTest"], "python": []
+    },
+    "src/test/resources/core/original-array-memcpy-descriptor.json": {
+      "junit": ["thc.runtime.OriginalMemcpyTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/test/resources/core/original-bytestring-strlen-descriptor.json": {
+      "junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["scripts/test-audit-core.py"]
     },
     "test/haskell-fixtures/SimdByteArrayFixtures.hs": {
       "junit": [

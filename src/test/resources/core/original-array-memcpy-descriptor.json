@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "target": {"kind": "static", "symbol": "memcpy", "unit": "array-0.5.8.0-inplace", "isFunction": true},
+  "convention": "ccall", "safety": "unsafe", "arity": 4, "suppliedArity": 4,
+  "argumentReps": [
+    {"primReps": ["BoxedRep (Just Unlifted)"], "kind": "object", "evaluated": false},
+    {"primReps": ["BoxedRep (Just Unlifted)"], "kind": "object", "evaluated": false},
+    {"primReps": ["Word64Rep"], "kind": "long", "evaluated": false},
+    {"primReps": [], "kind": "void", "evaluated": false}
+  ],
+  "resultRep": {
+    "primReps": ["AddrRep"], "kind": "unknown", "evaluated": false, "aggregate": "unboxed-tuple",
+    "components": [
+      {"primReps": [], "kind": "void", "evaluated": true},
+      {"primReps": ["AddrRep"], "kind": "address", "evaluated": true}
+    ]
+  }
+}

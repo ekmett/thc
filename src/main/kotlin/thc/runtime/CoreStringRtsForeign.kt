@@ -5,9 +5,11 @@ package thc.runtime
 
 import com.oracle.truffle.api.frame.VirtualFrame
 
-/** Only the two exact original GHC 9.14.1 Posix FCallIds, not a libc dispatcher. */
-internal enum class StringRtsOp(val symbol: String, val arguments: List<String?>) {
+/** Original Posix and bytestring declarations, not an arbitrary libc dispatcher. */
+internal enum class StringRtsOp(val symbol: String, val arguments: List<String?>,
+    val unit: String = "ghc-internal", val result: String = "IntRep") {
     STRLEN("strlen", listOf("AddrRep", null)),
+    STRLEN_CSIZE("strlen", listOf("AddrRep", null), "bytestring-0.12.2.0-inplace", "Word64Rep"),
     THREADED("rts_isThreaded", listOf(null))
 }
 
@@ -30,13 +32,13 @@ internal object CoreStringRtsForeign {
             value["primReps"] == listOfNotNull(rep) && value["evaluated"] is Boolean &&
             (evaluated == null || value["evaluated"] == evaluated)
     }
-    private fun result(raw: Any?, declared: Boolean = false): Boolean {
+    private fun result(raw: Any?, primitive: String, declared: Boolean = false): Boolean {
         val value = raw as? Map<*, *> ?: return false
         val fields = value["components"] as? List<*> ?: return false
         return value.keys == tupleKeys && value["kind"] == "unknown" &&
-            value["aggregate"] == "unboxed-tuple" && value["primReps"] == listOf("IntRep") &&
+            value["aggregate"] == "unboxed-tuple" && value["primReps"] == listOf(primitive) &&
             value["evaluated"] is Boolean && (!declared || value["evaluated"] == false) &&
-            fields.size == 2 && scalar(fields[0], null, true) && scalar(fields[1], "IntRep", true)
+            fields.size == 2 && scalar(fields[0], null, true) && scalar(fields[1], primitive, true)
     }
 
     fun validateHead(function: List<Any?>, defined: Boolean) {
@@ -77,10 +79,13 @@ internal object CoreStringRtsForeign {
         val meta = metadata as? Map<*, *> ?: return null
         val descriptor = meta["foreignCall"] as? Map<*, *> ?: return null
         val target = descriptor["target"] as? Map<*, *> ?: return null
-        val operation = StringRtsOp.entries.firstOrNull { it.symbol == target["symbol"] } ?: return null
+        val candidates = StringRtsOp.entries.filter { it.symbol == target["symbol"] }
+        if (candidates.isEmpty()) return null
+        val operation = candidates.firstOrNull { it.unit == target["unit"] }
+            ?: fault("Invalid original Posix string/RTS call: exact installed GHC target")
         requireProof(descriptor.keys == descriptorKeys && exact(descriptor["schema"], 1), "descriptor schema")
         requireProof(target.keys == setOf("kind", "symbol", "unit", "isFunction") &&
-            target["kind"] == "static" && target["unit"] == "ghc-internal" && target["isFunction"] == true,
+            target["kind"] == "static" && target["unit"] == operation.unit && target["isFunction"] == true,
             "exact installed GHC target")
         requireProof(descriptor["convention"] == "ccall" && descriptor["safety"] == "unsafe" &&
             exact(descriptor["arity"], operation.arguments.size) &&
@@ -91,8 +96,8 @@ internal object CoreStringRtsForeign {
         } && arguments.size == operation.arguments.size && operation.arguments.indices.all {
             scalar(arguments[it], operation.arguments[it])
         } && flags == List(operation.arguments.size) { false }, "argument representations and flags")
-        requireProof(result(descriptor["resultRep"], true) && result(meta["rep"]) && result(resultProof),
-            "State#/Int# tuple result")
+        requireProof(result(descriptor["resultRep"], operation.result, true) && result(meta["rep"], operation.result) &&
+            result(resultProof, operation.result), "State#/length tuple result")
         return operation
     }
 }
@@ -102,7 +107,7 @@ internal class StringRtsExpression(private val operation: StringRtsOp,
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("Original Posix call requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        val address = if (operation == StringRtsOp.STRLEN) operands[0].executeRequiredAddress(frame) else null
+        val address = if (operation != StringRtsOp.THREADED) operands[0].executeRequiredAddress(frame) else null
         requireVoidCarrier(operands.last().execute(frame))
         FrameAccess.writeLong(frame, slots[offset], if (address == null) 0L else address.cStringLength())
         return null

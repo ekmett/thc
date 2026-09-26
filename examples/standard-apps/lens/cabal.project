@@ -1,0 +1,6 @@
+packages: .
+constraints: lens == 5.3.6
+jobs: 2
+tests: False
+benchmarks: False
+index-state: 2026-09-24T12:38:18Z

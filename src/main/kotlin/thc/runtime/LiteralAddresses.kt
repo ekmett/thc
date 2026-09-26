@@ -97,7 +97,7 @@ internal class ManagedAddress private constructor(
     internal fun cbitsOffset(): Long { size(); return offset }
     internal fun cbitsOwner(): ManagedAllocation? = owner
     internal fun cbitsSize(): Long = size()
-    fun availableBytes(): Long = size() - offset
+    fun availableBytes(): Long { requireRange(0, 0); return size() - offset }
 
     /** Validate byte-only transport without exposing allocation storage. */
     internal fun requireByteRegion(count: Long, writable: Boolean = false) {
@@ -207,7 +207,9 @@ internal class ManagedAddress private constructor(
         return offset.compareTo(other.offset)
     }
 
-    /** Like pointer arithmetic within this allocation, including its one-past address. */
+    /** Arithmetic retains allocation identity even outside its accessible range.
+     * Original bytestring unpacking uses a before-start sentinel; only a memory
+     * access must lie inside storage. A managed origin must not overflow. */
     fun plus(displacement: Long): ManagedAddress {
         if (heap != null) {
             HeapAddresses.current().require(heap)
@@ -225,10 +227,15 @@ internal class ManagedAddress private constructor(
             if (displacement == 0L) return this
             fault("Cannot offset null Addr#")
         }
-        // Check before adding so even Long.MIN/MAX_VALUE cannot wrap into range.
-        if (displacement < -offset || displacement > size() - offset)
-            fault("Managed Addr# offset outside its backing storage")
-        return if (displacement == 0L) this else ManagedAddress(literalBytes, mutableBytes, offset + displacement, owner, native = native)
+        size() // Preserve native lifetime/context validation, including plus zero.
+        return if (displacement == 0L) this else ManagedAddress(literalBytes, mutableBytes,
+            displacedOffset(displacement), owner, native = native)
+    }
+
+    private fun displacedOffset(displacement: Long): Long = try {
+        Math.addExact(offset, displacement)
+    } catch (_: ArithmeticException) {
+        fault("Managed Addr# offset overflow")
     }
 
     /** Relative pointers need no JVM address projection. Native/numeric pointers
@@ -259,8 +266,7 @@ internal class ManagedAddress private constructor(
     }
 
     private fun index(displacement: Long): Int {
-        if (displacement < -offset || displacement >= size() - offset)
-            fault("Managed Addr# access outside its backing storage")
+        requireRange(displacement, 1)
         return (offset + displacement).toInt()
     }
 
@@ -270,6 +276,7 @@ internal class ManagedAddress private constructor(
     /** The polyglot text ABI reads a checked NUL-terminated UTF-8 region. */
     @TruffleBoundary
     fun utf8(): String {
+        requireRange(0, 1)
         val bytes = rawBacking()
         val start = offset.toInt()
         val limit = size().toInt()
@@ -459,10 +466,10 @@ internal class ManagedAddress private constructor(
             fault("Cannot write through an immutable literal Addr#")
         if (writable && owner != null && !owner.isWritable)
             fault("Cannot write through an immutable managed allocation")
-        if (count < 0 || displacement < -offset || displacement > size() - offset)
+        val start = displacedOffset(displacement)
+        val limit = size()
+        if (count < 0 || start < 0 || start > limit || count > limit - start)
             fault("Managed Addr# range outside its backing storage")
-        val start = offset + displacement
-        if (count > size() - start) fault("Managed Addr# range outside its backing storage")
     }
 
     /** Exact overlap of two checked byte regions, including independently made

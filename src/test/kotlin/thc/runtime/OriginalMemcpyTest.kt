@@ -22,8 +22,8 @@ class OriginalMemcpyTest {
     private fun module(declaration: Map<String, Any?> = descriptor,
         stored: Map<Int, Map<String, Any?>> = emptyMap(),
         shadowForeignWithJoin: Boolean = false,
+        canonical: Map<String, Any?> = descriptor,
         changeCall: (List<Any?>) -> List<Any?> = { it }): Map<String, Any?> {
-        val canonical = descriptor
         val tuple = canonical.getValue("resultRep") as Map<String, Any?>
         val fields = tuple.getValue("components") as List<Map<String, Any?>>
         val reps = (canonical.getValue("argumentReps") as List<Map<String, Any?>>).map { it + ("evaluated" to true) }
@@ -84,6 +84,60 @@ class OriginalMemcpyTest {
         System.getProperty("os.arch") in setOf("amd64", "x86_64")
     private fun copy(target: RootCallTarget, destination: ManagedAddress, source: ManagedAddress, count: Long): ManagedAddress =
         Calls.target(target, arrayOf(0L, destination, source, count, Unit)) as ManagedAddress
+
+    @Test fun originalArrayMemcpyRetainsBackingIdentityAndByteArraySafety() {
+        // Unchanged FCallId exported in Alex Output, module SHA-256
+        // 5ca87bc502b96c468c4b45647776d77693510b4bb2febd1af4fbaeb765091664.
+        val original = Json.parse(javaClass.getResource("/core/original-array-memcpy-descriptor.json")!!.readText())
+            as Map<String, Any?>
+        for (backend in listOf("ast", "bytecode")) inside { language ->
+            val guest = program(language, backend, module(original, canonical = original))
+            val target = guest.entryTarget("copy")
+            val bytes = ByteArray(16) { (it + 16).toByte() }
+            val sources = listOf<Any>(bytes, ManagedAllocation.immutable(bytes.copyOf(), 8),
+                ManagedAllocation.mutable(16, 8).also { allocation ->
+                    bytes.forEachIndexed { i, value -> allocation.writeByte(i.toLong(), value.toLong()) }
+                })
+            val destinations = listOf<Any>(ByteArray(16), ManagedAllocation.mutable(16, 8))
+            val empty = ByteArray(0)
+            assertTrue((Calls.target(target, arrayOf(0L, empty, empty, 0L, Unit)) as ManagedAddress)
+                .sameLocation(ManagedAddress.fromByteArray(empty)))
+            fun run(source: Any, destination: Any) {
+                val result = Calls.target(target, arrayOf(0L, destination, source, 8L, Unit)) as ManagedAddress
+                val view = ManagedAddress.fromGuestByteArray(destination)
+                assertTrue(result.sameLocation(view))
+                assertEquals((16L until 24L).toList(), (0L until 8L).map(result::readWord8))
+                result.writeWord8(15, 99)
+                assertEquals(99L, view.readWord8(15))
+            }
+            for (source in sources) for (destination in destinations) run(source, destination)
+            target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+            valid(target)
+            for (source in sources) for (destination in destinations) {
+                val before = (guest.diagnostics().getValue("compiledEntries") as Number).toLong()
+                run(source, destination)
+                assertEquals(before + 1, (guest.diagnostics().getValue("compiledEntries") as Number).toLong())
+                valid(target)
+            }
+            val destination = destinations.last()
+            val before = contents(ManagedAddress.fromGuestByteArray(destination))
+            for ((source, count) in listOf(sources.first() to -1L, sources.first() to 17L,
+                destination to 1L, ManagedAllocation.mutable(16, 8).also { it.shrink(3) } to 4L)) {
+                assertThrows(RuntimeFault::class.java) { Calls.target(target, arrayOf(0L, destination, source, count, Unit)) }
+                assertEquals(before, contents(ManagedAddress.fromGuestByteArray(destination)))
+            }
+            assertThrows(RuntimeFault::class.java) {
+                Calls.target(target, arrayOf(0L, sources[1], sources.first(), 8L, Unit))
+            }
+            val pointers = ManagedAllocation.mutable(16, 8)
+            val payload = managed()
+            ManagedAddress.fromAllocation(pointers).writeAddressElementIndex(0, payload)
+            Calls.target(target, arrayOf(0L, destination, pointers, 8L, Unit))
+            assertSame(payload, ManagedAddress.fromGuestByteArray(destination).readAddressElementIndex(0))
+            assertThrows(RuntimeFault::class.java) { Calls.target(target, arrayOf(0L, destination, pointers, 7L, Unit)) }
+            assertSame(payload, ManagedAddress.fromGuestByteArray(destination).readAddressElementIndex(0))
+        }
+    }
 
     @Test fun originalDescriptorCopiesManagedAndNativeRegionsOnFirstCompiledCalls() {
         for (backend in listOf("ast", "bytecode")) inside { language ->

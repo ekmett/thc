@@ -1,0 +1,5 @@
+/upstream-lens/
+/dist-newstyle/
+/dist-thc/
+/cabal.project.local
+/lens-*.tar.gz
