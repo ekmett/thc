@@ -98,7 +98,12 @@ generator markup. Assembly preserves Dokka's sidebar HTML fragment. For Haddock
 2.33 it adds the
 missing local anchors to rendered instance-method declarations and removes an
 empty source-line suffix from record-selector file links. All resulting links
-still pass the same checker; missing targets are not exempted.
+still pass the same checker; missing targets are not exempted. Haddock 2.33 also
+links derived-instance origins to the hidden `THC.Runtime.Types` module even
+though `Availability` is documented through its public reexports. Those exact
+module-origin links point to the defining module's tracked source at the same
+revision. Public symbol links remain unchanged, and the private module and raw
+FFI boundary are not added to the published API.
 
 `.github/workflows/docs.yml` builds a cached, docs-only Pages artifact from
 `main`. An active publication finishes while a newer run may replace pending
