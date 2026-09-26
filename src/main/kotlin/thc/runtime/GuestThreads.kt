@@ -84,9 +84,12 @@ internal class GuestThreads internal constructor(
         @Volatile var pending = false
     }
 
-    internal class GuestEntry(val active: GuestThreadId?, val status: GuestThreadStatus)
+    internal class GuestEntry(val active: GuestThreadId?, val status: GuestThreadStatus, val astStack: AstStackScope)
     /** Stable per-context/carrier cell, including between nested guest entries. */
-    internal class PollState { internal var current: GuestThread? = null }
+    internal class PollState {
+        internal var current: GuestThread? = null
+        internal var astStack = AstStackScope()
+    }
     private val pollStates = WeakHashMap<Thread, PollState>()
     @TruffleBoundary @Synchronized internal fun pollState(thread: Thread): PollState =
         pollStates.getOrPut(thread) { PollState() }
@@ -193,7 +196,9 @@ internal class GuestThreads internal constructor(
             identity.allocationBaseline = GuestAllocationAccounting.sample(id)
             if (identity.allocationBaseline < 0L) identity.allocationUnavailable = true
         }
-        slot.entriesPrevious.addLast(GuestEntry(activeIdentity.get(), slot.identity.status))
+        val poll = pollState(current)
+        slot.entriesPrevious.addLast(GuestEntry(activeIdentity.get(), slot.identity.status, poll.astStack))
+        poll.astStack = AstStackScope()
         slot.identity.status = GuestThreadStatus.RUNNING
         activeIdentity.set(slot.identity)
         slot.entries++
@@ -383,6 +388,7 @@ internal class GuestThreads internal constructor(
             check(target.thread === current) { "Guest completion ran on a different Java thread" }
             check(target.entries > 0)
             val previous = target.entriesPrevious.removeLast()
+            pollState(current).astStack = previous.astStack
             if (previous.active == null) activeIdentity.remove() else activeIdentity.set(previous.active)
             if (--target.entries != 0) {
                 if (!closed) target.identity.status = previous.status

@@ -40,7 +40,8 @@ class TupleCompletionTest {
         @field:CompilationFinal(dimensions = 1) val fields = intArrayOf(layout.bind("integer"), layout.bind("lazy pointer"))
     }
     private class Producer(language: Language, val shape: TupleShape, private val slots: Slots = Slots(),
-        private val fallback: RootCallTarget? = null, private val environment: CaptureLayout? = null) : GuestRoot(language, slots.layout.build()) {
+        private val fallback: RootCallTarget? = null, private val environment: CaptureLayout? = null,
+        private val capturesFrame: Boolean = false) : GuestRoot(language, slots.layout.build()) {
         @Child private var residual = IndirectCallNode.create()
         init { configureTupleResult(shape); configureEntry(booleanArrayOf(false, false), environment != null) }
         override fun bloom(frame: VirtualFrame) = 0L
@@ -55,7 +56,7 @@ class TupleCompletionTest {
                 FrameAccess.writeLong(frame, slots.fields[0], value + 17L)
                 FrameAccess.write(frame, slots.fields[1], frame.arguments[offset + 1])
             }
-            return shape.finish(frame, slots.fields)
+            return shape.finish(frame, slots.fields, capturesFrame)
         }
     }
     private class Consumer(language: Language, private val shape: TupleShape, target: RootCallTarget,
@@ -93,6 +94,44 @@ class TupleCompletionTest {
         assertEquals(0, language.handoffState.get().results.depth)
         assertEquals(0, language.handoffState.get().results.retainedReferences())
     }
+
+    @Test fun asyncTupleCarrierStaysVirtualUntilItsCompiledCaptureOwnsIt() = withLanguage { language ->
+        val shape = shape(language)
+        val producer = Producer(language, shape, capturesFrame = true).callTarget
+        val slots = Slots()
+        val consumer = object : RootNode(language, slots.layout.build()) {
+            @Child var call = DirectCallNode.create(producer).also { it.forceInlining() }
+            var compiledCaptures = 0
+            override fun execute(frame: VirtualFrame): Any? {
+                val result = Calls.direct(call, arrayOf(0L, frame.arguments[0], frame.arguments[1]))
+                if (CompilerDirectives.inCompiledCode()) CompilerDirectives.ensureVirtualizedHere(result)
+                if (frame.arguments[2] == true) {
+                    if (CompilerDirectives.inCompiledCode()) compiledCaptures++
+                    // Interpreter tuple completion owns a pool loan; a compiled
+                    // inline carrier can become the captured value directly.
+                    return if (result === TupleComplete) ownedTupleResult(result, shape) else result
+                }
+                shape.consume(frame, result, slots.fields, 0)
+                return frame.getObject(slots.fields[1])
+            }
+        }
+        val pointer = Any()
+        repeat(20) {
+            assertSame(pointer, consumer.callTarget.call(5L, pointer, false))
+            assertTrue(consumer.callTarget.call(5L, pointer, true) is HandoffStorage)
+            released(language)
+        }
+        compile(consumer.callTarget)
+        val before = consumer.compiledCaptures
+        val captured = consumer.callTarget.call(4097L, pointer, true) as HandoffStorage
+        assertEquals(before + 1, consumer.compiledCaptures)
+        assertSame(shape.layout, captured.layout)
+        assertEquals(4114L, shape.layout.getLong(captured, 0))
+        assertSame(pointer, shape.layout.getObject(captured, 1))
+        assertSame(pointer, consumer.callTarget.call(8193L, pointer, false))
+        assertTrue(valid(consumer.callTarget)); released(language)
+    }
+
     @Test fun deoptimizationMaterializesAFreshPointerCarrierWithoutInventingALoan() = withLanguage { language ->
         val shape = shape(language)
         val producer = Producer(language, shape).callTarget

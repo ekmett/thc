@@ -359,6 +359,7 @@ jobs:
             build/proxy-void/
             build/test-results/
             build/mask-functions/
+            build/deep-evaluation/
             build/aggregate-frontier.json
             build/primop-coverage.json
             build/scalar-signatures/provenance.json

@@ -75,12 +75,15 @@ internal class AstContinuation(
         if (!claimed.compareAndSet(false, true)) fault("AST continuation was already resumed")
         val ambient = SynchronousMasking.current(sourceRoot)
         val ambientAnnotations = StackAnnotations.current(sourceRoot)
+        val stack = astStackScope(sourceRoot)
+        stack.depth++
         try {
             SynchronousMasking.set(sourceRoot, logicalMask)
             StackAnnotations.set(sourceRoot, annotations)
             return try { resumeAstSteps(frame, steps, input) }
             catch (cut: AstCapture) { cut.freeze(sourceRoot, frame) }
         } finally {
+            stack.depth--
             SynchronousMasking.set(sourceRoot, ambient)
             StackAnnotations.set(sourceRoot, ambientAnnotations)
         }

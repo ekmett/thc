@@ -22,8 +22,8 @@ import com.oracle.truffle.api.source.SourceSection
 
 /* Indexed frames, selective captures, rooted application and self-tail frame
  * restoration follow Cadenza. See NOTICE.md and LICENSE.txt. Haskell thunks
- * supply the additional lazy update/blackhole protocol. Arbitrary non-tail
- * recursion still uses the host stack. */
+ * supply the additional lazy update/blackhole protocol. Async-capable AST
+ * roots spill bounded non-tail activation chains to saved continuations. */
 open class RuntimeFault(message: String) : RuntimeException(message)
 /** A known implementation gap, distinct from malformed Core or runtime errors. */
 internal class UnsupportedCore(message: String) : RuntimeFault(message)
@@ -148,7 +148,8 @@ internal class CapturedAsyncDelivery @JvmOverloads constructor(
     com.oracle.truffle.api.exception.AbstractTruffleException(
         "Private captured IO-handler delivery", null, 0, null)
 /** A root-local bytecode yield hands the shared thunk to another evaluator. */
-internal class ThunkSuspended @JvmOverloads constructor(val thunk: Thunk, val asyncRequest: AsyncRequest? = null) :
+internal class ThunkSuspended @JvmOverloads constructor(val thunk: Thunk, val asyncRequest: AsyncRequest? = null,
+    val stackSpill: Boolean = false) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
         "Internal bytecode thunk suspension", null, 0, null)
 /** A call returned its own bytecode continuation; only that exact call edge may capture it. */
@@ -159,7 +160,8 @@ internal class CallSegmentSuspended @JvmOverloads constructor(
     val segment: CallSegment,
     /** Logical mask before a caller parked to its root-entry mask for Yield. */
     val parkedActiveMask: MaskingState? = null,
-    val asyncRequest: AsyncRequest? = savedGuestContinuation(segment.value)?.asyncRequest()
+    val asyncRequest: AsyncRequest? = savedGuestContinuation(segment.value)?.asyncRequest(),
+    val stackSpill: Boolean = savedGuestContinuation(segment.value)?.stackSpill() == true
 ) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
         "Internal bytecode call segment suspension", null, 0, null)
@@ -541,13 +543,11 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
     }
 
     @CompilerDirectives.TruffleBoundary
-    private fun resumeChain(original: Thunk): Any? {
+    private fun resumeChain(original: Any, drainSpills: Boolean = false): Any? {
         val parked = java.util.ArrayDeque<Parked>()
         val seen = java.util.IdentityHashMap<Any, Boolean>()
+        var leaf: Any = original
         while (true) {
-            parked.clear()
-            seen.clear()
-            var leaf: Any = original
             var leafContinuation: SavedGuestContinuation? = null
             while (true) {
                 if (seen.put(leaf, true) != null) fault("Suspended thunk dependency cycle")
@@ -560,7 +560,8 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
             var expected = leafContinuation
             var input: Any? = Unit
             while (true) {
-                val outcome = try {
+                var spilled = false
+                var outcome: Any? = try {
                     val answer = when (current) {
                         is Thunk -> executeOne(current, expected, input)
                         is CallSegment -> executeCallSegment(current, expected, input)
@@ -568,25 +569,99 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                     }
                     if (answer === Retry) null else ChildResume(answer, null)
                 } catch (suspension: ThunkSuspended) {
-                    // Resignal the requested update boundary, not a deeper child.
-                    if (original.state == 5) throw ThunkSuspended(original, suspension.asyncRequest)
-                    throw suspension
+                    if (drainSpills && suspension.stackSpill && suspension.asyncRequest == null) {
+                        spilled = true
+                        null
+                    } else if (suspension.thunk === current && suspension.asyncRequest != null &&
+                        astCaller(parked.peekLast())) {
+                        AstChildSuspension(current, suspension.asyncRequest)
+                    } else {
+                        // Resignal the requested update boundary, not a deeper child.
+                        resignalParked(original, suspension.asyncRequest, suspension.stackSpill)
+                        throw suspension
+                    }
                 } catch (suspension: CallSegmentSuspended) {
-                    // The requested thunk is still parked even if a deeper
-                    // dependency yielded again. A new caller must capture the
-                    // requested update boundary, not skip its continuation.
-                    if (original.state == 5) throw ThunkSuspended(original, suspension.asyncRequest)
-                    throw suspension
+                    if (drainSpills && suspension.stackSpill && suspension.asyncRequest == null) {
+                        spilled = true
+                        null
+                    } else if (suspension.segment === current && suspension.asyncRequest != null &&
+                        astCaller(parked.peekLast())) {
+                        AstChildSuspension(current, suspension.asyncRequest)
+                    } else {
+                        // The requested thunk is still parked even if a deeper
+                        // dependency yielded again. A new caller must capture the
+                        // requested update boundary, not skip its continuation.
+                        resignalParked(original, suspension.asyncRequest, suspension.stackSpill)
+                        throw suspension
+                    }
                 } catch (failure: GuestException) { ChildResume(null, failure) }
-                if (outcome == null) break // Another evaluator advanced a link; rescan from the root.
+                val pending = (input as? AstChildSuspension)?.request
+                    ?.takeIf { it.state == AsyncRequestState.CLAIMED }
+                if (pending != null && (outcome is ChildResume || outcome == null && !spilled)) {
+                    // Another evaluator may have completed or reparked this caller.
+                    // Forward the delivery through its still-saved lexical callers;
+                    // neither the result nor an identity race consumes the token.
+                    outcome = if (astCaller(parked.peekLast())) AstChildSuspension(current, pending)
+                        else resignalPending(original, pending)
+                }
+                if (outcome == null) {
+                    if (spilled) {
+                        // The driver still owns this deque. Descend only the new cut,
+                        // retaining older callers instead of rescanning the whole chain.
+                        leaf = current
+                        seen.remove(current)
+                    } else {
+                        // Another evaluator advanced a link; rescan from the root.
+                        leaf = original
+                        parked.clear()
+                        seen.clear()
+                    }
+                    break
+                }
+                seen.remove(current)
                 if (parked.isEmpty()) {
-                    outcome.failure?.let { throw it }
-                    return outcome.value
+                    val completed = outcome as? ChildResume ?: fault("AST child cut has no saved caller")
+                    completed.failure?.let { throw it }
+                    return completed.value
                 }
                 val parent = parked.removeLast()
                 current = parent.boundary
                 expected = parent.continuation
                 input = outcome
+            }
+        }
+    }
+
+    private fun astCaller(parked: Parked?): Boolean =
+        parked?.continuation is AstContinuation || parked?.continuation is AstStackContinuation
+
+    private fun resignalPending(original: Any, request: AsyncRequest): Nothing {
+        resignalParked(original, request, false)
+        // A completed shared update can be read after delivery without replay.
+        throw AsyncBlocked(request, this)
+    }
+
+    private fun resignalParked(original: Any, request: AsyncRequest?, stackSpill: Boolean) {
+        when (original) {
+            is Thunk -> if (original.state == 5) throw ThunkSuspended(original, request, stackSpill)
+            is CallSegment -> if (original.state == 5)
+                throw CallSegmentSuspended(original, asyncRequest = request, stackSpill = stackSpill)
+        }
+    }
+
+    /** Called only after every nested AST activation has unwound to its entry driver. */
+    @CompilerDirectives.TruffleBoundary
+    internal fun drainStack(initial: SavedGuestContinuation): Any? {
+        val mask = SynchronousMasking.current(this)
+        val root = initial.sourceRoot as? GuestRoot ?: fault("AST stack cut has no guest root")
+        val parkedMask = (initial.yielded as? CallSegmentSuspended)?.parkedActiveMask ?: mask
+        val segment = CallSegment(initial.identity, parkedMask, mask, root.tupleResult)
+        while (true) {
+            try { return resumeChain(segment, drainSpills = true) }
+            catch (cut: CallSegmentSuspended) {
+                if (cut.segment !== segment) throw cut
+                if (!cut.stackSpill || cut.asyncRequest != null)
+                    return AstStackContinuation(root, cut)
             }
         }
     }
@@ -666,7 +741,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                     throw IllegalStateException("Parked call segment did not restore its caller mask")
                 val request = saved.asyncRequest()
                 publishCallContinuation(segment, saved, parkedMask ?: SynchronousMasking.current(this))
-                throw CallSegmentSuspended(segment, asyncRequest = request)
+                throw CallSegmentSuspended(segment, asyncRequest = request, stackSpill = saved.stackSpill())
             }
             // A completed tuple may still be a producer-thread slab loan.
             // Release that loan even if the callee returned under a wrong mask.
@@ -798,7 +873,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                     throw IllegalStateException("Nested guest yield has no captured caller segment")
                 val request = saved.asyncRequest()
                 publishContinuation(thunk, saved)
-                throw ThunkSuspended(thunk, request)
+                throw ThunkSuspended(thunk, request, saved.stackSpill())
             }
             if (result is Thunk) fault("Thunk target violated WHNF convention")
             synchronized(thunk.monitor) {
@@ -1620,7 +1695,7 @@ private class FunctionBody(expression: Expr, metrics: Metrics, result: CoreRepre
                     }
                 })
             }
-            return shape.finish(frame, tupleSlots)
+            return shape.finish(frame, tupleSlots, AstControl.enabled(this))
         }
         // Kotlin's enum when uses a mutable synthetic int[] mapping. Graal
         // cannot fold that lookup, even when this node's resultKind is constant.
@@ -1848,6 +1923,26 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     }
 
     override fun execute(frame: VirtualFrame): Any? {
+        if (!enableAsync) return executeInitial(frame, false)
+        val stack = astStackScope(this)
+        val driver = !stack.driving
+        if (driver) stack.driving = true
+        return try {
+            stack.depth++
+            val result = try { executeInitial(frame, stack.depth >= AstStackScope.MAX_DEPTH) }
+                finally { stack.depth-- }
+            // Drain only after all nested guest activations have returned.
+            val saved = when (result) {
+                is AstTailYield -> result.continuation
+                else -> savedGuestContinuation(result)
+            }
+            if (driver && saved?.stackSpill() == true && saved.asyncRequest() == null)
+                entryForce.drainStack(saved)
+            else result
+        } finally { if (driver) stack.driving = false }
+    }
+
+    private fun executeInitial(frame: VirtualFrame, spill: Boolean): Any? {
         if (metrics.enabled && CompilerDirectives.inCompiledCode()) metrics.incrementCompiledEntries()
         val entry = handoff
         val typed = typedInput
@@ -1863,13 +1958,24 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             frame.setLong(FrameLayout.BLOOM_FILTER, (frame.arguments[0] as? Long ?: fault("Invalid bloom argument")) or mask)
             buildFrame(frame.arguments, frame)
         }
+        if (spill) {
+            return captureStack(frame.materialize())
+        }
         return try { executeCapturableBody(frame) }
         catch (cut: AstCapture) {
             // Continuations own a real frame only on the interrupted slow path.
-            // Keep its escape out of ordinary compiled calls and foreign-call edges.
-            CompilerDirectives.transferToInterpreter()
             cut.freeze(this, frame.materialize())
         }
+    }
+
+    /** A root-entry cut has no executed body or caller suffix to unwind here. */
+    @CompilerDirectives.TruffleBoundary
+    private fun captureStack(frame: MaterializedFrame): AstContinuation {
+        if (thc.Language.currentState(this).stm.hasTransaction())
+            throw UnsupportedCore("AST stack spilling across an active STM transaction is unsupported")
+        astStackScope(this).spills++
+        return AstCapture(AstStackSpill, SynchronousMasking.current(this))
+            .append(ResumeBody(this)).freeze(this, frame)
     }
 
     private fun executeCapturableBody(frame: VirtualFrame): Any? {
@@ -2123,7 +2229,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "unsupportedPolicy" to (if (diagnosticUnsupported) "diagnostic-traps" else "reject-at-load"),
         "deferredUnsupported" to deferredUnsupported.toList(), "unsupportedTraps" to metrics.unsupportedTraps,
         "frames" to "indexed primitive slots; selective StaticShape captures",
-        "stackPolicy" to "tail-safe; non-tail calls and nested thunk forcing use host stack", "threadPolicy" to
+        "stackPolicy" to (if (enableAsync) "tail-safe; bounded AST activation chains; active STM spilling unsupported"
+            else "tail-safe; non-tail calls and nested thunk forcing use host stack"), "threadPolicy" to
             if (enableAsync) "context-owned Java threads; captured asynchronous delivery"
             else "context-owned Java threads; external asynchronous delivery disabled")
     private fun representation(binding: Map<String, Any?>): Boolean = binding["lifted"] as? Boolean

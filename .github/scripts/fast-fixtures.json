@@ -31,6 +31,7 @@
     "thc.runtime.CoreMainThreadForeignTest",
     "thc.runtime.SulongLimbProviderTest",
     "thc.runtime.AstContinuationTest",
+    "thc.runtime.AstStackTest",
     "thc.runtime.GuestThreadsTest",
     "thc.runtime.GuestThreadStatusTest",
     "thc.runtime.GuestThreadLabelTest",
@@ -979,6 +980,34 @@
         "scripts/prepare-synchronous-exceptions.py",
         "compiler/test-fixtures/SynchronousExceptionsAudit.hs",
         "compiler/test-fixtures/SynchronousExceptionsNative.hs"
+      ]
+    },
+    "deep-evaluation": {
+      "junit": [
+        "thc.runtime.AstStackNativeTest"
+      ],
+      "commands": [
+        {
+          "argv": [
+            "cabal",
+            "run",
+            "exe:thc-fixtures",
+            "--offline",
+            "--",
+            "deep-evaluation"
+          ]
+        }
+      ],
+      "outputs": [
+        "build/deep-evaluation"
+      ],
+      "sources": [
+        "test/haskell-fixtures/DeepEvaluationFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal",
+        "compiler/test-fixtures/DeepEvaluation.hs",
+        "compiler/test-fixtures/DeepEvaluationNative.hs"
       ]
     },
     "mask-functions": {

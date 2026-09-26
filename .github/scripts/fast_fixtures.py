@@ -24,13 +24,13 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "42f68a55ef78b4fa0b44797a1ef7ee268f51af30398a6205b213762f1d9c2ee9"
+FULL_PREPARATION_PLAN = "7c09649f65edf911dd5741b9d8fed26374b20df808abc9566d3353656f03a7d6"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/address-array-copy", "build/simd-capability-smoke", "build/managed-address-reads",
     "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/thread-status", "build/thread-label", "build/uncaught-self", "build/small-arrays", "build/floating-address", "build/atomic-address",
     "build/floating-byte-offset", "build/narrow-byte-offset", "build/int32-byte-offset", "build/unaligned-scalar-memory",
-    "build/explicit64-arrays", "build/mask-functions", "build/interface-core",
+    "build/explicit64-arrays", "build/mask-functions", "build/deep-evaluation", "build/interface-core",
     "build/original-fd-ready", "build/simd-calls", "build/sum-join", "build/record-fields",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
@@ -148,6 +148,12 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/mask-functions/pre/core/MaskFunctionAudit.json",
     "build/mask-functions/post/core/MaskFunctionAudit.json",
     "build/mask-functions/logs/native-oracle.stdout",
+    "build/deep-evaluation/manifest.json", "build/deep-evaluation/native/oracle",
+    *[f"build/deep-evaluation/{stage}/{name}" for stage in ("pre", "post")
+      for name in ("core/DeepEvaluation.json", "core/THC.InterfaceClosure.json", "audit.json")],
+    *[f"build/deep-evaluation/logs/{command}.{suffix}"
+      for command in ("ghc-version", "native-compile", "native-oracle", "pre-export", "pre-audit", "post-export", "post-audit")
+      for suffix in ("stdout", "stderr", "command.json")],
     "build/addr-identity/pre-core/AddressIdentityAudit.json", "build/addr-identity/post-core/AddressIdentityAudit.json",
     "build/io-main-pap/provenance.json", "build/managed-mvars/manifest.json", "build/managed-md5-native/provenance.json",
     "build/pinned-addresses/manifest.json",

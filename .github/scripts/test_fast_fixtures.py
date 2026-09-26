@@ -19,6 +19,19 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_deep_evaluation_is_required_for_full_preparation_reuse(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        self.assertEqual('deep-evaluation', owners['thc.runtime.AstStackNativeTest'])
+        self.assertEqual(['build/deep-evaluation'], manifest['groups']['deep-evaluation']['outputs'])
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/deep-evaluation', fast_fixtures.FULL_OUTPUT_ROOTS)
+        for path in ('manifest.json', 'native/oracle', 'logs/native-oracle.stdout',
+                     'pre/core/DeepEvaluation.json', 'post/core/DeepEvaluation.json',
+                     'pre/core/THC.InterfaceClosure.json', 'post/core/THC.InterfaceClosure.json',
+                     'pre/audit.json', 'post/audit.json'):
+            self.assertIn('build/deep-evaluation/' + path, fast_fixtures.FULL_REQUIRED)
+
     def test_proxy_void_has_focused_preparation_and_closed_cache(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

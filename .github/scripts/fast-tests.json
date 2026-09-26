@@ -11,6 +11,7 @@
     ]
   },
   "leafSources": {
+    "src/main/kotlin/thc/runtime/AstStack.kt": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
     "src/main/kotlin/thc/runtime/NativeEpoll.kt": {
       "junit": ["thc.runtime.NativeEpollTest"], "python": []
     },
@@ -1554,8 +1555,7 @@
         "thc.runtime.SimdInt32ByteArrayTest",
         "thc.runtime.SimdWord32ByteArrayTest",
         "thc.runtime.SimdFloatByteArrayTest",
-        "thc.runtime.SimdDoubleByteArrayTest"
-      ],
+        "thc.runtime.SimdDoubleByteArrayTest", "thc.runtime.AstStackNativeTest"],
       "python": []
     },
     "test/haskell-fixtures/LibdwUnavailableFixtures.hs": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
@@ -1690,6 +1690,9 @@
       "junit": ["thc.runtime.CoreContinuationNativeTest"],
       "python": []
     },
+    "test/haskell-fixtures/DeepEvaluationFixtures.hs": {"junit": ["thc.runtime.AstStackNativeTest"], "python": []},
+    "compiler/test-fixtures/DeepEvaluation.hs": {"junit": ["thc.runtime.AstStackNativeTest"], "python": []},
+    "compiler/test-fixtures/DeepEvaluationNative.hs": {"junit": ["thc.runtime.AstStackNativeTest"], "python": []},
     "test/haskell-fixtures/MaskFunctionFixtures.hs": {
       "junit": ["thc.runtime.MaskFunctionNativeTest"],
       "python": []
