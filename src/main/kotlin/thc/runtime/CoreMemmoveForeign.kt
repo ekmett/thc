@@ -4,11 +4,12 @@ package thc.runtime
 
 import com.oracle.truffle.api.frame.VirtualFrame
 
-/** Original ghc-internal address copies and array's byte-array memcpy declaration. */
+/** Original ghc-internal/ram address copies and array's byte-array memcpy declaration. */
 internal object CoreMemmoveForeign : CoreMemoryCopyForeign("memmove")
 internal object CoreMemcpyForeign : CoreMemoryCopyForeign("memcpy")
 
 internal sealed class CoreMemoryCopyForeign(private val symbol: String) {
+    private val ramUnit = Regex("ram-0\\.22\\.1(?:-[A-Za-z0-9]+)?")
     private val scalarKeys = setOf("kind", "primReps", "evaluated")
     private val tupleKeys = scalarKeys + setOf("aggregate", "components")
     private val descriptorKeys = setOf("schema", "target", "convention", "safety", "arity", "suppliedArity", "argumentReps", "resultRep")
@@ -87,7 +88,9 @@ internal sealed class CoreMemoryCopyForeign(private val symbol: String) {
         val expected = if (arrays) arrayArgumentReps else argumentReps
         requireProof(descriptor.keys == descriptorKeys && exactInteger(descriptor["schema"], 1), "descriptor schema")
         requireProof(target.keys == setOf("kind", "symbol", "unit", "isFunction") && target["kind"] == "static" &&
-            (target["unit"] == "ghc-internal" || arrays) && target["isFunction"] == true, "exact installed GHC target")
+            (target["unit"] == "ghc-internal" || arrays || symbol == "memcpy" &&
+                (target["unit"] as? String)?.matches(ramUnit) == true) && target["isFunction"] == true,
+            "supported installed-library target")
         requireProof(descriptor["convention"] == "ccall" && descriptor["safety"] == "unsafe" &&
             exactInteger(descriptor["arity"], 4) && exactInteger(descriptor["suppliedArity"], 4), "convention, safety or arity")
         val declared = descriptor["argumentReps"] as? List<*>

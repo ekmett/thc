@@ -39,6 +39,7 @@ extra-source-files:
   docs/gc-stats-clock.md
   compiler/test-fixtures/RubbishLiteralAudit.hs
   compiler/test-fixtures/OriginalDigestNative.hs
+  compiler/test-fixtures/OriginalMemcpyNative.hs
   compiler/test-fixtures/OriginalErfNative.hs
   compiler/test-fixtures/OriginalErfEntry.hs
   compiler/pinned-zlib/README.md
