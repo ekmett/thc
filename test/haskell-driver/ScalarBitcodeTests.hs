@@ -4,7 +4,7 @@ module ScalarBitcodeTests (tests) where
 
 import Data.Either (isLeft)
 import Test.HUnit
-import THC.Driver.ScalarBitcode (parseDependencies, scalarFunctions)
+import THC.Driver.ScalarBitcode (parseDependencies, scalarFunctions, sulongScalarTarget)
 
 tests :: Test
 tests = TestLabel "closed scalar C producer inputs" $ TestList
@@ -36,5 +36,12 @@ tests = TestLabel "closed scalar C producer inputs" $ TestList
       , "define i32 @numeric(i64 %x) {\n %p = inttoptr i64 %x to ptr\n ret i32 0\n}"
       , "define i32 @callback(i32 %x) {\n %v = call i32 %fp(i32 %x)\n ret i32 %v\n}"
       ]
+  , TestCase $ do
+      assertEqual "exact Sulong Linux x86_64 vendor alias" "x86_64-unknown-linux-gnu"
+        (sulongScalarTarget "x86_64-pc-linux-gnu")
+      mapM_ (\target -> assertEqual ("target retained: " ++ target) target (sulongScalarTarget target))
+        ["x86_64-unknown-linux-gnu", "aarch64-pc-linux-gnu", "i386-pc-linux-gnu",
+         "x86_64-pc-linux-musl", "x86_64-pc-linux-gnux32", "x86_64-pc-windows-msvc",
+         "x86_64-apple-darwin", "x86_64-redhat-linux-gnu", "x86_64-pc-linux-gnu-extra"]
   ]
   where integerFunction = "define i32 @identity(i32 %x) {\n ret i32 %x\n}"

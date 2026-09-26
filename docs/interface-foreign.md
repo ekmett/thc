@@ -56,6 +56,11 @@ Matching `llvm-link`, `opt` and `llvm-nm` must be available, or selected with
 and LLVM constructs, requires the LLVM roundtrip to reproduce Cabal's actual
 native object, and records source/header observations in the component cache
 key. A target-specific native build and full-Core GHC 9.14.1 remain required.
+Sulong requires the Linux x86_64 vendor spelling `unknown`, so the exact
+`x86_64-pc-linux-gnu` triple is changed to `x86_64-unknown-linux-gnu` in the
+emitted LLVM module. The hashed recipe retains its observed `nativeTarget`
+and selected bitcode `target`; the adjusted bitcode must still reproduce the
+identical Cabal native object before linking. No other target is normalized.
 
 Typed `staticForeignImports` associations retain the original declaration,
 normalization and emitted GHC ABI. A separate `packageScalarLink` carries the
