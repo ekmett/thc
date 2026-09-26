@@ -125,6 +125,14 @@ count. The base-only public [`THC` module](docs/cpu-affinity-api.md) exposes sup
 and per-fork acceptance queries. See [scheduling](docs/thread-scheduling.md) for
 Linux/Windows behavior and the local Graal compiler-worker affinity reset.
 
+The base-only [`thc:runtime` services](docs/runtime-services.md) also expose
+runtime permissions/backend, thread accounting and CPU eligibility, JVM memory
+and collector statistics, context-owned native allocation accounting, and
+structured stderr/JFR events and spans. Availability and scope are explicit;
+native GHC reports unavailable JVM services honestly. Opt-in JIT telemetry is
+separate in `THC.Internal.JIT`, explicitly `Unsafe`; the public `THC` facade is
+`Safe` and does not re-export hazardous internal controls.
+
 The [polyglot example](docs/polyglot.md) calls JavaScript from Haskell with
 `foreign import javascript`. GHC checks the declarations; THC implements them
 with Truffle interop. Run `scripts/javascript-demo.sh` to try it. A lower-level

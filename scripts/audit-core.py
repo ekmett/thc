@@ -654,6 +654,34 @@ class Audit:
 
         target = call.get('target') if isinstance(call, dict) else None
         symbol = target.get('symbol') if isinstance(target, dict) else None
+        runtime_arguments = self.cap.get('runtimeServiceCalls', {}).get(symbol) if isinstance(symbol, str) else None
+        if runtime_arguments is not None:
+            try:
+                core_original_foreign.validate_head(function, function[1] in bound or function[1] in self.bindings)
+                require = core_original_foreign.require
+                require(set(call) == core_original_foreign.DESCRIPTOR_KEYS and type(call['schema']) is int and
+                        call['schema'] == 1 and call['convention'] == 'ccall' and call['safety'] == 'unsafe',
+                        'THC runtime service exact v1 C ABI')
+                require(set(target) == {'kind', 'symbol', 'unit', 'isFunction'} and target['kind'] == 'static' and
+                        target['isFunction'] is True and (target['unit'] is None or isinstance(target['unit'], str)),
+                        'THC runtime service static target')
+                require(all(type(call[k]) is int and call[k] == len(runtime_arguments) for k in ('arity', 'suppliedArity')) and
+                        len(arguments) == len(runtime_arguments) and len(expr[3]) == len(runtime_arguments) and
+                        all(flag is False for flag in expr[3]), 'THC runtime service saturated arguments')
+                declared = call['argumentReps']
+                require(isinstance(declared, list) and len(declared) == len(runtime_arguments), 'THC runtime service argument declarations')
+                for index, (argument, proof, primitive) in enumerate(zip(arguments, declared, runtime_arguments)):
+                    require(core_original_foreign.scalar(proof, primitive, True) and
+                            core_original_foreign.scalar(core_original_foreign.raw_rep(argument), primitive),
+                            f'THC runtime service argument {index}')
+                    self.original_stack_operand(argument, primitive, bound, index)
+                require(core_original_foreign.result(call['resultRep'], (None, 'Int64Rep'), True) and
+                        core_original_foreign.result(core_original_foreign.raw_rep(expr), (None, 'Int64Rep')),
+                        'THC runtime service State#/CLLong result')
+                self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path))
+            except (ValueError, KeyError, TypeError, IndexError) as error:
+                self.issue('foreign-call', owner, path, str(error))
+            return True
         if symbol in ('thc_cpu_affinity_v1_support', 'thc_cpu_affinity_v1_applied'):
             try:
                 core_original_foreign.validate_head(function, function[1] in bound or function[1] in self.bindings)

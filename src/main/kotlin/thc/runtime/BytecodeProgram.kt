@@ -1443,7 +1443,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val floatDecode = if (fn[0] == "prim") FloatDecodeOp.named(fn[1] as String) else null
             val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
             val cpuAffinity = CoreCpuAffinity.validate(expr, defined || fn.getOrNull(1) in scope.joins)
-            val packageScalar = if (cpuAffinity == null) CorePackageScalarForeign.validate(CoreRepresentations.metadata(expr),
+            val runtimeService = CoreRuntimeServices.validate(expr, defined || fn.getOrNull(1) in scope.joins)
+            val packageScalar = if (cpuAffinity == null && runtimeService == null) CorePackageScalarForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
                 CoreRepresentations.metadata(expr)?.get("rep"), packageScalarLinks) else null
             // A verified package owner takes precedence over similarly named RTS symbols.
@@ -1494,17 +1495,42 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (cpuAffinity == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
-            if (cpuAffinity != null) {
+            if (runtimeService != null) {
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { lowered ->
+                        CoreRuntimeServices.validateOperand(runtimeService, index, lowered.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginRuntimeServiceBridge(destination.single(), runtimeService.ordinal)
+                    operands[0].emit(e)
+                    operands[1].emit(e)
+                    if (runtimeService == RuntimeServiceCall.TRACE) operands[2].emit(e)
+                    else e.builder.emitLoadConstant(ManagedAddress.nullAddress())
+                    when (runtimeService) {
+                        RuntimeServiceCall.QUERY -> operands[2].emit(e)
+                        RuntimeServiceCall.CONTROL -> e.builder.emitLoadConstant(0L)
+                        RuntimeServiceCall.TRACE -> operands[3].emit(e)
+                    }
+                    operands.last().emit(e)
+                    e.builder.endRuntimeServiceBridge()
+                }
+            } else if (cpuAffinity != null) {
                 val state = compile(args.single(), scope, false)
                 CoreBoundThreadForeign.validateOperand(state.proof,
                     if (args.single()[0] == "var") scope.locals[args.single()[1]]?.proof ?: globalProofs[args.single()[1]] else null)
                 tupleExpression(tupleProof) { e, destination ->
-                    e.builder.beginCpuAffinityQuery(destination.single(), cpuAffinity)
+                    e.builder.beginRuntimeServiceBridge(destination.single(), 3)
+                    e.builder.emitLoadConstant(if (cpuAffinity) 1L else 0L)
+                    e.builder.emitLoadConstant(0L)
+                    e.builder.emitLoadConstant(ManagedAddress.nullAddress())
+                    e.builder.emitLoadConstant(0L)
                     state.emit(e)
-                    e.builder.endCpuAffinityQuery()
+                    e.builder.endRuntimeServiceBridge()
                 }
             } else if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)

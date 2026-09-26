@@ -95,6 +95,11 @@ are not live heap usage, allocation budgets or guest-only profiler samples.
 Unsupported virtual-thread counters and disabled accounting are explicit; a
 query does not turn monitoring on.
 
+The older guest allocation-counter implementation separately enables JVM
+allocation accounting on first guest entry when supported. This batch does not
+change that existing policy; these new read-only accounting queries never call
+the management bean's enable/disable setters themselves.
+
 `eligibleCPUs :: IO (Availability [CpuCoordinate])` returns the context's
 initial CPU eligibility in dense logical-capability order, capped by JVM CPU
 capacity. Linux uses group zero and potentially sparse OS CPU IDs. Windows uses

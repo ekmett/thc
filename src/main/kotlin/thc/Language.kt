@@ -389,6 +389,8 @@ class Language : TruffleLanguage<Language.State>() {
         internal val maskingState = ThreadLocal.withInitial { thc.runtime.MaskingState.UNMASKED }
         internal val stackAnnotations = ThreadLocal.withInitial { thc.runtime.StackAnnotationState.EMPTY }
         internal val threads = thc.runtime.GuestThreads(env, maskingState)
+        internal val runtimeTrace = thc.runtime.RuntimeTraceServices(env.err())
+        internal val runtimeJit = thc.runtime.RuntimeJitServices(language)
         @JvmField internal val stm = thc.runtime.ManagedSTM()
         internal val files = thc.runtime.ManagedFiles(env, threads)
         internal val rtsFileLocks = thc.runtime.RtsFileLocks()
@@ -490,6 +492,7 @@ class Language : TruffleLanguage<Language.State>() {
         try { context.signals.close() } finally { context.iconv.dispose() }
     }
     override fun disposeContext(context: State) {
+        try { context.runtimeJit.close() } finally { context.runtimeTrace.close() }
         context.compactImages.close()
         context.heapAddresses.close()
         context.managedExports.close()

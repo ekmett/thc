@@ -130,6 +130,57 @@ class CpuAffinityQueryTest(unittest.TestCase):
             self.assertTrue(self.inspect(call, state, shadow=True).issues)
 
 
+class RuntimeServicesQueryTest(unittest.TestCase):
+    def calls(self):
+        descriptors = json.loads((ROOT.parent / 'src/test/resources/core/runtime-services-descriptors.json').read_text())
+        self.assertEqual(set(CAP['runtimeServiceCalls']), set(descriptors))
+        for symbol, primitives in CAP['runtimeServiceCalls'].items():
+            declaration = descriptors[symbol]
+            proofs = declaration['argumentReps']
+            self.assertEqual(len(primitives), len(proofs))
+            result = declaration['resultRep']
+            bound = {f'a{i}': dict(proof, evaluated=True) for i, proof in enumerate(proofs)}
+            expression = ['app', ['var', 'service', dict(rep=CLOSURE)],
+                          [['var', key, dict(rep=proof)] for key, proof in bound.items()],
+                          [False] * len(proofs), False, False,
+                          dict(rep=dict(result, evaluated=True), foreignCall=declaration)]
+            yield expression, bound
+
+    def inspect(self, expression, bound, package=False):
+        audit = audit_core.Audit([], CAP)
+        if package:
+            audit.package_scalar_links['main'] = dict(unit='main', abi=[])
+        audit.polyglot_call(expression, bound, 'root', 'root')
+        return audit
+
+    def test_exact_reserved_calls_precede_native_compatibility_package(self):
+        for expression, bound in self.calls():
+            for package in (False, True):
+                audit = self.inspect(expression, bound, package)
+                self.assertEqual([], audit.issues)
+                self.assertEqual(1, len(audit.foreign_calls))
+
+    def test_foreign_abi_and_shadowed_names_reject(self):
+        for expression, bound in self.calls():
+            for key, value in (('schema', True), ('arity', True), ('suppliedArity', 0),
+                               ('convention', 'javascript'), ('safety', 'safe'), ('resultRep', LONG)):
+                changed = copy.deepcopy(expression)
+                changed[6]['foreignCall'][key] = value
+                self.assertTrue(self.inspect(changed, bound).issues, key)
+            self.assertTrue(self.inspect(expression, dict(bound, service=CLOSURE)).issues)
+            changed = copy.deepcopy(expression)
+            changed[3][0] = True
+            self.assertTrue(self.inspect(changed, bound).issues)
+
+    def test_wrong_width_and_erased_stored_operand_reject(self):
+        for expression, bound in self.calls():
+            for index, key in enumerate(bound):
+                bad = copy.deepcopy(expression)
+                bad[2][index][2]['rep'] = LONG
+                self.assertTrue(self.inspect(bad, bound).issues, key)
+                self.assertTrue(self.inspect(expression, dict(bound, **{key: LONG})).issues, key)
+
+
 class PackageScalarOperandTest(unittest.TestCase):
     """Call-proof controls only; no invented component or bitcode is executed."""
     def call(self, primitive):

@@ -2143,7 +2143,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val floatDecode = if (fn[0] == "prim") FloatDecodeOp.named(fn[1] as String) else null
             val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
             val cpuAffinity = CoreCpuAffinity.validate(expr, defined || fn.getOrNull(1) in scope.joins)
-            val packageScalar = if (cpuAffinity == null) CorePackageScalarForeign.validate(CoreRepresentations.metadata(expr),
+            val runtimeService = CoreRuntimeServices.validate(expr, defined || fn.getOrNull(1) in scope.joins)
+            val packageScalar = if (cpuAffinity == null && runtimeService == null) CorePackageScalarForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
                 CoreRepresentations.metadata(expr)?.get("rep"), packageScalarLinks) else null
             // A verified package owner takes precedence over similarly named RTS symbols.
@@ -2194,10 +2195,22 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (cpuAffinity == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
-            if (cpuAffinity != null) {
+            if (runtimeService != null) {
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { lowered ->
+                        CoreRuntimeServices.validateOperand(runtimeService, index, lowered.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                when (runtimeService) {
+                    RuntimeServiceCall.QUERY -> RuntimeQueryExpression(1, operands[0], operands[1], operands[2], operands[3])
+                    RuntimeServiceCall.CONTROL -> RuntimeControlExpression(operands[0], operands[1], operands[2])
+                    RuntimeServiceCall.TRACE -> RuntimeTraceExpression(operands[0], operands[1], operands[2], operands[3], operands[4])
+                }.proven(tupleProof.copy(evaluated = true))
+            } else if (cpuAffinity != null) {
                 val state = compile(args.single(), scope, false)
                 CoreBoundThreadForeign.validateOperand(state.representation,
                     if (args.single()[0] == "var") scope.locals[args.single()[1]]?.proof ?: globalProofs[args.single()[1]] else null)
