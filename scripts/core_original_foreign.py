@@ -8,6 +8,10 @@ These declarations alone do not enable complete decoding or remote capture.
 """
 
 STACK_CLONE = 'stg_cloneMyStackzh'
+TEXT_OPERATIONS = {
+    '_hs_text_memchr': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', 'Word64Rep', 'Word64Rep', 'Word8Rep', None), (None, 'Int64Rep')),
+    '_hs_text_measure_off': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', 'Word64Rep', 'Word64Rep', 'Word64Rep', None), (None, 'Int64Rep')),
+}
 GMP_ARRAY = 'BoxedRep (Just Unlifted)'
 # Actual ghc-internal primitive FCallId shapes, not the source IO wrapper types.
 # Even source-pure cmp/mod carry State; q/r return the singleton State tuple.
@@ -77,6 +81,7 @@ TCSETATTR_SYMBOL = 'ghczuwrapperZC9ZCghczminternalZCGHCziInternalziSystemziPosix
 TCGETATTR_SYMBOL = 'ghczuwrapperZC10ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCtcgetattr'
 
 OPERATIONS = {
+    **TEXT_OPERATIONS,
     **{'is' + precision + predicate: ('ccall', 'unsafe', (rep, None), (None, 'IntRep'))
        for precision, rep in (('Float', 'FloatRep'), ('Double', 'DoubleRep'))
        for predicate in ('NaN', 'Infinite', 'Finite', 'Denormalized', 'NegativeZero')},
@@ -213,6 +218,7 @@ DESCRIPTOR_KEYS = {'schema', 'target', 'convention', 'safety', 'arity', 'supplie
 # Same libc symbols, but different physical operands or result ABI from the
 # ghc-internal declarations above. Do not infer these from caller binding names.
 LIBRARY_OPERATIONS = {
+    **{('text-2.1.3-inplace', symbol): operation for symbol, operation in TEXT_OPERATIONS.items()},
     ('ghc-9.14.1-inplace', 'getOrSetLibHSghcFastStringTable'): OPERATIONS['getOrSetLibHSghcFastStringTable'],
     ('ghc-9.14.1-inplace', 'getOrSetLibHSghcGlobalHasPprDebug'): OPERATIONS['getOrSetLibHSghcGlobalHasPprDebug'],
     ('ghc-9.14.1-inplace', 'getOrSetLibHSghcGlobalHasNoDebugOutput'): OPERATIONS['getOrSetLibHSghcGlobalHasNoDebugOutput'],
@@ -315,6 +321,8 @@ def validate(metadata, argument_reps, flags, result_rep):
     convention, safety, expected, output = operation(target)
     if symbol == 'memchr':
         require(target.get('unit') == 'bytestring-0.12.2.0-inplace', 'exact bytestring unit')
+    if symbol in TEXT_OPERATIONS:
+        require(target.get('unit') == 'text-2.1.3-inplace', 'exact text unit')
     if symbol in ('getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',
                   'getOrSetLibHSghcGlobalHasNoDebugOutput', 'getOrSetLibHSghcGlobalHasNoStateHack', 'keepCAFsForGHCi'):
         require(target.get('unit') == 'ghc-9.14.1-inplace', 'exact compiler unit')

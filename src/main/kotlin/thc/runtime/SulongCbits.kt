@@ -57,6 +57,24 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
     private val iconvTask = FutureTask { load(env, "iconv") }
     private val strerrorTask = FutureTask { load(env, "strerror") }
     private val strerrorLocaleTask = FutureTask { load(env, "strerror-locale") }
+    private val textTask = FutureTask { load(env, "text") }
+    internal fun textFunction(operation: TextForeignOp): Any {
+        if (System.getProperty("os.name") != "Linux" || System.getProperty("os.arch") !in setOf("amd64", "x86_64"))
+            fault("Original text cbits currently require Linux x86_64")
+        textTask.run()
+        val library = try {
+            if (textTask.isDone) textTask.get()
+            else TruffleSafepoint.setBlockedThreadInterruptibleFunction(null,
+                TruffleSafepoint.InterruptibleFunction<FutureTask<Any>, Any> { it.get() }, textTask)
+        } catch (failure: ExecutionException) { throw (failure.cause ?: failure) }
+        return interop.readMember(library, operation.symbol)
+    }
+    internal fun text(function: Any, operation: TextForeignOp, bytes: CbitsBuffer, offset: Long, length: Long, count: Long): Long {
+        val argument = if (operation == TextForeignOp.MEMCHR) count.toByte() else count
+        val result = executeWithOwners(function, bytes, offset, length, argument)
+        if (!interop.fitsInLong(result)) fault("Original text result is not ssize_t")
+        return interop.asLong(result)
+    }
     private val finalizerTask = FutureTask {
         val original = load(env, "libdw-unavailable")
         listOf("libdwPoolRelease", "backtraceFree").associateWith { symbol ->

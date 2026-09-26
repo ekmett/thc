@@ -217,6 +217,7 @@ tasks.withType<Test>().configureEach {
             "original-iconv/**/*.json", "original-iconv/native/oracle",
             "original-iconv/logs/*.stdout", "original-iconv/logs/*.stderr",
             "managed-md5-native/**",
+            "text-cbits/**/*.json", "text-cbits/*.tsv", "text-cbits/logs/*.stdout", "text-cbits/logs/*.stderr",
             "original-stack/manifest.json", "original-stack/run-*/**",
             "original-stack-formatter/manifest.json", "original-stack-formatter/run-*/logs/*",
             "original-stack-formatter/run-*/pre-core/*.json", "original-stack-formatter/run-*/post-core/*.json",
@@ -812,6 +813,8 @@ val compileCbits by tasks.registering(Exec::class) {
         "bench/experiments/pinned-addresses/reference/md5.c",
         "bench/experiments/pinned-addresses/reference/md5.h")
     inputs.files(fileTree("compiler/pinned-ghc-rts") { include("*.c", "*.h") })
+    inputs.files("src/main/c/text-api.c")
+    inputs.files(fileTree("compiler/pinned-text/2.1.3"))
     outputs.dir(layout.buildDirectory.dir("generated/cbits"))
     outputs.upToDateWhen { false }
     commandLine(python.get(), "scripts/build-cbits.py", "--output", layout.buildDirectory.dir("generated/cbits").get().asFile)

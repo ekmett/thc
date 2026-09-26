@@ -3207,5 +3207,52 @@ class STMContractTest(unittest.TestCase):
         self.assertNotIn('sameTVar#', CAP['primitives'])
 
 
+class OriginalTextForeignAuditTests(unittest.TestCase):
+    def fixture(self, symbol):
+        arguments = ('BoxedRep (Just Unlifted)', 'Word64Rep', 'Word64Rep',
+                     'Word8Rep' if symbol == '_hs_text_memchr' else 'Word64Rep', None)
+        def scalar(rep, evaluated=True):
+            return dict(kind='void' if rep is None else 'object' if rep.startswith('BoxedRep') else 'long',
+                        primReps=[] if rep is None else [rep], evaluated=evaluated)
+        parameters = [dict(id=f'a{i}', lifted=False, rep=scalar(rep)) for i, rep in enumerate(arguments)]
+        result = dict(tuple_rep(scalar(None), scalar('Int64Rep')), evaluated=False)
+        descriptor = dict(schema=1, target=dict(kind='static', unit='text-2.1.3-inplace', symbol=symbol,
+                          isFunction=True), convention='ccall', safety='unsafe', arity=5, suppliedArity=5,
+                          argumentReps=[scalar(rep, False) for rep in arguments], resultRep=copy.deepcopy(result))
+        call = ['app', ['var', 'original-text', dict(rep=CLOSURE)],
+                [['var', p['id'], dict(rep=copy.deepcopy(p['rep']))] for p in parameters],
+                [False] * 5, False, False, dict(rep=result, foreignCall=descriptor)]
+        body = ['case', call, 'result', [['default', None, [], [*lit(0), dict(rep=LONG)]]],
+                dict(rep=LONG, binder=dict(id='result', lifted=False, rep=dict(result, evaluated=True)))]
+        root = dict(bind('root', ['lam', parameters, body, dict(rep=CLOSURE, resultRep=LONG)]),
+                    rep=CLOSURE, arity=5)
+        return dict(schema=1, ghc='9.14.1', bindings=[root], constructors=[])
+
+    def test_exact_text_calls_and_capability_boundary(self):
+        for symbol in ('_hs_text_memchr', '_hs_text_measure_off'):
+            module = self.fixture(symbol)
+            report = audit_core.Audit([('text-control.json', module)], CAP).run(['root'])
+            self.assertTrue(report['accepted'], report['issues'])
+            disabled = dict(CAP, managedForeignCalls=[name for name in CAP['managedForeignCalls'] if name != symbol])
+            self.assertFalse(audit_core.Audit([('text-control.json', module)], disabled).run(['root'])['accepted'])
+
+    def test_text_identity_state_array_result_and_binding_mutations_reject(self):
+        for symbol in ('_hs_text_memchr', '_hs_text_measure_off'):
+            for mutation in ('unit', 'safety', 'arity', 'array', 'state', 'result', 'stored-array', 'flags'):
+                module = self.fixture(symbol)
+                call = module['bindings'][0]['expr'][2][1]
+                descriptor = call[6]['foreignCall']
+                if mutation == 'unit': descriptor['target']['unit'] = 'other-text'
+                elif mutation == 'safety': descriptor['safety'] = 'safe'
+                elif mutation == 'arity': descriptor['suppliedArity'] = 4
+                elif mutation == 'array': descriptor['argumentReps'][0]['primReps'] = ['AddrRep']
+                elif mutation == 'state': call[2][-1][2]['rep'] = LONG
+                elif mutation == 'result': descriptor['resultRep']['primReps'] = ['Word64Rep']
+                elif mutation == 'stored-array': module['bindings'][0]['expr'][1][0]['rep'] = LONG
+                elif mutation == 'flags': call[3][0] = True
+                report = audit_core.Audit([('text-control.json', module)], CAP).run(['root'])
+                self.assertFalse(report['accepted'], (symbol, mutation))
+
+
 if __name__ == '__main__':
     unittest.main()
