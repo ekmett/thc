@@ -114,7 +114,7 @@ prepareGhcApi root requested = do
     binary <- singleLine "native executable" located
     native <- execute logs "native" [] binary arguments
     managed <- execute logs "thc" [] driver
-      (["run", fixture, "--exe", name, "--thc-root", root, "--runtime", runtime,
+      (["run", "--project-dir", fixture, name, "--thc-root", root, "--runtime", runtime,
         "--dist-dir", root </> acquired, "--installed-core", "required",
         "--with-ghc", ghc, "--with-ghc-pkg", ghcPkg] ++
         maybe [] (\path -> ["--ghc-source", path]) source ++ ["--"] ++ arguments)

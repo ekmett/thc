@@ -10,7 +10,7 @@ import TestSupport
 import THC.Driver.Run (FfiMode(..), parseFfiMode, runtimeLaunchArguments)
 
 tests :: Env -> Test
-tests env = TestLabel "runtime-only FFI selection" $ TestList
+tests env = TestLabel "run options and target selection" $ TestList
   [ TestLabel "typed mode choices" $ TestCase $ do
       assertEqual "native" (Right NativeFfi) (parseFfiMode "native")
       assertEqual "managed" (Right ManagedFfi) (parseFfiMode "managed")
@@ -39,18 +39,18 @@ tests env = TestLabel "runtime-only FFI selection" $ TestList
   , TestLabel "CLI accepts both choices and equals syntax" $ TestCase $
       forM_ [["--ffi", "native"], ["--ffi", "managed"],
              ["--ffi=native"], ["--ffi=managed"]] $ \arguments -> do
-        -- Missing --exe is intentionally checked before any build or runtime
+        -- Missing --thc-root is intentionally checked before any build or runtime
         -- probe; reaching it verifies that the option was accepted by the CLI.
         result <- run env (root env) Nothing 30 ("run" : arguments)
         assertFailure result
-        assertContains "run requires --exe NAME" (err result)
+        assertContains "run requires --thc-root DIR" (err result)
         assertBool "not an option-parser rejection" (not ("unrecognized option" `isInfixOf` err result))
   , TestLabel "CLI does not interpret a guest same-spelled option" $ TestCase $
       forM_ [[], ["--ffi", "managed"]] $ \arguments -> do
         result <- run env (root env) Nothing 30
           ("run" : arguments ++ ["--", "--ffi", "not-a-runtime-mode", "", "--"])
         assertFailure result
-        assertContains "run requires --exe NAME" (err result)
+        assertContains "run requires --thc-root DIR" (err result)
         assertBool "guest mode value was not validated"
           (not ("--ffi must be native or managed" `isInfixOf` err result))
   , TestLabel "unreleased old spelling is not an alias" $ TestCase $
@@ -71,4 +71,32 @@ tests env = TestLabel "runtime-only FFI selection" $ TestList
       assertContains "native|managed" (out result)
       assertContains "unavailable managed execution fails explicitly" (out result)
       assertBool "old spelling is absent from help" (not ("--sulong-mode" `isInfixOf` out result))
+  , TestLabel "positional Cabal targets and omitted default" $ TestCase $
+      forM_ ["run", "acquire"] $ \command ->
+      forM_ [[], ["ordinary"], ["exe:ordinary"], ["example:exe:ordinary"],
+             ["bench:measured"], ["example:bench:measured"], ["example:test:checked"]] $ \target -> do
+        result <- run env (root env) Nothing 30 (command : target)
+        assertFailure result
+        assertContains (command ++ " requires --thc-root DIR") (err result)
+  , TestLabel "legacy selector flags are not aliases" $ TestCase $
+      forM_ ["run", "acquire"] $ \command ->
+      forM_ ["--exe", "--target", "--bench"] $ \flag -> do
+        result <- run env (root env) Nothing 30 [command, flag, "ordinary"]
+        assertFailure result
+        assertNoStdout result
+        assertContains "unrecognized option" (err result)
+  , TestLabel "project location flags follow Cabal" $ TestCase $
+      forM_ [["--project-dir", "."], ["--project-file", "cabal.project"]] $ \location -> do
+        result <- run env (root env) Nothing 30 ("run" : "bench:measured" : location)
+        assertFailure result
+        assertContains "run requires --thc-root DIR" (err result)
+  , TestLabel "multiple runnable targets are rejected" $ TestCase $ do
+      result <- run env (root env) Nothing 30 ["run", "ordinary", "bench:measured"]
+      assertFailure result
+      assertContains "Usage: thc run [TARGET]" (err result)
+  , TestLabel "target-like guest arguments are not parsed as driver selectors" $ TestCase $ do
+      result <- run env (root env) Nothing 30
+        ["run", "bench:measured", "--", "--exe", "guest-option", "", "--"]
+      assertFailure result
+      assertContains "run requires --thc-root DIR" (err result)
   ]

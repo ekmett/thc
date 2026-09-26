@@ -60,7 +60,7 @@ preparePackageScalar root = do
        "executable oracle","  main-is: Main.hs","  hs-source-dirs: app","  ghc-options: -O2",
        "  build-depends: base, " ++ packageName,"  default-language: Haskell2010"]
     managed <- execute (name ++ "-thc-run") [("THC_BACKEND","bytecode")] driver
-      (["run",root </> project,"--exe","oracle","--thc-root",root,"--runtime",runtime,
+      (["run", "--project-dir", root </> project,"oracle","--thc-root",root,"--runtime",runtime,
         "--dist-dir",root </> output,"--installed-core","required","--with-ghc",ghc,"--with-ghc-pkg",ghcPkg] ++
         maybe [] (\path -> ["--ghc-source",path]) sourceRoot)
     plan <- readJson (root </> output </> "native/cache/plan.json")

@@ -28,10 +28,10 @@ With the built Haskell driver on PATH, select the actual THC checkout and GHC
 source tree (the placeholders below are paths, not environment settings):
 
 ```sh
-thc run . --exe ad-thc-check:exe:ad-kahn \
+thc run ad-thc-check:exe:ad-kahn \
   --thc-root /path/to/thc --dist-dir dist-thc/kahn \
   --installed-core required --ghc-source /path/to/ghc-9.14.1
-thc run . --exe ad-thc-check:exe:ad-regression \
+thc run ad-thc-check:exe:ad-regression \
   --thc-root /path/to/thc --dist-dir dist-thc/regression \
   --installed-core required --ghc-source /path/to/ghc-9.14.1 \
   -- --quickcheck-replay=20260926 --num-threads=1
