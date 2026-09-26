@@ -31,6 +31,11 @@ import java.util.function.Supplier
  * complete while enabled. Fields are independently sampled, not an atomic
  * snapshot; callers must not require starts >= completions. Disable/re-enable
  * retains counters. Each counter saturates at Long.MAX_VALUE.
+ *
+ * The listener is not an exhaustive JVM retirement/deoptimization stream. On
+ * pinned Graal, transferToInterpreterAndInvalidate can retire code without an
+ * invalidation or deoptimization callback. Never infer code liveness or absence
+ * of deoptimizations from a zero event count.
  */
 internal class RuntimeJitServices(
     language: Language,

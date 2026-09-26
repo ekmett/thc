@@ -161,7 +161,7 @@ class RuntimeJitServicesTest {
         } } }
     }
 
-    @Test fun realDeoptimizationAndCompilationFailureHaveTheirOwnCounters() {
+    @Test fun callbackAccountingDoesNotInventEventsForVmRetirement() {
         engine("Silent").use { engine -> context(engine).use { context -> entered(context) {
             val owner = language()
             RuntimeJitServices(owner).use { service ->
@@ -182,10 +182,16 @@ class RuntimeJitServicesTest {
                 assertEquals(0L, count(service, 405))
                 assertEquals(19L, deoptimizing.call(true))
                 assertFalse(deoptimizing.isValid)
-                // This VM deoptimization does not emit Truffle's separate
-                // explicit target-invalidation callback. Do not conflate them.
+                // This pinned-runtime VM retirement emits neither callback.
+                // The event counters must stay truthful rather than synthesize
+                // an invalidation/deoptimization from a changed isValid flag.
                 assertEquals(0L, count(service, 404))
-                assertTrue(count(service, 405) > 0L)
+                assertEquals(0L, count(service, 405))
+                // Independently test the listener's deoptimization event path,
+                // explicitly a provider control, not a claim the VM sent one.
+                (Truffle.getRuntime() as OptimizedTruffleRuntime).listener
+                    .onCompilationDeoptimized(deoptimizing, null, "controlled telemetry callback")
+                assertEquals(1L, count(service, 405))
 
                 val rejected = object : RootNode(owner) {
                     override fun execute(frame: VirtualFrame): Any {
