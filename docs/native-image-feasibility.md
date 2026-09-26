@@ -51,14 +51,31 @@ capture-state handling, close ordering and readiness duplication are unchanged.
 52 cases across the two modes. Bytecode inspection confirms that preparing the
 receiver class no longer resolves a native handle.
 
-The receiver/companion initialization probe gets beyond those blocklist and
-image-heap failures but then fails in the pinned runtime-graph encoder while
-preparing `ManagedAddress.toNativeBits`: an `ImageHeapConstant` has no backing
-hosted constant. The cause is still under investigation; this is not a linked
-image or a successful Haskell/native result. Larger preparation lists must be
-derived from an initialization audit, not a package-wide build-time override.
-New raw diagnostics remain local; this checkpoint publishes source and concise
-results only.
+The runtime-graph encoder next failed while preparing `ManagedAddress.toNativeBits`:
+two `ImageHeapConstant` values had no backing hosted constant. A targeted graph
+dump identifies the stateless `StablePointers` and `NativeAddresses` companions,
+created by Native Image's class-initializer simulation. Explicit initialization
+of those two classes and companions, after inspecting their initializers,
+removes this failure without disabling simulation globally.
+
+The resulting analysis exposed arbitrary-precision arithmetic in `UnsignedWord64`
+interop queries. Signed range checks now use the primitive bits; binary32/64
+exactness counts the span between the highest and lowest set bits. Exact values
+in the unsigned upper half convert by shifting the zero low bit and doubling.
+The BigInteger result representation is unchanged. An independent BigInteger /
+BigDecimal model checks 196 boundary values, exact conversions and rejection of
+lossy conversions. Host display formatting and native buffer projection also
+receive explicit Truffle boundaries; typed scalar buffer operations remain on
+their existing paths. Scalar, buffer, pinned-storage and namespace tests pass
+50 cases across the two handoff modes.
+
+The next optimizing build completes analysis with all compiler assertions and
+blocklist checks enabled, then fails during native method compilation because
+`Intrinsics.areEqual` and `ManagedAllocation.getSize` lack prepared deoptimization
+variants. This is still not a linked image or a successful Haskell/native result.
+Larger preparation lists must come from an initialization audit, not a
+package-wide build-time override. New raw diagnostics remain local; this
+checkpoint publishes source and concise results only.
 
 ## Execution models
 
