@@ -133,6 +133,9 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
                 for (buffer in buffers.values) {
                     val address = buffer.address
                     val nativeImage = if (address.nativeImageKey() == null) null else Supplier {
+                        // project ensures the image exists; its offset-bearing
+                        // result is deliberately ignored. transport returns the
+                        // image base, and Sulong retains the pointer's offset.
                         entry.owner.nativeAddresses.project(address)
                         entry.owner.nativeAddresses.transport(address) ?: fault("Missing immutable C pointer image")
                     }

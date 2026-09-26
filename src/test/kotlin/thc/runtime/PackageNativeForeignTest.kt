@@ -45,6 +45,10 @@ class PackageNativeForeignTest {
             uint32_t next_equal(const unsigned char *a, const unsigned char *b) { return a + 1 == b; }
             int64_t distance(const unsigned char *a, const unsigned char *b) { return b - a; }
             uint32_t read_before(const unsigned char *p) { return p[-1]; }
+            uint64_t native_bits(const unsigned char *p) {
+              /* XOR forces numerical projection, unlike a lazy ptrtoint. */
+              return ((uintptr_t) p) ^ UINT64_C(0x5a5a123456787654);
+            }
             uint32_t mixed_alias(unsigned char *a, const unsigned char *b) {
               if (a != b) return 0;
               a[0] = 91;
@@ -69,6 +73,7 @@ class PackageNativeForeignTest {
             PackageScalarSignature("next_equal", "next_equal", listOf("AddrRep", "AddrRep"), "Word32Rep"),
             PackageScalarSignature("distance", "distance", listOf("AddrRep", "AddrRep"), "Int64Rep"),
             PackageScalarSignature("read_before", "read_before", listOf("AddrRep"), "Word32Rep"),
+            PackageScalarSignature("native_bits", "native_bits", listOf("AddrRep"), "Word64Rep"),
             PackageScalarSignature("mixed_alias", "mixed_alias", listOf("MutableByteArray#", "ByteArray#"), "Word32Rep"))
         return PackageScalarLink("native-ffi-control", "test-host", sha, sha, bytes, abi)
     }
@@ -120,6 +125,18 @@ class PackageNativeForeignTest {
                     val literal = ManagedAddress.fromHex("6162")
                     assertEquals(1L, functions.getValue("next_equal").call(literal, literal.plus(1)))
                     assertEquals(97L, functions.getValue("read_before").call(literal.plus(1)))
+                    // First/only argument is interior; there is no existing
+                    // native image or base argument to hide an offset error.
+                    val nativeLiteral = ManagedAddress.fromHex("1020304050")
+                    val nativeImages = Language.currentState().nativeAddresses
+                    assertNull(nativeImages.transport(nativeLiteral))
+                    val projected = functions.getValue("native_bits").call(nativeLiteral.plus(3)) as Long
+                    val image = nativeImages.transport(nativeLiteral)
+                    assertNotNull(image, "C numerical use actually materialized an immutable native image")
+                    assertEquals(image!!.asPointer() + 3, projected xor 0x5a5a123456787654L)
+                    assertEquals(image.asPointer() + 1,
+                        (functions.getValue("native_bits").call(nativeLiteral.plus(1)) as Long) xor 0x5a5a123456787654L)
+                    assertEquals(48L, functions.getValue("read_before").call(nativeLiteral.plus(3)))
                     val separate = ManagedAddress.fromByteArray(byteArrayOf(91))
                     assertEquals(0L, functions.getValue("equal").call(address, separate))
                     assertEquals(0xffff_ffffL, functions.getValue("complement32").call(0))
