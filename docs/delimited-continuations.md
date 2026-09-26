@@ -28,6 +28,11 @@ nonmatching and same-tag nested prompts, captured catch/mask boundaries, an
 escaped continuation resumed twice, and ambient masking. These are synchronous
 IO examples, on both AST and bytecode backends.
 
+Strict scalar-returning workers preserve their pending case caller, including
+its result destination. Capturing a resumed segment again freezes the mask
+return's already-rebased prior state: if another mask frame becomes outermost,
+the inner return must not revert to the first capture's ambient state.
+
 Saved function and lexical-join owners also handle tail/self/join transfers
 without discarding the remaining caller suffix. The recursive examples exercise
 both a separately called worker and an exported local join; neither restarts the
@@ -55,11 +60,11 @@ cabal run exe:thc-fixtures --offline -- delimited-continuations
 JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --tests thc.runtime.DelimitedContinuationsTest --rerun
 ```
 
-The Haskell producer retains the native GHC invocation, its 33 results, original
-pre/post Core, 22 strict entry audits, command stdout/stderr, and source/artifact
+The Haskell producer retains the native GHC invocation, its 39 results, original
+pre/post Core, 26 strict entry audits, command stdout/stderr, and source/artifact
 SHA-256 provenance under `build/delimited-continuations/`. The Kotlin arithmetic
-and shared-state model is independent of THC execution. Each mode checks 132
-interpreted observations and 44 first-installed executions with exact guest-root
+and shared-state model is independent of THC execution. Each mode checks 156
+interpreted observations and 52 first-installed executions with exact guest-root
 entry deltas, no intervening guest calls, and balanced argument/result pools and
 masking state. These checks establish this fixture's scope, not universal
 continuation correctness or allocation-free capture.
@@ -89,3 +94,14 @@ keeping ordinary scalar/join graphs unchanged. The original 34-test
 continuation, tail, join, and handoff regression set then passed
 in default (`20260926-054517-3kkiyaot`) and dense handoff mode
 (`20260926-054616-bc11zf1a`). No test assertion or guest warmup was changed.
+
+The scalar-caller follow-up retains the unfixed AST uninitialized-local failure
+for `resumedScalar` (`20260926-055114-vyybm2dg`). Its unlifted worker runs in the
+prompt's strict State thread, with no thunk update or nested unsafe IO. The
+second regression (`20260926-055202-9lwx_l04`) returned -2 for
+`recapturedMask(-2)` where native GHC returned -1. Replaying the case scrutinee or
+restoring the original mask prior would fail these controls.
+All 34 continuation/control-flow regression tests pass again in default
+(`20260926-055257-0k26t_0h`) and dense (`20260926-055406-ip0qk49m`) modes.
+The producer's 122-file closed cache payload and 249 fast fixture/cache tests
+also pass; the same native artifacts serve both backend and handoff matrices.

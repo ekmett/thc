@@ -22,7 +22,7 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 class FastInputTests(unittest.TestCase):
     def test_delimited_continuation_closed_outputs_exclude_native_binaries_and_extras(self):
-        self.assertEqual(106, len(cache.DELIMITED_OUTPUTS))
+        self.assertEqual(122, len(cache.DELIMITED_OUTPUTS))
         self.assertIn('build/delimited-continuations/manifest.json', DECLARED_REQUIRED)
         for path in cache.DELIMITED_OUTPUTS:
             self.assertTrue(cache.allowed_payload(path, {}), path)

@@ -23,10 +23,11 @@ import java.security.MessageDigest
 class DelimitedContinuationsTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val entries = listOf("promptPure", "abortSuffix", "resumeTwice", "nestedPrompts", "sameTagNearest",
-        "capturedCatch", "capturedMask", "escapedResume", "ambientMask", "resumedTail", "resumedJoin")
+        "capturedCatch", "capturedMask", "escapedResume", "ambientMask", "resumedTail", "resumedJoin", "resumedScalar", "recapturedMask")
     private val calls = mapOf("promptPure" to 3L, "abortSuffix" to 4L, "resumeTwice" to 6L,
         "nestedPrompts" to 7L, "sameTagNearest" to 5L, "capturedCatch" to 7L, "capturedMask" to 7L,
-        "escapedResume" to 6L, "ambientMask" to 7L, "resumedTail" to 6L, "resumedJoin" to 5L)
+        "escapedResume" to 6L, "ambientMask" to 7L, "resumedTail" to 6L, "resumedJoin" to 5L,
+        "resumedScalar" to 6L, "recapturedMask" to 10L)
 
     private fun provenance(): List<Long> {
         val manifest = Json.parse(File(root, "build/delimited-continuations/manifest.json").readText()) as Map<*, *>
@@ -51,7 +52,8 @@ class DelimitedContinuationsTest {
         "capturedMask" -> n + 21
         "escapedResume" -> 2 * n + 14
         "ambientMask" -> n
-        "resumedTail", "resumedJoin" -> n + 117
+        "resumedTail", "resumedJoin", "resumedScalar" -> n + 117
+        "recapturedMask" -> n + 1
         else -> error(entry)
     }
 
