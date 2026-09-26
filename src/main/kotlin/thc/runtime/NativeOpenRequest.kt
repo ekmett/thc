@@ -53,6 +53,8 @@ internal interface NativeFileResource : SeekableByteChannel {
     fun writeTermios(action: Int, image: ByteArray)
     fun statusFlags(): Long
     fun setStatusFlags(flags: Long): Long
+    fun setDescriptorFlags(flags: Long): Long
+    fun writeEvent(value: Long): Long
     fun requireLive()
     fun readinessWait(): NativeFdWait
 }
@@ -67,6 +69,8 @@ internal class OpenedNativeFile(private val channel: SeekableByteChannel,
     override fun writeTermios(action: Int, image: ByteArray) = metadata.writeTermios(action, image)
     override fun statusFlags(): Long = metadata.statusFlags()
     override fun setStatusFlags(flags: Long): Long = metadata.setStatusFlags(flags)
+    override fun setDescriptorFlags(flags: Long): Long = metadata.setDescriptorFlags(flags)
+    override fun writeEvent(value: Long): Long = metadata.writeEvent(value)
     override fun requireLive() = metadata.requireLive()
     override fun readinessWait(): NativeFdWait = metadata.readinessWait()
     override fun close() {

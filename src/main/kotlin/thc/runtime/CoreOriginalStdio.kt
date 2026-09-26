@@ -69,6 +69,9 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     SEEK_CUR("ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR", "capi", "unsafe", listOf(null), "Int32Rep"),
     SEEK_END("ghczuwrapperZC0ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuEND", "capi", "unsafe", listOf(null), "Int32Rep"),
     CLOSE("close", "ccall", "unsafe", listOf("Int32Rep", null), "Int32Rep"),
+    EVENTFD("eventfd", "ccall", "unsafe", listOf("Int32Rep", "Int32Rep", null), "Int32Rep"),
+    EVENTFD_WRITE("eventfd_write", "ccall", "unsafe", listOf("Int32Rep", "Word64Rep", null), "Int32Rep"),
+    PIPE("pipe", "ccall", "unsafe", listOf("AddrRep", null), "Int32Rep"),
     UNLINK("unlink", "ccall", "unsafe", listOf("AddrRep", null), "Int32Rep"),
     OPEN("__hscore_open", "ccall", "unsafe", listOf("AddrRep", "Int32Rep", "Word32Rep", null), "Int32Rep"),
     OPEN_SAFE("__hscore_open", "ccall", "safe", listOf("AddrRep", "Int32Rep", "Word32Rep", null), "Int32Rep"),
@@ -112,6 +115,8 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
         this == O_NONBLOCK || this == O_RDONLY || this == O_RDWR || this == O_WRONLY ||
         this == F_GETFL || this == F_SETFL || this == F_SETFD || this == FD_CLOEXEC
     val fcntl: Boolean get() = this == FCNTL_READ || this == FCNTL_WRITE
+    val eventPair: Boolean get() = this == EVENTFD || this == EVENTFD_WRITE
+    val eventDescriptor: Boolean get() = eventPair || this == PIPE
     val seekConstant: Boolean get() = this == SEEK_SET || this == SEEK_CUR || this == SEEK_END
     val stat: Boolean get() = this == SIZEOF_STAT || statField ||
         this == IS_REG || this == IS_CHR || this == IS_BLK || this == IS_DIR || this == IS_FIFO || this == IS_SOCK
@@ -155,7 +160,7 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation.waitStatus || operation == OriginalStdioOp.UNLINK || operation.flagConstant || operation.fcntl || operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation == OriginalStdioOp.TCSETATTR || operation.opening || operation.iconv || operation.strerror || operation.duplication || operation.locking,
+        requireProof(operation.eventDescriptor || operation.waitStatus || operation == OriginalStdioOp.UNLINK || operation.flagConstant || operation.fcntl || operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation == OriginalStdioOp.TCSETATTR || operation.opening || operation.iconv || operation.strerror || operation.duplication || operation.locking,
             "strict operand operation")
         val primitive = operation.arguments[index]
         val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }

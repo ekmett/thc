@@ -255,6 +255,25 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
         result("standard", lease, endpoint)
     }
 
+    /** These anonymous kernel resources need no pathname or filesystem lookup.
+     * They remain available only through this explicitly authorized provider. */
+    internal fun eventfd(initial: Int, flags: Int): NativeFileResource = acquire(true, true) { lease ->
+        result("eventfd", lease, initial, flags)
+    }
+
+    internal fun pipe(): Pair<NativeFileResource, NativeFileResource> {
+        var writer: NativeFileResource? = null
+        try {
+            val reader = acquire(true, false) { readLease ->
+                writer = acquire(false, true) { writeLease -> result("pipe", readLease, writeLease) }
+            }
+            return reader to checkNotNull(writer)
+        } catch (failure: Throwable) {
+            try { writer?.close() } catch (closing: Throwable) { failure.addSuppressed(closing) }
+            throw failure
+        }
+    }
+
     private fun retire(lease: NativeFileLease) {
         try { lease.close() } finally { synchronized(this) { leases.remove(lease) } }
     }
@@ -322,6 +341,11 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
         }
         override fun statusFlags(): Long = live { result("getfl", lease) }
         override fun setStatusFlags(flags: Long): Long = live { result("setfl", lease, flags) }
+        override fun setDescriptorFlags(flags: Long): Long = live { result("setfd", lease, flags) }
+        override fun writeEvent(value: Long): Long = live {
+            if (!writable) throw NonWritableChannelException()
+            result("eventfd_write", lease, value)
+        }
         override fun read(destination: ByteBuffer): Int = live {
             if (!readable) throw NonReadableChannelException()
             if (destination.isReadOnly) throw ReadOnlyBufferException()

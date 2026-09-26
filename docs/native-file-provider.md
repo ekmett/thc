@@ -19,10 +19,12 @@ provider proof.
 The original GHC `__hscore_o_*` getters for append, create, no-controlling-terminal,
 nonblocking and the three access modes, plus `__hscore_f_getfl`/`__hscore_f_setfl`,
 use the generated host C ABI constants. The exact original Posix CAPI `fcntl`
-wrappers support `F_GETFL` and `F_SETFL` through a context-owned native lease.
+wrappers support `F_GETFL`, `F_SETFL` and `F_SETFD` through a context-owned native lease.
 The setter retains its `CLong` argument; the kernel determines which status bits
 can change. Guest `dup` aliases observe the same open-description flags, and
-success preserves the guest's sticky errno. Other commands are explicitly
+success preserves the guest's sticky errno. `F_SETFD` changes the owned native
+resource's descriptor flags; logical aliases do not provide a separate fork/exec
+inheritance model. Other commands are explicitly
 unsupported; a guest integer never names an arbitrary host descriptor. Ordinary
 embedding streams have no native flag capability. These calls retain the
 original unsafe FFI contract and do not add interruptible byte transfers.
@@ -48,6 +50,11 @@ substitution before any acquisition; there is no reflection, channel unwrapping,
 path-keyed metadata lookup or process-global descriptor registry.
 
 ## Resource lifetime and metadata
+
+Original [pipe/eventfd acquisition](rts-event-capabilities.md#native-anonymous-descriptors)
+creates anonymous kernel resources under the same explicit provider authority.
+Their guest descriptor numbers, byte transfers, status flags, duplication and
+close use the same context registry as opened files.
 
 Acquisition goes through `Env.getPublicTruffleFile(...).newByteChannel(...)` and
 the configured filesystem transaction. A synchronous single-use request retains

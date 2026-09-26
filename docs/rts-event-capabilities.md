@@ -43,19 +43,38 @@ These slots do not themselves start a timer or event-manager thread.
 `__hscore_f_setfd` (`Int32#`), `__hscore_fd_cloexec` (`Int64#`) and
 `__hscore_sizeof_siginfo_t` (`Word64#`, safe) return values measured by the native
 C ABI probe, without requiring guest native-access authority. The size grants
-no access to a host signal record. Exposing the constants does not extend the
-managed `fcntl` adapter beyond its existing `F_GETFL`/`F_SETFL` operations.
+no access to a host signal record. The original `fcntl` write wrapper also
+executes `F_SETFD` on an owned native resource, including `FD_CLOEXEC`.
 
-`eventfd`, `eventfd_write`, `pipe`, `epoll_create`, `epoll_ctl`, `epoll_wait`,
-`poll`, `setIOManagerWakeupFd`, `setIOManagerControlFd` and
+## Native anonymous descriptors
+
+In the explicit Linux x86_64 `NativeIO` context, original `pipe` and `eventfd`
+create actual kernel resources behind the existing context-owned descriptor
+registry. The returned integers are guest descriptor numbers, never arbitrary
+host fds. Both pipe results are reserved before acquisition and published only
+after validating the complete writable output image. Failed acquisition or
+publication releases the acquired leases and reservations. Original read, write,
+close, dup, status flags and readiness use these same owners; eventfd writes
+retain their unsigned 64-bit counter value. Native failures retain actual errno,
+including eventfd overflow/invalid increments, and success preserves sticky errno.
+Ordinary contexts do not acquire this authority merely by allowing IO/native access.
+
+`F_SETFD` updates the owned native resource. Logical dup aliases share that
+resource; THC does not expose a separate fork/exec descriptor-inheritance model.
+
+`epoll_create`, `epoll_ctl`, `epoll_wait`, `poll`,
+`setIOManagerWakeupFd`, `setIOManagerControlFd` and
 `setTimerManagerControlFd` remain unsupported original event-manager leaves.
 They need an owned descriptor and wakeup/shutdown protocol; THC does not return
 invented descriptors or silently accept control-fd registration. Existing
 managed I/O readiness and process-signal delivery retain their own protocols.
 
-`cabal run exe:thc-fixtures -- rts-event` recovers all eight declarations from
+`cabal run exe:thc-fixtures -- rts-event` recovers the prerequisite and descriptor declarations from
 installed full Core, specializes typed consumers, records the original interface
 and source hashes, executes independent native controls, and strictly audits
 pre/post exports. `rtsEventFullCoreTest` and `rtsEventFullCoreDenseTest` check both
 backends and first installed calls. Native controls query existing event slots
 without installing test objects into the host RTS.
+The same producer runs complete original-import pipe/eventfd lifecycles against
+native GHC. Both backends compare those results before and immediately after
+compilation, without a settling call or retry.

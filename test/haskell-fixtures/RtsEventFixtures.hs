@@ -8,7 +8,8 @@ import Control.Exception (finally)
 import qualified GHC.Conc as Conc
 import Data.Aeson (object, (.=))
 import qualified Data.ByteString.Char8 as BS
-import Data.List (nubBy)
+import Data.List (nub, nubBy)
+import qualified Data.Text as T
 import FixtureSupport
 import GHC hiding (entry, exprType)
 import GHC.Plugins hiding (line)
@@ -39,10 +40,23 @@ calls = [("processors","getNumberOfProcessors","Processors"), ("capabilities","s
          ("timerManager","getOrSetSystemTimerThreadEventManagerStore","Store"),
          ("timerThread","getOrSetSystemTimerThreadIOManagerThreadStore","Store")]
 
+descriptorCalls :: [(String,[String],String)]
+descriptorCalls =
+  [("eventfdCycle", ["eventfd","eventfd_write",readCall,"close"], "EventfdCycle"),
+   ("pipeCycle", ["pipe",readCall,writeCall,"close",fcntlCall,"__hscore_f_setfd","__hscore_fd_cloexec"], "PipeCycle")]
+  where
+    readCall = "ghczuwrapperZC23ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread"
+    writeCall = "ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite"
+    fcntlCall = "ghczuwrapperZC16ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCfcntl"
+
+targets :: [String]
+targets = nub ([s | (_,s,_) <- calls] ++ concat [ss | (_,ss,_) <- descriptorCalls])
+
 symbol :: Id -> Maybe String
 symbol v = case isFCallId_maybe v of
-  Just (F.CCall (F.CCallSpec (F.StaticTarget _ name (Just unit) True) F.CCallConv safety))
-    | unitString unit == "ghc-internal", unpackFS name `elem` [s | (_,s,_) <- calls],
+  Just (F.CCall (F.CCallSpec (F.StaticTarget _ name (Just unit) True) convention safety))
+    | unitString unit == "ghc-internal", unpackFS name `elem` targets,
+      convention == (if "ghczuwrapper" `T.isPrefixOf` T.pack (unpackFS name) then F.CApiConv else F.CCallConv),
       safety == if unpackFS name `elem` ["setNumCapabilities","__hscore_sizeof_siginfo_t"] then F.PlaySafe else F.PlayRisky -> Just (unpackFS name)
   _ -> Nothing
 
@@ -79,7 +93,7 @@ prepareRtsEvent root = do
   let interfaces = map (oneLine imports </>)
         ["GHC/Internal/Conc/Sync.hi","GHC/Internal/Event/Thread.hi",
          "GHC/Internal/Event/Control.hi","GHC/Internal/System/Posix/Internals.hi"]
-  (rows, signatures) <- runGhc (Just (oneLine library)) $ do
+  (rows, descriptorRows, signatures) <- runGhc (Just (oneLine library)) $ do
     initial <- getSessionDynFlags
     env0 <- getSession
     (configured,_,_) <- parseDynamicFlags (hsc_logger env0) initial (map noLoc
@@ -94,7 +108,7 @@ prepareRtsEvent root = do
       recovered <- loadInterfaceCore env (mi_module raw) path
       actual <- maybe (die "RTS event fixture requires complete installed Core") pure recovered
       pure [v | (_,body) <- flattenBinds (interfaceBindings actual), v <- variables body, symbol v /= Nothing]
-    liftIO $ unless (length originals == length calls) (die ("Missing original RTS event declarations: " ++ show (map symbol originals)))
+    liftIO $ unless (length originals == length targets) (die ("Missing original RTS event declarations: " ++ show (map symbol originals)))
     file <- guessTarget (root </> source) Nothing Nothing
     setTargets [file]
     graph <- depanal [] False
@@ -110,16 +124,21 @@ prepareRtsEvent root = do
           Cast body coercion -> Cast (resolve body) coercion
           Tick tick body -> Tick tick (resolve body)
           _ -> expression
-        specialize prefix (_,target,consumer) = case
-            ([(v,body) | (v,body) <- bindings, getOccString v == prefix ++ consumer, isExternalName (varName v)],
-             [v | v <- originals, symbol v == Just target]) of
-          ([(v,body)],[original]) | Just (_,_,formal,_) <- splitFunTy_maybe (idType v), eqType formal (idType original) ->
-            let applied = simpleOptExpr (initSimpleOpts flags) (App (resolve body) (Var original))
+        specializeMany prefix consumer selected = case
+            [(v,body) | (v,body) <- bindings, getOccString v == prefix ++ consumer, isExternalName (varName v)] of
+          [(v,body)] ->
+            let apply expression target = case ([original | original <- originals, symbol original == Just target],
+                                               splitFunTy_maybe (exprType expression)) of
+                  ([original],Just (_,_,formal,_)) | eqType formal (idType original) ->
+                    simpleOptExpr (initSimpleOpts flags) (App expression (Var original))
+                  _ -> error ("Original RTS event FCallId differs from typed consumer " ++ prefix ++ consumer ++ "/" ++ target)
+                applied = foldl apply (resolve body) selected
             in (setIdArity (setIdType (setIdInfo v vanillaIdInfo) (exprType applied)) (exprArity applied), applied)
-          _ -> error ("Original RTS event FCallId differs from typed consumer " ++ prefix ++ consumer ++ "/" ++ target)
+          _ -> error ("Missing original RTS event consumer " ++ prefix ++ consumer)
+        specialize prefix (_,target,consumer) = specializeMany prefix consumer [target]
     -- Separate exports avoid assigning a shared consumer binder to three RTS slots.
-    _ <- liftIO $ forM calls $ \call@(entry,_,_) -> do
-      let (v,body) = specialize "original" call
+    _ <- liftIO $ forM ([(entry,[target],consumer) | (entry,target,consumer) <- calls] ++ descriptorCalls) $ \(entry,selected,consumer) -> do
+      let (v,body) = specializeMany "original" consumer selected
           adapted = optimized { mg_binds = [NonRec v body], mg_exports = filter ((== varName v) . availName) (mg_exports optimized) }
       serializeOptimizedCore flags ["unit-qualified"] adapted >>= writeFile (root </> directory </> entry ++ "-pre.json")
       (tidied,_) <- hscTidy current adapted
@@ -141,19 +160,33 @@ prepareRtsEvent root = do
         unless (if entry == "capabilities" then result == input else result > 0)
           (die ("Unexpected native RTS event result: " ++ show (entry,input,result)))
         pure (entry,input,result)
-    pure (concat observations, [(target,showSDoc flags (ppr (idType v))) | v <- originals, Just target <- [symbol v]])
-  writeJson (root </> directory </> "oracle.json") $ object ["rows" .= rows]
+    descriptorObservations <- forM descriptorCalls $ \(entry,selected,consumer) -> liftIO $ do
+      let (_,body) = specializeMany "native" consumer selected
+      (value,_,_) <- hscCompileCoreExpr current noSrcSpan (mkLets (mg_binds optimized) body)
+      function <- wormhole (hscInterp current) value
+      let invoke = unsafeCoerce function :: Int -> IO Int
+      forM [1,2,4] $ \input -> do
+        result <- invoke input
+        unless (result == if entry == "eventfdCycle" then 2 * input + 5 else input + 13)
+          (die ("Unexpected native descriptor lifecycle result: " ++ show (entry,input,result)))
+        pure (entry,input,result)
+    pure (concat observations, concat descriptorObservations,
+      [(target,showSDoc flags (ppr (idType v))) | v <- originals, Just target <- [symbol v]])
+  writeJson (root </> directory </> "oracle.json") $ object ["rows" .= rows,"descriptorRows" .= descriptorRows]
   let entries = [(entry,"original" ++ consumer) | (entry,_,consumer) <- calls]
-  _ <- forM entries $ \(entry,binder) -> forM ["pre","post"] $ \stage ->
+      descriptorEntries = [(entry,"original" ++ consumer) | (entry,_,consumer) <- descriptorCalls]
+      allEntries = entries ++ descriptorEntries
+  _ <- forM allEntries $ \(entry,binder) -> forM ["pre","post"] $ \stage ->
     execute (entry ++ "-" ++ stage) [] "python3" ["scripts/audit-core.py","--entry",binder,
       "--output",directory </> entry ++ "-" ++ stage ++ ".audit.json",directory </> entry ++ "-" ++ stage ++ ".json"]
   inputHashes <- hashes root [source,"test/haskell-fixtures/RtsEventFixtures.hs","compiler/THC/Plugin.hs",
     "compiler/THC/Interface.hs","scripts/core_original_foreign.py","scripts/audit-core.py","scripts/core-capabilities.json"]
   artifactHashes <- hashes root ([directory </> "oracle.json"] ++
-    [directory </> entry ++ "-" ++ stage ++ ".json" | (entry,_) <- entries, stage <- ["pre","post"]])
+    [directory </> entry ++ "-" ++ stage ++ extension | (entry,_) <- allEntries, stage <- ["pre","post"],
+      extension <- [".json",".audit.json"]])
   interfaceHashes <- hashes root interfaces
   writeJson (root </> directory </> "manifest.json") $ object
-    ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),"entries" .= entries,
+    ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),"entries" .= entries,"descriptorEntries" .= descriptorEntries,
      "signatures" .= signatures,"interfaceHashes" .= interfaceHashes,"inputHashes" .= inputHashes,
      "artifactHashes" .= artifactHashes]
-  putStrLn "rts-event: eight genuine original declarations, 24 native rows, pre/post strict audits"
+  putStrLn "rts-event: eight RTS prerequisites plus native pipe/eventfd lifecycles, 30 native rows, pre/post strict audits"
