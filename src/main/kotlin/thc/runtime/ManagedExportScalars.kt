@@ -8,7 +8,6 @@ import com.oracle.truffle.api.interop.TruffleObject
 import com.oracle.truffle.api.interop.UnsupportedMessageException
 import com.oracle.truffle.api.library.ExportLibrary
 import com.oracle.truffle.api.library.ExportMessage
-import java.math.BigDecimal
 import java.math.BigInteger
 
 /** The boxed scalar portion of a verified static foreign-export signature. */
@@ -196,20 +195,29 @@ internal class UnsignedWord64(private val bits: Long) : TruffleObject {
         if (bits < 0) it.add(BigInteger.ONE.shiftLeft(64)) else it
     }
     @ExportMessage fun isNumber() = true
-    @ExportMessage fun fitsInByte() = number <= BigInteger.valueOf(Byte.MAX_VALUE.toLong())
-    @ExportMessage fun fitsInShort() = number <= BigInteger.valueOf(Short.MAX_VALUE.toLong())
-    @ExportMessage fun fitsInInt() = number <= BigInteger.valueOf(Int.MAX_VALUE.toLong())
+    @ExportMessage fun fitsInByte() = bits in 0..Byte.MAX_VALUE.toLong()
+    @ExportMessage fun fitsInShort() = bits in 0..Short.MAX_VALUE.toLong()
+    @ExportMessage fun fitsInInt() = bits in 0..Int.MAX_VALUE.toLong()
     @ExportMessage fun fitsInLong() = bits >= 0
     @ExportMessage fun fitsInBigInteger() = true
-    private fun fitsFloating(value: Double) = value.isFinite() &&
-        BigDecimal(value).toBigIntegerExact() == number
-    @ExportMessage fun fitsInFloat() = fitsFloating(number.toFloat().toDouble())
-    @ExportMessage fun fitsInDouble() = fitsFloating(number.toDouble())
+    // Every Word64 is within either exponent range. Exactness depends only
+    // on the span from its highest set bit to its lowest set bit.
+    private fun fitsBinary(precision: Int) = bits == 0L ||
+        64 - java.lang.Long.numberOfLeadingZeros(bits) - java.lang.Long.numberOfTrailingZeros(bits) <= precision
+    @ExportMessage fun fitsInFloat() = fitsBinary(24)
+    @ExportMessage fun fitsInDouble() = fitsBinary(53)
     @ExportMessage fun asByte(): Byte = if (fitsInByte()) bits.toByte() else throw UnsupportedMessageException.create()
     @ExportMessage fun asShort(): Short = if (fitsInShort()) bits.toShort() else throw UnsupportedMessageException.create()
     @ExportMessage fun asInt(): Int = if (fitsInInt()) bits.toInt() else throw UnsupportedMessageException.create()
     @ExportMessage fun asLong(): Long = if (fitsInLong()) bits else throw UnsupportedMessageException.create()
     @ExportMessage fun asBigInteger(): BigInteger = number
-    @ExportMessage fun asFloat(): Float = if (fitsInFloat()) number.toFloat() else throw UnsupportedMessageException.create()
-    @ExportMessage fun asDouble(): Double = if (fitsInDouble()) number.toDouble() else throw UnsupportedMessageException.create()
+    @ExportMessage fun asFloat(): Float {
+        if (!fitsInFloat()) throw UnsupportedMessageException.create()
+        // An exactly representable upper-half value has a zero low bit.
+        return if (bits >= 0) bits.toFloat() else (bits ushr 1).toFloat() * 2.0f
+    }
+    @ExportMessage fun asDouble(): Double {
+        if (!fitsInDouble()) throw UnsupportedMessageException.create()
+        return if (bits >= 0) bits.toDouble() else (bits ushr 1).toDouble() * 2.0
+    }
 }

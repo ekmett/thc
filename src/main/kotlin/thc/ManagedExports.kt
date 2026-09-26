@@ -141,6 +141,7 @@ internal class ManagedExportValue(private val registry: ManagedExportRegistry, p
     }
     @ExportMessage fun hasLanguage() = true
     @ExportMessage fun getLanguage(): Class<out TruffleLanguage<*>> = Language::class.java
-    @ExportMessage fun toDisplayString(allowSideEffects: Boolean): String =
+    @ExportMessage @CompilerDirectives.TruffleBoundary
+    fun toDisplayString(allowSideEffects: Boolean): String =
         "${signature.unit}:${signature.module}/${signature.symbol}"
 }

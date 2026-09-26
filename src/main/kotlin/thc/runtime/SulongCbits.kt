@@ -286,7 +286,7 @@ internal class CbitsBuffer @JvmOverloads constructor(bytes: ByteBuffer, private 
     @Synchronized @ExportMessage fun toNative() {
         if (nativeImage != null && pointer == null) pointer = nativeImage.get()
     }
-    @Synchronized @ExportMessage @Throws(UnsupportedMessageException::class)
+    @Synchronized @ExportMessage @TruffleBoundary @Throws(UnsupportedMessageException::class)
     fun asPointer(): Long {
         if (!isPointer()) throw UnsupportedMessageException.create()
         return (nativeAddress?.asLong ?: pointer!!.asPointer()) + baseOffset
