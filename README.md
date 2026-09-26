@@ -107,6 +107,9 @@ bindings, typed constructor fields, local joins, and unboxed tuple inputs and
 results. There is also bounded support for unboxed sum results, scalar arithmetic,
 SIMD calls and operations for [supported shapes](docs/simd-families.md), and
 managed arrays and mutable references.
+All prefetch hints and the three user trace primops have
+[JVM target implementations](docs/hints-and-tracing.md): hints are no-ops,
+and trace records use the context's stderr diagnostic stream.
 
 The bytecode backend also supports [asynchronous exceptions](docs/async-exceptions.md)
 between Haskell threads. An interrupted shared thunk keeps its continuation, so

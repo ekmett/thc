@@ -49,10 +49,19 @@ pull request against `main`. Explain the problem, the change and how you checked
 it. Keep issues about the work to do; PRs carry the implementation discussion
 and merge status.
 
-Current integration uses reviewed PRs merged manually by the integration
-owner. Record the exact tested revision and any dependent changes. Do not treat
-the retained merge-bot implementation or its `auto-merge` label as the current
-integration workflow.
+Publish tested substantive worker checkpoints promptly on their owned branches
+so contributors on other machines can use them. Designated integration owners
+on any host may manually merge reviewed, tested commits onto the latest published
+main and push a normal fast-forward. Never force-push or change protections.
+Record the exact tested revisions and dependencies, and reuse worker test
+evidence: only substantive merge conflicts need focused retests, not unchanged
+fixture generation or test suites. There is no all-worker, GitHub Actions, or
+full-matrix publication barrier. GitHub Actions results are informative, not
+publication gates. Broader regression runs continue in the
+background on immutable revisions; address failures promptly. Keep the coverage
+counts and generated documentation tied to each published tree, and report the
+checks actually performed. The retained merge-bot implementation and its
+`auto-merge` label are not the current integration workflow.
 
 After preparing the affected native/Core fixtures, combine installation and
 both mode tasks in one invocation. Gradle shares Kotlin/KAPT/Java compilation,
@@ -97,7 +106,7 @@ derived from the same contracts as the auditor; don't edit its checkboxes by
 hand. Record concrete missing behavior separately; runtime representations alone
 do not make implemented operations partial.
 
-`Fast checks` is the required PR workflow. It runs compiled smoke tests and
+`Fast checks` is an informative PR workflow, not a publication gate. It runs compiled smoke tests and
 checks for the changed components on Linux, in both handoff modes. Compiler,
 calling-convention and other broad changes run more tests. Cached toolchains,
 compilation outputs and verified native/Core inputs save setup work; the selected

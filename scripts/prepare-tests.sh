@@ -50,6 +50,7 @@ fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
 "$fixture_bin" original-stack
 "$fixture_bin" original-stack-formatter
 "$fixture_bin" boxed-array-extensions
+"$fixture_bin" boxed-cas
 "$fixture_bin" bytearray
 "$fixture_bin" mutable-bytearrays
 "$fixture_bin" resize-bytearrays
@@ -75,6 +76,7 @@ python3 scripts/prepare-synchronous-exceptions.py
 "$fixture_bin" thread-status
 "$fixture_bin" thread-inventory
 "$fixture_bin" thread-label
+"$fixture_bin" hint-trace
 "$fixture_bin" uncaught-self
 "$fixture_bin" mask-functions
 "$fixture_bin" interface-core

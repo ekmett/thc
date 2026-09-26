@@ -514,12 +514,12 @@ class MutVarTest {
             for (levity in listOf("Lifted", "Unlifted")) {
                 val payload = CoreRepresentation(kind, present = true,
                     primReps = listOf("BoxedRep (Just $levity)"))
-                for (operation in MutVarOp.entries.filterNot { it == MutVarOp.MODIFY2 }) {
+                for (operation in listOf(MutVarOp.NEW, MutVarOp.READ, MutVarOp.SWAP, MutVarOp.WRITE)) {
                     val arguments = when (operation) {
                         MutVarOp.NEW -> listOf(payload, state)
                         MutVarOp.READ -> listOf(reference, state)
                         MutVarOp.SWAP, MutVarOp.WRITE -> listOf(reference, payload, state)
-                        MutVarOp.MODIFY2 -> error("Separate lifted function contract")
+                        else -> error("Separate atomic contract in BoxedCasTest")
                     }
                     val returned = if (operation == MutVarOp.NEW) reference else payload
                     val result = if (operation.tuple) CoreRepresentation(CoreKind.UNKNOWN, present = true,
@@ -730,7 +730,7 @@ class MutVarTest {
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                for (operation in MutVarOp.entries) for (mutation in 0..6) for (diagnostic in listOf(false, true)) {
+                for (operation in MutVarOp.entries.filterNot { it in setOf(MutVarOp.CAS, MutVarOp.MODIFY) }) for (mutation in 0..6) for (diagnostic in listOf(false, true)) {
                     val module = CoreModules.reachable(merged(paths), when (operation) {
                         MutVarOp.SWAP -> "swapRef"
                         MutVarOp.MODIFY2 -> "modifyRef"
@@ -764,7 +764,7 @@ class MutVarTest {
                         program(language, module + ("diagnosticUnsupported" to diagnostic), backend)
                     }, "$backend/${operation.primitive}/mutation$mutation/$diagnostic")
                 }
-                for (operation in MutVarOp.entries) {
+                for (operation in MutVarOp.entries.filterNot { it in setOf(MutVarOp.CAS, MutVarOp.MODIFY) }) {
                     val module = CoreModules.reachable(merged(paths), when (operation) {
                         MutVarOp.SWAP -> "swapRef"
                         MutVarOp.MODIFY2 -> "modifyRef"

@@ -106,12 +106,28 @@
         "bench/experiments/int32x4-bytearray/evidence-x86_64/native/provenance.json.gz"
       ]
     },
+    "boxed-cas": {
+      "junit": ["thc.runtime.BoxedCasTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "boxed-cas"]}],
+      "outputs": ["build/boxed-cas"],
+      "sources": ["compiler/test-fixtures/BoxedCasAudit.hs", "compiler/test-fixtures/BoxedCasNative.hs",
+        "examples/THC/BoxedCasCounter.hs", "test/haskell-fixtures/BoxedCasFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "thread-inventory": {
       "junit": ["thc.runtime.ThreadInventoryNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-inventory"]}],
       "outputs": ["build/thread-inventory"],
       "sources": ["examples/ThreadInventory.hs", "compiler/test-fixtures/ThreadInventoryNative.hs",
         "test/haskell-fixtures/ThreadInventoryFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
+    "hint-trace": {
+      "junit": ["thc.runtime.HintTraceTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "hint-trace"]}],
+      "outputs": ["build/hint-trace"],
+      "sources": ["compiler/test-fixtures/HintTraceAudit.hs", "compiler/test-fixtures/HintTraceNative.hs",
+        "test/haskell-fixtures/HintTraceFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "thread-label": {

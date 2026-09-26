@@ -8,11 +8,12 @@ THC supports the eight GHC 9.14.1 fundamentals
 `copySmallMutableArray#`, `unsafeThawSmallArray#`, `freezeSmallArray#`, and
 `thawSmallArray#` in both execution
 backends. The last mutable size form is deprecated by GHC but still occurs in
-exported Core. Shrinking and atomic SmallArray operations remain outside this slice.
+exported Core. [Boxed CAS](boxed-cas.md) adds `casSmallArray#`; shrinking remains
+outside this slice.
 
 SmallArray and ordinary Array references share GHC's unlifted boxed
 representation, but use distinct managed storage carriers. A primitive for
-one family rejects the other's carrier. Cells store lifted references
+one family rejects the other's carrier. Cells store either known boxed levity
 without entering them; reads and indexing return the same references.
 Unsafe freeze and thaw preserve storage identity. Safe freeze and thaw copy
 the requested slice into independent shallow storage, including empty slices;

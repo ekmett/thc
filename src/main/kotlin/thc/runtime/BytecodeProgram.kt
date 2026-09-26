@@ -2429,8 +2429,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         MutVarOp.NEW -> e.builder.beginNewMutVar(destination[0])
                         MutVarOp.READ -> e.builder.beginReadMutVar(destination[0])
                         MutVarOp.SWAP -> e.builder.beginSwapMutVar(destination[0])
-                        MutVarOp.MODIFY2 -> e.builder.beginModifyMutVar2(destination[0], destination[1],
-                            language, metrics, enableAsync)
+                        MutVarOp.CAS -> e.builder.beginCasMutVar(destination[0], destination[1])
+                        MutVarOp.MODIFY, MutVarOp.MODIFY2 -> e.builder.beginModifyMutVar2(destination[0], destination[1],
+                            language, metrics, enableAsync, operation == MutVarOp.MODIFY2)
                         else -> error("Not a tuple MutVar operation")
                     }
                     operands.forEach { it.emit(e) }
@@ -2438,7 +2439,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         MutVarOp.NEW -> e.builder.endNewMutVar()
                         MutVarOp.READ -> e.builder.endReadMutVar()
                         MutVarOp.SWAP -> e.builder.endSwapMutVar()
-                        MutVarOp.MODIFY2 -> e.builder.endModifyMutVar2()
+                        MutVarOp.CAS -> e.builder.endCasMutVar()
+                        MutVarOp.MODIFY, MutVarOp.MODIFY2 -> e.builder.endModifyMutVar2()
                         else -> error("Not a tuple MutVar operation")
                     }
                 } else ProvenExpression(Expression { e ->
@@ -2490,6 +2492,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     when (operation) {
                         ArrayOp.NEW -> e.builder.beginNewArray(destination[0])
                         ArrayOp.READ -> e.builder.beginReadArray(destination[0])
+                        ArrayOp.CAS -> e.builder.beginCasArray(destination[0], destination[1])
                         ArrayOp.FREEZE, ArrayOp.UNSAFE_THAW -> e.builder.beginFreezeArray(destination[0])
                         ArrayOp.FREEZE_COPY, ArrayOp.THAW, ArrayOp.CLONE_MUTABLE -> e.builder.beginCopyArraySlice(destination[0])
                         ArrayOp.INDEX -> e.builder.beginIndexArray(destination[0])
@@ -2499,6 +2502,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     when (operation) {
                         ArrayOp.NEW -> e.builder.endNewArray()
                         ArrayOp.READ -> e.builder.endReadArray()
+                        ArrayOp.CAS -> e.builder.endCasArray()
                         ArrayOp.FREEZE, ArrayOp.UNSAFE_THAW -> e.builder.endFreezeArray()
                         ArrayOp.FREEZE_COPY, ArrayOp.THAW, ArrayOp.CLONE_MUTABLE -> e.builder.endCopyArraySlice()
                         ArrayOp.INDEX -> e.builder.endIndexArray()
@@ -2527,6 +2531,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     when (operation) {
                         SmallArrayOp.NEW -> e.builder.beginNewSmallArray(destination[0])
                         SmallArrayOp.READ -> e.builder.beginReadSmallArray(destination[0])
+                        SmallArrayOp.CAS -> e.builder.beginCasSmallArray(destination[0], destination[1])
                         SmallArrayOp.INDEX -> e.builder.beginIndexSmallArray(destination[0])
                         SmallArrayOp.FREEZE, SmallArrayOp.UNSAFE_THAW -> e.builder.beginFreezeSmallArray(destination[0])
                         SmallArrayOp.GET_SIZE_MUTABLE -> e.builder.beginGetSizeSmallMutableArray(destination[0])
@@ -2538,6 +2543,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     when (operation) {
                         SmallArrayOp.NEW -> e.builder.endNewSmallArray()
                         SmallArrayOp.READ -> e.builder.endReadSmallArray()
+                        SmallArrayOp.CAS -> e.builder.endCasSmallArray()
                         SmallArrayOp.INDEX -> e.builder.endIndexSmallArray()
                         SmallArrayOp.FREEZE, SmallArrayOp.UNSAFE_THAW -> e.builder.endFreezeSmallArray()
                         SmallArrayOp.GET_SIZE_MUTABLE -> e.builder.endGetSizeSmallMutableArray()
@@ -2564,6 +2570,29 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 val operation = VectorByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 vectorByteArray(operation, args.map { compile(it, scope, false) })
+            } else if (fn[0] == "prim" && fn[1] in prefetchArities) {
+                if (args.size != prefetchArities[fn[1]]) fault("Wrong prefetch arity")
+                val value = argument(args[0], scope, flags[0] as Boolean)
+                val offset = if (args.size == 3) compile(args[1], scope, false) else null
+                val state = compile(args.last(), scope, false)
+                ProvenExpression(Expression { e ->
+                    e.builder.beginPrefetch()
+                    value.emit(e)
+                    if (offset == null) e.builder.emitLoadConstant(0L) else offset.emit(e)
+                    state.emit(e)
+                    e.builder.endPrefetch()
+                }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && TraceOp.named(fn[1] as String) != null) {
+                val operation = TraceOp.named(fn[1] as String)!!
+                if (args.size != operation.arity) fault("Wrong trace arity")
+                val operands = args.map { compile(it, scope, false) }
+                ProvenExpression(Expression { e ->
+                    e.builder.beginTraceEvent(operation)
+                    operands[0].emit(e)
+                    if (operation == TraceOp.BINARY) operands[1].emit(e) else e.builder.emitLoadConstant(0L)
+                    operands.last().emit(e)
+                    e.builder.endTraceEvent()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && fn[1] == "touch#") {
                 CoreTouch.validateRaw(args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
                     CoreRepresentations.metadata(expr)?.get("rep"))

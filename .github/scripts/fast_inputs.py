@@ -36,7 +36,7 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
 MANIFEST_DIRS = """address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
-thread-status thread-label thread-inventory boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
+thread-status thread-label hint-trace thread-inventory boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
 narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
@@ -99,6 +99,11 @@ MEMORY_FIXTURE_OUTPUTS = {
     "atomic-address": ATOMIC_ADDRESS_OUTPUTS,
     "unaligned-scalar-memory": UNALIGNED_SCALAR_MEMORY_OUTPUTS,
 }
+HINT_TRACE_OUTPUTS = frozenset("build/hint-trace/" + name for name in (
+    "manifest.json", "oracle.tsv", "native/oracle", "native/oracle.eventlog",
+    *(f"{stage}/{suffix}" for stage in ("pre", "post")
+      for suffix in ("core/HintTraceAudit.json", "hints.audit.json", "traces.audit.json",
+                     "event.audit.json", "marker.audit.json", "binary.audit.json", "addressHints.audit.json"))))
 BIGNAT_ENTRIES = ("integerRoundTrip", "naturalRoundTrip", "integerLiteral", "naturalLiteral",
                   "magnitudeSize", "magnitudeByte", "magnitudeWord", "magnitudeSign")
 BIGNAT_AUDITS = (*BIGNAT_ENTRIES, "integerAddFrontier", "naturalAddFrontier", "missing-source")
@@ -302,6 +307,7 @@ NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate", "build/fl
     "build/floating-remainder/native/oracle",
     "build/pinned-addresses/native/pinned-address-oracle",
     "build/integer-completion/native/integer-completion-oracle",
+    "build/hint-trace/native/oracle",
     "build/simd-capability-smoke/native/simd-smoke-oracle",
     "build/original-stdio/native/original-stdio-oracle",
     "build/original-stdio-read/native/original-stdio-read-oracle",
@@ -639,6 +645,19 @@ BOXED_ARRAY_EXTENSION_FILES = frozenset((
         "ghc-version", "ghc-info", "pre-export", "post-export", "native-compile", "native-oracle",
         *(f"{stage}-audit-{entry}" for stage in ("pre", "post")
           for entry in ("boxedExtSizes", "boxedExtClone", "boxedExtCopy", "boxedExtMove", "boxedExtThaw", "boxedExtLazy")))
+      for suffix in ("stdout", "stderr", "command.json")),
+))
+
+BOXED_CAS_ENTRIES = ("arrayCas", "arrayCasUnlifted", "smallCas", "smallCasUnlifted", "varCas",
+                     "varCasUnlifted", "modifyValue", "modifyLazy", "modifyBottom", "boxedCasCounter")
+BOXED_CAS_FILES = frozenset((
+    "native/boxed-cas-oracle",
+    *(f"{stage}-core/{module}.json" for stage in ("pre", "post")
+      for module in ("BoxedCasAudit", "THC.BoxedCasCounter", "THC.InterfaceClosure")),
+    *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in BOXED_CAS_ENTRIES),
+    *(f"logs/{label}.{suffix}" for label in (
+        "ghc-version", "ghc-info", "pre-export", "post-export", "native-compile", "native-oracle",
+        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in BOXED_CAS_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json")),
 ))
 
@@ -1118,6 +1137,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_STDIO_OUTPUTS
     if parts[1] == "thread-inventory":
         return name in THREAD_INVENTORY_OUTPUTS
+    if parts[1] == "hint-trace":
+        return name in HINT_TRACE_OUTPUTS
     if parts[1] == "bignat-literals":
         return name in BIGNAT_OUTPUTS
     if parts[1] in BYTEARRAY_OUTPUTS:
@@ -1191,6 +1212,9 @@ def allowed_payload(name, pins):
         return name == "build/original-stack-formatter/manifest.json" or original_stack_formatter_artifact(name)
     if parts[1] == "boxed-array-extensions":
         return name == "build/boxed-array-extensions/manifest.json" or boxed_array_extension_artifact(name)
+    if parts[1] == "boxed-cas":
+        match = re.fullmatch(r"build/boxed-cas/run-[1-9][0-9]*/(.+)", name)
+        return name == "build/boxed-cas/manifest.json" or match is not None and match.group(1) in BOXED_CAS_FILES
     if parts[1] not in BUILD_DIRS or any(p in ("test-results", "reports", "classes", ".gradle") for p in parts):
         return False
     # Fixture inputs and recorded native objects only, not arbitrary executable

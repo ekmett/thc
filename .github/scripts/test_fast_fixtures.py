@@ -19,6 +19,17 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_hint_trace_has_native_fixture_and_complete_cache_scope(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        self.assertEqual('hint-trace', owners['thc.runtime.HintTraceTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'hint-trace']}],
+                         manifest['groups']['hint-trace']['commands'])
+        self.assertIn('"$fixture_bin" hint-trace', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('build/hint-trace/manifest.json', fast_fixtures.fast_inputs.REQUIRED)
+        self.assertEqual(18, len([path for path in fast_fixtures.FULL_REQUIRED if path.startswith('build/hint-trace/')]))
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+
     def test_stm_keeps_original_exception_proof_in_explicit_fail_closed_full_core_gate(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
@@ -31,6 +42,22 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('tasks.register<Test>("stmFullCoreTest")', build)
         self.assertIn('includeTestsMatching("thc.runtime.STMFullCoreTest")', build)
         self.assertIn('check(file("build/stm/manifest.json").isFile)', build)
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+
+    def test_boxed_cas_owns_native_inputs_and_only_declared_artifacts(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['boxed-cas']
+        cache = fast_fixtures.fast_inputs
+        self.assertEqual('boxed-cas', owners['thc.runtime.BoxedCasTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'boxed-cas']}], group['commands'])
+        self.assertIn('examples/THC/BoxedCasCounter.hs', group['sources'])
+        self.assertIn('"$fixture_bin" boxed-cas', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('build/boxed-cas/manifest.json', fast_fixtures.FULL_REQUIRED)
+        for suffix in cache.BOXED_CAS_FILES:
+            self.assertTrue(cache.allowed_payload('build/boxed-cas/run-1/' + suffix, {}))
+        for suffix in ('logs/secret.stdout', 'native/unowned', 'pre-core/Fake.json'):
+            self.assertFalse(cache.allowed_payload('build/boxed-cas/run-1/' + suffix, {}))
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
 
     def test_thread_inventory_owns_exact_native_outputs_and_rejects_partial_receipts(self):

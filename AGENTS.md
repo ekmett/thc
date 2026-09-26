@@ -80,3 +80,15 @@ and coordinate shared build resources and integration with the task owner.
 Use per-worktree build-directory leases; independent CPU builds may run
 concurrently when host resources allow. Do not impose a global build queue or
 require the integration owner's approval for each local rebuild.
+
+Publish tested substantive worker checkpoints promptly on their owned branches
+so other machines can use them. Designated integration owners on any host may
+manually merge reviewed, tested commits onto the latest published main and push
+a normal fast-forward; never force-push or change branch protections. Reuse the
+workers' recorded test evidence. Only substantive merge conflicts require
+focused retests; do not rerun unchanged fixture or test suites merely to merge.
+There is no all-worker, GitHub Actions, or full-matrix publication barrier.
+GitHub Actions results are informative, not publication gates.
+Run broader regression checks on immutable revisions in the background and
+address failures promptly. Keep coverage counts and generated documentation
+consistent with each published tree, and report exactly which checks ran.

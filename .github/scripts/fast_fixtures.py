@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "c5bcea6f4bcf89eb0614dd79752ce948453ccbbd969794ee8611fbfdad516a96"
+FULL_PREPARATION_PLAN = "1f41e8e02fe5bc80ad7f0a9ce6fa64c1873419d468fc7e18a0d9cf0bd590edc0"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/address-array-copy", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -38,6 +38,10 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/aligned-scalar-memory/manifest.json", "build/aligned-scalar-memory/oracle.tsv",
     *[f"build/aligned-scalar-memory/{stage}/{file}" for stage in ("pre", "post")
       for file in ("audit.json", "core/AlignedScalarMemoryAudit.json")],
+    "build/hint-trace/oracle.tsv", "build/hint-trace/native/oracle", "build/hint-trace/native/oracle.eventlog",
+    *[f"build/hint-trace/{stage}/{suffix}" for stage in ("pre", "post")
+      for suffix in ("core/HintTraceAudit.json", "hints.audit.json", "traces.audit.json",
+                     "event.audit.json", "marker.audit.json", "binary.audit.json", "addressHints.audit.json")],
     "build/native-malloc/oracle.txt",
     "build/simd-calls/manifest.json", "build/simd-calls/pre-core/SimdCallAudit.json",
     "build/simd-calls/pre-audit.json",

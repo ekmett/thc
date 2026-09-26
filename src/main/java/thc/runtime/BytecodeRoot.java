@@ -1706,6 +1706,23 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** Java declarations are required by the Truffle Bytecode DSL processor. */
+    @Operation public static final class Prefetch {
+        @Specialization public static Object hint(Object ignored, long offset, Object state) {
+            TupleResultsKt.requireVoidCarrier(state);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation
+    @ConstantOperand(type = TraceOp.class, name = "operation")
+    public static final class TraceEvent {
+        @Specialization public static Object trace(TraceOp operation, ManagedAddress address,
+                long count, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            RtsDiagnostics.trace(node, operation, address, count);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
     @Operation public static final class Touch {
         @Specialization public static Object preserve(Object kept, Object state) {
             return thc.runtime.Touch.preserve(kept, state);
@@ -2744,19 +2761,36 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
     @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "flagDestination")
+    @ConstantOperand(type = LocalAccessor.class, name = "valueDestination")
+    public static final class CasMutVar {
+        @Specialization public static void compare(VirtualFrame frame, LocalAccessor flagDestination,
+                LocalAccessor valueDestination, Object reference, Object expected, Object replacement,
+                Object state, @Bind("$node") Node node) {
+            ManagedMutVar cell = ManagedMutVar.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            Object witness = cell.compareExchange(expected, replacement);
+            boolean success = witness == expected;
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            flagDestination.setLong(bytecode, frame, success ? 0L : 1L);
+            valueDestination.setObject(bytecode, frame, success ? replacement : witness);
+        }
+    }
+    @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "oldDestination")
     @ConstantOperand(type = LocalAccessor.class, name = "resultDestination")
     @ConstantOperand(type = Language.class, name = "language")
     @ConstantOperand(type = Metrics.class, name = "metrics")
     @ConstantOperand(type = boolean.class, name = "async")
+    @ConstantOperand(type = boolean.class, name = "selectFirst")
     public static final class ModifyMutVar2 {
-        protected static MutVarModifySite create(Language language, Metrics metrics, boolean async) {
-            return MutVarModifySite.create(language, metrics, async);
+        protected static MutVarModifySite create(Language language, Metrics metrics, boolean async, boolean selectFirst) {
+            return MutVarModifySite.create(language, metrics, async, selectFirst);
         }
         @Specialization public static void modify(VirtualFrame frame, LocalAccessor oldDestination,
-                LocalAccessor resultDestination, Language language, Metrics metrics, boolean async,
+                LocalAccessor resultDestination, Language language, Metrics metrics, boolean async, boolean selectFirst,
                 Object reference, Object function, Object state, @Bind("$node") Node node,
-                @Cached(value = "create(language, metrics, async)", neverDefault = true) MutVarModifySite site) {
+                @Cached(value = "create(language, metrics, async, selectFirst)", neverDefault = true) MutVarModifySite site) {
             ManagedMutVar cell = ManagedMutVar.require(reference);
             TupleResultsKt.requireVoidCarrier(state);
             ModifiedMutVar modified = cell.modify(function, site);
@@ -2961,6 +2995,22 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, ManagedArray.read(array, index));
         }
     }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "flagDestination")
+    @ConstantOperand(type = LocalAccessor.class, name = "valueDestination")
+    public static final class CasArray {
+        @Specialization public static void compare(VirtualFrame frame, LocalAccessor flagDestination,
+                LocalAccessor valueDestination, Object reference, long index, Object expected, Object replacement,
+                Object state, @Bind("$node") Node node) {
+            Object[] array = ManagedArray.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            Object witness = ManagedArray.compareExchange(array, index, expected, replacement);
+            boolean success = witness == expected;
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            flagDestination.setLong(bytecode, frame, success ? 0L : 1L);
+            valueDestination.setObject(bytecode, frame, success ? replacement : witness);
+        }
+    }
     @Operation public static final class WriteArray {
         @Specialization public static Object write(Object reference, long index, Object value, Object state) {
             Object[] array = ManagedArray.require(reference);
@@ -3042,6 +3092,22 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             TupleResultsKt.requireVoidCarrier(state);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
                     ManagedSmallArray.read(array, index));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "flagDestination")
+    @ConstantOperand(type = LocalAccessor.class, name = "valueDestination")
+    public static final class CasSmallArray {
+        @Specialization public static void compare(VirtualFrame frame, LocalAccessor flagDestination,
+                LocalAccessor valueDestination, Object reference, long index, Object expected, Object replacement,
+                Object state, @Bind("$node") Node node) {
+            SmallArrayStorage array = ManagedSmallArray.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            Object witness = ManagedSmallArray.compareExchange(array, index, expected, replacement);
+            boolean success = witness == expected;
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            flagDestination.setLong(bytecode, frame, success ? 0L : 1L);
+            valueDestination.setObject(bytecode, frame, success ? replacement : witness);
         }
     }
     @Operation public static final class WriteSmallArray {

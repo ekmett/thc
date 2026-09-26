@@ -10,6 +10,44 @@ import java.io.IOException
 
 /** Backend diagnostics, not a claim about native GHC TSO allocation or RTS flags. */
 internal object RtsDiagnostics {
+    /** Context stderr records, not the GHC binary eventlog format or RTS flags. */
+    @JvmStatic @TruffleBoundary
+    fun trace(node: Node?, operation: TraceOp, address: ManagedAddress, count: Long) {
+        val context = Language.currentState(node)
+        val previous = context.threads.enterForeign()
+        try {
+            val bytes = if (operation == TraceOp.BINARY) {
+                if (count < 0 || count > Int.MAX_VALUE) fault("Invalid binary trace length")
+                if (count == 0L) byteArrayOf() else address.withNativeBorrow {
+                    address.requireByteRegion(count)
+                    ByteArray(count.toInt()) { address.readWord8(it.toLong()).toByte() }
+                }
+            } else address.withNativeBorrow { cstring(address) }
+            val output = context.env.err()
+            synchronized(output) {
+                try {
+                    output.write("[thc trace ${operation.label}] ".toByteArray(Charsets.US_ASCII))
+                    for (byte in bytes) {
+                        val value = byte.toInt() and 255
+                        when {
+                            operation == TraceOp.BINARY -> {
+                                output.write(HEX[value ushr 4].code); output.write(HEX[value and 15].code)
+                            }
+                            value == 92 -> { output.write(92); output.write(92) }
+                            value < 32 || value == 127 -> {
+                                output.write(92); output.write(120)
+                                output.write(HEX[value ushr 4].code); output.write(HEX[value and 15].code)
+                            }
+                            else -> output.write(value)
+                        }
+                    }
+                    output.write(10)
+                } catch (_: IOException) { /* Like the existing void RTS diagnostic hooks. */ }
+                try { output.flush() } catch (_: IOException) { /* No guest IO exception. */ }
+            }
+        } finally { context.threads.leaveForeign(previous) }
+    }
+
     @JvmStatic @TruffleBoundary
     fun report(node: Node?, operation: RtsDiagnosticOp, first: Any?, second: Any?) {
         val context = Language.currentState(node)
@@ -60,4 +98,5 @@ internal object RtsDiagnostics {
         address.requireByteRegion(length + 1)
         return ByteArray(length.toInt()) { address.readWord8(it.toLong()).toByte() }
     }
+    private const val HEX = "0123456789abcdef"
 }

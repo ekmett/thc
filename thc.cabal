@@ -48,6 +48,9 @@ extra-source-files:
   compiler/test-fixtures/MaskFunctionNative.hs
   compiler/test-fixtures/BoxedArrayExtensionsAudit.hs
   compiler/test-fixtures/BoxedArrayExtensionsNative.hs
+  compiler/test-fixtures/BoxedCasAudit.hs
+  compiler/test-fixtures/BoxedCasNative.hs
+  examples/THC/BoxedCasCounter.hs
   compiler/test-fixtures/LazyIOCallbackAudit.hs
   compiler/test-fixtures/LazyIOCallbackNative.hs
   compiler/target-layout.c
@@ -508,6 +511,7 @@ executable thc-fixtures
     OriginalIconvFixtures
     MutVarFixtures
     STMFixtures
+    HintTraceFixtures
     StablePointerFixtures
     WeakFixtures
     ShrinkByteArrayFixtures
@@ -534,6 +538,7 @@ executable thc-fixtures
     THC.Driver.Zip
     BoxedArrayExtensionsFixtures
     AlignedScalarMemoryFixtures
+    BoxedCasFixtures
     WideCharAddressFixtures
     ManagedAddressReadFixtures
   hs-source-dirs: test/haskell-fixtures, src

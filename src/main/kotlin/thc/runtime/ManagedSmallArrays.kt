@@ -25,6 +25,8 @@ internal object ManagedSmallArray {
     @JvmStatic fun write(array: SmallArrayStorage, index: Long, value: Any?) {
         array.elements[index(array, index)] = value
     }
+    @JvmStatic fun compareExchange(array: SmallArrayStorage, index: Long, expected: Any?, replacement: Any?): Any? =
+        ManagedArray.compareExchange(array.elements, index(array, index).toLong(), expected, replacement)
     @JvmStatic fun freeze(array: SmallArrayStorage): SmallArrayStorage = array
     private fun range(array: SmallArrayStorage, offset: Long, count: Long) {
         val size = size(array)
@@ -50,6 +52,7 @@ internal enum class SmallArrayOp(val primitive: String, private val arguments: L
     NEW("newSmallArray#", listOf("int", "element", "state"), listOf("state", "array")),
     READ("readSmallArray#", listOf("array", "int", "state"), listOf("state", "element")),
     WRITE("writeSmallArray#", listOf("array", "int", "element", "state"), listOf("state")),
+    CAS("casSmallArray#", listOf("array", "int", "element", "element", "state"), listOf("state", "int", "element")),
     INDEX("indexSmallArray#", listOf("array", "int"), listOf("element")),
     FREEZE("unsafeFreezeSmallArray#", listOf("array", "state"), listOf("state", "array")),
     SIZE("sizeofSmallArray#", listOf("array"), listOf("int")),
@@ -63,7 +66,7 @@ internal enum class SmallArrayOp(val primitive: String, private val arguments: L
     THAW("thawSmallArray#", listOf("array", "int", "int", "state"), listOf("state", "array")),
     UNSAFE_THAW("unsafeThawSmallArray#", listOf("array", "state"), listOf("state", "array"));
 
-    val tuple: Boolean get() = this in setOf(NEW, READ, INDEX, FREEZE, GET_SIZE_MUTABLE,
+    val tuple: Boolean get() = this in setOf(NEW, READ, CAS, INDEX, FREEZE, GET_SIZE_MUTABLE,
         CLONE_MUTABLE, SAFE_FREEZE, THAW, UNSAFE_THAW)
     fun validate(actual: List<CoreRepresentation>, flags: List<*>, proof: CoreRepresentation) {
         fun matches(rep: CoreRepresentation, role: String): Boolean = !rep.isAggregate && !rep.isVector && when (role) {
@@ -71,11 +74,12 @@ internal enum class SmallArrayOp(val primitive: String, private val arguments: L
             "int" -> rep.kind == CoreKind.LONG && rep.primReps == listOf("IntRep")
             "array" -> rep.kind == CoreKind.OBJECT && rep.primReps == listOf("BoxedRep (Just Unlifted)")
             else -> rep.kind in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) &&
-                rep.primReps == listOf("BoxedRep (Just Lifted)")
+                rep.primReps?.singleOrNull() in setOf("BoxedRep (Just Lifted)", "BoxedRep (Just Unlifted)")
         }
         if (actual.size != arguments.size || flags.size != arguments.size)
             throw RuntimeFault("Primitive arity mismatch: $primitive")
-        if (flags != arguments.map { it == "element" } || actual.indices.any { !matches(actual[it], arguments[it]) })
+        if (flags != actual.map { it.primReps == listOf("BoxedRep (Just Lifted)") } ||
+            actual.indices.any { !matches(actual[it], arguments[it]) })
             throw RuntimeFault("SmallArray primitive argument representation mismatch: $primitive")
         val valid = if (!tuple) matches(proof, result.single()) else proof.isTuple &&
             proof.kind == CoreKind.UNKNOWN && proof.components!!.size == result.size &&
@@ -91,6 +95,7 @@ internal fun smallArrayExpression(operation: SmallArrayOp, proof: CoreRepresenta
     SmallArrayOp.NEW -> NewSmallArrayExpression(operands[0], operands[1], operands[2])
     SmallArrayOp.READ -> ReadSmallArrayExpression(operands[0], operands[1], operands[2])
     SmallArrayOp.WRITE -> WriteSmallArrayExpression(operands[0], operands[1], operands[2], operands[3])
+    SmallArrayOp.CAS -> CasSmallArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4])
     SmallArrayOp.INDEX -> IndexSmallArrayExpression(operands[0], operands[1])
     SmallArrayOp.FREEZE, SmallArrayOp.UNSAFE_THAW -> FreezeSmallArrayExpression(operands[0], operands[1])
     SmallArrayOp.SIZE, SmallArrayOp.SIZE_MUTABLE -> SizeSmallArrayExpression(operands[0])
@@ -140,6 +145,23 @@ private class IndexSmallArrayExpression(@field:Child private var array: Expr, @f
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         FrameAccess.write(frame, slots[offset],
             ManagedSmallArray.read(ManagedSmallArray.require(array.execute(frame)), index.executeRequiredLong(frame)))
+        return null
+    }
+}
+private class CasSmallArrayExpression(@field:Child private var array: Expr, @field:Child private var index: Expr,
+    @field:Child private var expected: Expr, @field:Child private var replacement: Expr,
+    @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val storage = ManagedSmallArray.require(array.execute(frame))
+        val at = index.executeRequiredLong(frame)
+        val old = expected.execute(frame)
+        val new = replacement.execute(frame)
+        requireVoidCarrier(state.execute(frame))
+        val witness = ManagedSmallArray.compareExchange(storage, at, old, new)
+        val success = witness === old
+        FrameAccess.writeLong(frame, slots[offset], if (success) 0L else 1L)
+        FrameAccess.write(frame, slots[offset + 1], if (success) new else witness)
         return null
     }
 }

@@ -16,6 +16,7 @@ are different claims; each report identifies which it establishes.
 | Formatting | [Int formatting](show-int.md), [Word and list formatting](show-word-list.md) |
 | Integer and Natural | [BigNat literals and original conversion workers](bignat-literals.md); this does not imply general large-integer arithmetic |
 | Mutable references | [ST/STRef with lazy lifted storage](mutvars.md) |
+| Boxed atomic updates | [Pointer CAS and lazy atomic modification](boxed-cas.md) |
 | MVars | [Managed cells, lazy payloads and blocking handoff](managed-mvars.md); a Handle IO foundation, not complete Handle support |
 | Weak pointers | [Retained registrations and explicit finalization](weak-explicit.md), including [bounded C finalizers](c-finalizers.md); no automatic GC/ephemerons |
 | Managed exports | [Declared scalar and IO actions](site/embedding.md) through polyglot bindings; not native C callback addresses |
