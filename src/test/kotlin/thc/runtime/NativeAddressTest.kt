@@ -4,6 +4,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.interop.InteropLibrary
 import com.oracle.truffle.api.interop.UnsupportedMessageException
@@ -42,6 +43,20 @@ class NativeAddressTest {
     private fun valid(target: RootCallTarget, label: String) =
         assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), label)
 
+    /** Failure-only observation; never repairs the stub or executes another guest call. */
+    private fun entryState(target: RootCallTarget): String {
+        val jvmci = Class.forName("jdk.vm.ci.runtime.JVMCI").getMethod("getRuntime").invoke(null)
+        val backend = Class.forName("jdk.vm.ci.runtime.JVMCIRuntime").getMethod("getHostJVMCIBackend").invoke(jvmci)
+        val metaAccess = Class.forName("jdk.vm.ci.runtime.JVMCIBackend").getMethod("getMetaAccess").invoke(backend)
+        val method = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
+            .getDeclaredMethod("callBoundary", Array<Any?>::class.java)
+        val boundary = Class.forName("jdk.vm.ci.meta.MetaAccessProvider")
+            .getMethod("lookupJavaMethod", java.lang.reflect.Executable::class.java).invoke(metaAccess, method)
+        val installed = Class.forName("jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod")
+            .getMethod("hasCompiledCode").invoke(boundary)
+        return "valid=${target.javaClass.getMethod("isValidLastTier").invoke(target)} boundary=$installed"
+    }
+
     @Test fun exactBitsAndImmutableAliasesSurviveTheFirstCompiledEntryInBothBackends() {
         for (backend in listOf("ast", "bytecode")) for (inlining in listOf(false, true)) context(inlining = inlining).use { context ->
             context.initialize("thc"); context.enter()
@@ -56,8 +71,9 @@ class NativeAddressTest {
                     val result = Calls.target(target, arrayOf(0L, argument))
                     if (compiled) {
                         val label = "$backend/inlining=$inlining/$name($argument)"
-                        assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong(),
-                            "$label must enter compiled code exactly once")
+                        assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong()) {
+                            "$label must enter compiled code exactly once; after call ${entryState(target)}"
+                        }
                         valid(target, "$label must remain valid after the call")
                     }
                     return result
@@ -83,9 +99,14 @@ class NativeAddressTest {
                     literalBits?.let { assertEquals(it, bits) }; literalBits = bits
                 }
                 repeat(3) { exercise() }
+                val runtime = Truffle.getRuntime()
+                val targetType = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
                 targets.forEach { (name, target) ->
                     target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
                     valid(target, "$backend/inlining=$inlining/$name after compilation")
+                    // Match EntryValue.compile without executing a settling guest call.
+                    runtime.javaClass.getMethod("bypassedInstalledCode", targetType).invoke(runtime, target)
+                    valid(target, "$backend/inlining=$inlining/$name after boundary restoration")
                 }
                 compiled = true
                 exercise() // first calls after installation, with no settling calls
