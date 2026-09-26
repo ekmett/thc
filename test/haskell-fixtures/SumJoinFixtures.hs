@@ -27,7 +27,7 @@ prepareSumJoins root = do
       output = root </> directory
       source = "compiler/test-fixtures/SumJoinAudit.hs"
       driver = "compiler/test-fixtures/SumJoinAuditNative.hs"
-      entries = ["forwardCase", "recursiveCase", "nestedCase"]
+      entries = ["forwardCase", "recursiveCase", "nestedCase", "stateForwardCase", "stateRecursiveCase"]
       logs = directory </> "commands"
       native = directory </> "native"
   createDirectoryIfMissing True (root </> native)
@@ -38,7 +38,7 @@ prepareSumJoins root = do
     ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-icompiler/test-fixtures",
      "-odir", native, "-hidir", native, driver, "-o", native </> "oracle"]
   observations <- runLogged 30 root logs "native-run" [] (output </> "native/oracle") []
-  unless (length (BSC.lines (commandStdout observations)) == 18) (die "Unexpected sum-join row count")
+  unless (length (BSC.lines (commandStdout observations)) == 30) (die "Unexpected sum-join row count")
   BS.writeFile (output </> "oracle.tsv") (commandStdout observations)
   artifacts <- fmap concat $ forM ["pre", "post"] $ \stage -> do
     let core = directory </> stage </> "core"
@@ -47,11 +47,21 @@ prepareSumJoins root = do
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
       "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
     bytes <- BS.readFile (root </> modulePath)
-    let joins = [fields | Just value <- [decodeStrict' bytes], Object fields <- walk value,
+    let nodes = maybe [] walk (decodeStrict' bytes)
+        joins = [fields | Object fields <- nodes,
                           KeyMap.member "joinValueArity" fields]
-    unless (length joins >= 4 && all (\fields -> case KeyMap.lookup "joinResultRep" fields of
+    unless (length joins >= 6 && all (\fields -> case KeyMap.lookup "joinResultRep" fields of
       Just (Object proof) -> KeyMap.lookup "aggregate" proof == Just (String "unboxed-sum")
       _ -> False) joins) (die "Sum-join fixture lost genuine optimized sum joins")
+    let states = [() | Array node <- nodes,
+                      String "app" : Array function : Array arguments : _ <- [toList node],
+                      String "lam" : Array parameters : _ <- [toList function],
+                      [Object parameter] <- [toList parameters],
+                      Just (Object proof) <- [KeyMap.lookup "rep" parameter],
+                      KeyMap.lookup "kind" proof == Just (String "void"),
+                      [Array argument] <- [toList arguments],
+                      String "void" : _ <- [toList argument]]
+    unless (length states >= 2) (die "Sum-join fixture lost its genuine runRW# state lambdas")
     let report = directory </> stage </> "audit.json"
     audited <- runLogged 30 root logs (stage ++ "-audit") [] "python3"
       (["scripts/audit-core.py", "--output", report] ++ concatMap (\entry -> ["--entry", entry]) entries ++ [modulePath])
@@ -61,9 +71,9 @@ prepareSumJoins root = do
       _ -> die ("Strict sum-join audit rejected " ++ stage)
     pure (modulePath : report : commandArtifacts exported ++ commandArtifacts audited)
   sourceHashes <- hashes root [source, driver, "test/haskell-fixtures/SumJoinFixtures.hs",
-    "scripts/audit-core.py", "scripts/core-capabilities.json", "compiler/THC/Plugin.hs"]
+    "scripts/audit-core.py", "scripts/core-capabilities.json", "compiler/THC/Plugin.hs", "compiler/THC/Wired.hs"]
   artifactHashes <- hashes root ((directory </> "oracle.tsv") : artifacts ++ concatMap commandArtifacts [version, compiled, observations])
   writeJson (output </> "manifest.json") $ object
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= entries,
      "inputHashes" .= sourceHashes, "artifactHashes" .= artifactHashes]
-  putStrLn "sum-join: 18 native observations and exact pre/post-Tidy sum-join audits"
+  putStrLn "sum-join: 30 native observations and exact pre/post-Tidy sum-join audits"
