@@ -74,7 +74,7 @@ class SimdFamiliesTest {
     }
 
     @Test fun exactLaneSignWidthLogicalTupleAndCallingProofsRemainRequired() {
-        assertEquals(168, GeneratedVectors.operations.size)
+        assertEquals(180, GeneratedVectors.operations.size)
         for ((name, tuple, vector) in listOf(
             Triple("Word64X2", GeneratedVectors.unpackedWord64X2, GeneratedVectors.proofWord64X2),
             Triple("Word32X8", GeneratedVectors.unpackedWord32X8, GeneratedVectors.proofWord32X8),
@@ -146,6 +146,28 @@ class SimdFamiliesTest {
         }
         for (index in listOf(-1L, 16L, Long.MAX_VALUE, 0x1_0000_0000L)) {
             assertThrows(RuntimeFault::class.java) { GeneratedVectorInsert.insert(Word8X16.broadcast(1), 2, index) }
+        }
+    }
+
+    @Test fun floatingExtremaRequireTwoExactCarriersAndResult() {
+        for ((shape, proof) in listOf("FloatX4" to CoreVectors.proofFloat,
+            "FloatX8" to GeneratedVectors.proofFloatX8, "FloatX16" to GeneratedVectors.proofFloatX16,
+            "DoubleX2" to CoreVectors.proofDouble, "DoubleX4" to GeneratedVectors.proofDoubleX4,
+            "DoubleX8" to GeneratedVectors.proofDoubleX8)) {
+            for (operation in listOf("min", "max")) {
+                val name = "$operation$shape#"
+                CoreVectors.validate(name, listOf(proof, proof), proof)
+                for (index in 0..1) assertThrows(RuntimeFault::class.java) {
+                    CoreVectors.validate(name, MutableList(2) { proof }.also { it[index] = CoreVectors.proof }, proof)
+                }
+                for (arity in listOf(1, 3)) assertThrows(RuntimeFault::class.java) {
+                    CoreVectors.validate(name, List(arity) { proof }, proof)
+                }
+                assertThrows(RuntimeFault::class.java) {
+                    CoreVectors.validate(name, listOf(proof, proof), CoreVectors.proof)
+                }
+                assertThrows(RuntimeFault::class.java) { CoreVectors.validateFlags(listOf(false, true)) }
+            }
         }
     }
 
@@ -252,9 +274,12 @@ class SimdFamiliesTest {
                     val cases = when {
                         !earlyWideGate -> rows.getValue(name)
                         name.endsWith("Composite") -> rows.getValue(name).groupBy { it[1] }.values.flatMap { selectorRows ->
-                            // Each selector reaches a distinct operation and output lane. Use finite
-                            // normal inputs in the early JVM gate; the native oracle retains every edge row.
-                            val indices = if (selectorRows.size == 28) listOf(12, 14, 16) else listOf(348, 350, 404)
+                            // Extrema's native corpus excludes NaNs, infinities and mixed-zero ties.
+                            val indices = when (selectorRows.size) {
+                                28 -> listOf(12, 14, 16)
+                                398 -> listOf(0, 199, 397)
+                                else -> listOf(348, 350, 404)
+                            }
                             indices.map(selectorRows::get)
                         }
                         else -> rows.getValue(name).filterIndexed { i, _ -> i % 225 in listOf(0, 112, 224) }

@@ -27,6 +27,39 @@ class SimdCapabilitySmokeTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = File(root, "build/simd-capability-smoke")
 
+    /** Requests use real exported vector primops; only their edge expectations are Java-specific. */
+    private fun javaExtremaCases(name: String, cases: List<List<String>>, selectors: Map<String, String>): List<List<String>> {
+        val owned = cases.map { it[1].toInt() / 256 }.toSet()
+        return selectors.entries.filter { (index, primitive) -> index.toInt() in owned &&
+            Regex("(min|max)(Float|Double)X(2|4|8|16)#").matches(primitive) }.flatMap { (index, primitive) ->
+            val double = "Double" in primitive
+            val count = primitive.substringAfter('X').removeSuffix("#").toInt()
+            val sign = if (double) Long.MIN_VALUE else 0x80000000L
+            val one = if (double) 0x3ff0000000000000L else 0x3f800000L
+            val infinity = if (double) 0x7ff0000000000000L else 0x7f800000L
+            val nan = if (double) 0x7ff8000000001234L else 0x7fc01234L
+            val pairs = listOf(0L to sign, 0L to 0L, sign to sign, nan to one,
+                nan to infinity, nan to (nan + 1), (nan or sign) to (one or sign),
+                infinity to one, infinity to (infinity or sign), 1L to 3L,
+                (sign or 1L) to 1L, (infinity - 1) to ((infinity - 1) or sign))
+                .flatMap { (a,b) -> listOf(a to b, b to a) }.distinct()
+            (0 until count).flatMap { lane -> pairs.map { (a,b) ->
+                val minimum = primitive.startsWith("min")
+                val expected = if (double) {
+                    val x = Double.fromBits(a); val y = Double.fromBits(b)
+                    val value = if (minimum) Math.min(x,y) else Math.max(x,y)
+                    if (value.isNaN()) 0x7ff8000000000000L else value.toRawBits()
+                } else {
+                    val x = Float.fromBits(a.toInt()); val y = Float.fromBits(b.toInt())
+                    val value = if (minimum) Math.min(x,y) else Math.max(x,y)
+                    if (value.isNaN()) 0x7fc00000L else value.toRawBits().toLong() and 0xffffffffL
+                }
+                listOf(name, (index.toInt() * 256 + lane).toString(),
+                    (a - lane * 104729L).toString(), (b + lane * 7919L).toString(), expected.toString())
+            } }
+        }
+    }
+
     private fun targets(entry: RootCallTarget): List<RootCallTarget> {
         val seen = Collections.newSetFromMap(IdentityHashMap<RootCallTarget, Boolean>())
         val result = mutableListOf<RootCallTarget>()
@@ -51,8 +84,14 @@ class SimdCapabilitySmokeTest {
     @Test fun finiteLocalVectorsCompileOnAstAndBytecode() {
         val manifest = Json.parse(File(directory, "manifest.json").readText()) as Map<String, Any?>
         assertEquals("9.14.1", manifest["ghcVersion"])
-        assertEquals(5154L, (manifest["rows"] as Number).toLong())
+        assertEquals(5430L, (manifest["rows"] as Number).toLong())
         assertTrue(manifest["nativeOracle"] in listOf("scalar", "scalar-and-vector"))
+        assertEquals("java-math", manifest["floatingExtrema"])
+        assertEquals("finite-without-mixed-zero-ties", manifest["nativeFloatingExtrema"])
+        val selectors = manifest["selectors"] as Map<String, String>
+        assertEquals(GeneratedVectors.operations.filterNot { it.startsWith("pack") || it.startsWith("unpack") }.toSet(),
+            selectors.values.toSet())
+        assertEquals(12, selectors.values.count { Regex("(min|max)(Float|Double)X(2|4|8|16)#").matches(it) })
         for (item in (manifest["inputs"] as List<Map<String, String>>) +
                 (manifest["artifacts"] as List<Map<String, String>>)) {
             val file = File(root, item.getValue("path"))
@@ -67,6 +106,8 @@ class SimdCapabilitySmokeTest {
         assertEquals((0..14).map { "simdSmoke$it" }, manifest["names"])
         assertEquals(manifest["names"], rows.keys.toList())
         assertEquals((manifest["rows"] as Number).toInt(), rows.values.sumOf { it.size })
+        val javaEdges = rows.mapValues { (name, cases) -> javaExtremaCases(name, cases, selectors) }
+        assertEquals(1848, javaEdges.values.sumOf { it.size }, "Both extrema and operand orders across all 42 floating lanes")
         for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").allowExperimentalOptions(true)
             .option("compiler.Inlining", "false").option("engine.BackgroundCompilation", "false")
             .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
@@ -75,7 +116,8 @@ class SimdCapabilitySmokeTest {
                 context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                    for ((name, cases) in rows) {
+                    for ((name, nativeCases) in rows) {
+                        val cases = nativeCases + javaEdges.getValue(name)
                         val input = CoreModules.reachable(module, name) + ("instrument" to true)
                         val program: ExecutableProgram = if (backend == "ast") Program(language, input)
                             else BytecodeProgram(language, input)

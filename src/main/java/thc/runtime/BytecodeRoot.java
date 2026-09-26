@@ -4005,6 +4005,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class GeneratedFloatX4Insert {
         @Specialization public static FloatX4 apply(FloatX4 vector, float value, long index) { return GeneratedVectorInsert.insert(vector, value, index); }
     }
+    @Operation public static final class GeneratedFloatX4Min {
+        @Specialization public static FloatX4 apply(FloatX4 left, FloatX4 right) { return FloatX4.min(left, right); }
+    }
+    @Operation public static final class GeneratedFloatX4Max {
+        @Specialization public static FloatX4 apply(FloatX4 left, FloatX4 right) { return FloatX4.max(left, right); }
+    }
     @Operation public static final class GeneratedDoubleX2Negate {
         @Specialization public static DoubleX2 apply(DoubleX2 value) { return DoubleX2.negate(value); }
     }
@@ -4013,6 +4019,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class GeneratedDoubleX2Insert {
         @Specialization public static DoubleX2 apply(DoubleX2 vector, double value, long index) { return GeneratedVectorInsert.insert(vector, value, index); }
+    }
+    @Operation public static final class GeneratedDoubleX2Min {
+        @Specialization public static DoubleX2 apply(DoubleX2 left, DoubleX2 right) { return DoubleX2.min(left, right); }
+    }
+    @Operation public static final class GeneratedDoubleX2Max {
+        @Specialization public static DoubleX2 apply(DoubleX2 left, DoubleX2 right) { return DoubleX2.max(left, right); }
     }
     @Operation public static final class GeneratedFloatX8Pack {
         @Specialization public static FloatX8 apply(float lane0, float lane1, float lane2, float lane3, float lane4, float lane5, float lane6, float lane7) { return new FloatX8(lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7); }
@@ -4060,6 +4072,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class GeneratedFloatX8Insert {
         @Specialization public static FloatX8 apply(FloatX8 vector, float value, long index) { return FloatX8.insert(vector, value, index); }
     }
+    @Operation public static final class GeneratedFloatX8Min {
+        @Specialization public static FloatX8 apply(FloatX8 left, FloatX8 right) { return FloatX8.min(left, right); }
+    }
+    @Operation public static final class GeneratedFloatX8Max {
+        @Specialization public static FloatX8 apply(FloatX8 left, FloatX8 right) { return FloatX8.max(left, right); }
+    }
     @Operation public static final class GeneratedDoubleX4Pack {
         @Specialization public static DoubleX4 apply(double lane0, double lane1, double lane2, double lane3) { return new DoubleX4(lane0, lane1, lane2, lane3); }
     }
@@ -4097,6 +4115,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class GeneratedDoubleX4Insert {
         @Specialization public static DoubleX4 apply(DoubleX4 vector, double value, long index) { return DoubleX4.insert(vector, value, index); }
+    }
+    @Operation public static final class GeneratedDoubleX4Min {
+        @Specialization public static DoubleX4 apply(DoubleX4 left, DoubleX4 right) { return DoubleX4.min(left, right); }
+    }
+    @Operation public static final class GeneratedDoubleX4Max {
+        @Specialization public static DoubleX4 apply(DoubleX4 left, DoubleX4 right) { return DoubleX4.max(left, right); }
     }
     @Operation public static final class GeneratedInt64X4Pack {
         @Specialization public static Int64X4 apply(long lane0, long lane1, long lane2, long lane3) { return new Int64X4(lane0, lane1, lane2, lane3); }
@@ -4396,6 +4420,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class GeneratedFloatX16Insert {
         @Specialization public static FloatX16 apply(FloatX16 vector, float value, long index) { return FloatX16.insert(vector, value, index); }
     }
+    @Operation public static final class GeneratedFloatX16Min {
+        @Specialization public static FloatX16 apply(FloatX16 left, FloatX16 right) { return FloatX16.min(left, right); }
+    }
+    @Operation public static final class GeneratedFloatX16Max {
+        @Specialization public static FloatX16 apply(FloatX16 left, FloatX16 right) { return FloatX16.max(left, right); }
+    }
     @Operation public static final class GeneratedDoubleX8Pack {
         @Specialization public static DoubleX8 apply(double lane0, double lane1, double lane2, double lane3, double lane4, double lane5, double lane6, double lane7) { return new DoubleX8(lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7); }
     }
@@ -4441,6 +4471,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class GeneratedDoubleX8Insert {
         @Specialization public static DoubleX8 apply(DoubleX8 vector, double value, long index) { return DoubleX8.insert(vector, value, index); }
+    }
+    @Operation public static final class GeneratedDoubleX8Min {
+        @Specialization public static DoubleX8 apply(DoubleX8 left, DoubleX8 right) { return DoubleX8.min(left, right); }
+    }
+    @Operation public static final class GeneratedDoubleX8Max {
+        @Specialization public static DoubleX8 apply(DoubleX8 left, DoubleX8 right) { return DoubleX8.max(left, right); }
     }
     @Operation public static final class GeneratedInt8X16Insert {
         @Specialization public static Int8X16 apply(Int8X16 vector, long value, long index) { return GeneratedVectorInsert.insert(vector, (byte) value, index); }

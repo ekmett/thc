@@ -13,7 +13,7 @@ import unittest
 from unittest.mock import patch
 
 from core_vectors import OPERATIONS, proof_error, signature_matches
-from simd_family_model import cases, entries, float_operation, result, signed
+from simd_family_model import cases, entries, float_operation, result, rows, signed
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = importlib.util.spec_from_file_location('simd_generator', ROOT / 'scripts/generate-simd-families.py')
@@ -117,12 +117,13 @@ class SimdFamiliesTest(unittest.TestCase):
             self.assertEqual(family['lanes'] * len(operations), branches.count(' -> case unpack'))
             for operation in operations:
                 self.assertIn(operation + family['name'] + '#', branches)
-                self.assertEqual(family['lanes'] * (28 if operation in ('broadcast', 'negate') else 28 * 28),
+                self.assertEqual(family['lanes'] * (28 if operation in ('broadcast', 'negate') else
+                                 398 if operation in ('min', 'max') else 28 * 28),
                                  len(cases(family, operation)))
 
     def test_exact_machine_contracts_and_recursive_lanes(self):
         families = GEN.families()
-        self.assertEqual(168, len(GEN.contracts(families)))
+        self.assertEqual(180, len(GEN.contracts(families)))
         for family in families:
             for operation in family['operations']:
                 name = operation + family['name'] + '#'
@@ -140,6 +141,32 @@ class SimdFamiliesTest(unittest.TestCase):
         wrong = copy.deepcopy(packed)
         wrong['components'][7] = dict(kind='long', evaluated=True, primReps=['Word32Rep'])
         self.assertFalse(signature_matches(packed, wrong))
+
+    def test_floating_extrema_java_edges_and_finite_native_scope(self):
+        for width, one, sign, infinity, nan in (
+                (32, 0x3f800000, 0x80000000, 0x7f800000, 0x7fc00000),
+                (64, 0x3ff0000000000000, 1 << 63, 0x7ff0000000000000, 0x7ff8000000000000)):
+            for a, b in ((0, sign), (sign, 0)):
+                self.assertEqual(sign, float_operation('min', a, b, width))
+                self.assertEqual(0, float_operation('max', a, b, width))
+            for operation in ('min', 'max'):
+                for a, b in ((nan + 1, one), (one, nan + 1), (nan | sign, infinity)):
+                    self.assertEqual(nan, float_operation(operation, a, b, width))
+                self.assertEqual(sign, float_operation(operation, sign, sign, width))
+            self.assertEqual(infinity | sign, float_operation('min', infinity, infinity | sign, width))
+            self.assertEqual(infinity, float_operation('max', infinity, infinity | sign, width))
+        floats = [family for family in GEN.families() if family['laneRep'] in ('FloatRep', 'DoubleRep')]
+        self.assertEqual(6, len(floats))
+        for family in floats:
+            for operation in ('min', 'max'):
+                self.assertIn(operation, family['operations'])
+                self.assertEqual(398 * family['lanes'], len(cases(family, operation)))
+        scalar = GEN.smoke_sources(floats)['fixtures/GeneratedSimdSmokeScalar.hs']
+        self.assertIn('(<##)', scalar)
+        self.assertNotIn('ltDouble#', scalar)
+        legacy = [dict(family, operations=['min', 'max']) for family in floats if not family['newCarrier']]
+        with patch('simd_family_model.FAMILIES', legacy):
+            self.assertEqual(4776, sum(1 for _ in rows()), "Legacy extrema also retain only finite native rows")
 
     def test_new_carriers_have_only_fixed_primitive_lane_fields(self):
         for family in GEN.families():

@@ -4475,6 +4475,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedFloatX4Insert(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX4Insert()
         }, GeneratedVectors.proofFloatX4)
+        "minFloatX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX4Min(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX4Min()
+        }, GeneratedVectors.proofFloatX4)
+        "maxFloatX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX4Max(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX4Max()
+        }, GeneratedVectors.proofFloatX4)
         "negateDoubleX2#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedDoubleX2Negate(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX2Negate()
@@ -4486,6 +4494,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         "insertDoubleX2#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedDoubleX2Insert(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX2Insert()
+        }, GeneratedVectors.proofDoubleX2)
+        "minDoubleX2#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX2Min(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX2Min()
+        }, GeneratedVectors.proofDoubleX2)
+        "maxDoubleX2#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX2Max(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX2Max()
         }, GeneratedVectors.proofDoubleX2)
         "packFloatX8#" -> ProvenExpression(Expression { e ->
             val b = e.builder
@@ -4528,6 +4544,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedFloatX8Insert(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX8Insert()
         }, GeneratedVectors.proofFloatX8)
+        "minFloatX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX8Min(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX8Min()
+        }, GeneratedVectors.proofFloatX8)
+        "maxFloatX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX8Max(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX8Max()
+        }, GeneratedVectors.proofFloatX8)
         "packDoubleX4#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
@@ -4568,6 +4592,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         "insertDoubleX4#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedDoubleX4Insert(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX4Insert()
+        }, GeneratedVectors.proofDoubleX4)
+        "minDoubleX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX4Min(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX4Min()
+        }, GeneratedVectors.proofDoubleX4)
+        "maxDoubleX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX4Max(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX4Max()
         }, GeneratedVectors.proofDoubleX4)
         "packInt64X4#" -> ProvenExpression(Expression { e ->
             val b = e.builder
@@ -4823,6 +4855,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = e.builder
             b.beginGeneratedFloatX16Insert(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX16Insert()
         }, GeneratedVectors.proofFloatX16)
+        "minFloatX16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX16Min(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX16Min()
+        }, GeneratedVectors.proofFloatX16)
+        "maxFloatX16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX16Max(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX16Max()
+        }, GeneratedVectors.proofFloatX16)
         "packDoubleX8#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginBlock()
@@ -4863,6 +4903,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         "insertDoubleX8#" -> ProvenExpression(Expression { e ->
             val b = e.builder
             b.beginGeneratedDoubleX8Insert(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX8Insert()
+        }, GeneratedVectors.proofDoubleX8)
+        "minDoubleX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX8Min(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX8Min()
+        }, GeneratedVectors.proofDoubleX8)
+        "maxDoubleX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX8Max(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX8Max()
         }, GeneratedVectors.proofDoubleX8)
         "insertInt8X16#" -> ProvenExpression(Expression { e ->
             val b = e.builder

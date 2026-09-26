@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 491 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 691 | No declared lowering. |
+| Partial | 503 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 679 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -550,6 +550,12 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `makeStablePtr#` — arity 2 — Context-owned opaque stable handles; no pointer memory access
 - [ ] `maskAsyncExceptions#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `maskUninterruptible#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `maxDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `maxDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `maxDoubleX8#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `maxFloatX16#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `maxFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `maxFloatX8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `maxInt16X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `maxInt16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `maxInt32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -568,6 +574,12 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `maxWord64X4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `maxWord64X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `maxWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `minDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `minDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `minDoubleX8#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `minFloatX16#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `minFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `minFloatX8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minInt16X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minInt16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minInt32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -1103,13 +1115,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `listThreads#` — arity 1
 - [ ] `makeStableName#` — arity 2
 - [ ] `maxDouble#` — arity 2
-- [ ] `maxDoubleX2#` — arity 2
-- [ ] `maxDoubleX4#` — arity 2
-- [ ] `maxDoubleX8#` — arity 2
 - [ ] `maxFloat#` — arity 2
-- [ ] `maxFloatX16#` — arity 2
-- [ ] `maxFloatX4#` — arity 2
-- [ ] `maxFloatX8#` — arity 2
 - [ ] `maxInt16X32#` — arity 2
 - [ ] `maxInt8X32#` — arity 2
 - [ ] `maxInt8X64#` — arity 2
@@ -1117,13 +1123,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `maxWord8X32#` — arity 2
 - [ ] `maxWord8X64#` — arity 2
 - [ ] `minDouble#` — arity 2
-- [ ] `minDoubleX2#` — arity 2
-- [ ] `minDoubleX4#` — arity 2
-- [ ] `minDoubleX8#` — arity 2
 - [ ] `minFloat#` — arity 2
-- [ ] `minFloatX16#` — arity 2
-- [ ] `minFloatX4#` — arity 2
-- [ ] `minFloatX8#` — arity 2
 - [ ] `minInt16X32#` — arity 2
 - [ ] `minInt8X32#` — arity 2
 - [ ] `minInt8X64#` — arity 2

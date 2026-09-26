@@ -73,6 +73,15 @@ def float_operation(operation, left, right, width):
         return nan if lc == 'nan' else left
     if operation == 'negate':
         return nan if lc == 'nan' else left ^ (1 << (width - 1))
+    if operation in ('min', 'max'):
+        # Java Math ordering, including signed zero and NaN propagation.
+        if lc == 'nan' or rc == 'nan':
+            return nan
+        if lc == rc == 'finite' and not lv and not rv:
+            return ((ls | rs) if operation == 'min' else (ls & rs)) << (width - 1)
+        lvalue = (-1 if ls else 1) * (float('inf') if lc == 'infinity' else lv)
+        rvalue = (-1 if rs else 1) * (float('inf') if rc == 'infinity' else rv)
+        return left if (lvalue < rvalue if operation == 'min' else lvalue > rvalue) else right
     sign = ls ^ rs
     if operation in ('plus', 'minus'):
         if operation == 'minus':
@@ -145,6 +154,14 @@ def cases(family, operation=None):
         edges = [signed(x | sign << (width - 1)) for x in magnitude for sign in (0, 1)]
         pairs = [(a, 0) for a in edges] if operation in ('broadcast', 'negate') else [
             (a, b) for a in edges for b in edges]
+        if operation in ('min', 'max'):
+            # Native vector NaN/zero-tie rules can differ from Java. Keep the
+            # experimental native corpus finite; Kotlin checks Java edges.
+            pairs = [(a, b) for a, b in pairs
+                     if floating(a & ((1 << width) - 1), width)[1] == 'finite'
+                     and floating(b & ((1 << width) - 1), width)[1] == 'finite'
+                     and not (a != b and a & ((1 << (width - 1)) - 1) == 0
+                              and b & ((1 << (width - 1)) - 1) == 0)]
     else:
         pairs = [(a, b) for a in INTEGER_EDGES for b in INTEGER_EDGES]
     # Shift each selected lane back to the edge pattern. Other lanes carry
@@ -158,6 +175,6 @@ def rows():
     for name, family, operation in entries():
         operations = [op for op in family['operations'] if op not in ('pack', 'unpack')] if operation == 'composite' else [operation]
         for index, selected in enumerate(operations):
-            for lane, a, b in cases(family, selected if operation == 'composite' else None):
+            for lane, a, b in cases(family, selected if operation == 'composite' or selected in ('min', 'max') else None):
                 selector = index * family['lanes'] + lane if operation == 'composite' else lane
                 yield name, selector, a, b, result(family, selected, lane, a, b)
