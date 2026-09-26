@@ -5,6 +5,8 @@
 package thc.runtime
 
 import jdk.incubator.vector.IntVector
+import jdk.incubator.vector.FloatVector
+import jdk.incubator.vector.DoubleVector
 
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.interop.InteropLibrary
@@ -145,20 +147,35 @@ class ShrinkByteArrayTest {
     }
 
     @Test fun vectorsObserveShrunkBoundsWithoutLosingValidPrefix() {
-        val owner = ManagedByteArray.allocateGuest(32)
-        val vector = IntVector.broadcast(IntVector.SPECIES_128, 1).withLane(1, 2).withLane(2, 3).withLane(3, 4)
-        ManagedByteArray.writeInt32VectorGuest(owner, 0, vector, false)
-        owner.shrink(16)
-        val read = ManagedByteArray.readInt32VectorGuest(owner, 0, false)
-        assertEquals(listOf(1, 2, 3, 4), listOf(read.lane(0), read.lane(1), read.lane(2), read.lane(3)))
-        assertDoesNotThrow { ManagedByteArray.readWord32VectorGuest(owner, 0, false) }
-        assertDoesNotThrow { ManagedByteArray.readFloatVectorGuest(owner, 0, false) }
-        assertDoesNotThrow { ManagedByteArray.readDoubleVectorGuest(owner, 0, false) }
-        assertThrows(RuntimeFault::class.java) { ManagedByteArray.readInt32VectorGuest(owner, 1, false) }
-        assertThrows(RuntimeFault::class.java) { ManagedByteArray.readWord32VectorGuest(owner, 1, false) }
-        assertThrows(RuntimeFault::class.java) { ManagedByteArray.readFloatVectorGuest(owner, 1, false) }
-        assertThrows(RuntimeFault::class.java) { ManagedByteArray.readDoubleVectorGuest(owner, 1, false) }
-        assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeInt32VectorGuest(owner, 1, vector, false) }
-        assertEquals(1, ManagedByteArray.readInt32VectorGuest(owner, 0, false).lane(0))
+        val ints = IntVector.broadcast(IntVector.SPECIES_128, 1).withLane(1, 2).withLane(2, 3).withLane(3, 4)
+        val floats = FloatVector.broadcast(FloatVector.SPECIES_128, 1.5f)
+        val doubles = DoubleVector.broadcast(DoubleVector.SPECIES_128, -2.5)
+        fun check(expected: Any, read: (Any, Long) -> Any, write: (Any, Long) -> Unit) {
+            val owner = ManagedByteArray.allocateGuest(32)
+            write(owner, 0)
+            owner.shrink(16)
+            assertEquals(expected, read(owner, 0))
+            // The raw path still checks physical bounds; the owned path must
+            // reject the same range even with twice the backing capacity.
+            for (storage in listOf(owner, ByteArray(16))) {
+                write(storage, 0)
+                for (index in listOf(-1L, 1L, Long.MAX_VALUE)) {
+                    assertThrows(RuntimeFault::class.java) { read(storage, index) }
+                    assertThrows(RuntimeFault::class.java) { write(storage, index) }
+                    assertFalse(Thread.holdsLock(storage))
+                    assertEquals(expected, read(storage, 0))
+                }
+            }
+        }
+        for (scalarOffset in listOf(false, true)) {
+            check(ints, { bytes, index -> ManagedByteArray.readInt32VectorGuest(bytes, index, scalarOffset) },
+                { bytes, index -> ManagedByteArray.writeInt32VectorGuest(bytes, index, ints, scalarOffset) })
+            check(ints, { bytes, index -> ManagedByteArray.readWord32VectorGuest(bytes, index, scalarOffset) },
+                { bytes, index -> ManagedByteArray.writeWord32VectorGuest(bytes, index, ints, scalarOffset) })
+            check(floats, { bytes, index -> ManagedByteArray.readFloatVectorGuest(bytes, index, scalarOffset) },
+                { bytes, index -> ManagedByteArray.writeFloatVectorGuest(bytes, index, floats, scalarOffset) })
+            check(doubles, { bytes, index -> ManagedByteArray.readDoubleVectorGuest(bytes, index, scalarOffset) },
+                { bytes, index -> ManagedByteArray.writeDoubleVectorGuest(bytes, index, doubles, scalarOffset) })
+        }
     }
 }

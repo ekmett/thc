@@ -3,6 +3,7 @@
 
 package thc.runtime
 
+import jdk.incubator.vector.IntVector
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
@@ -49,6 +50,55 @@ class ManagedAllocationTest {
         ManagedByteArray.writeIntGuest(storage, 0, 0x1234)
         assertThrows(RuntimeFault::class.java) { storage.readAddressByteOffset(0) }
         assertEquals(0x1234L, ManagedByteArray.readIntGuest(storage, 0))
+    }
+
+    @Test fun vectorAccessKeepsTheOwnerMonitorThroughTheOperationAndReleasesOnFailure() {
+        val storage = ManagedAllocation.mutable(32, 8)
+        val failure = IllegalStateException("failed vector operation")
+        for (scalarOffset in listOf(false, true)) for (width in listOf(4, 8))
+            for (writable in listOf(false, true)) {
+                val thrown = assertThrows(IllegalStateException::class.java) {
+                    storage.accessVector(1, scalarOffset, width, writable) {
+                        assertTrue(Thread.holdsLock(storage))
+                        throw failure
+                    }
+                }
+                assertSame(failure, thrown)
+                assertFalse(Thread.holdsLock(storage))
+                assertThrows(RuntimeFault::class.java) {
+                    storage.accessVector(Long.MAX_VALUE, scalarOffset, width, writable) {
+                        fail<Unit>("Invalid vector range reached the operation")
+                    }
+                }
+                assertFalse(Thread.holdsLock(storage))
+                assertEquals(32, storage.accessVector(0, scalarOffset, width, writable) {
+                    assertTrue(Thread.holdsLock(storage))
+                    it.size
+                })
+                assertFalse(Thread.holdsLock(storage))
+            }
+    }
+
+    @Test fun vectorAccessPreservesPointerOverlapAndImmutableWriteChecks() {
+        val storage = ManagedAllocation.mutable(32, 8)
+        val target = ManagedAddress.fromAllocation(storage).plus(24)
+        val vector = IntVector.broadcast(IntVector.SPECIES_128, 7)
+        storage.writeAddressByteOffset(0, target)
+        assertThrows(RuntimeFault::class.java) { ManagedByteArray.readInt32VectorGuest(storage, 0, false) }
+        assertFalse(Thread.holdsLock(storage))
+        assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeInt32VectorGuest(storage, 1, vector, true) }
+        assertFalse(Thread.holdsLock(storage))
+        assertSame(target, storage.readAddressByteOffset(0))
+        ManagedByteArray.writeInt32VectorGuest(storage, 1, vector, false)
+        assertSame(target, storage.readAddressByteOffset(0))
+        assertEquals(vector, ManagedByteArray.readInt32VectorGuest(storage, 1, false))
+        ManagedByteArray.writeInt32VectorGuest(storage, 0, vector, false)
+        assertThrows(RuntimeFault::class.java) { storage.readAddressByteOffset(0) }
+        assertEquals(vector, ManagedByteArray.readInt32VectorGuest(storage, 0, false))
+        val immutable = ManagedAllocation.immutable(ByteArray(16), 8)
+        assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeInt32VectorGuest(immutable, 0, vector, false) }
+        assertFalse(Thread.holdsLock(immutable))
+        assertEquals(0, ManagedByteArray.readInt32VectorGuest(immutable, 0, false).lane(0))
     }
 
     @Test fun pinnedContentsAliasesKeepTheSameOwnerAndRejectRawPointerBits() {

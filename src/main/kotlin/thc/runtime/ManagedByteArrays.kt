@@ -282,9 +282,9 @@ internal object ManagedByteArray {
     @JvmStatic fun allocateGuest(size: Long): ManagedAllocation =
         ManagedAllocation.mutable(size, ValueLayout.ADDRESS.byteSize().toInt())
     private inline fun <T> vectorGuest(value: Any?, index: Long, scalarOffset: Boolean,
-        scalarWidth: Int, writable: Boolean, crossinline action: (ByteArray) -> T): T =
+        scalarWidth: Int, writable: Boolean, action: (ByteArray) -> T): T =
         if (value is ManagedAllocation)
-            value.accessVector(index, scalarOffset, scalarWidth, writable) { action(it) }
+            value.accessVector(index, scalarOffset, scalarWidth, writable, action)
         else action(require(value))
     @JvmStatic fun readInt32VectorGuest(value: Any?, index: Long, scalarOffset: Boolean): IntVector =
         vectorGuest(value, index, scalarOffset, 4, false) { readIntVectorArray(it, index, scalarOffset, "Int32X4") }
