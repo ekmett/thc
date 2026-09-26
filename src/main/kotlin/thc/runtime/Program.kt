@@ -859,6 +859,10 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         }
     }
 
+    // Failure publication is cold; inlining its monitor and unwind edges at
+    // every force site makes large bytecode roots exceed the PE graph budget.
+    // Keep ordinary thunk evaluation and successful publication compiled.
+    @CompilerDirectives.TruffleBoundary
     private fun publishFailure(thunk: Thunk, failure: Any) = synchronized(thunk.monitor) {
         thunk.value = failure
         thunk.target = null
@@ -868,6 +872,8 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         thunk.monitor.notifyAll()
     }
 
+    // As with memoized failure, ownership release is an exceptional exit.
+    @CompilerDirectives.TruffleBoundary
     private fun suspendOwned(thunk: Thunk) = synchronized(thunk.monitor) {
         if (thunk.state != 1 || thunk.owner !== Thread.currentThread()) return@synchronized
         // An arbitrary Java/bytecode stack is not a resumable Haskell AP_STACK.
