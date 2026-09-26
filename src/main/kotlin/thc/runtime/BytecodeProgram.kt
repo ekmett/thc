@@ -2486,6 +2486,31 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         e.builder.beginPutMVar(false); operands.forEach { it.emit(e) }; e.builder.endPutMVar()
                     }
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && CompactOp.named(fn[1] as String) != null) {
+                val operation = CompactOp.named(fn[1] as String)!!
+                if (enableAsync && operation.adds)
+                    throw UnsupportedCore("Compact graph traversal does not yet support resumable asynchronous forcing")
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                val failures = if (operation.adds) CompactOp.failures.map { globals[it]
+                    ?: throw UnsupportedCore("Compact addition requires original exception payload: $it") }.toTypedArray()
+                    else emptyArray()
+                if (operation == CompactOp.RESIZE) ProvenExpression(Expression { e ->
+                    e.builder.beginResizeCompact(); operands.forEach { it.emit(e) }; e.builder.endResizeCompact()
+                }, tupleProof.copy(evaluated = true)) else tupleExpression(tupleProof) { e, destination ->
+                    when (operation) {
+                        CompactOp.ADD, CompactOp.ADD_SHARING -> e.builder.beginAddCompact(destination[0],
+                            operation == CompactOp.ADD_SHARING, metrics, failures)
+                        CompactOp.CONTAINS -> e.builder.beginContainsCompact(destination[0])
+                        else -> e.builder.beginInspectCompact(destination[0], operation)
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (operation) {
+                        CompactOp.ADD, CompactOp.ADD_SHARING -> e.builder.endAddCompact()
+                        CompactOp.CONTAINS -> e.builder.endContainsCompact()
+                        else -> e.builder.endInspectCompact()
+                    }
+                }
             } else if (fn[0] == "prim" && MutVarOp.named(fn[1] as String) != null) {
                 val operation = MutVarOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -2572,8 +2597,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ArrayOp.NEW -> e.builder.beginNewArray(destination[0])
                         ArrayOp.READ -> e.builder.beginReadArray(destination[0])
                         ArrayOp.CAS -> e.builder.beginCasArray(destination[0], destination[1])
-                        ArrayOp.FREEZE, ArrayOp.UNSAFE_THAW -> e.builder.beginFreezeArray(destination[0])
-                        ArrayOp.FREEZE_COPY, ArrayOp.THAW, ArrayOp.CLONE_MUTABLE -> e.builder.beginCopyArraySlice(destination[0])
+                        ArrayOp.FREEZE, ArrayOp.UNSAFE_THAW -> e.builder.beginFreezeArray(destination[0], operation == ArrayOp.FREEZE)
+                        ArrayOp.FREEZE_COPY, ArrayOp.THAW, ArrayOp.CLONE_MUTABLE -> e.builder.beginCopyArraySlice(destination[0], operation == ArrayOp.FREEZE_COPY)
                         ArrayOp.INDEX -> e.builder.beginIndexArray(destination[0])
                         else -> error("Not a tuple array operation")
                     }
@@ -2612,10 +2637,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         SmallArrayOp.READ -> e.builder.beginReadSmallArray(destination[0])
                         SmallArrayOp.CAS -> e.builder.beginCasSmallArray(destination[0], destination[1])
                         SmallArrayOp.INDEX -> e.builder.beginIndexSmallArray(destination[0])
-                        SmallArrayOp.FREEZE, SmallArrayOp.UNSAFE_THAW -> e.builder.beginFreezeSmallArray(destination[0])
+                        SmallArrayOp.FREEZE, SmallArrayOp.UNSAFE_THAW -> e.builder.beginFreezeSmallArray(destination[0], operation == SmallArrayOp.FREEZE)
                         SmallArrayOp.GET_SIZE_MUTABLE -> e.builder.beginGetSizeSmallMutableArray(destination[0])
                         SmallArrayOp.CLONE_MUTABLE, SmallArrayOp.SAFE_FREEZE, SmallArrayOp.THAW ->
-                            e.builder.beginCopySmallArraySlice(destination[0])
+                            e.builder.beginCopySmallArraySlice(destination[0], operation == SmallArrayOp.SAFE_FREEZE)
                         else -> error("Not a tuple SmallArray operation")
                     }
                     operands.forEach { it.emit(e) }

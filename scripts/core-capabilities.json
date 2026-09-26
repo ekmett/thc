@@ -185,6 +185,15 @@
       18446744073709551615
     ]
   },
+  "managedCompactPrimitives": {
+    "compactNew#": {"arguments": ["word", "state"], "result": "region"},
+    "compactResize#": {"arguments": ["region", "word", "state"], "result": "state"},
+    "compactAdd#": {"arguments": ["region", "lifted", "state"], "result": "lifted"},
+    "compactAddWithSharing#": {"arguments": ["region", "lifted", "state"], "result": "lifted"},
+    "compactContains#": {"arguments": ["region", "lifted", "state"], "result": "int"},
+    "compactContainsAny#": {"arguments": ["lifted", "state"], "result": "int"},
+    "compactSize#": {"arguments": ["region", "state"], "result": "word"}
+  },
   "managedSTMPrimitives": {
     "atomically#": {"arguments": ["action", "state"], "result": ["state", "boxed"]},
     "retry#": {"arguments": ["state"], "result": ["state", "boxed"]},
@@ -472,6 +481,13 @@
     "readDoubleOffAddrAsDoubleX8#": 3,
     "writeDoubleX8OffAddr#": 4,
     "writeDoubleOffAddrAsDoubleX8#": 4,
+    "compactNew#": 2,
+    "compactResize#": 3,
+    "compactAdd#": 3,
+    "compactAddWithSharing#": 3,
+    "compactContains#": 3,
+    "compactContainsAny#": 2,
+    "compactSize#": 2,
     "indexStablePtrArray#": 2,
     "readStablePtrArray#": 3,
     "writeStablePtrArray#": 4,

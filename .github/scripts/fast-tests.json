@@ -17,6 +17,9 @@
     "src/main/kotlin/thc/runtime/CoreRtsArgumentsForeign.kt": {
       "junit": ["thc.runtime.GuestArgumentsTest"], "python": ["scripts/test-audit-core.py"]
     },
+    "src/main/kotlin/thc/runtime/ManagedCompacts.kt": {
+      "junit": ["thc.runtime.ManagedCompactsTest"], "python": ["scripts/test-audit-core.py"]
+    },
     "src/main/kotlin/thc/runtime/HintTracePrimops.kt": {
       "junit": ["thc.runtime.HintTraceTest"], "python": []
     },
@@ -345,6 +348,10 @@
     "test/haskell-fixtures/HintTraceFixtures.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
     "compiler/test-fixtures/HintTraceAudit.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
     "compiler/test-fixtures/HintTraceNative.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
+    "test/haskell-fixtures/CompactRegionsFixtures.hs": {"junit": ["thc.runtime.ManagedCompactsTest"], "python": [".github/scripts/test_fast_fixtures.py"]},
+    "compiler/test-fixtures/CompactRegionsAudit.hs": {"junit": ["thc.runtime.ManagedCompactsTest"], "python": ["scripts/test-audit-core.py"]},
+    "compiler/test-fixtures/CompactRegionsNative.hs": {"junit": ["thc.runtime.ManagedCompactsTest"], "python": []},
+    "src/test/kotlin/thc/runtime/ManagedCompactsTest.kt": {"junit": ["thc.runtime.ManagedCompactsTest"], "python": []},
     "test/haskell-fixtures/STMFixtures.hs": {"junit": ["thc.runtime.ManagedSTMTest"], "python": [".github/scripts/test_fast_fixtures.py"]},
     "compiler/test-fixtures/STMAudit.hs": {"junit": ["thc.runtime.ManagedSTMTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/STMNative.hs": {"junit": ["thc.runtime.ManagedSTMTest"], "python": []},

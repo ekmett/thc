@@ -2835,6 +2835,62 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = CompactOp.class, name = "operation")
+    public static final class InspectCompact {
+        @Specialization public static void execute(VirtualFrame frame, LocalAccessor destination,
+                CompactOp operation, Object argument, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedCompacts registry = Language.currentState(node).compactRegions;
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            if (operation == CompactOp.NEW) {
+                if (!(argument instanceof Long)) throw new RuntimeFault("Expected compact allocation size");
+                destination.setObject(bytecode, frame, new ManagedCompact(registry, (Long) argument));
+            } else if (operation == CompactOp.SIZE) {
+                destination.setLong(bytecode, frame, registry.require(argument).size());
+            } else {
+                destination.setLong(bytecode, frame, registry.containsAny(argument) ? 1L : 0L);
+            }
+        }
+    }
+    @Operation public static final class ResizeCompact {
+        @Specialization public static Object execute(Object reference, long size, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            Language.currentState(node).compactRegions.require(reference).resize(size);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ContainsCompact {
+        @Specialization public static void execute(VirtualFrame frame, LocalAccessor destination,
+                Object reference, Object value, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedCompacts registry = Language.currentState(node).compactRegions;
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    registry.contains(registry.require(reference), value) ? 1L : 0L);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = boolean.class, name = "sharing")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    @ConstantOperand(type = GlobalBinding[].class, name = "failures")
+    public static final class AddCompact {
+        protected static CompactCopyNode create(Metrics metrics, GlobalBinding[] failures) {
+            return new CompactCopyNode(metrics, failures);
+        }
+        @Specialization public static void execute(VirtualFrame frame, LocalAccessor destination,
+                boolean sharing, Metrics metrics, GlobalBinding[] failures,
+                Object reference, Object value, Object state, @Bind("$node") Node node,
+                @Cached(value = "create(metrics, failures)", neverDefault = true) CompactCopyNode copier) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedCompact region = Language.currentState(node).compactRegions.require(reference);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    copier.execute(frame, region, value, sharing));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ReadMutVar {
         @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
                 Object value, Object state, @Bind("$node") Node node) {
@@ -3149,12 +3205,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = boolean.class, name = "freeze")
     public static final class FreezeArray {
         @Specialization public static void freeze(VirtualFrame frame, LocalAccessor destination,
-                Object reference, Object state, @Bind("$node") Node node) {
+                boolean freeze, Object reference, Object state, @Bind("$node") Node node) {
             Object[] array = ManagedArray.require(reference);
             TupleResultsKt.requireVoidCarrier(state);
-            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, ManagedArray.freeze(array));
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    freeze ? ManagedArray.freeze(array) : ManagedArray.thaw(array));
         }
     }
     @Operation
@@ -3186,18 +3244,20 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class CloneArray {
         @Specialization public static Object clone(Object reference, long offset, long count) {
-            return ManagedArray.slice(ManagedArray.require(reference), offset, count);
+            return ManagedArray.freeze(ManagedArray.slice(ManagedArray.require(reference), offset, count));
         }
     }
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = boolean.class, name = "freeze")
     public static final class CopyArraySlice {
         @Specialization public static void copy(VirtualFrame frame, LocalAccessor destination,
-                Object reference, long offset, long count, Object state, @Bind("$node") Node node) {
+                boolean freeze, Object reference, long offset, long count, Object state, @Bind("$node") Node node) {
             Object[] array = ManagedArray.require(reference);
             TupleResultsKt.requireVoidCarrier(state);
+            Object[] copy = ManagedArray.slice(array, offset, count);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                    ManagedArray.slice(array, offset, count));
+                    freeze ? ManagedArray.freeze(copy) : copy);
         }
     }
 
@@ -3257,13 +3317,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = boolean.class, name = "freeze")
     public static final class FreezeSmallArray {
         @Specialization public static void freeze(VirtualFrame frame, LocalAccessor destination,
-                Object reference, Object state, @Bind("$node") Node node) {
+                boolean freeze, Object reference, Object state, @Bind("$node") Node node) {
             SmallArrayStorage array = ManagedSmallArray.require(reference);
             TupleResultsKt.requireVoidCarrier(state);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                    ManagedSmallArray.freeze(array));
+                    freeze ? ManagedSmallArray.freeze(array) : ManagedSmallArray.thaw(array));
         }
     }
     @Operation public static final class SizeSmallArray {
@@ -3284,18 +3345,20 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class CloneSmallArray {
         @Specialization public static Object clone(Object reference, long offset, long count) {
-            return ManagedSmallArray.slice(ManagedSmallArray.require(reference), offset, count);
+            return ManagedSmallArray.freeze(ManagedSmallArray.slice(ManagedSmallArray.require(reference), offset, count));
         }
     }
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = boolean.class, name = "freeze")
     public static final class CopySmallArraySlice {
         @Specialization public static void clone(VirtualFrame frame, LocalAccessor destination,
-                Object reference, long offset, long count, Object state, @Bind("$node") Node node) {
+                boolean freeze, Object reference, long offset, long count, Object state, @Bind("$node") Node node) {
             SmallArrayStorage array = ManagedSmallArray.require(reference);
             TupleResultsKt.requireVoidCarrier(state);
+            SmallArrayStorage copy = ManagedSmallArray.slice(array, offset, count);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                    ManagedSmallArray.slice(array, offset, count));
+                    freeze ? ManagedSmallArray.freeze(copy) : copy);
         }
     }
     @Operation

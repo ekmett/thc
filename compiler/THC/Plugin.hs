@@ -1109,6 +1109,13 @@ exportInterfaceClosure hsc opts dir rootCtx roots = do
       arithmeticException op = lookup (occNameString (primOpOcc op))
         [("raiseDivZero#", "divZeroException"), ("raiseOverflow#", "overflowException"),
          ("raiseUnderflow#", "underflowException")]
+      compactExceptionId occurrence = do
+        name <- initIfaceCheck (text "THC implicit compaction exception") hsc $
+          lookupOrig (mkModule ghcInternalUnit (mkModuleName "GHC.Internal.IO.Exception")) (mkVarOcc occurrence)
+        thing <- lookupGlobal hsc name
+        case thing of
+          AnId v -> pure v
+          _ -> error "THC implicit compaction exception is not an Id"
       exceptionId occurrence = do
         name <- initIfaceCheck (text "THC implicit arithmetic exception") hsc $
           lookupOrig (mkModule ghcInternalUnit (mkModuleName "GHC.Internal.Exception.Type")) (mkVarOcc occurrence)
@@ -1119,6 +1126,10 @@ exportInterfaceClosure hsc opts dir rootCtx roots = do
       walk _ [] found missing = pure (reverse found, reverse missing)
       walk seen (v:todo) found missing
         | v `elemVarSet` seen = walk seen todo found missing
+        | Just op <- isPrimOpId_maybe v
+        , occNameString (primOpOcc op) `elem` ["compactAdd#", "compactAddWithSharing#"] = do
+            payloads <- mapM compactExceptionId ["cannotCompactFunction", "cannotCompactPinned", "cannotCompactMutable"]
+            walk seen' (payloads ++ todo) found missing
         | Just op <- isPrimOpId_maybe v
         , occNameString (primOpOcc op) == "atomically#" = do
             payload <- stmPayloadId

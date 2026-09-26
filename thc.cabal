@@ -490,6 +490,7 @@ executable thc-fixtures
     LiveAsyncFixtures
     ThreadLabelFixtures
     ThreadStatusFixtures
+    CompactRegionsFixtures
     ThreadInventoryFixtures
     ScalarMemoryUtilitiesFixtures
     ThreadAsyncFixtures

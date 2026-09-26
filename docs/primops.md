@@ -6,12 +6,12 @@ GHC 9.14.1 exposes **1491 primops** on the pinned 64-bit target. This list is
 generated from `allThePrimOps`, the [runtime capabilities](../scripts/core-capabilities.json)
 and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signatures.json).
 
-**Implementation coverage: 1383 / 1491 (92.8%).**
+**Implementation coverage: 1390 / 1491 (93.2%).**
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Implemented | 1383 | A runtime implementation is registered in the capability inventory. |
-| Missing | 108 | No runtime implementation is registered. |
+| Implemented | 1390 | A runtime implementation is registered in the capability inventory. |
+| Missing | 101 | No runtime implementation is registered. |
 
 Implemented means translating the GHC operation to a sensible runtime implementation and
 checking it with ordinary tests. It does not require formal proof or exhaustive input testing.
@@ -205,6 +205,13 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `clz32#` — arity 1 — Numeric scalar signature
 - [x] `clz64#` — arity 1 — Numeric scalar signature
 - [x] `clz8#` — arity 1 — Numeric scalar signature
+- [x] `compactAdd#` — arity 3 — Compact-region operation
+- [x] `compactAddWithSharing#` — arity 3 — Compact-region operation
+- [x] `compactContains#` — arity 3 — Compact-region operation
+- [x] `compactContainsAny#` — arity 2 — Compact-region operation
+- [x] `compactNew#` — arity 2 — Compact-region operation
+- [x] `compactResize#` — arity 3 — Compact-region operation
+- [x] `compactSize#` — arity 2 — Compact-region operation
 - [x] `compareByteArrays#` — arity 5 — Byte-array operation
 - [x] `control0#` — arity 3 — Specialized lowering
 - [x] `copyAddrToAddr#` — arity 4 — Byte-array operation
@@ -1476,17 +1483,10 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `anyToAddr#` — arity 2
 - [ ] `clearCCS#` — arity 2
 - [ ] `closureSize#` — arity 1
-- [ ] `compactAdd#` — arity 3
-- [ ] `compactAddWithSharing#` — arity 3
 - [ ] `compactAllocateBlock#` — arity 3
-- [ ] `compactContains#` — arity 3
-- [ ] `compactContainsAny#` — arity 2
 - [ ] `compactFixupPointers#` — arity 3
 - [ ] `compactGetFirstBlock#` — arity 2
 - [ ] `compactGetNextBlock#` — arity 3
-- [ ] `compactNew#` — arity 2
-- [ ] `compactResize#` — arity 3
-- [ ] `compactSize#` — arity 2
 - [ ] `delay#` — arity 2
 - [ ] `forkOn#` — arity 3
 - [ ] `getApStackVal#` — arity 2
