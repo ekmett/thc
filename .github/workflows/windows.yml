@@ -1,0 +1,45 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+name: Native Windows smoke
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Build and test on native Windows
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:THC_PYTHON = (Get-Command python.exe).Source
+          . ./scripts/bootstrap-windows.ps1 -Prefix "$env:RUNNER_TEMP/thc-tools"
+          Invoke-ThcTool $env:CABAL @('update')
+          New-Item -ItemType Directory -Force build | Out-Null
+          & ./scripts/windows.ps1 -Action Test -Jobs 4 *>&1 | Tee-Object build/windows-ci.log
+      - name: Preserve native evidence
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: native-windows-evidence
+          if-no-files-found: warn
+          path: |
+            build/windows-ci.log
+            build/windows-smoke/
+            build/windows-launcher/
+            build/windows-driver/
+            build/managed-md5-native*/
+            build/generated/cbits/
+            build/test-results/windows*SmokeTest/
+            build/reports/tests/windows*SmokeTest/
+            dist-newstyle/**/test/*.log

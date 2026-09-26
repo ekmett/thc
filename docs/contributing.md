@@ -18,6 +18,9 @@ negative controls, strict Core audits, provenance, and all active CI callers.
 
 ## Build and test
 
+For native Windows, use the [PowerShell build and test guide](windows.md).
+It records the pinned tools, tested runtime/exporter slice, and remaining platform limits.
+
 `make` builds the runtime and Haskell components. `make test` prepares native
 fixtures and runs the JVM tests; `make test TESTS='thc.RuntimeTest'` selects one
 JUnit class. `make jit-test` runs the separate advisory JIT retention suite.

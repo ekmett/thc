@@ -8,7 +8,7 @@ module THC.Driver.InstalledForeign
   ( ForeignCompiler(..), prepareForeignInterfaces, missingForeignProof, createView, viewContext
   , observeProbeInterfaces, retainedUsageFiles, verifyUsageFiles, matchUsageFiles ) where
 
-import Control.Exception (bracket, bracketOnError)
+import Control.Exception (bracketOnError)
 import Control.Monad (filterM, forM, forM_, unless)
 import qualified Crypto.Hash.SHA256 as SHA
 import Data.Aeson (Value(..), FromJSON, Result(..), fromJSON, eitherDecodeStrict', encode, object, (.=))
@@ -38,10 +38,10 @@ import System.Directory
 import System.Environment (getEnvironment)
 import System.Exit (ExitCode(..))
 import System.FilePath
-import System.IO (hClose, openTempFile, SeekMode(AbsoluteSeek))
+import System.IO (hClose, openTempFile)
 import System.IO.Error (tryIOError)
 import qualified System.Info as Host
-import qualified System.Posix.IO as Posix
+import THC.Driver.Lock (withLock)
 import System.Process (proc, CreateProcess(..), readCreateProcessWithExitCode)
 import THC.Driver.Installed
 
@@ -556,9 +556,3 @@ atomicJson path value = do
   hClose handle
   BL.writeFile temporary (encode value)
   renameFile temporary path
-
-withLock :: FilePath -> IO a -> IO a
-withLock path action = bracket (Posix.openFd path Posix.ReadWrite
-  (Posix.defaultFileFlags {Posix.creat = Just 0o600})) Posix.closeFd $ \descriptor -> do
-    Posix.waitToSetLock descriptor (Posix.WriteLock, AbsoluteSeek, 0, 0)
-    action

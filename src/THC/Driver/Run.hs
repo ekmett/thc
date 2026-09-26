@@ -15,9 +15,11 @@ import Distribution.Simple.PreProcess (knownSuffixHandlers)
 import Distribution.Simple.Setup
 import Distribution.Utils.Path (getSymbolicPath, makeSymbolicPath)
 import Distribution.Verbosity (silent)
+import GHC.ResponseFile (escapeArgs)
 import System.Directory (canonicalizePath, doesFileExist, listDirectory, makeAbsolute,
                          createDirectoryIfMissing, removeFile)
-import System.Environment (getEnvironment)
+import System.Environment (getEnvironment, lookupEnv)
+import System.Info (os)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath
 import System.IO (stderr)
@@ -76,11 +78,15 @@ runPackage opts target = do
     _ -> fail ("Cabal executable main source is ambiguous: " ++ mainName)
 
   thcRoot <- canonicalizePath (runThcRoot opts)
-  runtime <- maybe (pure (thcRoot </> "build/install/thc/bin/thc")) makeAbsolute (runRuntime opts)
+  let windows = os == "mingw32"
+      launcher = if windows then "thc.bat" else "thc"
+      exporter = thcRoot </> "compiler" </> if windows then "export.ps1" else "export.sh"
+  runtime <- maybe (pure (thcRoot </> "build/install/thc/bin" </> launcher)) makeAbsolute (runRuntime opts)
+  python <- maybe (if windows then "python" else "python3") id <$> lookupEnv "THC_PYTHON"
   let output = packageRoot </> dist </> "thc-run" </> selectedName
       core = output </> "core"
       objects = output </> "ghc"
-  ensureFile (thcRoot </> "compiler/export.sh")
+  ensureFile exporter
   ensureFile (thcRoot </> "scripts/audit-core.py")
   ensureFile runtime
   createDirectoryIfMissing True core
@@ -107,11 +113,18 @@ runPackage opts target = do
                    packages ++ concatMap (\directory -> ["-i" ++ directory]) dirs ++
                    extensions ++ cpp ++ hcOptions GHC info ++
                    ["-fno-code", "-fwrite-interface", "-fwrite-if-simplified-core", source]
-  checked True (thcRoot </> "compiler/export.sh") exportArgs thcRoot environment
+  if windows
+    then do
+      -- Windows PowerShell -File consumes a lone "-" and splits colon-bearing
+      -- named arguments. GHC's own response-file format preserves exact tokens.
+      let response = output </> "export.args"
+      writeFile response (escapeArgs exportArgs)
+      checked True "powershell.exe" ["-NoProfile", "-File", exporter, "@" ++ response] thcRoot environment
+    else checked True exporter exportArgs thcRoot environment
   files <- sort . filter ((== ".json") . takeExtension) <$> listDirectory core
   let modules = [core </> file | file <- files, file /= "audit.json"]
   unless (not (null modules)) $ fail "GHC plugin exported no Core modules"
-  checked True "python3" ([thcRoot </> "scripts/audit-core.py", "--entry", "main:Main.main", "--io-main",
+  checked True python ([thcRoot </> "scripts/audit-core.py", "--entry", "main:Main.main", "--io-main",
                       "--output", output </> "audit.json"] ++ modules) thcRoot inherited
   checked False runtime ["--run-io", intercalate "," modules, "main:Main.main"] thcRoot inherited
 

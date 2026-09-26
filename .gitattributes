@@ -1,3 +1,8 @@
+# Source provenance hashes are over repository bytes on every host.
+* text=auto eol=lf
+# Retain the committed bytes of the batch wrapper and historical evidence.
+gradlew.bat -text
+bench/results/** -text
 # Preserve compiler and benchmark output exactly as captured.
 docs/graphs/** -whitespace linguist-generated=true
 docs/cadenza-graphs/** -whitespace linguist-generated=true

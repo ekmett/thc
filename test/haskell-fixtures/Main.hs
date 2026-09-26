@@ -57,6 +57,7 @@ import OriginalSigprocmaskFixtures (prepareOriginalSigprocmask)
 import OriginalSigsetFixtures (prepareOriginalSigset)
 import OriginalIconvFixtures (prepareOriginalIconv)
 import MutVarFixtures (prepareMutVar)
+import WindowsSmokeFixtures (prepareWindowsSmoke, prepareWindowsDriver)
 import StablePointerFixtures (prepareStablePointers)
 import WeakFixtures (prepareWeaks)
 import ShrinkByteArrayFixtures (prepareShrinkByteArrays)
@@ -877,6 +878,8 @@ main = do
     [name] -> prepareAggregate root name
     _ -> pure False
   unless handled $ case args of
+    ["windows-smoke"] -> prepareWindowsSmoke root
+    ["windows-driver"] -> prepareWindowsDriver root
     ["word-floating"] -> prepareWordFloating root
     ["scalar-bitcasts"] -> prepareScalarBitCasts root
     ["bignat-literals"] -> prepareBigNatLiterals root False
