@@ -870,7 +870,7 @@
       "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/Int8ArrayAudit.hs", "examples/THC/Unboxed8Arrays.hs"]
     },
     "int16-arrays": {
-      "junit": ["thc.runtime.Int16ArrayNativeTest"],
+      "junit": ["thc.runtime.Int16ArrayNativeTest", "thc.runtime.Int16BoundaryCompilationTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int16-arrays"]}],
       "outputs": ["build/int16-arrays"],
       "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/Int16ArrayAudit.hs", "examples/THC/Unboxed16Arrays.hs"]

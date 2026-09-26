@@ -1393,6 +1393,7 @@ class FixturePreparationTest(unittest.TestCase):
                     "thc.runtime.BoxedLexicalProofTest", "thc.runtime.ScalarPrimitiveSignatureTest",
                     "thc.runtime.DataToTagTest", "thc.runtime.MutableByteArraySizeTest",
                     "thc.runtime.Int8ArrayNativeTest", "thc.runtime.Int16ArrayNativeTest",
+                    "thc.runtime.Int16BoundaryCompilationTest",
                     "thc.runtime.Int32ArrayNativeTest"}
         self.assertEqual({"cbv-coercion", "data-to-tag", "mutable-bytearray-size",
                           "int8-arrays", "int16-arrays", "int32-arrays"},
@@ -1407,6 +1408,17 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn("build/explicit64-primops/core/Explicit64PrimopsAudit.json", cbv["outputs"])
         self.assertTrue(any("scripts/check-cbv-metadata.py" in command["argv"]
                             for command in cbv["commands"]))
+
+    def test_int16_boundary_control_prepares_the_genuine_native_fixture(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        self.assertEqual("int16-arrays", owners["thc.runtime.Int16BoundaryCompilationTest"])
+        group = manifest["groups"]["int16-arrays"]
+        self.assertEqual({"thc.runtime.Int16ArrayNativeTest", "thc.runtime.Int16BoundaryCompilationTest"},
+                         set(group["junit"]))
+        self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int16-arrays"]}],
+                         group["commands"])
+        self.assertEqual(["build/int16-arrays"], group["outputs"])
 
 
 class FullFixtureReceiptTest(unittest.TestCase):

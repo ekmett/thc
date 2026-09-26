@@ -5,6 +5,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.Instruction
 import com.oracle.truffle.api.nodes.DirectCallNode
@@ -39,6 +40,106 @@ class Int16ArrayNativeTest {
     private fun compile(target: RootCallTarget) {
         target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
         valid(target, "initial installation")
+        // Match EntryValue.compile: installation alone does not restore a
+        // retired shared boundary before the first measured guest call.
+        val runtime = Truffle.getRuntime()
+        runtime.javaClass.getMethod("bypassedInstalledCode",
+            Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target)
+        valid(target, "installation after boundary restoration")
+    }
+
+    internal fun checkRetiredBoundaryBeforeFirstTwoRootCall() {
+        val manifest = manifest()
+        for (kind in listOf("inputHashes", "artifactHashes"))
+            for ((path, expected) in manifest[kind] as Map<String, String>) {
+                val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
+                    .joinToString("") { "%02x".format(it.toInt() and 255) }
+                assertEquals(expected, actual, "Stale boundary-control fixture: $path")
+            }
+        val paths = (manifest["stages"] as Map<String, List<String>>).getValue("post")
+        val name = "unboxedInt16Accum"
+        val module = merged(paths)
+        assertEquals(2L, checkedCalls(module, name), "Genuine public entry and immediate state lambda")
+        val evidence = ArrayCoreEvidence(module, name)
+        val labels = evidence.guestLambdas(evidence.root["expr"]).map { expression ->
+            val formals = expression[1] as List<Map<String, Any?>>
+            "lambda ${formals.joinToString { it["name"].toString() }}"
+        }.toSet()
+        val rows = checkedRows(File(root, "build/int16-arrays/oracle.tsv").readText()).getValue(name)
+        val (input, answer) = rows.first()
+        assertEquals(Long.MIN_VALUE, input)
+        for (backendName in listOf("ast", "bytecode")) context(false).use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
+                val rawCompile = type.getMethod("compile", Boolean::class.javaPrimitiveType)
+                val callCount = type.getMethod("getCallCount")
+                val runtime = Truffle.getRuntime()
+                val repair = runtime.javaClass.getMethod("bypassedInstalledCode", type)
+                val jvmci = Class.forName("jdk.vm.ci.runtime.JVMCI").getMethod("getRuntime").invoke(null)
+                val backend = Class.forName("jdk.vm.ci.runtime.JVMCIRuntime").getMethod("getHostJVMCIBackend").invoke(jvmci)
+                val metaAccess = Class.forName("jdk.vm.ci.runtime.JVMCIBackend").getMethod("getMetaAccess").invoke(backend)
+                val method = type.getDeclaredMethod("callBoundary", Array<Any?>::class.java)
+                val boundary = Class.forName("jdk.vm.ci.meta.MetaAccessProvider")
+                    .getMethod("lookupJavaMethod", java.lang.reflect.Executable::class.java).invoke(metaAccess, method)
+                val reprofile = Class.forName("jdk.vm.ci.meta.ResolvedJavaMethod").getMethod("reprofile")
+                val hasCode = Class.forName("jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod").getMethod("hasCompiledCode")
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val program = program(language, CoreModules.reachable(module, name) + ("instrument" to true), backendName)
+                val entry = program.entryTarget(name)
+                fun count() = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                for ((seed, native) in rows) assertEquals(native, Calls.target(entry, arrayOf(0L, seed)))
+                val targets = activeTargets(entry)
+                assertEquals(2, targets.size, "$backendName active public and state roots")
+                assertEquals(labels, targets.map { it.rootNode.name }.toSet(), "$backendName source-derived root labels")
+                fun calls() = targets.map { callCount.invoke(it) as Int }
+                fun unchanged() {
+                    assertEquals(targets, activeTargets(entry), "$backendName active target identities")
+                    targets.forEach { valid(it, "$backendName retained ${it.rootNode.name}") }
+                    released(language)
+                }
+                targets.forEach(::compile)
+                try {
+                    // The old helper leaves valid guest nmethods behind a retired
+                    // stub. The outer entry interprets and repairs the boundary;
+                    // its nested state call enters compiled code. This loses one entry,
+                    // not both, so it does not explain the historical delta-zero failure.
+                    reprofile.invoke(boundary)
+                    assertEquals(false, hasCode.invoke(boundary))
+                    targets.forEach { rawCompile.invoke(it, true); valid(it, "$backendName raw compilation") }
+                    assertEquals(false, hasCode.invoke(boundary), "$backendName raw compilation leaves boundary retired")
+                    val before = count()
+                    val callsBefore = calls()
+                    assertEquals(answer, Calls.target(entry, arrayOf(0L, input)))
+                    println("INT16_BOUNDARY $backendName negative delta=${count() - before} calls=$callsBefore->${calls()}")
+                    assertEquals(1L, count() - before, "$backendName retired boundary bypasses only the public root")
+                    assertEquals(targets.mapIndexed { index, target ->
+                        callsBefore[index] + if (target === entry) 1 else 0
+                    }, calls(), "$backendName only the public root interpreted once")
+                    assertEquals(true, hasCode.invoke(boundary), "$backendName public entry repaired the shared stub")
+                    unchanged()
+
+                    // Positive control installs the prerequisite without any guest
+                    // call, then demands both exact entries on the first invocation.
+                    reprofile.invoke(boundary)
+                    assertEquals(false, hasCode.invoke(boundary))
+                    val beforeSetup = count()
+                    val callsBeforeSetup = calls()
+                    targets.forEach(::compile)
+                    assertEquals(true, hasCode.invoke(boundary))
+                    assertEquals(beforeSetup, count(), "$backendName setup does not execute compiled guest code")
+                    assertEquals(callsBeforeSetup, calls(), "$backendName setup does not settle interpreted calls")
+                    unchanged()
+                    assertEquals(answer, Calls.target(entry, arrayOf(0L, input)))
+                    println("INT16_BOUNDARY $backendName positive delta=${count() - beforeSetup} calls=$callsBeforeSetup->${calls()}")
+                    assertEquals(2L, count() - beforeSetup, "$backendName first repaired call enters both roots")
+                    assertEquals(callsBeforeSetup, calls(), "$backendName repaired call never enters the interpreter")
+                    unchanged()
+                } finally {
+                    repair.invoke(runtime, entry)
+                }
+            } finally { context.leave() }
+        }
     }
     private fun activeTargets(entry: RootCallTarget): List<RootCallTarget> {
         val seen = Collections.newSetFromMap(IdentityHashMap<RootCallTarget, Boolean>())

@@ -879,9 +879,10 @@ private val text = "class FakeString { @Test }"
                     "thc.runtime.BoxedLexicalProofTest", "thc.runtime.ScalarPrimitiveSignatureTest",
                     "thc.runtime.DataToTagTest", "thc.runtime.MutableByteArraySizeTest",
                     "thc.runtime.Int8ArrayNativeTest", "thc.runtime.Int16ArrayNativeTest",
+                    "thc.runtime.Int16BoundaryCompilationTest",
                     "thc.runtime.Int32ArrayNativeTest", "thc.runtime.InterfaceCoreNativeTest"}
         self.assertEqual(sorted(expected), result["affected"]["junit"])
-        self.assertEqual(13, result["junit"]["count"])  # Ten affected + three smoke.
+        self.assertEqual(14, result["junit"]["count"])  # Eleven affected + three smoke.
         self.assertEqual(sorted({"scripts/test-core-data-tags.py", "scripts/test-core-bytearrays.py"}), result["affected"]["python"])
 
 
@@ -1004,8 +1005,19 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             if path.name != "ArrayCoreEvidence.kt" and "ArrayCoreEvidence(" in source:
                 consumers.update(select.junit_info(source)[0])
         self.assertEqual(9, len(consumers))
-        self.assertEqual(consumers, set(group["junit"]))
+        # The isolated boundary control delegates to the native test's genuine
+        # two-root fixture helper, so it also consumes ArrayCoreEvidence.
+        self.assertEqual(consumers | {"thc.runtime.Int16BoundaryCompilationTest"}, set(group["junit"]))
         self.assertEqual([], group["python"])
+
+    def test_int16_boundary_control_tracks_its_helper_and_genuine_inputs(self):
+        expected = {"thc.runtime.Int16ArrayNativeTest", "thc.runtime.Int16BoundaryCompilationTest"}
+        for path in ("src/test/kotlin/thc/runtime/Int16ArrayNativeTest.kt",
+                     "src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt",
+                     "compiler/test-fixtures/Int16ArrayAudit.hs",
+                     "examples/THC/Unboxed16Arrays.hs", "test/haskell-fixtures/Main.hs"):
+            self.assertTrue(expected <= set(self.policy["owners"][path]["junit"]), path)
+        self.assertTrue(expected <= self.classes)
 
     def test_stack_info_layout_helper_selects_all_consumers(self):
         group = self.policy["owners"]["src/test/kotlin/thc/runtime/ManagedStackInfoImageTest.kt"]

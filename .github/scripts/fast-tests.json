@@ -769,6 +769,10 @@
       "junit": ["thc.CoreZipBundleTest"],
       "python": []
     },
+    "src/test/kotlin/thc/runtime/Int16ArrayNativeTest.kt": {
+      "junit": ["thc.runtime.Int16ArrayNativeTest", "thc.runtime.Int16BoundaryCompilationTest"],
+      "python": []
+    },
     "src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt": {
       "junit": [
         "thc.runtime.BoxedArrayExtensionsTest",
@@ -776,6 +780,7 @@
         "thc.runtime.IntArrayNativeTest",
         "thc.runtime.Int8ArrayNativeTest",
         "thc.runtime.Int16ArrayNativeTest",
+        "thc.runtime.Int16BoundaryCompilationTest",
         "thc.runtime.Int32ArrayNativeTest",
         "thc.runtime.DoubleArrayNativeTest",
         "thc.runtime.FloatWordArrayNativeTest",
@@ -927,7 +932,8 @@
     },
     "compiler/test-fixtures/Int16ArrayAudit.hs": {
       "junit": [
-        "thc.runtime.Int16ArrayNativeTest"
+        "thc.runtime.Int16ArrayNativeTest",
+        "thc.runtime.Int16BoundaryCompilationTest"
       ],
       "python": []
     },
@@ -1022,7 +1028,8 @@
     },
     "examples/THC/Unboxed16Arrays.hs": {
       "junit": [
-        "thc.runtime.Int16ArrayNativeTest"
+        "thc.runtime.Int16ArrayNativeTest",
+        "thc.runtime.Int16BoundaryCompilationTest"
       ],
       "python": []
     },
@@ -1194,6 +1201,7 @@
         "thc.runtime.Explicit64PrimopsTest",
         "thc.runtime.Int8ArrayNativeTest",
         "thc.runtime.Int16ArrayNativeTest",
+        "thc.runtime.Int16BoundaryCompilationTest",
         "thc.runtime.Int32ArrayNativeTest",
         "thc.runtime.IntArrayNativeTest",
         "thc.runtime.DoubleArrayNativeTest",
