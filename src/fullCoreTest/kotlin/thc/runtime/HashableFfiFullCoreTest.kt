@@ -6,7 +6,8 @@ package thc.runtime
 import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.DynamicTest
+import org.junit.jupiter.api.TestFactory
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
@@ -120,31 +121,35 @@ class HashableFfiFullCoreTest {
         } finally { context.leave() }
     }
 
-    @Test fun originalHashableMatchesNativeThroughRealByteBackedFfiAndFirstCompiledEntries() {
+    @TestFactory fun originalHashableMatchesNativeThroughRealByteBackedFfiAndFirstCompiledEntries(): List<DynamicTest> {
         val fixture = fixture()
-        for (backend in listOf("ast", "bytecode")) for (name in entries) {
-            Context.newBuilder("thc").allowNativeAccess(true)
-                .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build().use { context ->
-                    val entry = "${fixture.unit}:HashableProbe.$name"
-                    val function = context.eval("thc", CoreModules.request(listOf("@${fixture.packages.path}"), entry, backend = backend))
-                    val selected = fixture.rows.filter { it.entry == name }
-                    fun diagnostics() = Json.parse(function.getMember("diagnostics").asString()) as Map<String, Any?>
-                    fun check(row: Row) {
-                        assertEquals(row.result, function.execute(row.salt, row.choice).asLong(), "$backend/$name/${row.salt}/${row.choice}")
-                        released(context)
-                    }
-                    selected.forEach(::check)
-                    assertTrue(function.invokeMember("compile").asBoolean(), "$backend/$name installs real guest code")
-                    // The very next invocation is checked, with no settling call,
-                    // retry, recompilation or discarded first-entry observation.
-                    for (row in selected.asReversed()) {
-                        val before = diagnostics()["compiledEntries"] as Long
-                        check(row)
-                        assertTrue((diagnostics()["compiledEntries"] as Long) > before, "$backend/$name entered compiled guest code")
-                    }
-                    assertEquals(0L, diagnostics()["unsupportedTraps"])
-                    println("HashableFfi PASS $backend/$name nativeRows=${selected.size} firstCompiled=true")
+        return listOf("ast", "bytecode").flatMap { backend ->
+            entries.map { name ->
+                DynamicTest.dynamicTest("$backend/$name") {
+                    Context.newBuilder("thc").allowNativeAccess(true)
+                        .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build().use { context ->
+                            val entry = "${fixture.unit}:HashableProbe.$name"
+                            val function = context.eval("thc", CoreModules.request(listOf("@${fixture.packages.path}"), entry, backend = backend))
+                            val selected = fixture.rows.filter { it.entry == name }
+                            fun diagnostics() = Json.parse(function.getMember("diagnostics").asString()) as Map<String, Any?>
+                            fun check(row: Row) {
+                                assertEquals(row.result, function.execute(row.salt, row.choice).asLong(), "$backend/$name/${row.salt}/${row.choice}")
+                                released(context)
+                            }
+                            selected.forEach(::check)
+                            assertTrue(function.invokeMember("compile").asBoolean(), "$backend/$name installs real guest code")
+                            // The very next invocation is checked, with no settling call,
+                            // retry, recompilation or discarded first-entry observation.
+                            for (row in selected.asReversed()) {
+                                val before = diagnostics()["compiledEntries"] as Long
+                                check(row)
+                                assertTrue((diagnostics()["compiledEntries"] as Long) > before, "$backend/$name entered compiled guest code")
+                            }
+                            assertEquals(0L, diagnostics()["unsupportedTraps"])
+                            println("HashableFfi PASS $backend/$name nativeRows=${selected.size} firstCompiled=true")
+                        }
                 }
+            }
         }
     }
 }
