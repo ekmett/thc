@@ -160,8 +160,8 @@ internal class ManagedAllocation private constructor(
         val start = range(index * 8, 8)
         if (intersectsPointer(start, 8))
             fault("Atomic Int access overlaps a managed pointer cell")
-        val old = ManagedIntArray.read(bytes, index)
-        ManagedIntArray.write(bytes, index, old + delta)
+        val old = ByteArrayAccess.readInt(bytes, index)
+        ByteArrayAccess.writeInt(bytes, index, old + delta)
         return old
     }
 
