@@ -19,7 +19,8 @@ import TestSupport
 import THC.Driver.GhcProxy (ghcProxyCommand)
 
 tests :: Env -> Test
-tests env = TestList [proxyOptionsTest env, storeProjectTest env, customStoreProjectTest env, nativeVariantsTest env]
+tests env = TestList [proxyOptionsTest env, storeProjectTest env, customStoreProjectTest env,
+  nativeVariantsTest env False, nativeVariantsTest env True]
 
 proxyOptionsTest :: Env -> Test
 proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay provenance" $ TestCase $
@@ -249,10 +250,24 @@ customStoreProjectTest env = TestLabel "Custom Setup library retains runtime-onl
     assertBackend "bytecode" second
     assertEqual "transitive captured bundle is reused" stamp =<< getModificationTime leafBundle
 
-nativeVariantsTest :: Env -> Test
-nativeVariantsTest env = TestLabel "same native C symbol retains pointer and byte-array variants" $ TestCase $
+nativeVariantsTest :: Env -> Bool -> Test
+nativeVariantsTest env cxx = TestLabel
+  ("same native " ++ (if cxx then "C++/ccall-header" else "C") ++ " symbol retains pointer and byte-array variants") $ TestCase $
   withFixtureNamed env "test/fixtures/run-native-variants" "native variants" $ \project ->
   withCache (takeDirectory project </> "cache") $ do
+    if cxx then do
+      original <- readText (project </> "variants.c")
+      writeText (project </> "variants.cc") $ unlines
+        ["static_assert(THC_CXX_CONFIGURATION == 7, \"Cabal C++ options must survive replay\");",
+         "template<class T> static T read_cpp(T const *p) { return *p; }",
+         "extern \"C\" {", replaceText "bytes[i]" "read_cpp(bytes + i)" original, "}"]
+      removeFile (project </> "variants.c")
+      description <- readText (project </> "native-variants.cabal")
+      writeText (project </> "native-variants.cabal")
+        (replaceText "c-sources: variants.c" "cxx-sources: variants.cc\n  cxx-options: -std=c++11 -DTHC_CXX_CONFIGURATION=7" description)
+      haskell <- readText (project </> "Main.hs")
+      writeText (project </> "Main.hs") (replaceText "\"variant_sum\"" "\"variants.h variant_sum\"" haskell)
+    else pure ()
     let base = takeDirectory project
         output = base </> "output"
         invoke backend = run env base (Just backend) 240
@@ -280,6 +295,15 @@ nativeVariantsTest env = TestLabel "same native C symbol retains pointer and byt
         bundle = string (field (field unit "bundle") "path")
         modulePath = string (field (one ((== "Main") . string . (`field` "name")) (objects unit "modules")) "path")
     core <- readCore bundle modulePath
+    if cxx then do
+      let declarations = objects (field core "staticForeignImports") "imports"
+      assertBool "ordinary ccall retains its original header name"
+        (all ((== "variants.h") . string . (`field` "header")) declarations)
+      let inputs = field (field core "packageNativeLink") "buildInputs"
+          units = array (field inputs "translationUnits")
+          cppUnits = [value | value <- drop 1 units, string (field value "language") == "c++"]
+      assertEqual "exactly one compiled C++ source receipt" 1 (length cppUnits)
+    else pure ()
     let abi = objects (field core "packageNativeLink") "abi"
     assertEqual "one real C symbol" ["variant_sum", "variant_sum"] (map (string . (`field` "symbol")) abi)
     assertEqual "two exact semantic carrier adapters" [["AddrRep", "WordRep"], ["ByteArray#", "WordRep"]]
