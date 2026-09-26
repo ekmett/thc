@@ -115,12 +115,12 @@ add native transport for managed pointers or authorize arbitrary library symbols
 Safe scalar calls use the existing foreign extent: other Java guest threads and
 JVM GC may progress, pending async delivery is deferred while in foreign code,
 and `finally` restores the previous permission and masking extent even when
-interop fails. Bytecode stores the result before its resumable post-call poll,
-so delivery never replays a completed foreign effect. Boundary controls exercise
-concurrent scalar C calls, GC, deferred delivery on return and exceptional cleanup.
+interop fails. AST and bytecode store the result before their resumable post-call
+poll, so delivery never replays a completed foreign effect. Boundary controls
+exercise concurrent scalar C calls, GC, deferred delivery on return, completed
+result resumption and exceptional cleanup in interpreted and compiled entries.
 This tranche does not claim interruptible native blocking calls, callbacks,
-bound OS threads or native errno behavior. AST execution retains its existing
-async-admission policy.
+bound OS threads or native errno behavior.
 
 Four primitive bit-pattern entrypoints using the original package's public API
 pass the strict reachable audit and match 88 native observations, including

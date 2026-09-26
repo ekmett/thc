@@ -10,11 +10,15 @@ import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import thc.*
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
 import java.util.HexFormat
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
@@ -26,15 +30,22 @@ class PackageSafeForeignTest {
         val source = directory.resolve("safe.c")
         val output = directory.resolve("safe.bc")
         Files.writeString(source, """
+            #define _DEFAULT_SOURCE 1
             #include <stdatomic.h>
+            #include <unistd.h>
             static _Atomic int phase;
+            static _Atomic int calls;
             int started(void) { return atomic_load(&phase); }
+            int call_count(void) { return atomic_load(&calls); }
+            void reset(void) { atomic_store(&phase, 0); atomic_store(&calls, 0); }
             void release(void) { atomic_store(&phase, 2); }
             double wait_value(double value) {
+              if (atomic_fetch_add(&calls, 1) != 0) return -321.0;
               atomic_store(&phase, 1);
-              for (unsigned i = 0; i < 1000000000; ++i)
-                if (atomic_load(&phase) == 2) return value;
-              return -123.0;
+              /* A finite native leaf, like the native libm leaves used by erf.
+                 This test does not add usleep to producer ABI admission. */
+              usleep(100000);
+              return value;
             }
             double requires_argument(double value) { return value; }
         """.trimIndent())
@@ -48,6 +59,8 @@ class PackageSafeForeignTest {
         val hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))
         val abi = listOf(
             PackageScalarSignature("started", "started", emptyList(), "Int32Rep", safety = "safe"),
+            PackageScalarSignature("call_count", "call_count", emptyList(), "Int32Rep", safety = "safe"),
+            PackageScalarSignature("reset", "reset", emptyList(), "void", safety = "safe"),
             PackageScalarSignature("release", "release", emptyList(), "void", safety = "safe"),
             PackageScalarSignature("wait_value", "wait_value", listOf("DoubleRep"), "DoubleRep", safety = "safe"),
             // Deliberately inconsistent control: no forged typed Core is admitted.
@@ -66,7 +79,30 @@ class PackageSafeForeignTest {
         }
     }
 
-    @Test fun safeScalarDefersAsyncUntilReturnWhileOtherGuestCallsAndGcProgress() {
+    private fun module(link: PackageScalarLink): Map<String, Any?> {
+        val state = mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true)
+        val double = mapOf("kind" to "double", "primReps" to listOf("DoubleRep"), "evaluated" to true)
+        val closure = mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)
+        val result = mapOf("kind" to "unknown", "aggregate" to "unboxed-tuple", "primReps" to listOf("DoubleRep"),
+            "components" to listOf(state, double), "evaluated" to true)
+        val descriptor = mapOf("schema" to 1L, "target" to mapOf("kind" to "static", "symbol" to "wait_value",
+            "unit" to link.unit, "isFunction" to true), "convention" to "ccall", "safety" to "safe",
+            "arity" to 2L, "suppliedArity" to 2L,
+            "argumentReps" to listOf(double + ("evaluated" to false), state + ("evaluated" to false)),
+            "resultRep" to (result + ("evaluated" to false)))
+        val arguments = listOf(listOf("var", "value", mapOf("rep" to double)),
+            listOf("var", "state", mapOf("rep" to state)))
+        val body = listOf("app", listOf("var", "native-safe", mapOf("rep" to closure)), arguments,
+            listOf(false, false), false, false, mapOf("rep" to result, "foreignCall" to descriptor))
+        val parameters = listOf("value" to double, "state" to state).map { (name, rep) ->
+            mapOf("id" to name, "name" to name, "lifted" to false, "coercion" to false, "rep" to rep) }
+        return mapOf("bindings" to listOf(mapOf("id" to "wait", "name" to "wait", "lifted" to true,
+            "expr" to listOf("lam", parameters, body, mapOf("resultRep" to result)))),
+            "packageScalarLinks" to listOf(link), "instrument" to true)
+    }
+
+    @ParameterizedTest @ValueSource(strings = ["ast", "ast-compiled", "bytecode", "bytecode-compiled"])
+    fun safeScalarDefersAsyncUntilReturnWhileOtherGuestCallsAndGcProgress(mode: String) {
         val link = library()
         Context.newBuilder("thc").allowNativeAccess(true).withContextProfile(ContextProfile.SYNCHRONOUS_TEST)
             .build().use { context ->
@@ -76,23 +112,57 @@ class PackageSafeForeignTest {
                     val owner = Language.currentState()
                     owner.packageCbits.link(link)
                     val entries = link.abi.associate { it.symbol to Entry(language, PackageScalarCall(link, it)).callTarget }
-                    val target = entries.getValue("wait_value")
+                    val program: ExecutableProgram = if (mode.startsWith("ast")) Program(language, module(link), true)
+                        else BytecodeProgram(language, module(link), true)
+                    val target = program.entryTarget("wait")
+                    val shape = checkNotNull((target.rootNode as GuestRoot).tupleResult)
+                    entries.getValue("started").call()
+                    entries.getValue("release").call()
+                    entries.getValue("call_count").call()
+                    val ready = CountDownLatch(1)
+                    val begin = CountDownLatch(1)
+                    val compiledBefore = AtomicLong()
                     val identity = AtomicLong()
                     val pending = AtomicReference<AsyncRequest>()
+                    val completed = AtomicReference<SavedGuestContinuation>()
                     val failure = AtomicReference<Throwable>()
                     val worker = Thread {
                         context.enter()
                         identity.set(owner.threads.enterCurrent())
                         try {
-                            assertEquals(0.5, target.call(0.5))
-                            val request = owner.threads.poll(target.rootNode)
-                            assertSame(pending.get(), request, "delivery becomes possible at the returning guest cut")
+                            // Warm on the same registered carrier that will
+                            // execute the first installed foreign call.
+                            repeat(3) {
+                                entries.getValue("reset").call()
+                                val result = Calls.target(target, arrayOf(0L, 0.5, Unit))
+                                assertEquals(0.5, shape.layout.getDouble(ownedTupleResult(result, shape), 0))
+                            }
+                            entries.getValue("reset").call()
+                            ready.countDown()
+                            check(begin.await(10, TimeUnit.SECONDS))
+                            val result = Calls.target(target, arrayOf(0L, 0.5, Unit))
+                            val continuation = checkNotNull(savedGuestContinuation(result))
+                            val request = continuation.asyncRequest()
+                            assertSame(pending.get(), request, "delivery occurs at the completed foreign-call cut")
+                            if (mode.endsWith("compiled")) {
+                                assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() > compiledBefore.get())
+                                assertTrue(request!!.compiledCapture, "first installed call reaches the return cut in compiled code")
+                            }
                             request!!.acknowledge()
+                            completed.set(continuation)
                         } catch (problem: Throwable) { failure.set(problem) }
-                        finally { owner.threads.leaveCurrent(); context.leave() }
+                        finally { ready.countDown(); owner.threads.leaveCurrent(); context.leave() }
                     }
                     worker.start()
                     try {
+                        assertTrue(ready.await(10, TimeUnit.SECONDS))
+                        failure.get()?.let { throw it }
+                        if (mode.endsWith("compiled")) {
+                            target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                            assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                        }
+                        compiledBefore.set((program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                        begin.countDown()
                         val deadline = System.nanoTime() + 5_000_000_000L
                         while (entries.getValue("started").call() != 1L && System.nanoTime() < deadline) Thread.sleep(1)
                         assertEquals(1L, entries.getValue("started").call(), "other guest call observes the active C loop")
@@ -101,12 +171,26 @@ class PackageSafeForeignTest {
                         System.gc()
                         assertEquals(AsyncRequestState.PENDING, request.state, "no guest delivery from the opaque foreign frame")
                     } finally {
+                        begin.countDown()
                         entries.getValue("release").call()
                         worker.join(5000)
                     }
                     assertFalse(worker.isAlive, "scalar safe return must release the Java carrier")
                     failure.get()?.let { throw it }
                     assertEquals(AsyncRequestState.ACKNOWLEDGED, pending.get().state)
+                    assertEquals(1L, entries.getValue("call_count").call())
+                    owner.threads.enterCurrent()
+                    try {
+                        val result = completed.get().continueWith(Unit)
+                        assertEquals(0.5, shape.layout.getDouble(ownedTupleResult(result, shape), 0))
+                        assertEquals(1L, entries.getValue("call_count").call(), "resumption must not replay the foreign effect")
+                        if (mode.startsWith("ast"))
+                            assertThrows(RuntimeFault::class.java) { completed.get().continueWith(Unit) }
+                        assertEquals(0, language.handoffState.get().arguments.depth)
+                        assertEquals(0, language.handoffState.get().results.depth)
+                        assertEquals(0, language.handoffState.get().arguments.retainedReferences())
+                        assertEquals(0, language.handoffState.get().results.retainedReferences())
+                    } finally { owner.threads.leaveCurrent() }
                 } finally { context.leave() }
             }
     }
