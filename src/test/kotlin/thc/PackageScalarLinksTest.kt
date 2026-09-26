@@ -19,10 +19,10 @@ class PackageScalarLinksTest {
         val proof = base["staticForeignImports"] as Map<String, Any?>
         val original = (proof["imports"] as List<Map<String, Any?>>).single()
         val binder = original["binder"] as Map<String, Any?>
-        val emitted = mapOf("symbol" to "blocked", "unit" to base["unit"], "convention" to "ccall", "safety" to "safe",
+        val emitted = mapOf("symbol" to "blocked", "unit" to base["unit"], "convention" to "ccall", "safety" to "interruptible",
             "arguments" to listOf("AddrRep", "void"), "result" to listOf("void", "Int32Rep"))
-        val blocked = original + mapOf("symbol" to "blocked", "safety" to "safe", "binder" to (binder + ("occurrence" to "blocked")), "emitted" to emitted)
-        val call = mapOf("target" to mapOf("unit" to base["unit"], "symbol" to "blocked"), "convention" to "ccall", "safety" to "safe")
+        val blocked = original + mapOf("symbol" to "blocked", "safety" to "interruptible", "binder" to (binder + ("occurrence" to "blocked")), "emitted" to emitted)
+        val call = mapOf("target" to mapOf("unit" to base["unit"], "symbol" to "blocked"), "convention" to "ccall", "safety" to "interruptible")
         val goodId = "scalar-fixture:Scalar.good"
         val badId = "scalar-fixture:Scalar.bad"
         val bindings = listOf(mapOf("id" to goodId, "expr" to listOf("lit", "int", 7L)),
@@ -255,7 +255,24 @@ class PackageScalarLinksTest {
         }
         val accepted = native("Int32Rep", "safe")
         assertEquals("safe", PackageScalarLinks.read(accepted)!!.link.abi.single().safety)
-        assertThrows(IllegalArgumentException::class.java) { PackageScalarLinks.read(native("Int32Rep", "safe", "AddrRep")) }
+        assertEquals("AddrRep", PackageScalarLinks.read(native("Int32Rep", "safe", "AddrRep"))!!.link.abi.single().result)
+        for (rep in listOf("AddrRep", "ByteArray#", "MutableByteArray#")) {
+            val signature = PackageScalarLinks.read(native(rep, "safe"))!!.link.abi.single()
+            assertEquals(listOf(rep), signature.arguments)
+            assertEquals("safe", signature.safety)
+        }
+        val shared = native("AddrRep", "safe")
+        val sharedLink = shared["packageNativeLink"] as Map<String, Any?>
+        val sharedAbi = (sharedLink["abi"] as List<Map<String, Any?>>).single()
+        val sharedProof = shared["staticForeignImports"] as Map<String, Any?>
+        val sharedImport = (sharedProof["imports"] as List<Map<String, Any?>>).single()
+        val unsafeImport = sharedImport + mapOf("safety" to "unsafe",
+            "binder" to ((sharedImport["binder"] as Map<String, Any?>) + ("occurrence" to "unsafeValue")),
+            "emitted" to ((sharedImport["emitted"] as Map<String, Any?>) + ("safety" to "unsafe")))
+        val sharedVariants = shared + mapOf("packageNativeLink" to (sharedLink + ("abi" to listOf(sharedAbi,
+            sharedAbi + mapOf("entry" to "thc_native_${"a".repeat(64)}_1", "safety" to "unsafe")))),
+            "staticForeignImports" to (sharedProof + ("imports" to listOf(sharedImport, unsafeImport))))
+        assertEquals(listOf("safe", "unsafe"), PackageScalarLinks.read(sharedVariants)!!.link.abi.map { it.safety })
         val proof = accepted["staticForeignImports"] as Map<String, Any?>
         val imported = (proof["imports"] as List<Map<String, Any?>>).single()
         val emitted = imported["emitted"] as Map<String, Any?>
@@ -265,9 +282,8 @@ class PackageScalarLinksTest {
                 PackageScalarLinks.read(accepted + ("staticForeignImports" to (proof + ("imports" to listOf(changed)))))
             }
         }
-        for ((rep, safety) in listOf("AddrRep" to "safe", "ByteArray#" to "safe", "MutableByteArray#" to "safe",
-            "Int32Rep" to "interruptible")) assertThrows(IllegalArgumentException::class.java) {
-            PackageScalarLinks.read(native(rep, safety))
+        for (rep in listOf("Int32Rep", "AddrRep", "ByteArray#", "MutableByteArray#")) assertThrows(IllegalArgumentException::class.java) {
+            PackageScalarLinks.read(native(rep, "interruptible"))
         }
     }
 }

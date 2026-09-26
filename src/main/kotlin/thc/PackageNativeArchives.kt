@@ -97,11 +97,7 @@ internal object PackageNativeArchives {
             }
         }
         if (module.containsKey("staticForeignImportStubs")) check(module["staticForeignImportStubs"] == proof, "retained stub provenance differs")
-        val expected = imports.filter { emitted ->
-            emitted["safety"] == "interruptible" || emitted["safety"] == "safe" &&
-                ((emitted["arguments"] as List<*>).dropLast(1).any { it !in scalar || it == "AddrRep" } ||
-                    (emitted["result"] as List<*>).last() == "AddrRep")
-        }
+        val expected = imports.filter { it["safety"] == "interruptible" }
         check(list(archive["unsupportedImports"]) == expected, "unsupported import inventory differs")
         val unresolved = list(archive["unresolvedSymbols"]).map(::text)
         check(unresolved.distinct() == unresolved, "duplicate unresolved symbols")

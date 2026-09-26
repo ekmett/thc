@@ -60,7 +60,7 @@ nativeSignatures unit modules = do
   where
     first (symbol,_,_,_,_) = symbol
     cAbi integer (_,convention,safety,arguments,result) =
-      (convention,safety,map (integer . pointerAbi) arguments,result)
+      (convention,if safety == "safe" then "unsafe" else safety,map (integer . pointerAbi) arguments,result)
     pointerAbi value | value `elem` ["ByteArray#","MutableByteArray#"] = "AddrRep"
                      | otherwise = value
     integerAbi value | value `elem` ["IntRep","Int8Rep","Int16Rep","Int32Rep","Int64Rep"] = "Word" ++ drop 3 value
@@ -200,8 +200,10 @@ nativeType depth value = case member value "kind" of
           mapM_ (\key -> field value key >>= nativeType depth) keys
 
 supportedSignature :: Signature -> Bool
-supportedSignature (_,_,safety,arguments,result) = safety == "unsafe" ||
-  safety == "safe" && all (\rep -> scalarCarrier rep && rep /= "AddrRep") arguments && result /= "AddrRep"
+-- Temporary user-selected execution policy: preserve the declared safety in
+-- every proof/adapter, but use the existing unsafe boundary for safe imports.
+-- This does not admit interruptible calls or broaden pointer lifetime rules.
+supportedSignature (_,_,safety,_,_) = safety `elem` ["unsafe","safe"]
 
 setMember :: String -> Value -> Value -> Value
 setMember name value (Object fields) = Object (KM.insert (Key.fromString name) value fields)

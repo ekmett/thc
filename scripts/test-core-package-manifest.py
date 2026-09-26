@@ -58,7 +58,7 @@ class PackageNativeVariantsTest(unittest.TestCase):
         blocked = copy.deepcopy(proof['imports'][0])
         blocked['binder']['occurrence'] = 'blocked'
         blocked['symbol'] = blocked['emitted']['symbol'] = 'blocked'
-        blocked['safety'] = blocked['emitted']['safety'] = 'safe'
+        blocked['safety'] = blocked['emitted']['safety'] = 'interruptible'
         blocked['emitted']['arguments'] = ['AddrRep', 'void']
         proof['imports'].append(blocked)
         module['packageNativeArchive'] = dict(schema=1, profile='thc-package-native-archive-v1', execution='not-linked',
@@ -68,7 +68,7 @@ class PackageNativeVariantsTest(unittest.TestCase):
         self.assertEqual({link['abi'][0]['entry']}, proved)
         archive = core_package_manifest.package_native_archive(module)
         self.assertFalse(core_package_manifest.native_archive_blocks(module, {}, archive))
-        binding = dict(foreignCall=dict(target=dict(unit=module['unit'], symbol='blocked'), convention='ccall', safety='safe'))
+        binding = dict(foreignCall=dict(target=dict(unit=module['unit'], symbol='blocked'), convention='ccall', safety='interruptible'))
         self.assertTrue(core_package_manifest.native_archive_blocks(module, binding, archive))
         for key, value in [('unsupportedImports', []), ('unclassifiedReason', 'invented'), ('schema', True)]:
             bad = copy.deepcopy(module); bad['packageNativeArchive'][key] = value
@@ -87,6 +87,15 @@ class PackageNativeVariantsTest(unittest.TestCase):
             with self.subTest(reps=reps), self.assertRaises(ValueError):
                 core_package_manifest.package_scalar_link(self.module(reps))
 
+    def test_safe_and_unsafe_declarations_share_c_abi_but_retain_both_adapters(self):
+        module = self.module(['AddrRep', 'AddrRep'])
+        module['packageNativeLink']['abi'][0]['safety'] = 'safe'
+        imported = module['staticForeignImports']['imports'][0]
+        imported['safety'] = imported['emitted']['safety'] = 'safe'
+        link, proved = core_package_manifest.package_scalar_link(module)
+        self.assertEqual(['safe', 'unsafe'], [entry['safety'] for entry in link['abi']])
+        self.assertEqual(2, len(proved))
+
     def test_ccall_header_is_retained_without_changing_emitted_symbol(self):
         module = self.module(['AddrRep', 'ByteArray#'])
         for imported in module['staticForeignImports']['imports']:
@@ -98,7 +107,7 @@ class PackageNativeVariantsTest(unittest.TestCase):
             with self.subTest(header=malformed), self.assertRaises(ValueError):
                 core_package_manifest.package_scalar_link(module)
 
-    def test_safe_scalars_retain_safety_and_reject_pointer_or_interruptible_calls(self):
+    def test_safe_imports_retain_metadata_with_temporary_unsafe_carriers_but_reject_interruptible(self):
         def make(rep, safety, result='WordRep'):
             module = self.module([rep])
             module['packageNativeLink']['abi'][0]['safety'] = safety
@@ -111,18 +120,21 @@ class PackageNativeVariantsTest(unittest.TestCase):
         link, proved = core_package_manifest.package_scalar_link(accepted)
         self.assertEqual('safe', link['abi'][0]['safety'])
         self.assertEqual({link['abi'][0]['entry']}, proved)
-        with self.assertRaises(ValueError):
-            core_package_manifest.package_scalar_link(make('WordRep', 'safe', 'AddrRep'))
+        link, _ = core_package_manifest.package_scalar_link(make('WordRep', 'safe', 'AddrRep'))
+        self.assertEqual('AddrRep', link['abi'][0]['result'])
+        for rep in ('AddrRep', 'ByteArray#', 'MutableByteArray#'):
+            link, _ = core_package_manifest.package_scalar_link(make(rep, 'safe'))
+            self.assertEqual([rep], link['abi'][0]['arguments'])
+            self.assertEqual('safe', link['abi'][0]['safety'])
         for where in ('declaration', 'emitted'):
             altered = make('WordRep', 'safe')
             imported = altered['staticForeignImports']['imports'][0]
             (imported if where == 'declaration' else imported['emitted'])['safety'] = 'unsafe'
             with self.subTest(where=where), self.assertRaises(ValueError):
                 core_package_manifest.package_scalar_link(altered)
-        for rep, safety in (('AddrRep', 'safe'), ('ByteArray#', 'safe'),
-                            ('MutableByteArray#', 'safe'), ('WordRep', 'interruptible')):
-            with self.subTest(rep=rep, safety=safety), self.assertRaises(ValueError):
-                core_package_manifest.package_scalar_link(make(rep, safety))
+        for rep in ('AddrRep', 'ByteArray#', 'MutableByteArray#', 'WordRep'):
+            with self.subTest(rep=rep), self.assertRaises(ValueError):
+                core_package_manifest.package_scalar_link(make(rep, 'interruptible'))
 
     def test_signedness_adapters_require_headers_and_keep_integer_widths(self):
         for width in ('', '8', '16', '32', '64'):

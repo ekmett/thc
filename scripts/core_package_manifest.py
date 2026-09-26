@@ -422,8 +422,7 @@ def package_native_archive(module):
                 (result == ['void'] or len(result) == 2 and result[0] == 'void' and result[1] in scalar), 'emitted carriers')
             emitted_imports.append(emitted)
     require('staticForeignImportStubs' not in module or module['staticForeignImportStubs'] == proof, 'retained stub provenance differs')
-    expected = [entry for entry in emitted_imports if entry['safety'] == 'interruptible' or entry['safety'] == 'safe' and
-        (any(rep not in scalar or rep == 'AddrRep' for rep in entry['arguments'][:-1]) or entry['result'][-1] == 'AddrRep')]
+    expected = [entry for entry in emitted_imports if entry['safety'] == 'interruptible']
     require(sequence(archive['unsupportedImports']) == expected, 'unsupported import inventory differs')
     unresolved = [text(value) for value in sequence(archive['unresolvedSymbols'])]
     require(len(set(unresolved)) == len(unresolved), 'duplicate unresolved symbols')
@@ -529,9 +528,7 @@ def package_scalar_link(module, validate_archive=True):
         require(re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', name), 'C symbol')
         require(entry['entry'] == ('thc_native_' if native else 'thc_scalar_') + link['componentSha256'] + '_' + str(index), 'component entry namespace')
         require(isinstance(entry['arguments'], list) and all(arg in reps for arg in entry['arguments']) and entry['result'] in results, 'C ABI')
-        require(not native or entry['convention'] in ('ccall', 'capi') and (entry['safety'] == 'unsafe' or
-                entry['safety'] == 'safe' and entry['result'] != 'AddrRep' and
-                not any(rep in ('AddrRep', 'ByteArray#', 'MutableByteArray#') for rep in entry['arguments'])),
+        require(not native or entry['convention'] in ('ccall', 'capi') and entry['safety'] in ('unsafe', 'safe'),
                 'unsupported C calling convention/safety')
         key = (name, entry.get('convention', 'ccall'), entry.get('safety', 'unsafe'), tuple(entry['arguments']), entry['result'])
         require(key not in abi, 'duplicate ABI signature')
@@ -545,13 +542,15 @@ def package_scalar_link(module, validate_archive=True):
     for name in {entry['symbol'] for entry in abi.values()}:
         variants = [entry for entry in abi.values() if entry['symbol'] == name]
         require(native or len(variants) == 1, 'duplicate scalar ABI symbol')
-        def shape(entry, normalize):
-            return (entry.get('convention', 'ccall'), entry.get('safety', 'unsafe'), tuple(normalize(rep) for rep in entry['arguments']), entry['result'])
+        def shape(entry, normalize, effective_safety=True):
+            safety = entry.get('safety', 'unsafe')
+            if effective_safety and safety == 'safe': safety = 'unsafe'
+            return (entry.get('convention', 'ccall'), safety, tuple(normalize(rep) for rep in entry['arguments']), entry['result'])
         if len({shape(entry, pointer_abi) for entry in variants}) > 1:
             header_adapted.add(name)
         require(len({shape(entry, lambda rep: integer_abi(pointer_abi(rep)))
                      for entry in variants}) == 1, 'conflicting C ABI variants')
-        require(len({shape(entry, lambda rep: 'ByteArray#' if rep == 'MutableByteArray#' else rep)
+        require(len({shape(entry, lambda rep: 'ByteArray#' if rep == 'MutableByteArray#' else rep, False)
                      for entry in variants}) == len(variants), 'ambiguous byte-array mutability variants')
     if native and 'staticForeignImports' not in module:
         require('foreign' not in module and 'staticForeignImportStubs' not in module,

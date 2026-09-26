@@ -119,8 +119,8 @@ internal object PackageScalarLinks {
                 (if (native) nativeReps - setOf("ByteArray#", "MutableByteArray#") + "void" else reps), "C ABI")
             val convention = if (native) text(entry["convention"]) else "ccall"
             val safety = if (native) text(entry["safety"]) else "unsafe"
-            check(!native || convention in setOf("ccall", "capi") && (safety == "unsafe" || safety == "safe" &&
-                entry["result"] != "AddrRep" && arguments.none { it in setOf("AddrRep", "ByteArray#", "MutableByteArray#") }),
+            // Temporary safe-as-unsafe policy; declared metadata stays exact.
+            check(!native || convention in setOf("ccall", "capi") && safety in setOf("unsafe", "safe"),
                 "unsupported C calling convention/safety")
             PackageScalarSignature(name, entry["entry"] as String, arguments.map { it as String }, entry["result"] as String, convention, safety)
         }
@@ -137,7 +137,7 @@ internal object PackageScalarLinks {
             variants.map { it.arguments.map(::pointerAbi) }.distinct().size > 1 }.keys
         bySymbol.values.forEach { variants ->
             check(native || variants.size == 1, "duplicate scalar ABI symbol")
-            check(variants.map { listOf(it.convention, it.safety, it.arguments.map { rep ->
+            check(variants.map { listOf(it.convention, if (it.safety == "safe") "unsafe" else it.safety, it.arguments.map { rep ->
                 integerAbi(pointerAbi(rep)) }, it.result) }.distinct().size == 1,
                 "conflicting C ABI variants")
             check(variants.map { listOf(it.convention, it.safety, it.arguments.map { rep ->

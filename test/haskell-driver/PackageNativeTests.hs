@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module PackageNativeTests (tests) where
 
+import Control.Monad (forM_)
 import Data.Aeson (Value(..), object, toJSON, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
@@ -24,14 +25,14 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       (nativeSignatures "fixture-unit" [moduleWith [ordinary]])
       (nativeSignatures "fixture-unit" [moduleWith [ordinary],object ["unit" .= ("fixture-unit"::String)]])
   , TestCase $ do
-      let blocked = changeEmitted "safety" "safe" (entry "blocked" "ccall" ["AddrRep","void"] ["void","WordRep"])
+      let blocked = changeEmitted "safety" "interruptible" (entry "blocked" "ccall" ["AddrRep","void"] ["void","WordRep"])
           original = moduleWith [ordinary,blocked]
       case archiveNativeModule "fixture-unit" original of
         Left message -> assertFailure message
         Right archived -> do
           assertEqual "original typed declaration inventory is not rewritten" (lookupField "staticForeignImports" original)
             (lookupField "staticForeignImports" archived)
-          assertBool "unsupported safe pointer retained explicitly" (lookupField "packageNativeArchive" archived /= Nothing)
+          assertBool "unsupported interruptible pointer retained explicitly" (lookupField "packageNativeArchive" archived /= Nothing)
           assertEqual "supported declaration in the same module still receives its adapter"
             (nativeSignatures "fixture-unit" [moduleWith [ordinary]]) (nativeSignatures "fixture-unit" [archived])
       mapM_ (\bad -> assertBool "malformed companion cannot become unsupported" (isLeft (archiveNativeModule "fixture-unit" bad)))
@@ -60,9 +61,6 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       , entry "wrong" "ccall" ["void"] ["WordRep"]
       , entry "wrong" "stdcall" ["void"] ["void","WordRep"]
       , changeEmitted "safety" "interruptible" ordinary
-      , changeEmitted "safety" "safe" (entry "wrong" "ccall" ["AddrRep","void"] ["void","WordRep"])
-      , changeEmitted "safety" "safe" (entry "wrong" "ccall" ["ByteArray#","void"] ["void","WordRep"])
-      , changeEmitted "safety" "safe" (entry "wrong" "ccall" ["WordRep","void"] ["void","AddrRep"])
       , changeEmitted "safety" "safe" (entry "wrong" "ccall" [] ["void","WordRep"])
       , changeEmitted "unit" "other-unit" ordinary
       , entry "bad-name" "ccall" ["void"] ["void"]
@@ -70,6 +68,16 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
   , TestCase $ assertEqual "safe scalar import retains safe metadata"
       (Right [("identity","ccall","safe",["WordRep"],"WordRep")])
       (nativeSignatures "fixture-unit" [moduleWith [changeEmitted "safety" "safe" ordinary]])
+  , TestCase $ do
+      forM_ ["AddrRep","ByteArray#","MutableByteArray#"] $ \rep ->
+        assertEqual "temporary safe-as-unsafe retains pointer metadata"
+          (Right [("pointer","ccall","safe",[rep],"AddrRep")])
+          (nativeSignatures "fixture-unit" [moduleWith
+            [changeEmitted "safety" "safe" (entry "pointer" "ccall" [rep,"void"] ["void","AddrRep"])]])
+      assertEqual "same C ABI can retain separate safe and unsafe adapters"
+        (Right [("identity","ccall","safe",["WordRep"],"WordRep"),
+                ("identity","ccall","unsafe",["WordRep"],"WordRep")])
+        (nativeSignatures "fixture-unit" [moduleWith [ordinary,changeEmitted "safety" "safe" ordinary]])
   , TestCase $ do
       assertEqual "libm scalar declarations preserve exact native widths" (Right ())
         (validateNativeMathIR ["erf","erff"]

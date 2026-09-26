@@ -23,7 +23,7 @@ class PackageNativeArchiveFullCoreTest {
             "src/THC/Driver/PackageNative.hs", "scripts/core_package_manifest.py", "scripts/audit-core.py"))
         val paths = manifest["modules"] as List<String>
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], (paths + listOf(
-            "build/native-archive/supported-audit.json", "build/native-archive/safe-pointer.json",
+            "build/native-archive/supported-audit.json", "build/native-archive/interruptible.json",
             "build/native-archive/non-static.json", "build/native-archive/unresolved.json")).toSet(), "build/native-archive/")
         val modules = paths.map { Json.parse(File(root, it).readText()) as Map<String, Any?> }
         val mixed = "native-archive-mixed-0.1.0.0-inplace:Mixed."
