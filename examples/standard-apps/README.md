@@ -5,6 +5,11 @@ applications. The THC driver compiles and exports each real package, then runs
 its accepted Core in the JVM. Native GHC executions below are independent
 baselines, never evidence that the application ran under THC.
 
+The [lens recipe](lens/README.md) adds public-API traversal, prism and state
+examples plus the unchanged upstream HUnit, property and Template Haskell
+tests. Its native baseline passes 14 example checks, 55 unit tests and 25
+properties; guest results are recorded separately in that recipe.
+
 ## Recorded baseline
 
 On Linux x86-64 with GHC 9.14.1, all four pinned native `--version` commands
