@@ -734,6 +734,7 @@ executable thc-fixtures
     THC.Driver.PackageNative
     THC.Driver.ScalarBitcode
     THC.Driver.Installed
+    THC.Driver.RuntimeShim
     THC.Driver.InstalledForeign
     THC.Driver.GhcProxy
     THC.Driver.Lock

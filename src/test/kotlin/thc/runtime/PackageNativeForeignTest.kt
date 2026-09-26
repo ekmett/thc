@@ -78,15 +78,41 @@ class PackageNativeForeignTest {
         return PackageScalarLink("native-ffi-control", "test-host", sha, sha, bytes, abi)
     }
 
-    private class Entry(language: Language, private val operation: PackageScalarCall) : RootNode(language) {
+    private class Entry(language: Language, private val operation: PackageScalarCall,
+        private val forceIntegerResult: Boolean = false) : RootNode(language) {
         @Child private var access = PackageScalarAccess(operation)
         override fun execute(frame: VirtualFrame): Any {
             val arguments = frame.arguments
-            return if (operation.result == "void") {
+            return if (operation.result == "void" && !forceIntegerResult) {
                 access.executeVoid(arguments, Unit)
                 Unit
             } else access.executeLong(arguments, Unit)
         }
+    }
+
+    @Test fun integerCallSitesRetainFirstInstalledCodeAndRejectWrongResultsBeforeEffects() {
+        val link = library()
+        Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
+            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+            .option("engine.CompilationFailureAction", "Throw").build().use { context ->
+                context.initialize("thc"); context.enter()
+                try {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    Language.currentState().packageCbits.link(link)
+                    val signature = link.abi.single { it.symbol == "sum_bytes" }
+                    val target = Entry(language, PackageScalarCall(link, signature)).callTarget
+                    assertEquals(385L, target.call(byteArrayOf(1, 2, 127, -1), 4L))
+                    target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                    assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                    assertEquals(260L, target.call(byteArrayOf(5, -1), 2L), "first installed call observes new bytes")
+                    assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                    val update = link.abi.single { it.symbol == "update" }
+                    val invalid = Entry(language, PackageScalarCall(link, update), forceIntegerResult = true).callTarget
+                    val state = ManagedAllocation.mutable(8, 8, true)
+                    assertThrows(RuntimeFault::class.java) { invalid.call(state, byteArrayOf(1), 1L) }
+                    assertEquals(0L, state.readByte(0), "wrong result path must reject before C mutates its argument")
+                } finally { context.leave() }
+            }
     }
 
     @Test fun realCReadsAndMutatesAliasedPersistentByteStorage() {
