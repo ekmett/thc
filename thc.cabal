@@ -836,6 +836,7 @@ executable thc-fixtures
     GetEntropyFixtures
     WcwidthFixtures
     TextCbitsFixtures
+    ByteStringDecimalFixtures
     UnixLibcFixtures
     UnixWaitStatusFixtures
     HashableFfiFixtures

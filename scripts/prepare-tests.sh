@@ -31,6 +31,7 @@ fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
 "$fixture_bin" unsafe-equality
 "$fixture_bin" proxy-void
 "$fixture_bin" unix-libc
+"$fixture_bin" bytestring-decimal
 "$fixture_bin" integer
 "$fixture_bin" bit
 "$fixture_bin" word-floating

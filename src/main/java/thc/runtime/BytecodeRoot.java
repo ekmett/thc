@@ -1358,6 +1358,25 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class OriginalByteStringDecimal {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                long value, ManagedAddress address, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    ByteStringDecimal.signed(value, address));
+        }
+    }
+
+    @Operation
+    public static final class OriginalByteStringDecimalPadded18 {
+        @Specialization public static void apply(long value, ManagedAddress address, Object state) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ByteStringDecimal.padded18(value, address);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class OriginalMemcmp {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 ManagedAddress left, ManagedAddress right, long count, Object state, @Bind("$node") Node node) {

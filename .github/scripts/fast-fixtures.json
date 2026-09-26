@@ -1325,6 +1325,34 @@
         "thc.cabal",
         "src/test/resources/core/original-unix-libc-descriptors.json"
       ]
+    },
+    "bytestring-decimal": {
+      "junit": [
+        "thc.runtime.ByteStringDecimalTest"
+      ],
+      "commands": [
+        {
+          "argv": [
+            "cabal",
+            "run",
+            "exe:thc-fixtures",
+            "--offline",
+            "--",
+            "bytestring-decimal"
+          ]
+        }
+      ],
+      "outputs": [
+        "build/bytestring-decimal"
+      ],
+      "sources": [
+        "compiler/test-fixtures/ByteStringDecimalAudit.hs",
+        "test/haskell-fixtures/ByteStringDecimalFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal",
+        "src/test/resources/core/original-bytestring-decimal-descriptors.json"
+      ]
     }
   }
 }
