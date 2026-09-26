@@ -97,6 +97,30 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
   , TestCase $ assertBool "conflicting emitted ABIs rejected" $ isLeft $ nativeSignatures "fixture-unit"
       [moduleWith [ordinary,entry "identity" "ccall" ["IntRep","void"] ["void","IntRep"]]]
   , TestCase $ do
+      let narrow = entry "width" "ccall" ["IntRep","void"] ["void","Int32Rep"]
+          wide = entry "width" "ccall" ["IntRep","void"] ["void","Int64Rep"]
+          named name entries = set "module" (toJSON (name::String)) $
+            changeProof "module" (toJSON name) $ moduleWith (map (change "binder" "module" (toJSON name)) entries)
+          originals = [named "Narrow" [ordinary,narrow],named "Wide" [wide]]
+      assertBool "incompatible original C result widths remain an execution rejection"
+        (isLeft (nativeSignatures "fixture-unit" originals))
+      case archiveNativeModules "fixture-unit" originals of
+        Left message -> assertFailure message
+        Right archived -> do
+          assertEqual "every original typed declaration survives unchanged"
+            (map (lookupField "staticForeignImports") originals) (map (lookupField "staticForeignImports") archived)
+          assertEqual "unrelated import in the conflicting module still gets an adapter"
+            (nativeSignatures "fixture-unit" [moduleWith [ordinary]]) (nativeSignatures "fixture-unit" archived)
+          forM_ archived $ \value -> do
+            let marker = lookupField "packageNativeArchive" value
+            assertEqual "original cross-module conflicting witnesses retained"
+              (Just (toJSON [maybe Null id (lookupField "emitted" narrow),maybe Null id (lookupField "emitted" wide)]))
+              (marker >>= lookupField "conflictingImports")
+            assertEqual "conflicts are not disguised as unclassified declarations"
+              (Just Null) (marker >>= lookupField "unclassifiedReason")
+      assertBool "a malformed companion declaration is still fatal"
+        (isLeft (archiveNativeModules "fixture-unit" [named "Narrow" [ordinary,narrow],named "Wide" [set "normalizedType" (object []) wide]]))
+  , TestCase $ do
       let target = "x86_64-unknown-linux-gnu"
           valid = "declare i32 @getentropy(ptr noundef, i64 noundef) local_unnamed_addr\n"
       assertEqual "getentropy preserves native pointer/size_t/status ABI" (Right ())

@@ -10,6 +10,42 @@ import java.util.HexFormat
 
 /** Structural controls only: these bytes are never parsed as LLVM or called. */
 class PackageScalarLinksTest {
+    @Test fun conflictingOriginalAbiWitnessesExcludeOnlyThatSymbol() {
+        val base = module()
+        val scalar = base["packageScalarLink"] as Map<String, Any?>
+        val abi = (scalar["abi"] as List<Map<String, Any?>>).single()
+        val link = scalar + mapOf("profile" to "thc-package-c-ffi-v1", "abi" to listOf(abi + mapOf(
+            "entry" to "thc_native_${"a".repeat(64)}_0", "convention" to "ccall", "safety" to "unsafe")))
+        val proof = base["staticForeignImports"] as Map<String, Any?>
+        val original = (proof["imports"] as List<Map<String, Any?>>).single()
+        val emitted = (original["emitted"] as Map<String, Any?>) + ("symbol" to "width")
+        val wide = emitted + ("result" to listOf("void", "Int64Rep"))
+        val narrow = original + mapOf("symbol" to "width", "emitted" to emitted,
+            "binder" to ((original["binder"] as Map<String, Any?>) + ("occurrence" to "narrow")))
+        val archive = mapOf("schema" to 1L, "profile" to "thc-package-native-archive-v1", "execution" to "not-linked",
+            "unit" to base["unit"], "module" to base["module"], "unsupportedImports" to listOf(emitted),
+            "unclassifiedReason" to null, "unresolvedSymbols" to emptyList<String>(), "artifact" to null,
+            "conflictingImports" to listOf(emitted, wide))
+        val mixed = (base - "packageScalarLink") + mapOf("packageNativeLink" to link, "packageNativeArchive" to archive,
+            "staticForeignImports" to (proof + ("imports" to listOf(original, narrow))))
+        val retained = PackageNativeArchives.read(mixed)!!
+        assertFalse(retained.wholeModule)
+        assertFalse(retained.blocks(emptyMap<String, Any>()))
+        assertTrue(retained.blocks(mapOf("foreignCall" to mapOf("target" to mapOf("unit" to base["unit"], "symbol" to "width"),
+            "convention" to "ccall", "safety" to "unsafe"))))
+        assertEquals(setOf("thc_native_${"a".repeat(64)}_0"), PackageScalarLinks.read(mixed)!!.proved)
+        for (bad in listOf(emptyList(), listOf(emitted), listOf(wide), listOf(emitted, emitted),
+            listOf(emitted, wide + ("unit" to "other")), listOf(emitted, wide + ("result" to listOf("void", "invented"))))) {
+            assertThrows(IllegalArgumentException::class.java) {
+                PackageScalarLinks.read(mixed + ("packageNativeArchive" to (archive + ("conflictingImports" to bad))))
+            }
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            PackageScalarLinks.read(mixed + ("staticForeignImports" to (proof + ("imports" to listOf(original,
+                narrow + ("normalizedType" to emptyMap<Any, Any>()))))))
+        }
+    }
+
     @Test fun nativeArchiveKeepsMixedDeclarationsButNeverAdmitsTheirUnsupportedEffects() {
         val base = module()
         val scalar = base["packageScalarLink"] as Map<String, Any?>

@@ -198,7 +198,12 @@ The original import declarations, emitted calls and foreign products remain
 unchanged. A verified declaration inventory records the exact excluded emitted
 signatures; supported imports in the same module can still receive their real
 compiled adapters. Reachability rejects bindings containing an excluded call
-before evaluation. An unclassified non-static declaration inventory is honestly
+before evaluation. Genuine incompatible declarations of one C symbol additionally
+retain `conflictingImports`: the exact original emitted signature witnesses,
+possibly from different modules of that component. Both widths remain excluded;
+no result conversion or guessed callee prototype is manufactured. Compatible
+safe/unsafe declarations and the existing same-C-ABI pointer/signedness adapters
+are not conflicts. An unclassified non-static declaration inventory is honestly
 module-wide, as is a component whose verified LLVM retains unresolved external
 symbols. The latter preserves its actual compiled artifact and build inputs,
 including the checked artifact digest, but does not load it into Sulong.
@@ -209,9 +214,13 @@ and artifact/hash failures remain fatal. Initializers, finalizers and additional
 foreign files retain their existing global admission checks. A published
 acquisition manifest is still not a successful reachable audit or guest run.
 The `package-native-archives` fixture group builds real mixed-import and
-unresolved-component packages; its native oracle performs the excluded effect,
+unresolved-component packages, including two modules declaring one symbol with
+different result widths. Its native oracle performs the interruptible effect,
 while `packageNativeArchivesDefault` and `packageNativeArchivesDense` verify
-supported calls and rejection before that effect in both runtimes.
+supported calls (also inside the conflicting module) and rejection before any
+excluded effect in both runtimes. The original network-3.2.9.0 capture exposed
+this case for `recvmsg` and `sendmsg`: `Network.Socket.Buffer` declares `CInt`
+results while `Network.Socket.ByteString.Internal` declares `CSsize` results.
 
 Temporarily admitted safe pointer calls reuse the same synchronous foreign
 extent and pointer transport as unsafe calls, without copies or automatic

@@ -12,6 +12,14 @@ maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  test/fixtures/run-native-archive/cabal.project
+  test/fixtures/run-native-archive/mixed/native-archive-mixed.cabal
+  test/fixtures/run-native-archive/mixed/native.c
+  test/fixtures/run-native-archive/mixed/src/*.hs
+  test/fixtures/run-native-archive/mixed/app/Main.hs
+  test/fixtures/run-native-archive/unresolved/native-archive-unresolved.cabal
+  test/fixtures/run-native-archive/unresolved/native.c
+  test/fixtures/run-native-archive/unresolved/Unresolved.hs
   test/fixtures/run-wcwidth/cabal.project
   test/fixtures/run-wcwidth/wcwidth-ffi.cabal
   test/fixtures/run-wcwidth/src/Width.hs

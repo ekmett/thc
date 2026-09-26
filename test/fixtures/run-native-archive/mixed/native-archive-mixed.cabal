@@ -4,7 +4,7 @@ version: 0.1.0.0
 build-type: Simple
 license: BSD-3-Clause
 library
-  exposed-modules: Mixed, Unknown
+  exposed-modules: Mixed, Narrow, Unknown, Wide
   hs-source-dirs: src
   c-sources: native.c
   build-depends: base

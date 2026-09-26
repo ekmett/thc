@@ -77,7 +77,10 @@ preparePackageNativeArchives root = do
   let audit entry label = ["scripts/audit-core.py","--entry",entry,"--output",output </> label <.> "json"] ++ map (root </>) linked
       mixed = mixedUnit ++ ":Mixed."
   accepted <- execute "supported-audit" [] "python3" (audit (mixed ++ "allowed") "supported-audit")
+  mixedWidth <- execute "mixed-width-audit" [] "python3"
+    (audit (mixedUnit ++ ":Narrow.allowed") "mixed-width-audit")
   negatives <- forM [(mixed ++ "blocked","interruptible"),(mixedUnit ++ ":Unknown.other","non-static"),
+    (mixedUnit ++ ":Narrow.narrow","narrow-conflict"),(mixedUnit ++ ":Wide.wide","wide-conflict"),
     (unresolvedUnit ++ ":Unresolved.process","unresolved")] $ \(entry,label) -> do
       rejected <- runLoggedExpect 1 60 root (relative </> "logs") label [] "python3" (audit entry label)
       report <- readJson (output </> label <.> "json")
@@ -88,11 +91,12 @@ preparePackageNativeArchives root = do
   inputs <- hashes root (map (makeRelative root) sources ++
     ["test/haskell-fixtures/PackageNativeArchiveFixtures.hs","src/THC/Driver/PackageNative.hs",
      "scripts/core_package_manifest.py","scripts/audit-core.py"])
-  artifacts <- hashes root (linked ++ [relative </> name <.> "json" | name <- ["supported-audit","interruptible","non-static","unresolved"]])
+  artifacts <- hashes root (linked ++ [relative </> name <.> "json" | name <-
+    ["supported-audit","mixed-width-audit","interruptible","non-static","narrow-conflict","wide-conflict","unresolved"]])
   writeJson (output </> "manifest.json") (object ["schema" .= (1::Int),"driverSha256" .= driverHash,
     "modules" .= linked,"inputHashes" .= inputs,"artifactHashes" .= artifacts,
-    "commands" .= map commandRecord ([built,acquired,oracle,accepted] ++ negatives)])
-  putStrLn "package-native-archives: mixed supported import admitted; three real unsupported frontiers archived and rejected when reachable"
+    "commands" .= map commandRecord ([built,acquired,oracle,accepted,mixedWidth] ++ negatives)])
+  putStrLn "package-native-archives: supported mixed imports admitted; interruptible, non-static, conflicting-width and unresolved imports archived and rejected when reachable"
   where
     line bytes = case BSC.lines bytes of [value] -> BSC.unpack value; _ -> error "expected one tool result"
     locate execute cabal target = line . commandStdout <$> execute ("locate-" ++ drop 4 target) [] cabal ["list-bin","--offline",target]
