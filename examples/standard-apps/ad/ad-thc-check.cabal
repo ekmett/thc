@@ -1,0 +1,21 @@
+cabal-version: 3.0
+name: ad-thc-check
+version: 0.1.0.0
+build-type: Simple
+license: UPL-1.0 AND BSD-3-Clause
+
+executable ad-kahn
+  main-is: ADKahn.hs
+  default-language: Haskell2010
+  build-depends: base, ad
+  ghc-options: -O2
+
+-- Use the original upstream suite as an executable because thc run selects
+-- executable components. Do not copy, replace or weaken its tests.
+executable ad-regression
+  main-is: Regression.hs
+  hs-source-dirs: upstream-ad/tests
+  other-modules: AdditionalTests
+  default-language: Haskell2010
+  build-depends: ad, base, QuickCheck, tasty, tasty-hunit, tasty-quickcheck
+  ghc-options: -fspec-constr -fdicts-cheap -O2

@@ -1,0 +1,8 @@
+packages: . upstream-ad
+jobs: 4
+tests: True
+benchmarks: False
+index-state: 2026-09-24T12:38:18Z
+
+package *
+  ghc-options: -fwrite-if-simplified-core
