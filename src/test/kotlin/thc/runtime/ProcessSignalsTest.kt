@@ -29,12 +29,37 @@ class ProcessSignalsTest {
     private fun variable(id: String, proof: Map<String, Any?>) = listOf("var", id, mapOf("rep" to proof))
     private fun application() = listOf("app", variable("original-signal-fcall", closure),
         arguments.mapIndexed { i, rep -> variable("a$i", rep) }, List(4) { false }, false, false, metadata)
-    private fun module(): Map<String, Any?> {
+    private fun module(recordSignal: Boolean = false): Map<String, Any?> {
         val inputs = arguments.mapIndexed { i, rep -> mapOf("id" to "a$i", "lifted" to false, "rep" to rep) }
         val binding = mapOf("id" to "install", "name" to "install", "arity" to 4, "lifted" to true,
             "rep" to closure, "expr" to listOf("lam", inputs, application(), mapOf("rep" to closure, "resultRep" to result)))
         val ioResult = mapOf("kind" to "unknown", "primReps" to listOf("BoxedRep (Just Lifted)"),
             "evaluated" to false, "aggregate" to "unboxed-tuple", "components" to listOf(state, boxed))
+        val returned = listOf("app", listOf("con", "tuple2", 2, mapOf("rep" to closure)),
+            listOf(variable("token", state), listOf("con", unitId, 0, mapOf("rep" to boxed))),
+            listOf(false, true), true, true, mapOf("rep" to ioResult))
+        var body: List<Any?> = returned
+        if (recordSignal) {
+            val address = mapOf("kind" to "address", "primReps" to listOf("AddrRep"), "evaluated" to true)
+            val number = mapOf("kind" to "long", "primReps" to listOf("Int32Rep"), "evaluated" to true)
+            val integer = number + ("primReps" to listOf("IntRep"))
+            fun binder(id: String, proof: Map<String, Any?>, lifted: Boolean) =
+                mapOf("id" to id, "rep" to proof, "lifted" to lifted)
+            val write = listOf("app", listOf("prim", "writeInt32OffAddr#"),
+                listOf(variable("infoAddress", address), listOf("lit", "int", "0", mapOf("rep" to integer)),
+                    variable("signalNumber", number), variable("token", state)),
+                List(4) { false }, false, false, mapOf("rep" to state))
+            body = listOf("case", write, "written", listOf(listOf("default", null, emptyList<String>(), returned)),
+                mapOf("rep" to ioResult, "binder" to binder("written", state, false)))
+            body = listOf("case", variable("signal", boxed), "signalBox", listOf(listOf("data",
+                "ghc-internal:GHC.Internal.Int.I32#", listOf("signalNumber"), body,
+                mapOf("binders" to listOf(binder("signalNumber", number, false))))),
+                mapOf("rep" to ioResult, "binder" to binder("signalBox", boxed, true)))
+            body = listOf("case", variable("pointer", boxed), "pointerBox", listOf(listOf("data",
+                "ghc-internal:GHC.Internal.Ptr.Ptr", listOf("infoAddress"), body,
+                mapOf("binders" to listOf(binder("infoAddress", address, false))))),
+                mapOf("rep" to ioResult, "binder" to binder("pointerBox", boxed, true)))
+        }
         // Synthetic dispatcher consumer, not replacement evidence for original
         // Conc.Signal. It exercises the exact boxed Ptr/CInt/State transport.
         val dispatcher = mapOf("id" to CoreSignalForeign.dispatcher, "name" to "runHandlersPtr", "arity" to 3,
@@ -42,9 +67,7 @@ class ProcessSignalsTest {
                 mapOf("id" to "pointer", "lifted" to true, "rep" to boxed),
                 mapOf("id" to "signal", "lifted" to true, "rep" to boxed),
                 mapOf("id" to "token", "lifted" to false, "rep" to state)),
-                listOf("app", listOf("con", "tuple2", 2, mapOf("rep" to closure)),
-                    listOf(variable("token", state), listOf("con", unitId, 0, mapOf("rep" to boxed))),
-                    listOf(false, true), true, true, mapOf("rep" to ioResult)),
+                body,
                 mapOf("rep" to closure, "resultRep" to ioResult)))
         fun constructor(id: String, name: String, fields: List<String>) = mapOf("id" to id, "name" to name,
             "kind" to "boxed", "arity" to fields.size, "tag" to 1, "fieldReps" to fields.map(::listOf),
@@ -146,39 +169,96 @@ class ProcessSignalsTest {
         assumeTrue(System.getProperty("os.name") == "Linux")
         inside { language ->
             val owner = Language.currentState()
-            val events = LinkedBlockingQueue<ByteArray>()
-            val delivered = CountDownLatch(1)
+            val events = LinkedBlockingQueue<ProcessSignalTransport.Event>()
+            val delivered = CountDownLatch(4)
             val closed = AtomicInteger()
             val fake = object : ProcessSignalTransport {
-                private var old = -1
+                private val old = mutableMapOf<Int, Int>()
                 private var received = false
-                override fun install(action: Int) = ProcessSignalTransport.Result(old.also { old = action }, 0)
-                override fun take(): ByteArray? {
+                override fun install(signal: Int, action: Int) =
+                    ProcessSignalTransport.Result((old.put(signal, action) ?: -1), 0)
+                override fun take(): ProcessSignalTransport.Event? {
                     if (received) delivered.countDown()
-                    return events.take().takeUnless { it.isEmpty() }?.also { received = true }
+                    received = false
+                    return events.take().takeUnless { it.info.isEmpty() }?.also { received = true }
                 }
-                override fun wake() { events.offer(byteArrayOf()) }
-                override fun resetWake() { events.removeIf { it.isEmpty() } }
+                override fun wake() { events.offer(ProcessSignalTransport.Event(0, byteArrayOf())) }
+                override fun resetWake() { events.removeIf { it.info.isEmpty() } }
                 override fun close() { closed.incrementAndGet() }
             }
-            val service = ManagedSignals(owner, language) { fake }
+            val service = ManagedSignals(owner, language, reducedVmSignals = true) { fake }
             val program = BytecodeProgram(language, module(), true)
             service.bind(program)
             assertThrows(RuntimeFault::class.java) { service.install(2L, -5L, ManagedAddress.nullAddress()) }
             service.authorizeLauncher()
-            for (bad in listOf(1L to -5L, 2L to -3L, 2L to 1L))
+            for (bad in listOf(10L to -5L, 11L to -5L, 2L to -3L, 2L to 1L))
                 assertThrows(RuntimeFault::class.java) { service.install(bad.first, bad.second, ManagedAddress.nullAddress()) }
-            assertEquals(listOf(-1L, -2L, -4L, -5L), listOf(-2L, -4L, -5L, -1L).map {
-                service.install(2L, it, ManagedAddress.nullAddress()) })
+            for (signal in listOf(1L, 2L, 3L, 15L))
+                assertEquals(listOf(-1L, -2L, -4L, -5L), listOf(-2L, -4L, -5L, -1L).map {
+                    service.install(signal, it, ManagedAddress.nullAddress()) })
             try {
-                events.put(ByteArray(128) { it.toByte() })
+                for (signal in listOf(1, 2, 3, 15))
+                    events.put(ProcessSignalTransport.Event(signal, ByteArray(128) { it.toByte() }))
                 assertTrue(TruffleSafepoint.setBlockedThreadInterruptibleFunction(null,
                     TruffleSafepoint.InterruptibleFunction<CountDownLatch, Boolean> { it.await(5, TimeUnit.SECONDS) }, delivered),
                     "typed guest dispatcher must return")
-                assertEquals(1, owner.nativeAllocations.liveCount(), "dispatcher image remains context-owned")
+                assertEquals(4, owner.nativeAllocations.liveCount(), "dispatcher images remain context-owned")
             } finally { service.close() }
             assertEquals(1, closed.get())
             assertThrows(RuntimeFault::class.java) { service.install(2L, -5L, ManagedAddress.nullAddress()) }
+        }
+    }
+
+    @Test fun extendedHandlersRequireReleasedVmSignalsBeforeAcquiringTransport() = inside { language ->
+        val service = ManagedSignals(Language.currentState(), language, reducedVmSignals = false) {
+            error("denied request must not acquire a native signal transport")
+        }
+        service.bind(BytecodeProgram(language, module(), true))
+        service.authorizeLauncher()
+        for (signal in listOf(1L, 3L, 15L)) {
+            val failure = assertThrows(RuntimeFault::class.java) {
+                service.install(signal, -4L, ManagedAddress.nullAddress())
+            }
+            assertTrue(failure.message!!.contains("-Xrs"))
+        }
+        service.close()
+    }
+
+    @Test fun dispatcherPassesEachActualSignalThroughTheOriginalBoxedCIntShape() = inside { language ->
+        val owner = Language.currentState()
+        val program = BytecodeProgram(language, module(recordSignal = true), true)
+        val target = SignalDispatchRoot(language, program).callTarget
+        val address = owner.nativeAllocations.malloc(128L)
+        owner.threads.enterCurrent()
+        try {
+            for (signal in listOf(1L, 2L, 3L, 15L)) {
+                target.call(address, signal)
+                assertEquals(signal, address.readWord8(0))
+            }
+        } finally { owner.threads.leaveCurrent(GuestThreadStatus.FINISHED) }
+    }
+
+    @Test fun nativeEventsCrossTheActualJvmBoundaryInAnIsolatedProcess() {
+        assumeTrue(System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in setOf("amd64", "x86_64"))
+        val classpath = checkNotNull(System.getProperty("thc.testRuntimeClasspath")) {
+            "test runner must expose its child JVM classpath"
+        }
+        val directory = File(System.getProperty("thc.projectRoot"), "build/process-signals")
+        directory.mkdirs()
+        for (disabled in listOf(false, true)) {
+            val output = File.createTempFile("jvm-transport-", ".log", directory)
+            val command = mutableListOf(File(System.getProperty("java.home"), "bin/java").path,
+                "-Xrs", "--enable-native-access=ALL-UNNAMED")
+            if (disabled) command.add("-XX:-ReduceSignalUsage")
+            command.addAll(listOf("-cp", classpath, ProcessSignalJvmProbe::class.java.name))
+            if (disabled) command.add("reduced-signals-disabled")
+            val child = ProcessBuilder(command).redirectErrorStream(true).redirectOutput(output).start()
+            try {
+                assertTrue(child.waitFor(30, TimeUnit.SECONDS), "native signal child timed out: $output")
+                assertEquals(0, child.exitValue(), output.readText())
+                assertTrue(output.readText().contains(if (disabled) "Later VM option disables reduced signal usage"
+                    else "JVM received signals 1,2,3,15"), output.readText())
+            } finally { if (child.isAlive) child.destroyForcibly().waitFor() }
         }
     }
 
@@ -191,7 +271,32 @@ class ProcessSignalsTest {
             "src/test/resources/core/original-signal-install-descriptor.json"))
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf("build/process-signals/oracle.txt",
             "build/process-signals/native-controls.txt"), "build/process-signals/")
-        assertEquals("[-1,-2,-4,-5]\n", File(root, "build/process-signals/oracle.txt").readText())
-        assertEquals("9 isolated native signal controls passed\n", File(root, "build/process-signals/native-controls.txt").readText())
+        assertEquals("[(1,[-1,-2,-4,-5]),(2,[-1,-2,-4,-5]),(3,[-1,-2,-4,-5]),(15,[-1,-2,-4,-5])]\n", File(root, "build/process-signals/oracle.txt").readText())
+        assertEquals("25 isolated native signal controls passed\n", File(root, "build/process-signals/native-controls.txt").readText())
+    }
+}
+
+/** Separate process: the Gradle test worker must never replace its host handlers. */
+object ProcessSignalJvmProbe {
+    @JvmStatic fun main(args: Array<String>) {
+        if (args.contentEquals(arrayOf("reduced-signals-disabled"))) {
+            check(!ManagedSignals.hasReducedVmSignals())
+            println("Later VM option disables reduced signal usage")
+            return
+        }
+        check(ManagedSignals.hasReducedVmSignals())
+        val raise = java.lang.foreign.Linker.nativeLinker().downcallHandle(
+            java.lang.foreign.Linker.nativeLinker().defaultLookup().find("raise").orElseThrow(),
+            java.lang.foreign.FunctionDescriptor.of(java.lang.foreign.ValueLayout.JAVA_INT,
+                java.lang.foreign.ValueLayout.JAVA_INT))
+        NativeSignalTransport().use { transport ->
+            for (signal in listOf(1, 2, 3, 15)) {
+                check(transport.install(signal, -4).action == -1)
+                check(raise.invokeExact(signal) as Int == 0)
+                val event = checkNotNull(transport.take())
+                check(event.signal == signal && event.info.isNotEmpty())
+            }
+        }
+        println("JVM received signals 1,2,3,15")
     }
 }

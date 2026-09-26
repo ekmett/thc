@@ -156,8 +156,9 @@ the four original imports through native glibc/Sulong, with context-owned handle
 and checked buffer copies. It requires full installed GHC library Core and is
 separate from stock-toolchain tests; it does not establish complete Handle/IO.
 
-The [GMP provider](docs/gmp-limb-provider.md) implements eleven original GHC
-foreign calls through Sulong and native GMP. Native comparisons cover interpreted
+The [GMP provider](docs/gmp-limb-provider.md) implements fifteen original GHC
+foreign calls, including shifts and floating conversions, through Sulong/native
+GMP and a direct JVM translation of the scalar RTS encoding call. Native comparisons cover interpreted
 and compiled calls on both backends; full `Integer` and `Natural` coverage is
 still separate work.
 
