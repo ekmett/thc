@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime
 
+import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.bytecode.BytecodeNode
 import com.oracle.truffle.api.bytecode.LocalAccessor
@@ -52,7 +53,7 @@ internal class VectorLayout(val proof: CoreRepresentation) {
     fun require(value: Any?): Vector<*> {
         val raw = value as? Vector<*> ?: fault("Expected raw vector carrier")
         if (raw.species() != species) fault("Vector carrier species disagrees with VecRep")
-        return raw
+        return CompilerDirectives.castExact(raw, species.vectorType())
     }
     fun write(frame: VirtualFrame, slots: IntArray, offset: Int, value: Any?) {
         FrameAccess.writeObject(frame, slots[offset], require(value))

@@ -152,7 +152,9 @@ class VectorLayoutTest {
             for (other in all) {
                 val candidate = rawVectorTestValue(other)
                 if (candidate.species() == raw.species()) {
-                    assertSame(candidate, vector.require(candidate))
+                    val checked = vector.require(candidate)
+                    assertSame(candidate, checked)
+                    assertEquals(vector.species.vectorType(), checked.javaClass)
                     assertSame(shape.layout, TupleShape(other, language).layout)
                 } else {
                     assertThrows(RuntimeFault::class.java) { vector.write(slots.frame, slots.slots, 0, candidate) }
