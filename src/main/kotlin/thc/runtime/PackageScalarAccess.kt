@@ -47,6 +47,7 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
         "IntRep", "WordRep", "Int64Rep", "Word64Rep" -> true
         else -> false
     }
+    private val addressResult = call.result == "AddrRep"
 
     private fun function(): PackageScalarFunction {
         // Check the entered context even when a host misuses a root from another context.
@@ -123,6 +124,10 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
                 val views = IdentityHashMap<ManagedAddress, PackagePointerBuffer>()
                 for ((index, address) in addresses) {
                     if (address === ManagedAddress.nullAddress()) continue
+                    if (address.stableHandle() != null) {
+                        entry.owner.stablePointers.validate(address)
+                        continue
+                    }
                     if (address.nativeAllocation() != null) {
                         address.requireByteRegion(0)
                         continue
@@ -152,6 +157,8 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
                 for ((index, address) in addresses) {
                     converted[index] = when {
                         address === ManagedAddress.nullAddress() -> PackageNativePointer(0L, lease)
+                        address.stableHandle() != null ->
+                            entry.owner.stablePointers.nativeTransport(address)
                         address.nativeAllocation() != null -> {
                             address.requireByteRegion(0)
                             PackageNativePointer(address.toNativeBits(), lease)
@@ -215,6 +222,18 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
     fun executeVoid(arguments: Array<Any?>, state: Any?) {
         if (call.result != "void") fault("Package C result is not void")
         invoke(prepare(arguments, state), arguments)
+    }
+
+    fun executeAddress(arguments: Array<Any?>, state: Any?): ManagedAddress {
+        if (!addressResult) fault("Package C result is not a pointer ABI")
+        val entry = prepare(arguments, state)
+        val result = invoke(entry, arguments)
+        if (numbers.isNull(result)) return ManagedAddress.nullAddress()
+        if (!numbers.isPointer(result)) fault("Package C returned a non-native opaque pointer")
+        val bits = numbers.asPointer(result)
+        // A return type never grants ownership or permission to dereference C
+        // storage. StablePtr identities are the sole recovered authority here.
+        return entry.owner.stablePointers.recoverToken(bits) ?: ManagedAddress.unownedNumeric(bits)
     }
 }
 

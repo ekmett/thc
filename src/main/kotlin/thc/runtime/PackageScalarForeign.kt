@@ -101,6 +101,7 @@ internal class PackageScalarExpression(private val call: PackageScalarCall,
                 FrameAccess.writeLong(frame, slots[offset], access.executeLong(values, state))
             "FloatRep" -> FrameAccess.writeFloat(frame, slots[offset], access.executeFloat(values, state))
             "DoubleRep" -> FrameAccess.writeDouble(frame, slots[offset], access.executeDouble(values, state))
+            "AddrRep" -> FrameAccess.write(frame, slots[offset], access.executeAddress(values, state))
             "void" -> access.executeVoid(values, state)
             else -> fault("Invalid package C result")
         }

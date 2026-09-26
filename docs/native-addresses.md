@@ -40,11 +40,20 @@ cannot pin arbitrary JVM arrays on demand: its native-pointer conversion calls
 Resolution uses only the current context's live registry: a numeric address
 from another context grants no access to that context's storage.
 
-Moving-heap arrays and opaque StablePtr handles still reject numeric projection.
-Pointer-bearing owned arrays retain their managed cell protections and cannot
-be exported as raw C buffers; this does not yet provide general native pointer
-cell encoding for pinned byte arrays. A temporary native copy or native identity
-token would not satisfy that contract. This increment does not
+StablePtr handles acquire an opaque native identity lazily, when passed to C or
+projected to bits. The context's stable-pointer table keeps the lazy referent
+rooted until `freeStablePtr` or disposal; only an exact live token in that context
+recovers its handle. C can retain and return the token across calls, including
+through native pointer cells. The identity has no guest byte storage, and neither
+its numeric bits nor a C copy extends the lifetime after explicit free. An
+unrecognized pointer result remains opaque and unowned. This is not a native
+GHC closure address or callback/re-entry implementation.
+
+Moving-heap arrays still reject numeric projection. Pointer-bearing owned arrays
+retain their managed cell protections and cannot be exported as raw C buffers;
+this does not yet provide general native pointer cell encoding for pinned byte
+arrays. A temporary native copy or native identity token would not satisfy that
+contract. This increment does not
 add generic foreign-pointer ownership, arbitrary-pointer memory access, or
 native function pointers.
 

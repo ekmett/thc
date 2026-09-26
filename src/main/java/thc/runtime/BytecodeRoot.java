@@ -1320,6 +1320,22 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = BytecodePackageScalarArguments.class, name = "arguments")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class LinkedPackageAddress {
+        @Specialization public static void call(VirtualFrame frame, BytecodePackageScalarArguments arguments,
+                LocalAccessor destination, @Bind("$node") Node node,
+                @Cached(value = "createAccess(arguments)", neverDefault = true) PackageScalarAccess access) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            destination.setObject(bytecode, frame,
+                    access.executeAddress(arguments.read(bytecode, frame), arguments.state(bytecode, frame)));
+        }
+        public static PackageScalarAccess createAccess(BytecodePackageScalarArguments arguments) {
+            return new PackageScalarAccess(arguments.getCall());
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = BytecodePackageScalarArguments.class, name = "arguments")
     public static final class LinkedPackageVoid {
         @Specialization public static void call(VirtualFrame frame, BytecodePackageScalarArguments arguments,
                 @Bind("$node") Node node,

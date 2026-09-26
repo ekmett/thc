@@ -63,6 +63,7 @@ internal class NativeAddresses(private val env: TruffleLanguage.Env) {
     fun recover(bits: Long): ManagedAddress {
         requireOpen()
         if (bits == 0L) return ManagedAddress.nullAddress()
+        StablePointers.current(null).recoverToken(bits)?.let { return it }
         reap()
         pinned.floorEntry(bits)?.let { (base, reference) ->
             reference.get()?.let { allocation ->

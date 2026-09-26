@@ -34,7 +34,8 @@ Addr and StablePtr memory cells use retained ManagedAddress references inside
 allocation-owned storage, including unaligned cells. They do not fabricate
 process pointer bits. Raw-exposed arrays and native storage cannot hold these
 managed cells. Owned native Addr cells can instead hold real native pointer bits;
-opaque StablePtr handles have no such projection. These operations count as
+StablePtr cells use context-owned opaque native identities, recovering only exact
+live stable handles without granting access to their referent's memory. These operations count as
 implemented; [pointer interoperability limits](primop-behavior.md#addresses-pinning-and-pointer-containing-storage)
 are documented separately. Scalar reads cannot inspect managed pointer-cell bits, partial overwrites
 fault, and complete writes or copies preserve the existing cell invalidation and
