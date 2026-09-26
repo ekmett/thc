@@ -96,8 +96,11 @@ class TypedInputProtocolTest {
                     observed.forEach { valid(it, label) }; clear(language)
                 }
                 assertTrue((p.diagnostics()["selfTailReentries"] as Long) > 0, label)
-                if (backend == "bytecode-async")
-                    assertEquals(0L, p.diagnostics()["trampolineIterations"], "$label should reenter locally")
+                if (backend == "bytecode-async") {
+                    val path = if (name == "cycle") listOf("a", "b", "c") else listOf("pa", "pb", "pc", "pd", "pe")
+                    val masks = path.map { (p.entryTarget(it).rootNode as GuestRoot).mask.toULong().toString(16) }
+                    assertEquals(0L, p.diagnostics()["trampolineIterations"], "$label should reenter locally; masks=$masks")
+                }
             }
         }
     }

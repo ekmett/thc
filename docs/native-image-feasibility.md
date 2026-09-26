@@ -276,6 +276,24 @@ independently prove the single original `runRW#` State# wrapper eliminated by
 lowering; all remaining root labels, entry counts and first-call validity checks
 stay exact. This is runtime preparation, not native guest-JIT success.
 
+Direct tuple overapplication now checks its optional child nodes explicitly;
+ordinary direct calls snapshot the handoff child once before a null-guarded
+call. These avoid generated nonnull diagnostics without changing caller loans,
+capture order or call boundaries. The frozen-array weak map moves to a private
+runtime holder, while the three public metadata operations retain their exact
+static synchronized locks and host boundaries. Only the outer singleton and
+immutable array access handle are prepared for the image; no guest array or
+mutable registry is initialized at build time. Real image analysis advances
+past these failures and next reports cold arithmetic diagnostic formatting.
+
+The final scoped run passes 56 checks in both handoff modes, including original
+GHC array results across residual calls. A broader inlined array test still
+retires the AST host entry after a correct clone result; unchanged production
+source reproduces it in both modes, so it is retained separately, not hidden by
+altering validity assertions. An initial typed-cycle trampoline-count failure
+did not recur in the unchanged-source or final candidate runs. Mask diagnostics
+were added without changing its counter assertion; its cause is not established.
+
 ## Execution models
 
 | Product | What is fixed when built | Guest execution |

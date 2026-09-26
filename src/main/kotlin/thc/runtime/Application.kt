@@ -465,14 +465,15 @@ internal class DirectCallerNode(val target: RootCallTarget, private val metrics:
         entryArguments.execute(frame, arguments)
         // All CBV marks (including unused formals and PAP prefixes) run before the shortcut.
         leadingCaseReturn?.execute(arguments)?.let { return it }
+        val handoff = handoff
         val result = if (tailCall) {
             if (handoff != null && (rootNode as? FunctionRoot)?.handoffDestination(frame)?.let { it >= 0 } == true)
-                return handoff!!.call(frame, arguments, callNode, true)
+                return handoff.call(frame, arguments, callNode, true)
             tailCheck.check(frame, target, arguments)
             Calls.direct(callNode, arguments)
         } else try {
             arguments[0] = 0L
-            val result = if (handoff != null) handoff!!.call(frame, arguments, callNode, false) else Calls.direct(callNode, arguments)
+            val result = if (handoff != null) handoff.call(frame, arguments, callNode, false) else Calls.direct(callNode, arguments)
             normalProfile.enter()
             result
         } catch (tail: TailCall) {

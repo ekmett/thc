@@ -13,10 +13,12 @@ internal object ManagedArray {
     private val ELEMENT = MethodHandles.arrayElementVarHandle(Array<Any?>::class.java)
     // Object[] has identity equality. Weak metadata records GHC's frozen info-table
     // distinction without replacing the existing array carrier or retaining it.
-    private val frozen = java.util.WeakHashMap<Array<Any?>, Boolean>()
-    @JvmStatic @TruffleBoundary @Synchronized fun isFrozen(array: Array<Any?>): Boolean = frozen.containsKey(array)
+    private object FrozenMetadata {
+        val arrays = java.util.WeakHashMap<Array<Any?>, Boolean>()
+    }
+    @JvmStatic @TruffleBoundary @Synchronized fun isFrozen(array: Array<Any?>): Boolean = FrozenMetadata.arrays.containsKey(array)
     @JvmStatic @TruffleBoundary @Synchronized fun thaw(array: Array<Any?>): Array<Any?> {
-        frozen.remove(array)
+        FrozenMetadata.arrays.remove(array)
         return array
     }
     @JvmStatic fun allocate(size: Long, initial: Any?): Array<Any?> {
@@ -71,7 +73,7 @@ internal object ManagedArray {
     }
     /** Preserve storage identity and retain the immutable-pointer-array distinction. */
     @JvmStatic @TruffleBoundary @Synchronized fun freeze(array: Array<Any?>): Array<Any?> {
-        frozen[array] = true
+        FrozenMetadata.arrays[array] = true
         return array
     }
 }
