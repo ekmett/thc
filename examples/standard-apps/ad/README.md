@@ -38,9 +38,9 @@ thc run . --exe ad-thc-check:exe:ad-regression \
 ```
 
 The original `ADKahn.hs` passes all ten checks as a THC guest on both AST and
-bytecode, with both default and dense handoffs. This checkpoint replays the
-unchanged, hash-checked full-Core package manifest captured from the original
-application; the current strict audit accepts all 2,259 reachable bindings
+bytecode, with both default and dense handoffs. Both the earlier cached manifest
+and a fresh acquisition of the unchanged application pass. The fresh
+hash-checked full-Core package manifest's strict audit accepts all 2,259 reachable bindings
 without missing globals or unsupported operations. It uses the executable
 lifecycle, including original `runMainIO` initialization and `flushStdHandles`,
 and explicitly enables `-Dthc.asyncExceptions=true` for AST signal delivery.
@@ -50,6 +50,7 @@ tests cover compiled execution.
 
 That guest result is distinct from the native 89-test upstream baseline.
 Fresh acquisition and guest execution of the unchanged `ad-regression` suite
-remain under investigation. Earlier acquisition blockers included disabled
-conditional C sources and the original safe `erf` imports; further frontiers
-are recorded rather than bypassing audits or changing upstream tests.
+remain under investigation. Disabled conditional C sources and the original
+safe `erf` imports no longer block acquisition. Its current frontier is the
+original `splitmix` initializer's `getentropy` native dependency; no upstream
+tests or strict audits have been bypassed.

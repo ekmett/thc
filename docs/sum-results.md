@@ -76,9 +76,10 @@ These correctness controls are distinct from generated-code evidence; typed
 storage alone does not establish register passing or eliminated allocations.
 
 `cabal run thc-fixtures -- sum-join` adds genuine pre/post-Tidy GHC sum joins,
-18 native observations, strict audits and source/artifact hashes. The focused
+30 native observations, strict audits and source/artifact hashes. The focused
 `SumJoinResultTest` compares an independent scalar model with native and guest
-results, exercises recursive and nested local transfers on both backends with
+results, exercises recursive and nested local transfers, including outer joins
+through genuine `runRW#` continuations, on both backends with
 inlining enabled/disabled, and checks zero-arity lazy identity, inactive
 reference clearing and malformed projection rejection. This slice was exposed
 by the unchanged `ad`/`data-reify` graph-reification path; passing these focused

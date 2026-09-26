@@ -2257,6 +2257,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
     private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expr {
+        CoreStateApplications.inline(expr)?.let { return compile(it, scope, tail) }
         val outer = operandBuilder
         val head = (expr.getOrNull(1) as? List<*>)?.firstOrNull()
         val operands = if (enableAsync && expr.firstOrNull() == "app" && head in setOf("prim", "con"))
