@@ -114,14 +114,17 @@ binaryProviders iface = do
   providers <- newIORef Set.empty
   buffer <- openBinMem 4096
   let nameWriter handle name = do
-        let m = nameModule name
-        modifyIORef' providers (Set.insert (unitString (moduleUnit m), moduleNameString (moduleName m)))
+        -- A retained interface mentions the same provider through many Names.
+        -- Keep GHC's compact identities while traversing; unpack their strings
+        -- only once per distinct Module after the unchanged Binary write.
+        modifyIORef' providers (Set.insert (nameModule name))
         putNameLiterally handle name
       writer = setWriterUserData buffer $ mkWriterUserData
         [mkSomeBinaryWriter (mkWriter putIfaceType), mkSomeBinaryWriter (mkWriter nameWriter),
          mkSomeBinaryWriter (simpleBindingNameWriter (mkWriter nameWriter)), mkSomeBinaryWriter (mkWriter putFS)]
   put_ writer iface
-  Set.toAscList <$> readIORef providers
+  modules <- readIORef providers
+  pure [(unitString (moduleUnit m), moduleNameString (moduleName m)) | m <- Set.toAscList modules]
 
 -- | Read a raw installed interface with the selected GHC session's target,
 -- package database and NameCache. The expected Module includes the exact unit
