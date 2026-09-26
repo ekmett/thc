@@ -75,15 +75,17 @@ internal object CoreVectors {
     val unpackedFloat = CoreRepresentation(CoreKind.UNKNOWN, true, true, List(4) { "FloatRep" }, List(4) { laneFloat })
     val fusedFloat = listOf("fmaddFloatX4#", "fmsubFloatX4#", "fnmaddFloatX4#", "fnmsubFloatX4#")
     val fusedFloat8 = listOf("fmaddFloatX8#", "fmsubFloatX8#", "fnmaddFloatX8#", "fnmsubFloatX8#")
+    val fusedFloat16 = listOf("fmaddFloatX16#", "fmsubFloatX16#", "fnmaddFloatX16#", "fnmsubFloatX16#")
     val operationsFloat = setOf("packFloatX4#", "unpackFloatX4#", "broadcastFloatX4#", "plusFloatX4#", "minusFloatX4#", "timesFloatX4#") + fusedFloat
     val proofDouble = CoreRepresentation(CoreKind.VECTOR, true, true, listOf("VecRep 2 DoubleElemRep"), vector = CoreVector.DOUBLEX2)
     private val laneDouble = CoreRepresentation(CoreKind.DOUBLE, true, true, listOf("DoubleRep"))
     val unpackedDouble = CoreRepresentation(CoreKind.UNKNOWN, true, true, List(2) { "DoubleRep" }, List(2) { laneDouble })
     val fusedDouble = listOf("fmaddDoubleX2#", "fmsubDoubleX2#", "fnmaddDoubleX2#", "fnmsubDoubleX2#")
     val fusedDouble4 = listOf("fmaddDoubleX4#", "fmsubDoubleX4#", "fnmaddDoubleX4#", "fnmsubDoubleX4#")
+    val fusedDouble8 = listOf("fmaddDoubleX8#", "fmsubDoubleX8#", "fnmaddDoubleX8#", "fnmsubDoubleX8#")
     val operationsDouble = setOf("packDoubleX2#", "unpackDoubleX2#", "broadcastDoubleX2#", "plusDoubleX2#", "minusDoubleX2#", "timesDoubleX2#") + fusedDouble
     val operations32 = setOf("packInt32X4#", "unpackInt32X4#", "broadcastInt32X4#", "plusInt32X4#", "minusInt32X4#", "negateInt32X4#", "timesInt32X4#")
-    val operations = setOf("packInt64X2#", "unpackInt64X2#", "broadcastInt64X2#", "plusInt64X2#", "minusInt64X2#", "negateInt64X2#") + operations32 + operations16 + operations8 + operationsWord8 + operationsWord16 + operationsWord32 + operationsFloat + operationsDouble + GeneratedVectors.operations + fusedFloat8 + fusedDouble4
+    val operations = setOf("packInt64X2#", "unpackInt64X2#", "broadcastInt64X2#", "plusInt64X2#", "minusInt64X2#", "negateInt64X2#") + operations32 + operations16 + operations8 + operationsWord8 + operationsWord16 + operationsWord32 + operationsFloat + operationsDouble + GeneratedVectors.operations + fusedFloat8 + fusedFloat16 + fusedDouble4 + fusedDouble8
     fun requireVariableProof(binding: CoreRepresentation?, occurrence: CoreRepresentation) {
         if (occurrence.isVector && binding?.vector != occurrence.vector)
             throw RuntimeFault("Vector occurrence lacks a matching lexical binder proof")
@@ -139,7 +141,9 @@ internal object CoreVectors {
             "broadcastFloatX4#" -> listOf(laneFloat)
             "plusFloatX4#", "minusFloatX4#", "timesFloatX4#" -> listOf(proofFloat, proofFloat)
             in fusedFloat8 -> List(3) { GeneratedVectors.proofFloatX8 }
+            in fusedFloat16 -> List(3) { GeneratedVectors.proofFloatX16 }
             in fusedDouble4 -> List(3) { GeneratedVectors.proofDoubleX4 }
+            in fusedDouble8 -> List(3) { GeneratedVectors.proofDoubleX8 }
             in fusedFloat -> listOf(proofFloat, proofFloat, proofFloat)
             in fusedDouble -> listOf(proofDouble, proofDouble, proofDouble)
             else -> throw UnsupportedCore("Unsupported vector primitive $name")
@@ -161,7 +165,9 @@ internal object CoreVectors {
             in operationsDouble -> proofDouble
             "unpackFloatX4#" -> unpackedFloat
             in fusedFloat8 -> GeneratedVectors.proofFloatX8
+            in fusedFloat16 -> GeneratedVectors.proofFloatX16
             in fusedDouble4 -> GeneratedVectors.proofDoubleX4
+            in fusedDouble8 -> GeneratedVectors.proofDoubleX8
             in operationsFloat -> proofFloat
             in operations32 -> proof32
             else -> proof

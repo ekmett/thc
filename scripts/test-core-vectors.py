@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 import unittest
 from core_vectors import VECTOR_REP, LANE_REP, TUPLE_REP, VECTOR32_REP, LANE32_REP, VECTOR_FLOAT_REP, LANE_FLOAT_REP, TUPLE_FLOAT_REP, VECTOR_DOUBLE_REP, LANE_DOUBLE_REP, TUPLE_DOUBLE_REP, signature_matches
-from core_vectors import VECTOR_FLOAT8_REP, VECTOR_DOUBLE4_REP
+from core_vectors import VECTOR_FLOAT8_REP, VECTOR_DOUBLE4_REP, VECTOR_FLOAT16_REP, VECTOR_DOUBLE8_REP
 from core_vectors import VECTOR16_REP, LANE16_REP, TUPLE16_REP, OPERATIONS, proof_error
 from core_vectors import VECTOR8_REP, LANE8_REP, TUPLE8_REP
 from core_vectors import VECTOR_WORD8_REP, LANE_WORD8_REP, TUPLE_WORD8_REP
@@ -246,6 +246,8 @@ class VectorAuditTest(unittest.TestCase):
         for shape, proof, lane, wrong, literal in (
                 ('FloatX4', VECTOR_FLOAT_REP, LANE_FLOAT_REP, VECTOR_DOUBLE_REP, 'float'),
                 ('FloatX8', VECTOR_FLOAT8_REP, LANE_FLOAT_REP, VECTOR_FLOAT_REP, 'float'),
+                ('FloatX16', VECTOR_FLOAT16_REP, LANE_FLOAT_REP, VECTOR_FLOAT8_REP, 'float'),
+                ('DoubleX8', VECTOR_DOUBLE8_REP, LANE_DOUBLE_REP, VECTOR_DOUBLE4_REP, 'double'),
                 ('DoubleX4', VECTOR_DOUBLE4_REP, LANE_DOUBLE_REP, VECTOR_DOUBLE_REP, 'double'),
                 ('DoubleX2', VECTOR_DOUBLE_REP, LANE_DOUBLE_REP, VECTOR_FLOAT_REP, 'double')):
           for prefix in ('fmadd', 'fmsub', 'fnmadd', 'fnmsub'):
@@ -280,9 +282,6 @@ class VectorAuditTest(unittest.TestCase):
             malformed = copy.deepcopy(module)
             malformed['bindings'][0]['expr'][2][1][3][1] = True
             self.assertFalse(run(malformed)['accepted'])
-        for name in ('fmaddFloatX16#', 'fmsubFloatX16#', 'fnmaddDoubleX8#', 'fnmsubDoubleX8#'):
-            self.assertNotIn(name, CAP['primitives'])
-
     def test_int32_multiply_requires_two_exact_signed_vectors(self):
         m=fixture(); body=m['bindings'][0]['expr'][2]
         def broadcast(value):

@@ -3314,11 +3314,21 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             operands.forEach { it.emit(e) }
             e.builder.endVectorFloat8Fused()
         }, GeneratedVectors.proofFloatX8)
+        in CoreVectors.fusedFloat16 -> ProvenExpression(Expression { e ->
+            e.builder.beginVectorFloat16Fused(CoreVectors.fusedFloat16.indexOf(name))
+            operands.forEach { it.emit(e) }
+            e.builder.endVectorFloat16Fused()
+        }, GeneratedVectors.proofFloatX16)
         in CoreVectors.fusedDouble4 -> ProvenExpression(Expression { e ->
             e.builder.beginVectorDouble4Fused(CoreVectors.fusedDouble4.indexOf(name))
             operands.forEach { it.emit(e) }
             e.builder.endVectorDouble4Fused()
         }, GeneratedVectors.proofDoubleX4)
+        in CoreVectors.fusedDouble8 -> ProvenExpression(Expression { e ->
+            e.builder.beginVectorDouble8Fused(CoreVectors.fusedDouble8.indexOf(name))
+            operands.forEach { it.emit(e) }
+            e.builder.endVectorDouble8Fused()
+        }, GeneratedVectors.proofDoubleX8)
         in CoreVectors.operations32 -> vector32Primitive(name, operands)
         "unpackInt64X2#" -> tupleExpression(CoreVectors.unpacked) { e, destination ->
             e.builder.beginVectorUnpack(destination[0], destination[1])

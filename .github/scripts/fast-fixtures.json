@@ -342,6 +342,12 @@
       "outputs": ["build/simd-floatx4-fma"],
       "sources": ["test/haskell-fixtures/SimdFloatFmaFixtures.hs", "test/haskell-fixtures/Main.hs", "compiler/test-fixtures/SimdFloatFma.hs", "compiler/test-fixtures/SimdFloatFmaNative.hs", "scripts/core_vectors.py"]
     },
+    "simd-wide-floating-fma": {
+      "junit": ["thc.runtime.SimdWideFloatFmaTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd-wide-floating-fma"]}],
+      "outputs": ["build/simd-wide-floating-fma"],
+      "sources": ["test/haskell-fixtures/SimdWideFloatFmaFixtures.hs", "test/haskell-fixtures/SimdFloatFmaFixtures.hs", "test/haskell-fixtures/Main.hs", "compiler/test-fixtures/SimdWideFloatFma.hs", "compiler/test-fixtures/SimdWideFloatFmaNative.hs", "scripts/core_vectors.py"]
+    },
     "word-floating": {
       "junit": ["thc.runtime.WordFloatingTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "word-floating"]}],

@@ -83,6 +83,9 @@ native/model checks and separate graph evidence.
 
 The [generated wide arithmetic families](simd-wide-arithmetic.md) share exact
 lane contracts and finite scalar-entry Haskell oracles/compiled JVM drivers.
+The [512-bit floating fused operations](wide-floating-fma.md) use genuine wide
+Core and native scalar-lane expectations; native wide instruction parity remains
+unproved.
 
 ## Performance and runtime design
 

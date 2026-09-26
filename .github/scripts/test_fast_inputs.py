@@ -194,6 +194,16 @@ class FastInputTests(unittest.TestCase):
                        'other.txt', 'pre-core/Other.json', 'test-results/pass.json'):
             self.assertFalse(cache.allowed_payload('build/simd-floatx4-fma/' + suffix, {}), suffix)
 
+    def test_wide_fma_scalar_oracle_payload_is_closed(self):
+        self.assertIn('build/simd-wide-floating-fma/manifest.json', DECLARED_REQUIRED)
+        self.assertEqual(5, len(cache.SIMD_WIDE_FMA_OUTPUTS))
+        for path in cache.SIMD_WIDE_FMA_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+            with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
+        for suffix in ('native/scalar-lane-oracle', 'native/SimdWideFloatFmaNative.o',
+                       'post-core/SimdWideFloatFma.json', 'pre-core/Other.json', 'logs/extra.stdout'):
+            self.assertFalse(cache.allowed_payload('build/simd-wide-floating-fma/' + suffix, {}), suffix)
+
     def test_arithmetic_installed_bundle_hashes_do_not_escape_into_zip_member_paths(self):
         path = 'build/arithmetic-exceptions/installed/bundles/ghc-internal.zip'
         package = dict(format='thc-core-packages', units=[dict(bundle=dict(path=path, sha256='a'*64),

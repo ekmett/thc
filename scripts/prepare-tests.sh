@@ -41,6 +41,7 @@ fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
 "$fixture_bin" fused-floating
 "$fixture_bin" simd-calls
 "$fixture_bin" simd-floatx4-fma
+"$fixture_bin" simd-wide-floating-fma
 "$fixture_bin" sqrt
 "$fixture_bin" original-stack
 "$fixture_bin" original-stack-formatter

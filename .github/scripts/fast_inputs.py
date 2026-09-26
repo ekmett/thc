@@ -40,10 +40,12 @@ thread-status thread-label boxed-arrays boxed-array-extensions bytearray compare
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array
 narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
-show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
+show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
 SIMD_FLOAT_FMA_OUTPUTS = frozenset("build/simd-floatx4-fma/" + name for name in (
     "manifest.json", "oracle.txt", "pre-core/SimdFloatFma.json", "post-core/SimdFloatFma.json",
     "pre-audit.json", "post-audit.json", "pre-double-audit.json", "post-double-audit.json"))
+SIMD_WIDE_FMA_OUTPUTS = frozenset("build/simd-wide-floating-fma/" + name for name in (
+    "manifest.json", "oracle.txt", "pre-core/SimdWideFloatFma.json", "pre-audit.json", "pre-double-audit.json"))
 SIMD_SMOKE_SOURCES = frozenset("build/generated/simd/fixtures/" + name for name in (
     "GeneratedSimdSmoke.hs", "GeneratedSimdSmokeScalar.hs",
     "GeneratedSimdSmokeScalarNative.hs", "GeneratedSimdSmokeVectorNative.hs"))
@@ -844,6 +846,8 @@ def allowed_payload(name, pins):
         return name in SIMD_SMOKE_OUTPUTS
     if parts[1] == "simd-floatx4-fma":
         return name in SIMD_FLOAT_FMA_OUTPUTS
+    if parts[1] == "simd-wide-floating-fma":
+        return name in SIMD_WIDE_FMA_OUTPUTS
     if parts[1] == "original-stdio-read":
         return name in ORIGINAL_STDIO_READ_OUTPUTS
     if parts[1] == "original-stdio-close":
