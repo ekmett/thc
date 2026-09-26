@@ -1,11 +1,12 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-module StoreProjectTests (tests) where
+module StoreProjectTests (tests, inplaceTests) where
 
 import Control.Exception (bracket)
 import Control.Monad (forM_, unless)
 import Data.Char (isHexDigit)
+import qualified Data.ByteString as BS
 import Data.List (isPrefixOf)
 import System.Directory (getModificationTime, getPermissions, removeFile,
                          removePathForcibly, setPermissions)
@@ -20,7 +21,119 @@ import THC.Driver.GhcProxy (ghcProxyCommand)
 
 tests :: Env -> Test
 tests env = TestList [proxyOptionsTest env, storeProjectTest env, customStoreProjectTest env,
-  nativeVariantsTest env False, nativeVariantsTest env True]
+  inplaceTests env, nativeVariantsTest env False, nativeVariantsTest env True]
+
+inplaceTests :: Env -> Test
+inplaceTests env = TestLabel "archive dependency retains its project-local dependency contents" $ TestCase $
+  withFixtureNamed env "test/fixtures/run-store-project" "inplace dependencies" $ \project ->
+  withCache (takeDirectory project </> "cache") $ do
+    let base = takeDirectory project
+        dependency = base </> "dependency-source"
+        facade = base </> "facade-source"
+        leaf = project </> "local-leaf"
+        leafSource = leaf </> "LocalLeaf.hs"
+        output = base </> "output"
+        invoke backend = run env base (Just backend) 300
+          ["run", "completed", "--project-dir", project, "--thc-root", thcRoot env,
+           "--runtime", runtime env, "--dist-dir", output]
+        planned plan name = one ((== name) . string . (`field` "pkg-name")) (objects plan "install-plan")
+        described manifest identifier = one ((== identifier) . string . (`field` "id")) (objects manifest "units")
+        bundlePath manifest identifier = string (field (field (described manifest identifier) "bundle") "path")
+    copyTree (project </> "dep-data") dependency
+    removePathForcibly (project </> "dep-data")
+    Directory.createDirectoryIfMissing True leaf
+    writeText (leaf </> "local-leaf.cabal") $ unlines
+      ["cabal-version: 3.0", "name: local-leaf", "version: 0.1.0.0",
+       "license: BSD-3-Clause", "build-type: Simple", "library",
+       "  exposed-modules: LocalLeaf", "  build-depends: base >=4.22 && <4.23",
+       "  default-language: Haskell2010", "  ghc-options: -O2"]
+    writeText leafSource "module LocalLeaf (leafValue) where\nleafValue :: Int\nleafValue = 42\n"
+    Directory.createDirectoryIfMissing True facade
+    writeText (facade </> "leaf-facade.cabal") $ unlines
+      ["cabal-version: 3.0", "name: leaf-facade", "version: 0.1.0.0",
+       "license: BSD-3-Clause", "build-type: Simple", "library",
+       "  reexported-modules: local-leaf:LocalLeaf",
+       "  build-depends: local-leaf ==0.1.0.0", "  default-language: Haskell2010"]
+    let description = dependency </> "dep-data.cabal"
+    original <- readText description
+    writeText description (replaceText "build-depends: base >=4.22 && <4.23"
+      "build-depends: base >=4.22 && <4.23, leaf-facade ==0.1.0.0" original)
+    writeText (dependency </> "src/SafeDependency.hs") $ unlines
+      ["{-# LANGUAGE CPP #-}", "module SafeDependency (stableValue) where",
+       "import LocalLeaf (leafValue)", "#ifndef THC_INPLACE_DELTA",
+       "#define THC_INPLACE_DELTA 0", "#endif",
+       "stableValue :: Int", "stableValue = leafValue + (THC_INPLACE_DELTA)"]
+    mapM_ (\source -> sourceDist env source project) [facade, dependency]
+    writeText (project </> "cabal.project") $ unlines
+      ["packages: app/app.cabal local-leaf/local-leaf.cabal",
+       "          dep-data-0.1.0.0.tar.gz leaf-facade-0.1.0.0.tar.gz"]
+    first <- invoke "ast"
+    assertSuccess first
+    assertNoStdout first
+    assertBackend "ast" first
+    plan <- readJson (output </> "native/cache/plan.json")
+    let dependencyUnit = planned plan "dep-data"
+        identifier = string (field dependencyUnit "id")
+        facadeId = string (field (planned plan "leaf-facade") "id")
+        executable = string (field (planned plan "app-store") "bin-file")
+        leafDist = string (field (planned plan "local-leaf") "dist-dir")
+        leafArtifacts = map ((leafDist </> "build") </>) ["LocalLeaf.o", "LocalLeaf.hi"]
+    forM_ ["dep-data", "leaf-facade"] $ \name ->
+      assertEqual "Cabal itself chooses inplace archive style" "inplace"
+        (string $ field (planned plan name) "style")
+    native <- runExe env project Nothing 60 executable []
+    assertSuccess native
+    assertEqual "unchanged native oracle" (out native) (out first)
+    manifest <- readJson (output </> "packages.json")
+    let path = bundlePath manifest identifier
+    facadeInner <- readCore (bundlePath manifest facadeId) "manifest.json"
+    assertEqual "reexport-only inplace archive owns no synthetic Core" []
+      (objects facadeInner "modules")
+    assertBool "exact isolated registration retained"
+      (not (null (string (field facadeInner "reexportRegistration"))))
+    assertReachable output identifier
+    stamp <- getModificationTime path
+    second <- invoke "bytecode"
+    assertSuccess second
+    assertNoStdout second
+    assertBackend "bytecode" second
+    secondManifest <- readJson (output </> "packages.json")
+    assertEqual "warm inplace Core bundle reused" path (bundlePath secondManifest identifier)
+    assertEqual "warm bundle not rewritten" stamp =<< getModificationTime path
+    originalLeafArtifacts <- mapM BS.readFile leafArtifacts
+    writeText (project </> "cabal.project.local")
+      "package dep-data\n  ghc-options: -DTHC_INPLACE_DELTA=-1\n"
+    configured <- invoke "bytecode"
+    assertFailure configured
+    configuredPlan <- readJson (output </> "native/cache/plan.json")
+    assertEqual "package-specific project options retain the inplace ID" identifier
+      (string $ field (planned configuredPlan "dep-data") "id")
+    assertEqual "package-specific options do not modify the source archive"
+      (field dependencyUnit "pkg-src-sha256") (field (planned configuredPlan "dep-data") "pkg-src-sha256")
+    assertEqual "package-specific options leave local dependency artifacts unchanged"
+      originalLeafArtifacts =<< mapM BS.readFile leafArtifacts
+    configuredManifest <- readJson (output </> "packages.json")
+    assertBool "inplace package configuration invalidates Core independently of local contents"
+      (bundlePath configuredManifest identifier /= path)
+    assertReachable output identifier
+    configuredNative <- runExe env project Nothing 60 executable []
+    assertFailure configuredNative
+    removeFile (project </> "cabal.project.local")
+    originalLeaf <- readText leafSource
+    writeText leafSource (replaceText "leafValue = 42" "leafValue = 41" originalLeaf)
+    changed <- invoke "ast"
+    assertFailure changed
+    changedPlan <- readJson (output </> "native/cache/plan.json")
+    assertEqual "inplace ID deliberately stays unchanged" identifier
+      (string $ field (planned changedPlan "dep-data") "id")
+    assertEqual "archive contents deliberately stay unchanged"
+      (field dependencyUnit "pkg-src-sha256") (field (planned changedPlan "dep-data") "pkg-src-sha256")
+    changedManifest <- readJson (output </> "packages.json")
+    assertBool "local dependency content invalidates inplace Core"
+      (bundlePath changedManifest identifier /= path)
+    assertReachable output identifier
+    changedNative <- runExe env project Nothing 60 executable []
+    assertFailure changedNative
 
 proxyOptionsTest :: Env -> Test
 proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay provenance" $ TestCase $
