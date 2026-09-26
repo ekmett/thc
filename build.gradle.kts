@@ -643,6 +643,24 @@ for ((taskName, dense) in listOf("packageNativeOriginalsDefault" to false, "pack
         }
     }
 }
+for ((taskName, dense) in listOf("wcwidthDefault" to false, "wcwidthDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Checks Tasty's exact wcwidth declaration and fallback against native locale-sensitive results."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        systemProperty("thc.handoffSlabs", dense.toString())
+        inputs.files(fileTree("build/wcwidth") { include("**/*.json", "*.tsv", "ConsoleReporter.hs", "TASTY-LICENSE") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.WcwidthTest") }
+        outputs.upToDateWhen { false }
+        doFirst {
+            check(file("build/wcwidth/manifest.json").isFile) {
+                "Set THC_TASTY_SOURCE and run cabal run exe:thc-fixtures -- wcwidth"
+            }
+        }
+    }
+}
 for ((taskName, dense) in listOf("getEntropyDefault" to false, "getEntropyDense" to true)) {
     tasks.register<Test>(taskName) {
         group = "verification"

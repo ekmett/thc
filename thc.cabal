@@ -12,6 +12,10 @@ maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  test/fixtures/run-wcwidth/cabal.project
+  test/fixtures/run-wcwidth/wcwidth-ffi.cabal
+  test/fixtures/run-wcwidth/src/Width.hs
+  test/fixtures/run-wcwidth/app/Main.hs
   compiler/test-fixtures/RubbishLiteralAudit.hs
   compiler/test-fixtures/OriginalDigestNative.hs
   compiler/test-fixtures/OriginalErfNative.hs
@@ -785,6 +789,7 @@ executable thc-fixtures
     PackageNativeOriginalsFixtures
     PackageNativeArchiveFixtures
     GetEntropyFixtures
+    WcwidthFixtures
     HashableFfiFixtures
     OriginalTermiosFixtures
     OriginalTcsetattrFixtures
