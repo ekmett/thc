@@ -21,6 +21,33 @@ concrete frontier includes original `array` byte-array `memcpy`, `bytestring`
 Neither result is a guest application success. Later runtime improvements must
 be checked by rerunning the actual commands, not inferred from primop counts.
 
+## Demonstrated guest workload
+
+HsColour 1.25 now passes actual THC `--version`, `--help`, and HTML generation
+from `TinyMath.hs`, using the metadata-only overlay below. Its original Haskell
+sources are unchanged. The complete exported closure passes strict admission:
+83,786 supplied bindings, 4,037 reachable, zero missing and zero issues.
+The generated 1,167-byte HTML file is byte-for-byte identical to the independent
+native output (SHA-256
+`c856e73e0f7b07edf9acea97a185def081ddc5e2e8552f30d3cc0e85fb17e267`).
+
+The HTML comparison passes both handoff modes in both backends: bytecode uses
+the full executable startup/shutdown; AST runs the original raw `Main.main`
+entry and the application closes its output file itself. This is not a claim
+that AST supports general executable startup, or that the whole application
+remains JIT compiled. These are real guest executions, not native subprocesses.
+
+The tested runtime checkpoint is `fdbf7e39`, combining the original library
+memory/sentinel fix `c2055888`, guest environment/realloc `bb9462e3`, Unix
+unlink/original-interface admission `ee52423b`, and linear Core JSON exporter
+`e6eddb52`. The memory fixture independently passes native comparisons in the
+same four backend/mode combinations. The original unchanged HsColour package
+still has the declared-module limitation documented below. Alex, Happy and
+doctest are not claimed as guest successes by this checkpoint; their native
+baselines and genuine guest retry recipes remain below.
+
+## Toolchain
+
 Use the supported GHC 9.14.1 complete-Core installation, matching ghc-pkg,
 Cabal 3.16 and Graal toolchain from [the driver guide](../../docs/driver.md).
 Keep an absolute `THC_ROOT`, `GHC_SOURCE`, `GHC` and `GHC_PKG` for the commands
