@@ -108,6 +108,8 @@
     "getenv", "putenv", "__hsbase_unsetenv", "__hscore_environ",
     "getOrSetSystemEventThreadEventManagerStore",
     "getOrSetGHCConcSignalSignalHandlerStore",
+    "getOrSetLibHSghcFastStringTable",
+    "keepCAFsForGHCi",
     "rts_setMainThread",
     "rtsSupportsBoundThreads",
     "stg_getThreadAllocationCounterzh",
@@ -145,7 +147,7 @@
     "data-addr"
   ],
   "functionLabels": ["libdwPoolRelease", "backtraceFree", "free"],
-  "dataLabels": ["enabled_capabilities"],
+  "dataLabels": ["enabled_capabilities", "ghc_unique_counter64", "ghc_unique_inc"],
   "integerLiteralRanges": {
     "int8": [
       -128,

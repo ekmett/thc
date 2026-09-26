@@ -14,6 +14,7 @@ internal class StablePointers {
     private val entries = HashMap<Long, Entry>()
     private var eventManagerStore: Handle? = null
     private var signalHandlerStore: Handle? = null
+    private var fastStringStore: Handle? = null
     private var nextId = 1L
     private var disposed = false
 
@@ -49,7 +50,7 @@ internal class StablePointers {
     @Synchronized @TruffleBoundary
     fun free(address: ManagedAddress) {
         val handle = entry(address).handle
-        if (handle === eventManagerStore || handle === signalHandlerStore)
+        if (handle === eventManagerStore || handle === signalHandlerStore || handle === fastStringStore)
             fault("RTS shared CAF StablePtr# remains owned until context disposal")
         entries.remove(handle.id)
     }
@@ -61,12 +62,14 @@ internal class StablePointers {
         val current = when (store) {
             SharedCAFStore.EVENT_MANAGER -> eventManagerStore
             SharedCAFStore.SIGNAL_HANDLER -> signalHandlerStore
+            SharedCAFStore.FAST_STRING -> fastStringStore
         }
         if (current != null) return ManagedAddress.fromStableHandle(current)
         if (supplied == null) return ManagedAddress.nullAddress()
         when (store) {
             SharedCAFStore.EVENT_MANAGER -> eventManagerStore = supplied
             SharedCAFStore.SIGNAL_HANDLER -> signalHandlerStore = supplied
+            SharedCAFStore.FAST_STRING -> fastStringStore = supplied
         }
         return candidate
     }
@@ -75,6 +78,7 @@ internal class StablePointers {
         disposed = true
         eventManagerStore = null
         signalHandlerStore = null
+        fastStringStore = null
         entries.clear()
     }
 

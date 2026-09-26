@@ -66,6 +66,7 @@ import OriginalGmpFixtures (prepareOriginalGmp)
 import OriginalFdReadyFixtures (prepareOriginalFdReady)
 import FileWaitFixtures (prepareFileWait)
 import OriginalRtsLocksFixtures (prepareOriginalRtsLocks)
+import CompilerRtsFixtures (prepareCompilerRts)
 import RtsDiagnosticFixtures (prepareRtsDiagnostics)
 import OriginalOpenFixtures (prepareOriginalOpen)
 import PackageScalarFixtures (preparePackageScalar)
@@ -973,6 +974,7 @@ main = do
     ["hint-trace"] -> prepareHintTrace root
     ["closure-inspection"] -> prepareClosureInspection root
     ["stable-pointers"] -> prepareStablePointers root
+    ["compiler-rts"] -> prepareCompilerRts root
     ["stable-names"] -> prepareStableNames root
     ["weak-explicit"] -> prepareWeaks root
     ["shrink-bytearrays"] -> prepareShrinkByteArrays root
