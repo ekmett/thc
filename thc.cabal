@@ -851,6 +851,7 @@ executable thc-fixtures
     SumJoinFixtures
     TupleJoinFixtures
     SumInputFixtures
+    TupleCaptureFixtures
     WeakFixtures
     ShrinkByteArrayFixtures
     ByteArrayFixtures

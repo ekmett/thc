@@ -12,8 +12,9 @@ reference. Neither is flattened. A lifted leaf inside an unboxed tuple stays laz
 including when the tuple parameter is strict or unused. Unknown layouts or levity,
 sums are excluded; exact vector leaves retain their fixed species. An exact evaluated
 `AddrRep` leaf carries only a checked `ManagedAddress`, never a native pointer.
-Tuple captures and ordinary aggregate let bindings are still rejected, as are aggregate
-parameters and results at the public host entry. [Local tuple-join arguments](tuple-joins.md)
+Ordinary aggregate let bindings and aggregate parameters/results at the public host
+entry remain rejected. [Tuple closure/thunk captures](tuple-captures.md) preserve owned
+physical fields and exact logical nesting. [Local tuple-join arguments](tuple-joins.md)
 use the same logical layouts but parallel moves within the current frame.
 Saturated boxed constructors support [owned tuple/sum fields](aggregate-heap-fields.md).
 Ordinary binary-sum parameters and captures use [the existing typed input protocol](sum-inputs.md).

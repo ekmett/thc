@@ -97,7 +97,7 @@ class TupleInputs(unittest.TestCase):
         # A valid SIMD leaf is supported with tuple-fields enabled. Its negative
         # specimen must instead contradict the exact physical VecRep annotation.
         bad=[dict(kind='unknown',primReps=None,evaluated=True),dict(REF,primReps=['BoxedRep Nothing']),
-             dict(kind='address',primReps=['AddrRep'],evaluated=True),
+             dict(kind='address',primReps=['AddrRep'],evaluated=False),
              dict(kind='vector',primReps=['VecRep 2 Int64ElemRep'],vector=dict(lanes=4,element='Int64ElemRep'),evaluated=True),
              dict(kind='unknown',aggregate='unboxed-sum',alternatives=None,primReps=None,evaluated=True),
              dict(LONG,primReps=[]),dict(STATE,primReps=['IntRep'])]
@@ -231,7 +231,7 @@ class TupleInputs(unittest.TestCase):
         call[2][0][6]['rep']['primReps']=['BoxedRep Nothing']
         self.rejected(module,detail='unboxed-tuple argument')
 
-    def test_join_formals_are_admitted_but_capture_storage_and_primop_boundaries_remain_rejected(self):
+    def test_ordinary_and_join_captures_need_capabilities_but_let_and_primops_stay_excluded(self):
         shape=tup(LONG)
         module=fixture([shape]);worker=module['bindings'].pop();worker.update(joinValueArity=1,joinResultRep=LONG,info=dict(joinArity=1))
         module['bindings'][0]['expr']=['let',False,[worker],module['bindings'][0]['expr'],dict(rep=LONG)]
@@ -240,7 +240,8 @@ class TupleInputs(unittest.TestCase):
         module=fixture([shape]);worker=module['bindings'][1]
         worker['expr'][2]=['lam',[],var('p0',shape),dict(rep=CLOSURE,resultRep=shape)];worker['expr'][3]['resultRep']=CLOSURE
         module['bindings'][0]['expr'][6]['rep']=CLOSURE
-        self.rejected(module,detail='unboxed-tuple capture')
+        self.accepted(module)
+        self.rejected(module,cap=dict(ENABLED,aggregateCaptures=[]),detail='unboxed-tuple capture')
         for declared in (shape,CLOSURE):
             module=fixture([shape]);value=module['bindings'][0]['expr'][2][0]
             module['bindings'][0]['expr']=['let',False,[bind('stored',value,declared)],lit(),dict(rep=LONG)]

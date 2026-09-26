@@ -93,6 +93,10 @@ class BytecodeVectorTransportTest {
             listOf("data", "T2", listOf("projected", "unused"), variable("projected", vector),
                 mapOf("binders" to listOf(parameter("projected", vector), parameter("unused"))))),
             mapOf("rep" to vector, "binder" to parameter("whole", pair)))
+        val capturedPair: VectorCore = listOf("case", variable("p", pair), "capturedWhole", listOf(
+            listOf("data", "T2", listOf("projected", "unused"), variable("projected", vector),
+                mapOf("binders" to listOf(parameter("projected", vector), parameter("unused"))))),
+            mapOf("rep" to vector, "binder" to parameter("capturedWhole", pair)))
         val join = binding("swap", lambda(listOf(parameter("left", vector), parameter("right", vector), parameter("n")),
             choice(primitive("<=#", listOf(variable("n"), number(0))), variable("left", vector),
                 call("swap", listOf(variable("right", vector), variable("left", vector),
@@ -107,6 +111,9 @@ class BytecodeVectorTransportTest {
             binding("identity", lambda(listOf(parameter("v", vector)), variable("v", vector), vector)),
             binding("worker", lambda(listOf(parameter("v", vector), parameter("ignored")), variable("v", vector), vector)),
             binding("pairIdentity", lambda(listOf(parameter("p", pair)), variable("p", pair), pair)),
+            binding("capturePair", lambda(listOf(parameter("p", pair)),
+                lambda(listOf(parameter("ignored")), capturedPair, vector), closure)),
+            binding("capturedPrefix", lambda(listOf(parameter("x")), call("capturePair", listOf(pairValue), closure), closure)),
             binding("make", lambda(listOf(parameter("outer")), lambda(listOf(parameter("v", vector)),
                 choice(primitive("==#", listOf(variable("outer"), number(19))), variable("v", vector), lanes(family, number(0)), vector), vector), closure)),
             function("self", "self"), function("mutualA", "mutualB"), function("mutualB", "mutualA"),
@@ -121,7 +128,8 @@ class BytecodeVectorTransportTest {
             entry("over", call("make", listOf(number(19), payload), vector)),
             entry("selfTail", call("self", listOf(payload, number(100)), vector)),
             entry("mutualTail", call("mutualA", listOf(payload, number(100)), vector)),
-            entry("joinSwap", joinValue), entry("tupleField", pairResult)))
+            entry("joinSwap", joinValue), entry("tupleField", pairResult),
+            entry("tupleCapture", call("capturePair", listOf(pairValue, number(23)), vector))))
     }
     private fun context(inlining: Boolean) = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("compiler.Inlining", inlining.toString()).option("engine.BackgroundCompilation", "false")
@@ -137,8 +145,8 @@ class BytecodeVectorTransportTest {
         assertEquals(0, state.arguments.depth); assertEquals(0, state.arguments.retainedReferences())
         assertEquals(0, state.results.depth); assertEquals(0, state.results.retainedReferences())
     }
-    private fun check(program: BytecodeProgram, language: Language, family: Family, name: String, input: Long) {
-        val root = program.entryTarget(name).rootNode as BytecodeRoot
+    private fun check(program: ExecutableProgram, language: Language, family: Family, name: String, input: Long) {
+        val root = program.entryTarget(name).rootNode as GuestRoot
         val shape = requireNotNull(root.tupleResult)
         assertEquals(1, shape.width)
         assertTrue(shape.proof.isVector); assertFalse(shape.proof.isTuple)
@@ -213,6 +221,40 @@ class BytecodeVectorTransportTest {
     }
     private fun valid(target: RootCallTarget) =
         assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), target.toString())
+
+    @Test fun tupleCapturesKeepAllVectorSpeciesAndOwnedLifetimeOnBothBackends() {
+        for (backend in listOf("ast", "bytecode")) for (inlining in listOf(true, false)) withLanguage(inlining) { language ->
+            for (family in families()) {
+                val data = fixture(family)
+                val program: ExecutableProgram = if (backend == "ast") Program(language, data) else BytecodeProgram(language, data)
+                for (value in values) check(program, language, family, "tupleCapture", value)
+                val captured = Calls.target(program.entryTarget("capturedPrefix"), arrayOf(0L, -129L)) as Closure
+                val environment = requireNotNull(captured.environment)
+                val vectors = (0 until environment.layout.storageSize).filter(environment.layout::isVector)
+                assertEquals(1, vectors.size)
+                VectorLayout(CoreRepresentations.parse(family.vector)).require(environment.layout.inspect(environment, vectors.single()))
+                assertTrue(ClosureInspection.image(captured).pointers.isEmpty(), "Raw vectors are not guest references")
+                val shape = requireNotNull((captured.target.rootNode as GuestRoot).tupleResult)
+                fun saved(): Any = ownedTupleResult(Calls.target(captured.target,
+                    arrayOf(0L, environment, 31L)), shape).let { VectorLayout(shape.proof).require(shape.layout.getObject(it, 0)) }
+                val original = saved()
+                Calls.target(program.entryTarget("capturedPrefix"), arrayOf(0L, 99L))
+                assertEquals(original, saved(), "$backend/${family.name} escaped capture")
+                if (family.name in setOf("Int32X4", "Word8X16", "FloatX4", "DoubleX2")) {
+                    val target = program.entryTarget("tupleCapture")
+                    val active = activeTargets(target)
+                    active.forEach { it.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(it, true); valid(it) }
+                    for (value in values.asReversed()) {
+                        val before = program.diagnostics()["compiledEntries"] as Long
+                        check(program, language, family, "tupleCapture", value)
+                        assertEquals(3L, program.diagnostics()["compiledEntries"] as Long - before)
+                        assertEquals(active, activeTargets(target)); active.forEach(::valid)
+                    }
+                }
+                released(language)
+            }
+        }
+    }
 
     @Test fun compiledCallsRemainInstalledFromTheFirstEntryWithAndWithoutInlining() {
         for (inlining in listOf(true, false)) withLanguage(inlining) { language ->
