@@ -125,10 +125,10 @@ class ClosureInspectionTest {
                         target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
                         valid(target); bypass.invoke(runtime, target); valid(target)
                     }
-                    // Source calls: entry, plus runRW lambda for three IO cases,
-                    // plus clearCCS's actual State action for the clear case.
-                    val entries = when (name) { "noCCS", "noProvenance" -> 2; "cleared" -> 3;
-                        "annotated" -> 4; "annotatedResume" -> 7; else -> 1 }
+                    // The immediate runRW State# wrapper is beta-reduced by
+                    // lowering; count the remaining entry/action calls only.
+                    val entries = when (name) { "cleared" -> 2;
+                        "annotated" -> 3; "annotatedResume" -> 6; else -> 1 }
                     for (row in selected) {
                         val before = (program.diagnostics()["compiledEntries"] as Number).toLong()
                         check(row)

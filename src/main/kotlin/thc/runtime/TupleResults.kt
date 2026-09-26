@@ -198,6 +198,9 @@ internal class TupleDispatch @JvmOverloads constructor(private val destination: 
         try { executeCall(frame, function, arguments) }
         catch (cut: DelimitedCut) {
             if (!DelimitedControl.enabled(this)) throw cut
+            // Saving a continuation makes this activation escape. Leave the
+            // compiled path before materializing it, without retiring its code.
+            CompilerDirectives.transferToInterpreter()
             throw DelimitedControl.tupleCut(cut, frame.materialize(), destination, this)
         }
     }

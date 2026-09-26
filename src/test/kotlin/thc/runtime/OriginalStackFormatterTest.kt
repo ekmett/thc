@@ -246,7 +246,10 @@ class OriginalStackFormatterTest {
             Triple("Failure", "codingFailureModeSuffix3", "IO.Encoding.mkTextEncoding19"),
             Triple("Failure", "codingFailureModeSuffix1", "IO.Encoding.mkTextEncoding19"))
         for ((module, name, callerName) in cases) {
-            val id = "ghc-internal:GHC.Internal.IO.Encoding.$module.$name"
+            // GHC qualifies record selector identities by their parent type;
+            // the human-facing occurrence remains close#.
+            val occurrence = if (module == "Types") "\$fld:BufferCodec#:$name" else name
+            val id = "ghc-internal:GHC.Internal.IO.Encoding.$module.$occurrence"
             val original = (modules.getValue("IO.Encoding.$module")["bindings"] as List<Map<String, Any?>>)
                 .single { it["id"] == id }
             assertEquals(name, original["name"])
