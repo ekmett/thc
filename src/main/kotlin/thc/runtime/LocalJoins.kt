@@ -6,6 +6,7 @@ package thc.runtime
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.frame.MaterializedFrame
 import com.oracle.truffle.api.nodes.*
 
 /** Immutable lexical branch identity, shared safely by cloned nodes. No call packet is needed. */
@@ -86,13 +87,29 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
 
 private class LocalJoinRepeater(private val group: Any, private val selector: Int, private val result: Int,
     @field:Children private var bodies: Array<Expr>, proof: CoreRepresentation,
-    @field:CompilationFinal(dimensions = 1) private val tupleSlots: IntArray) : Node(), RepeatingNode {
+    @field:CompilationFinal(dimensions = 1) private val tupleSlots: IntArray,
+    private val delimited: Boolean) : Node(), RepeatingNode {
     private val tuple = proof.isTypedTransport
     private val exactLong = proof.isLong
     private val exactFloat = proof.isFloat
     private val exactDouble = proof.isDouble
     private val referenceKind = if (proof.evaluated) proof.kind else CoreKind.UNKNOWN
     private fun executeBody(frame: VirtualFrame, body: Expr) {
+        if (!delimited) return executeUninterrupted(frame, body)
+        try {
+            executeUninterrupted(frame, body)
+        } catch (cut: DelimitedCut) {
+            throw cut.append(frame, object : DelimitedStep {
+                override fun resume(frame: MaterializedFrame, input: DelimitedResume, ambient: MaskingState,
+                                    outerMask: DelimitedStep?): Any? {
+                    val value = input.get()
+                    if (!tuple) FrameAccess.write(frame, result, value)
+                    return null
+                }
+            })
+        }
+    }
+    private fun executeUninterrupted(frame: VirtualFrame, body: Expr) {
         if (tuple) body.executeTuple(frame, tupleSlots, 0)
         else if (exactLong) FrameAccess.writeLong(frame, result, body.executeRequiredLong(frame))
         else if (exactFloat) FrameAccess.writeFloat(frame, result, body.executeRequiredFloat(frame))
@@ -102,7 +119,7 @@ private class LocalJoinRepeater(private val group: Any, private val selector: In
         else if (referenceKind == CoreKind.ADDRESS) FrameAccess.write(frame, result, body.executeRequiredAddress(frame))
         else FrameAccess.write(frame, result, body.execute(frame))
     }
-    @ExplodeLoop private fun executeTarget(frame: VirtualFrame, selected: Long) {
+    @ExplodeLoop fun executeTarget(frame: VirtualFrame, selected: Long) {
         // Structurally exclude entry even when PE cannot resolve a caught jump's
         // target. Otherwise nested entry regions can be expanded a second time.
         for (index in 1 until bodies.size) if (selected == index.toLong()) {
@@ -135,22 +152,50 @@ private class LocalJoinRepeater(private val group: Any, private val selector: In
 }
 
 /** Only recursive groups need loops; all regions preserve their typed result through a frame slot. */
-internal class LocalJoinRegion(group: Any, private val selector: Int, private val result: Int,
+internal class LocalJoinRegion(private val group: Any, private val selector: Int, private val result: Int,
     bodies: Array<Expr>, proof: CoreRepresentation, recursive: Boolean,
     private val tuple: TupleShape? = null,
-    @field:CompilationFinal(dimensions = 1) private val tupleSlots: IntArray = intArrayOf()) : Expr() {
+    @field:CompilationFinal(dimensions = 1) private val tupleSlots: IntArray = intArrayOf(),
+    private val delimited: Boolean = false) : Expr() {
     init { representation = proof }
     @Child private var single: LocalJoinRepeater? =
-        if (recursive) null else LocalJoinRepeater(group, selector, result, bodies, proof, tupleSlots)
+        if (recursive) null else LocalJoinRepeater(group, selector, result, bodies, proof, tupleSlots, delimited)
     @Child private var loop: LoopNode? = if (recursive) Truffle.getRuntime().createLoopNode(
-        LocalJoinRepeater(group, selector, result, bodies, proof, tupleSlots)) else null
-    private fun run(frame: VirtualFrame) {
+        LocalJoinRepeater(group, selector, result, bodies, proof, tupleSlots, delimited)) else null
+    private fun run(frame: VirtualFrame, slots: IntArray? = null, offset: Int = 0) {
+        if (!delimited) return runUninterrupted(frame)
+        try { runUninterrupted(frame) }
+        catch (cut: DelimitedCut) { throw cut.append(frame, ResumeRegion(this, slots, offset)) }
+    }
+    private fun runUninterrupted(frame: VirtualFrame) {
         val once = single
         if (once != null) once.executeOnce(frame)
         else {
             FrameAccess.writeLong(frame, selector, 0L)
             loop!!.execute(frame)
         }
+    }
+
+    private class ResumeRegion(private val region: LocalJoinRegion, private val slots: IntArray?,
+                               private val offset: Int) : DelimitedTransferStep {
+        override fun accepts(transfer: ControlFlowException): Boolean =
+            transfer is LocalJoinJump && transfer.target.group === region.group
+        override fun transfer(frame: MaterializedFrame, transfer: ControlFlowException, site: DelimitedActionSite): Any? {
+            val jump = transfer as LocalJoinJump
+            try {
+                val once = region.single
+                if (once != null) once.executeTarget(frame, jump.target.index.toLong())
+                else {
+                    FrameAccess.writeLong(frame, region.selector, jump.target.index.toLong())
+                    region.loop!!.execute(frame)
+                }
+            } catch (cut: DelimitedCut) { throw cut.append(frame, this) }
+            return finish(frame)
+        }
+        override fun resume(frame: MaterializedFrame, input: DelimitedResume, ambient: MaskingState,
+                            outerMask: DelimitedStep?): Any? { input.get(); return finish(frame) }
+        private fun finish(frame: VirtualFrame): Any? = if (slots == null) region.resultValue(frame)
+            else region.finishTuple(frame, slots, offset)
     }
     private fun resultValue(frame: VirtualFrame): Any? {
         val layout = typedVectorLayout
@@ -173,9 +218,12 @@ internal class LocalJoinRegion(group: Any, private val selector: Int, private va
     }
     override fun executeDataValue(frame: VirtualFrame): DataValue { run(frame); return RuntimeTypesGen.expectDataValue(resultValue(frame)) }
     override fun executeAddress(frame: VirtualFrame): ManagedAddress { run(frame); return RuntimeTypesGen.expectManagedAddress(resultValue(frame)) }
-    @ExplodeLoop override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        run(frame, slots, offset)
+        return finishTuple(frame, slots, offset)
+    }
+    @ExplodeLoop private fun finishTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val shape = tuple ?: fault("Scalar join region cannot write a tuple")
-        run(frame)
         for (index in tupleSlots.indices) {
             if (shape.layout.isLong(index)) FrameAccess.writeLong(frame, slots[offset + index], frame.getLong(tupleSlots[index]))
             else if (shape.layout.isFloat(index)) FrameAccess.writeFloat(frame, slots[offset + index], frame.getFloat(tupleSlots[index]))

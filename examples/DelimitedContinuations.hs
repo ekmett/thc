@@ -8,6 +8,33 @@ module DelimitedContinuations where
 
 import GHC.Exts
 
+{-# OPAQUE resumedJoin #-}
+resumedJoin :: Int# -> Int#
+resumedJoin n = runRW# $ \s0 -> case newPromptTag# s0 of
+  (# s1, tag #) -> case prompt# tag (\s2 ->
+    let go count s = case count of
+          0# -> (# s, I# (17# +# n) #)
+          3# -> case control0# tag (\k st -> k (\sx -> (# sx, 2# #)) st) s of
+            (# st, next #) -> go next st
+          _ -> go (count -# 1#) s
+    in go 3# s2) s1 of
+      (# _, I# answer #) -> answer +# 100#
+
+{-# OPAQUE tailWorker #-}
+tailWorker :: PromptTag# Int -> Int# -> State# RealWorld -> (# State# RealWorld, Int #)
+tailWorker tag count s = case count of
+  0# -> (# s, I# 17# #)
+  3# -> case control0# tag (\k st -> k (\sx -> (# sx, 2# #)) st) s of
+    (# st, next #) -> tailWorker tag next st
+  _ -> tailWorker tag (count -# 1#) s
+
+{-# OPAQUE resumedTail #-}
+resumedTail :: Int# -> Int#
+resumedTail n = runRW# $ \s0 -> case newPromptTag# s0 of
+  (# s1, tag #) -> case prompt# tag (\s2 -> case tailWorker tag 3# s2 of
+    (# s3, I# value #) -> (# s3, I# (value +# 100#) #)) s1 of
+    (# _, I# answer #) -> answer +# n
+
 data Saved = Answer Int | Suspended
   ((State# RealWorld -> (# State# RealWorld, Int# #)) -> State# RealWorld -> (# State# RealWorld, Saved #))
 

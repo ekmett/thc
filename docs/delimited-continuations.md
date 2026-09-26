@@ -28,8 +28,13 @@ nonmatching and same-tag nested prompts, captured catch/mask boundaries, an
 escaped continuation resumed twice, and ambient masking. These are synchronous
 IO examples, on both AST and bytecode backends.
 
-General resumed tail/self/join transfers, overapplication with unfinished
-applications, and composition with one-shot asynchronous suspension remain
+Saved function and lexical-join owners also handle tail/self/join transfers
+without discarding the remaining caller suffix. The recursive examples exercise
+both a separately called worker and an exported local join; neither restarts the
+original action. A resumed dense-ABI function detaches its old result destination
+before reentering its body.
+
+Overapplication with unfinished applications and composition with one-shot asynchronous suspension remain
 unestablished and require additional runtime work. This checkpoint must not be
 described as complete delimited-continuation support. Capturing through a thunk
 update rejects explicitly; GHC also excludes update/STM/foreign stack barriers
@@ -50,11 +55,11 @@ cabal run exe:thc-fixtures --offline -- delimited-continuations
 JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --tests thc.runtime.DelimitedContinuationsTest --rerun
 ```
 
-The Haskell producer retains the native GHC invocation, its 27 results, original
-pre/post Core, 18 strict entry audits, command stdout/stderr, and source/artifact
+The Haskell producer retains the native GHC invocation, its 33 results, original
+pre/post Core, 22 strict entry audits, command stdout/stderr, and source/artifact
 SHA-256 provenance under `build/delimited-continuations/`. The Kotlin arithmetic
-and shared-state model is independent of THC execution. Each mode checks 108
-interpreted observations and 36 first-installed executions with exact guest-root
+and shared-state model is independent of THC execution. Each mode checks 132
+interpreted observations and 44 first-installed executions with exact guest-root
 entry deltas, no intervening guest calls, and balanced argument/result pools and
 masking state. These checks establish this fixture's scope, not universal
 continuation correctness or allocation-free capture.
@@ -64,3 +69,23 @@ Initial focused default/dense passes were retained in resource logs
 capture failed because it constructed a FrameDescriptor in compiled code;
 `20260926-051910-1ztmxwb0` and its Graal diagnostic zip remain retained. The
 fix places dynamic continuation-root creation behind a Truffle boundary.
+
+The control-flow follow-up retains two actual failures: in
+`20260926-053113-din7uo2q`, native `resumedTail(-2)` returned 115 while the AST
+returned 15, because the tail trampoline bypassed the saved caller's `+100`.
+In `20260926-053424-0wjtmonb`, a captured local-join jump escaped as a host
+exception. Saved owner boundaries handle both transfers without weakening the
+expected results or entry counters. Frame-image and closed-context tests also
+check independent local copies, shared heap identity, and rejected foreign
+prompt/continuation use.
+
+The broader control-flow checks also caught a compilation regression before
+publication: adding capture handlers to ordinary 25-deep nonrecursive joins
+produced five-node compiled roots and no compiled entries. The exact published
+baseline passed that unchanged test (`20260926-054117-vka_f2n9`); a raw-entry
+restoration experiment did not fix the regression and was discarded. Capture
+handlers now follow the existing whole-linked-program delimited-control flag,
+keeping ordinary scalar/join graphs unchanged. The original 34-test
+continuation, tail, join, and handoff regression set then passed
+in default (`20260926-054517-3kkiyaot`) and dense handoff mode
+(`20260926-054616-bc11zf1a`). No test assertion or guest warmup was changed.

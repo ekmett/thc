@@ -290,7 +290,7 @@ internal class HandoffCaller(private val target: RootCallTarget, private val ent
 
     @CompilerDirectives.TruffleBoundary private fun releaseUnknown(state: HandoffState, input: HandoffStorage) { state.arguments.release(input) }
 
-    private fun trampoline(state: HandoffState, initial: HandoffTailCall): Any? {
+    internal fun trampoline(state: HandoffState, initial: HandoffTailCall): Any? {
         var transfer = initial
         while (true) {
             if (metrics.enabled) metrics.incrementTrampolineIterations()

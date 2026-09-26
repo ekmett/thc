@@ -11,6 +11,7 @@ import com.oracle.truffle.api.frame.FrameDescriptor
 import com.oracle.truffle.api.frame.MaterializedFrame
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.Node
+import com.oracle.truffle.api.nodes.ControlFlowException
 import thc.Language
 import java.util.IdentityHashMap
 
@@ -25,6 +26,25 @@ internal class DelimitedResume(val value: Any?, val failure: GuestException? = n
 internal interface DelimitedStep {
     fun resume(frame: MaterializedFrame, input: DelimitedResume, ambient: MaskingState,
                outerMask: DelimitedStep?): Any?
+}
+
+/** Lexical control transfers belong to their saved owner, not the resumer's
+ * ordinary trampoline. Otherwise they can silently discard caller suffixes. */
+internal interface DelimitedTransferStep : DelimitedStep {
+    fun accepts(transfer: ControlFlowException): Boolean
+    fun transfer(frame: MaterializedFrame, transfer: ControlFlowException, site: DelimitedActionSite): Any?
+}
+
+internal class DelimitedRootStep(private val root: FunctionRoot) : DelimitedTransferStep {
+    override fun resume(frame: MaterializedFrame, input: DelimitedResume, ambient: MaskingState,
+                        outerMask: DelimitedStep?): Any? = input.get()
+    override fun accepts(transfer: ControlFlowException): Boolean =
+        transfer === AstSelfCall || transfer is TailCall || transfer is HandoffTailCall
+    override fun transfer(frame: MaterializedFrame, transfer: ControlFlowException, site: DelimitedActionSite): Any? {
+        val result = root.resumeDelimited(frame, transfer, site)
+        DelimitedControl.captureBytecode(result, root.tupleResult)
+        return root.tupleResult?.let { ownedTupleResult(result, it) } ?: result
+    }
 }
 
 internal class DelimitedFrame(val frame: MaterializedFrame, val step: DelimitedStep)
@@ -53,12 +73,18 @@ internal fun copyContinuationFrame(frame: MaterializedFrame): MaterializedFrame 
 }
 
 internal class DelimitedBytecodeStep(private val saved: ContinuationResult,
-                                   private val shape: TupleShape?) : DelimitedStep {
+                                   private val shape: TupleShape?) : DelimitedTransferStep {
     override fun resume(frame: MaterializedFrame, input: DelimitedResume, ambient: MaskingState,
                         outerMask: DelimitedStep?): Any? {
         val answer = ContinuationResult.create(saved.continuationRootNode, frame, saved.result).continueWith(input)
         DelimitedControl.captureBytecode(answer, shape)
         return if (shape == null) answer else ownedTupleResult(answer, shape)
+    }
+    override fun accepts(transfer: ControlFlowException): Boolean = transfer is TailCall
+    override fun transfer(frame: MaterializedFrame, transfer: ControlFlowException, site: DelimitedActionSite): Any? {
+        val result = site.tail(transfer as TailCall)
+        DelimitedControl.captureBytecode(result, shape)
+        return if (shape == null) result else ownedTupleResult(result, shape)
     }
 }
 
@@ -128,8 +154,25 @@ internal class DelimitedStack(cut: DelimitedCut, private val outputShape: TupleS
             input = try { DelimitedResume(entry.step.resume(entry.frame, input, ambient, outerMask)) }
             catch (failure: GuestException) { DelimitedResume(null, failure) }
             catch (cut: DelimitedCut) { return transfer(site, cut, active.drop(index + 1), ambient, outerMask) }
+            catch (flow: ControlFlowException) {
+                return transferControl(site, flow, active.drop(index), ambient, outerMask)
+            }
         }
         return input.get()
+    }
+
+    private fun transferControl(site: DelimitedActionSite, flow: ControlFlowException,
+                                remaining: List<DelimitedFrame>, ambient: MaskingState,
+                                outerMask: DelimitedStep?): Any? {
+        val owner = remaining.indexOfFirst { it.step is DelimitedTransferStep && it.step.accepts(flow) }
+        if (owner < 0) throw flow
+        val entry = remaining[owner]
+        val after = remaining.drop(owner + 1)
+        val input = try { DelimitedResume((entry.step as DelimitedTransferStep).transfer(entry.frame, flow, site)) }
+        catch (failure: GuestException) { DelimitedResume(null, failure) }
+        catch (cut: DelimitedCut) { return transfer(site, cut, after, ambient, outerMask) }
+        catch (next: ControlFlowException) { return transferControl(site, next, after, ambient, outerMask) }
+        return run(site, after, input, ambient, outerMask)
     }
 
     private fun transfer(site: DelimitedActionSite, cut: DelimitedCut, remaining: List<DelimitedFrame>,
@@ -169,6 +212,8 @@ internal class DelimitedActionSite(private val language: Language, private val m
     @Child private var one = Dispatch.create(1, false, metrics)
     @Child private var two = Dispatch.create(2, false, metrics)
     @Child private var force = Force(metrics)
+    @Child private var trampoline = TailCallLoop(metrics)
+    fun tail(transfer: TailCall): Any? = trampoline.execute(transfer)
     fun invoke(frame: VirtualFrame, action: Any?, arguments: Array<Any?>, shape: TupleShape): Any? {
         val closure = requireClosure(force.execute(frame, action))
         val result = (if (arguments.size == 1) one else two).execute(frame, closure, arguments)
