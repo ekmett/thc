@@ -41,8 +41,12 @@ import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.ForeignBitcode (linkClockGetTime)
 import THC.Driver.GhcProxy (ghcProxyCommand)
-import THC.Driver.NativeRecipe (componentRoots, ensureNativeRecipes)
-import THC.Driver.ScalarBitcode (ScalarBitcode, withScalarBitcode, scalarBuildInputs, linkScalarBitcode)
+import THC.Driver.NativeRecipe (NativeRecipe(..), componentRoots, componentNativeObjects,
+  readNativeRecipe, ensureNativeRecipes, componentRuntimeShim)
+import THC.Driver.ScalarBitcode (ScalarBitcode, scalarBuildInputs, linkScalarBitcode)
+import THC.Driver.RuntimeShim (RuntimeShim, withRuntimeShim, runtimeShimInputs, validateRuntimeShimModules)
+import THC.Driver.PackageNative (captureNativeObject, capturePackageNative, finishPackageNative)
+import THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign
 import THC.Driver.Run (RunOptions(..))
@@ -81,7 +85,8 @@ data ExportContext = ExportContext
   , contextPluginLibrary :: FilePath, contextNative :: FilePath
   , contextCache :: FilePath, contextDriverHash :: String
   , contextGhc :: FilePath, contextGhcPkg :: Maybe FilePath
-  , contextDriver :: FilePath, contextRoot :: FilePath }
+  , contextDriver :: FilePath, contextRoot :: FilePath
+  , contextNativeTools :: Value }
 
 boundary :: String
 boundary = "optimized-Core-after-Tidy-before-CorePrep"
@@ -191,7 +196,8 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   setPermissions proxy (permissions {Directory.executable = True})
   inherited <- getEnvironment
   let overrides = [("THC_PROXY_DRIVER", driver), ("THC_PROXY_GHC", ghc),
-                   ("THC_PROXY_NATIVE_RECIPES", receipts), ("THC_PROXY_GLOBAL_UNITS", "")]
+                   ("THC_PROXY_NATIVE_RECIPES", receipts), ("THC_PROXY_GLOBAL_UNITS", ""),
+                   ("THC_PROXY_NATIVE_PIECES", native </> "cache/thc/native-pieces-v1")]
       environment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
       nativeBuild arguments = runCommandWithEnv True "cabal" arguments project (Just environment)
   nativeBuild nativeArguments
@@ -205,8 +211,9 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   arch <- field plan "arch"
   cacheRoot <- coreCacheDirectory
   driverHash <- digestFile driver
+  nativeTools <- nativeToolIdentity
   let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
-                              pluginLibrary native cacheRoot driverHash ghc ghcPkg driver thcRoot
+                              pluginLibrary native cacheRoot driverHash ghc ghcPkg driver thcRoot nativeTools
   records <- field plan "install-plan" :: IO [Value]
   units <- mapM readUnit records
   let byId = Map.fromList [(unitId unit, unit) | unit <- units]
@@ -730,7 +737,7 @@ globalLocation context unit = do
   let buildKey = shaHex (BL.toStrict (encode
         ("thc-core-store-build-v1" :: String, contextCompiler context,
          contextAbi context, contextPlatform context, unitId unit,
-         sourceHash, unitDepends unit)))
+         sourceHash, unitDepends unit, contextNativeTools context)))
   exporter <- exporterIdentity context
   let exportKey = shaHex (BL.toStrict (encode
         ("thc-core-export-v1" :: String, buildKey, exporter)))
@@ -778,6 +785,7 @@ prepareGlobalBundles context project target units = do
 captureGlobalUnits :: ExportContext -> FilePath -> String -> [Unit] ->
                       [(Unit, String, String, FilePath)] -> IO ()
 captureGlobalUnits context project target requested missing = do
+  helper <- prepareInterfaceHelper context (contextRoot context)
   let stagingRoot = contextNative context </> "cache/thc/staging"
   createDirectoryIfMissing True stagingRoot
   (staging, handle) <- openTempFile stagingRoot "store-export-"
@@ -808,6 +816,9 @@ captureGlobalUnits context project target requested missing = do
                      ("THC_PROXY_CAPTURE", capture),
                      ("THC_PROXY_PLUGIN_DB", contextPluginDb context),
                      ("THC_PROXY_PLUGIN_UNIT", contextPluginUnit context),
+                     ("THC_PROXY_NATIVE_PIECES", staging </> "native-pieces"),
+                     ("THC_PROXY_INTERFACE_HELPER", installedHelper helper),
+                     ("THC_PROXY_INTERFACE_LIBDIR", installedLibdir helper),
                      ("THC_PROXY_GLOBAL_UNITS", unlines (map unitId requested))]
         environment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
     runCommandWithEnv True "cabal" arguments project (Just environment)
@@ -861,7 +872,8 @@ packGlobalBundle store capture unit buildKey exportKey destination = do
       ("store Core artifact has wrong owner or boundary: " ++ path)
     bytes <- BS.readFile path
     pure (name, bytes)
-  let sorted = sortOn fst checked
+  linked <- finishPackageNative (takeDirectory capture </> "native-pieces") (capture </> unitId unit) (unitId unit) Nothing checked
+  let sorted = sortOn fst linked
       names = map fst sorted
   require (length names == length (nub names))
     ("duplicate exported store modules for " ++ unitId unit)
@@ -918,14 +930,27 @@ exportUnit :: ExportContext -> [FilePath] -> Map.Map String String -> Unit -> IO
 exportUnit context roots keys unit = do
   component <- readComponent unit context
   dist <- field (unitValue unit) "dist-dir"
-  withScalarBitcode (contextNative context) dist roots (componentCompiler component)
-    (maybe (takeDirectory (contextGhc context) </> "ghc-pkg") id (contextGhcPkg context))
-    (unitId unit) (componentValue component) $
-    exportConfiguredUnit context keys unit component
+  runtimeShim <- componentRuntimeShim (componentValue component)
+  if runtimeShim
+    then withRuntimeShim (contextNative context) dist roots (componentCompiler component)
+      (unitId unit) (componentValue component) $ \shim ->
+        exportConfiguredUnit context keys unit component Nothing (Just shim) Nothing
+    else do
+      -- Warm Cabal products may predate LLVM capture. Reuse their actual
+      -- compiler receipts while local sources/headers still exist.
+      objects <- componentNativeObjects (contextNative context) dist roots (componentValue component)
+      forM_ (filter ((== ".o") . takeExtension) objects) $ \path -> do
+        recipe <- readNativeRecipe (contextNative context </> "cache/thc/native-recipes-v1")
+          (componentCompiler component) path >>= maybe (fail "missing native compiler receipt") pure
+        Directory.withCurrentDirectory (recipeDirectory recipe) $
+          captureNativeObject (contextNative context </> "cache/thc/native-pieces-v1")
+            (componentCompiler component) (recipeArguments recipe)
+      exportConfiguredUnit context keys unit component Nothing Nothing (Just objects)
 
-exportConfiguredUnit :: ExportContext -> Map.Map String String -> Unit -> Component -> Maybe ScalarBitcode -> IO Bundle
-exportConfiguredUnit context keys unit component scalar = do
-  helper <- traverse (const (prepareInterfaceHelper context (contextRoot context))) scalar
+exportConfiguredUnit :: ExportContext -> Map.Map String String -> Unit -> Component -> Maybe ScalarBitcode -> Maybe RuntimeShim -> Maybe [FilePath] -> IO Bundle
+exportConfiguredUnit context keys unit component scalar runtimeShim nativeObjects = do
+  let retainedInterfaces = case (scalar, runtimeShim) of (Nothing, Nothing) -> Nothing; _ -> Just ()
+  helper <- traverse (const (prepareInterfaceHelper context (contextRoot context))) retainedInterfaces
   helperHash <- traverse (digestFile . installedHelper) helper
   dist <- field (unitValue unit) "dist-dir"
   let productFlags = ["-odir", "-hidir", "-hiedir", "-stubdir", "-outputdir"]
@@ -939,6 +964,8 @@ exportConfiguredUnit context keys unit component scalar = do
   nativeInputs <- forM products $ \path -> do
     digest <- digestFile path
     pure (makeRelative (contextNative context) path, digest)
+  nativePieces <- traverse
+    (nativePieceIdentity (contextNative context </> "cache/thc/native-pieces-v1")) nativeObjects
   let dependencies = [(identifier, Map.findWithDefault identifier identifier keys)
                      | identifier <- unitDepends unit]
       normalized = normalizePaths (contextNative context)
@@ -948,11 +975,14 @@ exportConfiguredUnit context keys unit component scalar = do
                                            "abi" .= contextAbi context,
                                            "platform" .= contextPlatform context],
                      "component" .= normalized (componentValue component),
+                     "nativeTools" .= contextNativeTools context,
                      "nativeArtifacts" .= [object ["path" .= path, "sha256" .= digest]
                                            | (path, digest) <- nativeInputs],
                      "dependencies" .= [object ["id" .= identifier, "buildKey" .= identity]
                                         | (identifier, identity) <- dependencies]] ++
-                    maybe [] (\recipe -> ["packageScalarRecipe" .= scalarBuildInputs recipe]) scalar
+                    maybe [] (\recipe -> ["packageNativeRecipe" .= normalized recipe]) nativePieces ++
+                    maybe [] (\recipe -> ["packageScalarRecipe" .= scalarBuildInputs recipe]) scalar ++
+                    maybe [] (\recipe -> ["runtimeShimRecipe" .= runtimeShimInputs recipe]) runtimeShim
       buildKey = shaHex (BL.toStrict (encode (object inputFields)))
   pluginHash <- digestFile (contextPluginLibrary context)
   let exporter = object $ ["pluginUnit" .= contextPluginUnit context,
@@ -980,11 +1010,11 @@ exportConfiguredUnit context keys unit component scalar = do
       Just bundle -> pure bundle
       Nothing -> do
         when cached (removeFile destination)
-        freshExport context component unit scalar helper buildKey exportKey buildInputs expected destination
+        freshExport context component unit scalar runtimeShim helper nativeObjects buildKey exportKey buildInputs expected destination
 
-freshExport :: ExportContext -> Component -> Unit -> Maybe ScalarBitcode -> Maybe InstalledContext -> String -> String -> Value ->
+freshExport :: ExportContext -> Component -> Unit -> Maybe ScalarBitcode -> Maybe RuntimeShim -> Maybe InstalledContext -> Maybe [FilePath] -> String -> String -> Value ->
                [String] -> FilePath -> IO Bundle
-freshExport context component unit scalar helper buildKey exportKey buildInputs expected destination = do
+freshExport context component unit scalar runtimeShim helper nativeObjects buildKey exportKey buildInputs expected destination = do
   let localRoot = contextNative context </> "cache/thc/staging"
   createDirectoryIfMissing True localRoot
   (staging, handle) <- openTempFile localRoot "export-"
@@ -994,7 +1024,7 @@ freshExport context component unit scalar helper buildKey exportKey buildInputs 
   let cleanup = do exists <- doesDirectoryExist staging
                    when exists (removePathForcibly staging)
   (do
-    let objects = staging </> "ghc"
+    let objects = staging </> "objects"
         core = staging </> "core"
     createDirectoryIfMissing True objects
     let arguments = ["--make", "-no-link"] ++ componentArguments component ++
@@ -1005,8 +1035,7 @@ freshExport context component unit scalar helper buildKey exportKey buildInputs 
            "-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:unit-qualified",
            "-fplugin-opt=THC.Plugin:source-notes",
            "-fplugin-opt=THC.Plugin:foreign-import-provenance",
-           "-dynamic", "-fforce-recomp", "-dcore-lint"] ++
-          maybe [] (const ["-fwrite-if-simplified-core", "-hisuf", "hi"]) scalar ++
+           "-dynamic", "-fforce-recomp", "-dcore-lint", "-fwrite-if-simplified-core", "-hisuf", "hi"] ++
           map snd (componentSources component)
     sourceDir <- field (componentValue component) "src-dir"
     runCommand True (componentCompiler component) arguments sourceDir
@@ -1023,11 +1052,24 @@ freshExport context component unit scalar helper buildKey exportKey buildInputs 
     let actual = sort (map fst checked)
     require (length actual == length (nub actual) && actual == expected)
       ("Core module inventory differs from Cabal build-info for " ++ unitId unit ++ ": " ++ show actual)
-    sorted <- case (scalar,helper) of
-      (Nothing,Nothing) -> pure (sortOn fst checked)
-      (Just recipe,Just selectedHelper) -> do
+    sorted <- case (scalar,runtimeShim,helper) of
+      (Nothing,Nothing,Nothing) -> do
+        selectedHelper <- prepareInterfaceHelper context (contextRoot context)
+        Directory.withCurrentDirectory sourceDir $
+          capturePackageNative (installedHelper selectedHelper) (installedLibdir selectedHelper)
+            (componentCompiler component) arguments (unitId unit) staging
+        updated <- forM exported $ \path -> do
+          value <- readJson path
+          name <- field value "module"
+          bytes <- BS.readFile path
+          pure (name,bytes)
+        sortOn fst <$> finishPackageNative (contextNative context </> "cache/thc/native-pieces-v1") staging (unitId unit) nativeObjects updated
+      (Just recipe,Nothing,Just selectedHelper) -> do
         retained <- scalarInterfaceModules selectedHelper component unit objects expected
         linkScalarBitcode recipe buildKey retained
+      (Nothing,Just shim,Just selectedHelper) -> do
+        retained <- scalarInterfaceModules selectedHelper component unit objects expected
+        validateRuntimeShimModules shim retained
       _ -> fail "scalar cbits interface helper missing"
     let members = [("core/" ++ show index ++ ".json", bytes)
                   | (index, (_, bytes)) <- zip [0 :: Int ..] sorted]

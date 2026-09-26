@@ -20,17 +20,24 @@ class PackageScalarForeignTest {
         null -> CoreKind.VOID
         "FloatRep" -> CoreKind.FLOAT
         "DoubleRep" -> CoreKind.DOUBLE
+        "AddrRep" -> CoreKind.ADDRESS
+        "ByteArray#", "MutableByteArray#" -> CoreKind.OBJECT
         else -> CoreKind.LONG
     }
+    private fun reps(rep: String?) = when (rep) {
+        "ByteArray#", "MutableByteArray#" -> listOf("BoxedRep (Just Unlifted)")
+        else -> listOfNotNull(rep)
+    }
     private fun scalar(rep: String?, evaluated: Boolean = true) =
-        mapOf("kind" to kind(rep).name.lowercase(), "primReps" to listOfNotNull(rep), "evaluated" to evaluated)
+        mapOf("kind" to kind(rep).name.lowercase(), "primReps" to reps(rep), "evaluated" to evaluated)
     private fun result(rep: String, evaluated: Boolean = true) = mapOf("kind" to "unknown", "primReps" to listOf(rep),
         "evaluated" to evaluated, "aggregate" to "unboxed-tuple", "components" to listOf(scalar(null), scalar(rep)))
     private fun link(unit: String, rep: String) = PackageScalarLink(unit, "unused", "", "", byteArrayOf(),
         listOf(PackageScalarSignature("stg_sig_install", "unused", listOf(rep), rep)))
 
     @Test fun exactWidthStateAndUnitProofsAreRequiredForAllScalarKinds() {
-        for (rep in listOf("Int32Rep", "Int64Rep", "FloatRep", "DoubleRep")) {
+        for (rep in listOf("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep",
+                "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep", "FloatRep", "DoubleRep")) {
             val link = link("first", rep)
             val target = mapOf("kind" to "static", "symbol" to "stg_sig_install", "unit" to "first", "isFunction" to true)
             val descriptor = mapOf("schema" to 1L, "target" to target, "convention" to "ccall", "safety" to "unsafe",
@@ -70,10 +77,36 @@ class PackageScalarForeignTest {
                 CoreRepresentation(CoreKind.VOID, present = true, primReps = emptyList()), null)
             assertThrows(RuntimeFault::class.java) {
                 CorePackageScalarForeign.validateOperand(admitted, 0, exact,
-                    CoreRepresentation(CoreKind.LONG, present = true, primReps = listOf("Word64Rep")))
+                    CoreRepresentation(CoreKind.LONG, present = true,
+                        primReps = listOf(if (rep == "Word64Rep") "Int64Rep" else "Word64Rep")))
             }
             assertThrows(RuntimeFault::class.java) {
                 CorePackageScalarForeign.validateOperand(admitted, 0, exact.copy(present = false), null)
+            }
+        }
+    }
+
+    @Test fun capiByteStorageAndAddressesKeepTheirExactVoidWorkerShape() {
+        for (rep in listOf("ByteArray#", "MutableByteArray#", "AddrRep")) {
+            val signature = PackageScalarSignature("wrapper", "unused", listOf(rep), "void", "capi")
+            val link = PackageScalarLink("first", "unused", "", "", byteArrayOf(), listOf(signature))
+            val output = mapOf("kind" to "unknown", "primReps" to emptyList<String>(), "evaluated" to true,
+                "aggregate" to "unboxed-tuple", "components" to listOf(scalar(null)))
+            val descriptor = mapOf("schema" to 1L, "target" to mapOf("kind" to "static", "symbol" to "wrapper",
+                "unit" to "first", "isFunction" to true), "convention" to "capi", "safety" to "unsafe",
+                "arity" to 2L, "suppliedArity" to 2L, "argumentReps" to listOf(scalar(rep, false), scalar(null, false)),
+                "resultRep" to (output + ("evaluated" to false)))
+            fun validate(first: Any? = scalar(rep), returned: Any? = output) = CorePackageScalarForeign.validate(
+                mapOf("foreignCall" to descriptor, "rep" to output), listOf(first, scalar(null)), listOf(false, false),
+                returned, listOf(link))
+            val call = validate()!!
+            assertEquals("void", call.result)
+            val exact = CoreRepresentation(kind(rep), present = true, primReps = reps(rep))
+            CorePackageScalarForeign.validateOperand(call, 0, exact, exact)
+            assertThrows(RuntimeFault::class.java) { validate(scalar("Word64Rep")) }
+            assertThrows(RuntimeFault::class.java) { validate(returned = result("Word64Rep")) }
+            assertThrows(RuntimeFault::class.java) {
+                validate(scalar(rep) + ("primReps" to listOf("BoxedRep (Just Lifted)")))
             }
         }
     }

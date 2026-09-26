@@ -5,6 +5,12 @@ bytecode backend contracts and the pinned GHC/Graal toolchain requirements.
 
 ## JVM runtime and primops
 
+- Public Haskell modules under `THC.Internal` denote potentially hazardous and
+  unstable interfaces. Mark them explicitly `Unsafe` for Safe Haskell; do not
+  re-export their raw controls from the `Safe` convenience facade. Use
+  `Trustworthy` only for audited typed wrappers around an unsafe implementation
+  boundary, with explicit exports and documented IO effects/authority. Test a
+  `Safe` client of the public API and rejection of hazardous internal imports.
 - Prefer Kotlin for handwritten JVM implementation. Keep Java where the Truffle
   Bytecode DSL, annotation processing, compiler behavior, or an actual Java/ABI
   boundary requires it; explain that requirement when adding Java code.

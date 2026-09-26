@@ -147,6 +147,12 @@ matched header-off run. Keep graph capture separate from timed measurements.
 
 ## Project integration
 
+[The Haskell runtime-service API](runtime-services.md) covers context permissions,
+thread/affinity observations, JVM memory/GC statistics, structured tracing and
+the explicitly `Unsafe` `THC.Internal.JIT` telemetry interface. Stable wrappers
+are available to Safe Haskell callers; JVM-specific services have explicit
+native-GHC unavailable results.
+
 [The driver guide](driver.md) covers the current bounded Cabal build/run path,
 including the optional complete-Core executable provider. Standalone `thc build`
 and `thc repl` commands are not implemented. The separate

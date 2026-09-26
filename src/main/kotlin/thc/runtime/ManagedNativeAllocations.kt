@@ -184,6 +184,15 @@ internal class ManagedNativeAllocations(private val env: TruffleLanguage.Env) {
     }
     @Synchronized internal fun liveCount(): Int = live.size
 
+    /** Requested bytes still owned by this registry, including an allocation
+     * whose free is waiting for active borrows. Excludes allocator overhead and
+     * every other native allocation service. Overflow must not look like bytes. */
+    @Synchronized @TruffleBoundary internal fun liveBytes(): Long {
+        var bytes = 0L
+        for (owner in live) bytes = Math.addExact(bytes, owner.size)
+        return bytes
+    }
+
     /** Pointer atomic results recover only existing context-owned allocations.
      * Unknown bits remain non-dereferenceable in NativeAddresses. */
     @Synchronized @TruffleBoundary internal fun recoverAddress(bits: Long): ManagedAddress? {

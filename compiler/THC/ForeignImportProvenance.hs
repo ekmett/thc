@@ -4,14 +4,15 @@
 -- | A closed producer profile for stock static-import C products. These are
 -- retained provenance records, not native links or execution capabilities.
 module THC.ForeignImportProvenance
-  ( Import(..), Call(..), Verdict(..), recordImports, inspectImports ) where
+  ( Import(..), ImportType(..), Call(..), Verdict(..), recordImports, inspectImports ) where
 
 import Control.Monad (unless)
 import Data.Data (Data)
 import Data.IORef (newIORef, readIORef)
-import Data.List (nub)
+import Data.List (elemIndex, nub)
 import GHC.Plugins
-import GHC.Core.TyCo.Rep (scaledThing)
+import GHC.Builtin.Types.Prim (byteArrayPrimTyCon, mutableByteArrayPrimTyCon)
+import GHC.Core.TyCo.Rep (Type(..), scaledThing)
 import GHC.Core.TyCo.Compare (eqType)
 import GHC.Cmm.CLabel (CStubLabel(..))
 import GHC.Data.OrdList (fromOL)
@@ -28,12 +29,21 @@ import GHC.Types.ForeignCall
 import GHC.Types.ForeignStubs
 import GHC.Types.RepType (typePrimRep_maybe, unwrapType)
 import qualified GHC.Unit.Module.WholeCoreBindings as Foreign
-import THC.ForeignExports (ExportName, ExportType, nameIdentity, typeIdentity)
+import THC.ForeignExports (ExportName, nameIdentity)
 import THC.ForeignExportProvenance (knownPipeline)
 
 data Call = Call String (Maybe String) String String [String] [String] deriving (Eq, Data)
+-- Imports may quantify the phantom state parameter of MutableByteArray#.
+-- Keep alpha-bound type identity without weakening the closed export profile.
+data ImportType
+  = ImportTyCon ExportName [ImportType]
+  | ImportApp ImportType ImportType
+  | ImportArrow ImportType ImportType ImportType
+  | ImportVariable Int
+  | ImportForall ImportType ImportType
+  deriving (Eq, Data)
 data Import = Import ExportName (Maybe String) String (Maybe String) Bool String String
-  ExportType ExportType Call deriving (Eq, Data)
+  ImportType ImportType Call deriving (Eq, Data)
 data Product = Product (Maybe (String,String,[(Bool,String,String,String)],[(Bool,String,String,String)]))
   [(String,String,String)] deriving (Eq, Data)
 data Evidence = Unclassified String | StockImports [Import] Product deriving Data
@@ -47,7 +57,7 @@ productOf (Foreign.IfaceForeign stubs files) = Product (fmap stub stubs) (map fi
       (header,source,map label initializers,map label finalizers)
     label (Foreign.IfaceCLabel value) = (csl_is_initializer value,
       unitString (moduleUnit (csl_module value)),moduleNameString (moduleName (csl_module value)),unpackFS (csl_name value))
-    file (Foreign.IfaceForeignFile language source extension) = (show language,source,extension)
+    file (Foreign.IfaceForeignFile sourceLanguage source extension) = (show sourceLanguage,source,extension)
 
 convention :: CCallConv -> String
 convention CCallConv = "ccall"
@@ -60,11 +70,28 @@ safetyName PlaySafe = "safe"
 safetyName PlayInterruptible = "interruptible"
 
 scalar :: Type -> Either String String
-scalar ty = case typePrimRep_maybe ty of
-  Just [] -> Right "void"
-  Just [primitive] | primitive `elem` [IntRep,WordRep,Int8Rep,Word8Rep,Int16Rep,Word16Rep,
-      Int32Rep,Word32Rep,Int64Rep,Word64Rep,AddrRep,FloatRep,DoubleRep] -> Right (show primitive)
-  _ -> Left "static-import producer requires concrete scalar foreign carriers"
+scalar ty
+  | Just (constructor, _) <- splitTyConApp_maybe (unwrapType ty), constructor == byteArrayPrimTyCon = Right "ByteArray#"
+  | Just (constructor, _) <- splitTyConApp_maybe (unwrapType ty), constructor == mutableByteArrayPrimTyCon = Right "MutableByteArray#"
+  | otherwise = case typePrimRep_maybe ty of
+      Just [] -> Right "void"
+      Just [primitive] | primitive `elem` [IntRep,WordRep,Int8Rep,Word8Rep,Int16Rep,Word16Rep,
+          Int32Rep,Word32Rep,Int64Rep,Word64Rep,AddrRep,FloatRep,DoubleRep] -> Right (show primitive)
+      _ -> Left "static-import producer requires concrete scalar or byte-array foreign carriers"
+
+importTypeIdentity :: Type -> Either String ImportType
+importTypeIdentity = go []
+  where
+    go bound = \case
+      TyConApp constructor arguments -> ImportTyCon <$> nameIdentity (tyConName constructor)
+        <*> traverse (go bound) arguments
+      AppTy function argument -> ImportApp <$> go bound function <*> go bound argument
+      FunTy { ft_af = FTF_T_T, ft_mult = multiplicity, ft_arg = argument, ft_res = result } ->
+        ImportArrow <$> go bound multiplicity <*> go bound argument <*> go bound result
+      TyVarTy variable -> maybe (Left "free type variable in static import") (Right . ImportVariable) (elemIndex variable bound)
+      ForAllTy binder body -> let variable = binderVar binder in
+        ImportForall <$> go bound (tyVarKind variable) <*> go (variable : bound) body
+      _ -> Left "static import type contains casts or constraints"
 
 callIn :: CoreExpr -> [Either String Call]
 callIn expression = case collectArgs expression of
@@ -148,8 +175,8 @@ recordImports options environment
           unless (idType binder `eqType` coercionRKind coercion && coercionRole coercion == Representational)
             (Left "foreign-import normalization disagrees with actual binder")
           identity <- nameIdentity (varName binder)
-          declared <- typeIdentity (idType binder)
-          normalized <- typeIdentity (coercionLKind coercion)
+          declared <- importTypeIdentity (idType binder)
+          normalized <- importTypeIdentity (coercionLKind coercion)
           pure (Import identity (fmap (\(Header _ name') -> unpackFS name') header) (unpackFS name)
             (unitString <$> unit) function (convention conv) (safetyName safe) declared normalized)
     classify _ = Left "non-static-c-import-declaration"

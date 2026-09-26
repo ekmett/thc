@@ -16,6 +16,7 @@ import GHC (getSessionDynFlags, getSession, parseDynamicFlags, setSessionDynFlag
 import GHC.Plugins (HscEnv, Module, Unit, hsc_logger, mkModule, mkModuleName, moduleUnit,
                     unitString, stringToUnit, stringToUnitId, liftIO)
 import GHC.Driver.Env (hsc_units)
+import GHC.Driver.DynFlags (DynFlags(ghcMode), GhcMode(OneShot))
 import GHC.Types.Unique.Map (lookupUniqMap)
 import GHC.Unit.Info (mkUnit)
 import GHC.Unit.State (wireMap, lookupUnitId, unwireUnit)
@@ -27,11 +28,12 @@ import THC.Interface
 data Options = Options
   { libdir :: FilePath, unit :: String, moduleName :: String, interface :: FilePath
   , way :: String, databases :: [FilePath], sourceNotes :: Bool, inventoryProbe :: Bool
+  , homeInterfaces :: Maybe FilePath
   }
 
 usage :: String
 usage = "thc-interface --libdir DIR --unit UNIT --module MODULE --interface FILE " ++
-  "[--way vanilla|dynamic|profiling] [--package-db DIR ...] [--source-notes]"
+  "[--way vanilla|dynamic|profiling] [--package-db DIR ...] [--source-notes] [--home-interfaces DIR]"
 
 parseOptions :: [String] -> Either String Options
 parseOptions = go Map.empty [] False False
@@ -46,13 +48,15 @@ parseOptions = go Map.empty [] False False
         (Left "Inventory probe does not accept a single interface or source notes")
       let w = Map.findWithDefault "vanilla" "--way" values
       unless (w `elem` ["vanilla", "dynamic", "profiling"]) (Left "Unsupported --way")
-      pure (Options l u m i w (reverse dbs) notes probe)
+      let home = Map.lookup "--home-interfaces" values
+      unless (not probe || home == Nothing) (Left "Inventory probe requires registered packages")
+      pure (Options l u m i w (reverse dbs) notes probe home)
     go values dbs False probe ("--source-notes":rest) = go values dbs True probe rest
     go values dbs notes False ("--probe-inventory":rest) = go values dbs notes True rest
     go values dbs notes probe ("--package-db":value:rest)
       | not (null value || "--" `isPrefixOf` value) = go values (value:dbs) notes probe rest
     go values dbs notes probe (key:value:rest)
-      | key `elem` ["--libdir", "--unit", "--module", "--interface", "--way"]
+      | key `elem` ["--libdir", "--unit", "--module", "--interface", "--way", "--home-interfaces"]
       , not (null value || "--" `isPrefixOf` value)
       , Map.notMember key values = go (Map.insert key value values) dbs notes probe rest
     go _ _ _ _ (argument:_) = Left ("Invalid, duplicate, or incomplete option: " ++ argument)
@@ -91,7 +95,12 @@ main = do
 
 loadSelected :: Options -> IO (Maybe String)
 loadSelected options = withSelected options $ \environment -> do
-  expected <- resolveModule environment (unit options) (moduleName options)
+  expected <- case homeInterfaces options of
+    Nothing -> resolveModule environment (unit options) (moduleName options)
+    -- Cabal has not registered a library while its --make invocation is still
+    -- running. Its explicit home unit and emitted .hi files supply ownership;
+    -- loadInterfaceCore still checks the binary interface's exact Module.
+    Just _ -> pure (mkModule (stringToUnit (unit options)) (mkModuleName (moduleName options)))
   loaded <- loadInterfaceCore environment expected (interface options)
   case loaded of
     Nothing -> pure Nothing
@@ -140,10 +149,12 @@ withSelected options action = runGhc (Just (libdir options)) $ do
         _ -> []
       flags = ["-clear-package-db", "-global-package-db", "-package-env", "-", "-fno-ignore-interface-pragmas"] ++
         concatMap (\database -> ["-package-db", database]) (databases options) ++
-        ["-package-id", unit options] ++ wayFlags
+        (case homeInterfaces options of
+          Nothing -> ["-package-id", unit options]
+          Just directory -> ["-this-unit-id", unit options, "-i", "-i" ++ directory]) ++ wayFlags
   (selected,leftovers,_) <- parseDynamicFlags (hsc_logger initial) original (map noLoc flags)
   unless (null leftovers) (liftIO (ioError (userError "Unconsumed interface helper flags")))
-  _ <- setSessionDynFlags selected
+  _ <- setSessionDynFlags (case homeInterfaces options of Nothing -> selected; Just _ -> selected {ghcMode=OneShot})
   environment <- getSession
   liftIO (action environment)
 

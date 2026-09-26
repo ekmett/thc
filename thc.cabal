@@ -126,7 +126,15 @@ extra-source-files:
   docs/ghc-core.md
   docs/interface-foreign.md
   docs/cpu-affinity-api.md
+  docs/runtime-services.md
   examples/THC/CpuAffinity.hs
+  examples/THC/RuntimeServices.hs
+  test/haskell-runtime/SafeClient.hs
+  test/haskell-runtime/UnsafeClient.hs
+  test/haskell-runtime/check-safe-haskell.sh
+  test/fixtures/run-runtime-services/cabal.project
+  test/fixtures/run-runtime-services/runtime-services-smoke.cabal
+  test/fixtures/run-runtime-services/Main.hs
   docs/original-posix-dup.md
   docs/original-termios.md
   docs/original-sigset.md
@@ -283,8 +291,17 @@ flag full-core-tests
 library runtime
   visibility: public
   hs-source-dirs: runtime
-  exposed-modules: THC
-  c-sources: runtime/cpu-affinity.c
+  exposed-modules:
+    THC
+    THC.Runtime
+    THC.Thread
+    THC.Memory
+    THC.GC
+    THC.Trace
+    THC.Internal.JIT
+  other-modules: THC.Runtime.Types, THC.Internal.RuntimeABI
+  c-sources: runtime/cpu-affinity.c, runtime/runtime-services.c
+  x-thc-runtime-shim: v1
   build-depends: base >= 4.22 && < 4.23
   default-language: Haskell2010
   ghc-options: -Wall
@@ -295,6 +312,16 @@ test-suite cpu-affinity-api
   type: exitcode-stdio-1.0
   main-is: Main.hs
   hs-source-dirs: test/haskell-affinity
+  build-depends: base >= 4.22 && < 4.23, thc:runtime
+  default-language: Haskell2010
+  ghc-options: -Wall -threaded
+  if flag(development)
+    ghc-options: -Werror
+
+test-suite runtime-services-api
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  hs-source-dirs: test/haskell-runtime
   build-depends: base >= 4.22 && < 4.23, thc:runtime
   default-language: Haskell2010
   ghc-options: -Wall -threaded
@@ -348,8 +375,11 @@ executable thc
     THC.Driver.Cabal
     THC.Driver.Cache
     THC.Driver.ForeignBitcode
+    THC.Driver.NativeCache
     THC.Driver.NativeRecipe
+    THC.Driver.PackageNative
     THC.Driver.ScalarBitcode
+    THC.Driver.RuntimeShim
     THC.Driver.GhcProxy
     THC.Driver.Installed
     THC.Driver.InstalledForeign
@@ -391,14 +421,20 @@ test-suite driver-tests
     StoreProjectTests
     EmptyStoreProjectTests
     ScalarBitcodeTests
+    PackageNativeTests
+    NativeCacheTests
     NativeRecipeTests
+    RuntimeShimTests
     InstalledForeignTests
     THC.Driver.GhcProxy
     THC.Driver.Installed
     THC.Driver.InstalledForeign
     THC.Driver.Lock
+    THC.Driver.NativeCache
     THC.Driver.NativeRecipe
+    THC.Driver.PackageNative
     THC.Driver.ScalarBitcode
+    THC.Driver.RuntimeShim
   build-tool-depends: thc:thc
   build-depends:
     base >= 4.22 && < 4.23,
@@ -664,6 +700,7 @@ executable thc-fixtures
     RtsDiagnosticFixtures
     OriginalOpenFixtures
     PackageScalarFixtures
+    HashableFfiFixtures
     OriginalTermiosFixtures
     OriginalTcsetattrFixtures
     OriginalTcgetattrFixtures
@@ -692,10 +729,14 @@ executable thc-fixtures
     THC.Driver.Cabal
     THC.Driver.Cache
     THC.Driver.ForeignBitcode
+    THC.Driver.NativeCache
     THC.Driver.NativeRecipe
+    THC.Driver.PackageNative
     THC.Driver.ScalarBitcode
     THC.Driver.Installed
+    THC.Driver.RuntimeShim
     THC.Driver.InstalledForeign
+    THC.Driver.GhcProxy
     THC.Driver.Lock
     THC.Driver.Json
     THC.Driver.Project

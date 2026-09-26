@@ -86,6 +86,27 @@ task: select only `testDense` to repeat that mode, or use `testHandoffModes
 compilation dependencies to run again. Existing `test` and its
 `JAVA_TOOL_OPTIONS` selection remain supported.
 
+### Generated instruction metadata
+
+The pinned Truffle 25.3.4.1 processor emits one large
+`BytecodeRootGen.Instructions.getArguments` method. Our operation inventory can
+exceed the JVM's 64 KiB method limit there. This is instruction introspection,
+not one giant primop executor. The processor offers no option to split it.
+
+[`gradle/bytecode-metadata.gradle.kts`](../gradle/bytecode-metadata.gradle.kts)
+splits complete case/return groups into bounded private helpers at the end of
+`kaptKotlin`, before Gradle snapshots that task's output. Every argument
+description is retained verbatim; the interpreter and primop implementations are
+untouched. There is no processor-JAR patch, metadata removal, extra dependency,
+or GHC requirement. The normalization is idempotent and rejects unrecognized
+generator shapes or processor versions; review it when upgrading Truffle.
+
+Run `./gradlew testBytecodeMetadataSplit` for compiled before/after opcode checks
+and malformed-input controls. Add
+`-Pthc.metadataFixture=/absolute/path/to/BytecodeRootGen.java` to compare every
+argument description in an existing generated source without modifying it.
+The check is also part of Gradle's `check` task.
+
 `scripts/try.sh --handoff-modes` prepares the full fixture set once and batches
 installation, diagnostic tools and both test forks. Native ABI probes still run
 once per Gradle graph because their complete host/compiler/header inputs are not

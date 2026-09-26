@@ -519,7 +519,10 @@ internal class ManagedAddress private constructor(
     /** Keep native lifetime and pointer-cell transport inside the existing
      * storage boundaries; no temporary Addr# view or raw owner alias escapes. */
     fun copyToByteArray(destination: Any?, destinationOffset: Long, count: Long) = withNativeBorrow {
-        requireRange(0, count)
+        // Empty ByteString uses nullAddr#. Its ordinary toShort path still
+        // emits a zero-byte copy, which does not read or need source storage.
+        // Retain all destination checks and every nonempty source check.
+        if (this !== NULL || count != 0L) requireRange(0, count)
         requireDistinctArray(destination)
         val destinationSize = ManagedByteArray.sizeGuest(destination)
         if (destinationOffset < 0 || destinationOffset > destinationSize || count > destinationSize - destinationOffset)
@@ -660,6 +663,16 @@ internal class ManagedAddress private constructor(
 
     companion object {
         private val NATIVE_BORROW_TIE = Any()
+        /** Hold every distinct native owner for one synchronous multi-pointer call. */
+        internal fun <T> withNativeBorrows(addresses: List<ManagedAddress>, body: () -> T): T {
+            val owners = addresses.mapNotNull { it.native }.distinct().sortedWith { first, second ->
+                Integer.compareUnsigned(System.identityHashCode(first), System.identityHashCode(second))
+            }
+            fun acquire(index: Int): T = if (index == owners.size) body()
+                else owners[index].borrow().use { acquire(index + 1) }
+            val collision = owners.zipWithNext().any { (a, b) -> System.identityHashCode(a) == System.identityHashCode(b) }
+            return if (collision) synchronized(NATIVE_BORROW_TIE) { acquire(0) } else acquire(0)
+        }
         private val NULL = ManagedAddress(null, null, 0L)
         fun nullAddress(): ManagedAddress = NULL
         internal fun fromNativeAllocation(owner: ManagedNativeAllocations.Owner): ManagedAddress =

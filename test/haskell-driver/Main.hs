@@ -11,7 +11,10 @@ import qualified ProjectTests
 import qualified StoreProjectTests
 import qualified EmptyStoreProjectTests
 import qualified ScalarBitcodeTests
+import qualified PackageNativeTests
+import qualified NativeCacheTests
 import qualified NativeRecipeTests
+import qualified RuntimeShimTests
 import qualified InstalledForeignTests
 import qualified TestSupportTests
 import TestSupport (setup)
@@ -22,7 +25,10 @@ main = do
   counts <- runTestTT $ TestList
     [ InstalledForeignTests.tests
     , ScalarBitcodeTests.tests
+    , PackageNativeTests.tests
+    , NativeCacheTests.tests
     , NativeRecipeTests.tests
+    , RuntimeShimTests.tests
     , InstalledForeignTests.viewTests env
     , TestSupportTests.tests
     , PlanTests.tests env

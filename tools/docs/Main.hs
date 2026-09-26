@@ -30,6 +30,7 @@ guides =
   , Guide "docs/core-package-manifest.md" "core-packages" "Core packages"
   , Guide "docs/interface-foreign.md" "interface-foreign" "Foreign artifacts"
   , Guide "docs/polyglot.md" "polyglot" "Polyglot calls"
+  , Guide "docs/runtime-services.md" "runtime-services" "Haskell runtime services"
   , Guide "docs/bytecode.md" "bytecode" "Bytecode backend"
   , Guide "docs/primop-behavior.md" "primop-behavior" "Primop behavior and limits"
   , Guide "docs/contributing.md" "contributing" "Development"
@@ -50,6 +51,16 @@ mascotAssets =
 isFragment :: FilePath -> Bool
 isFragment = (== "api/jvm/navigation.html")
 
+isHaddock :: FilePath -> Bool
+isHaddock path = any (`isPrefixOf` path) ["api/haskell/", "api/runtime/"]
+
+-- Haddock's instance-origin links name the actual defining module, even when
+-- that module is hidden. Keep that attribution without publishing private APIs.
+-- Only these exact module-page links may point to their tracked source instead.
+hiddenHaddockSources :: [(FilePath, FilePath)]
+hiddenHaddockSources =
+  [("api/runtime/THC-Runtime-Types.html", "runtime/THC/Runtime/Types.hs")]
+
 repo :: String
 repo = "https://github.com/ekmett/thc"
 
@@ -63,7 +74,7 @@ main = do
     ["build", revision, pandoc] -> do
       checkRevision revision
       checkSiteRoot
-      forM_ ["haskell", "jvm"] $ \kind -> do
+      forM_ ["haskell", "runtime", "jvm"] $ \kind -> do
         built <- Text.strip <$> Text.readFile ("build/docs" </> kind <.> "revision")
         unless (built == Text.pack revision) $ die (kind ++ " documentation is from a different revision")
       buildSite revision pandoc
@@ -90,6 +101,11 @@ checkSiteRoot = do
 
 buildSite :: String -> FilePath -> IO ()
 buildSite revision pandoc = do
+  forM_ hiddenHaddockSources $ \(_, source) -> do
+    exists <- doesFileExist source
+    tracked <- Text.strip . Text.pack <$> readProcess "git" ["ls-files", "--", source] ""
+    unless (exists && tracked == Text.pack source) $
+      die ("Hidden Haddock module source must exist and be tracked: " ++ source)
   -- Only this generated directory is replaced. Refuse a redirected destination.
   exists <- doesPathExist site
   when exists $ do
@@ -102,19 +118,21 @@ buildSite revision pandoc = do
   copyFile "docs/site/theme.js" (site </> "assets/theme.js")
   forM_ mascotAssets $ \name ->
     copyFile ("docs/site" </> name) (site </> "assets" </> name)
-  haskellFiles <- filesBelow "build/docs/haskell"
-  let roots = [takeDirectory p | p <- haskellFiles, takeFileName p == "THC-Plugin.html"]
-  haskellRoot <- case roots of
-    [root] -> pure root
-    _ -> die "Expected exactly one lib:thc Haddock output; run make docs-haskell"
-  copyTree haskellRoot (site </> "api/haskell")
+  forM_ [("haskell", "THC-Plugin.html", "lib:thc"),
+         ("runtime", "THC.html", "lib:runtime")] $ \(kind, marker, component) -> do
+    haskellFiles <- filesBelow ("build/docs" </> kind)
+    let roots = [takeDirectory p | p <- haskellFiles, takeFileName p == marker]
+    haskellRoot <- case roots of
+      [root] -> pure root
+      _ -> die ("Expected exactly one " ++ component ++ " Haddock output; run make docs-haskell")
+    copyTree haskellRoot (site </> "api" </> kind)
   copyTree "build/docs/jvm" (site </> "api/jvm")
   apiFiles <- filesBelow (site </> "api")
   forM_ (filter ((== ".html") . takeExtension) apiFiles) $ \path -> do
     let relative = makeRelative site path
     unless (isFragment relative) $ do
       html <- Text.readFile path
-      let repaired = if "api/haskell/" `isPrefixOf` relative then repairHaddock html else html
+      let repaired = if isHaddock relative then repairHaddock revision relative html else html
       enhanced <- stylePage revision relative repaired
       Text.writeFile path enhanced
   forM_ guides $ \guide@(Guide source _ title) -> renderGuide revision pandoc source (guidePath guide) title
@@ -129,8 +147,11 @@ buildSite revision pandoc = do
 -- dependency interfaces installed. Anchor the actual method declarations; do
 -- not exempt missing fragments from validation. Record selectors can also lack
 -- a source line: their pinned file URL remains useful without a dangling #L.
-repairHaddock :: Text.Text -> Text.Text
-repairHaddock html = Text.pack (renderTags (go anchors tags))
+-- "Defined in" module links are not entity-home links: Haddock 2.33 emits the
+-- original instance module even when hidden. Attribute the known private type
+-- module to its real source, leaving public reexports and arbitrary gaps alone.
+repairHaddock :: String -> FilePath -> Text.Text -> Text.Text
+repairHaddock revision page html = Text.pack (renderTags (go anchors tags))
   where
     tags = parseTags (Text.unpack html)
     anchors = Set.fromList [value | TagOpen _ attrs <- tags, ("id", value) <- attrs]
@@ -143,6 +164,9 @@ repairHaddock html = Text.pack (renderTags (go anchors tags))
     go seen (TagOpen tag attrs : rest) = TagOpen tag (map source attrs) : go seen rest
     go seen (tag : rest) = tag : go seen rest
     go _ [] = []
+    source ("href", url)
+      | Just path <- lookup (takeDirectory page </> url) hiddenHaddockSources =
+          ("href", repo ++ "/blob/" ++ revision ++ "/" ++ path)
     source ("href", url) | (repo ++ "/blob/") `isPrefixOf` url && "#L" `isSuffixOf` url =
       ("href", take (length url - 2) url)
     source attr = attr
@@ -183,7 +207,7 @@ stylePage revision page html = do
   let stylesheet = "<link rel=\"stylesheet\" href=\"" ++ fromPage page "assets/site.css" ++ "\">"
       theme = "<script src=\"" ++ fromPage page "assets/theme.js" ++ "\"></script>"
       metadata = "<meta name=\"thc-revision\" content=\"" ++ revision ++ "\">"
-      section = if "api/haskell/" `isPrefixOf` page then "haskell" else
+      section = if isHaddock page then "haskell" else
         if "api/jvm/" `isPrefixOf` page then "jvm" else "guide"
       (beforeBody, body) = Text.breakOn "<body" html
       (opening, remainder) = Text.breakOn ">" body
@@ -227,7 +251,8 @@ renderShell revision pages = do
         "<nav aria-label=\"THC documentation\"><p class=\"thc-nav-label\">Start</p>" ++
         item "home.html" "Overview" ++ "<p class=\"thc-nav-label\">Guides</p>" ++
         concatMap guideItem guides ++ "<p class=\"thc-nav-label\">Reference</p>" ++
-        item "api/haskell/index.html" "Haskell API" ++ item "api/jvm/index.html" "Runtime" ++
+        item "api/runtime/index.html" "Haskell runtime API" ++
+        item "api/haskell/index.html" "Compiler API" ++ item "api/jvm/index.html" "JVM internals" ++
         "</nav><div class=\"thc-rail-footer\">" ++
         "<p>Experimental · GHC 9.14.1 · GraalVM 25.3.4.1</p>" ++
         link (repo ++ "/tree/" ++ revision) "Source ↗" ++ " · " ++
@@ -316,8 +341,10 @@ checkSite revision = do
     pure (path, (anchors, urls))
   let failures = concat [checkURL inventory pages page url | (page, (_,urls)) <- Map.toList pages, url <- urls]
       required = ["index.html", "home.html", "assets/site.js", "assets/theme.js",
-        "api/jvm/index.html", "api/haskell/index.html",
+        "api/jvm/index.html", "api/haskell/index.html", "api/runtime/index.html",
         "api/haskell/THC-Plugin.html", "api/haskell/THC-Interface.html"] ++
+        map ("api/runtime" </>) ["THC.html", "THC-Runtime.html", "THC-Thread.html",
+          "THC-Memory.html", "THC-GC.html", "THC-Trace.html", "THC-Internal-JIT.html"] ++
         map ("assets" </>) mascotAssets ++ map guidePath guides
       excluded = [path | path <- Set.toList inventory, any (`isSuffixOf` path) [".bgv", ".log", ".zip", ".tar.xz"]]
       missing = [path | path <- required, Set.notMember path inventory]

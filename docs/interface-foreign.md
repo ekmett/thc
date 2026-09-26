@@ -37,7 +37,59 @@ metadata; a schema-1 document cannot hide a `foreign` field. The strict Core
 auditor applies the same reachability and global-obligation boundary. This
 does not change the ordinary source-plugin foreign-output contract.
 
-## Local package scalar C calls
+## Package-owned C and CAPI calls
+
+The `thc-package-c-ffi-v1` profile acquires ordinary local and Cabal-store
+packages without a package-name whitelist. It compiles the configured C sources
+and GHC's genuine retained CAPI wrappers with Clang, then links their LLVM into
+the Core bundle. Native Cabal compilation still uses the selected GHC and its
+configured native compiler. LLVM acquisition is a sensible second compilation,
+not a requirement to reproduce the native object's exact bytes.
+
+Initial support is static, unsafe `ccall`/`capi`, scalar arguments, `Addr#`,
+`ByteArray#` and `MutableByteArray#`, and a scalar or void result. Pure source
+imports and IO imports both retain GHC's actual State-token worker ABI. Pointer
+results, callbacks, safe/interruptible calls, additional foreign-file products,
+initializers/finalizers and extra native libraries remain outside this profile.
+Ordinary memory helpers supplied by Sulong/libc are allowed. C++ and assembly
+sources are not acquired by this initial C implementation.
+
+The source capture runs while Cabal's unpacked sources and generated headers
+still exist. `thc-interface --home-interfaces DIR` reads the exact just-emitted
+home-unit interfaces before Cabal registration, with normal dependency package
+databases and binary module-identity checks. No synthetic registration or
+inferred foreign declaration is substituted. Import provenance additionally
+retains alpha-bound state type variables; semantic byte-array carriers are
+derived from their GHC types, not guessed from an unlifted boxed RuntimeRep.
+
+`packageNativeLink` carries the unit, LLVM target/content digest, namespaced
+entry ABI and retained `buildInputs` compiler/source/header observations. Header
+content participates in the wrapper component identity; the final bitcode
+digest covers linked C implementations too. Actual CAPI definitions supply
+their C prototypes. Same-unit inlined calls share the component link and resolve
+against the complete unit's real declaration inventory, even when their own
+module declares no imports. Libraries and mutable byte-array backing storage
+remain context-owned; this profile does not authorize raw JVM addresses.
+
+Select LLVM tools with `THC_CLANG`, `THC_LLVM_LINK`, `THC_LLVM_OPT` and
+`THC_LLVM_NM`, or provide their ordinary executable names on `PATH`. The exact
+Linux x86_64 `pc` vendor alias is normalized to Sulong's `unknown` spelling;
+the observed native target remains in the recipe.
+
+Core bundle cache keys include the selected LLVM tool paths and executable
+contents, plus native include/SDK environment settings. Local component keys
+also include the exact currently owned C translation-unit receipts, captured
+source/header hashes and actual bitcode contents. Changed tools or a fresh C
+capture cannot reuse an older bundle just because Cabal's native objects are
+unchanged. Unrelated persistent receipts and dynamic-object twins do not add
+translation units. Missing LLVM tools are recorded without requiring them for
+pure-Haskell builds; acquisition diagnoses them when native code is needed.
+
+## Legacy local package scalar C calls
+
+Previously emitted `packageScalarLink` bundles remain readable. New ordinary
+package acquisition uses the more general profile above; the restrictions in
+this section describe the legacy producer only.
 
 The `thc-local-scalar-ccall-v1` link profile covers a registered local Cabal
 library component with one C translation unit and static, unsafe `ccall`
@@ -47,6 +99,13 @@ It does not admit pointers, callbacks, safe/interruptible imports, native RTS
 closures, initializers, destructors, global variables or additional native
 libraries. This is a bounded source-component path, not arbitrary installed
 Hackage cbits support.
+
+The public runtime library separately opts into the
+[`x-thc-runtime-shim: v1` compatibility profile](runtime-services.md#native-compatibility-shims-in-cabal-projects).
+It records its native fallback products without linking them into the guest,
+and validates every retained import and Core call against the exact reserved
+runtime-service signatures. This is not an expansion of generic scalar-C support
+or an exemption based on package name.
 
 The selected GHC remains Cabal's native compiler. THC uses Cabal's resolved
 flags, target platform and compiler version to select active native declarations.
@@ -93,6 +152,68 @@ destinations. Library loading and initial resolution remain behind boundaries.
 Foreign entry/exit retain their existing masking boundaries and scope storage.
 Compiled guest-entry validity does not establish Sulong inlining or
 allocation-free foreign calls; those claims require separate graph evidence.
+
+## Managed and native memory at the C boundary
+
+THC needs both bitcode operating on managed buffers and bitcode calling real
+host-native libraries, including mixed packages. These are not two mutually
+exclusive runtime modes: native-enabled Sulong can handle managed interop
+pointers and native pointers. Sulong's separate `--llvm.managed` sandbox mode
+prohibits host-native calls; using managed buffer views does not enable that
+mode. See [Sulong's native execution contract](https://www.graalvm.org/latest/reference-manual/llvm/NativeExecution/).
+
+The practical boundary is storage, not symbol lookup. A JVM-backed managed
+pointer is not a host machine address. The shared transport must preserve its
+allocation identity, offset, aliases, alignment and lifetime. A native call
+must not receive a temporary snapshot when it may retain a pointer, observe
+aliases, or mutate state used by later calls. Nor can a general adapter infer
+a buffer's required size or retention rules from an `AddrRep` alone.
+
+The intended general path is stable native backing for pinned/FFI allocations,
+accessed by THC primops, Sulong and host C as the same allocation. Ordinary
+non-escaping storage can remain managed. Scoped copies remain useful for
+explicitly bounded interfaces, such as the existing GMP limb provider, but
+are not a universal FFI policy. Opaque guest objects need handles and a
+separate re-entry contract, not pointer reinterpretation.
+
+Current support is narrower: managed package-C buffer views and separately
+owned native `malloc` addresses are implemented; generic native-backed pinned
+byte arrays, retained-pointer lifetimes and native callbacks remain work.
+The package-C acquisition path must eventually carry declared external native
+dependencies as well as bitcode. This design direction is not a claim that
+arbitrary mixed native packages already run.
+
+## Package C/CAPI calls
+
+The separate `thc-package-c-ffi-v1` profile extends the runtime link boundary
+for ordinary package C code. It accepts static, unsafe `ccall` and `capi`
+entries with machine-word and 8/16/32/64-bit signed/unsigned integers,
+`FloatRep`, `DoubleRep`, `AddrRep`, `ByteArray#` and `MutableByteArray#`
+arguments, and numeric or void results. Source-level pure imports still use
+GHC's emitted State-threaded foreign worker. A CAPI value import is executed
+through its original generated function wrapper.
+
+`packageNativeLink` retains the complete component ABI and bitcode identity;
+the original typed import declarations and CAPI source remain in the module.
+Modules containing only inlined calls contribute no invented declarations:
+their component's real import inventory must be present elsewhere in the
+merged bundle. Byte-array arguments are classified from the original GHC
+types; an arbitrary unlifted object is not accepted as byte storage.
+
+The runtime writes numeric results directly into the lowered carriers and
+preserves unsigned low bits at narrow C boundaries. Mutable managed buffers
+remain shared across calls rather than being copied per invocation. Owned
+native addresses are borrowed through synchronous return. This first slice
+does not support safe/interruptible calls, pointer results, retained pointers,
+callbacks, foreign exports, initialization/finalization or arbitrary extra
+native libraries. Within one call, aliases share their allocation transport and
+a small C bridge produces Sulong's allocation-relative pointer, preserving C
+pointer equality, distances, and backward access from an interior address.
+Read-only and writable arguments to the same allocation share identity; a
+permitted writable alias permits writes to that shared storage, while genuinely
+immutable allocations remain read-only. The original Hashable XXH3 end-to-end
+fixture remains integration work; focused C buffer tests alone are not evidence
+that Hashable or Pandoc runs.
 
 ## Why compiling the stubs through Sulong is insufficient
 

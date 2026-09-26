@@ -148,6 +148,57 @@ class CpuAffinityQueryTest(unittest.TestCase):
             self.assertTrue(self.inspect(call, state, shadow=True).issues)
 
 
+class RuntimeServicesQueryTest(unittest.TestCase):
+    def calls(self):
+        descriptors = json.loads((ROOT.parent / 'src/test/resources/core/runtime-services-descriptors.json').read_text())
+        self.assertEqual(set(CAP['runtimeServiceCalls']), set(descriptors))
+        for symbol, primitives in CAP['runtimeServiceCalls'].items():
+            declaration = descriptors[symbol]
+            proofs = declaration['argumentReps']
+            self.assertEqual(len(primitives), len(proofs))
+            result = declaration['resultRep']
+            bound = {f'a{i}': dict(proof, evaluated=True) for i, proof in enumerate(proofs)}
+            expression = ['app', ['var', 'service', dict(rep=CLOSURE)],
+                          [['var', key, dict(rep=proof)] for key, proof in bound.items()],
+                          [False] * len(proofs), False, False,
+                          dict(rep=dict(result, evaluated=True), foreignCall=declaration)]
+            yield expression, bound
+
+    def inspect(self, expression, bound, package=False):
+        audit = audit_core.Audit([], CAP)
+        if package:
+            audit.package_scalar_links['main'] = dict(unit='main', abi=[])
+        audit.polyglot_call(expression, bound, 'root', 'root')
+        return audit
+
+    def test_exact_reserved_calls_precede_native_compatibility_package(self):
+        for expression, bound in self.calls():
+            for package in (False, True):
+                audit = self.inspect(expression, bound, package)
+                self.assertEqual([], audit.issues)
+                self.assertEqual(1, len(audit.foreign_calls))
+
+    def test_foreign_abi_and_shadowed_names_reject(self):
+        for expression, bound in self.calls():
+            for key, value in (('schema', True), ('arity', True), ('suppliedArity', 0),
+                               ('convention', 'javascript'), ('safety', 'safe'), ('resultRep', LONG)):
+                changed = copy.deepcopy(expression)
+                changed[6]['foreignCall'][key] = value
+                self.assertTrue(self.inspect(changed, bound).issues, key)
+            self.assertTrue(self.inspect(expression, dict(bound, service=CLOSURE)).issues)
+            changed = copy.deepcopy(expression)
+            changed[3][0] = True
+            self.assertTrue(self.inspect(changed, bound).issues)
+
+    def test_wrong_width_and_erased_stored_operand_reject(self):
+        for expression, bound in self.calls():
+            for index, key in enumerate(bound):
+                bad = copy.deepcopy(expression)
+                bad[2][index][2]['rep'] = LONG
+                self.assertTrue(self.inspect(bad, bound).issues, key)
+                self.assertTrue(self.inspect(expression, dict(bound, **{key: LONG})).issues, key)
+
+
 class PackageScalarOperandTest(unittest.TestCase):
     """Call-proof controls only; no invented component or bitcode is executed."""
     def call(self, primitive):
@@ -193,7 +244,25 @@ class PackageScalarOperandTest(unittest.TestCase):
         del altered[6]['rep']
         self.assertIn('exact scalar/State ABI', str(self.inspect(abi, altered, stored)))
 
-
+    def test_package_capi_byte_storage_address_and_void_shapes(self):
+        for rep in ('ByteArray#', 'MutableByteArray#', 'AddrRep'):
+            abi, expression, _ = self.call('Word64Rep')
+            stored = dict(kind='address' if rep == 'AddrRep' else 'object',
+                          primReps=['AddrRep'] if rep == 'AddrRep' else ['BoxedRep (Just Unlifted)'], evaluated=True)
+            abi.update(arguments=[rep], result='void', convention='capi')
+            state = dict(kind='void', primReps=[], evaluated=True)
+            output = dict(kind='unknown', primReps=[], aggregate='unboxed-tuple', evaluated=True, components=[state])
+            expression[2][0][2]['rep'] = stored
+            expression[6]['rep'] = output
+            expression[6]['foreignCall'].update(convention='capi',
+                argumentReps=[dict(stored, evaluated=False), dict(state, evaluated=False)],
+                resultRep=dict(output, evaluated=False))
+            self.assertEqual([], self.inspect(abi, expression, stored), rep)
+            self.assertIn('stored operand', str(self.inspect(abi, expression,
+                dict(stored, primReps=['BoxedRep (Just Lifted)']))), rep)
+            altered = copy.deepcopy(expression)
+            altered[6]['rep']['components'].append(dict(kind='long', primReps=['Word64Rep'], evaluated=True))
+            self.assertIn('exact scalar/State ABI', str(self.inspect(abi, altered, stored)), rep)
 class ArchiveReachabilityTest(unittest.TestCase):
     def report(self, expression, initializers=(), finalizers=(), files=()):
         root = dict(schema=1, ghc='9.14.1', bindings=[bind('root', expression)], constructors=[])

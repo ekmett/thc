@@ -91,7 +91,8 @@ object CoreModules {
             count++
             if (admission != null) admissions.add(admission)
             CoreForeignArtifacts.validateArchive(module)
-            PackageScalarLinks.read(module)?.let { admission ->
+            val packageLink = PackageScalarLinks.read(module)
+            packageLink?.let { admission ->
                 val link = admission.link
                 require(packageScalarLinks.values.none { it.unit != link.unit && it.componentSha256 == link.componentSha256 }) {
                     "Package C entry namespace belongs to another unit: ${link.componentSha256}"
@@ -103,8 +104,8 @@ object CoreModules {
             val link = CoreForeignArtifacts.linked(module)
             val archiveOnly = module["schema"] == 2L || module["schema"] == 2
             val managedExport = admission != null
-            val managedImports = ManagedImportAdmission.read(module) != null
-            if (archiveOnly && link == null && !managedExport && !managedImports && CoreForeignArtifacts.hasRegistrationObligations(module))
+            val managedImports = packageLink == null && ManagedImportAdmission.read(module) != null
+            if (archiveOnly && link == null && packageLink == null && !managedExport && !managedImports && CoreForeignArtifacts.hasRegistrationObligations(module))
                 CoreForeignArtifacts.requireExecutable(module)
             link?.let {
                 require(foreignLinks.putIfAbsent(link.unit to link.module, link) == null) {
@@ -133,7 +134,7 @@ object CoreModules {
             for (b in module["bindings"] as List<Map<String, Any?>>) {
                 val id = b["id"] as String
                 require(bindings.putIfAbsent(id, b) == null) { "Duplicate binding: $id" }
-                if (archiveOnly && link == null && !managedExport && !managedImports)
+                if (archiveOnly && link == null && packageLink == null && !managedExport && !managedImports)
                     archiveBindings[id] = "${module["unit"]}:${module["module"]}"
                 // The merged bundle has no single unit/module. Preserve the exact
                 // exporting module for globally named bindings; synthetic entries
@@ -389,6 +390,8 @@ class Language : TruffleLanguage<Language.State>() {
         internal val maskingState = ThreadLocal.withInitial { thc.runtime.MaskingState.UNMASKED }
         internal val stackAnnotations = ThreadLocal.withInitial { thc.runtime.StackAnnotationState.EMPTY }
         internal val threads = thc.runtime.GuestThreads(env, maskingState)
+        internal val runtimeTrace = thc.runtime.RuntimeTraceServices(env.err())
+        internal val runtimeJit = thc.runtime.RuntimeJitServices(language)
         @JvmField internal val stm = thc.runtime.ManagedSTM()
         internal val files = thc.runtime.ManagedFiles(env, threads)
         internal val rtsFileLocks = thc.runtime.RtsFileLocks()
@@ -490,6 +493,7 @@ class Language : TruffleLanguage<Language.State>() {
         try { context.signals.close() } finally { context.iconv.dispose() }
     }
     override fun disposeContext(context: State) {
+        try { context.runtimeJit.close() } finally { context.runtimeTrace.close() }
         context.compactImages.close()
         context.heapAddresses.close()
         context.managedExports.close()

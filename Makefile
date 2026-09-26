@@ -52,6 +52,15 @@ docs-haskell:
 	  --haddock-option='--source-module=https://github.com/ekmett/thc/blob/$(DOCS_REVISION)/compiler/%{MODULE/.//}.hs' \
 	  --haddock-option='--source-entity=https://github.com/ekmett/thc/blob/$(DOCS_REVISION)/compiler/%{MODULE/.//}.hs#L%L'
 	@printf '%s\n' '$(DOCS_REVISION)' > build/docs/haskell.revision
+	$(CABAL) haddock lib:runtime $(DOCS_CABAL_FLAGS) --haddock-html --haddock-quickjump \
+	  --haddock-output-dir='$(CURDIR)/build/docs/runtime' \
+	  --haddock-html-location='https://hackage.haskell.org/package/$$pkg-$$version/docs' \
+	  --haddock-option=--built-in-themes \
+	  --haddock-option='--theme=$(CURDIR)/docs/site/haddock.css' \
+	  --haddock-option='--source-base=https://github.com/ekmett/thc/tree/$(DOCS_REVISION)/runtime' \
+	  --haddock-option='--source-module=https://github.com/ekmett/thc/blob/$(DOCS_REVISION)/runtime/%{MODULE/.//}.hs' \
+	  --haddock-option='--source-entity=https://github.com/ekmett/thc/blob/$(DOCS_REVISION)/runtime/%{MODULE/.//}.hs#L%L'
+	@printf '%s\n' '$(DOCS_REVISION)' > build/docs/runtime.revision
 
 docs-jvm: check-java
 	./gradlew dokkaGeneratePublicationHtml $(GRADLE_FLAGS) --max-workers=2 -Pthc.docsRevision='$(DOCS_REVISION)'

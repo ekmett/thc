@@ -31,6 +31,7 @@
   function active(page) {
     const path = page.split(/[?#]/, 1)[0];
     const section = path.startsWith("api/haskell/") ? "api/haskell/index.html" :
+      path.startsWith("api/runtime/") ? "api/runtime/index.html" :
       path.startsWith("api/jvm/") ? "api/jvm/index.html" : path;
     document.querySelectorAll(".thc-nav-link[data-page]").forEach(link => {
       if (link.dataset.page === section) link.setAttribute("aria-current", "page");

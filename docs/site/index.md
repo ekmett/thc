@@ -42,6 +42,11 @@ Running on Truffle also gives Haskell a route into other languages. The
 [JavaScript example](../polyglot.md) already supports `foreign import javascript`.
 The [embedding guide](embedding.md) describes the current JVM entrypoints for
 loading and calling accepted Haskell code from Java or Kotlin.
+The public [`thc:runtime` library](../runtime-services.md) gives Haskell programs
+typed access to runtime identity, thread and CPU-affinity information, memory
+and GC statistics, structured tracing, and optional JIT diagnostics. Unavailable
+services are explicit; JVM-wide statistics are distinguished from context-local
+measurements.
 
 ## Build it today
 
@@ -116,10 +121,14 @@ primop; implementation coverage is not a claim of identical GHC RTS behavior.
 
 The guides cover [Cabal integration](../cabal.md),
 [package bundles](../core-package-manifest.md),
-[the bytecode backend](../bytecode.md), and [development](../contributing.md).
-The Haskell API documents `THC.Plugin` and `THC.Interface`; the Runtime reference
-combines Kotlin KDoc and Java Javadoc. Runtime nodes and storage classes are
-implementation details, not a stable embedding API.
+[the bytecode backend](../bytecode.md), [runtime services](../runtime-services.md),
+and [development](../contributing.md).
+The Haskell runtime API documents the public `THC` namespace; the separate
+compiler API covers `THC.Plugin` and `THC.Interface`. `THC.Internal.JIT` is
+intentionally unstable and `Unsafe` for Safe Haskell: `.Internal` names are not
+stable interfaces. The JVM-internals reference combines Kotlin KDoc and Java
+Javadoc. Runtime nodes and storage classes are implementation details, not a
+stable embedding API.
 
 The [source repository](../../README.md) includes the full
 [documentation archive](../), [benchmark evidence](../../bench/) and

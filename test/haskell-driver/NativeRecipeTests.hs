@@ -17,12 +17,41 @@ import System.IO.Error (tryIOError)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import THC.Driver.NativeRecipe
 import THC.Driver.ScalarBitcode (withScalarBitcode)
+import THC.Driver.RuntimeShim (withRuntimeShim)
 
 tests :: Test
 tests = TestLabel "actual native compiler receipts" $ TestList
   [ TestCase $ do
       let args = ["-c", "cbits/a café.c", "-I/a \"quoted\" path", "-DVALUE=\\x"]
       assertEqual "GHC response quoting preserves complete arguments" args (unescapeArgs (escapeArgs args))
+  , TestCase $ withScratch $ \root -> withCurrentDirectory root $ do
+      let native = root </> "native"
+          dist = native </> "build"
+          receipts = native </> "cache/thc/native-recipes-v1"
+          component = metadata root dist
+          package marker = unlines
+            ["cabal-version: 3.0", "name: proof", "version: 0.1", "build-type: Simple", "library",
+             "  exposed-modules: Proof", "  build-depends: base", "  c-sources: cbits/proof.c cbits/other.c",
+             "  x-thc-runtime-shim: " ++ marker]
+      createDirectoryIfMissing True (dist </> "cbits")
+      createDirectoryIfMissing True "cbits"
+      compiler <- canonicalizePath "/unused"
+      writeFile "proof.cabal" (package "v1")
+      forM_ ["proof", "other"] $ \name -> do
+        let source = "cbits" </> name <.> "c"
+        writeFile source "native fallback model"
+        writeFile (dist </> "cbits" </> name <.> "o") "object model"
+        captureNativeRecipe receipts compiler ["-c", source, "-odir", dist]
+      selected <- componentRuntimeShim component
+      assertBool "exact explicit runtime shim profile selected" selected
+      ensureNativeRecipes native dist [dist] compiler component (fail "fresh model receipts must not rebuild")
+      withRuntimeShim native dist [dist] compiler "proof-unit" component (const (pure ()))
+      removeFile (dist </> "cbits/other.o")
+      incomplete <- tryIOError $ withRuntimeShim native dist [dist] compiler "proof-unit" component (const (pure ()))
+      assertBool "a remaining good object cannot conceal another declared C source" (isLeft incomplete)
+      writeFile "proof.cabal" (package "v2")
+      unknown <- tryIOError (componentRuntimeShim component)
+      assertBool "unknown runtime shim profile version is rejected" (isLeft unknown)
   , TestCase $ withScratch $ \root -> do
       let dist = root </> "build"
           configured flags platform compiler = case metadata root dist of
@@ -103,7 +132,7 @@ tests = TestLabel "actual native compiler receipts" $ TestList
       before <- readIORef calls
       omitted <- tryIOError ensure
       assertBool "two declared sources cannot reuse one surviving object and receipt" (isLeft omitted)
-      assertEqual "unsupported declaration inventory rejects before rebuilding" before =<< readIORef calls
+      assertEqual "incomplete multiple-source inventory attempts one targeted rebuild" (before + 1) =<< readIORef calls
       writePackage root True
       let child = dist </> "exe/exe-tmp"
       createDirectoryIfMissing True child

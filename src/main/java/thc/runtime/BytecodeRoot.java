@@ -1319,6 +1319,20 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = BytecodePackageScalarArguments.class, name = "arguments")
+    public static final class LinkedPackageVoid {
+        @Specialization public static void call(VirtualFrame frame, BytecodePackageScalarArguments arguments,
+                @Bind("$node") Node node,
+                @Cached(value = "createAccess(arguments)", neverDefault = true) PackageScalarAccess access) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            access.executeVoid(arguments.read(bytecode, frame), arguments.state(bytecode, frame));
+        }
+        public static PackageScalarAccess createAccess(BytecodePackageScalarArguments arguments) {
+            return new PackageScalarAccess(arguments.getCall());
+        }
+    }
+
+    @Operation
     public static final class NativeFree {
         @Specialization public static void apply(ManagedAddress address, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
@@ -3261,7 +3275,6 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             throw fail("Expected managed Addr# for RTS shared CAF store");
         }
     }
-    /** Public query declarations use the same tuple destination as ordinary CInt IO calls. */
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = boolean.class, name = "applied")
@@ -3271,7 +3284,39 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             TupleResultsKt.requireVoidCarrier(state);
             GuestThreads threads = GuestThreads.current(node);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                    applied ? (threads.currentIdentity().getAffinityApplied() ? 1L : 0L) : threads.getCpuAffinity().getMode().ordinal());
+                    applied ? (threads.currentIdentity().getAffinityApplied() ? 1L : 0L)
+                            : threads.getCpuAffinity().getMode().ordinal());
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class RuntimeServiceQuery {
+        @Specialization public static void query(VirtualFrame frame, LocalAccessor destination,
+                long selector, long index, long detail, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    RuntimeServices.query(node, 2, (int) selector, index, detail));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class RuntimeServiceControl {
+        @Specialization public static void control(VirtualFrame frame, LocalAccessor destination,
+                long selector, long setting, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    RuntimeServices.control(node, (int) selector, setting));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class RuntimeServiceTrace {
+        @Specialization public static void trace(VirtualFrame frame, LocalAccessor destination,
+                long operation, long token, ManagedAddress address, long length, Object state,
+                @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    RuntimeServices.trace(node, (int) operation, token, address, length));
         }
     }
     /** Original thread queries. Neither capability support nor accounting enforces a limit. */

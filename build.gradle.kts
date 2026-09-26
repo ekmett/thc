@@ -86,6 +86,7 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     polyglotDemoRuntime("org.graalvm.polyglot:js:$graalVersion")
 }
+apply(from = "gradle/bytecode-metadata.gradle.kts")
 kotlin {
     jvmToolchain(25)
     // Kotlin's generated null-check failures inline stack-trace sanitization into
@@ -524,6 +525,27 @@ tasks.register<Test>("packageScalarFullCoreTest") {
         }
     }
 }
+for ((taskName, dense) in listOf("hashableFfiFullCoreDefault" to false, "hashableFfiFullCoreDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests original Hashable byte-backed instances against native GHC, including first compiled entries."
+        // The genuine manifest includes full original boot-library Core.
+        maxHeapSize = "8g"
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        inputs.files(fileTree("build/hashable-ffi") { include("**/*.json", "bundles/*.zip", "logs/*.stdout", "logs/*.stderr") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.HashableFfiFullCoreTest") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Native Hashable FFI and first-compiled evidence requires a fresh process") { true }
+        doFirst {
+            check(file("build/hashable-ffi/manifest.json").isFile) {
+                "Select full-Core GHC 9.14.1/configured Clang and run cabal run exe:thc-fixtures -- hashable-ffi"
+            }
+        }
+    }
+}
 tasks.register<Test>("simdFamiliesExperimentTest") {
     group = "verification"
     description = "Runs the prepared generated SIMD Core, native-oracle, and compiled-path experiment."
@@ -600,7 +622,7 @@ tasks.withType<JavaCompile>().configureEach { options.compilerArgs.addAll(listOf
 // remains an optional execution path; no native pointer is exposed to Core.
 val compileCbits by tasks.registering(Exec::class) {
     inputs.files("scripts/build-cbits.py", "src/main/c/md5-api.c", "src/main/c/iconv-api.c",
-        "src/main/c/strerror-locale.c", "src/main/c/libdw-unavailable.c",
+        "src/main/c/strerror-locale.c", "src/main/c/libdw-unavailable.c", "src/main/c/package-pointer-api.c",
         "compiler/pinned-ghc-internal/cbits/strerror.c",
         "src/main/c/gmp-api.c",
         "bench/experiments/pinned-addresses/reference/md5.c",
