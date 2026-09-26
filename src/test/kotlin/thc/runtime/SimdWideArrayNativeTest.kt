@@ -25,16 +25,17 @@ import java.util.IdentityHashMap
 class SimdWideArrayNativeTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = "build/simd-wide-arrays"
-    private val shapes = listOf("int16X16","word16X16","int32X8","word32X8","int32X16","word32X16","int64X4","word64X4","int64X8","word64X8","floatX8","floatX16","doubleX4","doubleX8")
+    private val shapes = listOf("int8X32","word8X32","int8X64","word8X64","int16X32","word16X32",
+        "int16X16","word16X16","int32X8","word32X8","int32X16","word32X16","int64X4","word64X4","int64X8","word64X8","floatX8","floatX16","doubleX4","doubleX8")
     private val entries = shapes.flatMap { shape -> listOf("Index","Read","Write").flatMap { op ->
         listOf("Packed","Scalar").map { shape+op+it }
     } }
     private val seeds = listOf(Long.MIN_VALUE,-129L,-1L,0L,1L,127L,65535L,Long.MAX_VALUE)
-    private val pattern = Regex("(int16|word16|int32|word32|int64|word64|float|double)X(\\d+)(Index|Read|Write)(Packed|Scalar)")
+    private val pattern = Regex("(int8|word8|int16|word16|int32|word32|int64|word64|float|double)X(\\d+)(Index|Read|Write)(Packed|Scalar)")
     private data class Input(val entry: String, val seed: Long, val offset: Long)
     private fun fields(entry: String) = pattern.matchEntire(entry)!!.groupValues
     private fun width(entry: String) = when (val scalar = fields(entry)[1]) {
-        "float" -> 4; "double" -> 8; else -> scalar.takeLast(2).toInt()/8
+        "float" -> 4; "double" -> 8; else -> scalar.dropWhile { !it.isDigit() }.toInt()/8
     }
     private fun size(entry: String) = width(entry)*fields(entry)[2].toInt()*3
     private val requests = entries.flatMap { entry ->
@@ -85,8 +86,8 @@ class SimdWideArrayNativeTest {
         assertEquals(ByteOrder.LITTLE_ENDIAN, ByteOrder.nativeOrder(), "Pinned SIMD wide oracle platform")
         val proof = read("$directory/manifest.json")
         assertEquals(1L,proof["schema"]); assertEquals("9.14.1",proof["ghc"])
-        assertEquals(entries,proof["entries"]); assertEquals(2016L,proof["requests"])
-        assertEquals(2016L,proof["nativeRows"])
+        assertEquals(entries,proof["entries"]); assertEquals(2880L,proof["requests"])
+        assertEquals(2880L,proof["nativeRows"])
         assertEquals("scalar-lane",proof["nativeMode"])
         for (kind in listOf("inputHashes","artifactHashes")) {
             val files = proof[kind] as Map<String,String>; assertTrue(files.isNotEmpty())

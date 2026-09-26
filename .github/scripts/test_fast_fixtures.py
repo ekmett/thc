@@ -154,13 +154,13 @@ class FixturePreparationTest(unittest.TestCase):
         for item in cache.SIMD_ADDRESS_OUTPUTS - {name}:
             path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
-        receipt = dict(schema=1, ghc='9.14.1', entries=list(cache.SIMD_ADDRESS_ENTRIES), scalarRows=2592,
+        receipt = dict(schema=1, ghc='9.14.1', entries=list(cache.SIMD_ADDRESS_ENTRIES), scalarRows=3456,
             nativeVector128Rows=576 if cache.SIMD_ADDRESS_NATIVE128 else 0,
             stages={stage: {} for stage, _ in cache.SIMD_ADDRESS_STAGES}, artifactHashes=artifacts)
         (self.root / name).write_text(json.dumps(receipt))
         self.assertEqual(cache.SIMD_ADDRESS_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
         for bad in (dict(receipt, schema=True), dict(receipt, ghc='9.12.2'), dict(receipt, entries=[]),
-                    dict(receipt, scalarRows=2591), dict(receipt, stages={}), dict(receipt, artifactHashes={})):
+                    dict(receipt, scalarRows=3455), dict(receipt, stages={}), dict(receipt, artifactHashes={})):
             with self.assertRaises(cache.CacheMiss): cache.simd_address_artifact_hashes(bad)
         (self.root / 'build/simd-address-families/source/SimdAddressAudit.hs').write_text('mutated')
         with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)

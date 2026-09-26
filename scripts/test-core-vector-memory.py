@@ -77,9 +77,9 @@ def check(module):
 
 
 class VectorMemoryProofTest(unittest.TestCase):
-    def test_all_144_address_signatures_keep_exact_auditor_carriers(self):
+    def test_all_180_address_signatures_keep_exact_auditor_carriers(self):
         names = sorted(name for name in memory.OPERATIONS if 'OffAddr' in name)
-        self.assertEqual(144, len(names))
+        self.assertEqual(180, len(names))
         for name in names:
             vector = memory.vector_proof(name)
             proofs = [memory.ADDRESS, INDEX]

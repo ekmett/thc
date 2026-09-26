@@ -94,12 +94,30 @@ fun main(args: Array<String>) {
     }
 }
 
+/** The driver protocol has a fixed prefix followed by opaque guest arguments. */
+internal fun launcherArguments(args: Array<String>, prefix: Int): Pair<String, Array<String>> {
+    if (args.size == prefix) return "thc" to emptyArray()
+    require(args.size >= prefix + 2 && args[prefix] == "--") {
+        "Expected -- PROGRAM_NAME [ARG...] after executable arguments"
+    }
+    return args[prefix + 1] to args.copyOfRange(prefix + 2, args.size)
+}
+
+private fun initializeArguments(context: Context, arguments: Pair<String, Array<String>>) {
+    context.initialize("thc")
+    context.enter()
+    try { Language.currentState().arguments.initialize(arguments.first, arguments.second) }
+    finally { context.leave() }
+}
+
 private fun launch(args: Array<String>) {
     if (args.firstOrNull() == "--run-executable") {
-        require(args.size == 4) {
-            "Usage: thc --run-executable MODULE.json[,MODULE.json...] ENTRY SHUTDOWN_ENTRY"
+        require(args.size >= 4) {
+            "Usage: thc --run-executable MODULE.json[,MODULE.json...] ENTRY SHUTDOWN_ENTRY [-- PROGRAM_NAME ARG...]"
         }
+        val arguments = launcherArguments(args, 4)
         executionContext(fileIO = true).use { context ->
+            initializeArguments(context, arguments)
             val action = loadEntry(context, args[1].split(','), args[2], ioMain = true, shutdownEntry = args[3])
             check(action.invokeMember("runIO").asBoolean()) { "Executable IO did not complete" }
             if (java.lang.Boolean.getBoolean("thc.diagnostics"))
@@ -108,9 +126,11 @@ private fun launch(args: Array<String>) {
         return
     }
     if (args.firstOrNull() == "--run-io") {
-        require(args.size == 3) { "Usage: thc --run-io MODULE.json[,MODULE.json...] ENTRY" }
+        require(args.size >= 3) { "Usage: thc --run-io MODULE.json[,MODULE.json...] ENTRY [-- PROGRAM_NAME ARG...]" }
+        val arguments = launcherArguments(args, 3)
         val modules = args[1].split(',')
         executionContext(fileIO = true).use { context ->
+            initializeArguments(context, arguments)
             val action = loadEntry(context, modules, args[2], ioMain = true)
             check(action.invokeMember("runIO").asBoolean()) { "IO main did not complete" }
             if (java.lang.Boolean.getBoolean("thc.diagnostics"))

@@ -405,6 +405,7 @@ class Language : TruffleLanguage<Language.State>() {
         internal val stableNames = thc.runtime.StableNames()
         internal val nativeAddresses = thc.runtime.NativeAddresses(env)
         internal val nativeAllocations = thc.runtime.ManagedNativeAllocations(env)
+        internal val arguments = thc.runtime.GuestArguments(env)
         internal val weaks = thc.runtime.ManagedWeaks()
         // A future SHARED policy may keep the lockless thunk path while this is valid.
         // The transition is one-way and belongs to this context, not to Language.

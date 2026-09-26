@@ -33,13 +33,16 @@ main = topHandler $ do
             target = case targets of [] -> "."; [file] -> file; _ -> error "checked above"
         planPackage opts target >>= putStrLn . renderJson
       (_, _, errors) -> die (concat errors ++ usage)
-    "run" : rest -> case getOpt Permute runOptions rest of
-      (updates, targets, []) | length targets <= 1 -> do
-        let opts = foldl (flip ($)) (RunOptions defaultPlanOptions "" "" Nothing "pinned" Nothing) updates
-            target = case targets of [] -> "."; [file] -> file; _ -> error "checked above"
-        project <- doesFileExist (target </> "cabal.project")
-        if project then runProject opts target else runPackage opts target
-      (_, _, errors) -> die (concat errors ++ runUsage)
+    "run" : rest -> do
+      let (driverArgs, suffix) = break (== "--") rest
+          guestArgs = drop 1 suffix
+      case getOpt Permute runOptions driverArgs of
+        (updates, targets, []) | length targets <= 1 -> do
+          let opts = foldl (flip ($)) (RunOptions defaultPlanOptions "" "" Nothing "pinned" Nothing guestArgs) updates
+              target = case targets of [] -> "."; [file] -> file; _ -> error "checked above"
+          project <- doesFileExist (target </> "cabal.project")
+          if project then runProject opts target else runPackage opts target
+        (_, _, errors) -> die (concat errors ++ runUsage)
     _ -> die usage
 
 options :: [OptDescr (PlanOptions -> PlanOptions)]
@@ -75,4 +78,4 @@ liftPlanOption (Option shorts longs argument description) = Option shorts longs 
   where liftUpdate update run = run {runPlan = update (runPlan run)}
 
 runUsage :: String
-runUsage = usageInfo "Usage: thc run [PACKAGE.cabal|DIR] --exe NAME --thc-root DIR [OPTIONS]\n\nBuild the selected Cabal executable, export and audit its GHC main :: IO (), then execute that action in THC.\nA DIR containing cabal.project uses Cabal's resolved multi-package plan and accepts NAME or PACKAGE:exe:NAME.\nFor an explicit .cabal file, the initial single-package path still requires no internal library or build-tool dependencies.\n" runOptions
+runUsage = usageInfo "Usage: thc run [PACKAGE.cabal|DIR] --exe NAME --thc-root DIR [OPTIONS] [-- ARG...]\n\nBuild the selected Cabal executable, export and audit its GHC main :: IO (), then execute that action in THC.\nArguments after -- are passed unchanged to the guest, including empty strings and option-looking arguments.\nA DIR containing cabal.project uses Cabal's resolved multi-package plan and accepts NAME or PACKAGE:exe:NAME.\nFor an explicit .cabal file, the initial single-package path still requires no internal library or build-tool dependencies.\n" runOptions

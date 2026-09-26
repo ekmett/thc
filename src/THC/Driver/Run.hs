@@ -31,6 +31,7 @@ data RunOptions = RunOptions
   , runRuntime :: Maybe FilePath
   , runInstalledCore :: String
   , runGhcSource :: Maybe FilePath
+  , runArguments :: [String]
   }
 
 -- This first run slice uses the package configuration that Cabal itself
@@ -113,7 +114,8 @@ runPackage opts target = do
   unless (not (null modules)) $ fail "GHC plugin exported no Core modules"
   checked True "python3" ([thcRoot </> "scripts/audit-core.py", "--entry", "main:Main.main", "--io-main",
                       "--output", output </> "audit.json"] ++ modules) thcRoot inherited
-  checked False runtime ["--run-io", intercalate "," modules, "main:Main.main"] thcRoot inherited
+  checked False runtime (["--run-io", intercalate "," modules, "main:Main.main", "--", selectedName] ++
+                         runArguments opts) thcRoot inherited
 
 filterMFile :: (a -> IO Bool) -> [a] -> IO [a]
 filterMFile predicate items = do

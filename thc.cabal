@@ -197,6 +197,9 @@ extra-source-files:
   test/fixtures/run-file-lifecycle/cabal.project
   test/fixtures/run-file-lifecycle/run-file-lifecycle.cabal
   test/fixtures/run-file-lifecycle/app/Main.hs
+  test/fixtures/run-arguments/cabal.project
+  test/fixtures/run-arguments/run-arguments.cabal
+  test/fixtures/run-arguments/app/Main.hs
   test/fixtures/run-binary-buffers/cabal.project
   test/fixtures/run-binary-buffers/run-binary-buffers.cabal
   test/fixtures/run-binary-buffers/app/Main.hs
@@ -372,6 +375,30 @@ test-suite driver-tests
 
 -- Genuine installed full-Core is required for GHC's Handle implementation.
 -- Keep this out of the stock-GHC driver suite, with no silent fixture skip.
+test-suite arguments-full-core
+  type: exitcode-stdio-1.0
+  if !flag(full-core-tests)
+    buildable: False
+  main-is: ArgumentsFullCore.hs
+  hs-source-dirs: test/haskell-driver
+  other-modules: TestSupport
+  build-tool-depends: thc:thc
+  build-depends:
+    base >= 4.22 && < 4.23,
+    aeson >= 2.3 && < 2.4,
+    bytestring >= 0.12.2 && < 0.13,
+    directory >= 1.3.10 && < 1.4,
+    filepath >= 1.5.4 && < 1.6,
+    HUnit >= 1.6 && < 1.7,
+    process >= 1.6.26 && < 1.7,
+    text >= 2.1 && < 2.2,
+    vector >= 0.13 && < 0.14,
+    zip-archive >= 0.4.3.2 && < 0.5
+  default-language: Haskell2010
+  ghc-options: -Wall
+  if flag(development)
+    ghc-options: -Werror
+
 test-suite file-lifecycle-full-core
   type: exitcode-stdio-1.0
   if !flag(full-core-tests)

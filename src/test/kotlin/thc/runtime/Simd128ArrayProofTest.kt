@@ -158,7 +158,7 @@ internal class VectorArrayProofCases(private val wide: Boolean) {
         assertEquals(0, state.results.depth); assertEquals(0, state.results.retainedReferences())
     }
     fun allOperationsPreserveEveryByteAcrossAliasesTailsAndBothBackends() {
-        assertEquals(if (wide) 84 else 36, operations.size)
+        assertEquals(if (wide) 120 else 36, operations.size)
         for (backend in listOf("ast", "bytecode")) withLanguage { language ->
             for (op in operations) {
                 val shape = Shape(op)

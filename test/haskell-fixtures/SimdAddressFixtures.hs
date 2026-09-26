@@ -18,11 +18,12 @@ import System.Exit (die)
 import System.FilePath
 import System.Info (arch)
 
--- Existing vector representations only. The six newly introduced narrow-wide
--- representations and their memory primitives have a separate fixture owner.
+-- All vector shapes except the six 128-bit integer shapes in their own corpus.
 data Shape = Shape String Int Int
 shapes :: [Shape]
-shapes = [Shape "Int32" 4 4, Shape "Word32" 4 4, Shape "Float" 4 4, Shape "Double" 2 8,
+shapes = [Shape "Int8" 32 1, Shape "Word8" 32 1, Shape "Int8" 64 1, Shape "Word8" 64 1,
+  Shape "Int16" 32 2, Shape "Word16" 32 2,
+  Shape "Int32" 4 4, Shape "Word32" 4 4, Shape "Float" 4 4, Shape "Double" 2 8,
   Shape "Int16" 16 2, Shape "Word16" 16 2, Shape "Int32" 8 4, Shape "Word32" 8 4,
   Shape "Int32" 16 4, Shape "Word32" 16 4, Shape "Int64" 4 8, Shape "Word64" 4 8,
   Shape "Int64" 8 8, Shape "Word64" 8 8, Shape "Float" 8 4, Shape "Float" 16 4,
@@ -204,4 +205,4 @@ prepareSimdAddresses root = do
     "scalarRows" .= length (requests entries),"nativeVector128Rows" .= (if native128 then length (requests narrow) else 0),
     "stages" .= Map.fromList [(stage,value) | (stage,value,_) <- exported],
     "inputHashes" .= inputHashes,"artifactHashes" .= artifactHashes])
-  putStrLn "SIMD addresses: 108 operations, 2592 native scalar rows, native 128-bit vector comparison when supported"
+  putStrLn "SIMD addresses: 144 operations, 3456 native scalar rows, native 128-bit vector comparison when supported"
