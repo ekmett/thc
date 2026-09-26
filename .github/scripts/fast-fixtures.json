@@ -1161,13 +1161,13 @@
       "junit": ["thc.runtime.MutableByteArraySizeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "mutable-bytearray-size"]}],
       "outputs": ["build/mutable-bytearray-size"],
-      "sources": ["test/haskell-fixtures/ByteArrayFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "scripts/primop-coverage.py", "compiler/test-fixtures/MutableByteArraySizeAudit.hs", "compiler/test-fixtures/MutableByteArraySizeNative.hs", "compiler/test-fixtures/ByteArrayFixtureInputs.hs"]
+      "sources": ["test/haskell-fixtures/ByteArrayFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "tools/primops/PrimopTools.hs", "compiler/test-fixtures/MutableByteArraySizeAudit.hs", "compiler/test-fixtures/MutableByteArraySizeNative.hs", "compiler/test-fixtures/ByteArrayFixtureInputs.hs"]
     },
     "resize-bytearrays": {
       "junit": ["thc.runtime.ResizeByteArrayTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "resize-bytearrays"]}],
       "outputs": ["build/resize-bytearrays"],
-      "sources": ["test/haskell-fixtures/ByteArrayFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "scripts/primop-coverage.py", "compiler/test-fixtures/ResizeByteArrayAudit.hs", "compiler/test-fixtures/ResizeByteArrayNative.hs", "compiler/test-fixtures/ByteArrayFixtureInputs.hs"]
+      "sources": ["test/haskell-fixtures/ByteArrayFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "tools/primops/PrimopTools.hs", "compiler/test-fixtures/ResizeByteArrayAudit.hs", "compiler/test-fixtures/ResizeByteArrayNative.hs", "compiler/test-fixtures/ByteArrayFixtureInputs.hs"]
     },
     "bytearray": {
       "junit": ["thc.runtime.ByteArrayTest"],
@@ -1179,7 +1179,7 @@
       "junit": ["thc.runtime.MutableByteArrayTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "mutable-bytearrays"]}],
       "outputs": ["build/mutable-bytearrays"],
-      "sources": ["test/haskell-fixtures/ByteArrayFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/MutableByteArrayAudit.hs", "scripts/primop-coverage.py"]
+      "sources": ["test/haskell-fixtures/ByteArrayFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/MutableByteArrayAudit.hs", "tools/primops/PrimopTools.hs"]
     },
     "compare-byte-arrays": {
       "junit": ["thc.runtime.CompareByteArraysTest"],

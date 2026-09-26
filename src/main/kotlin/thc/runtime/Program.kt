@@ -2269,6 +2269,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
     private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expr {
+        CoreStateApplications.inline(expr)?.let { return compile(it, scope, tail) }
         val outer = operandBuilder
         val head = (expr.getOrNull(1) as? List<*>)?.firstOrNull()
         val operands = if (enableAsync && expr.firstOrNull() == "app" && head in setOf("prim", "con"))
@@ -2368,6 +2369,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"), true)
             val stringRts = CoreStringRtsForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val floatingForeign = CoreFloatForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val environment = CoreEnvironmentForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val rtsDiagnostic = CoreRtsDiagnosticForeign.validate(foreignMetadata,
@@ -2391,7 +2394,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (runtimeService != null) {
@@ -2501,6 +2504,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     }
                 }
                 EnvironmentExpression(environment, operands.toTypedArray(), tupleProof)
+            } else if (floatingForeign != null) {
+                CoreFloatForeign.validateHead(fn, defined || fn.getOrNull(1) in scope.joins)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreFloatForeign.validateOperand(floatingForeign, index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                FloatForeignExpression(floatingForeign, operands[0], operands[1], tupleProof)
             } else if (stringRts != null) {
                 CoreStringRtsForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->

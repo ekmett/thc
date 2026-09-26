@@ -26,6 +26,18 @@ nativeKeep call (I# x) = I# (originalKeep call x)
 nativeFast :: (Addr# -> State# RealWorld -> (# State# RealWorld, Addr# #)) -> Int -> Int
 nativeFast call (I# x) = I# (originalFast call x)
 
+originalPpr, originalNoDebug, originalNoState ::
+  (Addr# -> State# RealWorld -> (# State# RealWorld, Addr# #)) -> Int# -> Int#
+originalPpr = originalFast
+originalNoDebug = originalFast
+originalNoState = originalFast
+
+nativePpr, nativeNoDebug, nativeNoState ::
+  (Addr# -> State# RealWorld -> (# State# RealWorld, Addr# #)) -> Int -> Int
+nativePpr = nativeFast
+nativeNoDebug = nativeFast
+nativeNoState = nativeFast
+
 foreign import ccall unsafe "&ghc_unique_counter64" counter :: Ptr Word
 foreign import ccall unsafe "&ghc_unique_inc" increment :: Ptr Int
 

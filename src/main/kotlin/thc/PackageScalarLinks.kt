@@ -127,10 +127,15 @@ internal object PackageScalarLinks {
             abi.map { listOf(it.symbol, it.convention, it.safety, it.arguments, it.result) }.distinct().size == abi.size,
             "sorted unique ABI")
         val bySymbol = abi.groupBy { it.symbol }
+        fun pointerAbi(rep: String) = if (rep in setOf("ByteArray#", "MutableByteArray#")) "AddrRep" else rep
+        fun integerAbi(rep: String) = if (rep in setOf("IntRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep"))
+            "Word" + rep.removePrefix("Int") else rep
+        val headerAdapted = bySymbol.filterValues { variants ->
+            variants.map { it.arguments.map(::pointerAbi) }.distinct().size > 1 }.keys
         bySymbol.values.forEach { variants ->
             check(native || variants.size == 1, "duplicate scalar ABI symbol")
             check(variants.map { listOf(it.convention, it.safety, it.arguments.map { rep ->
-                if (rep in setOf("ByteArray#", "MutableByteArray#")) "AddrRep" else rep }, it.result) }.distinct().size == 1,
+                integerAbi(pointerAbi(rep)) }, it.result) }.distinct().size == 1,
                 "conflicting C ABI variants")
             check(variants.map { listOf(it.convention, it.safety, it.arguments.map { rep ->
                 if (rep == "MutableByteArray#") "ByteArray#" else rep }, it.result) }.distinct().size == variants.size,
@@ -184,6 +189,9 @@ internal object PackageScalarLinks {
             text(item["symbol"])
             val emitted = record(item["emitted"], "symbol unit convention safety arguments result")
             val name = if (native) text(emitted["symbol"]) else text(item["symbol"])
+            if (name in headerAdapted) check(convention == "ccall" && item["header"] is String &&
+                (item["header"] as String).isNotEmpty() && (item["header"] as String).none { it in "\u0000\n\r\"\\" },
+                "signedness variants require a retained configured C header")
             val signature = requireNotNull(bySymbol[name]?.singleOrNull {
                 it.convention == convention && it.safety == item["safety"] && emitted["arguments"] == it.arguments + "void" &&
                     emitted["result"] == (if (it.result == "void") listOf("void") else listOf("void", it.result))

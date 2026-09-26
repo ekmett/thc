@@ -93,6 +93,14 @@ code. Private compilation setup must restore that prerequisite, as the public
 original-Core continuation and mask tests include forced-stub-retirement controls;
 keep their first-effect and no-replay assertions intact.
 
+Root control policy is also compilation metadata. `GuestRoot.prepareForCall`
+fixes the delimited-continuation flag before Truffle publishes the call target;
+guest code reads that flag instead of resolving concrete root types in a cold
+handler during partial evaluation. This avoids a first-compilation class-hierarchy
+bailout without executing guest code, retrying compilation, or preloading unrelated
+classes. Preserve the fresh floating-tuple compilation check and the metadata,
+clone and continuation-policy controls when changing root initialization.
+
 ### Generated instruction metadata
 
 The pinned Truffle 25.3.4.1 processor emits one large
@@ -126,10 +134,10 @@ backends and the native checks pass. Then refresh the generated
 [primop checklist](primops.md):
 
 ```sh
-python3 scripts/generate-scalar-signatures.py --write
-python3 scripts/primop-coverage.py --write-checklist
-python3 scripts/primop-coverage.py --check
-python3 scripts/test-primop-coverage.py
+cabal run exe:thc-primops -- scalars --write
+cabal run exe:thc-primops -- coverage --write-checklist
+cabal run exe:thc-primops -- coverage --check
+cabal test primop-tools
 ```
 
 The scalar signature command needs the pinned GHC 9.14.1. The checklist is

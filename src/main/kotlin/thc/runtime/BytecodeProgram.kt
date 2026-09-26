@@ -816,6 +816,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             is ManagedAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
         }, evaluated = true))
     private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expression {
+        CoreStateApplications.inline(expr)?.let { return compile(it, scope, tail) }
         val source = sources.expression(expr, scope.source)
         val value = try {
             val lowered = compileSupported(expr, scope.withSource(source), tail)
@@ -1470,6 +1471,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"), true)
             val stringRts = CoreStringRtsForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val floatingForeign = CoreFloatForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val environment = CoreEnvironmentForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val rtsDiagnostic = CoreRtsDiagnosticForeign.validate(foreignMetadata,
@@ -1493,7 +1496,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (runtimeService != null) {
@@ -1830,6 +1833,20 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         EnvironmentOp.PUT, EnvironmentOp.UNSET -> e.builder.endEnvironmentChange()
                         EnvironmentOp.ENUMERATE -> e.builder.endEnvironmentEnumerate()
                     }
+                }
+            } else if (floatingForeign != null) {
+                CoreFloatForeign.validateHead(fn, defined || fn.getOrNull(1) in scope.joins)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreFloatForeign.validateOperand(floatingForeign, index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    if (floatingForeign.single) e.builder.beginOriginalFloatCall(destination.single(), floatingForeign)
+                    else e.builder.beginOriginalDoubleCall(destination.single(), floatingForeign)
+                    operands.forEach { it.emit(e) }
+                    if (floatingForeign.single) e.builder.endOriginalFloatCall() else e.builder.endOriginalDoubleCall()
                 }
             } else if (stringRts != null) {
                 CoreStringRtsForeign.validateHead(fn, defined)

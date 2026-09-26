@@ -103,6 +103,19 @@ units and links the checksum providers. All six typed foreign adapters match
 unsigned seeds and long blocks in interpreted and first-installed compiled
 execution, in both handoff modes. This checks the common foreign adapters;
 it does not claim whole Pandoc or whole-package Core execution.
+
+The unchanged `primitive-0.9.1.0` source (Hackage cabal revision 1) imports its
+memset functions with both signed and unsigned arguments. Acquisition retains
+each typed adapter and requires the same configured C header for signedness
+variants. That header supplies the callee prototype, including narrow argument
+extension; the compiler converts each adapter's exact Haskell carrier. Different
+widths, differing results and ambiguous array mutability still reject. Header
+dependencies participate in the component hash. All 20 integer setters match
+720 native observations over both mutable-array and address inputs, offsets,
+zero/nonzero counts and signed/unsigned boundaries, interpreted and on their
+first installed calls in both handoff modes. Writes affect the original managed
+storage directly, without copying or pinning it.
+
 The unchanged `erf-2.0.0.0` package has source-pure imports whose emitted
 State-threaded calls are `safe`. Its four Float/Double entries retain that safety
 through acquisition, ABI admission and call selection. A Linux native-libm
@@ -115,17 +128,17 @@ add native transport for managed pointers or authorize arbitrary library symbols
 Safe scalar calls use the existing foreign extent: other Java guest threads and
 JVM GC may progress, pending async delivery is deferred while in foreign code,
 and `finally` restores the previous permission and masking extent even when
-interop fails. Bytecode stores the result before its resumable post-call poll,
-so delivery never replays a completed foreign effect. Boundary controls exercise
-concurrent scalar C calls, GC, deferred delivery on return and exceptional cleanup.
+interop fails. AST and bytecode store the result before their resumable post-call
+poll, so delivery never replays a completed foreign effect. Boundary controls
+exercise concurrent scalar C calls, GC, deferred delivery on return, completed
+result resumption and exceptional cleanup in interpreted and compiled entries.
 This tranche does not claim interruptible native blocking calls, callbacks,
-bound OS threads or native errno behavior. AST execution retains its existing
-async-admission policy.
+bound OS threads or native errno behavior.
 
 Four primitive bit-pattern entrypoints using the original package's public API
 pass the strict reachable audit and match 88 native observations, including
 signed zeros, subnormals, infinities and NaNs, in interpreted and first-installed
-compiled AST/bytecode execution in both handoff modes. Bytecode checks run with
+compiled AST/bytecode execution in both handoff modes. Both backends run with
 async capture enabled. This is actual small-program Core execution, not a whole
 Pandoc run.
 
@@ -134,6 +147,7 @@ acquired source trees, then run their two explicit test forks:
 
 ```sh
 THC_DIGEST_SOURCE=/path/to/digest-0.0.2.1 THC_ERF_SOURCE=/path/to/erf-2.0.0.0 \
+  THC_PRIMITIVE_SOURCE=/path/to/primitive-0.9.1.0 \
   cabal run exe:thc-fixtures -- package-native-originals
 ./gradlew --continue packageNativeOriginalsDefault packageNativeOriginalsDense
 ```
@@ -141,6 +155,10 @@ THC_DIGEST_SOURCE=/path/to/digest-0.0.2.1 THC_ERF_SOURCE=/path/to/erf-2.0.0.0 \
 The Haskell producer retains original source hashes, compiler calls, typed Core,
 LLVM acquisition, native observations, and changed-source/header negative
 controls under `build/original-native`. The JVM rejects stale fixture inputs.
+For the matching upstream primitive package description, use
+`cabal get primitive-0.9.1.0 --index-state=2026-09-24T12:38:18Z`;
+the pristine tarball's older base bound excludes GHC 9.14.1. No package source
+patch or `allow-newer` override is needed with revision 1.
 
 Select LLVM tools with `THC_CLANG`, `THC_LLVM_LINK`, `THC_LLVM_OPT` and
 `THC_LLVM_NM`, or provide their ordinary executable names on `PATH`. The exact

@@ -31,7 +31,7 @@ class StateTupleTest {
         val required = listOf("scripts/audit-core.py", "scripts/core-capabilities.json") +
             File(root, "scripts").listFiles()!!.filter { it.name.startsWith("core_") && it.extension == "py" }
                 .map { it.relativeTo(root).path } +
-            listOf("src/main/resources/thc/scalar-primop-signatures.json", "scripts/generate-scalar-signatures.py")
+            listOf("src/main/resources/thc/scalar-primop-signatures.json", "tools/primops/PrimopTools.hs")
                 .filter { File(root, it).exists() }
         assertTrue(sources.map { it.getValue("path") }.containsAll(required), "Missing current auditor input hashes")
         for (stage in listOf("pre", "post")) {

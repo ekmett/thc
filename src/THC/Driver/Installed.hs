@@ -6,12 +6,15 @@
 -- the selected GHC API. Never substitute ordinary unfoldings for a full payload.
 module THC.Driver.Installed
   ( InstalledContext(..), InstalledUnit(..), InstalledCore(..), MissingCore(..)
-  , installedContext, discoverInstalled, validateReexports, acquireInstalled
+  , installedContext, discoverInstalled, validateReexports, acquireInstalled, acquireInstalledWithJobs
   , installedProvenance, installedLayoutHeaders, helperCommand, probeInstalled
   , emptyRegistration, modulelessRegistration
   ) where
 
-import Control.Monad (filterM, foldM, forM, forM_, unless)
+import Control.Concurrent (ThreadId, forkIOWithUnmask, killThread)
+import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, readMVar)
+import Control.Exception (SomeException, bracket, finally, mask, mask_, throwIO, try)
+import Control.Monad (filterM, foldM, forM, forM_, unless, void)
 import Data.Aeson (Value(..), FromJSON, eitherDecodeStrict', encode, fromJSON, Result(..), object, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -19,6 +22,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.Char (isAlphaNum, isHexDigit)
 import Data.List (nub, sort)
+import Data.IORef (modifyIORef', newIORef, readIORef)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (isNothing)
 import qualified Data.Set as Set
@@ -28,11 +32,14 @@ import Distribution.Pretty (prettyShow)
 import Distribution.Types.ExposedModule (ExposedModule(..))
 import qualified Distribution.Types.InstalledPackageInfo as Package
 import System.Directory (canonicalizePath, doesDirectoryExist, doesFileExist)
-import System.Environment (getEnvironment)
+import System.Environment (getEnvironment, lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), pathSeparator)
-import System.Process (proc, CreateProcess(..), readCreateProcessWithExitCode)
+import System.IO (hClose, hSetBinaryMode)
+import System.Process (proc, CreateProcess(..), StdStream(..), readCreateProcessWithExitCode,
+                       waitForProcess, withCreateProcess)
 import System.Timeout (timeout)
+import Text.Read (readMaybe)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
@@ -255,9 +262,61 @@ probeInstalled context requested = do
             (sort (installedDepends unit))
 
 acquireInstalled :: InstalledContext -> InstalledUnit -> IO (Either MissingCore InstalledCore)
-acquireInstalled context unit = go [] (installedInterfaces unit)
+acquireInstalled context unit = do
+  selected <- lookupEnv "THC_INSTALLED_CORE_JOBS"
+  jobs <- case selected of
+    Nothing -> pure 2
+    Just value -> maybe (fail "THC_INSTALLED_CORE_JOBS must be an integer from 1 to 64") pure (readMaybe value)
+  acquireInstalledWithJobs jobs context unit
+
+type LoadedInterface = Either MissingCore (String, String, BS.ByteString)
+type InterfaceWorker = (ThreadId, MVar (Either SomeException LoadedInterface))
+
+-- Only helper hydration overlaps. Consume in registration order, retaining the
+-- original first failure, owner check, strict serialized payloads and final
+-- registration check. At most `jobs` responses can be pending; a slow early
+-- module must not let the whole package's decoded trees accumulate behind it.
+acquireInstalledWithJobs :: Int -> InstalledContext -> InstalledUnit -> IO (Either MissingCore InstalledCore)
+acquireInstalledWithJobs jobs context unit = do
+  unless (jobs >= 1 && jobs <= 64) (fail "THC_INSTALLED_CORE_JOBS must be an integer from 1 to 64")
+  mask $ \restore -> do
+    active <- newIORef ([] :: [InterfaceWorker])
+    let spawn item = mask_ $ do
+          result <- newEmptyMVar
+          thread <- forkIOWithUnmask $ \unmask -> do
+            loaded <- try (unmask (load item))
+            putMVar result loaded
+          let worker = (thread, result)
+          modifyIORef' active (worker :)
+          pure worker
+        stop = do
+          workers <- readIORef active
+          forM_ workers $ \(thread, result) -> do
+            killThread thread
+            -- The process bracket terminates and reaps its child before
+            -- the worker publishes cancellation. Do not leave an
+            -- exporting helper alive after failure, timeout or caller unwind.
+            void (readMVar result)
+        go modules [] [] = finish modules
+        go modules ((thread, result):pending) rest = do
+          loaded <- readMVar result
+          modifyIORef' active (filter ((/= thread) . fst))
+          value <- either throwIO pure loaded
+          case value of
+            Left missing -> pure (Left missing)
+            Right entry -> case rest of
+              [] -> go (entry : modules) pending []
+              next : later -> do
+                worker <- spawn next
+                go (entry : modules) (pending ++ [worker]) later
+        go _ [] _ = fail "installed-Core worker inventory became inconsistent"
+        start = do
+          let (first, later) = splitAt jobs (installedInterfaces unit)
+          pending <- mapM spawn first
+          restore (go [] pending later)
+    start `finally` stop
   where
-    go modules [] = do
+    finish modules = do
       -- A changed registration aborts the transaction before publication.
       current <- discoverInstalled context (registeredId unit)
       unless (current == unit) (fail "installed registration changed during Core acquisition")
@@ -267,10 +326,10 @@ acquireInstalled context unit = go [] (installedInterfaces unit)
         [value] -> pure value
         _ -> fail "installed interfaces disagree on their original Core owner"
       pure (Right (InstalledCore owner [(name, bytes) | (_, name, bytes) <- reverse modules]))
-    go modules (item@(name, path):rest) = do
-      (status, output, diagnostic) <- boundedProcess (installedHelper context) (helperCommand context unit item)
+    load item@(name, path) = do
+      (status, output, diagnostic) <- boundedInterfaceProcess (installedHelper context) (helperCommand context unit item)
       response <- either (fail . ("invalid thc-interface JSON: " ++)) pure
-        (eitherDecodeStrict' (Text.encodeUtf8 (Text.pack output)))
+        (eitherDecodeStrict' output)
       unless (valueAt response "schema" == Just (1 :: Int)) (fail "unsupported thc-interface protocol")
       case (status, valueAt response "status" :: Maybe String) of
         (ExitSuccess, Just "loaded") -> do
@@ -290,7 +349,7 @@ acquireInstalled context unit = go [] (installedInterfaces unit)
           -- lazy tuple field otherwise retains every decoded Aeson Core tree
           -- until the whole package is packaged (notably the compiler itself).
           let bytes = BL.toStrict (encode core)
-          bytes `seq` go ((owner, name, bytes) : modules) rest
+          bytes `seq` pure (Right (owner, name, bytes))
         (ExitFailure 3, Just "unavailable") -> do
           unless (valueAt response "capability" == Just ("complete-interface-core" :: String) &&
                   valueAt response "unit" == Just (registeredId unit) &&
@@ -300,7 +359,8 @@ acquireInstalled context unit = go [] (installedInterfaces unit)
             (fail "inconsistent missing-Core response")
           pure (Left (MissingCore (registeredId unit) name path))
         _ -> fail ("thc-interface failed for " ++ registeredId unit ++ ":" ++ name ++
-                    " (" ++ show status ++ "): " ++ take 2000 output ++ take 2000 diagnostic)
+                    " (" ++ show status ++ "): " ++ clipped output ++ clipped diagnostic)
+    clipped = take 2000 . Text.unpack . Text.decodeUtf8
 
 valueAt :: FromJSON a => Value -> String -> Maybe a
 valueAt (Object fields) name = do
@@ -310,6 +370,40 @@ valueAt _ _ = Nothing
 
 required :: FromJSON a => Value -> String -> IO a
 required value name = maybe (fail ("missing/invalid helper field " ++ name)) pure (valueAt value name)
+
+-- Full Core stdout can be tens of megabytes. Keep its UTF-8 bytes instead of
+-- building a linked-list String and encoding it back to bytes for Aeson. Drain
+-- stderr concurrently even when a helper emits more than a pipe buffer, and
+-- retain the existing empty-stdin, timeout, UTF-8 rejection and child cleanup.
+boundedInterfaceProcess :: FilePath -> [String] -> IO (ExitCode, BS.ByteString, BS.ByteString)
+boundedInterfaceProcess executable arguments = do
+  inherited <- getEnvironment
+  let clean = filter (\(key, _) -> key `notElem` ["GHC_PACKAGE_PATH", "GHC_ENVIRONMENT"]) inherited
+      commandLine = (proc executable arguments)
+        {env = Just clean, std_in = CreatePipe, std_out = CreatePipe, std_err = CreatePipe}
+      execute = withCreateProcess commandLine $ \input output diagnostic child ->
+        case (input, output, diagnostic) of
+          (Just stdinPipe, Just stdoutPipe, Just stderrPipe) -> do
+            hClose stdinPipe
+            hSetBinaryMode stdoutPipe True
+            hSetBinaryMode stderrPipe True
+            let startReader = mask_ $ do
+                  result <- newEmptyMVar :: IO (MVar (Either SomeException BS.ByteString))
+                  thread <- forkIOWithUnmask $ \unmask ->
+                    try (unmask (BS.hGetContents stderrPipe)) >>= putMVar result
+                  pure (thread, result)
+                stopReader (thread, result) = killThread thread >> void (readMVar result)
+            bracket startReader stopReader $ \(_, result) -> do
+              out <- BS.hGetContents stdoutPipe
+              err <- readMVar result >>= either throwIO pure
+              status <- waitForProcess child
+              -- The previous text Handle rejected invalid UTF-8 even on
+              -- otherwise successful output. Do not relax that protocol.
+              forM_ [out, err] $ \bytes -> either (fail . show) (const (pure ())) (Text.decodeUtf8' bytes)
+              pure (status, out, err)
+          _ -> fail "installed-Core helper pipes were unavailable"
+  result <- timeout (180 * 1000000) execute
+  maybe (fail ("installed-Core subprocess timed out: " ++ executable)) pure result
 
 -- readCreateProcessWithExitCode cleans up its child on exceptions, including
 -- timeout/cancellation. Neither is classified as a missing capability.

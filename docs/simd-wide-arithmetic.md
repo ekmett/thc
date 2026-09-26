@@ -59,7 +59,7 @@ performance claim.
 python3 scripts/generate-simd-families.py --check --verify-ghc
 python3 scripts/prepare-simd-capability-smoke.py
 ./gradlew test --tests thc.runtime.SimdCapabilitySmokeTest --tests thc.runtime.SimdFamiliesTest
-python3 scripts/primop-coverage.py --check
+cabal run exe:thc-primops -- coverage --check
 ```
 
 `--native-vector` on the preparation command also compares native vector output

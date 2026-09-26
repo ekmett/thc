@@ -3285,6 +3285,30 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = FloatForeignOp.class, name = "operation")
+    public static final class OriginalFloatCall {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                FloatForeignOp operation, float value, Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            if (operation.getRounding()) destination.setFloat(bytecode, frame, FloatForeignOp.round(value));
+            else destination.setLong(bytecode, frame, operation.classify(value));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = FloatForeignOp.class, name = "operation")
+    public static final class OriginalDoubleCall {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                FloatForeignOp operation, double value, Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            if (operation.getRounding()) destination.setDouble(bytecode, frame, FloatForeignOp.round(value));
+            else destination.setLong(bytecode, frame, operation.classify(value));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = SharedCAFStore.class, name = "store")
     public static final class RtsSharedCAFStore {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,

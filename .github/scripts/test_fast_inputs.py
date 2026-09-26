@@ -1086,7 +1086,7 @@ class FastInputTests(unittest.TestCase):
             "GHC/Internal/CString.hs": cache.sha(self.vendor)}) + "\n")
         for name in (cache.SELF, cache.WIRED_SOURCE, *cache.RUNTIME_INPUTS, *cache.COMPILER_BUILD_INPUTS, *cache.SIMD_BYTEARRAY_RETAINED,
                      "scripts/prepare-tests.sh", "examples/coverage.json",
-                     "src/main/resources/thc/scalar-primop-signatures.json"):
+                     "src/main/resources/thc/scalar-primop-signatures.json", "tools/primops/PrimopTools.hs"):
             self.put(name, "source: " + name)
         self.put("src/main/kotlin/thc/runtime/Program.kt", "unrelated runtime\n")
         subprocess.run(["git", "-C", str(self.root), "add", "."], check=True)
@@ -1154,6 +1154,14 @@ class FastInputTests(unittest.TestCase):
         p = self.root / "build/data-to-tag/oracle.tsv"; before = p.stat().st_mtime_ns
         cache.restore(self.root, self.current, self.bundle)
         self.assertEqual(before, p.stat().st_mtime_ns)
+
+    def test_compiled_primop_source_changes_invalidate_fixture_identity(self):
+        name = "tools/primops/PrimopTools.hs"
+        self.assertIn(name, self.current["sources"])
+        self.put(name, "changed compiled GHC API query\n")
+        changed = cache.identity(self.root)
+        self.assertNotEqual(self.current["sources"][name], changed["sources"][name])
+        self.assertNotEqual(cache.cache_key(self.current), cache.cache_key(changed))
 
     def test_noncanonical_workspace_alias_is_still_rejected(self):
         alias = self.temp_root / "workspace-alias"
@@ -1583,6 +1591,9 @@ class RenamedInputContractTests(unittest.TestCase):
         self.assertNotIn("src/main/kotlin/thc/runtime/CoreVectorMemory.kt", sources)
         self.assertFalse(any(name.startswith("compiler/Thc/") for name in sources))
         self.assertIn("test/haskell-fixtures/PinnedAddressFixtures.hs", sources)
+        self.assertIn("tools/primops/PrimopTools.hs", sources)
+        for name in ("generate-scalar-signatures.py", "primop-coverage.py", "test-primop-coverage.py"):
+            self.assertNotIn("scripts/" + name, sources)
         for name in ("prepare-pinned-addresses.py", "pinned_address_model.py", "test-pinned-addresses.py"):
             self.assertNotIn("scripts/" + name, sources)
 

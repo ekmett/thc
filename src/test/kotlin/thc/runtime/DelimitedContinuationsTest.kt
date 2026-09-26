@@ -8,6 +8,7 @@ import com.oracle.truffle.api.frame.FrameDescriptor
 import com.oracle.truffle.api.frame.FrameSlotKind
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.Node
+import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -118,6 +119,8 @@ class DelimitedContinuationsTest {
                             (it.getOrNull(1) as? List<*>)?.take(2) == listOf("var", apply["id"]) })
                     }
                     val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
+                    assertTrue((program.entryTarget(entry).rootNode as GuestRoot).delimitedControlEnabled,
+                        "$stage/$backend/$entry: root policy is prepared before the first guest call")
                     val function = context.asValue(EntryValue(program, entry, 1))
                     for ((index, n) in listOf(-2L, 0L, 7L).withIndex()) {
                         assertEquals(native[index * entries.size + entries.indexOf(entry)], function.execute(n).asLong(), "$stage/$backend/$entry/$n")
@@ -167,6 +170,43 @@ class DelimitedContinuationsTest {
                     assertEquals(MaskingState.UNMASKED, Language.currentState(null).maskingState.get())
                 } finally { context.leave() }
             }
+        }
+    }
+
+    @Test fun rootPoliciesArePreparedWithoutExecutingBodiesAndRetainedByClones() {
+        Context.newBuilder("thc").build().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                for (enabled in listOf(false, true)) {
+                    val source = FunctionRoot(language, FrameLayout().build(), "unexecuted policy", null,
+                        intArrayOf(), intArrayOf(), intArrayOf(), object : Expr() {
+                            override fun execute(frame: VirtualFrame): Any? = error("Metadata preparation executed guest code")
+                        }, Metrics(false), enableDelimited = enabled)
+                    val clone = NodeUtil.cloneNode(source)
+                    for (root in listOf(source, clone)) {
+                        assertSame(root, root.callTarget.rootNode)
+                        assertEquals(enabled, root.delimitedControlEnabled)
+                        assertEquals(enabled, DelimitedControl.enabled(root))
+                    }
+                }
+                val other = object : GuestRoot(language, FrameDescriptor.newBuilder().build()) {
+                    override fun bloom(frame: VirtualFrame): Long = 0L
+                    override fun execute(frame: VirtualFrame): Any? = error("Metadata preparation executed guest code")
+                }
+                other.callTarget
+                assertFalse(DelimitedControl.enabled(other), "Unrecognized roots do not gain continuation authority")
+                val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
+                val value = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
+                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, primReps = value.primReps,
+                    components = listOf(state, value)), language)
+                val cut = DelimitedCut(PromptTag(Language.currentState(null)), null, shape,
+                    MaskingState.UNMASKED, other)
+                val continuation = DelimitedStack(cut, shape).closure(language, Metrics(false)).target.rootNode as GuestRoot
+                assertTrue(continuation.delimitedControlEnabled)
+                assertTrue(DelimitedControl.enabled(continuation))
+                ThreadInventoryCoreEvidence.released(language)
+            } finally { context.leave() }
         }
     }
 

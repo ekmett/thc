@@ -311,6 +311,7 @@ tasks.withType<Test>().configureEach {
         "compiler/pinned-ghc-internal/GHC/Internal/InfoProv/Types.hsc",
         "compiler/pinned-ghc-internal/GHC/Internal/Heap/InfoTable.hsc")
     inputs.files(fileTree("test/haskell-fixtures") { include("**/*.hs") })
+    inputs.file("tools/primops/PrimopTools.hs")
     inputs.files(fileTree("bench/experiments") {
         include("int32x4-bytearray/evidence-x86_64/*-core.json.gz", "int32x4-bytearray/evidence-x86_64/native/provenance.json.gz",
             "word32x4-bytearray/evidence-x86_64/*-core.json.gz", "word32x4-bytearray/evidence-x86_64/native/provenance.json.gz",
@@ -325,7 +326,7 @@ tasks.withType<Test>().configureEach {
             "prepare-simd-capability-smoke.py", "simd_family_model.py", "test-simd-families.py")
         include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-floating-tuples.py", "prepare-tag-to-enum-audit.py", "prepare-show-int.py", "show_int_model.py", "test-show-int-model.py", "prepare-narrow-literal-proofs.py", "test-narrow-literal-proofs.py", "prepare-show-word-list.py", "show_word_list_model.py", "test-show-word-list-model.py", "prepare-short-bytes-slices.py", "short_bytes_slice_model.py", "test-short-bytes-slices-model.py", "test-core-enums.py", "prepare-boxed-arrays.py", "prepare-array-slices.py", "test-array-slice-model.py",
             "prepare-simd-audit.py", "prepare-floatx4-audit.py", "prepare-doublex2-audit.py", "doublex2_model.py", "test-doublex2-model.py", "core_vectors.py",
-            "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "prepare-tuple-input-audit.py", "prepare-io-main-pap.py", "test-tuple-inputs.py", "prepare-empty-join-input.py", "test-empty-join-inputs.py", "core_*.py", "generate-scalar-signatures.py",
+            "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "prepare-tuple-input-audit.py", "prepare-io-main-pap.py", "test-tuple-inputs.py", "prepare-empty-join-input.py", "test-empty-join-inputs.py", "core_*.py",
             "prepare-managed-mvars.py", "test-managed-mvar-fixtures.py", "test-managed-mvars.py",
             "prepare-synchronous-exceptions.py", "test-synchronous-exception-fixtures.py",
             "prepare-managed-md5.py",
@@ -399,6 +400,21 @@ for ((taskName, dense) in listOf("compilerRtsFullCoreTest" to false, "compilerRt
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Original compiler RTS native/first-entry checks require a fresh process") { true }
         doFirst { check(file("build/compiler-rts/manifest.json").isFile) { "Run thc-fixtures compiler-rts with complete installed GHC Core" } }
+    }
+}
+for ((taskName, dense) in listOf("floatForeignFullCoreTest" to false, "floatForeignFullCoreDenseTest" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests original GHC Float/Double C declarations against native raw-bit controls."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.FloatForeignNativeTest") }
+        inputs.files(fileTree("build/float-foreign") { include("*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original floating FFI native/first-entry checks require a fresh process") { true }
+        doFirst { check(file("build/float-foreign/manifest.json").isFile) { "Run thc-fixtures float-foreign with complete installed GHC Core" } }
     }
 }
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("main"))
@@ -592,7 +608,7 @@ for ((taskName, dense) in listOf("stablePtrFfiFullCoreDefault" to false, "stable
 for ((taskName, dense) in listOf("packageNativeOriginalsDefault" to false, "packageNativeOriginalsDense" to true)) {
     tasks.register<Test>(taskName) {
         group = "verification"
-        description = "Checks original digest C++/zlib and safe erf/libm against native Haskell observations."
+        description = "Checks original digest, safe erf/libm and primitive integer setters against native Haskell observations."
         testClassesDirs = fullCoreTests.output.classesDirs
         classpath = fullCoreTests.runtimeClasspath
         systemProperty("thc.handoffSlabs", dense.toString())
@@ -602,7 +618,7 @@ for ((taskName, dense) in listOf("packageNativeOriginalsDefault" to false, "pack
         outputs.upToDateWhen { false }
         doFirst {
             check(file("build/original-native/manifest.json").isFile) {
-                "Missing original digest fixture: set THC_DIGEST_SOURCE and run cabal run exe:thc-fixtures -- package-native-originals"
+                "Missing original package fixtures: set THC_DIGEST_SOURCE, THC_ERF_SOURCE and THC_PRIMITIVE_SOURCE; run cabal run exe:thc-fixtures -- package-native-originals"
             }
         }
     }

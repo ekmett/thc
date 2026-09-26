@@ -3,11 +3,63 @@
 
 package thc.runtime
 
+import com.oracle.truffle.api.CompilerDirectives
+import com.oracle.truffle.api.Truffle
+import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.nodes.RootNode
 import jdk.incubator.vector.IntVector
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import thc.Language
+import thc.primopTestContext
 
 class ManagedAllocationTest {
+    @Test fun heapAndNativeByteAccessKeepTheFirstInstalledCallAndStorageIdentity() {
+        primopTestContext().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val root = object : RootNode(language) {
+                    var compiledEntries = 0L
+                    override fun execute(frame: VirtualFrame): Any {
+                        if (CompilerDirectives.inCompiledCode()) compiledEntries++
+                        val storage = frame.arguments[0] as ManagedAllocation
+                        val index = frame.arguments[1] as Long
+                        val value = frame.arguments[2] as Long
+                        storage.writeByte(index, value)
+                        return storage.readByte(index)
+                    }
+                }
+                val heap = ManagedAllocation.mutable(16, 8)
+                val native = ManagedAllocation.mutable(16, 8, pinned = true)
+                val heapAlias = heap.rawBytesIfPointerFree()
+                val nativeAlias = native.nativeSegment()!!
+                val target = root.callTarget
+                for (storage in listOf(heap, native)) for (value in listOf(0L, 127L, 128L, 255L))
+                    assertEquals(value, target.call(storage, 7L, value))
+                target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                val runtime = Truffle.getRuntime()
+                runtime.javaClass.getMethod("bypassedInstalledCode",
+                    Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target)
+                for (storage in listOf(heap, native)) {
+                    val before = root.compiledEntries
+                    assertEquals(0xa5L, target.call(storage, 7L, 0x1a5L))
+                    assertEquals(before + 1, root.compiledEntries, "first installed byte access")
+                    assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                }
+                assertSame(heapAlias, heap.rawBytesIfPointerFree())
+                assertEquals(0xa5.toByte(), heapAlias[7])
+                assertSame(nativeAlias, native.nativeSegment())
+                assertEquals(0xa5.toByte(), nativeAlias.toArray(java.lang.foreign.ValueLayout.JAVA_BYTE)[7])
+                assertThrows(RuntimeFault::class.java) { heap.readByte(16) }
+                assertThrows(RuntimeFault::class.java) { native.writeByte(-1, 0) }
+                assertEquals(0xa5L, native.readByte(7))
+            } finally { context.leave() }
+        }
+    }
+
     @Test fun scalarAccessKeepsTheOwnerMonitorThroughTheOperationAndReleasesOnFailure() {
         val storage = ManagedAllocation.mutable(16, 8)
         val failure = IllegalStateException("failed scalar operation")

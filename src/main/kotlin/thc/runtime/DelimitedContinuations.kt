@@ -311,7 +311,11 @@ internal object DelimitedControl {
             cut.append(frame, DelimitedTupleStep(destination, node))
         return cut
     }
-    fun enabled(node: Node): Boolean = when (val root = node.rootNode) {
+    fun enabled(node: Node): Boolean = (node.rootNode as? GuestRoot)?.delimitedControlEnabled == true
+
+    /** Fixed calling-convention metadata, computed before the root can execute. */
+    @TruffleBoundary
+    fun rootEnabled(root: GuestRoot): Boolean = when (root) {
         is FunctionRoot -> root.enableDelimited
         is BytecodeRoot -> root.isDelimitedEnabled
         is DelimitedContinuationRoot -> true

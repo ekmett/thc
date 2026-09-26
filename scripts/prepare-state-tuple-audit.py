@@ -26,7 +26,7 @@ def audit_inputs():
              *sorted((ROOT / 'scripts').glob('core_*.py'))]
     # The shared table is an auditor input once that foundation is present.
     paths += [p for p in (ROOT / 'src/main/resources/thc/scalar-primop-signatures.json',
-                          ROOT / 'scripts/generate-scalar-signatures.py') if p.exists()]
+                          ROOT / 'tools/primops/PrimopTools.hs', ROOT / 'thc.cabal') if p.exists()]
     return paths
 
 

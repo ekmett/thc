@@ -62,6 +62,7 @@ class FastSelectionTest(unittest.TestCase):
             "scripts/test-smoke.py": PYTHON_TEST,
             "scripts/test-other.py": PYTHON_TEST,
             "test/haskell-driver/Main.hs": "module Main where\nmain = pure ()\n",
+            "test/primop-tools/Main.hs": "module Main where\nmain = pure ()\n",
             "README.md": "Documentation\n",
         }
         for path, text in files.items():
@@ -205,6 +206,18 @@ class FastSelectionTest(unittest.TestCase):
         self.assertEqual("narrow", selected["mode"], selected)
         self.assertEqual(["driver-tests"], selected["haskell"]["suites"])
         self.assertEqual(["driver-tests"], selected["affected"]["haskell"])
+
+    def test_primop_tests_select_the_new_cabal_suite(self):
+        path = "test/primop-tools/Main.hs"
+        self.policy["owners"][path] = dict(junit=[], python=[], haskell=["primop-tools"])
+        self.write(select.POLICY, json.dumps(self.policy))
+        before = self.commit()
+        self.write(path, "module Main where\nmain = print True\n")
+        self.commit()
+        selected = self.plan(base=before)
+        self.assertEqual("narrow", selected["mode"], selected)
+        self.assertEqual(["primop-tools"], selected["haskell"]["suites"])
+        self.assertEqual(["primop-tools"], selected["affected"]["haskell"])
 
     def test_polyglot_changes_select_actual_optional_class_without_all_regular_tests(self):
         path = "src/polyglotTest/kotlin/example/PolyglotTest.kt"
@@ -451,7 +464,7 @@ private val text = "class FakeString { @Test }"
         self.assertEqual("narrow", result["mode"], result)
         self.assertEqual(sorted(group["junit"]), result["affected"]["junit"])
         self.assertEqual(sorted(group["python"]), result["affected"]["python"])
-        self.assertEqual([], result["haskell"]["suites"])
+        self.assertEqual(["primop-tools"], result["haskell"]["suites"])
         self.assertFalse(result["polyglot"]["required"])
 
         for path, body, reason in (
@@ -1047,9 +1060,9 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                       *self.policy["automation"].values()]:
             self.assertLessEqual(set(group["junit"]), self.classes)
             for suite in group.get("haskell", []):
-                self.assertEqual("driver-tests", suite)
-                self.assertTrue((self.root / "test/haskell-driver/Main.hs").is_file())
-                self.assertIn("test-suite driver-tests", (self.root / "thc.cabal").read_text())
+                self.assertIn(suite, select.HASKELL_TESTS)
+                self.assertTrue((self.root / select.HASKELL_TESTS[suite]).is_file())
+                self.assertIn("test-suite " + suite, (self.root / "thc.cabal").read_text())
             for path in group["python"]:
                 if path in checked_python:
                     continue

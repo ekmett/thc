@@ -29,7 +29,7 @@ def record(path):
     return dict(path=str(path.relative_to(ROOT)), sha256=digest(path))
 def audit_inputs():
     return [ROOT/'scripts/audit-core.py', ROOT/'scripts/core-capabilities.json', *sorted((ROOT/'scripts').glob('core_*.py')),
-            ROOT/'src/main/resources/thc/scalar-primop-signatures.json', ROOT/'scripts/generate-scalar-signatures.py']
+            ROOT/'src/main/resources/thc/scalar-primop-signatures.json', ROOT/'tools/primops/PrimopTools.hs', ROOT/'thc.cabal']
 def auditor():
     spec = importlib.util.spec_from_file_location('audit_core', ROOT/'scripts/audit-core.py')
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)

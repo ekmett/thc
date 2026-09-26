@@ -37,7 +37,7 @@ def main():
     assert run([ghc,'--numeric-version'],text=True,capture_output=True).stdout.strip()=='9.14.1'
     assert run([pkg,'field','array','version','--simple-output'],text=True,capture_output=True).stdout.strip()=='0.5.8.0'
     run(['compiler/build.sh'])
-    run(['python3','scripts/primop-coverage.py'])
+    run(['cabal','run','exe:thc-primops','--','coverage'])
     inventory=json.loads((ROOT/'build/primop-coverage.json').read_text())
     signatures=[p for p in inventory['primitives'] if p['name'] in OPS]
     assert {p['name']:p['valueArity'] for p in signatures}=={'cloneArray#':3,'freezeArray#':4,'thawArray#':4}
@@ -74,7 +74,7 @@ def main():
     run([ghc,'--make','-O2','-fforce-recomp','-dcore-lint','-dstg-lint','-icompiler/test-fixtures','-odir',native,'-hidir',native,driver,'-o',binary])
     result=run([binary],input=''.join(f'{n}\t{x}\n' for n,x,_ in rows()),text=True,capture_output=True,timeout=30)
     verify(result.stdout);(OUT/'oracle.tsv').write_text(result.stdout)
-    sources=[SOURCE,Path(__file__).resolve(),ROOT/'scripts/primop-coverage.py',ROOT/'scripts/audit-core.py',ROOT/'scripts/core-capabilities.json',ROOT/'src/main/resources/thc/scalar-primop-signatures.json',
+    sources=[SOURCE,Path(__file__).resolve(),ROOT/'tools/primops/PrimopTools.hs',ROOT/'thc.cabal',ROOT/'scripts/audit-core.py',ROOT/'scripts/core-capabilities.json',ROOT/'src/main/resources/thc/scalar-primop-signatures.json',
              *sorted((ROOT/'scripts').glob('core_*.py')),*sorted((ROOT/'compiler/THC').glob('*.hs')),*[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')]]
     artifacts += [driver,binary,OUT/'oracle.tsv']
     hashes=lambda ps:{str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(set(ps))}

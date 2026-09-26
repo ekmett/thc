@@ -113,7 +113,7 @@ sourcePaths root = do
   pure $ sort $ fixtures ++ ["test/haskell-fixtures/UnsafeEqualityFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
     "test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh",
     "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json",
-    "scripts/generate-scalar-signatures.py"] ++
+    "tools/primops/PrimopTools.hs"] ++
     ["compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
     ["scripts" </> file | file <- scripts, "core_" `isPrefixOf` file, takeExtension file == ".py"]
 

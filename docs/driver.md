@@ -245,6 +245,12 @@ libraries with full startup/shutdown in both backends and handoff modes; the
 linked recipes distinguish these guest successes from the larger upstream
 test suites still being brought up.
 
+The [GHC library example](../examples/standard-apps/ghc-api/README.md) also runs
+the original compiler's FastString interning code on bytecode and matches native
+stdout. Its recipe needs complete Core for the `ghc` package itself; the first
+acquisition includes all 822 compiler interfaces. That result does not yet
+establish compiler sessions, module loading or GHCi support.
+
 ## Build and exercise
 
 Use GHC 9.14.1 with its bundled Cabal/Cabal-syntax 3.16. The API bounds are narrow
@@ -422,6 +428,16 @@ project runs can select `--installed-core required`. The default
 `--installed-core pinned` retains the limited source provider described above;
 these are separate choices, not an implicit fallback after an interface error.
 The explicit `.cabal` path does not yet support the installed provider.
+
+Cold installed-Core acquisition hydrates at most two interfaces concurrently.
+`THC_INSTALLED_CORE_JOBS` selects a bound from 1 to 64 (1 is the serial control);
+raising it increases helper CPU and peak memory demand. Results and errors are
+consumed in registered module order, and failure cancels outstanding helpers.
+Only hydration overlaps: identity/schema checks, source/provenance checks,
+registration rechecks, bundle contents and warm-cache validation are unchanged.
+Full-Core stdout stays in UTF-8 bytes through the subprocess boundary; stderr
+is drained concurrently and malformed UTF-8 remains a protocol failure.
+See the [transport allocation screen](../bench/results/performance-20260926-interface-transport.md).
 
 An optional `--ghc-source DIR` supplies the matching configured GHC 9.14.1
 source tree when original `Conc.Bound`, `System.Posix.Internals`, or Unix's

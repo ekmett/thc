@@ -3,7 +3,7 @@
 
 # Compiler-library RTS services
 
-THC translates three small GHC 9.14.1 compiler-runtime interfaces. This is not
+THC translates the following GHC 9.14.1 compiler-runtime interfaces. This is not
 support for the native GHC object loader or a claim that every GHC API works.
 
 * `getOrSetLibHSghcFastStringTable` uses the same first-writer-wins StablePtr
@@ -11,6 +11,12 @@ support for the native GHC object loader or a claim that every GHC API works.
   slot is separate, belongs to one THC context, retains its winning pointer until
   context disposal, and never evaluates the table. Losing pointers remain owned
   by their callers. Foreign, stale and prematurely freed winners reject.
+* `getOrSetLibHSghcGlobalHasPprDebug`, `getOrSetLibHSghcGlobalHasNoDebugOutput`
+  and `getOrSetLibHSghcGlobalHasNoStateHack` have separate slots in the same
+  context-owned table. Original `GHC.Utils.GlobalVars` creates and updates its
+  own `IORef Bool` values; THC retains the opaque winning StablePtrs without
+  evaluating, replacing, or merging those flags. Concurrent callers see one
+  winner per slot, and separate contexts never share compiler-global state.
 * `keepCAFsForGHCi` returns true: live THC programs already retain their global CAF
   cells, and THC does not perform native RTS CAF reversion. This does not load
   GHC's constructor function, mutate a native RTS, promise permanent retention
@@ -23,16 +29,18 @@ support for the native GHC object loader or a claim that every GHC API works.
   range/alignment checks, context ownership and disposal remain enforced. These
   cells do not refer to the host GHC RTS or manufacture process addresses.
 
-The two function declarations require the exact original compiler unit
+The function declarations require the exact original compiler unit
 `ghc-9.14.1-inplace`, unsafe `ccall`, and the original saturated primitive ABI.
 Data labels require an evaluated scalar `AddrRep` proof. Unknown labels reject.
 
-The fixture generator recovers actual FCallIds from complete installed `GHC` and
-`GHC.Data.FastString` interfaces, applies them to GHC-typechecked test consumers,
+The fixture generator recovers actual FCallIds from complete installed `GHC`,
+`GHC.Data.FastString` and `GHC.Utils.GlobalVars` interfaces, applies them to GHC-typechecked test consumers,
 and serializes the resulting pre/post-Tidy Core. These small consumers are not
 substitute compiler bodies. Native GHC executes the same specialized consumers;
 the address-cell oracle separately links the original RTS symbols and advances
-the real unique counter without resetting a live compiler's supply.
+the real unique counter without resetting a live compiler's supply. Native
+compiler flag CAFs are initialized normally before observations, so the oracle
+never installs a test value into a native compiler-owned flag slot.
 
 ```sh
 cabal run exe:thc-fixtures -- compiler-rts

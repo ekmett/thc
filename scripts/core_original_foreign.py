@@ -68,6 +68,11 @@ TCSETATTR_SYMBOL = 'ghczuwrapperZC9ZCghczminternalZCGHCziInternalziSystemziPosix
 TCGETATTR_SYMBOL = 'ghczuwrapperZC10ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCtcgetattr'
 
 OPERATIONS = {
+    **{'is' + precision + predicate: ('ccall', 'unsafe', (rep, None), (None, 'IntRep'))
+       for precision, rep in (('Float', 'FloatRep'), ('Double', 'DoubleRep'))
+       for predicate in ('NaN', 'Infinite', 'Finite', 'Denormalized', 'NegativeZero')},
+    'rintFloat': ('ccall', 'unsafe', ('FloatRep', None), (None, 'FloatRep')),
+    'rintDouble': ('ccall', 'unsafe', ('DoubleRep', None), (None, 'DoubleRep')),
     'getProgArgv': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None,)),
     'setProgArgv': ('ccall', 'unsafe', ('Int32Rep', 'AddrRep', None), (None,)),
     'stg_sig_install': ('ccall', 'unsafe', ('Int32Rep', 'Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),
@@ -160,6 +165,9 @@ OPERATIONS = {
     'getOrSetSystemEventThreadEventManagerStore': ('ccall', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
     'getOrSetGHCConcSignalSignalHandlerStore': ('ccall', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
     'getOrSetLibHSghcFastStringTable': ('ccall', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
+    'getOrSetLibHSghcGlobalHasPprDebug': ('ccall', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
+    'getOrSetLibHSghcGlobalHasNoDebugOutput': ('ccall', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
+    'getOrSetLibHSghcGlobalHasNoStateHack': ('ccall', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
     'keepCAFsForGHCi': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
     'rts_setMainThread': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', None), (None,)),
     STACK_CLONE: ('prim', 'safe', (None,), (None, 'BoxedRep (Just Unlifted)')),
@@ -190,6 +198,9 @@ DESCRIPTOR_KEYS = {'schema', 'target', 'convention', 'safety', 'arity', 'supplie
 # ghc-internal declarations above. Do not infer these from caller binding names.
 LIBRARY_OPERATIONS = {
     ('ghc-9.14.1-inplace', 'getOrSetLibHSghcFastStringTable'): OPERATIONS['getOrSetLibHSghcFastStringTable'],
+    ('ghc-9.14.1-inplace', 'getOrSetLibHSghcGlobalHasPprDebug'): OPERATIONS['getOrSetLibHSghcGlobalHasPprDebug'],
+    ('ghc-9.14.1-inplace', 'getOrSetLibHSghcGlobalHasNoDebugOutput'): OPERATIONS['getOrSetLibHSghcGlobalHasNoDebugOutput'],
+    ('ghc-9.14.1-inplace', 'getOrSetLibHSghcGlobalHasNoStateHack'): OPERATIONS['getOrSetLibHSghcGlobalHasNoStateHack'],
     ('ghc-9.14.1-inplace', 'keepCAFsForGHCi'): OPERATIONS['keepCAFsForGHCi'],
     ('array-0.5.8.0-inplace', 'memcpy'):
         ('ccall', 'unsafe', (GMP_ARRAY, GMP_ARRAY, 'Word64Rep', None), (None, 'AddrRep')),
@@ -284,7 +295,8 @@ def validate(metadata, argument_reps, flags, result_rep):
     if symbol not in OPERATIONS:
         return None
     convention, safety, expected, output = operation(target)
-    if symbol in ('getOrSetLibHSghcFastStringTable', 'keepCAFsForGHCi'):
+    if symbol in ('getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',
+                  'getOrSetLibHSghcGlobalHasNoDebugOutput', 'getOrSetLibHSghcGlobalHasNoStateHack', 'keepCAFsForGHCi'):
         require(target.get('unit') == 'ghc-9.14.1-inplace', 'exact compiler unit')
     require(descriptor.keys() == DESCRIPTOR_KEYS and type(descriptor.get('schema')) is int and descriptor['schema'] == 1,
             'descriptor schema')

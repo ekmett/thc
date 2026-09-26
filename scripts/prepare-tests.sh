@@ -5,8 +5,8 @@
 # Generate the real GHC inputs required by all JVM tests, from a fresh checkout.
 set -eu
 cd "$(dirname "$0")/.."
-python3 scripts/primop-coverage.py --check
-python3 scripts/generate-scalar-signatures.py
+cabal run exe:thc-primops -- coverage --check
+cabal run exe:thc-primops -- scalars
 compiler/build.sh
 python3 scripts/prepare-io-main-pap.py
 python3 scripts/prepare-floating-audit.py

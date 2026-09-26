@@ -209,7 +209,7 @@ prepareScalarBitCasts root = do
   scripts <- listDirectory (root </> "scripts")
   let sources = sort $ [source,driver,"thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/ScalarBitCastFixtures.hs",
-        "scripts/core-capabilities.json","scripts/audit-core.py","scripts/generate-scalar-signatures.py",
+        "scripts/core-capabilities.json","scripts/audit-core.py","tools/primops/PrimopTools.hs",
         "src/main/resources/thc/scalar-primop-signatures.json","compiler/build.sh","compiler/export.sh",
         "compiler/toolchain.sh","compiler/plugin.py"] ++
         ["compiler/THC" </> name | name <- plugins, takeExtension name == ".hs"] ++

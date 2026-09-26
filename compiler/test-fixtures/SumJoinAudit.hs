@@ -3,7 +3,7 @@
 {-# LANGUAGE MagicHash, UnboxedTuples, UnboxedSums, NoImplicitPrelude #-}
 {-# OPTIONS_GHC -fno-full-laziness -fno-worker-wrapper -fno-specialise -fno-spec-constr #-}
 module SumJoinAudit where
-import GHC.Exts (Int#, Double#, (+#), (-#), (*#), (<=#), int2Double#, double2Int#)
+import GHC.Exts (Int#, Double#, (+#), (-#), (*#), (<=#), int2Double#, double2Int#, runRW#, touch#)
 
 data Box = Box Int#
 {-# OPAQUE bottomBox #-}
@@ -46,6 +46,30 @@ nested x =
            _ -> finish n
      in inner x
 
+-- GHC explicitly permits outer join jumps inside runRW# continuations. Its
+-- late beta reduction must not become an ordinary capturing closure in THC.
+{-# OPAQUE stateForward #-}
+stateForward :: Int# -> (# Box | Int# #)
+stateForward x =
+  let {-# NOINLINE finish #-}
+      finish n = case n <=# 0# of
+        1# -> (# bottomBox | #)
+        _ -> (# | n +# 29# #)
+  in case x <=# 0# of
+       1# -> finish (x -# 1#)
+       _ -> runRW# (\s -> case touch# bottomBox s of _ -> finish (x +# 1#))
+
+{-# OPAQUE stateRecursive #-}
+stateRecursive :: Int# -> (# Int# | Double# #)
+stateRecursive x =
+  let {-# NOINLINE go #-}
+      go n a = case n <=# 0# of
+        1# -> case a <=# 0# of
+          1# -> (# a | #)
+          _ -> (# | int2Double# a #)
+        _ -> runRW# (\s -> case touch# bottomBox s of _ -> go (n -# 1#) (a +# 3#))
+  in go x (0# -# x)
+
 {-# OPAQUE forwardCase #-}
 forwardCase :: Int# -> Int#
 forwardCase x = case forward x of
@@ -61,3 +85,13 @@ nestedCase :: Int# -> Int#
 nestedCase x = case nested x of
   (# (# n, _ #) | #) -> n *# 5#
   (# | (# #) #) -> -23#
+{-# OPAQUE stateForwardCase #-}
+stateForwardCase :: Int# -> Int#
+stateForwardCase x = case stateForward x of
+  (# _ | #) -> -31#
+  (# | n #) -> n *# 7#
+{-# OPAQUE stateRecursiveCase #-}
+stateRecursiveCase :: Int# -> Int#
+stateRecursiveCase x = case stateRecursive x of
+  (# n | #) -> n -# 37#
+  (# | d #) -> double2Int# d +# 41#
