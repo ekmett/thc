@@ -1286,7 +1286,9 @@ class FastInputTests(unittest.TestCase):
                 self.assertIn("Bundle missing or linked", stderr.getvalue())
 
     def test_cli_restore_candidate_still_requires_fresh_identity(self):
-        self.pack()
+        # Restore absent payloads: pack deliberately removes group/world
+        # write bits, so source files created under umask 0002 may conflict.
+        manifest = self.pack(); self.remove_payload(manifest)
         identity_file = self.temp_root / "identity.json"
         identity_file.write_text(json.dumps(self.current))
         command = ["restore", "--root", str(self.root), "--identity", str(identity_file),
@@ -1298,6 +1300,7 @@ class FastInputTests(unittest.TestCase):
         with patch.object(cache, "identity", wraps=cache.identity) as identify, patch("sys.stderr", io.StringIO()) as stderr:
             self.assertEqual(1, cache.main(command), stderr.getvalue())
             identify.assert_called_once_with(self.root)
+            self.assertIn("Current identity changed since key step", stderr.getvalue())
 
     def test_payload_scope_has_no_runtime_or_test_outputs(self):
         pins = cache.vendor_pins(self.root)
@@ -1434,6 +1437,24 @@ class FastInputTests(unittest.TestCase):
         with self.assertRaises(cache.CacheMiss):cache.safe_mode(0o4755,name)
         with self.assertRaises(cache.CacheMiss):cache.safe_mode(0o777,name)
         with self.assertRaises(cache.CacheMiss):cache.safe_mode(0o755,"build/core/Fixture.json")
+
+    def test_pack_sanitizes_write_permissions_without_overwriting_existing_modes(self):
+        name = "build/bytearray/oracle.tsv"
+        path = self.root / name
+        original = path.read_bytes()
+        path.chmod(0o664)
+        manifest = self.pack()
+        self.assertEqual(0o644, manifest["modes"][name])
+        self.assertEqual(0o664, path.stat().st_mode & 0o7777)
+        self.remove_payload(manifest)
+        self.put(name, original)
+        path.chmod(0o664)
+        self.rejected_without_writes(self.bundle)
+        self.assertEqual(0o664, path.stat().st_mode & 0o7777)
+        path.unlink()
+        cache.restore(self.root, self.current, self.bundle)
+        self.assertEqual(original, path.read_bytes())
+        self.assertEqual(0o644, path.stat().st_mode & 0o7777)
 
     def test_malformed_bundle_shapes_are_cache_misses(self):
         m=self.pack();self.remove_payload(m)
