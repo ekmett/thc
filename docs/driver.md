@@ -578,6 +578,12 @@ another checkout for the single-package case. The project case builds the plugin
 from a private source-only root, then checks its new manifest. Command output is
 retained in `build/driver-haskell-tests`.
 
+Project source export marks the known THC plugin trustworthy, preserving GHC
+safety inference for local modules imported by `Safe` clients. The flag is part
+of the export cache identity; explicitly `Unsafe` imports remain rejected. Run
+`cabal test driver-tests --test-options=--export-safety-only` for the focused
+native/export and cache controls.
+
 The printed evidence directory retains the fresh driver build, `commands.jsonl`
 (commands, working directories, stdout/stderr, exit statuses and timeout errors),
 and `tests.log`. Bootstrap errors additionally produce `failure.log` and a
