@@ -415,6 +415,13 @@ project runs can select `--installed-core required`. The default
 these are separate choices, not an implicit fallback after an interface error.
 The explicit `.cabal` path does not yet support the installed provider.
 
+Cold installed-Core acquisition hydrates at most two interfaces concurrently.
+`THC_INSTALLED_CORE_JOBS` selects a bound from 1 to 64 (1 is the serial control);
+raising it increases helper CPU and peak memory demand. Results and errors are
+consumed in registered module order, and failure cancels outstanding helpers.
+Only hydration overlaps: identity/schema checks, source/provenance checks,
+registration rechecks, bundle contents and warm-cache validation are unchanged.
+
 An optional `--ghc-source DIR` supplies the matching configured GHC 9.14.1
 source tree when original `Conc.Bound`, `System.Posix.Internals`, or Unix's
 `System.Posix.Files.PosixString` interfaces lack

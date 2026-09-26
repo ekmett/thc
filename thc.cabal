@@ -454,6 +454,7 @@ test-suite driver-tests
     NativeRecipeTests
     RuntimeShimTests
     InstalledForeignTests
+    InstalledHydrationTests
     THC.Driver.Cabal
     THC.Driver.Json
     THC.Driver.Run
