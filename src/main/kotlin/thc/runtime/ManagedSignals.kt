@@ -50,6 +50,8 @@ internal class NativeSignalTransport : ProcessSignalTransport {
         } catch (failure: Throwable) { arena.close(); failed("Process signal setup failed", failure) }
     }
     override fun install(signal: Int, action: Int): ProcessSignalTransport.Result = try {
+        if (signal == 12 && !userSignalAvailable())
+            fault("SIGUSR2 requires the standalone JVM launcher with _JAVA_SR_SIGNUM=64 and verified native dispositions")
         Arena.ofConfined().use { call ->
             val errors = call.allocate(Api.capture)
             val old = Api.install.invokeExact(errors, session, signal, action) as Int
@@ -87,6 +89,7 @@ internal class NativeSignalTransport : ProcessSignalTransport {
         finally { arena.close() }
     }
     companion object {
+        internal fun userSignalAvailable(): Boolean = Api.usr2Available.invokeExact() as Int == 1
         /** Explicit CLI-only termination after context shutdown, never guest FFI. */
         fun exitBySignal(signal: Int) {
             require(signal in 1..64) { "Invalid process exit signal" }
@@ -124,6 +127,7 @@ internal class NativeSignalTransport : ProcessSignalTransport {
         val open = function("open", FunctionDescriptor.of(ValueLayout.ADDRESS), true)
         val size = function("info_size", FunctionDescriptor.of(ValueLayout.JAVA_INT), false)
         val number = function("number", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS), false)
+        val usr2Available = function("usr2_available", FunctionDescriptor.of(ValueLayout.JAVA_INT), false)
         val install = function("install", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS,
             ValueLayout.JAVA_INT, ValueLayout.JAVA_INT), true)
         val take = function("take", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS), false)
@@ -134,7 +138,7 @@ internal class NativeSignalTransport : ProcessSignalTransport {
     }
 }
 
-/** One explicit CLI context owns GHC's INT/QUIT/HUP/TERM handlers. Ordinary
+/** One explicit CLI context owns the supported GHC process handlers. Ordinary
  * native-access contexts cannot acquire it. Pending OS events contain real
  * siginfo bytes; GHC's own dispatcher chooses the current Haskell handler.
  *
@@ -143,6 +147,7 @@ internal class NativeSignalTransport : ProcessSignalTransport {
  */
 internal class ManagedSignals(private val owner: Language.State, private val language: Language,
                               private val reducedVmSignals: Boolean = hasReducedVmSignals(),
+                              private val userSignalAvailable: () -> Boolean = { NativeSignalTransport.userSignalAvailable() },
                               private val factory: () -> ProcessSignalTransport = { NativeSignalTransport() }) {
     private var authorized = false
     private var binding: SignalDispatchRoot? = null
@@ -170,12 +175,15 @@ internal class ManagedSignals(private val owner: Language.State, private val lan
     fun install(signal: Long, action: Long, mask: ManagedAddress): Long {
         current()
         if (!authorized) fault("Process signals require explicit NativeIO launcher authority")
-        if ((signal != 1L && signal != 2L && signal != 3L && signal != 15L) ||
+        if ((signal != 1L && signal != 2L && signal != 3L && signal != 10L &&
+                signal != 12L && signal != 15L && signal != 24L && signal != 25L) ||
             (action != -1L && action != -2L && action != -4L && action != -5L) ||
             mask !== ManagedAddress.nullAddress())
-            fault("stg_sig_install supports only SIGHUP/SIGINT/SIGQUIT/SIGTERM, DFL/IGN/HAN/RST and a null mask")
+            fault("stg_sig_install supports only HUP/INT/QUIT/USR1/USR2/TERM/XCPU/XFSZ, DFL/IGN/HAN/RST and a null mask")
         if (signal != 2L && !reducedVmSignals)
             fault("GHC process signal handlers require the standalone JVM launcher with -Xrs")
+        if (signal == 12L && !userSignalAvailable())
+            fault("SIGUSR2 requires the standalone JVM launcher with _JAVA_SR_SIGNUM=64 and verified native dispositions")
         if (closed || stopping) fault("Process signal service is closed")
         val root = binding ?: fault("Missing original signal dispatcher")
         val native = transport ?: factory().also { acquired ->

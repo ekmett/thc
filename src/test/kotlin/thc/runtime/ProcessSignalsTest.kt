@@ -253,7 +253,7 @@ class ProcessSignalsTest {
         onBackends { language, backend ->
             val owner = Language.currentState()
             val events = LinkedBlockingQueue<ProcessSignalTransport.Event>()
-            val delivered = CountDownLatch(4)
+            val delivered = CountDownLatch(8)
             val closed = AtomicInteger()
             val fake = object : ProcessSignalTransport {
                 private val old = mutableMapOf<Int, Int>()
@@ -269,23 +269,23 @@ class ProcessSignalsTest {
                 override fun resetWake() { events.removeIf { it.info.isEmpty() } }
                 override fun close() { closed.incrementAndGet() }
             }
-            val service = ManagedSignals(owner, language, reducedVmSignals = true) { fake }
+            val service = ManagedSignals(owner, language, reducedVmSignals = true, userSignalAvailable = { true }) { fake }
             val program = program(language, backend)
             service.bind(program)
             assertThrows(RuntimeFault::class.java) { service.install(2L, -5L, ManagedAddress.nullAddress()) }
             service.authorizeLauncher()
-            for (bad in listOf(10L to -5L, 11L to -5L, 2L to -3L, 2L to 1L))
+            for (bad in listOf(64L to -5L, 11L to -5L, 2L to -3L, 2L to 1L))
                 assertThrows(RuntimeFault::class.java) { service.install(bad.first, bad.second, ManagedAddress.nullAddress()) }
-            for (signal in listOf(1L, 2L, 3L, 15L))
+            for (signal in listOf(1L, 2L, 3L, 10L, 12L, 15L, 24L, 25L))
                 assertEquals(listOf(-1L, -2L, -4L, -5L), listOf(-2L, -4L, -5L, -1L).map {
                     service.install(signal, it, ManagedAddress.nullAddress()) })
             try {
-                for (signal in listOf(1, 2, 3, 15))
+                for (signal in listOf(1, 2, 3, 10, 12, 15, 24, 25))
                     events.put(ProcessSignalTransport.Event(signal, ByteArray(128) { it.toByte() }))
                 assertTrue(TruffleSafepoint.setBlockedThreadInterruptibleFunction(null,
                     TruffleSafepoint.InterruptibleFunction<CountDownLatch, Boolean> { it.await(5, TimeUnit.SECONDS) }, delivered),
                     "typed guest dispatcher must return")
-                assertEquals(4, owner.nativeAllocations.liveCount(), "dispatcher images remain context-owned")
+                assertEquals(8, owner.nativeAllocations.liveCount(), "dispatcher images remain context-owned")
             } finally { service.close() }
             assertEquals(1, closed.get())
             assertThrows(RuntimeFault::class.java) { service.install(2L, -5L, ManagedAddress.nullAddress()) }
@@ -298,12 +298,25 @@ class ProcessSignalsTest {
         }
         service.bind(program(language, backend))
         service.authorizeLauncher()
-        for (signal in listOf(1L, 3L, 15L)) {
+        for (signal in listOf(1L, 3L, 10L, 12L, 15L, 24L, 25L)) {
             val failure = assertThrows(RuntimeFault::class.java) {
                 service.install(signal, -4L, ManagedAddress.nullAddress())
             }
             assertTrue(failure.message!!.contains("-Xrs"))
         }
+        service.close()
+    }
+
+    @Test fun userSignalRequiresVerifiedRelocationBeforeAcquiringTransport() = onBackends { language, backend ->
+        val service = ManagedSignals(Language.currentState(), language, reducedVmSignals = true,
+            userSignalAvailable = { false }) { error("denied request must not acquire signal transport") }
+        service.bind(program(language, backend))
+        service.authorizeLauncher()
+        val failure = assertThrows(RuntimeFault::class.java) {
+            service.install(12L, -4L, ManagedAddress.nullAddress())
+        }
+        assertTrue(failure.message!!.contains("_JAVA_SR_SIGNUM=64"))
+        assertThrows(RuntimeFault::class.java) { service.install(64L, -4L, ManagedAddress.nullAddress()) }
         service.close()
     }
 
@@ -314,7 +327,7 @@ class ProcessSignalsTest {
         val address = owner.nativeAllocations.malloc(128L)
         owner.threads.enterCurrent()
         try {
-            for (signal in listOf(1L, 2L, 3L, 15L)) {
+            for (signal in listOf(1L, 2L, 3L, 10L, 12L, 15L, 24L, 25L)) {
                 target.call(address, signal)
                 assertEquals(signal, address.readWord8(0))
             }
@@ -328,19 +341,54 @@ class ProcessSignalsTest {
         }
         val directory = File(System.getProperty("thc.projectRoot"), "build/process-signals")
         directory.mkdirs()
-        for (disabled in listOf(false, true)) {
+        for (mode in listOf("relocated", "unrelocated", "reduced-signals-disabled")) {
             val output = File.createTempFile("jvm-transport-", ".log", directory)
             val command = mutableListOf(File(System.getProperty("java.home"), "bin/java").path,
                 "-Xrs", "--enable-native-access=ALL-UNNAMED")
-            if (disabled) command.add("-XX:-ReduceSignalUsage")
+            if (mode == "reduced-signals-disabled") command.add("-XX:-ReduceSignalUsage")
             command.addAll(listOf("-cp", classpath, ProcessSignalJvmProbe::class.java.name))
-            if (disabled) command.add("reduced-signals-disabled")
-            val child = ProcessBuilder(command).redirectErrorStream(true).redirectOutput(output).start()
+            command.add(mode)
+            val builder = ProcessBuilder(command).redirectErrorStream(true).redirectOutput(output)
+            builder.environment().remove("LD_PRELOAD")
+            if (mode == "relocated") builder.environment()["_JAVA_SR_SIGNUM"] = "64"
+            else builder.environment().remove("_JAVA_SR_SIGNUM")
+            val child = builder.start()
             try {
                 assertTrue(child.waitFor(30, TimeUnit.SECONDS), "native signal child timed out: $output")
                 assertEquals(0, child.exitValue(), output.readText())
-                assertTrue(output.readText().contains(if (disabled) "Later VM option disables reduced signal usage"
-                    else "JVM received signals 1,2,3,15"), output.readText())
+                assertTrue(output.readText().contains(when (mode) {
+                    "reduced-signals-disabled" -> "Later VM option disables reduced signal usage"
+                    "unrelocated" -> "Unrelocated JVM retains SIGUSR2"
+                    else -> "JVM received signals 1,2,3,10,12,15,24,25"
+                }), output.readText())
+            } finally { if (child.isAlive) child.destroyForcibly().waitFor() }
+        }
+    }
+
+    @Test fun standaloneScriptReservesSignalWithoutOverwritingUserSettings(@TempDir directory: Path) {
+        assumeTrue(System.getProperty("os.name") == "Linux")
+        val java = directory.resolve("bin/java").toFile()
+        java.parentFile.mkdirs()
+        java.writeText("#!/bin/sh\nprintf 'reserved=%s\\n' \"\${_JAVA_SR_SIGNUM-unset}\"\n")
+        assertTrue(java.setExecutable(true))
+        val script = File(System.getProperty("thc.projectRoot"), "build/scripts/thc")
+        for (setting in listOf(null, "64", "12", "")) {
+            val builder = ProcessBuilder("sh", script.path).redirectErrorStream(true)
+            builder.environment()["JAVA_HOME"] = directory.toString()
+            if (setting == null) builder.environment().remove("_JAVA_SR_SIGNUM")
+            else builder.environment()["_JAVA_SR_SIGNUM"] = setting
+            val child = builder.start()
+            try {
+                assertTrue(child.waitFor(10, TimeUnit.SECONDS))
+                val output = child.inputStream.bufferedReader().readText()
+                if (setting == null || setting == "64") {
+                    assertEquals(0, child.exitValue(), output)
+                    assertEquals("reserved=64\n", output)
+                } else {
+                    assertNotEquals(0, child.exitValue(), output)
+                    assertTrue(output.contains("incompatible setting was preserved"), output)
+                    assertFalse(output.contains("reserved="), output)
+                }
             } finally { if (child.isAlive) child.destroyForcibly().waitFor() }
         }
     }
@@ -355,8 +403,8 @@ class ProcessSignalsTest {
             "src/test/resources/core/original-unix-signal-install-descriptor.json"))
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf("build/process-signals/oracle.txt",
             "build/process-signals/native-controls.txt"), "build/process-signals/")
-        assertEquals("[(1,[-1,-2,-4,-5]),(2,[-1,-2,-4,-5]),(3,[-1,-2,-4,-5]),(15,[-1,-2,-4,-5])]\n", File(root, "build/process-signals/oracle.txt").readText())
-        assertEquals("25 isolated native signal controls passed\n", File(root, "build/process-signals/native-controls.txt").readText())
+        assertEquals("[(1,[-1,-2,-4,-5]),(2,[-1,-2,-4,-5]),(3,[-1,-2,-4,-5]),(10,[-1,-2,-4,-5]),(12,[-1,-2,-4,-5]),(15,[-1,-2,-4,-5]),(24,[-1,-2,-4,-5]),(25,[-1,-2,-4,-5])]\n", File(root, "build/process-signals/oracle.txt").readText())
+        assertEquals("41 isolated native signal controls passed\n", File(root, "build/process-signals/native-controls.txt").readText())
     }
 }
 
@@ -369,18 +417,29 @@ object ProcessSignalJvmProbe {
             return
         }
         check(ManagedSignals.hasReducedVmSignals())
+        if (args.contentEquals(arrayOf("unrelocated"))) {
+            check(!NativeSignalTransport.userSignalAvailable())
+            NativeSignalTransport().use { transport ->
+                val failure = runCatching { transport.install(12, -4) }.exceptionOrNull()
+                check(failure is RuntimeFault && failure.message!!.contains("_JAVA_SR_SIGNUM=64"))
+            }
+            println("Unrelocated JVM retains SIGUSR2")
+            return
+        }
+        check(NativeSignalTransport.userSignalAvailable())
         val raise = java.lang.foreign.Linker.nativeLinker().downcallHandle(
             java.lang.foreign.Linker.nativeLinker().defaultLookup().find("raise").orElseThrow(),
             java.lang.foreign.FunctionDescriptor.of(java.lang.foreign.ValueLayout.JAVA_INT,
                 java.lang.foreign.ValueLayout.JAVA_INT))
         NativeSignalTransport().use { transport ->
-            for (signal in listOf(1, 2, 3, 15)) {
+            for (signal in listOf(1, 2, 3, 10, 12, 15, 24, 25)) {
                 check(transport.install(signal, -4).action == -1)
                 check(raise.invokeExact(signal) as Int == 0)
                 val event = checkNotNull(transport.take())
                 check(event.signal == signal && event.info.isNotEmpty())
             }
         }
-        println("JVM received signals 1,2,3,15")
+        check(NativeSignalTransport.userSignalAvailable()) // USR2 restored; HotSpot's reserved handler survives.
+        println("JVM received signals 1,2,3,10,12,15,24,25")
     }
 }

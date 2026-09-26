@@ -102,12 +102,43 @@ val compactHeaderOption = "-XX:${if (compactObjectHeaders == "true") "+" else "-
 application {
     mainClass.set("thc.MainKt")
     applicationDefaultJvmArgs = listOf("--add-modules=jdk.incubator.vector", "--enable-native-access=ALL-UNNAMED", "-Xss2m", compactHeaderOption) +
-        // The Linux standalone guest owns GHC's INT/QUIT/HUP/TERM handlers.
+        // The Linux standalone guest owns GHC's supported process handlers.
         // Embedders do not inherit these launcher JVM arguments.
         if (System.getProperty("os.name") == "Linux") listOf("-Xrs") else emptyList()
 }
+tasks.startScripts {
+    // This must happen before Java starts. HotSpot's suspend handler cannot be
+    // chained behind the guest's USR2 handler; reserve Linux signal 64 for it.
+    val policy = """
+        case "${'$'}(uname -s)" in
+          Linux)
+            if [ "${'$'}{_JAVA_SR_SIGNUM+x}" = x ] && [ "${'$'}_JAVA_SR_SIGNUM" != 64 ]; then
+              die "thc: Linux launcher requires _JAVA_SR_SIGNUM=64; incompatible setting was preserved"
+            fi
+            _JAVA_SR_SIGNUM=64
+            export _JAVA_SR_SIGNUM
+            ;;
+        esac
+
+    """.trimIndent()
+    inputs.property("linuxSignalPolicy", policy)
+    doLast {
+        val marker = "# Collect all arguments for the java command:"
+        val script = unixScript.readText()
+        check(script.contains(marker)) { "Missing Gradle launcher insertion point" }
+        unixScript.writeText(script.replace(marker, policy + "\n" + marker))
+    }
+}
+tasks.named<JavaExec>("run") {
+    if (System.getProperty("os.name") == "Linux") doFirst {
+        val setting = environment["_JAVA_SR_SIGNUM"]
+        check(setting == null || setting == "64") { "Linux launcher requires _JAVA_SR_SIGNUM=64" }
+        environment("_JAVA_SR_SIGNUM", "64")
+    }
+}
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    dependsOn(tasks.startScripts)
     // Isolated native-signal controls need a child JVM with the actual test
     // classpath; modern Gradle workers need not use URLClassLoader.
     doFirst { systemProperty("thc.testRuntimeClasspath", classpath.asPath) }
@@ -1002,7 +1033,7 @@ val compileNativeProcessSignals by tasks.registering {
             val destination = output.get().asFile.resolve("thc/native/native-process-signal-api.so")
             destination.parentFile.mkdirs()
             providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
-                "-fPIC", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+                "-fPIC", "-shared", source.asFile.path, "-o", destination.path, "-ldl") }.result.get()
         }
     }
 }

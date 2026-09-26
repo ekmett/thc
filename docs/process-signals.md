@@ -4,7 +4,8 @@
 # Standalone process signals
 
 On Linux x86_64, both backends translate original `stg_sig_install`
-for SIGHUP, SIGINT, SIGQUIT and SIGTERM. These are the four handlers installed
+for SIGHUP, SIGINT, SIGQUIT, SIGUSR1, SIGUSR2, SIGTERM, SIGXCPU and SIGXFSZ.
+Tasty installs six of these during ordinary startup. HUP/INT/QUIT/TERM are installed
 temporarily by GHC 9.14.1's library-level `runGhc` and `runGhcT`; importing the
 compiler library alone does not install them.
 
@@ -12,7 +13,7 @@ The same bridge accepts the exact `stg_sig_install` declarations from
 `ghc-internal` and the pinned `unix-2.8.8.0-inplace` library. Both use the
 original `GHC.Internal.Conc.Signal.runHandlersPtr` dispatcher; admitting Unix's
 declaration does not grant an embedding context process-signal authority or
-change the supported signals and actions.
+change the supported actions.
 
 DFL, IGN, HAN and RST actions and a null signal mask are supported. Other
 signals, non-null masks and Windows delivery remain outside
@@ -30,15 +31,31 @@ the native transport is acquired.
 
 The Linux standalone JVM launch scripts include `-Xrs`. This leaves the four
 signals above to the application rather than HotSpot's normal signal handling.
-The extended bridge checks the effective `ReduceSignalUsage` VM setting and
-refuses HUP/QUIT/TERM installation if a later option disables it. The
+The bridge checks the effective `ReduceSignalUsage` VM setting and
+refuses every supported signal except SIGINT if a later option disables it. The
 previous SIGINT-only path remains available for existing direct launches.
 
 Only the explicit NativeIO command-line context can acquire this process-global
 service. Ordinary native-enabled embedding contexts cannot replace host process
 handlers. The handler slot is never reused by another context in the same JVM;
-late delivery from an old context must not target a new context. Code that builds
-its own JVM invocation must arrange the same `-Xrs` flag and owning launcher.
+late delivery from an old context must not target a new context. Code that builds its own JVM invocation must arrange the same startup policy and owning launcher.
+
+The standalone Linux launcher also sets `_JAVA_SR_SIGNUM=64` before starting
+Java, reserving signal 64 for HotSpot's suspend/resume mechanism. It preserves
+an existing value of `64` and rejects any incompatible supplied value. The
+bridge refuses guest signal 64. Guest USR2 installation requires both this
+setting and native disposition checks: signal 64 must have a handler in
+`libjvm.so`, while USR2 must not. Direct embeddings and interposers that obscure
+those dispositions fail explicitly. A guest request never relocates a running
+JVM's handler.
+
+On the pinned HotSpot VM, USR1 and XCPU have no JVM handler. HotSpot ignores
+XFSZ and permits applications to replace its handler; the bridge saves and
+restores it with the other owned dispositions. No `libjsig` preload is required.
+The startup policy and checks are Linux x86_64 HotSpot-specific, not a general
+embedding or portable JVM contract. HotSpot's suspend handler does not chain;
+see [OpenJDK's signal implementation](https://github.com/openjdk/jdk/blob/jdk-25%2B36/src/hotspot/os/posix/signals_posix.cpp)
+and [Oracle's signal guide](https://docs.oracle.com/en/java/javase/12/troubleshoot/handle-signals-and-exceptions.html).
 
 With `-Xrs`, SIGQUIT no longer produces HotSpot's ordinary thread dump, and JVM
 shutdown hooks are not automatically triggered by INT/HUP/TERM. The Haskell
@@ -61,9 +78,9 @@ that have not subsequently been replaced by the host. Unrelated signals are
 untouched. The existing context shutdown/cancellation path wakes and joins the
 reader before releasing its native resources.
 
-Verification includes four native GHC action-order oracles, 25 isolated native
+Verification includes eight native GHC action-order oracles, 41 isolated native
 process controls, real signal delivery through the FFM bridge in a separate
-`-Xrs` JVM, typed dispatcher checks for all four signal numbers, and both runtime
+`-Xrs` JVM with the reserved suspend signal, typed dispatcher checks for all eight signal numbers, and both runtime
 handoff modes. These checks do not claim a complete GHC compiler session works.
 See [compiler RTS services](compiler-rts.md) for that separate effort.
 
