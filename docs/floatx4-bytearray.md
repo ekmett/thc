@@ -1,5 +1,10 @@
 # Bounded FloatX4 ByteArray access
 
+This page retains the original memory-operation checkpoint and its measurements.
+Current execution uses raw `FloatVector.SPECIES_128` values, not a `FloatX4`
+wrapper. Historical transport restrictions below are superseded by the
+[current SIMD contract](simd.md); the old graphs do not certify the new runtime.
+
 This slice adds exactly six local GHC9.14.1 operations, without a vector ABI:
 
 | Operations | Index stride | Access width |
@@ -27,7 +32,7 @@ bounds are checked before scaling or narrowing:
 Invalid stores leave all bytes unchanged; invalid ranges deoptimize before
 exception allocation. State is checked before access or result publication.
 
-The storage path preserves the existing immutable FloatVector carrier,
+The storage path preserves raw immutable FloatVector values,
 using ByteVector128 transfers and reinterpretation, with per-int byte reversal
 on big-endian hosts. It performs no numeric conversion, lane extraction/repack,
 NaN canonicalization or floating arithmetic. Packed-code survival is verified

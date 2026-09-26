@@ -1853,7 +1853,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             if (local.proof.isVector) {
                 CoreRepresentations.requireInput(local.proof)
                 if (local.cell || local.tupleSlots?.size != 1)
-                    throw UnsupportedCore("Vector capture requires primitive lane locals")
+                    throw UnsupportedCore("Vector capture requires one raw-vector local")
             } else CoreRepresentations.requireScalar(local.proof, "capture")
         }
         val captureSources = captured.flatMap { id ->

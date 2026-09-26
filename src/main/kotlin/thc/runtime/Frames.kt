@@ -327,7 +327,7 @@ class CaptureLayout private constructor(language: TruffleLanguage<*>, primitiveE
         fun initializeDouble(storage: CapturedFrame, value: Double) { primitiveValue.setDouble(storage, value) }
 
         fun initialize(storage: CapturedFrame, value: Any?) {
-            if (vector != null) fault("Vector capture requires primitive lane sources")
+            if (vector != null) fault("Vector capture requires vector-aware initialization")
             if (exactFloat) initializeFloat(storage, value as? Float ?: fault("Expected primitive Float capture"))
             else if (exactDouble) initializeDouble(storage, value as? Double ?: fault("Expected primitive Double capture"))
             else if (exactLong) {

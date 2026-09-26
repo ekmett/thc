@@ -272,7 +272,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
-    /** One logical vector field restores directly to primitive bytecode locals. */
+    /** One logical vector field restores to one raw-vector reference local. */
     public static final class VectorCaptureSlots {
         public final CaptureLayout layout;
         public final int index;
@@ -1941,7 +1941,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
-    /** Vector fields are initialized from owned primitive locals before publication. */
+    /** Vector heap fields copy lanes from raw-vector locals before publication. */
     @Operation
     @ConstantOperand(type = DataLayout.class, name = "layout")
     public static final class AllocateData {

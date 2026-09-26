@@ -8,9 +8,11 @@ The eight primops remain **partial** entries in the coverage checklist.
 
 The formulas are `x*y+z`, `x*y-z`, `(-x)*y+z` and `(-x)*y-z`, respectively.
 Operand signs are selected before a single fused rounding. This matters for
-cancellation and signed zero. The runtime uses the existing owned primitive
-lane carriers and transient Java Vector API values. Floating behavior follows
-Java semantics; NaN payload selection is unspecified.
+cancellation and signed zero. The runtime directly uses fixed-species
+`FloatVector.SPECIES_512` and `DoubleVector.SPECIES_512` values; arithmetic does
+not reconstruct THC lane wrappers. Primitive lane fields remain a separate
+[durable heap-storage boundary](simd.md). Floating behavior follows Java
+semantics; NaN payload selection is unspecified.
 
 `SimdWideFloatFma.hs` exports genuine GHC 9.14.1 Core with 512-bit primops,
 vector workers and partially applied vector calls. Its separate native Haskell
@@ -29,7 +31,7 @@ there is no JVM hardware-SIMD, retained-graph or performance claim.
 `SimdWideFloatFmaTest` compares each native observation with the Java scalar
 model and genuine Core execution on both backends. It checks interpreted calls,
 first installed compiled scalar entries and compiled vector workers, including
-the exact 48-float or 24-double argument layout, retained compiled targets and
+three exact fixed-species vector arguments, retained compiled targets and
 released handoff state. Finite results and signed zero use raw bits; NaNs are
 compared by class.
 

@@ -1,10 +1,12 @@
 # Floating vector minimum and maximum
 
 `min` and `max` now cover FloatX4/X8/X16 and DoubleX2/X4/X8: twelve primops,
-each taking two exact vector carriers and returning the same shape. Both AST
+each taking two exact vector values and returning the same shape. Both AST
 and bytecode use the existing generated typed operations. Fixed-width Java
-Vector API operations preserve the existing carrier layouts without boxed lane
-fallbacks. These primops remain partial in the coverage checklist.
+Vector API operations return raw `FloatVector` or `DoubleVector` values, with
+no THC wrapper or boxed lane fallback. Exact shape remains in `VecRep` metadata;
+see the [SIMD representation contract](simd.md). These primops remain partial in
+the coverage checklist.
 
 The runtime follows Java floating semantics. If either operand is NaN, the
 result is NaN; payload and sign selection are unspecified. Negative zero orders

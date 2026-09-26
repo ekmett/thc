@@ -1,8 +1,10 @@
 # Bounded Word32X4 ByteArray access
 
-This slice adds the six unsigned counterparts to the local
-[Int32X4 memory operations](int32x4-bytearray.md), using the existing four-int
-Word32X4 carrier. It does not introduce a vector calling convention.
+This page records the original six unsigned counterparts to the local
+[Int32X4 memory operations](int32x4-bytearray.md) and their retained evidence.
+Current execution uses raw `IntVector.SPECIES_128` values with unsigned `VecRep`
+metadata, not a four-int `Word32X4` wrapper. Historical local-only limits below
+are superseded by the [current SIMD transport contract](simd.md).
 
 | Operations | Offset unit | Access width |
 | --- | ---: | ---: |
@@ -13,7 +15,7 @@ The pinned GHC 9.14.1 contracts are index `(ByteArray#, Int#) -> Word32X4#`,
 read `(MutableByteArray# s, Int#, State# s) -> (# State# s, Word32X4# #)`,
 and write `(MutableByteArray# s, Int#, Word32X4#, State# s) -> State# s`.
 The exact proof is `VecRep 4 Word32ElemRep`; signed proofs are not interchangeable.
-Four raw int fields preserve the bits and unpack zero-extends each lane to Long.
+The four raw int lanes preserve the bits and unpack zero-extends each lane to Long.
 Scalar observations therefore distinguish `0x80000000` and `0xffffffff` from
 their signed counterparts.
 

@@ -323,9 +323,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         context.captures = captureSources.map { bind(scope, it.name, it.primitive, it.proof, it.cell, it.entry, it.arityCertificate) }
         context.vectorCaptures = freeVectors.map { (id, proof, fields) ->
             val lanes = TupleShape.flatten(proof).mapIndexed { lane, leaf ->
-                Local(nextLocal++, "$id captured vector lane $lane", leaf.isLong, leaf)
+                Local(nextLocal++, "$id captured vector slot $lane", leaf.isLong, leaf)
             }
-            if (fields.size != lanes.size) throw RuntimeFault("Vector capture lane count mismatch")
+            if (fields.size != lanes.size) throw RuntimeFault("Vector capture slot count mismatch")
             scope.bindTuple(id, proof, lanes)
             VectorCapture(proof, lanes)
         }
@@ -3793,8 +3793,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val alt = alternatives.single()
         val ids = alt[2] as List<String>
         // A vector is one logical primitive value with no data alternatives.
-        // Keep its case binder in lane locals, as for vector formals and lets,
-        // so closures and delayed arguments copy the lanes into owned captures.
+        // Keep its case binder in one raw-vector local, as for formals and lets.
+        // Closures and delayed arguments copy lanes only into owned heap fields.
         if (proof.isVector && (alt[0] != "default" || ids.isNotEmpty() ||
                 CoreRepresentations.alternativeBinders(alt).isNotEmpty()))
             throw RuntimeFault("Vector case requires a binder-free DEFAULT alternative")

@@ -1,5 +1,9 @@
 # Local Word8X16 vectors
 
+This page retains the original foundation measurements. Current execution uses
+raw `ByteVector.SPECIES_128` values with unsigned `VecRep` metadata, not a
+`Word8X16` JVM wrapper; see the [current SIMD representation](simd.md).
+
 The original slice measured on this page covers six GHC 9.14.1 primitives:
 `packWord8X16#`, `unpackWord8X16#`, `broadcastWord8X16#`,
 `plusWord8X16#`, `minusWord8X16#`, and `timesWord8X16#`.
@@ -17,10 +21,10 @@ tuple fields, owned captures and boxed constructor fields; see the
 [current vector contract and limits](primops.md#current-aggregate-and-address-limits).
 The [checklist](primops.md) records later additions to the operation family.
 
-The runtime stores exactly sixteen final primitive `byte` fields in a distinct
+The original runtime stored exactly sixteen final primitive `byte` fields in a distinct
 `Word8X16` carrier: 16 bytes of lane payload, not total object size. Transient
-`ByteVector.SPECIES_128` values implement bitwise-equivalent wrapping arithmetic;
-there are no stored vector objects, generic payload arrays or per-lane boxes.
+`ByteVector.SPECIES_128` values implemented bitwise-equivalent wrapping arithmetic;
+that carrier stored no vector objects, generic payload arrays or per-lane boxes.
 Pack narrows sixteen Long slots to raw bytes; both AST and bytecode unpack each
 field with `& 0xffL`. Numeric operation dispatch is selected while lowering Core.
 

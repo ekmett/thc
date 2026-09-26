@@ -1,5 +1,10 @@
 # Local FloatX4 foundation
 
+This page records the original foundation and its retained evidence. Current
+execution uses `FloatVector.SPECIES_128` directly; the `FloatX4` JVM wrapper and
+`FloatX4.java` no longer exist. Historical local-only limits below are superseded
+by the [current SIMD representation and transport contract](simd.md).
+
 This slice adds `broadcastFloatX4#`, `packFloatX4#`, `unpackFloatX4#`,
 `plusFloatX4#`, `minusFloatX4#`, and `timesFloatX4#` on both executable backends.
 The exact installed GHC 9.14.1 signatures define one `VecRep 4 FloatElemRep`
@@ -12,12 +17,12 @@ register name. Pack reads primitive Float locals, unpack writes them, and the
 bytecode operations specialize on primitive `float` arguments. There is no
 numeric widening through Double or `Number`.
 
-The local carrier owns an immutable `FloatVector` of fixed `SPECIES_128`.
+The original local carrier owned an immutable `FloatVector` of fixed `SPECIES_128`.
 Arithmetic operates directly on that vector; it does not extract and rebuild
 lanes between operations. Unlike the integer vector carriers, interpreted or
 deoptimized FloatX4 storage retains the JDK vector object and its backing array.
 Allocation elimination is a property to verify in compiled graphs, not an
-interpreter representation claim. Java support is isolated in `FloatX4.java`.
+interpreter representation claim. That checkpoint isolated support in `FloatX4.java`.
 
 This does not extend the vector ABI. Vector function arguments/results, PAP
 prefixes, captures, ordinary lets, join arguments/results, constructor fields,

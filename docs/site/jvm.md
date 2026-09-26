@@ -43,12 +43,17 @@ object, even where their names sound similar.
 
 | Role | Examples | What an instance represents |
 | --- | --- | --- |
-| Guest values | [DataValue][thc.runtime.DataValue], internal `Closure` and `Thunk`, primitive scalars, SIMD carriers such as [FloatX4][thc.runtime.FloatX4] | A constructor, function, delayed computation or computed result. A value can be shared by several calls. |
+| Guest values | [DataValue][thc.runtime.DataValue], internal `Closure` and `Thunk`, primitive scalars, fixed-species JDK Vector API values | A constructor, function, delayed computation or computed result. A value can be shared by several calls. |
 | Value storage | [CapturedFrame][thc.runtime.CapturedFrame], [HandoffStorage][thc.runtime.HandoffStorage], managed arrays and addresses | Fields holding values, with a specific ownership and lifetime. Storage is not executable code. |
 | Executable Truffle nodes | [GuestRoot][thc.runtime.GuestRoot], [BytecodeRoot][thc.runtime.BytecodeRoot], internal `Expr`, `Force` and call nodes | Instructions and control flow, with children, specialization state and call-site caches. Nodes execute against invocation frames and runtime values. |
 | Layout and lowering metadata | [DataLayout][thc.runtime.DataLayout], [CaptureLayout][thc.runtime.CaptureLayout], [HandoffLayout][thc.runtime.HandoffLayout], internal `CoreRepresentation` | How to interpret or allocate fields and which execution path is justified. A layout describes storage; it does not contain a particular value's fields. |
 | Program construction and linkage | [Program][thc.runtime.Program], [BytecodeProgram][thc.runtime.BytecodeProgram], [ExecutableProgram][thc.runtime.ExecutableProgram] | Lowering, linked bindings, root call targets and host entrypoints. These are not themselves expression nodes or guest closures. |
 | Context services | `Language.State` and its thread, file and native-resource registries | Resources and mutable state belonging to one polyglot context. |
+
+SIMD values use JDK `ByteVector`, `ShortVector`, `IntVector`, `LongVector`,
+`FloatVector` and `DoubleVector` directly. GHC names such as `Int16X8#` describe
+guest types, not JVM wrapper classes. Their exact `VecRep` metadata retains lane
+count and signedness; durable heap storage may retain primitive lanes instead.
 
 For example, a `Closure` holds a target, an optional `CapturedFrame` and any
 already supplied arguments. A call node invokes that target. `CaptureLayout`

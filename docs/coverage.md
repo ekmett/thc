@@ -77,7 +77,8 @@ The [Int16X8](int16x8.md) and [Int8X16](int8x16.md) foundations each support
 pack, unpack, broadcast, add, subtract, negate and multiply with exact narrow
 lane proofs. Their native/model corpora contain 6,032 and 9,168 rows respectively,
 including independently observable lanes and residual scalar/tuple calls.
-Both use dense primitive carriers and retain the same local-only vector boundary.
+Those checkpoints used dense primitive carriers and a local-only vector boundary.
+Current execution uses [raw JDK vectors and the expanded guest transport](simd.md).
 The [Word8X16 foundation](word8x16.md) adds six unsigned byte-vector operations
 and 7,712 native/model rows, with exact Word8 proofs, zero-extension and explicit
 signed/unsigned mismatch controls. There is no GHC unsigned vector negate primop.
@@ -92,7 +93,8 @@ The [Int32X4 multiplication slice](int32x4-multiply.md) adds the missing signed
 The [Int32X4 ByteArray slice](int32x4-bytearray.md) adds six managed index/read/write
 operations and 9,666 native/model observations. Both offset units access sixteen
 bytes; mutable read tuples can only be destructured immediately into local State
-and vector binders. General vector tuple transport remains unsupported.
+and vector binders in that checkpoint. It did not establish the separately
+implemented [vector tuple transport](simd.md).
 
 The separate [library suite](library-coverage.md), run by
 `scripts/try-libraries.sh`, adds 13 executable entries and 2,524 native-oracle

@@ -1,5 +1,10 @@
 # Local Word16X8 vectors
 
+This page records the original foundation and its retained evidence. Current
+execution uses raw `ShortVector.SPECIES_128` values with unsigned `VecRep`
+metadata, not a `Word16X8` JVM wrapper. Historical storage and local-only limits
+below are superseded by the [current SIMD contract](simd.md).
+
 The bounded contract is exactly six pinned GHC 9.14.1 primitives:
 `packWord16X8#`, `unpackWord16X8#`, `broadcastWord16X8#`,
 `plusWord16X8#`, `minusWord16X8#`, and `timesWord16X8#`.
@@ -15,9 +20,9 @@ subtraction underflow and low-16-bit multiplication. Unpacked lanes widen to
 function results, captures, heap fields and vector-containing tuple ABIs remain
 unsupported. Machine `Int#` seeds and scalar results require a 64-bit host.
 
-The runtime uses a distinct `Word16X8` carrier with exactly eight final primitive
+The original runtime used a distinct `Word16X8` carrier with exactly eight final primitive
 `short` fields: sixteen bytes of lane payload, not total object size. Transient
-`ShortVector.SPECIES_128` values implement wrapping arithmetic; there is no stored
+`ShortVector.SPECIES_128` values implemented wrapping arithmetic; that carrier stored no
 vector object, payload array or lane box. Pack narrows eight Long slots; both AST
 and bytecode unpack every field with `& 0xffffL`. Operation selection happens
 during Core lowering, with no vector ABI expansion.

@@ -1,4 +1,4 @@
-# Bounded Int64X2 and Int32X4 execution
+# SIMD representation and transport
 
 The runtime represents each supported vector directly with a fixed-species JDK
 `ByteVector`, `ShortVector`, `IntVector`, `LongVector`, `FloatVector`, or

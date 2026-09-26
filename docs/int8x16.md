@@ -1,9 +1,14 @@
 # Local Int8X16 vectors
 
-The runtime uses sixteen final primitive `byte` fields for durable lanes
+This page records the original foundation and its retained evidence. Current
+execution uses raw `ByteVector.SPECIES_128` values, not an `Int8X16` JVM wrapper.
+The historical storage and local-only limits below are superseded by the
+[current SIMD representation and transport contract](simd.md).
+
+The original runtime used sixteen final primitive `byte` fields for durable lanes
 (16 bytes of lane payload, not a 16-byte Java object). Transient
-`ByteVector.SPECIES_128` values perform arithmetic; no vector object, generic
-payload array or boxed lane is stored in the carrier. Pack reads sixteen
+`ByteVector.SPECIES_128` values performed arithmetic; no vector object, generic
+payload array or boxed lane was stored in that carrier. Pack reads sixteen
 primitive Long slots and narrows; unpack sign-extends each byte to a Long slot.
 AST and bytecode choose numeric operation dispatch while lowering Core.
 

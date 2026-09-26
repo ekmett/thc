@@ -1,5 +1,10 @@
 # Local Word32X4 vectors
 
+This page retains the original foundation evidence. Current execution uses raw
+`IntVector.SPECIES_128` values with unsigned `VecRep` metadata, not a `Word32X4`
+JVM wrapper. Historical carrier and local-only descriptions below are superseded
+by the [current SIMD representation and transport contract](simd.md).
+
 The bounded contract is exactly six pinned GHC 9.14.1 primitives:
 `packWord32X4#`, `unpackWord32X4#`, `broadcastWord32X4#`,
 `plusWord32X4#`, `minusWord32X4#`, and `timesWord32X4#`.
@@ -15,10 +20,10 @@ and low-32-bit multiplication. Unpacked lanes widen to 0..4,294,967,295;
 results, captures, heap fields and vector-containing tuple ABIs remain
 unsupported. Machine `Int#` inputs and scalar results require a 64-bit host.
 
-The runtime uses a distinct `Word32X4` carrier with four final primitive
+The original runtime used a distinct `Word32X4` carrier with four final primitive
 `int` fields: sixteen bytes of lane payload, not total object size. Transient
-`IntVector.SPECIES_128` values perform low-32-bit arithmetic. No vector object,
-payload array or lane box is stored in the carrier. Pack narrows four Long slots;
+`IntVector.SPECIES_128` values performed low-32-bit arithmetic. No vector object,
+payload array or lane box was stored in that carrier. Pack narrows four Long slots;
 both AST and bytecode unpack each field with `& 0xffff_ffffL`.
 
 Canonical Word32 literal and aggregate-aware guards are unchanged. JVM checks

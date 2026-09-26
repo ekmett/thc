@@ -1,5 +1,10 @@
 # Bounded DoubleX2 ByteArray access
 
+This page retains the original memory-operation checkpoint and its measurements.
+Current execution uses raw `DoubleVector.SPECIES_128` values, not a `DoubleX2`
+wrapper. Historical transport restrictions below are superseded by the
+[current SIMD contract](simd.md); the old graphs do not certify the new runtime.
+
 This slice adds exactly six local GHC 9.14.1 operations without a vector ABI:
 
 | Operations | Index stride | Access width |
@@ -19,7 +24,7 @@ non-coercion binders, lexical identities and the producer/whole-binder annotatio
 checks remain mandatory. General tuple/vector function, join, capture, heap,
 foreign/Addr and pinned-memory transport rules do not change.
 
-The existing immutable DoubleVector carrier uses one ByteVector128 transfer and
+The immutable DoubleVector value uses one ByteVector128 transfer and
 LongVector/DoubleVector reinterpretation. Big-endian conversion reverses bytes
 within each 64-bit lane. The memory path does not extract/repack scalar lanes,
 perform floating arithmetic, numerically convert values or canonicalize NaNs.

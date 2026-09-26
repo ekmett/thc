@@ -69,7 +69,12 @@ other shapes and unimplemented operations remain outside that contract. The
 local operations and listed managed-memory slices below have their own
 native/model checks and separate graph evidence.
 
-| Lanes | Local arithmetic | Managed byte-array memory |
+These are GHC vector type names, not JVM classes. Current execution uses
+[raw fixed-species JDK vectors](simd.md); the foundation pages retain historical
+implementation and measurement checkpoints, not the removed THC wrappers as
+current APIs.
+
+| GHC vector shape | Local arithmetic | Managed byte-array memory |
 | --- | --- | --- |
 | Int64X2 | [Foundation](simd.md) | — |
 | Int32X4 | [Foundation](simd.md), [wrapping multiplication](int32x4-multiply.md) | [Signed packed memory](int32x4-bytearray.md) |

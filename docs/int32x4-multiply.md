@@ -1,5 +1,10 @@
 # Local signed Int32X4 multiplication
 
+This page retains the original multiplication checkpoint and its measurements.
+Current execution uses raw `IntVector.SPECIES_128` values, not an `Int32X4`
+wrapper. Historical local-only restrictions below are superseded by the
+[current SIMD representation and transport contract](simd.md).
+
 This bounded slice adds only `timesInt32X4#` to the existing local signed
 Int32X4 contract. Pinned GHC 9.14.1 gives the exact signature
 `Int32X4# -> Int32X4# -> Int32X4#`. Genuine fixtures also use existing
@@ -13,9 +18,11 @@ as signed two's-complement values before widening to the required 64-bit host
 yields 0. No vector function arguments, results, captures, heap fields or
 vector-containing tuple ABIs are enabled.
 
-The runtime reuses the four final `int` fields of `Int32X4` and its fixed
-128-bit `IntVector` species. Multiplication uses `IntVector.mul`, extracting
-four signed low-word results. Both the AST loader and a dedicated bytecode
+The original runtime reused the four final `int` fields of `Int32X4` and its
+fixed 128-bit `IntVector` species. Its multiplication used `IntVector.mul`,
+extracting four signed low-word results. Current multiplication retains the raw
+vector result; scalar extraction belongs to explicit unpack or heap storage.
+Both the AST loader and a dedicated bytecode
 operation enforce two exact, unlifted signed vector operands. The existing
 scalar-literal and aggregate policies are unchanged. Loader tests reject
 wrong signedness, width, arity, liftedness and malformed signed literals;

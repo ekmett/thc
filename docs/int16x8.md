@@ -1,5 +1,10 @@
 # Local Int16X8 vectors
 
+This page records the original foundation and its retained evidence. Current
+execution uses raw `ShortVector.SPECIES_128` values, not an `Int16X8` JVM wrapper.
+The historical storage and local-only limits below are superseded by the
+[current SIMD representation and transport contract](simd.md).
+
 The bounded contract is exactly seven GHC 9.14.1 primitives:
 `packInt16X8#`, `unpackInt16X8#`, `broadcastInt16X8#`,
 `plusInt16X8#`, `minusInt16X8#`, `negateInt16X8#`, and
@@ -14,11 +19,11 @@ function result, capture, heap field, or vector-containing tuple ABI is enabled
 by these fixtures. The explicit `vectorArgument` negative control must be
 rejected specifically for its vector formal.
 
-The AST and bytecode loaders use a durable carrier with eight final primitive
+The original AST and bytecode loaders used a durable carrier with eight final primitive
 `short` fields (16 bytes of lane payload, not a 16-byte Java object). Arithmetic
-constructs transient `ShortVector.SPECIES_128` values with constant lane indices,
-then reconstructs the short fields. No durable vector object, generic payload
-array, or boxed lane is stored. The interpreted JDK fallback may allocate private
+constructed transient `ShortVector.SPECIES_128` values with constant lane indices,
+then reconstructed the short fields. No durable vector object, generic payload
+array, or boxed lane was stored in that carrier. The interpreted JDK fallback may allocate private
 `short[]` arrays; compiled allocation elimination is a separate evidence gate.
 Operation dispatch is selected numerically while lowering Core. Unpack writes
 eight sign-extended primitive Long frame slots. Exact unlifted operand flags and

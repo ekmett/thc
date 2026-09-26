@@ -1,5 +1,10 @@
 # Local DoubleX2 foundation
 
+This page records the original foundation and its retained evidence. Current
+execution uses `DoubleVector.SPECIES_128` directly, not a `DoubleX2` JVM wrapper.
+Historical local-only limits below are superseded by the
+[current SIMD representation and transport contract](simd.md).
+
 This slice adds `broadcastDoubleX2#`, `packDoubleX2#`, `unpackDoubleX2#`,
 `plusDoubleX2#`, `minusDoubleX2#`, and `timesDoubleX2#` to both backends.
 The exact GHC 9.14.1 vector proof is `VecRep 2 DoubleElemRep`. Pack takes one
@@ -10,7 +15,7 @@ separate representations. `Int64X2#` and `FloatX4#` are also distinct.
 Scalar lane proofs require the concrete Double kind and `DoubleRep`. AST pack
 reads primitive Double frame slots; unpack writes primitive Double slots.
 Bytecode operations specialize on primitive `double` arguments and typed locals.
-The immutable local carrier retains `DoubleVector.SPECIES_128`, preserving
+The original immutable local carrier retained `DoubleVector.SPECIES_128`, preserving
 vector arithmetic between operations. Its interpreter/deoptimization storage
 includes the JDK vector object and backing array, as for FloatX4. Elimination of
 these objects and packed instructions must be demonstrated separately in compiled

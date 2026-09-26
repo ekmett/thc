@@ -152,7 +152,7 @@ class DataLayout private constructor(
     @ExplodeLoop
     fun create(values: Array<Any?>): DataValue {
         if (values.size != arity) fault("Constructor field count does not match layout")
-        if (fields.any { it.vector != null }) fault("Vector constructor fields require primitive lane sources")
+        if (fields.any { it.vector != null }) fault("Vector constructor fields require vector-aware initialization")
         if (boxedValues != null)
             return createLong(values[0] as? Long ?: fault("Expected primitive Long constructor field"))
         val value = allocate()
@@ -336,7 +336,7 @@ class DataLayout private constructor(
                 OBJECT -> property.setObject(value, if (address)
                     field as? ManagedAddress ?: fault("Expected a managed literal Addr# constructor field") else field)
                 VOID -> if (field !== Unit) fault("Expected zero-width constructor field")
-                VECTOR -> fault("Vector constructor field requires primitive lane sources")
+                VECTOR -> fault("Vector constructor field requires vector-aware initialization")
             }
         }
 
