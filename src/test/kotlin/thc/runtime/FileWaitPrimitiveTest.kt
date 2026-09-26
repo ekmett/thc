@@ -60,7 +60,7 @@ class FileWaitPrimitiveTest {
     }
 
     @Suppress("UNCHECKED_CAST")
-    @Test fun astAsyncAdmissionRejectsAComputedDescriptorBeforeItsBlockingCut() {
+    @Test fun astAsyncAdmissionAcceptsAComputedDescriptorBeforeItsBlockingCut() {
         val computed = listOf("app", listOf("var", "produceDescriptor", mapOf("rep" to closure)),
             listOf(listOf("var", "descriptor", mapOf("rep" to fd))), listOf(false),
             false, false, mapOf("rep" to fd))
@@ -68,10 +68,7 @@ class FileWaitPrimitiveTest {
             fun root(operand: List<Any?>? = null) =
                 (module(name, operand)["bindings"] as List<Map<String, Any?>>).first()
             assertDoesNotThrow { AstAsyncAdmission.validate(listOf(root())) }
-            val rejected = assertThrows(RuntimeFault::class.java) {
-                AstAsyncAdmission.validate(listOf(root(computed)))
-            }
-            assertTrue(rejected.message!!.contains("AST async capture is not complete"))
+            assertDoesNotThrow { AstAsyncAdmission.validate(listOf(root(computed))) }
         }
     }
 
