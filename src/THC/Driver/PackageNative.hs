@@ -28,6 +28,7 @@ import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import THC.Driver.ScalarBitcode (parseDependencies, sulongScalarTarget)
+import THC.Driver.NativeLibrarySources (zlibChecksumSources)
 
 -- (original emitted symbol, convention, safety, semantic carriers, result)
 type Signature = (String, String, String, [String], String)
@@ -183,8 +184,8 @@ captureNativeObject pieces compiler arguments = when ("-c" `elem` arguments && a
 -- Called while the package source and generated headers are still alive.
 -- The JSON written by the late Core pass does not contain retained annotations;
 -- hydrate exactly those interfaces which contain this unit's foreign calls.
-capturePackageNative :: FilePath -> FilePath -> FilePath -> [String] -> String -> FilePath -> IO ()
-capturePackageNative helper libdir compiler arguments unit directory = do
+capturePackageNative :: FilePath -> FilePath -> FilePath -> FilePath -> [String] -> String -> FilePath -> IO ()
+capturePackageNative repository helper libdir compiler arguments unit directory = do
   let core = directory </> "core"
       objects = directory </> "objects"
   paths <- sort . filter ((== ".json") . takeExtension) <$> files core
@@ -212,11 +213,27 @@ capturePackageNative helper libdir compiler arguments unit directory = do
     unless (null signatures) $ do
       sources <- mapM stubSource retained
       perModule <- mapM (either fail pure . nativeSignatures unit . (:[])) retained
+      let nativeDirectory = directory </> "native"
+      imports <- concat <$> mapM (\value -> maybe (pure []) (\proof -> get proof "imports")
+        (member value "staticForeignImports")) retained
+      -- Capture candidate source providers while the configured package headers
+      -- still exist. Final linking selects only actually unresolved symbols,
+      -- so a package-owned implementation is never replaced by the provider.
+      providers <- if any zlibChecksumImport imports then do
+        implementations <- zlibChecksumSources repository
+        forM implementations $ \(symbol, source) -> do
+          let output = nativeDirectory </> "providers/zlib" </> symbol
+          createDirectoryIfMissing True output
+          (bitcode,target,inputs) <- compileC compiler root configured output (Just source)
+          digest <- sha <$> BS.readFile bitcode
+          pure (object ["provider" .= ("zlib-checksums-1.2.11"::String), "symbols" .= [symbol],
+            "bitcode" .= bitcode,"bitcodeSha256" .= digest,"target" .= target,"inputs" .= inputs])
+        else pure []
       let inputIdentity = object ["unit" .= unit,"compiler" .= compiler,"arguments" .= arguments,
-            "sources" .= sources,"imports" .= map (\(a,b,c,d,e) -> toJSON (a,b,c,d,e)) signatures]
+            "sources" .= sources,"providers" .= providers,
+            "imports" .= map (\(a,b,c,d,e) -> toJSON (a,b,c,d,e)) signatures]
           provisional = sha (BL.toStrict (encode inputIdentity))
           makeEntries component = [(signature,"thc_native_" ++ component ++ "_" ++ show index) | (index,signature) <- zip [0::Int ..] signatures]
-          nativeDirectory = directory </> "native"
           -- GHC compiles each module's CAPI stubs as its own translation unit.
           -- Preserve private helpers, macros and header include boundaries.
           -- Repeated direct ccall imports need just one component adapter.
@@ -251,10 +268,15 @@ capturePackageNative helper libdir compiler arguments unit directory = do
       roots <- mapM canonicalizePath (nub [path | (flag,path) <- zip arguments (drop 1 arguments), flag `elem` ["-odir","-outputdir"]])
       writeJson (directory </> "native.json") (object
         ["unit" .= unit,"root" .= root,"objectRoots" .= roots,"bitcode" .= bitcode,"target" .= target,
-         "componentSha256" .= component,"inputs" .= inputs,"sourceIdentity" .= inputIdentity,
+         "componentSha256" .= component,"inputs" .= inputs,"sourceIdentity" .= inputIdentity,"providers" .= providers,
          "abi" .= [object ["symbol" .= symbol,"entry" .= entry,"convention" .= convention,"safety" .= safety,
            "arguments" .= arguments',"result" .= result] |
            ((symbol,convention,safety,arguments',result),entry) <- entries]])
+
+zlibChecksumImport :: Value -> Bool
+zlibChecksumImport value = member value "header" == Just "zlib.h" &&
+  maybe False (\emitted -> member emitted "symbol" `elem` [Just "adler32", Just "crc32"])
+    (member value "emitted")
 
 headerInputs :: FilePath -> Value -> IO [Value]
 headerInputs generated value = do
@@ -306,7 +328,7 @@ finishPackageNative pieces directory unit currentObjects modules = do
         digest <- sha <$> BS.readFile path
         check (member value "objectSha256" == Just (toJSON digest)) "package native object receipt is stale"
     forM_ native $ \value -> check (member value "target" == Just (toJSON (target::String))) "package C object target differs"
-    inputs <- mapM (\value -> get value "inputs" :: IO Value) (record:native)
+    sourceInputs <- mapM (\value -> get value "inputs" :: IO Value) (record:native)
     bitcodes <- mapM (\value -> get value "bitcode") native
     abi <- get record "abi" :: IO [Value]
     entries <- mapM (\value -> get value "entry") abi
@@ -319,19 +341,39 @@ finishPackageNative pieces directory unit currentObjects modules = do
     _ <- command directory link (wrapper : bitcodes ++ ["-o",linked])
     _ <- command directory opt ["-S","-passes=verify",linked,"-o",linkedIR]
     either fail pure . validateNativeIR =<< readFile linkedIR
-    _ <- command directory opt ["-passes=internalize,globaldce","-internalize-public-api-list=" ++ join "," entries,linked,"-o",final]
-    undefinedSymbols <- command directory nm ["--undefined-only","--format=posix",final]
+    let trim input = command directory opt ["-passes=internalize,globaldce",
+          "-internalize-public-api-list=" ++ join "," entries,input,"-o",final]
+        unresolved = do
+          output <- command directory nm ["--undefined-only","--format=posix",final]
+          pure [name | line <- lines output, name:_ <- [words line]]
+    _ <- trim linked
+    initialExternals <- unresolved
+    candidates' <- maybe (pure []) (either fail pure . parseValue) (member record "providers")
+    providers <- filterM (\value -> any (`elem` initialExternals) <$> (get value "symbols" :: IO [String])) candidates'
+    unless (null providers) $ do
+      providerBitcodes <- forM providers $ \value -> do
+        check (member value "target" == Just (toJSON (target::String))) "package native source provider target differs"
+        path <- get value "bitcode"
+        digest <- sha <$> BS.readFile path
+        check (member value "bitcodeSha256" == Just (toJSON digest)) "package native source provider bitcode changed"
+        pure path
+      let resolved = directory </> "native/resolved.bc"
+      _ <- command directory link (linked : providerBitcodes ++ ["-o",resolved])
+      _ <- trim resolved
+      pure ()
+    externals <- unresolved
     -- These are normal C memory operations supplied by Sulong/libc. This first
     -- profile does not silently acquire arbitrary extra native libraries.
-    let externals = [name | line <- lines undefinedSymbols, name:_ <- [words line]]
     check (all (\name -> name `elem` ["memcpy","memmove","memset","memcmp","bcmp"] || "llvm." `isPrefixOf` name) externals)
       ("package native unresolved dependencies: " ++ show externals)
     bytes <- BS.readFile final
     component <- get record "componentSha256" :: IO String
+    providerInputs <- mapM (\value -> get value "inputs") providers
+    let inputs = sourceInputs ++ providerInputs
     let proof = object ["schema" .= (1::Int),"format" .= ("llvm-bitcode"::String),
           "profile" .= ("thc-package-c-ffi-v1"::String),"unit" .= unit,"target" .= target,
           "componentSha256" .= component,"bitcodeSha256" .= sha bytes,"bitcodeHex" .= hex bytes,"abi" .= abi,
-          "buildInputs" .= object ["translationUnits" .= inputs,"unresolved" .= externals]]
+          "buildInputs" .= object ["translationUnits" .= inputs,"providers" .= providers,"unresolved" .= externals]]
     writeJson (directory </> "native/inputs.json") (object ["sources" .= inputs,"unresolved" .= externals])
     forM modules $ \(name,bytes') -> do
       value <- either fail pure (eitherDecodeStrict' bytes')
@@ -412,8 +454,10 @@ member (Object fields) key = KM.lookup (Key.fromString key) fields
 member _ _ = Nothing
 field :: FromJSON a => Value -> String -> Either String a
 field value key = case member value key of
-  Just item -> case fromJSON item of Success result -> Right result; Error message -> Left message
+  Just item -> parseValue item
   Nothing -> Left ("package native field missing: " ++ key)
+parseValue :: FromJSON a => Value -> Either String a
+parseValue value = case fromJSON value of Success result -> Right result; Error message -> Left message
 get :: FromJSON a => Value -> String -> IO a
 get value key = either fail pure (field value key)
 require :: Bool -> String -> Either String ()

@@ -85,12 +85,37 @@ C prototypes still reject. `ByteArray#`/`MutableByteArray#` variants that erase
 to the same call shape remain ambiguous: the current descriptor cannot choose
 a read/write policy from those erased representations alone.
 
-The genuine Pandoc dependency probe exposes remaining boundaries, not implicit
-allowlists: the unchanged `digest-0.0.2.1` C++ CRC32C sources now acquire LLVM,
-but its zlib linkage remains outstanding;
+The checksum source provider recognizes retained `zlib.h` imports for `adler32`
+and `crc32`, compiles unchanged upstream zlib 1.2.11 source with the package's
+configured header, and rejects a header-version or source-hash mismatch. It
+links a provider only when that symbol remains unresolved after package source
+linking, preserving package-owned definitions. Source/header observations and
+provider hashes remain in the component identity and `buildInputs`. This is
+managed LLVM over the original buffers: no native zlib call, extra buffer copy,
+or heap pinning is introduced. Other zlib versions and operations remain outside
+this bounded provider.
+
+The unchanged `digest-0.0.2.1` package now captures its two original C++ CRC32C
+units and links the checksum providers. All six typed foreign adapters match
+270 native Haskell observations over empty inputs, offsets, partial loops,
+unsigned seeds and long blocks in interpreted and first-installed compiled
+execution, in both handoff modes. This checks the common foreign adapters;
+it does not claim whole Pandoc or whole-package Core execution.
 `erf-2.0.0.0` has source-pure imports whose emitted State-threaded calls are
 `safe`, and needs a libm provider. Those obligations are not satisfied by
 pointer-variant support, and safe calls are not relabeled unsafe.
+
+Prepare the original checksum fixture with the pinned toolchain and an unchanged
+acquired source tree, then run its two explicit test forks:
+
+```sh
+THC_DIGEST_SOURCE=/path/to/digest-0.0.2.1 cabal run exe:thc-fixtures -- package-native-originals
+./gradlew --continue packageNativeOriginalsDefault packageNativeOriginalsDense
+```
+
+The Haskell producer retains original source hashes, compiler calls, typed Core,
+LLVM acquisition, native observations, and changed-source/header negative
+controls under `build/original-native`. The JVM rejects stale fixture inputs.
 
 Select LLVM tools with `THC_CLANG`, `THC_LLVM_LINK`, `THC_LLVM_OPT` and
 `THC_LLVM_NM`, or provide their ordinary executable names on `PATH`. The exact
