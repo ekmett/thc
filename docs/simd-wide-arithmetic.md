@@ -10,7 +10,8 @@ unsigned min/max use Word8X16,
 Word16X8, Word32X4, Word32X8 and Word64X2/X4/X8. Floating min/max now cover
 FloatX4/X8/X16 and DoubleX2/X4/X8 with a separate [Java-semantics contract](floating-vector-minmax.md).
 The six wide byte/short shapes Int8X32/X64, Word8X32/X64, Int16X32 and
-Word16X32 bring the table to 237 operations, including 30 `insert` names.
+Word16X32 plus [integer quotient/remainder and shuffle](simd-quot-rem-shuffle.md)
+bring the table to 315 operations, including 30 `insert` names.
 These tested operations are implemented entries in the primop checklist.
 
 The shared generator emits exact Core proofs and typed AST families, not JVM
@@ -30,10 +31,12 @@ preserve the other lanes, including floating-point bit patterns. Indices outside
 the shape's lane range raise a runtime fault before any narrowing. Insertion covers
 all currently represented vector shapes.
 
-The capability smoke uses 55 operation/lane drivers containing all 237
+The capability smoke uses 133 operation/lane drivers containing all 315
 generated operations. Drivers keep arithmetic families separate and split large ones, with at most
-112 lane-operation pairs to bound compiled code size. The current fixture has
-20,718 native scalar observations and 1,848 Java floating-extrema edge requests.
+112 lane-operation pairs to bound compiled code size. Quotient, remainder and
+shuffle keep separate entries, leaving the ordinary arithmetic groups unchanged.
+The current fixture has
+22,462 native scalar observations and 1,848 Java floating-extrema edge requests.
 Its JVM checks run interpreted and after explicit compilation on both backends,
 observe every lane, include integer sign/overflow edges, and check retained compiled targets and released handoff
 state. Exact guest-entry counts include GHC's argument-dropping workers where

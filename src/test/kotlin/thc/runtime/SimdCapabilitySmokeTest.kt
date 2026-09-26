@@ -84,7 +84,7 @@ class SimdCapabilitySmokeTest {
     @Test fun finiteLocalVectorsCompileOnAstAndBytecode() {
         val manifest = Json.parse(File(directory, "manifest.json").readText()) as Map<String, Any?>
         assertEquals("9.14.1", manifest["ghcVersion"])
-        assertEquals(21666L, (manifest["rows"] as Number).toLong())
+        assertEquals(22462L, (manifest["rows"] as Number).toLong())
         assertTrue(manifest["nativeOracle"] in listOf("scalar", "scalar-and-vector"))
         assertEquals("java-math", manifest["floatingExtrema"])
         assertEquals("finite-without-mixed-zero-ties", manifest["nativeFloatingExtrema"])
@@ -104,7 +104,7 @@ class SimdCapabilitySmokeTest {
         val rows = File(directory, "cases.tsv").readLines().filter(String::isNotEmpty).map { line ->
             line.split('\t').also { assertEquals(5, it.size) }
         }.groupBy { it[0] }
-        assertEquals((0..56).map { "simdSmoke$it" }, manifest["names"])
+        assertEquals((0..132).map { "simdSmoke$it" }, manifest["names"])
         assertEquals(manifest["names"], rows.keys.toList())
         assertEquals((manifest["rows"] as Number).toInt(), rows.values.sumOf { it.size })
         val javaEdges = rows.mapValues { (name, cases) -> javaExtremaCases(name, cases, selectors) }

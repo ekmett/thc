@@ -83,7 +83,7 @@ class SimdFamiliesTest {
     }
 
     @Test fun exactLaneSignWidthLogicalTupleAndCallingProofsRemainRequired() {
-        assertEquals(297, GeneratedVectors.operations.size)
+        assertEquals(315, GeneratedVectors.operations.size)
         for ((name, tuple, vector) in listOf(
             Triple("Int8X32", GeneratedVectors.unpackedInt8X32, GeneratedVectors.proofInt8X32),
             Triple("Word8X32", GeneratedVectors.unpackedWord8X32, GeneratedVectors.proofWord8X32),

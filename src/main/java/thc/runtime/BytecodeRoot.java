@@ -4676,6 +4676,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class GeneratedInt8X32Max {
         @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_256).max(CoreVectors.requireByte(right, ByteVector.SPECIES_256)); }
     }
+    @Operation public static final class GeneratedInt8X32Quot {
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.quotByte(CoreVectors.requireByte(left, ByteVector.SPECIES_256), CoreVectors.requireByte(right, ByteVector.SPECIES_256), false); }
+    }
+    @Operation public static final class GeneratedInt8X32Rem {
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.remByte(CoreVectors.requireByte(left, ByteVector.SPECIES_256), CoreVectors.requireByte(right, ByteVector.SPECIES_256), false); }
+    }
+    @Operation
+    @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
+    public static final class GeneratedInt8X32Shuffle {
+        @Specialization public static ByteVector apply(VectorShuffle<?> shuffle, ByteVector left, ByteVector right) {
+            return CoreVectors.requireByte(left, ByteVector.SPECIES_256).rearrange(shuffle.check(ByteVector.SPECIES_256), CoreVectors.requireByte(right, ByteVector.SPECIES_256));
+        }
+    }
     @Operation
     @ConstantOperand(type = BytecodeVectorLanes.class, name = "lanes")
     public static final class GeneratedWord8X32Pack {
@@ -4748,6 +4761,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class GeneratedWord8X32Max {
         @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_256).lanewise(VectorOperators.UMAX, CoreVectors.requireByte(right, ByteVector.SPECIES_256)); }
+    }
+    @Operation public static final class GeneratedWord8X32Quot {
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.quotByte(CoreVectors.requireByte(left, ByteVector.SPECIES_256), CoreVectors.requireByte(right, ByteVector.SPECIES_256), true); }
+    }
+    @Operation public static final class GeneratedWord8X32Rem {
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.remByte(CoreVectors.requireByte(left, ByteVector.SPECIES_256), CoreVectors.requireByte(right, ByteVector.SPECIES_256), true); }
+    }
+    @Operation
+    @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
+    public static final class GeneratedWord8X32Shuffle {
+        @Specialization public static ByteVector apply(VectorShuffle<?> shuffle, ByteVector left, ByteVector right) {
+            return CoreVectors.requireByte(left, ByteVector.SPECIES_256).rearrange(shuffle.check(ByteVector.SPECIES_256), CoreVectors.requireByte(right, ByteVector.SPECIES_256));
+        }
     }
     @Operation
     @ConstantOperand(type = BytecodeVectorLanes.class, name = "lanes")
@@ -4857,6 +4883,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class GeneratedInt8X64Max {
         @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_512).max(CoreVectors.requireByte(right, ByteVector.SPECIES_512)); }
     }
+    @Operation public static final class GeneratedInt8X64Quot {
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.quotByte(CoreVectors.requireByte(left, ByteVector.SPECIES_512), CoreVectors.requireByte(right, ByteVector.SPECIES_512), false); }
+    }
+    @Operation public static final class GeneratedInt8X64Rem {
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.remByte(CoreVectors.requireByte(left, ByteVector.SPECIES_512), CoreVectors.requireByte(right, ByteVector.SPECIES_512), false); }
+    }
+    @Operation
+    @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
+    public static final class GeneratedInt8X64Shuffle {
+        @Specialization public static ByteVector apply(VectorShuffle<?> shuffle, ByteVector left, ByteVector right) {
+            return CoreVectors.requireByte(left, ByteVector.SPECIES_512).rearrange(shuffle.check(ByteVector.SPECIES_512), CoreVectors.requireByte(right, ByteVector.SPECIES_512));
+        }
+    }
     @Operation
     @ConstantOperand(type = BytecodeVectorLanes.class, name = "lanes")
     public static final class GeneratedWord8X64Pack {
@@ -4962,6 +5001,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class GeneratedWord8X64Max {
         @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_512).lanewise(VectorOperators.UMAX, CoreVectors.requireByte(right, ByteVector.SPECIES_512)); }
     }
+    @Operation public static final class GeneratedWord8X64Quot {
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.quotByte(CoreVectors.requireByte(left, ByteVector.SPECIES_512), CoreVectors.requireByte(right, ByteVector.SPECIES_512), true); }
+    }
+    @Operation public static final class GeneratedWord8X64Rem {
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.remByte(CoreVectors.requireByte(left, ByteVector.SPECIES_512), CoreVectors.requireByte(right, ByteVector.SPECIES_512), true); }
+    }
+    @Operation
+    @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
+    public static final class GeneratedWord8X64Shuffle {
+        @Specialization public static ByteVector apply(VectorShuffle<?> shuffle, ByteVector left, ByteVector right) {
+            return CoreVectors.requireByte(left, ByteVector.SPECIES_512).rearrange(shuffle.check(ByteVector.SPECIES_512), CoreVectors.requireByte(right, ByteVector.SPECIES_512));
+        }
+    }
     @Operation
     @ConstantOperand(type = BytecodeVectorLanes.class, name = "lanes")
     public static final class GeneratedInt16X32Pack {
@@ -5038,6 +5090,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class GeneratedInt16X32Max {
         @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_512).max(CoreVectors.requireShort(right, ShortVector.SPECIES_512)); }
     }
+    @Operation public static final class GeneratedInt16X32Quot {
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.quotShort(CoreVectors.requireShort(left, ShortVector.SPECIES_512), CoreVectors.requireShort(right, ShortVector.SPECIES_512), false); }
+    }
+    @Operation public static final class GeneratedInt16X32Rem {
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.remShort(CoreVectors.requireShort(left, ShortVector.SPECIES_512), CoreVectors.requireShort(right, ShortVector.SPECIES_512), false); }
+    }
+    @Operation
+    @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
+    public static final class GeneratedInt16X32Shuffle {
+        @Specialization public static ShortVector apply(VectorShuffle<?> shuffle, ShortVector left, ShortVector right) {
+            return CoreVectors.requireShort(left, ShortVector.SPECIES_512).rearrange(shuffle.check(ShortVector.SPECIES_512), CoreVectors.requireShort(right, ShortVector.SPECIES_512));
+        }
+    }
     @Operation
     @ConstantOperand(type = BytecodeVectorLanes.class, name = "lanes")
     public static final class GeneratedWord16X32Pack {
@@ -5110,6 +5175,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class GeneratedWord16X32Max {
         @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_512).lanewise(VectorOperators.UMAX, CoreVectors.requireShort(right, ShortVector.SPECIES_512)); }
+    }
+    @Operation public static final class GeneratedWord16X32Quot {
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.quotShort(CoreVectors.requireShort(left, ShortVector.SPECIES_512), CoreVectors.requireShort(right, ShortVector.SPECIES_512), true); }
+    }
+    @Operation public static final class GeneratedWord16X32Rem {
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.remShort(CoreVectors.requireShort(left, ShortVector.SPECIES_512), CoreVectors.requireShort(right, ShortVector.SPECIES_512), true); }
+    }
+    @Operation
+    @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
+    public static final class GeneratedWord16X32Shuffle {
+        @Specialization public static ShortVector apply(VectorShuffle<?> shuffle, ShortVector left, ShortVector right) {
+            return CoreVectors.requireShort(left, ShortVector.SPECIES_512).rearrange(shuffle.check(ShortVector.SPECIES_512), CoreVectors.requireShort(right, ShortVector.SPECIES_512));
+        }
     }
     @Operation public static final class GeneratedWord64X2Pack {
         @Specialization public static LongVector apply(long lane0, long lane1) { return LongVector.broadcast(LongVector.SPECIES_128, lane0).withLane(1, lane1); }
@@ -5282,46 +5360,40 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return CoreVectors.requireInt(left, IntVector.SPECIES_256).rearrange(shuffle.check(IntVector.SPECIES_256), CoreVectors.requireInt(right, IntVector.SPECIES_256));
         }
     }
-    @Operation public static final class GeneratedInt32X16Pack {
-        @Specialization public static IntVector apply(long lane0, long lane1, long lane2, long lane3, long lane4, long lane5, long lane6, long lane7, long lane8, long lane9, long lane10, long lane11, long lane12, long lane13, long lane14, long lane15) { return IntVector.broadcast(IntVector.SPECIES_512, (int) lane0).withLane(1, (int) lane1).withLane(2, (int) lane2).withLane(3, (int) lane3).withLane(4, (int) lane4).withLane(5, (int) lane5).withLane(6, (int) lane6).withLane(7, (int) lane7).withLane(8, (int) lane8).withLane(9, (int) lane9).withLane(10, (int) lane10).withLane(11, (int) lane11).withLane(12, (int) lane12).withLane(13, (int) lane13).withLane(14, (int) lane14).withLane(15, (int) lane15); }
+    @Operation
+    @ConstantOperand(type = BytecodeVectorLanes.class, name = "lanes")
+    public static final class GeneratedInt32X16Pack {
+        @Specialization public static IntVector apply(VirtualFrame frame, BytecodeVectorLanes lanes, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            try {
+                return IntVector.broadcast(IntVector.SPECIES_512, (int) lanes.getSlots()[0].getLong(bytecode, frame)).withLane(1, (int) lanes.getSlots()[1].getLong(bytecode, frame)).withLane(2, (int) lanes.getSlots()[2].getLong(bytecode, frame)).withLane(3, (int) lanes.getSlots()[3].getLong(bytecode, frame)).withLane(4, (int) lanes.getSlots()[4].getLong(bytecode, frame)).withLane(5, (int) lanes.getSlots()[5].getLong(bytecode, frame)).withLane(6, (int) lanes.getSlots()[6].getLong(bytecode, frame)).withLane(7, (int) lanes.getSlots()[7].getLong(bytecode, frame)).withLane(8, (int) lanes.getSlots()[8].getLong(bytecode, frame)).withLane(9, (int) lanes.getSlots()[9].getLong(bytecode, frame)).withLane(10, (int) lanes.getSlots()[10].getLong(bytecode, frame)).withLane(11, (int) lanes.getSlots()[11].getLong(bytecode, frame)).withLane(12, (int) lanes.getSlots()[12].getLong(bytecode, frame)).withLane(13, (int) lanes.getSlots()[13].getLong(bytecode, frame)).withLane(14, (int) lanes.getSlots()[14].getLong(bytecode, frame)).withLane(15, (int) lanes.getSlots()[15].getLong(bytecode, frame));
+            } catch (com.oracle.truffle.api.nodes.UnexpectedResultException invalid) {
+                throw new RuntimeFault("Expected primitive vector lane");
+            }
+        }
     }
     @Operation
-    @ConstantOperand(type = LocalAccessor.class, name = "lane0")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane1")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane2")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane3")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane4")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane5")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane6")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane7")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane8")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane9")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane10")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane11")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane12")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane13")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane14")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane15")
+    @ConstantOperand(type = BytecodeVectorLanes.class, name = "lanes")
     public static final class GeneratedInt32X16Unpack {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, LocalAccessor lane8, LocalAccessor lane9, LocalAccessor lane10, LocalAccessor lane11, LocalAccessor lane12, LocalAccessor lane13, LocalAccessor lane14, LocalAccessor lane15, IntVector raw, @Bind("$node") Node node) {
+        @Specialization public static void apply(VirtualFrame frame, BytecodeVectorLanes lanes, IntVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             IntVector value = CoreVectors.requireInt(raw, IntVector.SPECIES_512);
-            lane0.setLong(bytecode, frame, value.lane(0));
-            lane1.setLong(bytecode, frame, value.lane(1));
-            lane2.setLong(bytecode, frame, value.lane(2));
-            lane3.setLong(bytecode, frame, value.lane(3));
-            lane4.setLong(bytecode, frame, value.lane(4));
-            lane5.setLong(bytecode, frame, value.lane(5));
-            lane6.setLong(bytecode, frame, value.lane(6));
-            lane7.setLong(bytecode, frame, value.lane(7));
-            lane8.setLong(bytecode, frame, value.lane(8));
-            lane9.setLong(bytecode, frame, value.lane(9));
-            lane10.setLong(bytecode, frame, value.lane(10));
-            lane11.setLong(bytecode, frame, value.lane(11));
-            lane12.setLong(bytecode, frame, value.lane(12));
-            lane13.setLong(bytecode, frame, value.lane(13));
-            lane14.setLong(bytecode, frame, value.lane(14));
-            lane15.setLong(bytecode, frame, value.lane(15));
+            lanes.getSlots()[0].setLong(bytecode, frame, value.lane(0));
+            lanes.getSlots()[1].setLong(bytecode, frame, value.lane(1));
+            lanes.getSlots()[2].setLong(bytecode, frame, value.lane(2));
+            lanes.getSlots()[3].setLong(bytecode, frame, value.lane(3));
+            lanes.getSlots()[4].setLong(bytecode, frame, value.lane(4));
+            lanes.getSlots()[5].setLong(bytecode, frame, value.lane(5));
+            lanes.getSlots()[6].setLong(bytecode, frame, value.lane(6));
+            lanes.getSlots()[7].setLong(bytecode, frame, value.lane(7));
+            lanes.getSlots()[8].setLong(bytecode, frame, value.lane(8));
+            lanes.getSlots()[9].setLong(bytecode, frame, value.lane(9));
+            lanes.getSlots()[10].setLong(bytecode, frame, value.lane(10));
+            lanes.getSlots()[11].setLong(bytecode, frame, value.lane(11));
+            lanes.getSlots()[12].setLong(bytecode, frame, value.lane(12));
+            lanes.getSlots()[13].setLong(bytecode, frame, value.lane(13));
+            lanes.getSlots()[14].setLong(bytecode, frame, value.lane(14));
+            lanes.getSlots()[15].setLong(bytecode, frame, value.lane(15));
         }
     }
     @Operation public static final class GeneratedInt32X16Broadcast {
@@ -5772,46 +5844,40 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return CoreVectors.requireLong(left, LongVector.SPECIES_512).rearrange(shuffle.check(LongVector.SPECIES_512), CoreVectors.requireLong(right, LongVector.SPECIES_512));
         }
     }
-    @Operation public static final class GeneratedWord32X16Pack {
-        @Specialization public static IntVector apply(long lane0, long lane1, long lane2, long lane3, long lane4, long lane5, long lane6, long lane7, long lane8, long lane9, long lane10, long lane11, long lane12, long lane13, long lane14, long lane15) { return IntVector.broadcast(IntVector.SPECIES_512, (int) lane0).withLane(1, (int) lane1).withLane(2, (int) lane2).withLane(3, (int) lane3).withLane(4, (int) lane4).withLane(5, (int) lane5).withLane(6, (int) lane6).withLane(7, (int) lane7).withLane(8, (int) lane8).withLane(9, (int) lane9).withLane(10, (int) lane10).withLane(11, (int) lane11).withLane(12, (int) lane12).withLane(13, (int) lane13).withLane(14, (int) lane14).withLane(15, (int) lane15); }
+    @Operation
+    @ConstantOperand(type = BytecodeVectorLanes.class, name = "lanes")
+    public static final class GeneratedWord32X16Pack {
+        @Specialization public static IntVector apply(VirtualFrame frame, BytecodeVectorLanes lanes, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            try {
+                return IntVector.broadcast(IntVector.SPECIES_512, (int) lanes.getSlots()[0].getLong(bytecode, frame)).withLane(1, (int) lanes.getSlots()[1].getLong(bytecode, frame)).withLane(2, (int) lanes.getSlots()[2].getLong(bytecode, frame)).withLane(3, (int) lanes.getSlots()[3].getLong(bytecode, frame)).withLane(4, (int) lanes.getSlots()[4].getLong(bytecode, frame)).withLane(5, (int) lanes.getSlots()[5].getLong(bytecode, frame)).withLane(6, (int) lanes.getSlots()[6].getLong(bytecode, frame)).withLane(7, (int) lanes.getSlots()[7].getLong(bytecode, frame)).withLane(8, (int) lanes.getSlots()[8].getLong(bytecode, frame)).withLane(9, (int) lanes.getSlots()[9].getLong(bytecode, frame)).withLane(10, (int) lanes.getSlots()[10].getLong(bytecode, frame)).withLane(11, (int) lanes.getSlots()[11].getLong(bytecode, frame)).withLane(12, (int) lanes.getSlots()[12].getLong(bytecode, frame)).withLane(13, (int) lanes.getSlots()[13].getLong(bytecode, frame)).withLane(14, (int) lanes.getSlots()[14].getLong(bytecode, frame)).withLane(15, (int) lanes.getSlots()[15].getLong(bytecode, frame));
+            } catch (com.oracle.truffle.api.nodes.UnexpectedResultException invalid) {
+                throw new RuntimeFault("Expected primitive vector lane");
+            }
+        }
     }
     @Operation
-    @ConstantOperand(type = LocalAccessor.class, name = "lane0")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane1")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane2")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane3")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane4")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane5")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane6")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane7")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane8")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane9")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane10")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane11")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane12")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane13")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane14")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane15")
+    @ConstantOperand(type = BytecodeVectorLanes.class, name = "lanes")
     public static final class GeneratedWord32X16Unpack {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, LocalAccessor lane8, LocalAccessor lane9, LocalAccessor lane10, LocalAccessor lane11, LocalAccessor lane12, LocalAccessor lane13, LocalAccessor lane14, LocalAccessor lane15, IntVector raw, @Bind("$node") Node node) {
+        @Specialization public static void apply(VirtualFrame frame, BytecodeVectorLanes lanes, IntVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             IntVector value = CoreVectors.requireInt(raw, IntVector.SPECIES_512);
-            lane0.setLong(bytecode, frame, value.lane(0) & 0xffff_ffffL);
-            lane1.setLong(bytecode, frame, value.lane(1) & 0xffff_ffffL);
-            lane2.setLong(bytecode, frame, value.lane(2) & 0xffff_ffffL);
-            lane3.setLong(bytecode, frame, value.lane(3) & 0xffff_ffffL);
-            lane4.setLong(bytecode, frame, value.lane(4) & 0xffff_ffffL);
-            lane5.setLong(bytecode, frame, value.lane(5) & 0xffff_ffffL);
-            lane6.setLong(bytecode, frame, value.lane(6) & 0xffff_ffffL);
-            lane7.setLong(bytecode, frame, value.lane(7) & 0xffff_ffffL);
-            lane8.setLong(bytecode, frame, value.lane(8) & 0xffff_ffffL);
-            lane9.setLong(bytecode, frame, value.lane(9) & 0xffff_ffffL);
-            lane10.setLong(bytecode, frame, value.lane(10) & 0xffff_ffffL);
-            lane11.setLong(bytecode, frame, value.lane(11) & 0xffff_ffffL);
-            lane12.setLong(bytecode, frame, value.lane(12) & 0xffff_ffffL);
-            lane13.setLong(bytecode, frame, value.lane(13) & 0xffff_ffffL);
-            lane14.setLong(bytecode, frame, value.lane(14) & 0xffff_ffffL);
-            lane15.setLong(bytecode, frame, value.lane(15) & 0xffff_ffffL);
+            lanes.getSlots()[0].setLong(bytecode, frame, value.lane(0) & 0xffff_ffffL);
+            lanes.getSlots()[1].setLong(bytecode, frame, value.lane(1) & 0xffff_ffffL);
+            lanes.getSlots()[2].setLong(bytecode, frame, value.lane(2) & 0xffff_ffffL);
+            lanes.getSlots()[3].setLong(bytecode, frame, value.lane(3) & 0xffff_ffffL);
+            lanes.getSlots()[4].setLong(bytecode, frame, value.lane(4) & 0xffff_ffffL);
+            lanes.getSlots()[5].setLong(bytecode, frame, value.lane(5) & 0xffff_ffffL);
+            lanes.getSlots()[6].setLong(bytecode, frame, value.lane(6) & 0xffff_ffffL);
+            lanes.getSlots()[7].setLong(bytecode, frame, value.lane(7) & 0xffff_ffffL);
+            lanes.getSlots()[8].setLong(bytecode, frame, value.lane(8) & 0xffff_ffffL);
+            lanes.getSlots()[9].setLong(bytecode, frame, value.lane(9) & 0xffff_ffffL);
+            lanes.getSlots()[10].setLong(bytecode, frame, value.lane(10) & 0xffff_ffffL);
+            lanes.getSlots()[11].setLong(bytecode, frame, value.lane(11) & 0xffff_ffffL);
+            lanes.getSlots()[12].setLong(bytecode, frame, value.lane(12) & 0xffff_ffffL);
+            lanes.getSlots()[13].setLong(bytecode, frame, value.lane(13) & 0xffff_ffffL);
+            lanes.getSlots()[14].setLong(bytecode, frame, value.lane(14) & 0xffff_ffffL);
+            lanes.getSlots()[15].setLong(bytecode, frame, value.lane(15) & 0xffff_ffffL);
         }
     }
     @Operation public static final class GeneratedWord32X16Broadcast {
@@ -5848,46 +5914,40 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return CoreVectors.requireInt(left, IntVector.SPECIES_512).rearrange(shuffle.check(IntVector.SPECIES_512), CoreVectors.requireInt(right, IntVector.SPECIES_512));
         }
     }
-    @Operation public static final class GeneratedFloatX16Pack {
-        @Specialization public static FloatVector apply(float lane0, float lane1, float lane2, float lane3, float lane4, float lane5, float lane6, float lane7, float lane8, float lane9, float lane10, float lane11, float lane12, float lane13, float lane14, float lane15) { return FloatVector.broadcast(FloatVector.SPECIES_512, lane0).withLane(1, lane1).withLane(2, lane2).withLane(3, lane3).withLane(4, lane4).withLane(5, lane5).withLane(6, lane6).withLane(7, lane7).withLane(8, lane8).withLane(9, lane9).withLane(10, lane10).withLane(11, lane11).withLane(12, lane12).withLane(13, lane13).withLane(14, lane14).withLane(15, lane15); }
+    @Operation
+    @ConstantOperand(type = BytecodeVectorLanes.class, name = "lanes")
+    public static final class GeneratedFloatX16Pack {
+        @Specialization public static FloatVector apply(VirtualFrame frame, BytecodeVectorLanes lanes, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            try {
+                return FloatVector.broadcast(FloatVector.SPECIES_512, lanes.getSlots()[0].getFloat(bytecode, frame)).withLane(1, lanes.getSlots()[1].getFloat(bytecode, frame)).withLane(2, lanes.getSlots()[2].getFloat(bytecode, frame)).withLane(3, lanes.getSlots()[3].getFloat(bytecode, frame)).withLane(4, lanes.getSlots()[4].getFloat(bytecode, frame)).withLane(5, lanes.getSlots()[5].getFloat(bytecode, frame)).withLane(6, lanes.getSlots()[6].getFloat(bytecode, frame)).withLane(7, lanes.getSlots()[7].getFloat(bytecode, frame)).withLane(8, lanes.getSlots()[8].getFloat(bytecode, frame)).withLane(9, lanes.getSlots()[9].getFloat(bytecode, frame)).withLane(10, lanes.getSlots()[10].getFloat(bytecode, frame)).withLane(11, lanes.getSlots()[11].getFloat(bytecode, frame)).withLane(12, lanes.getSlots()[12].getFloat(bytecode, frame)).withLane(13, lanes.getSlots()[13].getFloat(bytecode, frame)).withLane(14, lanes.getSlots()[14].getFloat(bytecode, frame)).withLane(15, lanes.getSlots()[15].getFloat(bytecode, frame));
+            } catch (com.oracle.truffle.api.nodes.UnexpectedResultException invalid) {
+                throw new RuntimeFault("Expected primitive vector lane");
+            }
+        }
     }
     @Operation
-    @ConstantOperand(type = LocalAccessor.class, name = "lane0")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane1")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane2")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane3")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane4")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane5")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane6")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane7")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane8")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane9")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane10")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane11")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane12")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane13")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane14")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane15")
+    @ConstantOperand(type = BytecodeVectorLanes.class, name = "lanes")
     public static final class GeneratedFloatX16Unpack {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, LocalAccessor lane8, LocalAccessor lane9, LocalAccessor lane10, LocalAccessor lane11, LocalAccessor lane12, LocalAccessor lane13, LocalAccessor lane14, LocalAccessor lane15, FloatVector raw, @Bind("$node") Node node) {
+        @Specialization public static void apply(VirtualFrame frame, BytecodeVectorLanes lanes, FloatVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             FloatVector value = CoreVectors.requireFloat(raw, FloatVector.SPECIES_512);
-            lane0.setFloat(bytecode, frame, value.lane(0));
-            lane1.setFloat(bytecode, frame, value.lane(1));
-            lane2.setFloat(bytecode, frame, value.lane(2));
-            lane3.setFloat(bytecode, frame, value.lane(3));
-            lane4.setFloat(bytecode, frame, value.lane(4));
-            lane5.setFloat(bytecode, frame, value.lane(5));
-            lane6.setFloat(bytecode, frame, value.lane(6));
-            lane7.setFloat(bytecode, frame, value.lane(7));
-            lane8.setFloat(bytecode, frame, value.lane(8));
-            lane9.setFloat(bytecode, frame, value.lane(9));
-            lane10.setFloat(bytecode, frame, value.lane(10));
-            lane11.setFloat(bytecode, frame, value.lane(11));
-            lane12.setFloat(bytecode, frame, value.lane(12));
-            lane13.setFloat(bytecode, frame, value.lane(13));
-            lane14.setFloat(bytecode, frame, value.lane(14));
-            lane15.setFloat(bytecode, frame, value.lane(15));
+            lanes.getSlots()[0].setFloat(bytecode, frame, value.lane(0));
+            lanes.getSlots()[1].setFloat(bytecode, frame, value.lane(1));
+            lanes.getSlots()[2].setFloat(bytecode, frame, value.lane(2));
+            lanes.getSlots()[3].setFloat(bytecode, frame, value.lane(3));
+            lanes.getSlots()[4].setFloat(bytecode, frame, value.lane(4));
+            lanes.getSlots()[5].setFloat(bytecode, frame, value.lane(5));
+            lanes.getSlots()[6].setFloat(bytecode, frame, value.lane(6));
+            lanes.getSlots()[7].setFloat(bytecode, frame, value.lane(7));
+            lanes.getSlots()[8].setFloat(bytecode, frame, value.lane(8));
+            lanes.getSlots()[9].setFloat(bytecode, frame, value.lane(9));
+            lanes.getSlots()[10].setFloat(bytecode, frame, value.lane(10));
+            lanes.getSlots()[11].setFloat(bytecode, frame, value.lane(11));
+            lanes.getSlots()[12].setFloat(bytecode, frame, value.lane(12));
+            lanes.getSlots()[13].setFloat(bytecode, frame, value.lane(13));
+            lanes.getSlots()[14].setFloat(bytecode, frame, value.lane(14));
+            lanes.getSlots()[15].setFloat(bytecode, frame, value.lane(15));
         }
     }
     @Operation public static final class GeneratedFloatX16Broadcast {
@@ -6116,46 +6176,40 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return CoreVectors.requireInt(left, IntVector.SPECIES_128).rearrange(shuffle.check(IntVector.SPECIES_128), CoreVectors.requireInt(right, IntVector.SPECIES_128));
         }
     }
-    @Operation public static final class GeneratedInt16X16Pack {
-        @Specialization public static ShortVector apply(long lane0, long lane1, long lane2, long lane3, long lane4, long lane5, long lane6, long lane7, long lane8, long lane9, long lane10, long lane11, long lane12, long lane13, long lane14, long lane15) { return ShortVector.broadcast(ShortVector.SPECIES_256, (short) lane0).withLane(1, (short) lane1).withLane(2, (short) lane2).withLane(3, (short) lane3).withLane(4, (short) lane4).withLane(5, (short) lane5).withLane(6, (short) lane6).withLane(7, (short) lane7).withLane(8, (short) lane8).withLane(9, (short) lane9).withLane(10, (short) lane10).withLane(11, (short) lane11).withLane(12, (short) lane12).withLane(13, (short) lane13).withLane(14, (short) lane14).withLane(15, (short) lane15); }
+    @Operation
+    @ConstantOperand(type = BytecodeVectorLanes.class, name = "lanes")
+    public static final class GeneratedInt16X16Pack {
+        @Specialization public static ShortVector apply(VirtualFrame frame, BytecodeVectorLanes lanes, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            try {
+                return ShortVector.broadcast(ShortVector.SPECIES_256, (short) lanes.getSlots()[0].getLong(bytecode, frame)).withLane(1, (short) lanes.getSlots()[1].getLong(bytecode, frame)).withLane(2, (short) lanes.getSlots()[2].getLong(bytecode, frame)).withLane(3, (short) lanes.getSlots()[3].getLong(bytecode, frame)).withLane(4, (short) lanes.getSlots()[4].getLong(bytecode, frame)).withLane(5, (short) lanes.getSlots()[5].getLong(bytecode, frame)).withLane(6, (short) lanes.getSlots()[6].getLong(bytecode, frame)).withLane(7, (short) lanes.getSlots()[7].getLong(bytecode, frame)).withLane(8, (short) lanes.getSlots()[8].getLong(bytecode, frame)).withLane(9, (short) lanes.getSlots()[9].getLong(bytecode, frame)).withLane(10, (short) lanes.getSlots()[10].getLong(bytecode, frame)).withLane(11, (short) lanes.getSlots()[11].getLong(bytecode, frame)).withLane(12, (short) lanes.getSlots()[12].getLong(bytecode, frame)).withLane(13, (short) lanes.getSlots()[13].getLong(bytecode, frame)).withLane(14, (short) lanes.getSlots()[14].getLong(bytecode, frame)).withLane(15, (short) lanes.getSlots()[15].getLong(bytecode, frame));
+            } catch (com.oracle.truffle.api.nodes.UnexpectedResultException invalid) {
+                throw new RuntimeFault("Expected primitive vector lane");
+            }
+        }
     }
     @Operation
-    @ConstantOperand(type = LocalAccessor.class, name = "lane0")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane1")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane2")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane3")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane4")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane5")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane6")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane7")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane8")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane9")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane10")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane11")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane12")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane13")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane14")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane15")
+    @ConstantOperand(type = BytecodeVectorLanes.class, name = "lanes")
     public static final class GeneratedInt16X16Unpack {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, LocalAccessor lane8, LocalAccessor lane9, LocalAccessor lane10, LocalAccessor lane11, LocalAccessor lane12, LocalAccessor lane13, LocalAccessor lane14, LocalAccessor lane15, ShortVector raw, @Bind("$node") Node node) {
+        @Specialization public static void apply(VirtualFrame frame, BytecodeVectorLanes lanes, ShortVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             ShortVector value = CoreVectors.requireShort(raw, ShortVector.SPECIES_256);
-            lane0.setLong(bytecode, frame, value.lane(0));
-            lane1.setLong(bytecode, frame, value.lane(1));
-            lane2.setLong(bytecode, frame, value.lane(2));
-            lane3.setLong(bytecode, frame, value.lane(3));
-            lane4.setLong(bytecode, frame, value.lane(4));
-            lane5.setLong(bytecode, frame, value.lane(5));
-            lane6.setLong(bytecode, frame, value.lane(6));
-            lane7.setLong(bytecode, frame, value.lane(7));
-            lane8.setLong(bytecode, frame, value.lane(8));
-            lane9.setLong(bytecode, frame, value.lane(9));
-            lane10.setLong(bytecode, frame, value.lane(10));
-            lane11.setLong(bytecode, frame, value.lane(11));
-            lane12.setLong(bytecode, frame, value.lane(12));
-            lane13.setLong(bytecode, frame, value.lane(13));
-            lane14.setLong(bytecode, frame, value.lane(14));
-            lane15.setLong(bytecode, frame, value.lane(15));
+            lanes.getSlots()[0].setLong(bytecode, frame, value.lane(0));
+            lanes.getSlots()[1].setLong(bytecode, frame, value.lane(1));
+            lanes.getSlots()[2].setLong(bytecode, frame, value.lane(2));
+            lanes.getSlots()[3].setLong(bytecode, frame, value.lane(3));
+            lanes.getSlots()[4].setLong(bytecode, frame, value.lane(4));
+            lanes.getSlots()[5].setLong(bytecode, frame, value.lane(5));
+            lanes.getSlots()[6].setLong(bytecode, frame, value.lane(6));
+            lanes.getSlots()[7].setLong(bytecode, frame, value.lane(7));
+            lanes.getSlots()[8].setLong(bytecode, frame, value.lane(8));
+            lanes.getSlots()[9].setLong(bytecode, frame, value.lane(9));
+            lanes.getSlots()[10].setLong(bytecode, frame, value.lane(10));
+            lanes.getSlots()[11].setLong(bytecode, frame, value.lane(11));
+            lanes.getSlots()[12].setLong(bytecode, frame, value.lane(12));
+            lanes.getSlots()[13].setLong(bytecode, frame, value.lane(13));
+            lanes.getSlots()[14].setLong(bytecode, frame, value.lane(14));
+            lanes.getSlots()[15].setLong(bytecode, frame, value.lane(15));
         }
     }
     @Operation public static final class GeneratedInt16X16Broadcast {
@@ -6195,46 +6249,40 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return CoreVectors.requireShort(left, ShortVector.SPECIES_256).rearrange(shuffle.check(ShortVector.SPECIES_256), CoreVectors.requireShort(right, ShortVector.SPECIES_256));
         }
     }
-    @Operation public static final class GeneratedWord16X16Pack {
-        @Specialization public static ShortVector apply(long lane0, long lane1, long lane2, long lane3, long lane4, long lane5, long lane6, long lane7, long lane8, long lane9, long lane10, long lane11, long lane12, long lane13, long lane14, long lane15) { return ShortVector.broadcast(ShortVector.SPECIES_256, (short) lane0).withLane(1, (short) lane1).withLane(2, (short) lane2).withLane(3, (short) lane3).withLane(4, (short) lane4).withLane(5, (short) lane5).withLane(6, (short) lane6).withLane(7, (short) lane7).withLane(8, (short) lane8).withLane(9, (short) lane9).withLane(10, (short) lane10).withLane(11, (short) lane11).withLane(12, (short) lane12).withLane(13, (short) lane13).withLane(14, (short) lane14).withLane(15, (short) lane15); }
+    @Operation
+    @ConstantOperand(type = BytecodeVectorLanes.class, name = "lanes")
+    public static final class GeneratedWord16X16Pack {
+        @Specialization public static ShortVector apply(VirtualFrame frame, BytecodeVectorLanes lanes, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            try {
+                return ShortVector.broadcast(ShortVector.SPECIES_256, (short) lanes.getSlots()[0].getLong(bytecode, frame)).withLane(1, (short) lanes.getSlots()[1].getLong(bytecode, frame)).withLane(2, (short) lanes.getSlots()[2].getLong(bytecode, frame)).withLane(3, (short) lanes.getSlots()[3].getLong(bytecode, frame)).withLane(4, (short) lanes.getSlots()[4].getLong(bytecode, frame)).withLane(5, (short) lanes.getSlots()[5].getLong(bytecode, frame)).withLane(6, (short) lanes.getSlots()[6].getLong(bytecode, frame)).withLane(7, (short) lanes.getSlots()[7].getLong(bytecode, frame)).withLane(8, (short) lanes.getSlots()[8].getLong(bytecode, frame)).withLane(9, (short) lanes.getSlots()[9].getLong(bytecode, frame)).withLane(10, (short) lanes.getSlots()[10].getLong(bytecode, frame)).withLane(11, (short) lanes.getSlots()[11].getLong(bytecode, frame)).withLane(12, (short) lanes.getSlots()[12].getLong(bytecode, frame)).withLane(13, (short) lanes.getSlots()[13].getLong(bytecode, frame)).withLane(14, (short) lanes.getSlots()[14].getLong(bytecode, frame)).withLane(15, (short) lanes.getSlots()[15].getLong(bytecode, frame));
+            } catch (com.oracle.truffle.api.nodes.UnexpectedResultException invalid) {
+                throw new RuntimeFault("Expected primitive vector lane");
+            }
+        }
     }
     @Operation
-    @ConstantOperand(type = LocalAccessor.class, name = "lane0")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane1")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane2")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane3")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane4")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane5")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane6")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane7")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane8")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane9")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane10")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane11")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane12")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane13")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane14")
-    @ConstantOperand(type = LocalAccessor.class, name = "lane15")
+    @ConstantOperand(type = BytecodeVectorLanes.class, name = "lanes")
     public static final class GeneratedWord16X16Unpack {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, LocalAccessor lane8, LocalAccessor lane9, LocalAccessor lane10, LocalAccessor lane11, LocalAccessor lane12, LocalAccessor lane13, LocalAccessor lane14, LocalAccessor lane15, ShortVector raw, @Bind("$node") Node node) {
+        @Specialization public static void apply(VirtualFrame frame, BytecodeVectorLanes lanes, ShortVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             ShortVector value = CoreVectors.requireShort(raw, ShortVector.SPECIES_256);
-            lane0.setLong(bytecode, frame, value.lane(0) & 0xffffL);
-            lane1.setLong(bytecode, frame, value.lane(1) & 0xffffL);
-            lane2.setLong(bytecode, frame, value.lane(2) & 0xffffL);
-            lane3.setLong(bytecode, frame, value.lane(3) & 0xffffL);
-            lane4.setLong(bytecode, frame, value.lane(4) & 0xffffL);
-            lane5.setLong(bytecode, frame, value.lane(5) & 0xffffL);
-            lane6.setLong(bytecode, frame, value.lane(6) & 0xffffL);
-            lane7.setLong(bytecode, frame, value.lane(7) & 0xffffL);
-            lane8.setLong(bytecode, frame, value.lane(8) & 0xffffL);
-            lane9.setLong(bytecode, frame, value.lane(9) & 0xffffL);
-            lane10.setLong(bytecode, frame, value.lane(10) & 0xffffL);
-            lane11.setLong(bytecode, frame, value.lane(11) & 0xffffL);
-            lane12.setLong(bytecode, frame, value.lane(12) & 0xffffL);
-            lane13.setLong(bytecode, frame, value.lane(13) & 0xffffL);
-            lane14.setLong(bytecode, frame, value.lane(14) & 0xffffL);
-            lane15.setLong(bytecode, frame, value.lane(15) & 0xffffL);
+            lanes.getSlots()[0].setLong(bytecode, frame, value.lane(0) & 0xffffL);
+            lanes.getSlots()[1].setLong(bytecode, frame, value.lane(1) & 0xffffL);
+            lanes.getSlots()[2].setLong(bytecode, frame, value.lane(2) & 0xffffL);
+            lanes.getSlots()[3].setLong(bytecode, frame, value.lane(3) & 0xffffL);
+            lanes.getSlots()[4].setLong(bytecode, frame, value.lane(4) & 0xffffL);
+            lanes.getSlots()[5].setLong(bytecode, frame, value.lane(5) & 0xffffL);
+            lanes.getSlots()[6].setLong(bytecode, frame, value.lane(6) & 0xffffL);
+            lanes.getSlots()[7].setLong(bytecode, frame, value.lane(7) & 0xffffL);
+            lanes.getSlots()[8].setLong(bytecode, frame, value.lane(8) & 0xffffL);
+            lanes.getSlots()[9].setLong(bytecode, frame, value.lane(9) & 0xffffL);
+            lanes.getSlots()[10].setLong(bytecode, frame, value.lane(10) & 0xffffL);
+            lanes.getSlots()[11].setLong(bytecode, frame, value.lane(11) & 0xffffL);
+            lanes.getSlots()[12].setLong(bytecode, frame, value.lane(12) & 0xffffL);
+            lanes.getSlots()[13].setLong(bytecode, frame, value.lane(13) & 0xffffL);
+            lanes.getSlots()[14].setLong(bytecode, frame, value.lane(14) & 0xffffL);
+            lanes.getSlots()[15].setLong(bytecode, frame, value.lane(15) & 0xffffL);
         }
     }
     @Operation public static final class GeneratedWord16X16Broadcast {

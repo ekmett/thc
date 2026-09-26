@@ -221,7 +221,8 @@ def bytecode_nodes(fs):
         n=f['name'];count=f['lanes'];scalar,_,_,access=LANES[f['laneRep']];prim=access.lower(); cast=f'({scalar}) ' if scalar in ('byte', 'short', 'int') else ''
         for op in f['operations']:
             title=op.capitalize(); node=f'Generated{n}{title}'
-            if op in ('pack', 'unpack') and count > 16:
+            # Keep the DSL's shared instruction metadata below the JVM method limit.
+            if op in ('pack', 'unpack') and count > 8:
                 lines += ['    @Operation', '    @ConstantOperand(type = BytecodeVectorLanes.class, name = "lanes")',
                           f'    public static final class {node} {{',
                           f'        @Specialization public static {vector_type(f) if op == "pack" else "void"} apply(VirtualFrame frame, BytecodeVectorLanes lanes' +
@@ -285,12 +286,12 @@ def bytecode_emitter(fs):
             elif op=='unpack':
                 lines += [f'        "{op}{n}#" -> tupleExpression(GeneratedVectors.unpacked{n}) {{ e, destination ->',
                           f'            e.builder.begin{node}(' +
-                          ('BytecodeVectorLanes(destination.map(LocalAccessor::constantOf).toTypedArray())' if count > 16 else ', '.join(f'destination[{i}]' for i in range(count))) + ')',
+                          ('BytecodeVectorLanes(destination.map(LocalAccessor::constantOf).toTypedArray())' if count > 8 else ', '.join(f'destination[{i}]' for i in range(count))) + ')',
                           '            operands[0].emit(e)',f'            e.builder.end{node}()','        }']
             else:
                 lines += [f'        "{op}{n}#" -> ProvenExpression(Expression {{ e ->','            val b = e.builder']
                 if op=='pack':
-                    emit = (f'            b.emit{node}(BytecodeVectorLanes(lanes.map(LocalAccessor::constantOf).toTypedArray()))' if count > 16 else
+                    emit = (f'            b.emit{node}(BytecodeVectorLanes(lanes.map(LocalAccessor::constantOf).toTypedArray()))' if count > 8 else
                             f'            b.begin{node}(); lanes.forEach(b::emitLoadLocal); b.end{node}()')
                     lines += ['            b.beginBlock()',f'            val lanes = List({count}) {{ b.createLocal() }}','            operands[0].emitTuple(e, lanes)',emit,'            b.endBlock()']
                 else:
@@ -404,14 +405,18 @@ def smoke_groups(fs):
     index = 0
     for family in fs:
         indices = []
+        standalone = []
         for operation in family['operations']:
             if operation in ('pack', 'unpack'):
                 continue
-            (legacy if operation == 'insert' and not family['newCarrier'] else indices).append(index)
+            (legacy if operation == 'insert' and not family['newCarrier'] else
+             standalone if operation in ('quot', 'rem', 'shuffle') else indices).append(index)
             index += 1
         limit = 112 // family['lanes']
         for start in range(0, len(indices), limit):
             groups.append(indices[start:start + limit])
+        # Keep division and shuffling separate from the ordinary arithmetic drivers.
+        groups.extend([entry] for entry in standalone)
     if legacy:
         groups.append(legacy)
     return {f'simdSmoke{i}': indices for i, indices in enumerate(groups)}
