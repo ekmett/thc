@@ -14,6 +14,12 @@
     "thc_runtime_v1_trace": ["Int32Rep", "Int64Rep", "AddrRep", "Int64Rep", null]
   },
   "managedForeignCalls": [
+    "getRTSStatsEnabled",
+    "getRTSStats",
+    "performGC",
+    "performMajorGC",
+    "performBlockingMajorGC",
+    "getMonotonicNSec",
     "getProgArgv",
     "setProgArgv",
     "localeEncoding",
@@ -117,7 +123,7 @@
     "ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR",
     "ghczuwrapperZC0ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuEND",
     "hs_free_stable_ptr",
-    "malloc", "realloc", "free", "memmove", "memcpy", "strlen", "unlink",
+    "malloc", "realloc", "free", "memmove", "memcpy", "memcmp", "memchr", "strlen", "unlink",
     "getenv", "putenv", "__hsbase_unsetenv", "__hscore_environ",
     "getOrSetSystemEventThreadEventManagerStore",
     "getOrSetGHCConcSignalSignalHandlerStore",
@@ -1771,6 +1777,7 @@
     "subWordC#": 2
   },
   "limitations": [
+    "Original ghc-internal getRTSStatsEnabled is false; direct getRTSStats rejects without reading or writing its buffer, while original Haskell raises its own UnsupportedOperation before allocation. performGC, performMajorGC and performBlockingMajorGC request advisory System.gc(), without GHC generation, finalizer or completion guarantees. getMonotonicNSec returns System.nanoTime() bits with an arbitrary JVM origin. Both backends preserve safe-call completion before async delivery. See docs/gc-stats-clock.md; JVM runtime-service counters are not fabricated GHC RTS statistics.",
     "The base-only THC runtime-service API exposes actual context permissions/backend, thread/affinity observations, JVM-wide memory and GC statistics, context-owned libc allocation statistics, context-local structured tracing and opt-in JIT telemetry. The private versioned C query/control/trace ABI returns explicit Unsupported/Disabled/Denied/Unavailable states; native-GHC fallback does not invent JVM data. THC.Internal.JIT is explicitly Unsafe and is not re-exported from the Safe facade. Queries do not enable JVM-wide instrumentation; diagnostics never automatically start JFR recording. See docs/runtime-services.md for scope, units and SafeHaskell boundaries.",
     "See docs/primop-behavior.md for the exact primop-by-primop behavioral reference, separate from implementation coverage. catch#, maskAsyncExceptions#, maskUninterruptible# and unmaskAsyncExceptions# require lifted boxed action results and reject valid single-word unboxed results. raiseIO# also restricts exception payloads and bottom result positions to lifted boxed forms. tagToEnum# excludes phantom-parameter enumerations and enumeration data-family instances.",
     "takeMVar#, putMVar# and readMVar# have working blocking handoff but no GC-driven BlockedIndefinitelyOnMVar detection. A wait without a future partner requires supported asynchronous interruption or embedding cancellation.",
@@ -1792,6 +1799,7 @@
     "Original malloc/realloc/free use owned libc allocations on native-enabled Linux x86_64 contexts. Live aliases share the allocation until successful realloc, explicit free, explicit weak finalization through &free, or context disposal; retirement waits for outstanding borrows. Only the owned base may be freed or reallocated, and free(NULL) succeeds. Realloc copies the retained prefix into a fresh owner, preserves the old owner on allocation failure, and follows Linux free-and-null behavior for realloc(nonnull,0). Sizes above signed Long, calloc, recovery from unregistered numeric pointers, array-only cbits transports, and automatic GC finalization remain unsupported.",
     "Original POSIX getenv/putenv/__hsbase_unsetenv/__hscore_environ use context-owned environment storage under Truffle's embedding environment-access policy. The command-line context inherits the host environment; guest mutations do not mutate the JVM process. Initial strings use Linux UTF-8, putenv retains caller storage, and mutation can invalidate a returned environ pointer vector. This uses the verified Linux x86_64 native allocation path; Windows environment APIs and child-process propagation are not implemented.",
     "Original ghc-internal memmove copies exact checked byte ranges between owned managed or native addresses, including overlap, and returns the destination Addr#. Managed pointer cells retain their references only when copied as whole cells; partial cells, freed native owners, unowned numeric pointers, and immutable destinations reject before mutation. Word64 lengths beyond the signed JVM range reject rather than wrap.",
+    "Original ByteString memcmp/memchr and ghc-internal memcmp use checked unsigned byte reads of existing managed or owned native storage, without copying or pinning. memcmp promises the C-required result sign, not a platform-specific nonzero magnitude. memchr returns the first matching interior Addr# retaining allocation identity, mutability and lifetime, or null. Pointer cells, unowned numeric addresses, invalid ranges and lengths beyond signed Long reject. See docs/original-memory-search.md.",
     "Original ghc-internal memcpy has the Addr#/Addr#/Word64#/State# declaration; array-0.5.8.0's freeze/thaw declaration takes two unlifted byte arrays instead. Both use checked owned storage transport and reject overlapping nonempty ranges before mutation. Adjacent and empty checked regions are permitted; the returned Addr# aliases the destination backing. This is not an arbitrary native-address bridge.",
     "Original strlen scans only live, bounded managed or owned native Addr# bytes through the first NUL. The ghc-internal declaration returns Int#; bytestring-0.12.2.0's CSize declaration returns Word64# on the pinned target. Unterminated storage, pointer-cell byte exposure, opaque labels, unowned numeric addresses and freed native allocations reject. rts_isThreaded reports the nonthreaded RTS mode used by THC's admitted original FD and wait path; it does not report the number of Java guest threads or offer GHC's threaded RTS ABI.",
     "labelThread#/threadLabel# retain and observe the exact UTF-8 ByteArray# on context-owned Java thread identities, including finished threads; empty labels are present and host Java thread names are unchanged. Labels are released with their identities or context disposal. No RTS eventlog emission is claimed.",
@@ -1808,6 +1816,10 @@
     "Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Local joins may read an enclosing tuple's existing typed frame slots; ordinary function captures, heap fields and ordinary let bindings remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums and unresolved leaves cannot appear in tuple inputs; exact vector leaves retain atomic VecRep identity and occupy one raw fixed-species vector reference each; exact evaluated AddrRep leaves use managed address references.",
     "SIMD guest transport admits the 30 exact vectorRepresentations through arguments, results, PAP prefixes, tail transfers, local calls, join arguments/results, same-frame join captures, unboxed tuple fields, nonrecursive unlifted let bindings, owned closure/thunk captures and boxed constructor fields. Exact VecRep identity remains distinct from equal-width tuples and other vector shapes. Recursive or lifted vector let bindings, sum fields and public host vector arguments/results remain unsupported. Transport does not expand the existing SIMD operation families.",
     "Binary unboxed sum results, local join results and immediate cases support exact machine Int/Word, Float, Double, known reference, void and tuple payloads. Local joins reuse typed tag/payload destinations within the same activation, including recursive and zero-arity transfers. Nested sums, width-changing payload casts, vector/address or unknown leaves, sum inputs/captures/heap fields/ordinary local lets/host results remain unsupported."
+  ],
+  "aggregateHeapFields": [
+    "unboxed-tuple",
+    "unboxed-sum"
   ],
   "aggregateInputs": [
     "empty-unboxed-tuple",

@@ -9,6 +9,8 @@ import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import thc.Language
 import thc.PackageScalarLink
 import thc.PackageScalarSignature
@@ -21,7 +23,7 @@ import java.util.HexFormat
 class PackageNativeForeignTest {
     @TempDir lateinit var directory: Path
 
-    private fun library(pointerVariants: Boolean = false): PackageScalarLink {
+    private fun library(pointerVariants: Boolean = false, safety: String = "unsafe"): PackageScalarLink {
         val source = directory.resolve("native.c")
         val bitcode = directory.resolve("native.bc")
         Files.writeString(source, """
@@ -80,7 +82,8 @@ class PackageNativeForeignTest {
             PackageScalarSignature("mixed_alias", "mixed_alias", listOf("MutableByteArray#", "ByteArray#"), "Word32Rep"))
         val selected = if (pointerVariants) listOf(abi.first(), abi.first().copy(entry = "sum_bytes_address",
             arguments = listOf("AddrRep", "Word64Rep"))) else abi
-        return PackageScalarLink("native-ffi-control", "test-host", sha, sha, bytes, selected)
+        return PackageScalarLink("native-ffi-control", "test-host", sha, sha, bytes,
+            selected.map { it.copy(safety = safety) })
     }
 
     private class Entry(language: Language, private val operation: PackageScalarCall,
@@ -150,8 +153,9 @@ class PackageNativeForeignTest {
             }
     }
 
-    @Test fun realCReadsAndMutatesAliasedPersistentByteStorage() {
-        val link = library()
+    @ParameterizedTest @ValueSource(strings = ["unsafe", "safe"])
+    fun realCReadsAndMutatesAliasedPersistentByteStorage(safety: String) {
+        val link = library(safety = safety)
         Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false").build().use { context ->
                 context.initialize("thc"); context.enter()

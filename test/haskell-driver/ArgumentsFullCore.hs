@@ -22,7 +22,7 @@ fixture environment = TestLabel "original System.Environment argument lifecycle"
     installedPkg <- lookupEnv "THC_INSTALLED_CORE_GHC_PKG"
     ghcSource <- lookupEnv "THC_INSTALLED_CORE_GHC_SOURCE"
     let output = scratch environment </> "arguments-full-core"
-        command = ["run", project, "--exe", "run-arguments:exe:arguments", "--installed-core", "required",
+        command = ["run", "--project-dir", project, "run-arguments:exe:arguments", "--installed-core", "required",
           "--thc-root", thcRoot environment, "--runtime", runtime environment, "--dist-dir", output] ++
           maybe [] (\path -> ["--with-ghc", path]) installedGhc ++
           maybe [] (\path -> ["--with-ghc-pkg", path]) installedPkg ++

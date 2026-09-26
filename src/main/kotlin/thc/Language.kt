@@ -91,6 +91,7 @@ object CoreModules {
             count++
             if (admission != null) admissions.add(admission)
             CoreForeignArtifacts.validateArchive(module)
+            val nativeArchive = PackageNativeArchives.read(module)
             val packageLink = PackageScalarLinks.read(module)
             packageLink?.let { admission ->
                 val link = admission.link
@@ -134,7 +135,9 @@ object CoreModules {
             for (b in module["bindings"] as List<Map<String, Any?>>) {
                 val id = b["id"] as String
                 require(bindings.putIfAbsent(id, b) == null) { "Duplicate binding: $id" }
-                if (archiveOnly && link == null && packageLink == null && !managedExport && !managedImports)
+                if (nativeArchive?.blocks(b) == true)
+                    archiveBindings[id] = nativeArchive.detail
+                else if (nativeArchive == null && archiveOnly && link == null && packageLink == null && !managedExport && !managedImports)
                     archiveBindings[id] = "${module["unit"]}:${module["module"]}"
                 // The merged bundle has no single unit/module. Preserve the exact
                 // exporting module for globally named bindings; synthetic entries

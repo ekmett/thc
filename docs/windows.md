@@ -53,8 +53,14 @@ $env:THC_BACKEND = 'bytecode'
 Both calls print 5050. For a Cabal executable, use:
 
 ~~~powershell
-cabal run thc -- run test/fixtures/run-pure/run-pure.cabal --exe completed --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
+cabal run thc -- run completed --project-dir test/fixtures/run-pure `
+  --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
 ~~~
+
+The positional target and `--project-dir` / `--project-file` flags are resolved
+by Cabal, just as on other hosts. On Windows, an accepted simple executable
+then uses the existing native Windows exporter pipeline internally; there is
+no separate selector syntax.
 
 The driver sends GHC options through GHC's own response-file format. This
 preserves lone dashes and drive-letter colons that Windows PowerShell's external
@@ -115,9 +121,10 @@ repository's entire fixture/test suite.
   The command deliberately fails when Core is unavailable. Local CString
   recompilation does not make that compiler a full-Core installation.
   See [the compiler build requirements](ghc-core.md).
-* Project-directory builds and the Unix shared-plugin/provider pipeline are
-  not ported by this checkpoint. A single Cabal executable without internal
-  library/build-tool dependencies uses the Windows exporter/launcher path.
+* The Unix project-capture/shared-plugin/provider pipeline is not ported by
+  this checkpoint. A single Cabal executable without internal library/build-tool
+  dependencies uses the Windows exporter/launcher path after Cabal resolves the
+  target. Benchmark and test-component capture on Windows remains unsupported.
 * POSIX stdio/stat/termios/signal ABIs and Linux native providers are explicitly
   skipped on Windows, with incompatible resources excluded from packaging.
   General Windows native IO, arbitrary CAPI/Sulong libraries, libdw finalizers,

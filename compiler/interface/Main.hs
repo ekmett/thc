@@ -4,9 +4,9 @@
 module Main (main) where
 
 import qualified Control.Exception as Exception
-import Control.DeepSeq (force)
 import Control.Monad (forM, unless)
 import Data.Aeson (Value, FromJSON(..), object, (.=), (.:), encode, eitherDecode, withObject)
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe)
@@ -78,7 +78,7 @@ main = do
     -- result. Evaluate the complete payload before emitting any stdout bytes.
     result <- Exception.tryJust synchronous $ if inventoryProbe options
       then Just <$> probeSelected options
-      else fmap (\core -> "{\"schema\":1,\"status\":\"loaded\",\"core\":" ++ core ++ "}") <$> loadSelected options
+      else loadSelected options
     case result of
       Left failure -> report 1 $ object
         ["schema" .= (1 :: Int), "status" .= ("error" :: String), "category" .= ("interface" :: String),
@@ -87,13 +87,13 @@ main = do
         ["schema" .= (1 :: Int), "status" .= ("unavailable" :: String),
          "capability" .= ("complete-interface-core" :: String), "unit" .= unit options,
          "module" .= moduleName options, "way" .= way options, "interface" .= interface options]
-      Right (Just output) -> putStrLn output
+      Right (Just output) -> BS.hPut stdout output
   where
     synchronous failure = case Exception.fromException failure :: Maybe Exception.SomeAsyncException of
       Just _ -> Nothing
       Nothing -> Just (failure :: Exception.SomeException)
 
-loadSelected :: Options -> IO (Maybe String)
+loadSelected :: Options -> IO (Maybe BS.ByteString)
 loadSelected options = withSelected options $ \environment -> do
   expected <- case homeInterfaces options of
     Nothing -> resolveModule environment (unit options) (moduleName options)
@@ -105,9 +105,9 @@ loadSelected options = withSelected options $ \environment -> do
   case loaded of
     Nothing -> pure Nothing
     Just core -> do
-      rendered <- interfaceCoreJSON (["unit-qualified"] ++ ["source-notes" | sourceNotes options]) core
-      _ <- Exception.evaluate (force rendered)
-      pure (Just rendered)
+      rendered <- interfaceCoreJSONBytes (["unit-qualified"] ++ ["source-notes" | sourceNotes options]) core
+      output <- Exception.evaluate (BS.concat ["{\"schema\":1,\"status\":\"loaded\",\"core\":", rendered, "}\n"])
+      pure (Just output)
 
 -- Private, versioned batch protocol used by the installed-bundle cache. Each
 -- entry is checked using the same selected package state as ordinary loading.
@@ -122,7 +122,7 @@ instance FromJSON ProbeRequest where
   parseJSON = withObject "interface probe inventory" $ \fields ->
     ProbeRequest <$> fields .: "units" <*> fields .: "interfaces"
 
-probeSelected :: Options -> IO String
+probeSelected :: Options -> IO BS.ByteString
 probeSelected options = do
   ProbeRequest identifiers entries <- either fail pure . eitherDecode =<< BL.getContents
   withSelected options $ \environment -> do
@@ -135,9 +135,12 @@ probeSelected options = do
       (digest, complete) <- probeInterface environment units modules expected path
       pure $ object ["unit" .= identifier, "module" .= name, "interface" .= path,
         "owner" .= unitString (moduleUnit expected), "fingerprint" .= show digest, "completeCore" .= complete]
-    let output = BL.unpack (encode (object ["schema" .= (1 :: Int),
-          "status" .= ("probed" :: String), "interfaces" .= rows]))
-    Exception.evaluate (force output)
+    -- Aeson already emits UTF-8. Char8.unpack followed by putStrLn would
+    -- encode those bytes a second time, corrupting non-ASCII interface paths
+    -- and making the driver's exact inventory check reject every cache hit.
+    let output = BS.snoc (BL.toStrict (encode (object ["schema" .= (1 :: Int),
+          "status" .= ("probed" :: String), "interfaces" .= rows]))) 10
+    Exception.evaluate output
 
 withSelected :: Options -> (HscEnv -> IO a) -> IO a
 withSelected options action = runGhc (Just (libdir options)) $ do

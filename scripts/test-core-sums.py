@@ -280,7 +280,9 @@ class SumAuditTest(unittest.TestCase):
             [['data','Heap',['word'],lit(),dict(binders=[binder('word',WORD)])]],
             dict(rep=INT,binder=binder('heap',dict(BOX,evaluated=True)))]
         report=self.rejected(module)
-        self.assertTrue(any(i['detail']=='unboxed-sum heap field' for i in report['issues']))
+        # This exact zero-payload sum is now a supported heap field, but a raw
+        # Word# cannot replace its logical sum operand or pattern binder.
+        self.assertIn('aggregate-shape', {i['code'] for i in report['issues']})
 
     def test_scalar_primitive_unknown_guard_cannot_hide_sum_proof(self):
         module=fixture();module['bindings'][0]['expr'][2]=['app',['prim','+#'],[lit(),lit()],[False,False],False,False,dict(rep=summ())]

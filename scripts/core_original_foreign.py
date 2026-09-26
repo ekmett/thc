@@ -97,6 +97,8 @@ OPERATIONS = {
     'free': ('ccall', 'unsafe', ('AddrRep', None), (None,)),
     'memmove': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', 'Word64Rep', None), (None, 'AddrRep')),
     'memcpy': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', 'Word64Rep', None), (None, 'AddrRep')),
+    'memcmp': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', 'Word64Rep', None), (None, 'Int32Rep')),
+    'memchr': ('ccall', 'unsafe', ('AddrRep', 'Int32Rep', 'Word64Rep', None), (None, 'AddrRep')),
     'strlen': ('ccall', 'unsafe', ('AddrRep', None), (None, 'IntRep')),
     'getenv': ('ccall', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
     'unlink': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Int32Rep')),
@@ -106,6 +108,11 @@ OPERATIONS = {
     **{symbol: ('capi', 'unsafe', arguments, output)
        for symbol, (arguments, output) in SIGSET_OPERATIONS.items()},
     'rtsSupportsBoundThreads': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
+    'getRTSStatsEnabled': ('ccall', 'safe', (None,), (None, 'IntRep')),
+    'getRTSStats': ('ccall', 'safe', ('AddrRep', None), (None,)),
+    **{symbol: ('ccall', 'safe', (None,), (None,))
+       for symbol in ('performGC', 'performMajorGC', 'performBlockingMajorGC')},
+    'getMonotonicNSec': ('ccall', 'unsafe', (None,), (None, 'Word64Rep')),
     'stg_getThreadAllocationCounterzh': ('prim', 'safe', (None,), (None, 'Int64Rep')),
     'rts_isThreaded': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
     'reportStackOverflow': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', None), (None,)),
@@ -215,6 +222,8 @@ LIBRARY_OPERATIONS = {
         ('ccall', 'unsafe', (GMP_ARRAY, GMP_ARRAY, 'Word64Rep', None), (None, 'AddrRep')),
     ('bytestring-0.12.2.0-inplace', 'strlen'):
         ('ccall', 'unsafe', ('AddrRep', None), (None, 'Word64Rep')),
+    ('bytestring-0.12.2.0-inplace', 'memcmp'): OPERATIONS['memcmp'],
+    ('bytestring-0.12.2.0-inplace', 'memchr'): OPERATIONS['memchr'],
 }
 
 
@@ -304,6 +313,8 @@ def validate(metadata, argument_reps, flags, result_rep):
     if symbol not in OPERATIONS:
         return None
     convention, safety, expected, output = operation(target)
+    if symbol == 'memchr':
+        require(target.get('unit') == 'bytestring-0.12.2.0-inplace', 'exact bytestring unit')
     if symbol in ('getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',
                   'getOrSetLibHSghcGlobalHasNoDebugOutput', 'getOrSetLibHSghcGlobalHasNoStateHack', 'keepCAFsForGHCi'):
         require(target.get('unit') == 'ghc-9.14.1-inplace', 'exact compiler unit')

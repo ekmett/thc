@@ -2,7 +2,7 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 module THC.Driver.Run
-  ( RunOptions(..), FfiMode(..), parseFfiMode, runtimeLaunchArguments, runPackage
+  ( RunOptions(..), FfiMode(..), parseFfiMode, runtimeLaunchArguments, runResolvedPackage
   ) where
 
 import Control.Monad (unless, when)
@@ -30,7 +30,9 @@ import THC.Driver.Cabal (PlanOptions(..), configurePackage)
 
 data RunOptions = RunOptions
   { runPlan :: PlanOptions
-  , runExecutable :: String
+  , runTarget :: String
+  , runProjectDirectory :: Maybe FilePath
+  , runProjectFile :: Maybe FilePath
   , runThcRoot :: FilePath
   , runRuntime :: Maybe FilePath
   , runInstalledCore :: String
@@ -55,19 +57,20 @@ runtimeLaunchArguments mode entry program arguments =
     NativeFfi -> "native"
     ManagedFfi -> "managed"]) mode ++ entry ++ ["--", program] ++ arguments
 
--- This first run slice uses the package configuration that Cabal itself
--- elaborated. Native build output is never executed; the exported GHC Core is.
-runPackage :: RunOptions -> FilePath -> IO ()
-runPackage opts target = do
+-- Internal simple-package backend retained for Windows after Cabal resolves
+-- the public positional target. This is not a second command-line selector.
+-- Native build output is never executed; the exported GHC Core is.
+runResolvedPackage :: RunOptions -> FilePath -> FilePath -> IO ()
+runResolvedPackage opts working target = do
   unless (runGhcSource opts == Nothing) $
-    fail "--ghc-source requires --installed-core required and a cabal.project directory"
-  unless (not (null (runExecutable opts))) $ fail "run requires --exe NAME"
+    fail "the Windows simple-package backend does not support --ghc-source"
+  unless (not (null (runTarget opts))) $ fail "resolved runnable component has no name"
   unless (not (null (runThcRoot opts))) $ fail "run requires --thc-root DIR"
   unless (runInstalledCore opts == "pinned") $
-    fail "--installed-core required currently requires a cabal.project directory"
+    fail "the Windows simple-package backend does not support --installed-core required"
   (cabalFile, lbi) <- configurePackage (runPlan opts) target
   let packageRoot = takeDirectory cabalFile
-      selectedName = runExecutable opts
+      selectedName = runTarget opts
       configured = localPkgDescr lbi
       candidates = [ (clbi, exe) | clbi <- allComponentsInBuildOrder lbi
                  , CExe exe <- [getComponent configured (componentLocalName clbi)]
@@ -147,7 +150,7 @@ runPackage opts target = do
   checked True python ([thcRoot </> "scripts/audit-core.py", "--entry", "main:Main.main", "--io-main",
                       "--output", output </> "audit.json"] ++ modules) thcRoot inherited
   checked False runtime (runtimeLaunchArguments (runFfiMode opts)
-    ["--run-io", intercalate "," modules, "main:Main.main"] selectedName (runArguments opts)) thcRoot inherited
+    ["--run-io", intercalate "," modules, "main:Main.main"] selectedName (runArguments opts)) working inherited
 
 filterMFile :: (a -> IO Bool) -> [a] -> IO [a]
 filterMFile predicate items = do

@@ -48,9 +48,7 @@ target's volatile pending flag. The cell follows nested guest entry and is
 cleared when the carrier leaves its final guest entry. Claiming remains a cold
 locked operation that rechecks ownership, foreign-call permission, masking and
 FIFO state. This keeps Java `ThreadLocal` initialization and map maintenance out
-of compiled guest loops without disabling asynchronous delivery. See the
-[September 26 investigation](../bench/results/performance-regressions-20260926/README.md)
-for the graph regression and native-result checks.
+of compiled guest loops without disabling asynchronous delivery.
 
 Masking and stack-annotation reads likewise use context-thread-local mutable
 cells. Boundary setters and the thread registry's legacy `ThreadLocal` interface

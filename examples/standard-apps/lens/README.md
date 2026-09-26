@@ -26,7 +26,8 @@ Retain the archive's license and unmodified sources. The library itself is the
 pinned Cabal dependency; `upstream-lens` supplies its original test sources.
 
 `lens-hunit`, `lens-properties` and `lens-templates` wrap the unchanged upstream
-test modules as executables because `thc run` selects executable components.
+test modules as executables, retaining the original capture fixture layout.
+The driver now also accepts original exitcode test-component targets directly.
 Their source directories, dependencies and options follow the original test
 stanzas. The template suite's substantial checks run during native compilation;
 its runtime entry only prints a confirmation. This does not claim Template
@@ -61,16 +62,16 @@ plugin and runtime from the selected THC checkout. Set absolute `THC_ROOT`,
 `GHC_SOURCE`, `GHC` and `GHC_PKG` paths, then run:
 
 ```sh
-thc run . --exe lens-thc-check:exe:lens-public-api \
+thc run lens-thc-check:exe:lens-public-api \
   --thc-root "$THC_ROOT" --dist-dir "$THC_ROOT/build/lens/public-api" \
   --with-ghc "$GHC" --with-ghc-pkg "$GHC_PKG" \
   --installed-core required --ghc-source "$GHC_SOURCE"
-thc run . --exe lens-thc-check:exe:lens-hunit \
+thc run lens-thc-check:exe:lens-hunit \
   --thc-root "$THC_ROOT" --dist-dir "$THC_ROOT/build/lens/hunit" \
   --with-ghc "$GHC" --with-ghc-pkg "$GHC_PKG" \
   --installed-core required --ghc-source "$GHC_SOURCE" \
   -- --num-threads=1 --color=never
-thc run . --exe lens-thc-check:exe:lens-properties \
+thc run lens-thc-check:exe:lens-properties \
   --thc-root "$THC_ROOT" --dist-dir "$THC_ROOT/build/lens/properties" \
   --with-ghc "$GHC" --with-ghc-pkg "$GHC_PKG" \
   --installed-core required --ghc-source "$GHC_SOURCE" \

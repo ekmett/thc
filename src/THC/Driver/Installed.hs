@@ -7,22 +7,23 @@
 module THC.Driver.Installed
   ( InstalledContext(..), InstalledUnit(..), InstalledCore(..), MissingCore(..)
   , installedContext, discoverInstalled, validateReexports, acquireInstalled, acquireInstalledWithJobs
-  , installedProvenance, installedLayoutHeaders, helperCommand, probeInstalled
+  , installedProvenance, installedLayoutHeaders, helperCommand, probeInstalled, prepareInstalledProbe
   , emptyRegistration, modulelessRegistration
   ) where
 
 import Control.Concurrent (ThreadId, forkIOWithUnmask, killThread)
 import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, readMVar)
-import Control.Exception (SomeException, bracket, finally, mask, mask_, throwIO, try)
+import Control.Exception (SomeException, bracket, evaluate, finally, mask, mask_, throwIO, try)
 import Control.Monad (filterM, foldM, forM, forM_, unless, void)
 import Data.Aeson (Value(..), FromJSON, eitherDecodeStrict', encode, fromJSON, Result(..), object, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
+import qualified Crypto.Hash.SHA256 as SHA
 import Data.Char (isAlphaNum, isHexDigit)
 import Data.List (nub, sort)
-import Data.IORef (modifyIORef', newIORef, readIORef)
+import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (isNothing)
 import qualified Data.Set as Set
@@ -35,7 +36,7 @@ import System.Directory (canonicalizePath, doesDirectoryExist, doesFileExist)
 import System.Environment (getEnvironment, lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), pathSeparator)
-import System.IO (hClose, hSetBinaryMode)
+import System.IO (IOMode(ReadMode), hClose, hSetBinaryMode, withBinaryFile)
 import System.Process (proc, CreateProcess(..), StdStream(..), readCreateProcessWithExitCode,
                        waitForProcess, withCreateProcess)
 import System.Timeout (timeout)
@@ -219,10 +220,70 @@ helperCommand context unit (name, path) =
 -- itself must retain complete Core in every owned module.
 probeInstalled :: InstalledContext -> InstalledUnit -> IO Value
 probeInstalled context requested = do
+  units <- probeClosure context requested
+  value <- probeInstalledUnits context requested units
+  checkProbeRegistrations context units
+  pure value
+
+-- A single bundle transaction probes the same exact inventory before and after
+-- validation/acquisition. Reuse only a successful result with byte-identical
+-- raw interfaces and helper, and freshly discovered registrations. Do not
+-- share rows across inventories: the helper checks retained-Core providers
+-- against the complete request, not just each row's module/ordinary hash.
+-- This state is invocation-local, not a persistent or process-global cache.
+prepareInstalledProbe :: InstalledContext -> InstalledUnit -> IO (IO Value)
+prepareInstalledProbe context requested = do
+  previous <- newIORef Nothing
+  pure $ do
+    units <- probeClosure context requested
+    before <- probeSnapshot context units
+    cached <- readIORef previous
+    case cached of
+      Just (oldUnits, oldSnapshot, value) | units == oldUnits && before == oldSnapshot -> do
+        checkProbeRegistrations context units
+        pure value
+      _ -> do
+        value <- probeInstalledUnits context requested units
+        after <- probeSnapshot context units
+        unless (before == after) (fail "installed probe inputs changed during interface probe")
+        checkProbeRegistrations context units
+        writeIORef previous (Just (units, after, value))
+        pure value
+
+-- Stream raw contents: ordinary interface hashes omit retained Core, foreign
+-- payloads and annotations. Size/mtime alone cannot establish reusable evidence.
+probeSnapshot :: InstalledContext -> [InstalledUnit] -> IO [BS.ByteString]
+probeSnapshot context units = forM paths $ \path -> withBinaryFile path ReadMode $ \handle -> do
+  bytes <- BL.hGetContents handle
+  evaluate (SHA.hashlazy bytes)
+  where
+    paths = installedHelper context : concatMap (map snd . installedInterfaces) units
+
+probeClosure :: InstalledContext -> InstalledUnit -> IO [InstalledUnit]
+probeClosure context requested = do
   units <- Map.elems <$> visit Set.empty Map.empty (registeredId requested)
   unless (lookup (registeredId requested) [(registeredId unit, unit) | unit <- units] == Just requested)
     (fail "installed registration changed before interface probe")
   validateReexports units
+  pure units
+  where
+    visit active found identifier
+      | identifier `Set.member` active = fail "installed dependency cycle"
+      | Map.member identifier found = pure found
+      | otherwise = do
+          unit <- discoverInstalled context identifier
+          foldM (visit (Set.insert identifier active)) (Map.insert identifier unit found)
+            (sort (installedDepends unit))
+
+checkProbeRegistrations :: InstalledContext -> [InstalledUnit] -> IO ()
+checkProbeRegistrations context units = do
+  current <- mapM (discoverInstalled context . registeredId) units
+  unless (current == units) (fail "installed registration changed during interface probe")
+
+-- The caller rechecks registrations after consuming the response and any
+-- additional raw-input snapshots, immediately before returning the evidence.
+probeInstalledUnits :: InstalledContext -> InstalledUnit -> [InstalledUnit] -> IO Value
+probeInstalledUnits context requested units = do
   let entries = [(registeredId unit, name, path) | unit <- units,
                    (name, path) <- installedInterfaces unit]
       request = object ["units" .= map registeredId units,
@@ -249,17 +310,7 @@ probeInstalled context requested = do
             length digest == 32 && all isHexDigit digest &&
             (identifier /= registeredId requested || complete))
       (fail "inconsistent interface probe identity/payload")
-  current <- mapM (discoverInstalled context . registeredId) units
-  unless (current == units) (fail "installed registration changed during interface probe")
   pure (object ["registrations" .= map (installedProvenance context) units, "interfaces" .= rows])
-  where
-    visit active found identifier
-      | identifier `Set.member` active = fail "installed dependency cycle"
-      | Map.member identifier found = pure found
-      | otherwise = do
-          unit <- discoverInstalled context identifier
-          foldM (visit (Set.insert identifier active)) (Map.insert identifier unit found)
-            (sort (installedDepends unit))
 
 acquireInstalled :: InstalledContext -> InstalledUnit -> IO (Either MissingCore InstalledCore)
 acquireInstalled context unit = do

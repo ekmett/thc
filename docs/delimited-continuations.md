@@ -20,6 +20,14 @@ remaining case/result steps. The internal capture exception is an unwinding
 transport, not a substitute for saved continuation state. This multi-shot image
 does not reuse the existing one-shot asynchronous continuation owners.
 
+The tuple dispatcher transfers to the interpreter before materializing its
+activation for a captured continuation, without invalidating the installed
+code. Ordinary tuple returns stay on the compiled path. This prevents the
+escaping frame on a capture branch from forcing a frame-access deoptimization
+on the first compiled bytecode handler call. Original closure-inspection and
+annotation-free resumption checks retain exact compiled-entry counts, result
+comparisons, pool cleanup and code-validity assertions.
+
 ## Established slice and remaining work
 
 The [Haskell examples](../examples/DelimitedContinuations.hs) cover plain prompts,

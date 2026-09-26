@@ -413,7 +413,7 @@ class Int32ArrayNativeTest {
             for (name in names) {
                 val evidence = ArrayCoreEvidence(module, name)
                 checkedCore(name, evidence)
-                val expectedCalls = evidence.immediateStateCalls().toLong()
+                val expectedCalls = evidence.loweredImmediateStateCalls().toLong()
                 val cases = rows.getValue(name).map { it.input to it.answer }
                 assertEquals(cases.size, cases.map { it.first }.toSet().size)
                 assertEquals((manifest["inputs"] as List<Number>).map { it.toLong() }.toSet(), cases.map { it.first }.toSet())
@@ -433,10 +433,8 @@ class Int32ArrayNativeTest {
                             val formals = expression[1] as List<Map<String, Any?>>
                             return "lambda ${formals.joinToString { it["name"].toString() }}"
                         }
-                        val rootExpression = bindings.single { it["name"] == name }["expr"] as List<*>
-                        val stateCall = rootExpression[2] as List<*>
-                        val expectedLabels = bindings.map { lambdaLabel(it["expr"] as List<*>) }.toSet() +
-                            lambdaLabel(stateCall[1] as List<*>)
+                        // The checked immediate runRW State# lambda is beta-reduced.
+                        val expectedLabels = bindings.map { lambdaLabel(it["expr"] as List<*>) }.toSet()
                         var targets = emptyList<RootCallTarget>()
                         fun count() = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                         fun check(compiled: Boolean) {
@@ -478,7 +476,7 @@ class Int32ArrayNativeTest {
     private fun paths() = (manifest()["stages"] as Map<String, List<String>>).getValue("pre")
     private fun owner(operation: ByteArrayOp) = if (operation.primitive.contains("Word32")) "aliasWord32Bytes" else "aliasInt32Bytes"
 
-    @Test fun exactNarrowStateShapesAndSaturationAreRequiredInBothLoadModes() {
+    @Test fun longAliasesExecuteWhileCarrierStateShapeAndSaturationGuardsRemain() {
         val paths = paths()
         for (backend in listOf("ast", "bytecode")) context(true).use { context ->
             context.initialize("thc"); context.enter()
@@ -527,7 +525,19 @@ class Int32ArrayNativeTest {
                             } else metadata["rep"] = payload
                         }
                     }
-                    assertThrows(RuntimeFault::class.java, {
+                    // Scalar aliases share Long, but a unilateral tuple change
+                    // still conflicts with the untouched case binder's ABI.
+                    val sameCarrier = mutation == 6 || (!operation.tuple && (mutation == 7 || mutation in 10..13))
+                    if (sameCarrier) {
+                        val name = owner(operation)
+                        val p = program(language, module + ("diagnosticUnsupported" to diagnostic), backend)
+                        for (seed in listOf(5L, -1L, Long.MIN_VALUE)) {
+                            assertEquals(model(name, seed),
+                                Calls.target(p.hostEntryTarget(1), arrayOf(p.entryValue(name), arrayOf(seed))),
+                                "$backend/$operation/mutation$mutation/$diagnostic/$seed")
+                            released(language)
+                        }
+                    } else assertThrows(RuntimeFault::class.java, {
                         program(language, module + ("diagnosticUnsupported" to diagnostic), backend)
                     }, "$backend/$operation/mutation$mutation/$diagnostic")
                 }

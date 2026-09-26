@@ -51,6 +51,11 @@ class PackageSafeForeignTest {
               return -123.0;
             }
             double requires_argument(double value) { return value; }
+            unsigned char *wait_pointer(unsigned char *value) {
+              if (wait_value(0.5) != 0.5) return 0;
+              ++*value;
+              return value;
+            }
         """.trimIndent())
         val cpu = if (System.getProperty("os.arch") == "amd64") "x86_64" else System.getProperty("os.arch")
         val target = if (System.getProperty("os.name") == "Linux") "$cpu-unknown-linux-gnu" else "$cpu-apple-darwin"
@@ -66,6 +71,7 @@ class PackageSafeForeignTest {
             PackageScalarSignature("reset", "reset", emptyList(), "void", safety = "safe"),
             PackageScalarSignature("release", "release", emptyList(), "void", safety = "safe"),
             PackageScalarSignature("wait_value", "wait_value", listOf("DoubleRep"), "DoubleRep", safety = "safe"),
+            PackageScalarSignature("wait_pointer", "wait_pointer", listOf("AddrRep"), "AddrRep", safety = "safe"),
             // Deliberately inconsistent control: no forged typed Core is admitted.
             // The runtime interop call throws inside the foreign extent.
             PackageScalarSignature("requires_argument", "requires_argument", emptyList(), "DoubleRep", safety = "safe"))
@@ -82,22 +88,25 @@ class PackageSafeForeignTest {
         }
     }
 
-    private fun module(link: PackageScalarLink): Map<String, Any?> {
+    private fun module(link: PackageScalarLink, pointer: Boolean): Map<String, Any?> {
         val state = mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true)
-        val double = mapOf("kind" to "double", "primReps" to listOf("DoubleRep"), "evaluated" to true)
+        val valueRep = if (pointer) "AddrRep" else "DoubleRep"
+        val value = mapOf("kind" to (if (pointer) "address" else "double"),
+            "primReps" to listOf(valueRep), "evaluated" to true)
         val closure = mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)
-        val result = mapOf("kind" to "unknown", "aggregate" to "unboxed-tuple", "primReps" to listOf("DoubleRep"),
-            "components" to listOf(state, double), "evaluated" to true)
-        val descriptor = mapOf("schema" to 1L, "target" to mapOf("kind" to "static", "symbol" to "wait_value",
+        val result = mapOf("kind" to "unknown", "aggregate" to "unboxed-tuple", "primReps" to listOf(valueRep),
+            "components" to listOf(state, value), "evaluated" to true)
+        val descriptor = mapOf("schema" to 1L, "target" to mapOf("kind" to "static",
+            "symbol" to (if (pointer) "wait_pointer" else "wait_value"),
             "unit" to link.unit, "isFunction" to true), "convention" to "ccall", "safety" to "safe",
             "arity" to 2L, "suppliedArity" to 2L,
-            "argumentReps" to listOf(double + ("evaluated" to false), state + ("evaluated" to false)),
+            "argumentReps" to listOf(value + ("evaluated" to false), state + ("evaluated" to false)),
             "resultRep" to (result + ("evaluated" to false)))
-        val arguments = listOf(listOf("var", "value", mapOf("rep" to double)),
+        val arguments = listOf(listOf("var", "value", mapOf("rep" to value)),
             listOf("var", "state", mapOf("rep" to state)))
         val body = listOf("app", listOf("var", "native-safe", mapOf("rep" to closure)), arguments,
             listOf(false, false), false, false, mapOf("rep" to result, "foreignCall" to descriptor))
-        val parameters = listOf("value" to double, "state" to state).map { (name, rep) ->
+        val parameters = listOf("value" to value, "state" to state).map { (name, rep) ->
             mapOf("id" to name, "name" to name, "lifted" to false, "coercion" to false, "rep" to rep) }
         return mapOf("bindings" to listOf(mapOf("id" to "wait", "name" to "wait", "lifted" to true,
             "expr" to listOf("lam", parameters, body, mapOf("resultRep" to result)))),
@@ -106,6 +115,15 @@ class PackageSafeForeignTest {
 
     @ParameterizedTest @ValueSource(strings = ["ast", "ast-compiled", "bytecode", "bytecode-compiled"])
     fun safeScalarDefersAsyncUntilReturnWhileOtherGuestCallsAndGcProgress(mode: String) {
+        exerciseSafeReturn(mode, pointer = false)
+    }
+
+    @ParameterizedTest @ValueSource(strings = ["ast", "ast-compiled", "bytecode", "bytecode-compiled"])
+    fun temporarySafePointerPathPreservesNativeStorageAndCompletedResult(mode: String) {
+        exerciseSafeReturn(mode, pointer = true)
+    }
+
+    private fun exerciseSafeReturn(mode: String, pointer: Boolean) {
         val link = library()
         Context.newBuilder("thc").allowNativeAccess(true).withContextProfile(ContextProfile.SYNCHRONOUS_TEST)
             .build().use { context ->
@@ -115,10 +133,23 @@ class PackageSafeForeignTest {
                     val owner = Language.currentState()
                     owner.packageCbits.link(link)
                     val entries = link.abi.associate { it.symbol to Entry(language, PackageScalarCall(link, it)).callTarget }
-                    val program: ExecutableProgram = if (mode.startsWith("ast")) Program(language, module(link), true)
-                        else BytecodeProgram(language, module(link), true)
+                    val program: ExecutableProgram = if (mode.startsWith("ast")) Program(language, module(link, pointer), true)
+                        else BytecodeProgram(language, module(link, pointer), true)
                     val target = program.entryTarget("wait")
                     val shape = checkNotNull((target.rootNode as GuestRoot).tupleResult)
+                    val storage = if (pointer) PinnedMemory.allocate(8, 64) else null
+                    val argument: Any = storage?.let { ManagedAddress.fromAllocation(it).plus(3) } ?: 0.5
+                    val originalBits = storage?.nativeSegment()?.address()
+                    fun checkResult(result: Any?) {
+                        val tuple = ownedTupleResult(result, shape)
+                        if (pointer) {
+                            val address = shape.layout.getObject(tuple, 0) as ManagedAddress
+                            assertEquals(originalBits!! + 3, address.toNativeBits())
+                            assertEquals(originalBits, storage!!.nativeSegment()!!.address(), "no copied or relocated buffer")
+                            assertThrows(RuntimeFault::class.java) { address.readWord8(0) }
+                            for (index in listOf(0L, 1L, 2L, 4L, 5L, 6L, 7L)) assertEquals(0L, storage.readByte(index))
+                        } else assertEquals(0.5, shape.layout.getDouble(tuple, 0))
+                    }
                     entries.getValue("started").call()
                     entries.getValue("release").call()
                     entries.getValue("call_count").call()
@@ -137,13 +168,13 @@ class PackageSafeForeignTest {
                             // execute the first installed foreign call.
                             repeat(3) {
                                 entries.getValue("reset").call()
-                                val result = Calls.target(target, arrayOf(0L, 0.5, Unit))
-                                assertEquals(0.5, shape.layout.getDouble(ownedTupleResult(result, shape), 0))
+                                val result = Calls.target(target, arrayOf(0L, argument, Unit))
+                                checkResult(result)
                             }
                             entries.getValue("reset").call()
                             ready.countDown()
                             check(begin.await(30, TimeUnit.SECONDS))
-                            val result = Calls.target(target, arrayOf(0L, 0.5, Unit))
+                            val result = Calls.target(target, arrayOf(0L, argument, Unit))
                             val continuation = checkNotNull(savedGuestContinuation(result))
                             val request = continuation.asyncRequest()
                             assertSame(pending.get(), request, "delivery occurs at the completed foreign-call cut")
@@ -182,14 +213,15 @@ class PackageSafeForeignTest {
                         entries.getValue("release").call()
                         worker.join(25000)
                     }
-                    assertFalse(worker.isAlive, "scalar safe return must release the Java carrier")
+                    assertFalse(worker.isAlive, "safe return must release the Java carrier")
                     failure.get()?.let { throw it }
                     assertEquals(AsyncRequestState.ACKNOWLEDGED, pending.get().state)
                     assertEquals(1L, entries.getValue("call_count").call())
                     owner.threads.enterCurrent()
                     try {
                         val result = completed.get().continueWith(Unit)
-                        assertEquals(0.5, shape.layout.getDouble(ownedTupleResult(result, shape), 0))
+                        checkResult(result)
+                        if (pointer) assertEquals(4L, storage!!.readByte(3), "three warm calls and one completed effect, with no replay")
                         assertEquals(1L, entries.getValue("call_count").call(), "resumption must not replay the foreign effect")
                         if (mode.startsWith("ast"))
                             assertThrows(RuntimeFault::class.java) { completed.get().continueWith(Unit) }

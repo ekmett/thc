@@ -70,7 +70,9 @@ class Audit:
         self.retained_exports = []
         for source, module in modules:
             scalar_link = None
+            native_archive = None
             try:
+                native_archive = core_package_manifest.package_native_archive(module)
                 scalar_link = core_package_manifest.package_scalar_link(module)
                 if scalar_link:
                     link, proved = scalar_link
@@ -103,7 +105,7 @@ class Audit:
                 self.issue('module-format', None, source, str(error))
             linked = (type(module.get('schema')) is int and module['schema'] == 2 and
                       'foreignLink' in module and core_package_manifest.linked_foreign(module))
-            archive = core_package_manifest.foreign_execution_issue(module) if not linked and not scalar_link and not retained and not managed_imports else None
+            archive = core_package_manifest.foreign_execution_issue(module) if native_archive or (not linked and not scalar_link and not retained and not managed_imports) else None
             if archive:
                 try:
                     core_package_manifest.validate_archive_only_foreign(module)
@@ -132,7 +134,8 @@ class Audit:
                 else:
                     self.bindings[key] = binding
                     self.sources[key] = source
-                    if archive and not registration:
+                    if archive and not registration and (native_archive is None or
+                            core_package_manifest.native_archive_blocks(module, binding, native_archive)):
                         self.archive_bindings[key] = (source, archive)
             for constructor in module.get('constructors', []):
                 key = constructor.get('id')
@@ -362,6 +365,15 @@ class Audit:
                 vector_proof_error(rep) is None and any(
                     rep['vector'] == {key: shape[key] for key in ('lanes', 'element')}
                     for shape in self.cap.get('vectorRepresentations', [])))
+
+    def supported_heap_aggregate(self, rep):
+        if not isinstance(rep, dict) or rep.get('evaluated') is not True:
+            return False
+        if rep.get('aggregate') not in self.cap.get('aggregateHeapFields', []):
+            return False
+        return (sum_proof_error(rep) is None if is_sum(rep) else
+                tuple_input_proof_error(rep, allow_addresses=True,
+                    allow_vectors='heap-fields' in self.cap.get('vectorTransport', [])) is None)
 
     @classmethod
     def shape(cls, rep):
@@ -759,6 +771,8 @@ class Audit:
                         or symbol in ('isFloatNaN', 'isFloatInfinite', 'isFloatFinite', 'isFloatDenormalized', 'isFloatNegativeZero',
                                       'isDoubleNaN', 'isDoubleInfinite', 'isDoubleFinite', 'isDoubleDenormalized', 'isDoubleNegativeZero',
                                       'rintFloat', 'rintDouble')
+                        or symbol in ('getRTSStatsEnabled', 'getRTSStats', 'performGC', 'performMajorGC',
+                                      'performBlockingMajorGC', 'getMonotonicNSec')
                         or symbol in ('getOrSetSystemEventThreadEventManagerStore',
                                       'getOrSetGHCConcSignalSignalHandlerStore',
                                       'getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',
@@ -1006,16 +1020,25 @@ class Audit:
         if info.get('kind', 'boxed') not in self.cap['constructorKinds']:
             self.issue('constructor-kind', owner, path, f'{key}: {info.get("kind")}')
         fields = info.get('fieldTypes')
-        if isinstance(fields, list) and any(contains_sum(field) for field in fields):
+        if isinstance(fields, list) and any(contains_sum(field) and not self.supported_heap_aggregate(field) for field in fields):
             self.issue('aggregate-boundary', owner, path, 'unboxed-sum heap field')
-        if isinstance(fields, list) and any(contains_tuple(field) for field in fields):
+        if isinstance(fields, list) and any(contains_tuple(field) and not self.supported_heap_aggregate(field) for field in fields):
             self.issue('aggregate-boundary', owner, path, 'unboxed-tuple heap field')
         reps = info.get('fieldReps')
         if not isinstance(reps, list) or len(reps) != expected:
             self.issue('constructor-representations', owner, path, f'{key}: missing/misaligned fieldReps')
         else:
             for index, registers in enumerate(reps):
-                if not isinstance(registers, list) or len(registers) > 1:
+                proof = fields[index] if isinstance(fields, list) and len(fields) == expected else None
+                if self.supported_heap_aggregate(proof):
+                    lifted, strict = info.get('fieldLifted'), info.get('strictFields')
+                    if (proof.get('primReps') != registers or
+                            not isinstance(lifted, list) or len(lifted) != expected or lifted[index] is not False or
+                            not isinstance(strict, list) or len(strict) != expected or type(strict[index]) is not bool):
+                        self.issue('constructor-field-representation', owner, path,
+                                   f'{key}[{index}]: aggregate field requires exact unlifted fieldTypes')
+                    self.representation(proof, owner, path + f'/fieldTypes/{index}')
+                elif not isinstance(registers, list) or len(registers) > 1:
                     self.issue('constructor-field-representation', owner, path, f'{key}[{index}]: {registers!r}')
                 elif registers and isinstance(registers[0], str) and registers[0].startswith('VecRep '):
                     types, lifted, strict = info.get('fieldTypes'), info.get('fieldLifted'), info.get('strictFields')
@@ -1040,6 +1063,8 @@ class Audit:
         # legacy constructor records without the optional precise fieldTypes.
         for index, registers in enumerate(reps if isinstance(reps, list) else []):
             if registers != ['AddrRep']:
+                continue
+            if isinstance(fields, list) and index < len(fields) and self.supported_heap_aggregate(fields[index]):
                 continue
             lifted = info.get('fieldLifted')
             if 'fieldLifted' in info and (not isinstance(lifted, list) or len(lifted) != expected or lifted[index] is not False):
@@ -1792,6 +1817,17 @@ class Audit:
                 else:
                     self.walk(function, bound, owner, path + '/function', len(arguments), proof if tuple_constructor or sum_constructor else None)
                 for index, argument in enumerate(arguments):
+                    constructor = self.constructors.get(function[1], {}) if function[0] == 'con' else {}
+                    fields = constructor.get('fieldTypes')
+                    heap_field = (fields[index] if constructor.get('kind', 'boxed') == 'boxed' and
+                                  constructor.get('arity') == len(arguments) and isinstance(fields, list) and
+                                  len(fields) == len(arguments) else None)
+                    heap_aggregate = self.supported_heap_aggregate(heap_field)
+                    if heap_aggregate:
+                        self.compare_shapes(heap_field, self.effective_rep(argument, bound), owner,
+                                            f'{path}/arguments/{index}/rep', component=True)
+                        if not isinstance(flags, list) or index >= len(flags) or flags[index] is not False:
+                            self.issue('application-levity', owner, path, 'Aggregate heap field must be unlifted')
                     if sum_constructor and is_sum(proof) and sum_proof_error(proof) is None:
                         try:
                             selected = sum_constructor_tag(self.constructors.get(function[1]), len(arguments)) - 1
@@ -1801,7 +1837,7 @@ class Audit:
                                 self.issue('application-levity', owner, path, 'Sum payload levity mismatch')
                         except ValueError as error:
                             self.issue('constructor-arity', owner, path, str(error))
-                    if not sum_constructor and is_sum(self.effective_rep(argument, bound)):
+                    if not sum_constructor and not heap_aggregate and is_sum(self.effective_rep(argument, bound)):
                         self.issue('aggregate-boundary', owner, f'{path}/arguments/{index}', 'unboxed-sum argument')
                     if tuple_constructor and self.is_tuple(proof) and isinstance(proof.get('components'), list):
                         components = proof['components']
@@ -1826,7 +1862,7 @@ class Audit:
                             join = isinstance(target, dict) and '_join_arity' in target
                             ordinary = function[0] not in ('prim', 'con') and not join
                             supported = self.supported_empty_join_input(argument_rep) if join else (
-                                ordinary and self.supported_tuple_input(argument_rep) or
+                                heap_aggregate or ordinary and self.supported_tuple_input(argument_rep) or
                                 arithmetic_exception and self.is_empty_tuple(argument_rep))
                             if not supported:
                                 self.issue('aggregate-boundary', owner, f'{path}/arguments/{index}', 'unboxed-tuple argument')
@@ -1942,23 +1978,24 @@ class Audit:
                     if kind == 'data':
                         self.constructor(value, owner, altpath, False, len(ids), binder_proof)
                         fields = self.constructors.get(value, {}).get('fieldTypes')
-                        if (self.constructors.get(value, {}).get('kind') != 'unboxed-tuple' and
-                                isinstance(fields, list) and any(is_vector(field) for field in fields) and
+                        if (self.constructors.get(value, {}).get('kind', 'boxed') == 'boxed' and
+                                isinstance(fields, list) and any(is_vector(field) or self.supported_heap_aggregate(field) for field in fields) and
                                 (not isinstance(records, list) or len(records) != len(fields))):
                             self.issue('alternative-binder-metadata', owner, altpath,
-                                       'Vector constructor pattern requires every exact field binder')
+                                       'Aggregate/vector constructor pattern requires every exact field binder')
                         # Polymorphic (#,#) fieldTypes are unknown. Its instantiated
                         # case-binder components below carry the exact vector proof.
-                        if (self.constructors.get(value, {}).get('kind') != 'unboxed-tuple' and
+                        if (self.constructors.get(value, {}).get('kind', 'boxed') == 'boxed' and
                                 isinstance(fields, list) and isinstance(records, list) and len(fields) == len(records)):
                             for field, (expected, record) in enumerate(zip(fields, records)):
                                 actual = record.get('rep') if isinstance(record, dict) else None
-                                if is_vector(expected) or is_vector(actual):
+                                if (is_vector(expected) or is_vector(actual) or self.supported_heap_aggregate(expected)
+                                        or is_sum(actual) or self.is_tuple(actual)):
                                     self.compare_shapes(expected, actual, owner,
                                                         f'{altpath}/binders/{field}/rep', component=True)
                                     if not isinstance(record, dict) or record.get('lifted') is not False:
                                         self.issue('application-levity', owner, altpath,
-                                                   f'Vector constructor binder {field} must be unlifted')
+                                                   f'Aggregate/vector constructor binder {field} must be unlifted')
                         if self.is_tuple(binder_proof):
                             if self.constructors.get(value, {}).get('kind') != 'unboxed-tuple':
                                 self.issue('aggregate-shape', owner, altpath, 'Tuple scrutinee requires a tuple alternative')
@@ -1990,6 +2027,10 @@ class Audit:
             elif tag == 'con':
                 if self.constructors.get(expr[1], {}).get('kind') == 'unboxed-sum' and primitive_arity != 1:
                     self.issue('aggregate-boundary', owner, path, 'Sum constructor requires a saturated application')
+                info = self.constructors.get(expr[1], {})
+                if (any(contains_tuple(field) or contains_sum(field) for field in info.get('fieldTypes', [])) and
+                        info.get('kind', 'boxed') == 'boxed' and primitive_arity != info.get('arity')):
+                    self.issue('aggregate-boundary', owner, path, 'Aggregate-field constructor requires a saturated application')
                 self.constructor(expr[1], owner, path, True, expr[2], tuple_result or self.expression_rep(expr))
             elif tag == 'prim':
                 name = expr[1]

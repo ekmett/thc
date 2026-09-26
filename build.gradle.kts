@@ -189,6 +189,8 @@ tasks.withType<Test>().configureEach {
             "native-malloc/manifest.json", "native-malloc/oracle.txt",
             "process-signals/manifest.json", "process-signals/oracle.txt", "process-signals/native-controls.txt",
             "original-gmp/**/*.json", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
+            "original-memory-search/**/*.json", "original-memory-search/native/oracle",
+            "original-memory-search/logs/*.stdout", "original-memory-search/logs/*.stderr",
             "original-gmp/logs/*.stdout", "original-gmp/logs/*.stderr",
             "original-stdio-close/**/*.json", "original-stdio-close/results/*.txt", "original-stdio-close/results/*.private",
             "original-stdio-close/native/**", "original-stdio-close/logs/*.stdout", "original-stdio-close/logs/*.stderr",
@@ -387,6 +389,21 @@ configurations[fullCoreTests.runtimeOnlyConfigurationName].extendsFrom(configura
 fullCoreTests.compileClasspath += sourceSets.test.get().output
 fullCoreTests.runtimeClasspath += sourceSets.test.get().output
 
+for ((taskName, dense) in listOf("gcStatsFullCoreTest" to false, "gcStatsFullCoreDenseTest" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests original GHC GC/statistics/clock declarations and honest JVM behavior."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.GcStatsNativeTest") }
+        inputs.files(fileTree("build/gc-stats") { include("*.json") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original GC/statistics native and first-entry checks require a fresh process") { true }
+        doFirst { check(file("build/gc-stats/manifest.json").isFile) { "Run thc-fixtures gc-stats with complete installed GHC Core" } }
+    }
+}
 for ((taskName, dense) in listOf("compilerRtsFullCoreTest" to false, "compilerRtsFullCoreDenseTest" to true)) {
     tasks.register<Test>(taskName) {
         group = "verification"
@@ -415,6 +432,21 @@ for ((taskName, dense) in listOf("floatForeignFullCoreTest" to false, "floatFore
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Original floating FFI native/first-entry checks require a fresh process") { true }
         doFirst { check(file("build/float-foreign/manifest.json").isFile) { "Run thc-fixtures float-foreign with complete installed GHC Core" } }
+    }
+}
+for ((taskName, dense) in listOf("aggregateHeapFullCoreTest" to false, "aggregateHeapFullCoreDenseTest" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests genuine boxed tuple/sum fields, including GHC BoxedRep, against native GHC."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.AggregateHeapNativeTest") }
+        inputs.files(fileTree("build/aggregate-heap") { include("**/*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Aggregate heap native/first-entry checks require a fresh process") { true }
+        doFirst { check(file("build/aggregate-heap/manifest.json").isFile) { "Run thc-fixtures aggregate-heap" } }
     }
 }
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("main"))
@@ -605,6 +637,24 @@ for ((taskName, dense) in listOf("stablePtrFfiFullCoreDefault" to false, "stable
         }
     }
 }
+for ((taskName, dense) in listOf("packageNativeArchivesDefault" to false, "packageNativeArchivesDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Checks real mixed native imports and archive-only rejection before effects."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        systemProperty("thc.handoffSlabs", dense.toString())
+        inputs.files(fileTree("build/native-archive") { include("linked/**/*.json", "*.json") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.PackageNativeArchiveFullCoreTest") }
+        outputs.upToDateWhen { false }
+        doFirst {
+            check(file("build/native-archive/manifest.json").isFile) {
+                "Run cabal run exe:thc-fixtures -- package-native-archives with the selected full-Core GHC"
+            }
+        }
+    }
+}
 for ((taskName, dense) in listOf("packageNativeOriginalsDefault" to false, "packageNativeOriginalsDense" to true)) {
     tasks.register<Test>(taskName) {
         group = "verification"
@@ -619,6 +669,24 @@ for ((taskName, dense) in listOf("packageNativeOriginalsDefault" to false, "pack
         doFirst {
             check(file("build/original-native/manifest.json").isFile) {
                 "Missing original package fixtures: set THC_DIGEST_SOURCE, THC_ERF_SOURCE and THC_PRIMITIVE_SOURCE; run cabal run exe:thc-fixtures -- package-native-originals"
+            }
+        }
+    }
+}
+for ((taskName, dense) in listOf("wcwidthDefault" to false, "wcwidthDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Checks Tasty's exact wcwidth declaration and fallback against native locale-sensitive results."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        systemProperty("thc.handoffSlabs", dense.toString())
+        inputs.files(fileTree("build/wcwidth") { include("**/*.json", "*.tsv", "ConsoleReporter.hs", "TASTY-LICENSE") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.WcwidthTest") }
+        outputs.upToDateWhen { false }
+        doFirst {
+            check(file("build/wcwidth/manifest.json").isFile) {
+                "Set THC_TASTY_SOURCE and run cabal run exe:thc-fixtures -- wcwidth"
             }
         }
     }

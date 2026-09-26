@@ -28,7 +28,7 @@ fixture environment = TestLabel "original System.IO native binary buffers" $ Tes
         expectedBytes = BS.pack [0x00, 0x7f, 0x80, 0xff, 0x01, 0xfe]
         -- Original executable signal startup currently requires bytecode fork#.
         invoke = run environment project (Just "bytecode") 900 $
-          ["run", project, "--exe", "binary-buffers", "--installed-core", "required",
+          ["run", "--project-dir", project, "binary-buffers", "--installed-core", "required",
            "--thc-root", thcRoot environment,
            "--runtime", runtime environment, "--dist-dir", output] ++
           maybe [] (\compilerPath -> ["--with-ghc", compilerPath]) installedGhc ++
