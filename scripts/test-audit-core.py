@@ -1884,7 +1884,12 @@ class LibdwUnavailableAuditTest(unittest.TestCase):
 
 class OriginalSignalDeclarationTest(unittest.TestCase):
     def test_exact_call_requires_capability_and_implicit_original_dispatcher(self):
-        resource = ROOT.parent / 'src/test/resources/core/original-signal-install-descriptor.json'
+        for name in ('original-signal-install-descriptor.json', 'original-unix-signal-install-descriptor.json'):
+            with self.subTest(resource=name):
+                self.check_original(name)
+
+    def check_original(self, name):
+        resource = ROOT.parent / 'src/test/resources/core' / name
         declaration = json.loads(resource.read_text())
         fixture = LibdwUnavailableAuditTest()
         module = fixture.fixture(declaration)
@@ -1902,6 +1907,12 @@ class OriginalSignalDeclarationTest(unittest.TestCase):
             wrong = copy.deepcopy(module)
             wrong['bindings'][0]['expr'][1][index]['rep'] = LONG
             self.assertFalse(fixture.audit(wrong, enabled)['accepted'])
+        for unit in (None, 'unix', 'unix-2.8.7.0-inplace', 'other', 1):
+            wrong = copy.deepcopy(declaration)
+            wrong['target']['unit'] = unit
+            malformed = fixture.fixture(wrong)
+            malformed['bindings'].append(bind(dispatcher, lit(0)))
+            self.assertFalse(fixture.audit(malformed, enabled)['accepted'])
 
 
 class NativeMallocDeclarationTest(unittest.TestCase):

@@ -5,7 +5,7 @@ package thc.runtime
 
 import com.oracle.truffle.api.frame.VirtualFrame
 
-/** Exact GHC 9.14.1 TopHandler stg_sig_install declaration. */
+/** Exact GHC 9.14.1 TopHandler and unix-2.8.8.0 signal declarations. */
 internal enum class ProcessSignalOp(val symbol: String, val arguments: List<String?>, val result: String?) {
     INSTALL("stg_sig_install", listOf("Int32Rep", "Int32Rep", "AddrRep", null), "Int32Rep");
 }
@@ -26,9 +26,10 @@ internal class InstallProcessSignal(@field:Children private var operands: Array<
 
 internal object CoreSignalForeign {
     const val dispatcher = "ghc-internal:GHC.Internal.Conc.Signal.runHandlersPtr"
+    private fun installedUnit(unit: Any?): Boolean = unit == "ghc-internal" || unit == "unix-2.8.8.0-inplace"
     fun named(metadata: Map<String, Any?>?): Boolean {
         val target = (metadata?.get("foreignCall") as? Map<*, *>)?.get("target") as? Map<*, *>
-        return target?.get("symbol") == "stg_sig_install" && target["unit"] == "ghc-internal"
+        return target?.get("symbol") == "stg_sig_install" && installedUnit(target["unit"])
     }
     private val scalarKeys = setOf("kind", "primReps", "evaluated")
     private val tupleKeys = scalarKeys + setOf("aggregate", "components")
@@ -97,8 +98,8 @@ internal object CoreSignalForeign {
         val operation = ProcessSignalOp.entries.firstOrNull { it.symbol == target["symbol"] } ?: return null
         requireProof(descriptor.keys == descriptorKeys && exactInteger(descriptor["schema"], 1), "descriptor schema")
         requireProof(target.keys == setOf("kind", "symbol", "unit", "isFunction") &&
-            target["kind"] == "static" && target["unit"] == "ghc-internal" && target["isFunction"] == true,
-            "static ghc-internal function target")
+            target["kind"] == "static" && installedUnit(target["unit"]) && target["isFunction"] == true,
+            "static original installed-library function target")
         requireProof(descriptor["convention"] == "ccall" && descriptor["safety"] == "unsafe", "calling convention/safety")
         requireProof(exactInteger(descriptor["arity"], operation.arguments.size) &&
             exactInteger(descriptor["suppliedArity"], operation.arguments.size), "saturated arity")
