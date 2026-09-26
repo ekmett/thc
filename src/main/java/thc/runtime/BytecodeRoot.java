@@ -1439,7 +1439,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 return;
             }
             long result;
-            if (operation.getSigset()) result = SigsetImage.execute(operation, address, fd, CoreOriginalStdio.current(node));
+            if (operation.getWaitStatus()) result = CoreOriginalStdio.waitStatus(node, operation, fd);
+            else if (operation.getSigset()) result = SigsetImage.execute(operation, address, fd, CoreOriginalStdio.current(node));
             else if (operation.getStat()) result = PosixStat.execute(operation, address, fd);
             else if (operation == OriginalStdioOp.TCGETATTR) result = CoreOriginalStdio.current(node).tcgetattr(fd, address);
             else if (operation == OriginalStdioOp.FSTAT) result = CoreOriginalStdio.current(node).fstat(fd, address);

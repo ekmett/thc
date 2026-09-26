@@ -112,6 +112,10 @@ def main():
         sources["iconv"] = ROOT / "src/main/c/iconv-api.c"
         if arch == "x86_64":
             sources["text"] = ROOT / "src/main/c/text-api.c"
+            sources["wait-status"] = ROOT / "src/main/c/wait-status-api.c"
+    unix_headers = list(libdir.rglob("HsUnix.h")) if "wait-status" in sources else []
+    if "wait-status" in sources and len(unix_headers) != 1:
+        raise SystemExit(f"Expected one installed unix HsUnix.h, got {unix_headers}")
     for name, source in sources.items():
         command = [*compiler, "-O1", "-g", "-fno-strict-aliasing", "-emit-llvm", "-c",
                    f"-ffile-prefix-map={ROOT}=.", f"-fdebug-prefix-map={ROOT}=.",
@@ -121,6 +125,8 @@ def main():
         if name == "text":
             command.insert(1, "-D__STDC_NO_ATOMICS__=1")
             command.insert(1, "-fno-builtin-memchr")
+        if name == "wait-status":
+            command[1:1] = ["-I", str(unix_headers[0].parent)]
         subprocess.run(command, cwd=ROOT, check=True)
         commands.append(command)
         if name == "text":
@@ -136,6 +142,7 @@ def main():
             (output / "text-memchr-LICENSE").write_bytes((text_source / "openbsd-memchr.c").read_bytes())
     source_files = [reference / n for n in PINNED] + [libdw / n for n in LIBDW_SHA256] + list(sources.values())
     source_files += [text_source / n for n in TEXT_SHA256]
+    source_files += unix_headers + [p.parent / "HsUnixConfig.h" for p in unix_headers]
     artifacts = [output / (name + ".bc") for name in sources]
     if system == "Windows":
         # Sulong's PE dependency locator probes the guest filesystem even for

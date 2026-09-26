@@ -3272,5 +3272,52 @@ class OriginalTextForeignAuditTests(unittest.TestCase):
                 self.assertFalse(report['accepted'], (symbol, mutation))
 
 
+class OriginalWaitStatusAuditTests(unittest.TestCase):
+    def fixture(self, symbol):
+        def scalar(rep, evaluated=True):
+            return dict(kind='void' if rep is None else 'long', primReps=[] if rep is None else [rep],
+                        evaluated=evaluated)
+        parameters = [dict(id='status', lifted=False, rep=scalar('Int32Rep')),
+                      dict(id='state', lifted=False, rep=scalar(None))]
+        result = dict(tuple_rep(scalar(None), scalar('Int32Rep')), evaluated=False)
+        descriptor = dict(schema=1, target=dict(kind='static', unit='unix-2.8.8.0-inplace', symbol=symbol,
+                          isFunction=True), convention='capi', safety='unsafe', arity=2, suppliedArity=2,
+                          argumentReps=[scalar('Int32Rep', False), scalar(None, False)], resultRep=copy.deepcopy(result))
+        call = ['app', ['var', 'original-wait-status', dict(rep=CLOSURE)],
+                [['var', p['id'], dict(rep=copy.deepcopy(p['rep']))] for p in parameters],
+                [False, False], False, False, dict(rep=result, foreignCall=descriptor)]
+        body = ['case', call, 'result', [['default', None, [], [*lit(0), dict(rep=LONG)]]],
+                dict(rep=LONG, binder=dict(id='result', lifted=False, rep=dict(result, evaluated=True)))]
+        root = dict(bind('root', ['lam', parameters, body, dict(rep=CLOSURE, resultRep=LONG)]), rep=CLOSURE, arity=2)
+        return dict(schema=1, ghc='9.14.1', bindings=[root], constructors=[])
+
+    def test_seven_original_macros_and_capability_boundary(self):
+        for symbol in audit_core.core_original_foreign.WAIT_STATUS_OPERATIONS:
+            module = self.fixture(symbol)
+            report = audit_core.Audit([('wait-status.json', module)], CAP).run(['root'])
+            self.assertTrue(report['accepted'], report['issues'])
+            disabled = dict(CAP, managedForeignCalls=[name for name in CAP['managedForeignCalls'] if name != symbol])
+            self.assertFalse(audit_core.Audit([('wait-status.json', module)], disabled).run(['root'])['accepted'])
+
+    def test_wait_status_unit_width_state_and_stored_proofs_are_exact(self):
+        for symbol in audit_core.core_original_foreign.WAIT_STATUS_OPERATIONS:
+            for mutation in ('unit', 'safety', 'convention', 'arity', 'width', 'state', 'result', 'stored-status', 'stored-state', 'flags'):
+                module = self.fixture(symbol)
+                call = module['bindings'][0]['expr'][2][1]
+                descriptor = call[6]['foreignCall']
+                if mutation == 'unit': descriptor['target']['unit'] = 'ghc-internal'
+                elif mutation == 'safety': descriptor['safety'] = 'safe'
+                elif mutation == 'convention': descriptor['convention'] = 'ccall'
+                elif mutation == 'arity': descriptor['suppliedArity'] = 1
+                elif mutation == 'width': descriptor['argumentReps'][0]['primReps'] = ['IntRep']
+                elif mutation == 'state': call[2][-1][2]['rep'] = LONG
+                elif mutation == 'result': descriptor['resultRep']['primReps'] = ['Word32Rep']
+                elif mutation == 'stored-status': module['bindings'][0]['expr'][1][0]['rep'] = LONG
+                elif mutation == 'stored-state': module['bindings'][0]['expr'][1][1]['rep'] = LONG
+                elif mutation == 'flags': call[3][0] = True
+                report = audit_core.Audit([('wait-status.json', module)], CAP).run(['root'])
+                self.assertFalse(report['accepted'], (symbol, mutation))
+
+
 if __name__ == '__main__':
     unittest.main()

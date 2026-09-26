@@ -766,6 +766,7 @@ class Audit:
                 if symbol == 'stg_sig_install':
                     self.reference('ghc-internal:GHC.Internal.Conc.Signal.runHandlersPtr', owner, path + '/signal-dispatcher')
                 if (symbol in core_original_foreign.TEXT_OPERATIONS
+                        or symbol in core_original_foreign.WAIT_STATUS_OPERATIONS
                         or symbol in core_original_foreign.STACK_INFO or symbol in core_original_foreign.SEEK_CONSTANTS
                         or symbol in core_original_foreign.STAT_IMAGE
                         or symbol in core_original_foreign.GMP_SYMBOLS

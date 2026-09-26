@@ -53,7 +53,11 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
             return null
         }
         // Direct enum comparison remains constant during partial evaluation.
-        val result = if (operation.stat) {
+        val result = if (operation.waitStatus) {
+            val status = operands[0].executeRequiredLong(frame)
+            requireVoidCarrier(operands[1].execute(frame))
+            CoreOriginalStdio.waitStatus(this, operation, status)
+        } else if (operation.stat) {
             val address = if (operation.statField) operands[0].executeRequiredAddress(frame) else ManagedAddress.nullAddress()
             val mode = if (operation == OriginalStdioOp.SIZEOF_STAT || operation.statField) 0L
                 else operands[0].executeRequiredLong(frame)
