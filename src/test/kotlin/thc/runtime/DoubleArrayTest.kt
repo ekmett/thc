@@ -18,11 +18,11 @@ class DoubleArrayTest {
             0x7ff0000000000000L, -0x0010000000000000L, 0x7ff8000000001234L, -0x0007ffffffffa988L)
         val bytes = ByteArray(bits.size * 8 + 7) { 91 }
         for ((index, value) in bits.withIndex()) {
-            ByteArrayAccess.writeInt(bytes, index.toLong(), value)
-            val number = ByteArrayAccess.readDouble(bytes, index.toLong())
+            ManagedByteArray.writeInt(bytes, index.toLong(), value)
+            val number = ManagedByteArray.readDouble(bytes, index.toLong())
             assertEquals(value, number.toRawBits())
-            ByteArrayAccess.writeDouble(bytes, index.toLong(), number)
-            assertEquals(value, ByteArrayAccess.readInt(bytes, index.toLong()))
+            ManagedByteArray.writeDouble(bytes, index.toLong(), number)
+            assertEquals(value, ManagedByteArray.readInt(bytes, index.toLong()))
             for (byte in 0..7) {
                 val shift = (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) byte else 7-byte)*8
                 assertEquals((value ushr shift) and 255, ManagedByteArray.read(bytes, index*8L+byte))
@@ -31,9 +31,9 @@ class DoubleArrayTest {
         for (byte in bits.size*8 until bytes.size) assertEquals(91, bytes[byte].toInt())
         assertSame(bytes, ManagedByteArray.freeze(bytes))
         val other = ByteArray(8)
-        ByteArrayAccess.writeDouble(other, 0, 3.5)
-        assertEquals(3.5.toRawBits(), ByteArrayAccess.readInt(other, 0))
-        assertEquals(0L, ByteArrayAccess.readInt(bytes, 0))
+        ManagedByteArray.writeDouble(other, 0, 3.5)
+        assertEquals(3.5.toRawBits(), ManagedByteArray.readInt(other, 0))
+        assertEquals(0L, ManagedByteArray.readInt(bytes, 0))
     }
 
     @Test fun boundsRejectIncompleteElementsAndIndexOverflowWithoutWrites() {
@@ -41,8 +41,8 @@ class DoubleArrayTest {
             val bytes = ByteArray(size) { 37 }
             for (index in listOf(Long.MIN_VALUE, -1L, (size/8).toLong(), 1L shl 32, 1L shl 61, Long.MAX_VALUE)) {
                 val before = bytes.copyOf()
-                assertThrows(RuntimeFault::class.java) { ByteArrayAccess.readDouble(bytes, index) }
-                assertThrows(RuntimeFault::class.java) { ByteArrayAccess.writeDouble(bytes, index, -0.0) }
+                assertThrows(RuntimeFault::class.java) { ManagedByteArray.readDouble(bytes, index) }
+                assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeDouble(bytes, index, -0.0) }
                 assertArrayEquals(before, bytes)
             }
         }
@@ -82,14 +82,14 @@ class DoubleArrayTest {
         val slot = descriptor.addSlot(FrameSlotKind.Double, "result", null)
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), descriptor.build())
         val bytes = ByteArray(8)
-        ByteArrayAccess.writeDouble(bytes, 0, 7.5)
+        ManagedByteArray.writeDouble(bytes, 0, 7.5)
         val events = mutableListOf<String>()
         fun operand(name: String, action: () -> Any?) = object : Expr() {
             override fun execute(frame: VirtualFrame): Any? { events.add(name); return action() }
         }
         val read = byteArrayExpression(ByteArrayOp.READ_DOUBLE, CoreRepresentation.UNKNOWN, arrayOf(
             operand("array") { bytes }, operand("index") { 0L },
-            operand("state") { ByteArrayAccess.writeDouble(bytes, 0, -0.0); Unit }))
+            operand("state") { ManagedByteArray.writeDouble(bytes, 0, -0.0); Unit }))
         read.executeTuple(frame, intArrayOf(slot), 0)
         assertEquals(listOf("array", "index", "state"), events)
         assertTrue(frame.isDouble(slot)); assertEquals(Long.MIN_VALUE, frame.getDouble(slot).toRawBits())
@@ -97,10 +97,10 @@ class DoubleArrayTest {
         val quiet = Double.fromBits(0x7ff8000000001234L)
         val write = byteArrayExpression(ByteArrayOp.WRITE_DOUBLE, CoreRepresentation.UNKNOWN, arrayOf(
             operand("array") { bytes }, operand("index") { 0L }, operand("value") { quiet },
-            operand("state") { assertEquals(Long.MIN_VALUE, ByteArrayAccess.readInt(bytes, 0)); Unit }))
+            operand("state") { assertEquals(Long.MIN_VALUE, ManagedByteArray.readInt(bytes, 0)); Unit }))
         assertSame(Unit, write.execute(frame))
         assertEquals(listOf("array", "index", "value", "state"), events)
-        assertEquals(quiet.toRawBits(), ByteArrayAccess.readInt(bytes, 0))
+        assertEquals(quiet.toRawBits(), ManagedByteArray.readInt(bytes, 0))
         for (badState in listOf<() -> Any?>({ throw RuntimeFault("state failed") }, { 0L })) {
             frame.setDouble(slot, -0.0)
             val failedRead = byteArrayExpression(ByteArrayOp.READ_DOUBLE, CoreRepresentation.UNKNOWN, arrayOf(
@@ -110,7 +110,7 @@ class DoubleArrayTest {
             val failedWrite = byteArrayExpression(ByteArrayOp.WRITE_DOUBLE, CoreRepresentation.UNKNOWN, arrayOf(
                 operand("array") { bytes }, operand("index") { 0L }, operand("value") { 99.0 }, operand("state", badState)))
             assertThrows(RuntimeFault::class.java) { failedWrite.execute(frame) }
-            assertEquals(quiet.toRawBits(), ByteArrayAccess.readInt(bytes, 0))
+            assertEquals(quiet.toRawBits(), ManagedByteArray.readInt(bytes, 0))
         }
     }
 }
