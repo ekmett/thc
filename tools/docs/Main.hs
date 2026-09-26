@@ -54,6 +54,13 @@ isFragment = (== "api/jvm/navigation.html")
 isHaddock :: FilePath -> Bool
 isHaddock path = any (`isPrefixOf` path) ["api/haskell/", "api/runtime/"]
 
+-- Haddock's instance-origin links name the actual defining module, even when
+-- that module is hidden. Keep that attribution without publishing private APIs.
+-- Only these exact module-page links may point to their tracked source instead.
+hiddenHaddockSources :: [(FilePath, FilePath)]
+hiddenHaddockSources =
+  [("api/runtime/THC-Runtime-Types.html", "runtime/THC/Runtime/Types.hs")]
+
 repo :: String
 repo = "https://github.com/ekmett/thc"
 
@@ -94,6 +101,11 @@ checkSiteRoot = do
 
 buildSite :: String -> FilePath -> IO ()
 buildSite revision pandoc = do
+  forM_ hiddenHaddockSources $ \(_, source) -> do
+    exists <- doesFileExist source
+    tracked <- Text.strip . Text.pack <$> readProcess "git" ["ls-files", "--", source] ""
+    unless (exists && tracked == Text.pack source) $
+      die ("Hidden Haddock module source must exist and be tracked: " ++ source)
   -- Only this generated directory is replaced. Refuse a redirected destination.
   exists <- doesPathExist site
   when exists $ do
@@ -120,7 +132,7 @@ buildSite revision pandoc = do
     let relative = makeRelative site path
     unless (isFragment relative) $ do
       html <- Text.readFile path
-      let repaired = if isHaddock relative then repairHaddock html else html
+      let repaired = if isHaddock relative then repairHaddock revision relative html else html
       enhanced <- stylePage revision relative repaired
       Text.writeFile path enhanced
   forM_ guides $ \guide@(Guide source _ title) -> renderGuide revision pandoc source (guidePath guide) title
@@ -135,8 +147,11 @@ buildSite revision pandoc = do
 -- dependency interfaces installed. Anchor the actual method declarations; do
 -- not exempt missing fragments from validation. Record selectors can also lack
 -- a source line: their pinned file URL remains useful without a dangling #L.
-repairHaddock :: Text.Text -> Text.Text
-repairHaddock html = Text.pack (renderTags (go anchors tags))
+-- "Defined in" module links are not entity-home links: Haddock 2.33 emits the
+-- original instance module even when hidden. Attribute the known private type
+-- module to its real source, leaving public reexports and arbitrary gaps alone.
+repairHaddock :: String -> FilePath -> Text.Text -> Text.Text
+repairHaddock revision page html = Text.pack (renderTags (go anchors tags))
   where
     tags = parseTags (Text.unpack html)
     anchors = Set.fromList [value | TagOpen _ attrs <- tags, ("id", value) <- attrs]
@@ -149,6 +164,9 @@ repairHaddock html = Text.pack (renderTags (go anchors tags))
     go seen (TagOpen tag attrs : rest) = TagOpen tag (map source attrs) : go seen rest
     go seen (tag : rest) = tag : go seen rest
     go _ [] = []
+    source ("href", url)
+      | Just path <- lookup (takeDirectory page </> url) hiddenHaddockSources =
+          ("href", repo ++ "/blob/" ++ revision ++ "/" ++ path)
     source ("href", url) | (repo ++ "/blob/") `isPrefixOf` url && "#L" `isSuffixOf` url =
       ("href", take (length url - 2) url)
     source attr = attr
