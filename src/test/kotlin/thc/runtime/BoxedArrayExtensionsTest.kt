@@ -55,7 +55,7 @@ class BoxedArrayExtensionsTest {
         val proofs = when (operation) {
             ArrayOp.SIZE, ArrayOp.SIZE_MUTABLE -> listOf(array)
             ArrayOp.CLONE_MUTABLE -> listOf(array, int, int, state)
-            ArrayOp.UNSAFE_THAW -> listOf(array, state)
+            ArrayOp.FREEZE, ArrayOp.UNSAFE_THAW -> listOf(array, state)
             else -> listOf(array, int, array, int, int, state)
         }
         val result = if (operation.tuple) tuple else if (operation in listOf(ArrayOp.SIZE, ArrayOp.SIZE_MUTABLE)) int else state
@@ -75,6 +75,44 @@ class BoxedArrayExtensionsTest {
     private fun invalidRanges(size: Long) = listOf(Long.MIN_VALUE to 0L, -1L to 0L, size + 1 to 0L,
         0L to -1L, 0L to Long.MIN_VALUE, 0L to Long.MAX_VALUE, Long.MAX_VALUE to 1L,
         (1L shl 32) to 0L, 1L to Long.MAX_VALUE, size to 1L)
+
+    @Test fun firstCompiledFreezeAndThawPreserveIdentityLazyPayloadsAndMetadata() {
+        for (backend in listOf("ast", "bytecode")) context().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val programs = listOf(ArrayOp.FREEZE, ArrayOp.UNSAFE_THAW).map { program(language, synthetic(it), backend) }
+                val targets = programs.map { it.entryTarget("operation") }
+                var entered = 0
+                val bottom = Thunk(object : RootNode(null) {
+                    override fun execute(frame: VirtualFrame): Any? { entered++; error("freeze/thaw entered a payload") }
+                }.callTarget, null)
+                for (compiled in listOf(false, true)) {
+                    if (compiled) targets.forEach(::compile)
+                    for (size in listOf(0, 1, 5)) {
+                        val storage = Array<Any?>(size) { if (it % 2 == 0) bottom else null }
+                        val separate = storage.copyOf()
+                        assertFalse(ManagedArray.isFrozen(storage))
+                        for (index in targets.indices) {
+                            val before = (programs[index].diagnostics().getValue("compiledEntries") as Number).toLong()
+                            assertSame(storage, Calls.target(targets[index], arrayOf(0L, storage, Unit)))
+                            assertEquals(index == 0, ManagedArray.isFrozen(storage))
+                            assertFalse(ManagedArray.isFrozen(separate), "bookkeeping uses array identity, not elements")
+                            assertArrayEquals(separate, storage)
+                            if (compiled) {
+                                assertEquals(before + 1, (programs[index].diagnostics().getValue("compiledEntries") as Number).toLong(),
+                                    "$backend: first installed call must execute guest code")
+                                valid(targets[index])
+                            }
+                            released(language)
+                        }
+                    }
+                }
+                assertEquals(0, entered)
+                assertEquals(0, bottom.state)
+            } finally { context.leave() }
+        }
+    }
 
     @Test fun fullWidthRangesOverlapIndependentClonesAndImmutableAliasing() {
         val elements = arrayOf<Any?>(Any(), null, byteArrayOf(7), Any(), Any())

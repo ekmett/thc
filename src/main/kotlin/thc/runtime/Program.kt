@@ -1886,7 +1886,8 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         // Non-looping roots retain entry argument facts. Once self recursion
         // is observed, PE selects only the loop body instead of duplicating it.
         if (hasSelfTail) return loop.execute(frame)
-        return try { (loop.repeatingNode as SelfRepeater).once(frame) }
+        val repeating = loop.repeatingNode as? SelfRepeater ?: fault("Invalid function self-loop node")
+        return try { repeating.once(frame) }
         catch (_: AstSelfCall) {
             tailCallProfile.enter()
             if (metrics.enabled) metrics.incrementSelfTailReentries()

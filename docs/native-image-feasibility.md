@@ -283,6 +283,18 @@ source and is not an acceptance condition. A separate initial cold-install
 failure did not recur in the unchanged-source control or final candidate run;
 its cause remains undiagnosed, and no test retries compilation internally.
 
+Subsequent analysis exposed mutable frozen-array bookkeeping in guest graphs
+and a nullable platform cast's diagnostic path in `FunctionRoot.executeBody`.
+The existing synchronized array freeze/thaw/query methods now have host
+boundaries; their lock, weak-key map and actual array storage are unchanged.
+The self-loop accessor rejects an invalid node through the existing interpreter
+fault path. No mutable map is added to build-time initialization. All 34 focused
+array, PAP, tail-cycle and join tests pass in both handoff modes, including new
+first-installed AST/bytecode freeze/thaw checks for identity, lazy payloads and
+independent metadata. Bytecode retains the synchronized method flags and explicit
+guard. Real image analysis advances past both failures and next stops preparing
+the weak-pointer operation; guest JIT is still not established.
+
 ## Execution models
 
 | Product | What is fixed when built | Guest execution |
