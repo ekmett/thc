@@ -40,9 +40,10 @@ with the same contents compare false. Equality does not force either payload.
 
 Both loaders and the static auditor require the exact boxed levity, scalar
 State, logical tuple layout, arity and saturated application. Partial and
-first-class primitives, unknown representations, atomics, concurrency and FFI
-references remain outside this slice. The runtime follows its existing single
-guest thread policy.
+first-class primitives, unknown representations and FFI references remain outside
+this slice. Atomic swap and pair-returning modification are described below;
+[boxed CAS and lazy value modification](boxed-cas.md) cover `casMutVar#` and
+`atomicModifyMutVar_#`, including contended runtime controls.
 
 `compiler/test-fixtures/MutVarAudit.hs` uses public `runST`, `newSTRef`,
 `readSTRef`, `writeSTRef`, `modifySTRef`, `modifySTRef'`, and `(==)`. Eight entry points

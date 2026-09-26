@@ -1011,7 +1011,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             source = path.read_text()
             if path.name != "ArrayCoreEvidence.kt" and "ArrayCoreEvidence(" in source:
                 consumers.update(select.junit_info(source)[0])
-        self.assertEqual(9, len(consumers))
+        self.assertEqual(10, len(consumers))
         # The isolated boundary control delegates to the native test's genuine
         # two-root fixture helper, so it also consumes ArrayCoreEvidence.
         self.assertEqual(consumers | {"thc.runtime.Int16BoundaryCompilationTest"}, set(group["junit"]))

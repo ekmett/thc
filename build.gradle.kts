@@ -213,6 +213,7 @@ tasks.withType<Test>().configureEach {
             "boxed-arrays/**/*.json", "boxed-arrays/*.tsv", "boxed-arrays/NativeBoxedArray.hs", "boxed-arrays/native/**",
             "small-arrays/**/*.json", "small-arrays/*.tsv", "small-arrays/native/**",
             "boxed-array-extensions/manifest.json", "boxed-array-extensions/run-*/**",
+            "boxed-cas/manifest.json", "boxed-cas/run-*/**",
             "address-fields/**/*.json", "address-fields/*.tsv", "address-fields/NativeAddressFields.hs", "address-fields/native/**",
             "data-to-tag/**/*.json", "data-to-tag/*.tsv", "data-to-tag/NativeDataToTag.hs", "data-to-tag/native/**",
             "int-arrays/**/*.json", "int-arrays/oracle.tsv", "int-arrays/expected.tsv",

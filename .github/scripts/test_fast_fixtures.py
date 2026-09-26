@@ -19,6 +19,22 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_boxed_cas_owns_native_inputs_and_only_declared_artifacts(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['boxed-cas']
+        cache = fast_fixtures.fast_inputs
+        self.assertEqual('boxed-cas', owners['thc.runtime.BoxedCasTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'boxed-cas']}], group['commands'])
+        self.assertIn('examples/THC/BoxedCasCounter.hs', group['sources'])
+        self.assertIn('"$fixture_bin" boxed-cas', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('build/boxed-cas/manifest.json', fast_fixtures.FULL_REQUIRED)
+        for suffix in cache.BOXED_CAS_FILES:
+            self.assertTrue(cache.allowed_payload('build/boxed-cas/run-1/' + suffix, {}))
+        for suffix in ('logs/secret.stdout', 'native/unowned', 'pre-core/Fake.json'):
+            self.assertFalse(cache.allowed_payload('build/boxed-cas/run-1/' + suffix, {}))
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+
     def test_thread_inventory_owns_exact_native_outputs_and_rejects_partial_receipts(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

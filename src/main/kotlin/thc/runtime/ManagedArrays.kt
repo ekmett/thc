@@ -4,10 +4,12 @@
 package thc.runtime
 
 import com.oracle.truffle.api.frame.VirtualFrame
+import java.lang.invoke.MethodHandles
 
 /** One JVM Object[] is the actual Array# storage. Elements are mutable guest
  * references, never CompilationFinal and never entered by storage operations. */
 internal object ManagedArray {
+    private val ELEMENT = MethodHandles.arrayElementVarHandle(Array<Any?>::class.java)
     @JvmStatic fun allocate(size: Long, initial: Any?): Array<Any?> {
         if (size < 0 || size > Int.MAX_VALUE.toLong()) fault("Array# size outside the managed allocation domain")
         return Array(size.toInt()) { initial }
@@ -24,6 +26,19 @@ internal object ManagedArray {
     }
     @JvmStatic fun read(array: Array<Any?>, index: Long): Any? = array[index(array, index)]
     @JvmStatic fun write(array: Array<Any?>, index: Long, value: Any?) { array[index(array, index)] = value }
+    /** Full-memory-order CAS, including already-completed thunk indirections.
+     * Return expected on success or the atomic observation on failure; never force. */
+    @JvmStatic fun compareExchange(array: Array<Any?>, index: Long, expected: Any?, replacement: Any?): Any? {
+        val at = index(array, index)
+        var witness = ELEMENT.compareAndExchange(array, at, expected, replacement)
+        if (witness === expected) return expected
+        while (completedBoxedIdentity(witness) === completedBoxedIdentity(expected)) {
+            val prior = witness
+            witness = ELEMENT.compareAndExchange(array, at, prior, replacement)
+            if (witness === prior) return expected
+        }
+        return witness
+    }
     /** Shallow, independent storage. Validate full-width values without adding
      * offset and count, so invalid overflowing ranges cannot wrap into bounds. */
     @JvmStatic fun slice(array: Array<Any?>, offset: Long, count: Long): Array<Any?> {
@@ -49,13 +64,13 @@ internal object ManagedArray {
     @JvmStatic fun freeze(array: Array<Any?>): Array<Any?> = array
 }
 
-/** Writes keep the known-lifted specialization. Reads also expose unlifted
- * object references (notably Array# ThreadId# from listThreads#). Slice
- * operations copy boxed references opaquely without changing element proofs. */
+/** GHC's levity-polymorphic elements are boxed references of either known levity.
+ * Storage operations copy references opaquely without entering their contents. */
 internal enum class ArrayOp(val primitive: String, private val arguments: List<String>, private val result: List<String>) {
     NEW("newArray#", listOf("int", "element", "state"), listOf("state", "array")),
     READ("readArray#", listOf("array", "int", "state"), listOf("state", "element")),
     WRITE("writeArray#", listOf("array", "int", "element", "state"), emptyList()),
+    CAS("casArray#", listOf("array", "int", "element", "element", "state"), listOf("state", "int", "element")),
     FREEZE("unsafeFreezeArray#", listOf("array", "state"), listOf("state", "array")),
     INDEX("indexArray#", listOf("array", "int"), listOf("element")),
     CLONE("cloneArray#", listOf("array", "int", "int"), listOf("array")),
@@ -74,14 +89,13 @@ internal enum class ArrayOp(val primitive: String, private val arguments: List<S
             "state" -> rep.kind == CoreKind.VOID && rep.primReps == emptyList<String>()
             "int" -> rep.kind == CoreKind.LONG && rep.primReps == listOf("IntRep")
             "array" -> rep.kind == CoreKind.OBJECT && rep.primReps == listOf("BoxedRep (Just Unlifted)")
-            else -> (rep.kind in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) &&
-                rep.primReps == listOf("BoxedRep (Just Lifted)")) ||
-                (this in setOf(READ, INDEX) && rep.kind == CoreKind.OBJECT &&
-                    rep.primReps == listOf("BoxedRep (Just Unlifted)"))
+            else -> rep.kind in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) &&
+                rep.primReps?.singleOrNull() in setOf("BoxedRep (Just Lifted)", "BoxedRep (Just Unlifted)")
         }
         if (actual.size != arguments.size || flags.size != arguments.size)
             throw RuntimeFault("Primitive arity mismatch: $primitive")
-        if (flags != arguments.map { it == "element" } || actual.indices.any { !matches(actual[it], arguments[it]) })
+        if (flags != actual.map { it.primReps == listOf("BoxedRep (Just Lifted)") } ||
+            actual.indices.any { !matches(actual[it], arguments[it]) })
             throw RuntimeFault("Array primitive argument representation mismatch: $primitive")
         val valid = if (!tuple) matches(proof, result.singleOrNull() ?: "state") else proof.isTuple && proof.kind == CoreKind.UNKNOWN &&
             proof.components!!.size == result.size && result.indices.all { matches(proof.components[it], result[it]) } &&
@@ -133,6 +147,7 @@ internal fun arrayExpression(operation: ArrayOp, proof: CoreRepresentation, oper
     ArrayOp.NEW -> NewArrayExpression(operands[0], operands[1], operands[2])
     ArrayOp.READ -> ReadArrayExpression(operands[0], operands[1], operands[2])
     ArrayOp.WRITE -> WriteArrayExpression(operands[0], operands[1], operands[2], operands[3])
+    ArrayOp.CAS -> CasArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4])
     ArrayOp.FREEZE, ArrayOp.UNSAFE_THAW -> FreezeArrayExpression(operands[0], operands[1])
     ArrayOp.INDEX -> IndexArrayExpression(operands[0], operands[1])
     ArrayOp.CLONE -> CloneArrayExpression(operands[0], operands[1], operands[2])
@@ -173,6 +188,23 @@ private class WriteArrayExpression(@field:Child private var array: Expr, @field:
         requireVoidCarrier(state.execute(frame))
         ManagedArray.write(storage, at, stored)
         return Unit
+    }
+}
+private class CasArrayExpression(@field:Child private var array: Expr, @field:Child private var index: Expr,
+    @field:Child private var expected: Expr, @field:Child private var replacement: Expr,
+    @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val storage = ManagedArray.require(array.execute(frame))
+        val at = index.executeRequiredLong(frame)
+        val old = expected.execute(frame)
+        val new = replacement.execute(frame)
+        requireVoidCarrier(state.execute(frame))
+        val witness = ManagedArray.compareExchange(storage, at, old, new)
+        val success = witness === old
+        FrameAccess.writeLong(frame, slots[offset], if (success) 0L else 1L)
+        FrameAccess.write(frame, slots[offset + 1], if (success) new else witness)
+        return null
     }
 }
 private class FreezeArrayExpression(@field:Child private var array: Expr, @field:Child private var state: Expr) : Expr() {

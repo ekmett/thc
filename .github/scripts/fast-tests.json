@@ -41,7 +41,7 @@
       "python": ["scripts/test-audit-core.py"]
     },
     "src/main/kotlin/thc/runtime/ManagedMutVars.kt": {
-      "junit": ["thc.runtime.MutVarTest"],
+      "junit": ["thc.runtime.MutVarTest", "thc.runtime.BoxedCasTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/StablePointers.kt": {
@@ -61,7 +61,7 @@
       "python": []
     },
     "src/main/kotlin/thc/runtime/ManagedSmallArrays.kt": {
-      "junit": ["thc.runtime.SmallArrayTest"],
+      "junit": ["thc.runtime.SmallArrayTest", "thc.runtime.BoxedCasTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/AddressIdentity.kt": {
@@ -610,6 +610,10 @@
     "compiler/test-fixtures/BoxedArrayExtensionsAudit.hs": {
       "junit": ["thc.runtime.BoxedArrayExtensionsTest"], "python": []
     },
+    "compiler/test-fixtures/BoxedCasAudit.hs": {"junit": ["thc.runtime.BoxedCasTest"], "python": []},
+    "compiler/test-fixtures/BoxedCasNative.hs": {"junit": ["thc.runtime.BoxedCasTest"], "python": []},
+    "examples/THC/BoxedCasCounter.hs": {"junit": ["thc.runtime.BoxedCasTest"], "python": []},
+    "test/haskell-fixtures/BoxedCasFixtures.hs": {"junit": ["thc.runtime.BoxedCasTest"], "python": []},
     "compiler/test-fixtures/BoxedArrayExtensionsNative.hs": {
       "junit": ["thc.runtime.BoxedArrayExtensionsTest"], "python": []
     },
@@ -788,6 +792,7 @@
     },
     "src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt": {
       "junit": [
+        "thc.runtime.BoxedCasTest",
         "thc.runtime.BoxedArrayExtensionsTest",
         "thc.runtime.ArrayCoreEvidenceTest",
         "thc.runtime.IntArrayNativeTest",
@@ -1203,6 +1208,7 @@
         "thc.runtime.OriginalFstatTest",
         "thc.runtime.PosixStatAbiTest",
         "thc.runtime.MutVarTest",
+        "thc.runtime.BoxedCasTest",
         "thc.runtime.StablePointerTest",
         "thc.runtime.ManagedWeakTest",
         "thc.runtime.ShrinkByteArrayTest",

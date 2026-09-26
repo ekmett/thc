@@ -1208,12 +1208,12 @@ class Audit:
                             return kind == 'long' and reps == ['IntRep']
                         if role == 'array':
                             return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
-                        if function[1] in ('readArray#', 'indexArray#') and kind == 'object':
-                            return reps in (['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)'])
-                        return kind in ('object', 'data', 'closure') and reps == ['BoxedRep (Just Lifted)']
+                        return kind in ('object', 'data', 'closure') and reps in (
+                            ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)'])
                     expected = array['arguments']
+                    actual = [self.expression_rep(argument) for argument in arguments]
                     if (len(arguments) != len(expected) or any(type(flag) is not bool for flag in flags) or
-                            flags != [r == 'element' for r in expected] or
+                            flags != [isinstance(rep, dict) and rep.get('primReps') == ['BoxedRep (Just Lifted)'] for rep in actual] or
                             any(not array_role(self.expression_rep(a), r) for a, r in zip(arguments, expected))):
                         self.issue('primitive-representation', owner, path, function[1] + ': exact Array arguments required')
                     result = array['result']
@@ -1506,6 +1506,8 @@ class Audit:
                             return kind == 'void' and reps == []
                         if role == 'mutvar':
                             return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
+                        if role == 'flag':
+                            return kind == 'long' and reps == ['IntRep']
                         if role == 'function':
                             return kind == 'closure' and reps == ['BoxedRep (Just Lifted)']
                         if role == 'lifted':

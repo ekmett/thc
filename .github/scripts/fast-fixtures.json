@@ -47,6 +47,14 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "boxed-cas": {
+      "junit": ["thc.runtime.BoxedCasTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "boxed-cas"]}],
+      "outputs": ["build/boxed-cas"],
+      "sources": ["compiler/test-fixtures/BoxedCasAudit.hs", "compiler/test-fixtures/BoxedCasNative.hs",
+        "examples/THC/BoxedCasCounter.hs", "test/haskell-fixtures/BoxedCasFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "thread-inventory": {
       "junit": ["thc.runtime.ThreadInventoryNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-inventory"]}],
