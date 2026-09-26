@@ -27,7 +27,7 @@ acquisitionTests env = TestLabel "project acquisition stops before audit and exe
   withCache (scratch env </> "core-cache") $ do
     let base = takeDirectory project
         output = base </> "acquired"
-        arguments = ["acquire", project, "--exe", "fail-frontier", "--thc-root", thcRoot env,
+        arguments = ["acquire", "--project-dir", project, "fail-frontier", "--thc-root", thcRoot env,
                      "--dist-dir", output]
     forM_ [["--", "guest"], ["--"], ["--runtime", "/missing/thc"], ["--ffi", "native"]] $ \extra -> do
       rejected <- run env base Nothing 30 (arguments ++ extra)
@@ -36,9 +36,9 @@ acquisitionTests env = TestLabel "project acquisition stops before audit and exe
       published <- doesFileExist (output </> "packages.json")
       assertBool "CLI rejects runtime options before acquisition" (not published)
     notProject <- run env base Nothing 30
-      ["acquire", base, "--exe", "fail-frontier", "--thc-root", thcRoot env]
+      ["acquire", "--project-dir", base, "fail-frontier", "--thc-root", thcRoot env]
     assertFailure notProject
-    assertContains "acquire requires a directory containing cabal.project" (err notProject)
+    assertContains "Cabal runnable target selection failed" (err notProject)
     acquired <- run env base Nothing 240 arguments
     assertSuccess acquired
     assertNoStdout acquired
@@ -77,7 +77,7 @@ projectTests env = TestLabel "three-package project native versus THC run" $ Tes
         source = project </> "dep-data/src/Answer.hs"
         sourceOnlyRoot = base </> "THC source only"
         invoke backend target = run env base (Just backend) 240
-          ["run", project, "--exe", target, "--thc-root", thcRoot env,
+          ["run", "--project-dir", project, target, "--thc-root", thcRoot env,
            "--runtime", runtime env, "--dist-dir", output]
         entryOf plan = one (\value -> string (field value "pkg-name") == "app-run" &&
                                       string (field value "component-name") == "exe:completed")
@@ -100,7 +100,7 @@ projectTests env = TestLabel "three-package project native versus THC run" $ Tes
     initiallyBuilt <- doesFileExist (sourceOnlyRoot </> "build/compiler/plugin.json")
     assertBool "source-only checkout has no plugin manifest" (not initiallyBuilt)
     bootstrap <- run env base Nothing 120
-      ["run", project, "--exe", "app-run:exe:missing-bootstrap-probe", "--thc-root", sourceOnlyRoot,
+      ["run", "--project-dir", project, "app-run:exe:missing-bootstrap-probe", "--thc-root", sourceOnlyRoot,
        "--runtime", runtime env, "--dist-dir", output]
     assertFailure bootstrap
     assertNoStdout bootstrap
@@ -164,7 +164,7 @@ cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ T
   withCache (scratch env </> "core-cache") $ do
     let output = takeDirectory project </> "output"
         invoke backend = run env (takeDirectory project) (Just backend) 240
-          ["run", project, "--exe", "cstring", "--thc-root", thcRoot env,
+          ["run", "--project-dir", project, "cstring", "--thc-root", thcRoot env,
            "--runtime", runtime env, "--dist-dir", output]
         wired manifest = one ((== "ghc-internal") . string . (`field` "id"))
                             (objects manifest "units")
@@ -233,7 +233,7 @@ cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ T
         frontierOutput = base </> "fail-output"
     copyTree (root env </> "test/fixtures/run-fail-frontier") frontier
     frontierResult <- run env base Nothing 240
-      ["run", frontier, "--exe", "fail-frontier", "--thc-root", thcRoot env,
+      ["run", "--project-dir", frontier, "fail-frontier", "--thc-root", thcRoot env,
        "--runtime", runtime env, "--dist-dir", frontierOutput]
     assertFailure frontierResult
     assertNoStdout frontierResult

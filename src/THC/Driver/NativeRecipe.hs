@@ -4,7 +4,7 @@
 -- Receipts of actual successful Cabal compiler calls, never setup-config data.
 module THC.Driver.NativeRecipe
   ( NativeRecipe(..), captureNativeRecipe, readNativeRecipe, recipePath
-  , componentRoots, componentNativeObjects, componentNativeDeclarations, componentRuntimeShim
+  , componentRoots, componentNativeObjects, componentNativeDeclarations, componentRuntimeShim, componentDeclaredModules
   , ensureNativeRecipes, cRecipeOptions ) where
 
 import Control.Monad (filterM, forM, unless, when)
@@ -21,12 +21,13 @@ import qualified Data.Text as Text
 import Distribution.Compiler (unknownCompilerInfo, AbiTag(NoAbiTag))
 import Distribution.PackageDescription (PackageDescription, BuildInfo, customFieldsBI,
   buildType, BuildType(Simple), cSources, cxxSources, asmSources, cmmSources, jsSources,
-  genPackageFlags, flagName, mkFlagAssignment, mkFlagName, unFlagName)
+  genPackageFlags, flagName, mkFlagAssignment, mkFlagName, unFlagName, otherModules)
 import Distribution.PackageDescription.Parsec (parseGenericPackageDescriptionMaybe)
 import Distribution.PackageDescription.Configuration (finalizePD, flattenPackageDescription)
 import Distribution.Parsec (eitherParsec)
+import Distribution.Pretty (prettyShow)
 import Distribution.Simple.LocalBuildInfo (lookupComponent, componentBuildInfo)
-import Distribution.Types.ComponentName (ComponentName(CExeName, CLibName))
+import Distribution.Types.ComponentName (ComponentName(CExeName, CLibName, CBenchName, CTestName))
 import Distribution.Types.ComponentRequestedSpec (ComponentRequestedSpec(OneComponentRequestedSpec))
 import Distribution.Types.DependencySatisfaction (DependencySatisfaction(Satisfied))
 import Distribution.Types.LibraryName (LibraryName(LMainLibName, LSubLibName))
@@ -159,6 +160,17 @@ componentRuntimeShim component = do
       pure True
     _ -> fail "unsupported or ambiguous x-thc-runtime-shim profile"
 
+-- Cabal 3.16's ShowBuildInfo omits other-modules for exitcode tests. Recover
+-- only that missing inventory from the same declaration and solved flags used
+-- for native ownership; do not infer home modules from source imports.
+componentDeclaredModules :: Value -> IO [String]
+componentDeclaredModules component = do
+  names <- field component "modules"
+  kind <- field component "type" :: IO String
+  if kind /= "test" then pure names else do
+    (_, info) <- configuredBuildInfo component
+    pure (nub (names ++ map prettyShow (otherModules info)))
+
 configuredBuildInfo :: Value -> IO (PackageDescription, BuildInfo)
 configuredBuildInfo component = do
   root <- field component "src-dir"
@@ -205,6 +217,18 @@ componentNativeObjects native dist allRoots component = do
         Right (CExeName value) -> let executableName = unUnqualComponentName value
           in pure [executableName </> (executableName ++ "-tmp")]
         _ -> fail "Cabal executable build-info has an invalid component name"
+    "bench" -> do
+      name <- field component "name"
+      case eitherParsec name of
+        Right (CBenchName value) -> let benchmarkName = unUnqualComponentName value
+          in pure [benchmarkName </> (benchmarkName ++ "-tmp")]
+        _ -> fail "Cabal benchmark build-info has an invalid component name"
+    "test" -> do
+      name <- field component "name"
+      case eitherParsec name of
+        Right (CTestName value) -> let testName = unUnqualComponentName value
+          in pure [testName </> (testName ++ "-tmp")]
+        _ -> fail "Cabal test build-info has an invalid component name"
     "lib" -> do
       name <- field component "name"
       case eitherParsec name of
@@ -217,7 +241,7 @@ componentNativeObjects native dist allRoots component = do
     [directory </> suffix | suffix <- suffixes,
       (flag,directory) <- zip arguments (drop 1 arguments), flag `elem` ["-odir", "-outputdir"]]
   let haskellRoots = nub (roots ++ artifacts)
-  let names = nub (modules ++ ["Main" | kind == "exe"])
+  let names = nub (modules ++ ["Main" | kind `elem` ["exe", "bench", "test"]])
       expected = [joinPath (splitModule name) | name <- names]
       owns path = any (`within` path) roots &&
         not (any (\other -> other `notElem` roots && within other path &&

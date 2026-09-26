@@ -1,0 +1,53 @@
+cabal-version: 3.0
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+name: run-benchmark
+version: 0.1.0.0
+build-type: Simple
+license: UPL-1.0 AND BSD-3-Clause
+
+library
+  exposed-modules: Answer
+  hs-source-dirs: src
+  build-depends: base >=4.22 && <4.23
+  default-language: Haskell2010
+
+benchmark measured
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  other-modules: Check
+  hs-source-dirs: bench
+  build-depends: base >=4.22 && <4.23, run-benchmark
+  ghc-options: -O2
+  default-language: Haskell2010
+
+executable ordinary
+  main-is: Main.hs
+  other-modules: Check
+  hs-source-dirs: bench
+  build-depends: base >=4.22 && <4.23, run-benchmark
+  default-language: Haskell2010
+
+test-suite checked
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  other-modules: Check
+  hs-source-dirs: bench
+  build-depends: base >=4.22 && <4.23, run-benchmark
+  default-language: Haskell2010
+
+test-suite detailed
+  type: detailed-0.9
+  test-module: Detailed
+  hs-source-dirs: detailed
+  build-depends: base >=4.22 && <4.23, Cabal ==3.16.*
+  default-language: Haskell2010
+
+benchmark disabled
+  buildable: False
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  other-modules: Check
+  hs-source-dirs: bench
+  build-depends: base >=4.22 && <4.23, run-benchmark
+  default-language: Haskell2010

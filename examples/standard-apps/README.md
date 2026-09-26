@@ -148,7 +148,7 @@ names are `HsColour`, `alex`, `happy`, and `doctest` respectively. The first
 guest attempt is:
 
 ```sh
-"$THC_DRIVER" run "$PACKAGE_DIR" --exe "$EXE" --thc-root "$THC_ROOT" \
+"$THC_DRIVER" run "$EXE" --project-dir "$PACKAGE_DIR" --thc-root "$THC_ROOT" \
   --dist-dir "$THC_ROOT/build/standard-apps/$EXE-guest" \
   --with-ghc "$GHC" --with-ghc-pkg "$GHC_PKG" \
   --installed-core required --ghc-source "$GHC_SOURCE" -- --version

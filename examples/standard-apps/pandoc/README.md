@@ -29,7 +29,7 @@ and the corresponding configured GHC source tree, the guest attempt is:
 
 ```sh
 export pandoc_datadir="$PWD/pandoc-3.11"
-thc run . --exe pandoc-cli:exe:pandoc --installed-core required \
+thc run pandoc-cli:exe:pandoc --installed-core required \
   --ghc-source /path/to/ghc-9.14.1 --thc-root /path/to/thc \
   --dist-dir "$PWD/dist-thc" -- --version
 ```

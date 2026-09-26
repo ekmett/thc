@@ -88,7 +88,7 @@ storeProjectTest env = TestLabel "source-built Cabal store Core" $ TestCase $
         output = base </> "output"
         archive = project </> "dep-data-0.1.0.0.tar.gz"
         invoke backend = run env base (Just backend) 240
-          ["run", project, "--exe", "completed", "--thc-root", thcRoot env,
+          ["run", "--project-dir", project, "completed", "--thc-root", thcRoot env,
            "--runtime", runtime env, "--dist-dir", output]
         global plan = one (\unit -> string (field unit "style") == "global" &&
                             string (field unit "pkg-name") == "dep-data")
@@ -175,7 +175,7 @@ customStoreProjectTest env = TestLabel "Custom Setup library retains runtime-onl
         setupOnly = base </> "setup-source"
         output = base </> "output"
         invoke backend = run env base (Just backend) 240
-          ["run", project, "--exe", "completed", "--thc-root", thcRoot env,
+          ["run", "--project-dir", project, "completed", "--thc-root", thcRoot env,
            "--runtime", runtime env, "--dist-dir", output]
         planned plan name = one ((== name) . string . (`field` "pkg-name")) (objects plan "install-plan")
         described manifest identifier = one ((== identifier) . string . (`field` "id")) (objects manifest "units")
@@ -271,7 +271,7 @@ nativeVariantsTest env cxx = TestLabel
     let base = takeDirectory project
         output = base </> "output"
         invoke backend = run env base (Just backend) 240
-          ["run", project, "--exe", "variants", "--thc-root", thcRoot env,
+          ["run", "--project-dir", project, "variants", "--thc-root", thcRoot env,
            "--runtime", runtime env, "--dist-dir", output]
     forM_ ["ast", "bytecode"] $ \backend -> do
       actual <- invoke backend

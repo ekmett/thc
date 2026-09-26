@@ -58,13 +58,17 @@ is `cabal run thc -- --help`.
 Then run the included Cabal executable through THC:
 
 ```sh
-cabal run thc -- run test/fixtures/run-pure/run-pure.cabal \
-  --exe completed --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
+cabal run thc -- run completed --project-dir test/fixtures/run-pure \
+  --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
 ```
 
 This example checks a mutable reference and returns `()` without printing.
-For your own package, pass its directory or `.cabal` file and its executable
-name to `thc run`. The command builds with Cabal, exports GHC Core, and executes
+Inside your package, use `thc run [TARGET]`, following `cabal run` target syntax.
+Omitting the target selects the current package's sole buildable executable,
+otherwise its sole buildable runnable component. Explicit `PACKAGE:exe:NAME`,
+`PACKAGE:test:NAME` and `PACKAGE:bench:NAME` targets work; tests must use the
+`exitcode-stdio-1.0` interface. Use `--project-dir` or `--project-file` to select
+another project. The command builds with Cabal, exports GHC Core, and executes
 an accepted `Main.main :: IO ()` in THC. Use `cabal run thc -- --help` for the
 command-line options. The [driver guide](docs/driver.md)
 has the options and integration check.
@@ -74,8 +78,8 @@ build. For example, the included project has a data library, a native Template
 Haskell helper, an internal library and an executable:
 
 ```sh
-cabal run thc -- run test/fixtures/run-project \
-  --exe app-run:exe:completed --thc-root "$PWD" \
+cabal run thc -- run app-run:exe:completed \
+  --project-dir test/fixtures/run-project --thc-root "$PWD" \
   --dist-dir "$PWD/build/run-project"
 ```
 
@@ -95,9 +99,9 @@ remains incomplete. [STM/TVar transactions](docs/stm.md) work in both backends
 with buffered writes, atomic commit and real retry wakeups. Asynchronous
 interruption aborts the attempt and saves a fresh transaction restart;
 delimited transaction capture and GC deadlock detection remain explicit limits.
-The independent single-package `.cabal` path still excludes
-internal library and build-tool dependencies; use a `cabal.project` directory
-for the tested multi-package path. `thc build` and `thc repl` are future commands.
+The Windows simple-package backend retains its existing restriction against
+internal library and build-tool dependencies, behind the same Cabal-shaped
+target interface. `thc build` and `thc repl` are future commands.
 
 ## What works
 

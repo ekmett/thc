@@ -25,7 +25,7 @@ For THC, use the project-directory driver path, complete installed Core, and
 the matching configured GHC source tree:
 
 ```sh
-thc run examples/standard-apps/ghc-api --exe ghc-faststring \
+thc run ghc-faststring --project-dir examples/standard-apps/ghc-api \
   --installed-core required --ghc-source /path/to/ghc-9.14.1 \
   --thc-root /path/to/thc --dist-dir /path/to/thc/build/ghc-api/guest-faststring \
   -- "THC λ" "GHC API"

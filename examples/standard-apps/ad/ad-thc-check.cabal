@@ -10,8 +10,8 @@ executable ad-kahn
   build-depends: base, ad
   ghc-options: -O2
 
--- Use the original upstream suite as an executable because thc run selects
--- executable components. Do not copy, replace or weaken its tests.
+-- Retain this capture fixture's executable wrapper around the original suite.
+-- thc run also accepts test targets; do not replace or weaken upstream tests.
 executable ad-regression
   main-is: Regression.hs
   hs-source-dirs: upstream-ad/tests

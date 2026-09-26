@@ -10,8 +10,10 @@ import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
 
 tests :: Env -> Test
-tests env = TestLabel "single-package native versus THC run" $ TestCase $
-  withFixture env "test/fixtures/run-pure" $ \package -> do
+tests env = TestLabel "implicit Cabal project native versus THC run" $ TestCase $
+  -- GHC's Linux -g assembler cannot quote a double quote in .file paths.
+  -- Plan tests retain quoted paths; this project capture retains spaces/Unicode.
+  withFixtureNamed env "test/fixtures/run-pure" "project café" $ \package -> do
     let base = takeDirectory package
         source = package </> "app/Main.hs"
         -- Native compilation is independent of the THC backend. Keep the first
@@ -20,11 +22,14 @@ tests env = TestLabel "single-package native versus THC run" $ TestCase $
         -- Later edits use this same directory, exercising actual invalidation.
         output = base </> "output"
         invokeFfi backend ffi = run env base backend 180
-          (["run", package </> "run-pure.cabal", "--exe", "completed", "--dist-dir", output,
+          (["run", "--project-dir", package, "completed", "--dist-dir", output,
             "--thc-root", thcRoot env, "--runtime", runtime env] ++ ffi)
         invoke backend = invokeFfi backend ["--ffi", "native"]
-        exported = output </> "thc-run/completed"
-        native = output </> "build/completed/completed"
+        exported = output
+        executable = do
+          plan <- readJson (output </> "native/cache/plan.json")
+          pure $ string $ field (one ((== "exe:completed") . string . (`field` "component-name"))
+            (objects plan "install-plan")) "bin-file"
     cold <- doesDirectoryExist output
     assertBool "fixture starts with a cold native dist directory" (not cold)
     forM_ ["bytecode", "ast"] $ \backend -> do
@@ -36,13 +41,21 @@ tests env = TestLabel "single-package native versus THC run" $ TestCase $
       assertEqual "unsupported traps" 0 (number $ field diagnostics "unsupportedTraps")
       audit <- readJson (exported </> "audit.json")
       assertBool "strict Core accepted" (bool $ field audit "accepted")
-      assertEqual "IO root" ["main:Main.main"] (strings $ field audit "roots")
+      manifest <- readJson (output </> "packages.json")
+      let entry = one (any ((== "Main") . string . (`field` "name")) . (`objects` "modules"))
+                      (objects manifest "units")
+          bundle = string $ field (field entry "bundle") "path"
+      assertEqual "IO root" [string (field entry "id") ++ ":Main.main"] (strings $ field audit "roots")
       let primitives = map (string . (`field` "name")) (objects audit "primitives")
       forM_ ["newMutVar#", "writeMutVar#", "readMutVar#", "raise#"] $ \primitive ->
         assertBool ("missing " ++ primitive) (primitive `elem` primitives)
       forM_ ["Main", "Answer"] $ \moduleName -> do
-        core <- readJson (exported </> "core" </> moduleName ++ ".json")
-        assertEqual "source notes" "source-notes-metadata" (string $ field (field core "lowering") "ticks")
+        let moduleEntry = one ((== moduleName) . string . (`field` "name")) (objects entry "modules")
+        core <- readCore bundle (string $ field moduleEntry "path")
+        -- Project bundles use the post-Tidy schema, whose actual source tables
+        -- replace the older simplifier schema's lowering/ticks marker.
+        assertEqual "post-Tidy Core" "optimized-Core-after-Tidy-before-CorePrep"
+          (string $ field core "boundary")
         assertBool "source spans" (not $ null $ objects core "sourceSpans")
         sourcePath <- canonicalizePath (package </> "app" </> moduleName ++ ".hs")
         hasSource <- anyM (\file -> do
@@ -50,10 +63,13 @@ tests env = TestLabel "single-package native versus THC run" $ TestCase $
           pure (path == sourcePath && string (field file "content") /= ""))
           (objects core "sourceFiles")
         assertBool "source content" hasSource
-        requireFile (exported </> "ghc" </> moduleName ++ ".hi")
+        native <- executable
+        requireFile (takeDirectory native </> "completed-tmp" </> moduleName ++ ".hi")
+      -- Temporary export objects never become another native component build.
       forM_ [".o", ".dyn_o"] $ \suffix -> do
-        objectsFound <- findFiles (exported </> "ghc") suffix
-        assertBool "no duplicate native objects" (null objectsFound)
+        objectsFound <- findFiles (output </> "native/cache/thc/staging") suffix
+        assertBool "temporary export objects cleaned" (null objectsFound)
+      native <- executable
       requireFile native
       nativeResult <- runExe env package Nothing 60 native []
       assertSuccess nativeResult
@@ -72,6 +88,7 @@ tests env = TestLabel "single-package native versus THC run" $ TestCase $
       assertFailure result
       audit <- readJson (exported </> "audit.json")
       assertBool "valid Core still accepted" (bool $ field audit "accepted")
+      native <- executable
       requireFile native
       nativeResult <- runExe env package Nothing 60 native []
       assertFailure nativeResult
@@ -82,6 +99,7 @@ tests env = TestLabel "single-package native versus THC run" $ TestCase $
     assertNoStdout unsupported
     audit <- readJson (exported </> "audit.json")
     assertBool "console IO rejected" (not $ bool $ field audit "accepted")
+    native <- executable
     requireFile native
     nativeResult <- runExe env package Nothing 60 native []
     assertSuccess nativeResult
@@ -98,3 +116,8 @@ tests env = TestLabel "single-package native versus THC run" $ TestCase $
 
 anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 anyM predicate values = or <$> mapM predicate values
+
+one :: (a -> Bool) -> [a] -> a
+one predicate values = case filter predicate values of
+  [value] -> value
+  _ -> error "expected exactly one selected component or module"

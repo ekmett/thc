@@ -30,16 +30,21 @@ The command-line interface I'm working toward is:
 
 ```sh
 thc build
-thc run . --exe my-program
+thc run my-program
 thc repl
 ```
 
-`thc run` has a working, limited implementation today. `thc build` is planned;
+`thc run [TARGET] [FLAGS] [-- ARG...]` has a working, limited implementation
+today. Targets use Cabal's syntax, including `my-package:bench:my-benchmark` and
+`my-package:test:my-test`. With no target, Cabal selects the current package's
+sole buildable executable, otherwise its sole buildable runnable component.
+Use `--project-dir` or `--project-file` to select a different project.
+`thc build` is planned;
 `thc repl` is not yet implemented. The aim is to run complete programs, including
 their error paths.
 
 You can already run real generators and utilities: see the
-[Happy parser-generation and HsColour HTML command lines](../driver.md#run-real-applications).
+[Happy, HsColour and Alex command lines](../driver.md#run-real-applications).
 They use ordinary upstream packages and the complete-Core installation described
 below, with setup, expected output and current backend limits spelled out.
 
@@ -76,12 +81,12 @@ separately.
 Run the included Cabal executable:
 
 ```sh
-cabal run thc -- run test/fixtures/run-pure/run-pure.cabal \
-  --exe completed --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
+cabal run thc -- run completed --project-dir test/fixtures/run-pure \
+  --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
 ```
 
 It checks a mutable reference and returns `()` without printing. The
-[driver guide](../driver.md) covers executable selection and the tested
+[driver guide](../driver.md) covers runnable target selection and the tested
 multi-package `cabal.project` path. Use `cabal run thc -- --help` for current
 options, `make test` for the test suite, and `make clean` to remove build products.
 `make distclean` also removes this checkout's Gradle and Kotlin caches.

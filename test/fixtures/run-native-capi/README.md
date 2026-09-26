@@ -12,8 +12,7 @@ This ordinary Cabal library exercises the generic package-native producer:
   expose the same calls without requiring a full `Main`/Handle dependency closure.
 
 Build and run `oracle` with native GHC for independent expected results. Acquire
-the project through the ordinary driver (`thc run` with `--exe
-run-native-capi:exe:oracle`), then load its emitted `packages.json` to exercise
+the project through the ordinary driver (`thc run run-native-capi:exe:oracle`), then load its emitted `packages.json` to exercise
 `NativeLeft.leftProbe#`, `NativeLeft.firstProbe#`, `NativeRight.rightProbe#`,
 `NativeRight.firstAgainProbe#`, and `NativeRight.secondProbe#`. Each takes an
 `Int#` and returns an `Int#`, preserving the underlying `Word64` bits.

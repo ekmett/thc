@@ -10,8 +10,8 @@ executable lens-public-api
   build-depends: base, containers, lens, mtl
   ghc-options: -O2 -Wall
 
--- Run the unchanged upstream test sources as executable components because
--- thc run currently selects executables, not Cabal test-suite components.
+-- Retain the original capture fixture's executable wrappers around unchanged
+-- upstream tests. thc run also accepts exitcode test-suite targets directly.
 executable lens-hunit
   main-is: hunit.hs
   hs-source-dirs: upstream-lens/tests
