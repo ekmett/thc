@@ -868,53 +868,62 @@ exporterIdentity context = do
 prepareGlobalBundles :: ExportContext -> FilePath -> String -> Map.Map String Unit -> [(Unit, Component)] -> [Unit] -> IO (Map.Map String Bundle)
 prepareGlobalBundles _ _ _ _ _ [] = pure Map.empty
 prepareGlobalBundles context project target planned locals units = do
-  let lockDir = contextCache context </> "core-bundles/v1"
+  let lockDir = contextCache context </> "core-bundles/v1/export-batches"
   createDirectoryIfMissing True lockDir
-  withLock (lockDir </> "global-export.lock") $ do
-    closures <- mapM (dependencyClosure planned . unitId) units
-    let localIds = Set.fromList [unitId unit | unit <- concat closures, unitLocal unit]
-        inplaceUnits = Map.elems (Map.fromList
-          [(unitId unit, unit) | unit <- concat closures, sourceInplace unit])
-        observeInputs = do
-          localInputs <- forM (filter (\(unit, _) -> unitId unit `Set.member` localIds) locals) $ \(unit, component) -> do
-            artifacts <- componentNativeInputs context unit component
-            sources <- forM (componentSources component) $ \(name, path) -> do
-              digest <- digestFile path
-              pure (name, digest)
-            pure (unitId unit, object ["unit" .= unitId unit,
-              "component" .= normalizePaths (contextNative context) (componentValue component),
-              "nativeArtifacts" .= artifacts, "sources" .= sources])
-          sourceInputs <- forM inplaceUnits $ \unit -> do
-            artifacts <- sourceNativeInputs context unit
-            pure (unitId unit, object ["unit" .= unitId unit, "nativeInputs" .= artifacts])
-          pure (Map.fromList (localInputs ++ sourceInputs))
-    inputs <- observeInputs
-    located <- forM units $ \unit -> do
-      (buildKey, exportKey, path) <- globalLocation context planned inputs unit
-      cached <- doesFileExist path
-      hit <- if cached then readGlobalBundle path (unitId unit) (unitDepends unit) buildKey exportKey
-             else pure Nothing
-      pure (unit, buildKey, exportKey, path, hit)
-    let missing = [(unit, buildKey, exportKey, path)
-                  | (unit, buildKey, exportKey, path, Nothing) <- located]
-        validateInputs = do
-          currentInputs <- observeInputs
-          forM_ located $ \(unit, buildKey, _, _, _) -> do
-            (currentKey, _, _) <- globalLocation context planned currentInputs unit
-            require (currentKey == buildKey)
-              ("project dependency inputs changed during capture for " ++ unitId unit)
-    when (not (null missing)) $
-      captureGlobalUnits context project target planned (map first4 missing) missing validateInputs
-    -- Check warm hits too, before they enter the combined manifest.
-    validateInputs
-    pairs <- forM located $ \(unit, buildKey, exportKey, path, hit) -> do
-      bundle <- case hit of
-        Just value -> pure value
-        Nothing -> do
-          ready <- readGlobalBundle path (unitId unit) (unitDepends unit) buildKey exportKey
-          maybe (fail ("Cabal store Core bundle was not published: " ++ unitId unit)) pure ready
-      pure (unitId unit, bundle)
-    pure (Map.fromList pairs)
+  closures <- mapM (dependencyClosure planned . unitId) units
+  let localIds = Set.fromList [unitId unit | unit <- concat closures, unitLocal unit]
+      inplaceUnits = Map.elems (Map.fromList
+        [(unitId unit, unit) | unit <- concat closures, sourceInplace unit])
+      observeInputs = do
+        localInputs <- forM (filter (\(unit, _) -> unitId unit `Set.member` localIds) locals) $ \(unit, component) -> do
+          artifacts <- componentNativeInputs context unit component
+          sources <- forM (componentSources component) $ \(name, path) -> do
+            digest <- digestFile path
+            pure (name, digest)
+          pure (unitId unit, object ["unit" .= unitId unit,
+            "component" .= normalizePaths (contextNative context) (componentValue component),
+            "nativeArtifacts" .= artifacts, "sources" .= sources])
+        sourceInputs <- forM inplaceUnits $ \unit -> do
+          artifacts <- sourceNativeInputs context unit
+          pure (unitId unit, object ["unit" .= unitId unit, "nativeInputs" .= artifacts])
+        pure (Map.fromList (localInputs ++ sourceInputs))
+  inputs <- observeInputs
+  located <- forM units $ \unit -> do
+    (buildKey, exportKey, path) <- globalLocation context planned inputs unit
+    cached <- doesFileExist path
+    hit <- if cached then readGlobalBundle path (unitId unit) (unitDepends unit) buildKey exportKey
+           else pure Nothing
+    pure (unit, buildKey, exportKey, path, hit)
+  let missing = [(unit, buildKey, exportKey, path)
+                | (unit, buildKey, exportKey, path, Nothing) <- located]
+      validateInputs = do
+        currentInputs <- observeInputs
+        forM_ located $ \(unit, buildKey, _, _, _) -> do
+          (currentKey, _, _) <- globalLocation context planned currentInputs unit
+          require (currentKey == buildKey)
+            ("project dependency inputs changed during capture for " ++ unitId unit)
+  when (not (null missing)) $ do
+    -- Only identical missing batches serialize the expensive private Cabal
+    -- build. Unrelated projects do not wait behind a cache-wide export lock.
+    let batch = shaHex (BL.toStrict (encode (sort [key | (_, _, key, _) <- missing])))
+    withLock (lockDir </> batch <.> "lock") $ do
+      pending <- filterM (\(unit, buildKey, exportKey, path) -> do
+        present <- doesFileExist path
+        ready <- if present then readGlobalBundle path (unitId unit) (unitDepends unit) buildKey exportKey
+                 else pure Nothing
+        pure (case ready of Nothing -> True; Just _ -> False)) missing
+      when (not (null pending)) $
+        captureGlobalUnits context project target planned (map first4 pending) pending validateInputs
+  -- Check warm hits too, before they enter the combined manifest.
+  validateInputs
+  pairs <- forM located $ \(unit, buildKey, exportKey, path, hit) -> do
+    bundle <- case hit of
+      Just value -> pure value
+      Nothing -> do
+        ready <- readGlobalBundle path (unitId unit) (unitDepends unit) buildKey exportKey
+        maybe (fail ("Cabal store Core bundle was not published: " ++ unitId unit)) pure ready
+    pure (unitId unit, bundle)
+  pure (Map.fromList pairs)
   where first4 (unit, _, _, _) = unit
 
 captureGlobalUnits :: ExportContext -> FilePath -> String -> Map.Map String Unit -> [Unit] ->
@@ -986,8 +995,16 @@ captureGlobalUnits context project target planned requested missing validateInpu
       require (kind == "configured" && style `elem` ["global", "inplace"])
         ("isolated Cabal build changed store identity for " ++ unitId unit)
       createDirectoryIfMissing True (takeDirectory path)
-      withLock (path ++ ".lock") $
-        packGlobalBundle store dist capture unit buildKey exportKey path
+      withLock (path ++ ".lock") $ do
+        -- Overlapping batches can independently capture the same dependency.
+        -- Keep the first valid publication byte-for-byte: a prior manifest may
+        -- already refer to its hash, even if another capture is equivalent.
+        present <- doesFileExist path
+        ready <- if present then readGlobalBundle path (unitId unit) (unitDepends unit) buildKey exportKey
+                 else pure Nothing
+        case ready of
+          Just _ -> pure ()
+          Nothing -> packGlobalBundle store dist capture unit buildKey exportKey path
     ) `finally` cleanup
 
 packGlobalBundle :: FilePath -> FilePath -> FilePath -> Unit -> String -> String -> FilePath -> IO ()
