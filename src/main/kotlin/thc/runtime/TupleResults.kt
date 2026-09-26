@@ -267,6 +267,18 @@ private class DirectTupleCaller(private val destination: TupleDestination, metri
         System.arraycopy(function.supplied, 0, packet, skip, prefixSize)
         System.arraycopy(arguments, 0, packet, skip + prefixSize, physicalCount)
         if (arity < argsSize) {
+            if (AstControl.enabled(this)) {
+                val result = try { scalar!!.call(frame, packet, false) }
+                catch (cut: AstCapture) {
+                    val remaining = arguments.copyOfRange(physicalCount, arguments.size)
+                    throw cut.append(object : AstResumeStep {
+                        override fun resume(frame: VirtualFrame, input: Any?): Any? =
+                            resumeOverapplication(frame, input, remaining)
+                    })
+                }
+                resumeOverapplication(frame, result, arguments.copyOfRange(physicalCount, arguments.size))
+                return
+            }
             val result = if (!DelimitedControl.enabled(this)) force.execute(frame, scalar!!.call(frame, packet, false))
                 else try {
                     val answer = scalar!!.call(frame, packet, false)
@@ -297,6 +309,20 @@ private class DirectTupleCaller(private val destination: TupleDestination, metri
             catch (transfer: TailCall) { bounce.execute(frame, transfer) }
         }
     }
+
+    private fun resumeOverapplication(frame: VirtualFrame, value: Any?, remaining: Array<Any?>): Any? {
+        val closure = try { requireClosure(AstControl.force(frame, this, force, value)) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                    rest!!.execute(frame, requireClosure(input), remaining)
+                    return null
+                }
+            })
+        }
+        rest!!.execute(frame, closure, remaining)
+        return null
+    }
 }
 
 /** Residual calls return only the pooled completion token. The loop consumes it
@@ -326,7 +352,10 @@ internal class TupleBounce(private val destination: TupleDestination, private va
                     next.args[0] = 0L
                     Calls.indirect(call, next.target, next.args)
                 }
-                destination.consume(frame, this, result)
+                // This loop discarded every intermediate tail activation. The
+                // witness validates the final body before a caller captures it.
+                destination.consume(frame, this,
+                    if (result is SavedGuestContinuation) AstTailYield(result, next.target) else result)
                 return
             } catch (transfer: TailCall) { next = transfer }
         }
@@ -363,6 +392,30 @@ private class GenericTupleCaller(private val destination: TupleDestination, priv
             System.arraycopy(function.supplied, 0, packet, skip, function.supplied.size)
             System.arraycopy(arguments, physicalOffset, packet, skip + function.supplied.size, physicalCount)
             if (!exact) {
+                if (AstControl.enabled(this)) {
+                    val next = offset + count
+                    val result = try { scalar.call(frame, function.target, packet, false) }
+                    catch (cut: AstCapture) {
+                        val savedArguments = arguments.copyOf()
+                        throw cut.append(object : AstResumeStep {
+                            override fun resume(frame: VirtualFrame, input: Any?): Any? =
+                                resumeOverapplication(frame, input, savedArguments, next)
+                        })
+                    }
+                    val closure = try { requireClosure(AstControl.force(frame, this, force, result)) }
+                    catch (cut: AstCapture) {
+                        val savedArguments = arguments.copyOf()
+                        throw cut.append(object : AstResumeStep {
+                            override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                                execute(frame, requireClosure(input), savedArguments, next)
+                                return null
+                            }
+                        })
+                    }
+                    function = closure
+                    offset = next
+                    continue
+                }
                 val result = if (!DelimitedControl.enabled(this)) force.execute(frame, scalar.call(frame, function.target, packet, false))
                     else try {
                         val answer = scalar.call(frame, function.target, packet, false)
@@ -402,6 +455,20 @@ private class GenericTupleCaller(private val destination: TupleDestination, priv
             }
             return
         }
+    }
+
+    private fun resumeOverapplication(frame: VirtualFrame, value: Any?, arguments: Array<Any?>, next: Int): Any? {
+        val closure = try { requireClosure(AstControl.force(frame, this, force, value)) }
+        catch (cut: AstCapture) {
+            throw cut.append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                    execute(frame, requireClosure(input), arguments, next)
+                    return null
+                }
+            })
+        }
+        execute(frame, closure, arguments, next)
+        return null
     }
 }
 
