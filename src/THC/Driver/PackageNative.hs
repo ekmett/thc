@@ -7,7 +7,7 @@
 -- about native object layouts, into the immutable Core bundle.
 module THC.Driver.PackageNative
   ( captureNativeObject, captureNativeComponent, capturePackageNative, finishPackageNative
-  , nativeSignatures, nativeWrapperSource, nativeCompilerArguments, validateNativeIR, nativeObjectOwned
+  , nativeSignatures, archiveNativeModule, nativeWrapperSource, nativeCompilerArguments, validateNativeIR, nativeObjectOwned
   ) where
 
 import Control.Monad (filterM, forM, forM_, unless, when)
@@ -36,7 +36,8 @@ type Signature = (String, String, String, [String], String)
 nativeSignatures :: String -> [Value] -> Either String [Signature]
 nativeSignatures unit modules = do
   imports <- concat <$> mapM moduleImports modules
-  signatures <- mapM classify imports
+  signatures <- mapM (nativeSignature unit) imports
+  require (all supportedSignature signatures) "package native call has unsupported safety/carriers"
   let ordered = sort (nub signatures)
   forM_ (groupBy (\a b -> first a == first b) ordered) $ \variants -> do
     require (length (nub (map (cAbi integerAbi) variants)) == 1)
@@ -67,38 +68,144 @@ nativeSignatures unit modules = do
     coreAbi (_,convention,safety,arguments,result) =
       (convention,safety,map (\value -> if value == "MutableByteArray#" then "ByteArray#" else value) arguments,result)
     moduleImports value = do
-      require (member value "unit" == Just (toJSON unit)) "package native module owner differs"
-      case member value "staticForeignImports" of
-        Nothing -> Right []
-        Just proof -> do
-          require (member proof "schema" == Just (toJSON (1::Int)) &&
-            member proof "status" == Just "verified" && member proof "unit" == Just (toJSON unit))
-            "package native imports lack verified typed provenance"
-          expected <- field proof "expectedForeign"
-          require (maybe (emptyForeign expected) (== expected) (member value "foreign"))
-            "package native retained foreign product differs from typed import provenance"
-          require (member proof "expectedCalls" == Just (toJSON (calls value)))
-            "package native Core calls differ from typed import provenance"
-          require (maybe True (== proof) (member value "staticForeignImportStubs"))
-            "package native retained stub provenance differs"
-          field proof "imports"
-    classify entry = do
-      emitted <- field entry "emitted"
-      symbol <- field emitted "symbol"
-      convention <- field emitted "convention"
-      safety <- field emitted "safety"
-      arguments <- field emitted "arguments"
-      results <- field emitted "result"
-      require (identifier symbol && member emitted "unit" == Just (toJSON unit) &&
-        convention `elem` ["ccall", "capi"] && not (null arguments) &&
-        (safety == "unsafe" || safety == "safe" && all (\rep -> scalarCarrier rep && rep /= "AddrRep") (init arguments)) &&
-        last arguments == "void" && all inputCarrier (init arguments))
-        "package native call requires static C/CAPI; safe calls require only scalar inputs, interruptible calls are unsupported"
-      result <- case results of
-        ["void"] -> Right "void"
-        ["void", value] | scalarCarrier value && (safety /= "safe" || value /= "AddrRep") -> Right value
-        _ -> Left "package native call requires State with zero or one scalar result"
-      pure (symbol,convention,safety,init arguments,result)
+      imports <- nativeImports unit value
+      case member value "packageNativeArchive" of
+        Nothing -> do
+          require (maybe True ((/= Just "unclassified") . (`member` "status"))
+            (member value "staticForeignImports")) "package native imports lack verified typed provenance"
+          pure imports
+        Just archive -> do
+          excluded <- field archive "unsupportedImports" :: Either String [Value]
+          pure [entry | entry <- imports, member entry "emitted" `notElem` map Just excluded]
+
+-- Classify only known semantic gaps. Invalid records, mismatched retained
+-- products and compiler/linker failures are never converted into archives.
+archiveNativeModule :: String -> Value -> Either String Value
+archiveNativeModule unit value = do
+  imports <- nativeImports unit value
+  signatures <- mapM (nativeSignature unit) imports
+  let excluded = [emitted | (entry,signature) <- zip imports signatures,
+        not (supportedSignature signature), Just emitted <- [member entry "emitted"]]
+      unknown = case member value "staticForeignImports" of
+        Just proof | member proof "status" == Just "unclassified" -> member proof "reason"
+        _ -> Nothing
+  pure $ if null excluded && unknown == Nothing then value else
+    setMember "packageNativeArchive" (archiveRecord value excluded unknown [] Nothing) value
+
+archiveRecord :: Value -> [Value] -> Maybe Value -> [String] -> Maybe Value -> Value
+archiveRecord value excluded unknown unresolved artifact = object
+  ["schema" .= (1::Int), "profile" .= ("thc-package-native-archive-v1"::String),
+   "execution" .= ("not-linked"::String), "unit" .= member value "unit", "module" .= member value "module",
+   "unsupportedImports" .= excluded, "unclassifiedReason" .= unknown,
+   "unresolvedSymbols" .= unresolved, "artifact" .= artifact]
+
+nativeImports :: String -> Value -> Either String [Value]
+nativeImports unit value = do
+  require (member value "unit" == Just (toJSON unit)) "package native module owner differs"
+  case member value "staticForeignImports" of
+    Nothing -> Right []
+    Just proof -> do
+      require (member proof "schema" == Just (toJSON (1::Int)) && member proof "unit" == Just (toJSON unit) &&
+        member proof "module" == member value "module" && member proof "scope" == Just "retained-static-import-products" &&
+        member proof "execution" == Just "not-linked" && member proof "profile" == Just "ghc-9.14.1-thc-only-static-c-imports-v1")
+        "package native imports lack typed provenance identity"
+      require (maybe True (== proof) (member value "staticForeignImportStubs"))
+        "package native retained stub provenance differs"
+      if member proof "status" == Just "unclassified" then do
+        requireKeys proof ["schema","scope","execution","profile","unit","module","status","reason"]
+        require (member proof "reason" == Just "non-static-c-import-declaration")
+          "package native imports have an unrecognized unclassified producer"
+        pure []
+      else do
+        requireKeys proof ["schema","scope","execution","profile","unit","module","status","wordBits","expectedForeign","expectedCalls","imports"]
+        require (member proof "status" == Just "verified" && member proof "wordBits" == Just (toJSON (64::Int)))
+          "package native imports lack verified typed provenance"
+        expected <- field proof "expectedForeign"
+        require (maybe (emptyForeign expected) (== expected) (member value "foreign"))
+          "package native retained foreign product differs from typed import provenance"
+        require (member proof "expectedCalls" == Just (toJSON (calls value)))
+          "package native Core calls differ from typed import provenance"
+        imports <- field proof "imports"
+        forM_ imports $ \entry -> do
+          binder <- field entry "binder"
+          require (member binder "unit" == Just (toJSON unit) && member binder "module" == member value "module")
+            "package native import binder owner differs"
+        pure imports
+
+nativeSignature :: String -> Value -> Either String Signature
+nativeSignature unit entry = do
+  requireKeys entry ["binder","header","symbol","unit","isFunction","convention","safety","declaredType","normalizedType","normalizationRole","emitted"]
+  binder <- field entry "binder"
+  nativeIdentity binder
+  require (member binder "namespace" == Just "value") "package native import binder namespace differs"
+  mapM_ (\key -> field entry key >>= nativeType 0) ["declaredType","normalizedType"]
+  emitted <- field entry "emitted"
+  requireKeys emitted ["symbol","unit","convention","safety","arguments","result"]
+  symbol <- field emitted "symbol"
+  convention <- field emitted "convention"
+  safety <- field emitted "safety"
+  arguments <- field emitted "arguments"
+  results <- field emitted "result"
+  declaredSymbol <- field entry "symbol" :: Either String String
+  require (not (null declaredSymbol) && member entry "normalizationRole" == Just "representational" &&
+    member entry "unit" `elem` [Just Null,Just (toJSON unit)] &&
+    member entry "convention" == Just (toJSON convention) && member entry "safety" == Just (toJSON safety) &&
+    (member entry "isFunction" == Just (Bool True) || convention == "capi" && member entry "isFunction" == Just (Bool False)) &&
+    (convention /= "ccall" || declaredSymbol == symbol) &&
+    (case member entry "header" of Just Null -> True; Just (String header) -> validHeader (T.unpack header); _ -> False))
+    "package native declaration differs from emitted ABI"
+  require (identifier symbol && member emitted "unit" == Just (toJSON unit) &&
+    convention `elem` ["ccall", "capi"] && safety `elem` ["unsafe","safe","interruptible"] &&
+    not (null arguments) && last arguments == "void" && all inputCarrier (init arguments))
+    "package native call has malformed static C/CAPI metadata"
+  result <- case results of
+    ["void"] -> Right "void"
+    ["void", result] | scalarCarrier result -> Right result
+    _ -> Left "package native call requires State with zero or one scalar result"
+  pure (symbol,convention,safety,init arguments,result)
+
+requireKeys :: Value -> [String] -> Either String ()
+requireKeys (Object value) keys = require (sort (map Key.toString (KM.keys value)) == sort keys)
+  "package native provenance record fields differ"
+requireKeys _ _ = Left "package native provenance record is not an object"
+
+nativeIdentity :: Value -> Either String ()
+nativeIdentity value = do
+  requireKeys value ["unit","module","occurrence","namespace"]
+  forM_ ["unit","module","occurrence","namespace"] $ \key -> do
+    name <- field value key :: Either String String
+    require (not (null name) && '\0' `notElem` name) "invalid package native name"
+  require (member value "namespace" `elem` map (Just . toJSON) (["type","value","data"]::[String])) "invalid package native namespace"
+
+nativeType :: Int -> Value -> Either String ()
+nativeType depth value = case member value "kind" of
+  Just "tycon" -> do
+    requireKeys value ["kind","name","arguments"]
+    field value "name" >>= nativeIdentity
+    arguments <- field value "arguments" :: Either String [Value]
+    mapM_ (nativeType depth) arguments
+  Just "application" -> children ["function","argument"]
+  Just "function" -> children ["multiplicity","argument","result"]
+  Just "forall" -> do
+    requireKeys value ["kind","binderKind","body"]
+    field value "binderKind" >>= nativeType depth
+    field value "body" >>= nativeType (depth + 1)
+  Just "bound-variable" -> do
+    requireKeys value ["kind","index"]
+    index <- field value "index"
+    require (index >= (0::Int) && index < depth) "free package native import type variable"
+  _ -> Left "invalid package native import type"
+  where children keys = do
+          requireKeys value ("kind":keys)
+          mapM_ (\key -> field value key >>= nativeType depth) keys
+
+supportedSignature :: Signature -> Bool
+supportedSignature (_,_,safety,arguments,result) = safety == "unsafe" ||
+  safety == "safe" && all (\rep -> scalarCarrier rep && rep /= "AddrRep") arguments && result /= "AddrRep"
+
+setMember :: String -> Value -> Value -> Value
+setMember name value (Object fields) = Object (KM.insert (Key.fromString name) value fields)
+setMember _ _ value = value
 
 emptyForeign :: Value -> Bool
 emptyForeign value = member value "schema" == Just (toJSON (1::Int)) &&
@@ -227,15 +334,18 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
       value <- get response "core"
       check (member value "unit" == Just (toJSON unit) && member value "module" == Just (toJSON (name::String)))
         "package native retained interface identity differs"
-      writeJson path value
-      pure value
+      archived <- either fail pure (archiveNativeModule unit value)
+      writeJson path archived
+      pure archived
     signatures <- either fail pure (nativeSignatures unit retained)
+    when (null signatures) $ writeJson (directory </> "native.json")
+      (object ["unit" .= unit,"archiveOnly" .= True])
     unless (null signatures) $ do
-      sources <- mapM stubSource retained
       perModule <- mapM (either fail pure . nativeSignatures unit . (:[])) retained
+      sources <- mapM (\(value,signatures') -> if null signatures' then pure "" else stubSource value)
+        (zip retained perModule)
       let nativeDirectory = directory </> "native"
-      imports <- concat <$> mapM (\value -> maybe (pure []) (\proof -> get proof "imports")
-        (member value "staticForeignImports")) retained
+      imports <- concat <$> mapM (either fail pure . nativeImports unit) retained
       let signedVariants symbol = length (nub [map pointerAbi arguments' |
             (name,_,_,arguments',_) <- signatures, name == symbol]) > 1
           pointerAbi value | value `elem` ["ByteArray#","MutableByteArray#"] = "AddrRep"
@@ -343,6 +453,12 @@ finishPackageNative pieces directory unit currentObjects modules = do
   if not exists then pure modules else do
     record <- readJson receipt
     check (member record "unit" == Just (toJSON unit)) "package native receipt owner differs"
+    if member record "archiveOnly" == Just (Bool True) then do
+      check (case record of Object fields -> KM.size fields == 2; _ -> False) "invalid archive-only native receipt"
+      pure modules
+    else finish record
+  where
+   finish record = do
     roots <- get record "objectRoots" :: IO [FilePath]
     root <- get record "root"
     target <- get record "target"
@@ -401,14 +517,15 @@ finishPackageNative pieces directory unit currentObjects modules = do
     externals <- unresolved
     -- Memory operations are supplied by Sulong/libc. Scalar native libm is an
     -- explicit embedded-LLVM provider, never a managed-pointer native fallback.
-    check (all (\name -> name `elem` (["memcpy","memmove","memset","memcmp","bcmp"] ++ nativeMathSymbols) || "llvm." `isPrefixOf` name) externals)
-      ("package native unresolved dependencies: " ++ show externals)
+    let unsupported = [name | name <- externals,
+          name `notElem` (["memcpy","memmove","memset","memcmp","bcmp"] ++ nativeMathSymbols),
+          not ("llvm." `isPrefixOf` name)]
     let math = filter (`elem` nativeMathSymbols) externals
         finalIR = directory </> "native/final.ll"
     _ <- command directory opt ["-S","-passes=verify",final,"-o",finalIR]
     ir <- readFile finalIR
     either fail pure (validateNativeIR ir)
-    (artifact,format,libraries) <- if null math then pure (final,"llvm-bitcode",[]) else do
+    (artifact,format,libraries) <- if null math || not (null unsupported) then pure (final,"llvm-bitcode",[]) else do
       check ("-linux-gnu" `isSuffixOf` target) "native scalar libm provider currently requires Linux"
       either fail pure (validateNativeMathIR math ir)
       clang <- tool "THC_CLANG" "clang"
@@ -431,8 +548,17 @@ finishPackageNative pieces directory unit currentObjects modules = do
     forM modules $ \(name,bytes') -> do
       value <- either fail pure (eitherDecodeStrict' bytes')
       case value of
-        Object fields -> pure (name, BL.toStrict (encode (Object
-          (if any (owned unit) (calls value) then KM.insert "packageNativeLink" proof fields else fields))))
+        Object fields -> do
+          let prior = member value "packageNativeArchive"
+              unclassified = prior >>= (`member` "unclassifiedReason")
+              ownsCalls = any (owned unit) (calls value)
+          next <- if not ownsCalls || maybe False (/= Null) unclassified then pure value
+            else if null unsupported then pure (Object (KM.insert "packageNativeLink" proof fields))
+            else do
+              excluded <- maybe (pure []) (\archive -> get archive "unsupportedImports") prior
+              pure (setMember "packageNativeArchive"
+                (archiveRecord value excluded Nothing unsupported (Just proof)) value)
+          pure (name, BL.toStrict (encode next))
         _ -> fail "package native Core module is not an object"
 
 compileC :: FilePath -> FilePath -> [String] -> FilePath -> Maybe String -> IO (FilePath,String,Value)
@@ -478,7 +604,7 @@ compileC compiler root original directory generated = do
 calls :: Value -> [Value]
 calls (Object fields) = maybe [] (:[]) (KM.lookup "foreignCall" fields) ++
   concatMap calls [value | (key,value) <- KM.toList fields,
-    key `notElem` ["staticForeignImports","staticForeignImportStubs","packageNativeLink"]]
+    key `notElem` ["staticForeignImports","staticForeignImportStubs","packageNativeLink","packageNativeArchive"]]
 calls (Array values) = concatMap calls values
 calls _ = []
 owned :: String -> Value -> Bool

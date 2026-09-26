@@ -23,6 +23,34 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
   , TestCase $ assertEqual "same-unit inlining contributes no invented declarations"
       (nativeSignatures "fixture-unit" [moduleWith [ordinary]])
       (nativeSignatures "fixture-unit" [moduleWith [ordinary],object ["unit" .= ("fixture-unit"::String)]])
+  , TestCase $ do
+      let blocked = changeEmitted "safety" "safe" (entry "blocked" "ccall" ["AddrRep","void"] ["void","WordRep"])
+          original = moduleWith [ordinary,blocked]
+      case archiveNativeModule "fixture-unit" original of
+        Left message -> assertFailure message
+        Right archived -> do
+          assertEqual "original typed declaration inventory is not rewritten" (lookupField "staticForeignImports" original)
+            (lookupField "staticForeignImports" archived)
+          assertBool "unsupported safe pointer retained explicitly" (lookupField "packageNativeArchive" archived /= Nothing)
+          assertEqual "supported declaration in the same module still receives its adapter"
+            (nativeSignatures "fixture-unit" [moduleWith [ordinary]]) (nativeSignatures "fixture-unit" [archived])
+      mapM_ (\bad -> assertBool "malformed companion cannot become unsupported" (isLeft (archiveNativeModule "fixture-unit" bad)))
+        [changeProof "expectedCalls" (toJSON [object []]) original,
+         changeProof "profile" "invented" original,
+         moduleWith [blocked,changeEmitted "safety" "invented" ordinary],
+         moduleWith [blocked,set "normalizedType" (object []) ordinary],
+         moduleWith [blocked,entry "bad" "ccall" ["WordRep"] ["void","WordRep"]]]
+  , TestCase $ do
+      let unclassified reason = set "staticForeignImports" (object
+            ["schema" .= (1::Int),"scope" .= ("retained-static-import-products"::String),
+             "execution" .= ("not-linked"::String),"profile" .= ("ghc-9.14.1-thc-only-static-c-imports-v1"::String),
+             "unit" .= ("fixture-unit"::String),"module" .= ("Fixture"::String),
+             "status" .= ("unclassified"::String),"reason" .= (reason::String)]) (moduleWith [])
+      assertBool "known non-static declaration is honestly archived"
+        (not (isLeft (archiveNativeModule "fixture-unit" (unclassified "non-static-c-import-declaration"))))
+      mapM_ (\reason -> assertBool "unknown pipeline/probe failures remain fatal"
+        (isLeft (archiveNativeModule "fixture-unit" (unclassified reason))))
+        ["unclassified-plugin-or-hook-pipeline","stock-import-emitter-did-not-complete-cleanly","invented"]
   , TestCase $ mapM_ (\value -> assertBool "unsupported native boundary rejected"
       (isLeft (nativeSignatures "fixture-unit" [moduleWith [value]])))
       [ entry "wrong" "ccall" ["WordRep"] ["void","WordRep"]
@@ -121,13 +149,22 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
     ordinary = entry "identity" "ccall" ["WordRep","void"] ["void","WordRep"]
 
 entry :: String -> String -> [String] -> [String] -> Value
-entry symbol convention arguments result = object ["isFunction" .= False,"emitted" .= object
+entry symbol convention arguments result = object ["isFunction" .= True,"symbol" .= symbol,
+  "unit" .= Null,"header" .= Null,"convention" .= convention,"safety" .= ("unsafe"::String),
+  "binder" .= object ["unit" .= ("fixture-unit"::String),"module" .= ("Fixture"::String),
+    "occurrence" .= symbol,"namespace" .= ("value"::String)],
+  "declaredType" .= ty,"normalizedType" .= ty,"normalizationRole" .= ("representational"::String),"emitted" .= object
   ["symbol" .= symbol,"unit" .= ("fixture-unit"::String),"convention" .= convention,
    "safety" .= ("unsafe"::String),"arguments" .= arguments,"result" .= result]]
+  where ty = object ["kind" .= ("tycon"::String),"arguments" .= ([]::[Value]),"name" .= object
+          ["unit" .= ("ghc-internal"::String),"module" .= ("GHC.Internal.Word"::String),
+           "occurrence" .= ("Word"::String),"namespace" .= ("type"::String)]]
 
 moduleWith :: [Value] -> Value
-moduleWith imports = object ["unit" .= ("fixture-unit"::String),"staticForeignImports" .= object
+moduleWith imports = object ["unit" .= ("fixture-unit"::String),"module" .= ("Fixture"::String),"staticForeignImports" .= object
   ["schema" .= (1::Int),"status" .= ("verified"::String),"unit" .= ("fixture-unit"::String),
+   "module" .= ("Fixture"::String),"scope" .= ("retained-static-import-products"::String),"execution" .= ("not-linked"::String),
+   "profile" .= ("ghc-9.14.1-thc-only-static-c-imports-v1"::String),"wordBits" .= (64::Int),
    "expectedForeign" .= emptyArchive,"expectedCalls" .= ([]::[Value]),"imports" .= imports]]
 
 emptyArchive :: Value
@@ -139,7 +176,7 @@ set key value (Object fields) = Object (KM.insert (Key.fromString key) value fie
 set _ _ _ = error "test metadata must be an object"
 
 changeEmitted :: String -> Value -> Value -> Value
-changeEmitted key value = change "emitted" key value
+changeEmitted key value = (if key == "safety" then set key value else id) . change "emitted" key value
 changeProof :: String -> Value -> Value -> Value
 changeProof key value = change "staticForeignImports" key value
 change :: String -> String -> Value -> Value -> Value
@@ -147,3 +184,7 @@ change outer key value original@(Object fields) = case KM.lookup (Key.fromString
   Just inner -> set outer (set key value inner) original
   Nothing -> error "test metadata field is required"
 change _ _ _ _ = error "test metadata must be an object"
+
+lookupField :: String -> Value -> Maybe Value
+lookupField key (Object fields) = KM.lookup (Key.fromString key) fields
+lookupField _ _ = Nothing

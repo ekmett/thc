@@ -1,0 +1,4 @@
+packages: mixed unresolved
+jobs: 1
+tests: False
+benchmarks: False

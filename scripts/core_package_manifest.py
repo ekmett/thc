@@ -330,8 +330,124 @@ def managed_import_stubs(module):
     return True
 
 
-def package_scalar_link(module):
+def native_archive_calls(value):
+    if isinstance(value, dict):
+        return ([value['foreignCall']] if 'foreignCall' in value else []) + sum((native_archive_calls(v) for v in value.values()), [])
+    if isinstance(value, list): return sum((native_archive_calls(v) for v in value), [])
+    return []
+
+
+def package_native_archive(module):
+    """Validate original unsupported obligations without granting execution."""
+    if 'packageNativeArchive' not in module: return None
+    def require(ok, reason):
+        if not ok: raise ValueError('Invalid package native archive: ' + reason)
+    def record(value, fields):
+        require(isinstance(value, dict) and set(value) == set(fields.split()), 'record fields')
+        return value
+    def text(value):
+        require(isinstance(value, str) and value and '\0' not in value, 'text')
+        return value
+    def sequence(value):
+        require(isinstance(value, list), 'list'); return value
+    def identity(value):
+        record(value, 'unit module occurrence namespace')
+        for item in value.values(): text(item)
+        require(value['namespace'] in ('value', 'type', 'data'), 'name namespace')
+        return value
+    def typ(value, depth=0):
+        require(isinstance(value, dict), 'type record')
+        kind = value.get('kind')
+        if kind == 'tycon':
+            record(value, 'kind name arguments'); identity(value['name'])
+            for item in sequence(value['arguments']): typ(item, depth)
+        elif kind in ('application', 'function'):
+            fields = 'function argument' if kind == 'application' else 'multiplicity argument result'
+            record(value, 'kind ' + fields)
+            for key in fields.split(): typ(value[key], depth)
+        elif kind == 'forall':
+            record(value, 'kind binderKind body'); typ(value['binderKind'], depth); typ(value['body'], depth + 1)
+        elif kind == 'bound-variable':
+            record(value, 'kind index'); require(type(value['index']) is int and 0 <= value['index'] < depth, 'free type variable')
+        else: require(False, 'unknown type')
+    def proof_identity(proof):
+        require(type(proof['schema']) is int and proof['schema'] == 1 and proof['scope'] == 'retained-static-import-products' and
+            proof['execution'] == 'not-linked' and proof['profile'] == 'ghc-9.14.1-thc-only-static-c-imports-v1' and
+            proof['unit'] == module['unit'] and proof['module'] == module['module'], 'typed provenance identity')
+    archive = record(module['packageNativeArchive'],
+        'schema profile execution unit module unsupportedImports unclassifiedReason unresolvedSymbols artifact')
+    unit = text(module.get('unit'))
+    require(type(archive['schema']) is int and archive['schema'] == 1 and archive['profile'] == 'thc-package-native-archive-v1' and
+        archive['execution'] == 'not-linked' and archive['unit'] == unit and archive['module'] == module.get('module'), 'profile/owner')
+    require('foreignLink' not in module and 'packageScalarLink' not in module, 'mixed foreign profiles')
+    unknown, proof = archive['unclassifiedReason'], module.get('staticForeignImports')
+    require(unknown in (None, 'non-static-c-import-declaration'), 'unclassified reason')
+    scalar = ('IntRep', 'WordRep', 'Int8Rep', 'Word8Rep', 'Int16Rep', 'Word16Rep', 'Int32Rep', 'Word32Rep',
+              'Int64Rep', 'Word64Rep', 'FloatRep', 'DoubleRep', 'AddrRep')
+    emitted_imports = []
+    if unknown is not None:
+        record(proof, 'schema scope execution profile unit module status reason'); proof_identity(proof)
+        require(proof['status'] == 'unclassified' and proof['reason'] == unknown, 'unclassified provenance')
+    elif proof is None:
+        require('foreign' not in module and 'staticForeignImportStubs' not in module, 'missing import provenance')
+    else:
+        record(proof, 'schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls')
+        proof_identity(proof)
+        require(proof['status'] == 'verified' and type(proof['wordBits']) is int and proof['wordBits'] == 64, 'verified import profile')
+        product = record(proof['expectedForeign'], 'schema execution stubs files')
+        require(type(product['schema']) is int and product['schema'] == 1 and product['execution'] == 'not-linked' and product['files'] == [], 'foreign product')
+        if product['stubs'] is not None:
+            stubs = record(product['stubs'], 'header source initializers finalizers')
+            require(stubs['header'] == '' and isinstance(stubs['source'], str) and stubs['initializers'] == [] and stubs['finalizers'] == [], 'foreign stub obligations')
+            require('foreign' in module or stubs['source'] == '', 'missing retained stubs')
+        require('foreign' not in module or module['foreign'] == product, 'retained product differs')
+        require(proof['expectedCalls'] == native_archive_calls(module.get('bindings')), 'retained Core inventory differs')
+        binders = []
+        for entry in sequence(proof['imports']):
+            record(entry, 'binder header symbol unit isFunction convention safety declaredType normalizedType normalizationRole emitted')
+            binder = identity(entry['binder'])
+            require(binder['unit'] == unit and binder['module'] == module['module'] and binder['namespace'] == 'value' and binder not in binders, 'import binder')
+            binders.append(binder); text(entry['symbol'])
+            require(entry['header'] is None or isinstance(entry['header'], str) and text(entry['header']) and
+                not any(char in entry['header'] for char in '\n\r"\\'), 'import header')
+            require(entry['unit'] in (None, unit) and entry['convention'] in ('ccall', 'capi') and
+                (entry['isFunction'] is True or entry['convention'] == 'capi' and entry['isFunction'] is False) and
+                entry['safety'] in ('unsafe', 'safe', 'interruptible') and entry['normalizationRole'] == 'representational', 'import metadata')
+            typ(entry['declaredType']); typ(entry['normalizedType'])
+            emitted = record(entry['emitted'], 'symbol unit convention safety arguments result')
+            require(re.fullmatch('[A-Za-z_][A-Za-z0-9_]*', text(emitted['symbol'])) and emitted['unit'] == unit and
+                emitted['convention'] == entry['convention'] and emitted['safety'] == entry['safety'], 'emitted identity')
+            args, result = sequence(emitted['arguments']), sequence(emitted['result'])
+            require(args and args[-1] == 'void' and all(rep in scalar + ('ByteArray#', 'MutableByteArray#') for rep in args[:-1]) and
+                (result == ['void'] or len(result) == 2 and result[0] == 'void' and result[1] in scalar), 'emitted carriers')
+            emitted_imports.append(emitted)
+    require('staticForeignImportStubs' not in module or module['staticForeignImportStubs'] == proof, 'retained stub provenance differs')
+    expected = [entry for entry in emitted_imports if entry['safety'] == 'interruptible' or entry['safety'] == 'safe' and
+        (any(rep not in scalar or rep == 'AddrRep' for rep in entry['arguments'][:-1]) or entry['result'][-1] == 'AddrRep')]
+    require(sequence(archive['unsupportedImports']) == expected, 'unsupported import inventory differs')
+    unresolved = [text(value) for value in sequence(archive['unresolvedSymbols'])]
+    require(len(set(unresolved)) == len(unresolved), 'duplicate unresolved symbols')
+    artifact = archive['artifact']
+    require((artifact is None) == (not unresolved), 'unresolved artifact pair')
+    require(unknown is not None or expected or unresolved, 'empty archive obligation')
+    if artifact is not None:
+        require('packageNativeLink' not in module and unknown is None, 'archive is also executable')
+        package_scalar_link(dict(module, packageNativeLink=artifact), validate_archive=False)
+    return archive
+
+
+def native_archive_blocks(module, binding, archive):
+    if archive['unclassifiedReason'] is not None or archive['unresolvedSymbols']: return True
+    return any(isinstance(call, dict) and isinstance(call.get('target'), dict) and
+        call['target'].get('unit') == module['unit'] and any(
+            call['target'].get('symbol') == emitted['symbol'] and call.get('convention') == emitted['convention'] and
+            call.get('safety') == emitted['safety'] for emitted in archive['unsupportedImports'])
+        for call in native_archive_calls(binding))
+
+
+def package_scalar_link(module, validate_archive=True):
     """Verify the original scalar profile or package-owned typed C/capi calls."""
+    if validate_archive: package_native_archive(module)
     native = 'packageNativeLink' in module
     if not native and 'packageScalarLink' not in module:
         return None
@@ -462,6 +578,7 @@ def package_scalar_link(module):
     binders, proved = [], set()
     for item in proof['imports']:
         record(item, 'binder header symbol unit isFunction convention safety declaredType normalizedType normalizationRole emitted')
+        if item['emitted'] in module.get('packageNativeArchive', {}).get('unsupportedImports', []): continue
         binder = identity(item['binder'])
         require(binder['unit'] == unit and binder['module'] == module.get('module') and binder['namespace'] == 'value' and binder not in binders, 'import binder')
         binders.append(binder)
@@ -491,6 +608,8 @@ def package_scalar_link(module):
 
 def foreign_execution_issue(module):
     """Explain a valid archive-only foreign marker without admitting it as Core."""
+    if 'packageNativeArchive' in module:
+        return f"Unsupported foreign execution for {module.get('unit')}:{module.get('module')}: archive-only package native obligations"
     if 'foreignLink' in module and linked_foreign(module):
         return None
     foreign = module.get('foreign')
@@ -556,6 +675,9 @@ def validate_package_scalar_call(call, abi, unit, arguments, flags, output):
 
 def validate_archive_only_foreign(module):
     """Mirror the JVM's schema-2 archive shape; this never registers code."""
+    if 'packageNativeArchive' in module:
+        package_native_archive(module)
+        if module.get('schema') == 1 and 'foreign' not in module: return
     foreign = module['foreign']
     def record(value, keys):
         if not isinstance(value, dict) or set(value) != keys:
@@ -755,6 +877,9 @@ def _load(path, audit_archives):
                 executable = bool(package_scalar_link(module)) or executable
             elif 'staticForeignImportStubs' in module:
                 executable = managed_import_stubs(module) or executable
+            if 'packageNativeArchive' in module:
+                package_native_archive(module)
+                executable = False
             if not executable:
                 detail = foreign_execution_issue(module)
                 if audit_archives and detail:

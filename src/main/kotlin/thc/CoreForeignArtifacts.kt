@@ -187,6 +187,9 @@ internal object CoreForeignArtifacts {
 
     fun requireExecutable(module: Map<*, *>) {
         validateArchive(module)
+        require(!module.containsKey("packageNativeArchive")) {
+            "Archive-only package native obligations require strict entry reachability"
+        }
         require(version(module["schema"], 1) || linked(module) != null || PackageScalarLinks.read(module) != null || ManagedImportAdmission.read(module) != null) {
             "Unsupported foreign code/registration for ${module["unit"]}:${module["module"]}: " +
                 "Core schema 2 is archive-only; native stubs, initializers, finalizers and callbacks are not linked"

@@ -10,6 +10,53 @@ import java.util.HexFormat
 
 /** Structural controls only: these bytes are never parsed as LLVM or called. */
 class PackageScalarLinksTest {
+    @Test fun nativeArchiveKeepsMixedDeclarationsButNeverAdmitsTheirUnsupportedEffects() {
+        val base = module()
+        val scalar = base["packageScalarLink"] as Map<String, Any?>
+        val entry = (scalar["abi"] as List<Map<String, Any?>>).single()
+        val link = scalar + mapOf("profile" to "thc-package-c-ffi-v1", "abi" to listOf(entry + mapOf(
+            "entry" to "thc_native_${"a".repeat(64)}_0", "convention" to "ccall", "safety" to "unsafe")))
+        val proof = base["staticForeignImports"] as Map<String, Any?>
+        val original = (proof["imports"] as List<Map<String, Any?>>).single()
+        val binder = original["binder"] as Map<String, Any?>
+        val emitted = mapOf("symbol" to "blocked", "unit" to base["unit"], "convention" to "ccall", "safety" to "safe",
+            "arguments" to listOf("AddrRep", "void"), "result" to listOf("void", "Int32Rep"))
+        val blocked = original + mapOf("symbol" to "blocked", "safety" to "safe", "binder" to (binder + ("occurrence" to "blocked")), "emitted" to emitted)
+        val call = mapOf("target" to mapOf("unit" to base["unit"], "symbol" to "blocked"), "convention" to "ccall", "safety" to "safe")
+        val goodId = "scalar-fixture:Scalar.good"
+        val badId = "scalar-fixture:Scalar.bad"
+        val bindings = listOf(mapOf("id" to goodId, "expr" to listOf("lit", "int", 7L)),
+            mapOf("id" to badId, "expr" to listOf("lit", "int", 0L, mapOf("foreignCall" to call))))
+        val archive = mapOf("schema" to 1L, "profile" to "thc-package-native-archive-v1", "execution" to "not-linked",
+            "unit" to base["unit"], "module" to base["module"], "unsupportedImports" to listOf(emitted),
+            "unclassifiedReason" to null, "unresolvedSymbols" to emptyList<String>(), "artifact" to null)
+        val mixedProof = proof + mapOf("imports" to listOf(original, blocked), "expectedCalls" to listOf(call))
+        val mixed = (base - "packageScalarLink") + mapOf("packageNativeLink" to link, "packageNativeArchive" to archive,
+            "staticForeignImports" to mixedProof, "bindings" to bindings)
+        val merged = CoreModules.merge(listOf(mixed))
+        assertEquals(setOf("thc_native_${"a".repeat(64)}_0"), PackageScalarLinks.read(mixed)!!.proved)
+        assertEquals(listOf(bindings.first()), CoreModules.reachable(merged, goodId, true)["bindings"])
+        val failure = assertThrows(IllegalArgumentException::class.java) { CoreModules.reachable(merged, badId, true) }
+        assertTrue(failure.message!!.contains("archive-only"))
+        assertThrows(IllegalArgumentException::class.java) { CoreForeignArtifacts.requireExecutable(mixed) }
+        for (bad in listOf(
+            mixed + ("packageNativeArchive" to (archive + ("unsupportedImports" to emptyList<Any>()))),
+            mixed + ("staticForeignImports" to (mixedProof + ("expectedCalls" to emptyList<Any>()))),
+            mixed + ("staticForeignImports" to (mixedProof + ("imports" to listOf(original, blocked + ("normalizedType" to emptyMap<Any, Any>()))))),
+            mixed + ("packageNativeLink" to (link + ("bitcodeSha256" to "0".repeat(64))))))
+            assertThrows(IllegalArgumentException::class.java) { CoreModules.merge(listOf(bad)) }
+
+        val unresolved = (mixed - "packageNativeLink") + ("packageNativeArchive" to (archive + mapOf(
+            "unresolvedSymbols" to listOf("unknown_external"), "artifact" to link)))
+        assertEquals(emptyList<Any>(), CoreModules.merge(listOf(unresolved))["packageScalarLinks"])
+        assertThrows(IllegalArgumentException::class.java) {
+            CoreModules.reachable(CoreModules.merge(listOf(unresolved)), goodId, true)
+        }
+        val invalid = unresolved + ("packageNativeArchive" to (archive + mapOf("unresolvedSymbols" to listOf("unknown_external"),
+            "artifact" to (link + ("bitcodeHex" to "4342")))))
+        assertThrows(IllegalArgumentException::class.java) { CoreModules.merge(listOf(invalid)) }
+    }
+
     private fun module(unit: String = "scalar-fixture", name: String = "Scalar",
         digest: String = (if (unit == "scalar-fixture") "a" else "b").repeat(64)): Map<String, Any?> {
         val bytes = byteArrayOf(0x42, 0x43)

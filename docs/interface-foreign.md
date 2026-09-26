@@ -143,6 +143,27 @@ result resumption and exceptional cleanup in interpreted and compiled entries.
 This tranche does not claim interruptible native blocking calls, callbacks,
 bound OS threads or native errno behavior.
 
+Acquisition may retain unsupported package-native obligations in
+`packageNativeArchive` (`thc-package-native-archive-v1`, `execution=not-linked`).
+The original import declarations, emitted calls and foreign products remain
+unchanged. A verified declaration inventory records the exact excluded emitted
+signatures; supported imports in the same module can still receive their real
+compiled adapters. Reachability rejects bindings containing an excluded call
+before evaluation. An unclassified non-static declaration inventory is honestly
+module-wide, as is a component whose verified LLVM retains unresolved external
+symbols. The latter preserves its actual compiled artifact and build inputs,
+including the checked artifact digest, but does not load it into Sulong.
+
+Only recognized unsupported cases enter this path. Malformed import metadata,
+changed retained products, compiler failures, invalid LLVM, stale object receipts
+and artifact/hash failures remain fatal. Initializers, finalizers and additional
+foreign files retain their existing global admission checks. A published
+acquisition manifest is still not a successful reachable audit or guest run.
+The `package-native-archives` fixture group builds real mixed-import and
+unresolved-component packages; its native oracle performs the excluded effect,
+while `packageNativeArchivesDefault` and `packageNativeArchivesDense` verify
+supported calls and rejection before that effect in both runtimes.
+
 Four primitive bit-pattern entrypoints using the original erf package's public API
 pass the strict reachable audit and match 88 native observations, including
 signed zeros, subnormals, infinities and NaNs, in interpreted and first-installed

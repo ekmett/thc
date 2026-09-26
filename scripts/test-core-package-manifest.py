@@ -51,6 +51,36 @@ class PackageNativeVariantsTest(unittest.TestCase):
         _, partial = core_package_manifest.package_scalar_link(module)
         self.assertEqual(1, len(partial), 'one symbol does not prove both semantic variants')
 
+    def test_archive_preserves_mixed_imports_and_checks_unresolved_artifact_bytes(self):
+        import copy
+        module = self.module(['WordRep'])
+        proof = module['staticForeignImports']
+        blocked = copy.deepcopy(proof['imports'][0])
+        blocked['binder']['occurrence'] = 'blocked'
+        blocked['symbol'] = blocked['emitted']['symbol'] = 'blocked'
+        blocked['safety'] = blocked['emitted']['safety'] = 'safe'
+        blocked['emitted']['arguments'] = ['AddrRep', 'void']
+        proof['imports'].append(blocked)
+        module['packageNativeArchive'] = dict(schema=1, profile='thc-package-native-archive-v1', execution='not-linked',
+            unit=module['unit'], module=module['module'], unsupportedImports=[blocked['emitted']],
+            unclassifiedReason=None, unresolvedSymbols=[], artifact=None)
+        link, proved = core_package_manifest.package_scalar_link(module)
+        self.assertEqual({link['abi'][0]['entry']}, proved)
+        archive = core_package_manifest.package_native_archive(module)
+        self.assertFalse(core_package_manifest.native_archive_blocks(module, {}, archive))
+        binding = dict(foreignCall=dict(target=dict(unit=module['unit'], symbol='blocked'), convention='ccall', safety='safe'))
+        self.assertTrue(core_package_manifest.native_archive_blocks(module, binding, archive))
+        for key, value in [('unsupportedImports', []), ('unclassifiedReason', 'invented'), ('schema', True)]:
+            bad = copy.deepcopy(module); bad['packageNativeArchive'][key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError): core_package_manifest.package_scalar_link(bad)
+        archived = copy.deepcopy(module)
+        archived['packageNativeArchive']['artifact'] = archived.pop('packageNativeLink')
+        archived['packageNativeArchive']['unresolvedSymbols'] = ['unknown_external']
+        self.assertIsNone(core_package_manifest.package_scalar_link(archived))
+        self.assertTrue(core_package_manifest.native_archive_blocks(archived, {}, archived['packageNativeArchive']))
+        archived['packageNativeArchive']['artifact']['bitcodeHex'] = '4342'
+        with self.assertRaisesRegex(ValueError, 'bitcode digest'): core_package_manifest.package_native_archive(archived)
+
     def test_conflicts_order_duplicates_and_erased_mutability_still_reject(self):
         for reps in (['AddrRep', 'WordRep'], ['ByteArray#', 'MutableByteArray#'],
                      ['ByteArray#', 'AddrRep'], ['AddrRep', 'AddrRep']):

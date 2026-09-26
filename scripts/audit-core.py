@@ -62,7 +62,9 @@ class Audit:
         self.retained_exports = []
         for source, module in modules:
             scalar_link = None
+            native_archive = None
             try:
+                native_archive = core_package_manifest.package_native_archive(module)
                 scalar_link = core_package_manifest.package_scalar_link(module)
                 if scalar_link:
                     link, proved = scalar_link
@@ -95,7 +97,7 @@ class Audit:
                 self.issue('module-format', None, source, str(error))
             linked = (type(module.get('schema')) is int and module['schema'] == 2 and
                       'foreignLink' in module and core_package_manifest.linked_foreign(module))
-            archive = core_package_manifest.foreign_execution_issue(module) if not linked and not scalar_link and not retained and not managed_imports else None
+            archive = core_package_manifest.foreign_execution_issue(module) if native_archive or (not linked and not scalar_link and not retained and not managed_imports) else None
             if archive:
                 try:
                     core_package_manifest.validate_archive_only_foreign(module)
@@ -124,7 +126,8 @@ class Audit:
                 else:
                     self.bindings[key] = binding
                     self.sources[key] = source
-                    if archive and not registration:
+                    if archive and not registration and (native_archive is None or
+                            core_package_manifest.native_archive_blocks(module, binding, native_archive)):
                         self.archive_bindings[key] = (source, archive)
             for constructor in module.get('constructors', []):
                 key = constructor.get('id')
