@@ -64,6 +64,15 @@ tests = TestLabel "actual native compiler receipts" $ TestList
       failed <- tryIOError (ensureNativeRecipes native dist [dist] compiler component (pure ()))
       assertBool "successful command without object is rejected" (isLeft failed)
       ensure
+      writeFile "cbits/second.c" "static int hidden_initializer_state;\n"
+      appendFile (root </> "proof.cabal") "  c-sources: cbits/second.c\n"
+      assertEqual "public declaration inventory retains both C sources"
+        ["cbits/proof.c", "cbits/second.c"] =<< componentNativeDeclarations component
+      before <- readIORef calls
+      omitted <- tryIOError ensure
+      assertBool "two declared sources cannot reuse one surviving object and receipt" (isLeft omitted)
+      assertEqual "unsupported declaration inventory rejects before rebuilding" before =<< readIORef calls
+      writePackage root True
       let child = dist </> "exe/exe-tmp"
       createDirectoryIfMissing True child
       writeFile (child </> "foreign.o") "other-component"

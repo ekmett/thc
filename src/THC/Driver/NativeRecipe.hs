@@ -93,6 +93,14 @@ ensureNativeRecipes :: FilePath -> FilePath -> [FilePath] -> FilePath -> Value -
 ensureNativeRecipes native dist roots compiler component rebuild = do
   objects <- componentNativeObjects native dist roots component
   declarations <- componentNativeDeclarations component
+  -- The declaration union must satisfy the bounded profile before consulting
+  -- warm objects. One surviving receipt cannot conceal a second missing TU.
+  unless (case declarations of
+    [] -> True
+    [source] -> takeExtension source == ".c" && not (isAbsolute source) &&
+      ".." `notElem` splitDirectories source
+    _ -> False)
+    (fail "native scalar profile requires exactly one declared relative C source; ambiguous conditional native branches are outside the profile")
   let receipts = native </> "cache/thc/native-recipes-v1"
   missing <- filterM (\path -> maybe True (const False) <$> readNativeRecipe receipts compiler path) objects
   unless (null missing && (null declarations || any ((== ".o") . takeExtension) objects)) $ do
