@@ -1767,6 +1767,13 @@ class Audit:
                         if registers == ['BoxedRep Nothing'] and isinstance(rep, dict) and rep.get('primReps') in (
                                 ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)']):
                             stored = dict(stored, primReps=rep['primReps'])
+                        # An erased STM newtype cast refines an opaque lifted
+                        # object to its function type without changing carrier,
+                        # levity or evaluatedness. Runtime forcing still checks
+                        # that the value is actually a closure.
+                        if (role == 'action' and isinstance(stored, dict) and stored.get('kind') == 'object' and
+                                stored.get('primReps') == ['BoxedRep (Just Lifted)']):
+                            stored = dict(stored, kind='closure')
                         if isinstance(registers, list) and (
                                 self.shape(stored) != self.shape(rep) or
                                 stored.get('kind') != 'unknown' and not mvar_role(stored, role)):
