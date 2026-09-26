@@ -76,6 +76,15 @@ Select LLVM tools with `THC_CLANG`, `THC_LLVM_LINK`, `THC_LLVM_OPT` and
 Linux x86_64 `pc` vendor alias is normalized to Sulong's `unknown` spelling;
 the observed native target remains in the recipe.
 
+Core bundle cache keys include the selected LLVM tool paths and executable
+contents, plus native include/SDK environment settings. Local component keys
+also include the exact currently owned C translation-unit receipts, captured
+source/header hashes and actual bitcode contents. Changed tools or a fresh C
+capture cannot reuse an older bundle just because Cabal's native objects are
+unchanged. Unrelated persistent receipts and dynamic-object twins do not add
+translation units. Missing LLVM tools are recorded without requiring them for
+pure-Haskell builds; acquisition diagnoses them when native code is needed.
+
 ## Legacy local package scalar C calls
 
 Previously emitted `packageScalarLink` bundles remain readable. New ordinary
