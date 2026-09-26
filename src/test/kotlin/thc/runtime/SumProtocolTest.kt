@@ -211,7 +211,7 @@ class SumProtocolTest {
             released(language)
         }
     }
-    @Test fun inferredSumCannotCrossOrdinaryArgumentBoundaryWhenOuterProofIsOmitted() = withLanguage { language ->
+    @Test fun inferredSumCannotEnterScalarFormalWhenOuterProofIsOmitted() = withLanguage { language ->
         for(backend in listOf("ast","bytecode")) for(explicitUnknown in listOf(false,true)) {
             val module=module()
             val lambda=binding(module,"sumCase")["expr"] as MutableList<Any?>
@@ -232,8 +232,14 @@ class SumProtocolTest {
             val function=listOf("lam",listOf(mapOf("id" to "ignored","lifted" to false,"rep" to scalar)),literal,
                 mapOf("rep" to closure,"resultRep" to scalar))
             lambda[2]=listOf("app",function,listOf(body),listOf(false),false,false,mapOf("rep" to scalar))
-            val error=assertThrows(UnsupportedCore::class.java) { program(language,module,"sumCase",backend) }
-            assertTrue(error.message.orEmpty().contains("unboxed-sum (argument)"),"$backend/$explicitUnknown: ${error.message}")
+            // Ordinary sum arguments now lower, including an inferred case result.
+            // The scalar callee still cannot accept that logical aggregate layout.
+            val p=program(language,module,"sumCase",backend)
+            val error=assertThrows(RuntimeFault::class.java) {
+                Calls.target(p.hostEntryTarget(1),arrayOf(p.entryValue("sumCase"),arrayOf(-1L)))
+            }
+            assertTrue(error.message.orEmpty().contains("logical tuple argument"),"$backend/$explicitUnknown: ${error.message}")
+            released(language)
         }
     }
     @Test fun intrinsicScalarColdArmCannotSatisfyAggregateResultWithoutMetadata() = withLanguage { language ->

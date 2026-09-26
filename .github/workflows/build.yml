@@ -119,6 +119,10 @@ jobs:
         run: |
           cabal run exe:thc-fixtures --offline -- tuple-join --local
           ./gradlew tupleJoinFullCoreTest tupleJoinFullCoreDenseTest
+      - name: Check original binary sum inputs and captures
+        run: |
+          cabal run exe:thc-fixtures --offline -- sum-input
+          ./gradlew sumInputFullCoreTest sumInputFullCoreDenseTest
       - name: Check Haskell calls into JavaScript
         run: |
           python3 scripts/test-polyglot-audit.py
@@ -353,6 +357,7 @@ jobs:
             build/aggregate-layout/
             build/sum-layout/
             build/sum-result/
+            build/sum-input/
             build/tuple-return/
             build/state-tuple/checks.json
             build/state-tuple/provenance.json

@@ -31,7 +31,12 @@ internal object ClosureInspection {
     fun image(value: Any?): ClosureImage {
         val payload = ArrayList<Any?>()
         val references = ArrayList<Boolean>()
-        fun field(value: Any?, reference: Boolean) { payload += value; references += reference }
+        fun field(value: Any?, reference: Boolean) {
+            // Inactive sum fields in typed PAPs and captures are null padding,
+            // never guest closure pointers. Keep their physical word position.
+            payload += if (reference && value == null) 0L else value
+            references += reference && value != null
+        }
         fun captures(environment: CapturedFrame?) {
             if (environment != null) for (index in 0 until environment.layout.storageSize)
                 field(environment.layout.inspect(environment, index), environment.layout.isObject(environment, index))

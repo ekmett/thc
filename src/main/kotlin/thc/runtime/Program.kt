@@ -2150,31 +2150,44 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         freeLocals.filter { outer.locals.getValue(it).let { local -> local.slot < 0 && local.proof.kind == CoreKind.VOID } }
             .forEach { scope.bindVoid(it, outer.locals.getValue(it).proof) }
         val captured = freeLocals.filter { outer.locals.getValue(it).let { local -> local.slot >= 0 || local.proof.kind != CoreKind.VOID } }
-        captured.forEach { id ->
+        val captureFields = arrayListOf<Local>()
+        val captureDestinations = arrayListOf<Int>()
+        val vectorDestinations = arrayListOf<IntArray?>()
+        for (id in captured) {
             val local = outer.locals.getValue(id)
-            if (local.proof.isVector) {
+            if (local.proof.isSum) {
+                CoreRepresentations.requireInput(local.proof)
+                val fields = ArgumentLayout.leaves(local.proof)
+                val sources = local.tupleSlots
+                if (local.cell || sources?.size != fields.size)
+                    throw UnsupportedCore("Sum capture requires exact typed locals")
+                // The sum remains a logical alias. Its owned capture consists of
+                // ordinary typed tag/payload properties, including nullable inactive refs.
+                val destinations = IntArray(fields.size) { index ->
+                    val field = fields[index]
+                    captureFields += Local(sources[index], field.isLong, field, false)
+                    vectorDestinations += null
+                    scope.layout.bind("$id captured sum field $index").also { captureDestinations += it }
+                }
+                scope.bindTuple(id, local.proof, destinations)
+            } else if (local.proof.isVector) {
                 CoreRepresentations.requireInput(local.proof)
                 if (local.cell || local.tupleSlots?.size != 1)
                     throw UnsupportedCore("Vector capture requires one raw-vector local")
-            } else CoreRepresentations.requireScalar(local.proof, "capture")
-        }
-        val captureSources = captured.flatMap { id ->
-            val local = outer.locals.getValue(id)
-            if (local.proof.isVector) local.tupleSlots!!.toList() else listOf(local.slot)
-        }.toIntArray()
-        val captureKinds = captured.map { id ->
-            val local = outer.locals.getValue(id)
-            !local.proof.isVector && local.primitive
-        }.toBooleanArray()
-        val environmentVectorSlots = arrayOfNulls<IntArray>(captured.size)
-        val environmentSlots = captured.mapIndexed { index, id ->
-            val local = outer.locals.getValue(id)
-            if (local.proof.isVector) {
                 val lanes = IntArray(1) { scope.layout.bind("$id captured vector") }
-                environmentVectorSlots[index] = lanes
-                scope.bindTuple(id, local.proof, lanes).slot
-            } else scope.bind(id, local.primitive, local.proof, local.cell, local.entry, local.arityCertificate).slot
-        }.toIntArray()
+                captureFields += local
+                vectorDestinations += lanes
+                captureDestinations += scope.bindTuple(id, local.proof, lanes).slot
+            } else {
+                CoreRepresentations.requireScalar(local.proof, "capture")
+                captureFields += local
+                vectorDestinations += null
+                captureDestinations += scope.bind(id, local.primitive, local.proof, local.cell, local.entry, local.arityCertificate).slot
+            }
+        }
+        val captureSources = captureFields.map { if (it.proof.isVector) it.tupleSlots!![0] else it.slot }.toIntArray()
+        val environmentSlots = captureDestinations.toIntArray()
+        val environmentVectorSlots = vectorDestinations.toTypedArray()
         val argumentSlots = arrayListOf<Int>(); val argumentIndices = arrayListOf<Int>()
         val argumentProofs = arrayListOf<CoreRepresentation>()
         for ((index, arg) in args.withIndex()) {
@@ -2182,7 +2195,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val proof = CoreRepresentations.binder(arg).let { if (lifted) it.copy(evaluated = entryStrict[index]) else it }
             if (proof.isTypedTransport) {
                 if (lifted) throw RuntimeFault("Typed formal cannot be lifted")
-                val fields = TupleShape.flatten(proof)
+                val fields = ArgumentLayout.leaves(proof)
                 val slots = IntArray(fields.size) { leaf -> scope.layout.bind("${arg["id"]} typed input $leaf") }
                 scope.bindTuple(arg["id"] as String, proof, slots)
                 fields.forEachIndexed { leaf, field ->
@@ -2195,12 +2208,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 argumentSlots += scope.bind(arg["id"] as String, !lifted && arg["coercion"] != true, proof).slot
             }
         }
-        val captures = if (captured.isEmpty()) null else CaptureLayout.withVectors(requireNotNull(language),
-            captured.map { id -> outer.locals.getValue(id).proof.takeIf { it.isVector } }.toTypedArray(), captureKinds,
-            captured.map { outer.locals.getValue(it).let { local -> !local.cell && local.proof.isLong && local.proof.evaluated } }.toBooleanArray(),
-            captured.map { outer.locals.getValue(it).let { local -> if (local.cell) null else local.proof.referenceCarrier() } }.toTypedArray(),
-            captured.map { outer.locals.getValue(it).let { local -> !local.cell && local.proof.isFloat && local.proof.evaluated } }.toBooleanArray(),
-            captured.map { outer.locals.getValue(it).let { local -> !local.cell && local.proof.isDouble && local.proof.evaluated } }.toBooleanArray())
+        val captures = if (captureFields.isEmpty()) null else CaptureLayout.withVectors(requireNotNull(language),
+            captureFields.map { it.proof.takeIf { proof -> proof.isVector } }.toTypedArray(),
+            captureFields.map { !it.proof.isVector && it.primitive }.toBooleanArray(),
+            captureFields.map { !it.cell && it.proof.isLong && it.proof.evaluated }.toBooleanArray(),
+            captureFields.map { if (it.cell) null else it.proof.referenceCarrier() }.toTypedArray(),
+            captureFields.map { !it.cell && it.proof.isFloat && it.proof.evaluated }.toBooleanArray(),
+            captureFields.map { !it.cell && it.proof.isDouble && it.proof.evaluated }.toBooleanArray())
         val allArgumentSlots = IntArray(args.size) { -1 }
         val allArgumentProofs = Array(args.size) { CoreRepresentation.UNKNOWN }
         args.forEachIndexed { index, arg ->
