@@ -347,7 +347,9 @@ prepareSimdByteArray root name args = do
       nativeSource = "compiler/test-fixtures" </> moduleName family ++ "Native.hs"
       stages = if exportOnly then ["pre"] else ["pre","post"]
   createDirectoryIfMissing True (root </> directory)
-  attempt <- makeRelative root <$> createTempDirectory (root </> directory) "prepare-run-"
+  -- Cabal returns the new directory's basename and appends its own hyphen.
+  -- Keep every receipt/artifact below this family's owned build directory.
+  attempt <- (directory </>) <$> createTempDirectory (root </> directory) "prepare-run"
   old <- doesFileExist (root </> provenancePath)
   when old $ do
     previous <- readJson (root </> provenancePath)

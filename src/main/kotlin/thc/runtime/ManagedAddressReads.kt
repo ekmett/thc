@@ -12,26 +12,31 @@ internal enum class ManagedAddressRead(val width: Int, val payload: String) {
     WORD32(4, "Word32Rep"), WIDE_CHAR(4, "WordRep"), WORD(8, "WordRep"), INT32(4, "Int32Rep"), INT(8, "IntRep"),
     WORD64(8, "Word64Rep"), INT64(8, "Int64Rep");
 
-    @JvmOverloads fun read(address: ManagedAddress, elementOffset: Long, byteOffset: Boolean = false): Long = address.withNativeBorrow {
-        // A live RTS Word32 cell is read once under the thread registry lock;
-        // composing four byte reads could observe a torn capability count.
-        address.readCapabilitiesWord32(elementOffset, width)?.let {
-            if (this != WORD32) fault("enabled_capabilities requires readWord32OffAddr#")
-            return@withNativeBorrow it
+    @JvmOverloads fun read(address: ManagedAddress, elementOffset: Long, byteOffset: Boolean = false): Long {
+        val result: Any = address.withNativeBorrow {
+            // A live RTS Word32 cell is read once under the thread registry lock;
+            // composing four byte reads could observe a torn capability count.
+            address.readCapabilitiesWord32(elementOffset, width)?.let {
+                if (this != WORD32) fault("enabled_capabilities requires readWord32OffAddr#")
+                return@withNativeBorrow it
+            }
+            val stride = if (byteOffset) 1 else width
+            if (elementOffset < Long.MIN_VALUE / stride || elementOffset > Long.MAX_VALUE / stride)
+                fault("Managed Addr# element offset overflow")
+            val displacement = elementOffset * stride
+            address.requireRange(displacement, width.toLong())
+            var value = 0L
+            for (byte in 0 until width) {
+                val shift = if (littleEndian) byte * 8 else (width - 1 - byte) * 8
+                value = value or (address.readWord8(displacement + byte) shl shift)
+            }
+            if (this == INT16) value.toShort().toLong()
+                else if (this == INT32) value.toInt().toLong()
+                else value
         }
-        val stride = if (byteOffset) 1 else width
-        if (elementOffset < Long.MIN_VALUE / stride || elementOffset > Long.MAX_VALUE / stride)
-            fault("Managed Addr# element offset overflow")
-        val displacement = elementOffset * stride
-        address.requireRange(displacement, width.toLong())
-        var value = 0L
-        for (byte in 0 until width) {
-            val shift = if (littleEndian) byte * 8 else (width - 1 - byte) * 8
-            value = value or (address.readWord8(displacement + byte) shl shift)
-        }
-        if (this == INT16) value.toShort().toLong()
-            else if (this == INT32) value.toInt().toLong()
-            else value
+        // The generic loan returns this operation's exact boxed carrier; do
+        // not widen its erased result to Number.longValue in guest graphs.
+        return if (result is Long) result.toLong() else fault("Invalid scalar address read result")
     }
 
     companion object {

@@ -4,6 +4,7 @@
 module Main (main) where
 
 import Control.Monad (foldM, when)
+import Data.Maybe (catMaybes, isNothing)
 import Distribution.Simple.Utils (topHandler)
 import Distribution.Types.Flag (mkFlagName)
 import System.Console.GetOpt
@@ -26,8 +27,6 @@ main = topHandler $ do
     "ghc-proxy" : rest -> runGhcProxy rest
     ["--help"] -> putStr usage
     ["plan-package", "--help"] -> putStr usage
-    ["run", "--help"] -> putStr runUsage
-    ["acquire", "--help"] -> putStr acquireUsage
     "plan-package" : rest -> case getOpt Permute options rest of
       (updates, targets, []) | length targets <= 1 -> do
         let opts = foldl (flip ($)) defaultPlanOptions updates
@@ -40,15 +39,22 @@ main = topHandler $ do
           acquire = command == "acquire"
           commandUsage = if acquire then acquireUsage else runUsage
       when (acquire && not (null suffix)) $ die "acquire does not accept guest arguments"
-      case getOpt Permute (if acquire then acquireOptions else runOptions) driverArgs of
+      case getOpt Permute (withHelp (if acquire then acquireOptions else runOptions)) driverArgs of
+        (updates, _, []) | any isNothing updates -> putStr commandUsage
         (updates, targets, []) | length targets <= 1 -> do
           opts <- either (die . (++ "\n" ++ commandUsage)) pure $
-            foldM (flip ($)) (RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing Nothing guestArgs) updates
+            foldM (flip ($)) (RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing Nothing guestArgs) (catMaybes updates)
           let selected = opts {runTarget = case targets of [] -> ""; [target] -> target; _ -> error "checked above"}
           current <- getCurrentDirectory
           if acquire then acquireProject selected current else runProject selected current
         (_, _, errors) -> die (concat errors ++ commandUsage)
     _ -> die usage
+
+-- Parse help as an option, so an option value literally named --help is not
+-- mistaken for a request. The guest suffix has already been split off.
+withHelp :: [OptDescr a] -> [OptDescr (Maybe a)]
+withHelp descriptors = Option ['h'] ["help"] (NoArg Nothing) "Show this help text" :
+  map (fmap Just) descriptors
 
 options :: [OptDescr (PlanOptions -> PlanOptions)]
 options =
@@ -86,11 +92,11 @@ liftPlanOption (Option shorts longs argument description) = Option shorts longs 
   where liftUpdate update run = Right run {runPlan = update (runPlan run)}
 
 runUsage :: String
-runUsage = usageInfo "Usage: thc run [TARGET] [FLAGS] [-- ARG...]\n\nResolve a Cabal runnable target, build and export its GHC main :: IO (), then audit and execute it in THC.\nTARGET uses Cabal syntax, including PACKAGE:exe:NAME, PACKAGE:test:NAME and PACKAGE:bench:NAME.\nWith no target, select the current package's sole buildable executable, otherwise its sole buildable runnable component.\nCabal reports ambiguous or disabled targets. Tests must be exitcode-stdio-1.0, not detailed library tests.\nArguments after -- are passed unchanged to the guest, including empty strings and option-looking arguments.\nUse --project-dir/--project-file for project location. The built native runnable is never executed.\n" runOptions
+runUsage = usageInfo "Usage: thc run [TARGET] [FLAGS] [-- ARG...]\n\nResolve a Cabal runnable target, build and export its GHC main :: IO (), then audit and execute it in THC.\nTARGET uses Cabal syntax, including PACKAGE:exe:NAME, PACKAGE:test:NAME and PACKAGE:bench:NAME.\nWith no target, select the current package's sole buildable executable, otherwise its sole buildable runnable component.\nCabal reports ambiguous or disabled targets. Tests must be exitcode-stdio-1.0, not detailed library tests.\nArguments after -- are passed unchanged to the guest, including empty strings and option-looking arguments.\nUse --project-dir/--project-file for project location. The built native runnable is never executed.\n" (withHelp runOptions)
 
 acquireOptions :: [OptDescr (RunOptions -> Either String RunOptions)]
 acquireOptions = [option | option@(Option _ names _ _) <- runOptions,
   not (any (`elem` ["runtime", "ffi"]) names)]
 
 acquireUsage :: String
-acquireUsage = usageInfo "Usage: thc acquire [TARGET] [FLAGS]\n\nResolve the same Cabal runnable target as run and export its dependency closure to DIST/packages.json.\nStops after atomic manifest publication: no reachable-Core audit, THC guest execution or native runnable invocation.\nThe manifest is acquisition evidence, not a claim of runtime support. No runtime launcher or guest arguments are needed.\n" acquireOptions
+acquireUsage = usageInfo "Usage: thc acquire [TARGET] [FLAGS]\n\nResolve the same Cabal runnable target as run and export its dependency closure to DIST/packages.json.\nStops after atomic manifest publication: no reachable-Core audit, THC guest execution or native runnable invocation.\nThe manifest is acquisition evidence, not a claim of runtime support. No runtime launcher or guest arguments are needed.\n" (withHelp acquireOptions)

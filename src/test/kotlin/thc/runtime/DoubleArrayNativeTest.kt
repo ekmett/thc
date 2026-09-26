@@ -162,7 +162,7 @@ class DoubleArrayNativeTest {
         val exact = movementPrimitives[name]
         if (exact == null) {
             require(evidence.primitiveCounts.keys.containsAll(requiredPrimitives)) { "$name lost a required primitive" }
-            return evidence.immediateStateCalls().toLong()
+            return evidence.loweredImmediateStateCalls().toLong()
         }
         require(exact == evidence.primitiveCounts) { "$name primitive movement changed" }
         val root = evidence.root["expr"] as List<Any?>
@@ -190,11 +190,11 @@ class DoubleArrayNativeTest {
             require(rep["aggregate"] == "unboxed-tuple" && rep["primReps"] == listOf("DoubleRep"))
             require(rep["components"] == listOf(mapOf("primReps" to emptyList<String>(), "kind" to "void", "evaluated" to true), lane))
         } else require(rep == lane)
-        return (evidence.guestLambdas(root).size + calls.size * evidence.guestLambdas(expr).size).toLong()
+        return (evidence.loweredStateLambdas(root).size + calls.size * evidence.guestLambdas(expr).size).toLong()
     }
     @Test fun corePrimitiveEvidenceRejectsMissingExtraAndWrongCounts() {
         for ((stage, paths) in manifest()["stages"] as Map<String, List<String>>) {
-            for (name in names) assertEquals(if (name in movementPrimitives) 3L else 2L,
+            for (name in names) assertEquals(if (name in movementPrimitives) 2L else 1L,
                 checkCore(ArrayCoreEvidence(merged(paths), name), name), "$stage/$name")
             for (name in names.take(2)) for (primitive in requiredPrimitives) {
                 val module = merged(paths); val evidence = ArrayCoreEvidence(module, name)
@@ -296,10 +296,8 @@ class DoubleArrayNativeTest {
                             val formals = expression[1] as List<Map<String, Any?>>
                             return "lambda ${formals.joinToString { it["name"].toString() }}"
                         }
-                        val rootExpression = bindings.single { it["name"] == name }["expr"] as List<*>
-                        val stateCall = rootExpression[2] as List<*>
-                        val expectedLabels = bindings.map { lambdaLabel(it["expr"] as List<*>) }.toSet() +
-                            lambdaLabel(stateCall[1] as List<*>)
+                        // The checked immediate runRW State# lambda is beta-reduced.
+                        val expectedLabels = bindings.map { lambdaLabel(it["expr"] as List<*>) }.toSet()
                         var targets = emptyList<RootCallTarget>()
                         fun count() = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                         fun check(compiled: Boolean) {
@@ -341,7 +339,7 @@ class DoubleArrayNativeTest {
     private fun paths() = (manifest()["stages"] as Map<String, List<String>>).getValue("pre")
     private fun owner(operation: ByteArrayOp) = if (operation == ByteArrayOp.INDEX_DOUBLE) "indexDoubleBits" else "moveDoubleBits"
 
-    @Test fun exactDoubleStateShapesAndSaturationAreRequiredInBothLoadModes() {
+    @Test fun longIndexAliasesExecuteWhileDoubleStateShapeAndSaturationGuardsRemain() {
         val paths = paths()
         for (backend in listOf("ast", "bytecode")) context(true).use { context ->
             context.initialize("thc"); context.enter()
@@ -376,7 +374,16 @@ class DoubleArrayNativeTest {
                             proof["primReps"] = listOf("FloatRep")
                         } else flags[1] = true
                     }
-                    assertThrows(RuntimeFault::class.java, {
+                    if (mutation == 6) {
+                        val name = owner(operation)
+                        val p = program(language, module + ("diagnosticUnsupported" to diagnostic), backend)
+                        for (seed in listOf(5L, 0L, Long.MIN_VALUE)) {
+                            assertEquals(model(name, seed),
+                                Calls.target(p.hostEntryTarget(1), arrayOf(p.entryValue(name), arrayOf(seed))),
+                                "$backend/$operation/mutation$mutation/$diagnostic/$seed")
+                            released(language)
+                        }
+                    } else assertThrows(RuntimeFault::class.java, {
                         program(language, module + ("diagnosticUnsupported" to diagnostic), backend)
                     }, "$backend/$operation/mutation$mutation/$diagnostic")
                 }

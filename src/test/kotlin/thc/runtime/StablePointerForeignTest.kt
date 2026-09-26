@@ -12,6 +12,8 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import org.junit.jupiter.api.io.TempDir
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import thc.Language
 import thc.PackageScalarLink
 import thc.PackageScalarSignature
@@ -51,7 +53,8 @@ class StablePointerForeignTest {
             else -> access.executeLong(frame.arguments, Unit)
         }
     }
-    @Test fun sulongStoresReturnsAndComparesOpaqueStablePointersAcrossCalls() {
+    @ParameterizedTest @ValueSource(strings = ["unsafe", "safe"])
+    fun sulongStoresReturnsAndComparesOpaqueStablePointersAcrossCalls(safety: String) {
         val bytes = Files.readAllBytes(compile(false))
         val sha = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))
         val abi = listOf(
@@ -61,6 +64,7 @@ class StablePointerForeignTest {
             PackageScalarSignature("stable_equal", "stable_equal", listOf("AddrRep", "AddrRep"), "Int32Rep"),
             PackageScalarSignature("stable_clear", "stable_clear", emptyList(), "void"),
             PackageScalarSignature("stable_unknown", "stable_unknown", emptyList(), "AddrRep"))
+            .map { it.copy(safety = safety) }
         val link = PackageScalarLink("stable-ffi-control", "test-host", sha, sha, bytes, abi)
         context().use { context ->
             context.initialize("thc"); context.enter()

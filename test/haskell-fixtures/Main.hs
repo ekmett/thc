@@ -65,6 +65,7 @@ import ProcessSignalFixtures (prepareProcessSignals)
 import SignalDispatchFixtures (prepareSignalDispatch)
 import RtsShutdownFixtures (prepareRtsShutdown)
 import OriginalGmpFixtures (prepareOriginalGmp)
+import MemorySearchFixtures (prepareMemorySearch)
 import OriginalFdReadyFixtures (prepareOriginalFdReady)
 import FileWaitFixtures (prepareFileWait)
 import OriginalRtsLocksFixtures (prepareOriginalRtsLocks)
@@ -77,6 +78,7 @@ import PackageScalarFixtures (preparePackageScalar)
 import PackageNativeOriginalsFixtures (preparePackageNativeOriginals)
 import PackageNativeArchiveFixtures (preparePackageNativeArchives)
 import GetEntropyFixtures (prepareGetEntropy)
+import WcwidthFixtures (prepareWcwidth)
 import HashableFfiFixtures (prepareHashableFfi)
 import OriginalTermiosFixtures (prepareOriginalTermios)
 import OriginalTcsetattrFixtures (prepareOriginalTcsetattr)
@@ -965,6 +967,7 @@ main = do
     ["package-native-originals"] -> preparePackageNativeOriginals root
     ["package-native-archives"] -> preparePackageNativeArchives root
     ["getentropy"] -> prepareGetEntropy root
+    ["wcwidth"] -> prepareWcwidth root
     ["hashable-ffi"] -> prepareHashableFfi root
     ["libdw-unavailable"] -> prepareLibdwUnavailable root
     ["original-termios"] -> prepareOriginalTermios root
@@ -977,6 +980,7 @@ main = do
     ["signal-dispatch"] -> prepareSignalDispatch root
     ["rts-shutdown"] -> prepareRtsShutdown root
     ["original-gmp"] -> prepareOriginalGmp root False
+    ["original-memory-search"] -> prepareMemorySearch root
     ["original-gmp", "--require-supported"] -> prepareOriginalGmp root True
     ["original-fd-ready"] -> prepareOriginalFdReady root
     ["file-wait"] -> prepareFileWait root

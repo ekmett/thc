@@ -189,6 +189,8 @@ tasks.withType<Test>().configureEach {
             "native-malloc/manifest.json", "native-malloc/oracle.txt",
             "process-signals/manifest.json", "process-signals/oracle.txt", "process-signals/native-controls.txt",
             "original-gmp/**/*.json", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
+            "original-memory-search/**/*.json", "original-memory-search/native/oracle",
+            "original-memory-search/logs/*.stdout", "original-memory-search/logs/*.stderr",
             "original-gmp/logs/*.stdout", "original-gmp/logs/*.stderr",
             "original-stdio-close/**/*.json", "original-stdio-close/results/*.txt", "original-stdio-close/results/*.private",
             "original-stdio-close/native/**", "original-stdio-close/logs/*.stdout", "original-stdio-close/logs/*.stderr",
@@ -637,6 +639,24 @@ for ((taskName, dense) in listOf("packageNativeOriginalsDefault" to false, "pack
         doFirst {
             check(file("build/original-native/manifest.json").isFile) {
                 "Missing original package fixtures: set THC_DIGEST_SOURCE, THC_ERF_SOURCE and THC_PRIMITIVE_SOURCE; run cabal run exe:thc-fixtures -- package-native-originals"
+            }
+        }
+    }
+}
+for ((taskName, dense) in listOf("wcwidthDefault" to false, "wcwidthDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Checks Tasty's exact wcwidth declaration and fallback against native locale-sensitive results."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        systemProperty("thc.handoffSlabs", dense.toString())
+        inputs.files(fileTree("build/wcwidth") { include("**/*.json", "*.tsv", "ConsoleReporter.hs", "TASTY-LICENSE") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.WcwidthTest") }
+        outputs.upToDateWhen { false }
+        doFirst {
+            check(file("build/wcwidth/manifest.json").isFile) {
+                "Set THC_TASTY_SOURCE and run cabal run exe:thc-fixtures -- wcwidth"
             }
         }
     }

@@ -11,11 +11,20 @@ import Data.Either (isLeft)
 import Data.List (isInfixOf)
 import Test.HUnit
 import THC.Driver.PackageNative
-import THC.Driver.NativeLibrarySources (validateNativeMathIR, validateNativeEntropyIR)
+import THC.Driver.NativeLibrarySources (validateNativeMathIR, validateNativeEntropyIR, validateNativeWidthIR)
 
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
-  [ TestCase $ assertEqual "CAPI values, byte arrays, pointers and void keep their emitted ABI"
+  [ TestCase $ do
+      let validate = validateNativeWidthIR "x86_64-unknown-linux-gnu"
+      mapM_ (assertEqual "exact signed wchar_t/int ABI" (Right ()) . validate)
+        ["declare i32 @wcwidth(i32)","declare noundef i32 @wcwidth(i32 noundef) #0"]
+      mapM_ (assertBool "wrong width/arity/convention remains rejected" . isLeft . validate)
+        ["declare i64 @wcwidth(i32)","declare i32 @wcwidth(i64)","declare i32 @wcwidth(ptr)",
+         "declare i32 @wcwidth(i32, ...)","declare fastcc i32 @wcwidth(i32)","",
+         "declare i32 @wcwidth(i32)\ndeclare i32 @wcwidth(i32)"]
+      assertBool "wchar ABI is target-specific" (isLeft (validateNativeWidthIR "x86_64-pc-windows-msvc" "declare i32 @wcwidth(i32)"))
+  , TestCase $ assertEqual "CAPI values, byte arrays, pointers and void keep their emitted ABI"
       (Right [("read_bytes","capi","unsafe",["ByteArray#","IntRep","Word64Rep"],"Word64Rep"),
               ("write_state","ccall","unsafe",["MutableByteArray#","AddrRep"],"void")])
       (nativeSignatures "fixture-unit" [moduleWith

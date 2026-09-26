@@ -28,7 +28,7 @@ import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import THC.Driver.ScalarBitcode (parseDependencies, sulongScalarTarget)
-import THC.Driver.NativeLibrarySources (zlibChecksumSources, nativeMathSymbols, validateNativeMathIR, validateNativeEntropyIR)
+import THC.Driver.NativeLibrarySources (zlibChecksumSources, nativeMathSymbols, validateNativeMathIR, validateNativeEntropyIR, validateNativeWidthIR)
 
 -- (original emitted symbol, convention, safety, semantic carriers, result)
 type Signature = (String, String, String, [String], String)
@@ -521,10 +521,11 @@ finishPackageNative pieces directory unit currentObjects modules = do
     -- getentropy requires a genuine native address, never a managed heap copy.
     -- Other unresolved symbols retain this component as a non-executable archive.
     let unsupported = [name | name <- externals,
-          name `notElem` (["memcpy","memmove","memset","memcmp","bcmp","getentropy"] ++ nativeMathSymbols),
+          name `notElem` (["memcpy","memmove","memset","memcmp","bcmp","getentropy","wcwidth"] ++ nativeMathSymbols),
           not ("llvm." `isPrefixOf` name)]
     let math = filter (`elem` nativeMathSymbols) externals
         entropy = "getentropy" `elem` externals
+        width = "wcwidth" `elem` externals
         finalIR = directory </> "native/final.ll"
     _ <- command directory opt ["-S","-passes=verify",final,"-o",finalIR]
     ir <- readFile finalIR
@@ -534,18 +535,20 @@ finishPackageNative pieces directory unit currentObjects modules = do
       check ("-linux-gnu" `isSuffixOf` target) "native scalar libm provider currently requires Linux"
       either fail pure (validateNativeMathIR math ir)
     when entropy (either fail pure (validateNativeEntropyIR target ir))
-    (artifact,format,libraries) <- if (null math && not entropy) || not (null unsupported)
+    when width (either fail pure (validateNativeWidthIR target ir))
+    (artifact,format,libraries) <- if (null math && not entropy && not width) || not (null unsupported)
       then pure (final,"llvm-bitcode",[]) else do
       clang <- tool "THC_CLANG" "clang"
       let container = directory </> "native/final.so"
           arguments = ["--target=" ++ target,"-fembed-bitcode","-shared","-fPIC",final] ++
-            ["-lm" | not (null math)] ++ ["-lc" | entropy] ++ ["-o",container]
+            ["-lm" | not (null math)] ++ ["-lc" | entropy || width] ++ ["-o",container]
       _ <- command directory clang arguments
       compilerHash <- sha <$> BS.readFile clang
       pure (container,"llvm-embedded-elf",[object ["provider" .= provider,
         "symbols" .= symbols,"compiler" .= clang,"compilerSha256" .= compilerHash,"arguments" .= arguments] |
         (provider,symbols) <- [("native-libm-scalars-v1"::String,math) | not (null math)] ++
-          [("native-libc-getentropy-v1",["getentropy"]) | entropy]])
+          [("native-libc-getentropy-v1",["getentropy"]) | entropy] ++
+          [("native-libc-wcwidth-v1",["wcwidth"]) | width]])
     bytes <- BS.readFile artifact
     component <- get record "componentSha256" :: IO String
     providerInputs <- mapM (\value -> get value "inputs") providers

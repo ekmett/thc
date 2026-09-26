@@ -1,7 +1,8 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 module THC.Driver.NativeLibrarySources
-  ( zlibChecksumSources, nativeMathSymbols, validateNativeMathIR, validateNativeEntropyIR ) where
+  ( zlibChecksumSources, nativeMathSymbols, validateNativeMathIR, validateNativeEntropyIR,
+    validateNativeWidthIR ) where
 
 import Control.Monad (forM_, unless)
 import qualified Crypto.Hash.SHA256 as SHA
@@ -47,6 +48,20 @@ validateNativeEntropyIR target source = do
         (first,_:rest) -> first : arguments rest
   unless (length declarations == 1 && all valid declarations)
     (Left "native getentropy declaration has unsupported ABI")
+
+-- Linux wchar_t and int are both signed 32-bit values. Keep libc's current
+-- locale behavior, including its -1 result; the Haskell caller owns fallback.
+validateNativeWidthIR :: String -> String -> Either String ()
+validateNativeWidthIR target source = do
+  unless (target == "x86_64-unknown-linux-gnu")
+    (Left "native wcwidth provider currently requires Linux x86_64")
+  let declarations = [(before, drop (length "@wcwidth(") after) |
+        line <- lines source, "declare " `isPrefixOf` line,
+        let (before,after) = break (== '@') line, "@wcwidth(" `isPrefixOf` after]
+      valid (before,after) = filter (/= "noundef") (words before) == ["declare","i32"] &&
+        filter (/= "noundef") (words (takeWhile (/= ')') after)) == ["i32"]
+  unless (length declarations == 1 && all valid declarations)
+    (Left "native wcwidth declaration has unsupported ABI")
 
 -- Compile the original implementation with the package's actual configured
 -- zlib header. A mismatched installed version is a specific unsupported

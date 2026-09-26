@@ -1613,7 +1613,7 @@ private class FunctionBody(expression: Expr, metrics: Metrics, result: CoreRepre
 }
 private class SelfRepeater(@field:Child private var body: FunctionBody, private val metrics: Metrics) : Node(), RepeatingNode {
     fun once(frame: VirtualFrame): Any? {
-        val root = rootNode as FunctionRoot
+        val root = rootNode as? FunctionRoot ?: fault("Invalid self-loop function root")
         root.forceEntry(frame)
         root.pollBeforeBody(this)
         val entry = root.handoff
@@ -1627,14 +1627,14 @@ private class SelfRepeater(@field:Child private var body: FunctionBody, private 
         RepeatingNode.CONTINUE_LOOP_STATUS
     }
     catch (tail: HandoffTailCall) {
-        val root = rootNode as FunctionRoot
+        val root = rootNode as? FunctionRoot ?: fault("Invalid self-loop function root")
         if (!root.isSelf(tail.target)) throw tail
         if (metrics.enabled) metrics.incrementSelfTailReentries()
         root.restoreHandoff(frame, tail.arguments, false)
         RepeatingNode.CONTINUE_LOOP_STATUS
     }
     catch (tail: TailCall) {
-        val root = rootNode as FunctionRoot
+        val root = rootNode as? FunctionRoot ?: fault("Invalid self-loop function root")
         if (!root.isSelf(tail.target)) throw tail
         if (metrics.enabled) metrics.incrementSelfTailReentries()
         root.restoreTail(frame, tail)
@@ -2396,9 +2396,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val memcpy = CoreMemcpyForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val memorySearch = CoreMemorySearchForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (runtimeService != null) {
@@ -2566,6 +2568,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     }
                 }
                 NativeAllocationExpression(nativeAllocation, operands.toTypedArray(), tupleProof)
+            } else if (memorySearch != null) {
+                CoreMemorySearchForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreMemorySearchForeign.validateOperand(memorySearch, index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                MemorySearchExpression(memorySearch, operands.toTypedArray(), tupleProof)
             } else if (memmove) {
                 CoreMemmoveForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->

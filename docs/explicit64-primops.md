@@ -16,7 +16,9 @@ Both backends execute 36 additional operations from the pinned GHC 9.14.1
 The existing `intToInt64#`/`int64ToInt#` conversions remain supported. Every
 operation uses a primitive Long instruction on THC's supported 64-bit targets.
 Selection of a shared instruction does not rewrite the exported Core proof:
-`IntRep`, `WordRep`, `Int64Rep` and `Word64Rep` remain distinct. Comparisons return
+`IntRep`, `WordRep`, `Int64Rep` and `Word64Rep` remain distinct in GHC and the
+strict exporter audit. Runtime lowering accepts their shared Long carrier;
+the selected primitive determines signedness and arithmetic. Comparisons return
 `IntRep`, and every shift count is `IntRep`. Signed right shifts extend the sign;
 logical right shifts insert zeros. Word64 division and ordering are unsigned.
 Arithmetic keeps the low 64 result bits, and scalar conversions preserve them.
@@ -43,7 +45,9 @@ those inputs.
 `Explicit64PrimopsTest` runs every row before and after compilation on both
 backends, requires one installed guest entry per compiled call and verifies each
 exact target remains valid. Other tests reject wrong arities, malformed literals
-and contradictory Int64/Word64 lexical proofs. Normal clean-checkout preparation
+and incompatible scalar carriers. Same-Long integral metadata aliases execute
+against an independent arithmetic model instead of being rejected as type-name
+mismatches. Normal clean-checkout preparation
 runs the fixture; SHA-256 manifests cover source/exporter inputs, Core and oracle,
 with full `ghc --info` provenance. Gradle tracks the inputs and CI retains the
 manifest, Core export, and oracle. Tuple results, counts, byte swaps, bit
