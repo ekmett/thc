@@ -52,9 +52,10 @@ data ForeignCompiler = ForeignCompiler
   , foreignPluginLibrary :: FilePath, foreignRegisteredLibrary :: FilePath
   , foreignDriverHash :: String }
 
-boundModule, posixModule :: String
+boundModule, posixModule, unixFilesModule :: String
 boundModule = "GHC.Internal.Conc.Bound"
 posixModule = "GHC.Internal.System.Posix.Internals"
+unixFilesModule = "System.Posix.Files.PosixString"
 
 -- Presence is not permission to replace bad evidence. The helper has already
 -- checked actual annotations against the retained Core/foreign products.
@@ -64,7 +65,7 @@ missingForeignProof name core
       (Nothing, Nothing) -> Right True
       (Just _, Just proof) -> classified proof
       _ -> Left "incomplete static foreign-export evidence"
-  | name == posixModule = maybe (Right True) classified (member "staticForeignImportStubs" core)
+  | name `elem` [posixModule, unixFilesModule] = maybe (Right True) classified (member "staticForeignImportStubs" core)
   | otherwise = Left "module is outside the installed foreign producer profile"
   where
     classified proof
@@ -74,31 +75,34 @@ missingForeignProof name core
 prepareForeignInterfaces :: ForeignCompiler -> FilePath -> FilePath -> InstalledContext ->
                             [InstalledUnit] -> IO InstalledContext
 prepareForeignInterfaces producer cache source context registrations = do
-  let candidates = [u | u <- registrations, all (`elem` map fst (installedInterfaces u)) [boundModule, posixModule]]
-  case candidates of
-    [] -> pure context
-    [unit] -> do
-      original <- forM [boundModule, posixModule] $ \name -> do
-        path <- maybe (fail "missing original foreign interface") pure (lookup name (installedInterfaces unit))
-        before <- hashFile path
-        core <- readCore context unit name path
-        after <- hashFile path
-        check (before == after) "installed interface changed while examining foreign provenance"
-        missing <- either fail pure (missingForeignProof name core)
-        pure (name, core, missing, (path, before))
-      let needed = [(name, core) | (name, core, True, _) <- original]
-          observed = [observation | (_, _, _, observation) <- original]
-      if null needed then pure context else prepare unit needed observed
-    _ -> fail "multiple installed units contain the original foreign modules"
+  base <- prepareProfile [boundModule, posixModule] context
+  prepareProfile [unixFilesModule] base
   where
-    prepare unit needed originalFiles = do
+    prepareProfile names selected = do
+      let candidates = [u | u <- registrations, all (`elem` map fst (installedInterfaces u)) names]
+      case candidates of
+        [] -> pure selected
+        [unit] -> do
+          original <- forM names $ \name -> do
+            path <- maybe (fail "missing original foreign interface") pure (lookup name (installedInterfaces unit))
+            before <- hashFile path
+            core <- readCore selected unit name path
+            after <- hashFile path
+            check (before == after) "installed interface changed while examining foreign provenance"
+            missing <- either fail pure (missingForeignProof name core)
+            pure (name, core, missing, (path, before))
+          let needed = [(name, core) | (name, core, True, _) <- original]
+              observed = [observation | (_, _, _, observation) <- original]
+          if null needed then pure selected else prepare selected unit names needed observed
+        _ -> fail "multiple installed units contain the original foreign modules"
+    prepare selected unit names needed originalFiles = do
       root <- canonicalizePath source
-      config <- configuredRecipe producer context unit root
+      config <- configuredRecipe producer selected unit root names
       let requestedCache = cache </> "installed-foreign/v1"
       createDirectoryIfMissing True requestedCache
       cacheRoot <- canonicalizePath requestedCache
       withLock (cacheRoot </> ".lock") $ do
-        before <- inputs config unit
+        before <- inputs selected config unit
         currentOriginals <- fileInventory (map fst originalFiles)
         check (currentOriginals == originalFiles) "installed foreign proof changed before regeneration"
         let key = sha (BL.toStrict (encode before))
@@ -114,26 +118,26 @@ prepareForeignInterfaces producer cache source context registrations = do
           outputLinks <- field receipt "links"
           actual <- outputInventory (takeDirectory view)
           check (actual == (outputFiles, outputLinks)) "foreign cache files or links changed"
-          let selected = viewContext context view
-          validateView selected unit needed
-          pure selected
-        selected <- case hit of
+          let viewCompiler = viewContext selected view
+          validateView viewCompiler unit needed
+          pure viewCompiler
+        acquired <- case hit of
           Right value -> pure value
           Left _ -> freshDirectory cacheRoot $ \destination -> do
             forM_ needed $ \(name, _) -> compileOriginal producer config destination name
-            view <- createView context unit destination (map fst needed)
-            let selected = viewContext context view
-            validateView selected unit needed
-            after <- inputs config unit
+            view <- createView selected unit destination (map fst needed)
+            let viewCompiler = viewContext selected view
+            validateView viewCompiler unit needed
+            after <- inputs selected config unit
             check (after == before) "GHC source/configuration/interfaces changed during annotation compilation"
             (files, links) <- outputInventory destination
             let receipt = object ["inputs" .= before, "view" .= view, "files" .= files, "links" .= links]
             atomicJson index receipt
-            pure selected
-        after <- inputs config unit
+            pure viewCompiler
+        after <- inputs selected config unit
         check (after == before) "GHC source/configuration/interfaces changed during annotation acquisition"
-        pure selected
-    inputs config unit = do
+        pure acquired
+    inputs selected config unit = do
       _ <- verifyUsageFiles (recipeRoot config) (recipeSourceFiles config)
       forM_ (recipeUsageFiles config) $ \(_, original) -> do
         _ <- verifyUsageFiles (recipeRoot config) original
@@ -144,14 +148,14 @@ prepareForeignInterfaces producer cache source context registrations = do
       observed <- fileInventory files
       forM_ (installedInterfaces unit) $ \(name, installed) -> do
         forM_ ["hi", "dyn_hi"] $ \suffix -> do
-          let original = recipeRoot config </> "_build/stage1/libraries/ghc-internal/build" </> modulePath name <.> suffix
+          let original = recipeBuilt config </> modulePath name <.> suffix
           check (lookup (replaceExtension installed suffix) observed == lookup original observed)
             ("selected GHC and source interfaces changed: " ++ name)
       -- Includes each complete retained payload in the selected registered
       -- dependency closure, not ABI/mtime summaries or a GHC binary hash.
-      probe <- probeInstalled context unit
+      probe <- probeInstalled selected unit
       dependencyInterfaces <- observeProbeInterfaces probe
-      global <- command (installedPackageTool context)
+      global <- command (installedPackageTool selected)
         ["--global", "--no-user-package-db", "--expand-pkgroot", "dump"] Nothing
       pure $ object ["schema" .= (1 :: Int), "recipe" .= recipeIdentity config,
         "files" .= observed, "installed" .= probe, "dependencyInterfaces" .= dependencyInterfaces,
@@ -165,19 +169,22 @@ data Recipe = Recipe { recipeRoot :: FilePath, recipeArguments :: [String]
                      , recipeUsageFiles :: [(String, [(FilePath, String)])]
                      , recipeSourceFiles :: [(FilePath, String)]
                      , recipeVersionHeaders :: (FilePath, FilePath)
-                     , recipeProducerLibraries :: [FilePath] }
+                     , recipeProducerLibraries :: [FilePath]
+                     , recipeBuilt :: FilePath, recipeSources :: [(String, FilePath)] }
 
-configuredRecipe :: ForeignCompiler -> InstalledContext -> InstalledUnit -> FilePath -> IO Recipe
-configuredRecipe producer context unit root = do
+configuredRecipe :: ForeignCompiler -> InstalledContext -> InstalledUnit -> FilePath -> [String] -> IO Recipe
+configuredRecipe producer context unit root names = do
   check (null (installedDatabases context)) "foreign regeneration requires the selected global package database"
   version <- command (foreignGhc producer) ["--numeric-version"] Nothing
   check (words version == ["9.14.1"]) "--ghc-source requires selected GHC 9.14.1"
-  let stage = root </> "_build/stage1"
-      packageRoot = root </> "libraries/ghc-internal"
-      configured = stage </> "libraries/ghc-internal"
+  let unixProfile = names == [unixFilesModule]
+      packageName = if unixProfile then "unix" else "ghc-internal"
+      stage = root </> "_build/stage1"
+      packageRoot = root </> "libraries" </> packageName
+      configured = stage </> "libraries" </> packageName
       built = configured </> "build"
       autogen = built </> "autogen"
-      src = packageRoot </> "src"
+      src = if unixProfile then packageRoot else packageRoot </> "src"
   lbi <- getPersistBuildConfig Nothing (makeSymbolicPath configured)
   check (prettyShow (Compiler.compilerId (compiler lbi)) == "ghc-9.14.1") "GHC source configuration compiler differs"
   let platform = prettyShow (hostPlatform lbi)
@@ -188,7 +195,7 @@ configuredRecipe producer context unit root = do
   actualBuild <- canonicalizePath (getSymbolicPath (buildDir lbi))
   expectedBuild <- canonicalizePath built
   check (actualBuild == expectedBuild) "GHC setup-config belongs to a different build tree"
-  info <- maybe (fail "GHC source configuration has no ghc-internal library") (pure . libBuildInfo)
+  info <- maybe (fail "GHC source configuration has no selected library") (pure . libBuildInfo)
     (library (localPkgDescr lbi))
   component <- case allComponentsInBuildOrder lbi of
     [value] -> pure value
@@ -196,16 +203,17 @@ configuredRecipe producer context unit root = do
   check (prettyShow (componentUnitId component) == registeredId unit &&
          sort (map (prettyShow . fst) (componentPackageDeps component)) == sort (installedDepends unit))
     "GHC source configuration unit/dependencies differ from selected installation"
-  check (map getSymbolicPath (hsSourceDirs info) == ["src"] &&
+  check (map getSymbolicPath (hsSourceDirs info) == [if unixProfile then "." else "src"] &&
          map getSymbolicPath (includeDirs info) == ["include"])
     "unsupported GHC source/include directory configuration"
   -- Do not execute hidden arbitrary hooks/plugins from a setup-config. This is
   -- the known library option profile; conditional CPP comes from Cabal itself.
-  check (hcOptions GHC info == ["-this-unit-id", "ghc-internal", "-Wcompat", "-Wnoncanonical-monad-instances"] &&
-         cppOptions info == ["-DBIGNUM_GMP"] &&
+  check (hcOptions GHC info == (if unixProfile then ["-Wall"] else
+           ["-this-unit-id", "ghc-internal", "-Wcompat", "-Wnoncanonical-monad-instances"]) &&
+         cppOptions info == (if unixProfile then [] else ["-DBIGNUM_GMP"]) &&
          fmap prettyShow (defaultLanguage info) == Just "Haskell2010" &&
-         map prettyShow (defaultExtensions info) == ["NoImplicitPrelude"])
-    "unsupported ghc-internal compiler option profile (requires original native GMP configuration)"
+         map prettyShow (defaultExtensions info) == (if unixProfile then [] else ["NoImplicitPrelude"]))
+    "unsupported original library compiler option profile"
   forM_ (installedInterfaces unit) $ \(name, installed) -> do
     let original = built </> modulePath name <.> "dyn_hi"
     left <- hashFile installed
@@ -215,9 +223,12 @@ configuredRecipe producer context unit root = do
                       built </> "include", packageRoot </> "include"]
       roots = [built, autogen, src]
       macros = autogen </> "cabal_macros.h"
-  originalInputs <- forM [boundModule, posixModule] $ \name -> do
+  originalInputs <- forM names $ \name -> do
     let original = built </> modulePath name <.> "dyn_hi"
-        sourceFile = src </> modulePath name <.> "hs"
+        -- Unix's retained source is the configured hsc2hs output, whose own
+        -- UsageFile points back to the original .hsc. Never rerun hsc2hs with
+        -- newly guessed headers and call that the installed source.
+        sourceFile = (if unixProfile then built else src) </> modulePath name <.> "hs"
     description <- command (foreignGhc producer) ["--show-iface", original] Nothing
     digest <- show <$> getFileHash sourceFile
     let fingerprints = [value | line <- lines description, ["src", "hash:", value] <- [words line]]
@@ -225,21 +236,22 @@ configuredRecipe producer context unit root = do
       ("--ghc-source original source does not match retained self-recomp metadata: " ++ name)
     retained <- either fail pure (retainedUsageFiles description)
     verified <- verifyUsageFiles root retained
-    required <- mapM canonicalizePath $ [root </> "rts/include/ghcversion.h", macros] ++
+    required <- mapM canonicalizePath $ (if unixProfile
+      then [src </> modulePath name <.> "hsc"] else [root </> "rts/include/ghcversion.h", macros]) ++
       (if name == posixModule then [built </> "include/HsBaseConfig.h", stage </> "rts/build/include/ghcplatform.h"] else [])
     check (all (`elem` map fst verified) required)
       ("original interface lacks required CPP dependency evidence: " ++ name)
     pure (name, (sourceFile, digest), verified)
   let usageFiles = [(name, files) | (name, _, files) <- originalInputs]
       sourceFiles = [file | (_, file, _) <- originalInputs]
-      baseFiles = [configured </> "setup-config", packageRoot </> "ghc-internal.cabal", macros,
+      baseFiles = [configured </> "setup-config", packageRoot </> packageName <.> "cabal", macros,
                    root </> "hadrian/cfg/system.config", stage </> "lib/settings", installedLibdir context </> "settings",
-                   src </> modulePath boundModule <.> "hs", src </> modulePath posixModule <.> "hs",
-                   foreignPluginLibrary producer, foreignRegisteredLibrary producer, installedHelper context] ++
+                   foreignPluginLibrary producer, foreignRegisteredLibrary producer, installedHelper context] ++ map fst sourceFiles ++
                   [replaceExtension path suffix | (_, path) <- installedInterfaces unit, suffix <- ["hi", "dyn_hi"]]
       args = ["-c", "-fforce-recomp", "-O2", "-static", "-dynamic-too", "-fsplit-sections",
               "-hide-all-packages", "-no-user-package-db", "-package-env", "-",
-              "-this-package-name", "ghc-internal", "-i"] ++
+              "-this-package-name", packageName, "-i"] ++
+        (if unixProfile then ["-this-unit-id", registeredId unit] else []) ++
         concatMap (\dep -> ["-package-id", dep]) (installedDepends unit) ++
         hcOptions GHC info ++ maybe [] (\lang -> ["-X" ++ prettyShow lang]) (defaultLanguage info) ++
         map (("-X" ++) . prettyShow) (defaultExtensions info) ++
@@ -294,7 +306,8 @@ configuredRecipe producer context unit root = do
          "originalUsageFiles" .= usageFiles, "originalSourceFiles" .= sourceFiles,
          "versionHeaders" .= (originalVersion, selectedVersion),
          "producerLibraries" .= producerLibraries]
-  pure (Recipe root args allFiles identity usageFiles sourceFiles (originalVersion, selectedVersion) producerLibraries)
+  pure (Recipe root args allFiles identity usageFiles sourceFiles (originalVersion, selectedVersion) producerLibraries
+    built [(name, path) | (name, (path, _), _) <- originalInputs])
 
 compileOriginal :: ForeignCompiler -> Recipe -> FilePath -> String -> IO ()
 compileOriginal producer recipe destination name = do
@@ -305,12 +318,13 @@ compileOriginal producer recipe destination name = do
   createDirectoryIfMissing True (takeDirectory stem)
   createDirectoryIfMissing True scratch
   -- The output directory must be the plugin's first option.
+  source <- maybe (fail "missing original configured source") pure (lookup name (recipeSources recipe))
   let arguments = ["-fplugin-opt=THC.Plugin:" ++ scratch] ++ recipeArguments recipe ++
         map ("-fplugin-opt=THC.Plugin:" ++) options ++
         ["-odir", scratch, "-stubdir", scratch, "-tmpdir", scratch, "-dumpdir", scratch,
          "-ohi", stem <.> "hi", "-dynohi", stem <.> "dyn_hi",
          "-o", stem <.> "o", "-dyno", stem <.> "dyn_o",
-         recipeRoot recipe </> "libraries/ghc-internal/src" </> modulePath name <.> "hs"]
+         source]
   _ <- command (foreignGhc producer) arguments (Just (recipeRoot recipe))
   description <- command (foreignGhc producer) ["--show-iface", stem <.> "dyn_hi"] Nothing
   retained <- either fail pure (retainedUsageFiles description)
@@ -333,15 +347,19 @@ createView context unit destination names = do
       let original = installedLibdir context </> name
       directory <- doesDirectoryExist original
       (if directory then createDirectoryLink else createFileLink) original (libdir </> name)
-  forM_ (installedInterfaces unit) $ \(name, original) -> do
-    let target = interfaces </> modulePath name <.> "dyn_hi"
-        actual = if name `elem` names then destination </> "interfaces" </> modulePath name <.> "dyn_hi" else original
-    createDirectoryIfMissing True (takeDirectory target)
-    createFileLink actual target
+  forM_ (installedInterfaces unit) $ \(name, original) ->
+    forM_ ["hi", "dyn_hi"] $ \suffix -> do
+      -- Another annotated unit can depend on this view. GHC's dependency
+      -- observer reads both ways, even though Core export selects dyn_hi.
+      let target = interfaces </> modulePath name <.> suffix
+          actual = if name `elem` names then destination </> "interfaces" </> modulePath name <.> suffix
+                   else replaceExtension original suffix
+      createDirectoryIfMissing True (takeDirectory target)
+      createFileLink actual target
   dumped <- command (installedPackageTool context) ["--global", "--no-user-package-db", "--expand-pkgroot", "dump"] Nothing
   records <- mapM parseRegistration (splitRegistrations (lines dumped))
   check (length [() | record <- records, prettyShow (Package.installedUnitId record) == registeredId unit] == 1)
-    "selected package database lost ghc-internal"
+    "selected package database lost the original foreign unit"
   forM_ (zip [(0 :: Int)..] records) $ \(index, original) -> do
     let record = if prettyShow (Package.installedUnitId original) == registeredId unit
                  then original { Package.importDirs = [interfaces] } else original

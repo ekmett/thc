@@ -11,6 +11,7 @@ internal object OriginalStdioFixtures {
         "unsafe_write" to "ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite",
         "errno" to "__hscore_get_errno",
         "dup" to "dup", "dup2" to "dup2",
+        "unlink" to "unlink",
         "seek_set" to "ghczuwrapperZC1ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuSET",
         "seek_cur" to "ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR",
         "seek_end" to "ghczuwrapperZC0ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuEND",
@@ -19,9 +20,10 @@ internal object OriginalStdioFixtures {
         "safe_write" to listOf("Int32Rep", "AddrRep", "Word64Rep", null),
         "unsafe_write" to listOf("Int32Rep", "AddrRep", "Word64Rep", null),
         "errno" to listOf(null), "dup" to listOf("Int32Rep", null), "dup2" to listOf("Int32Rep", "Int32Rep", null),
+        "unlink" to listOf("AddrRep", null),
         "seek_set" to listOf(null), "seek_cur" to listOf(null), "seek_end" to listOf(null),
         "strerror" to listOf("Int32Rep", "AddrRep", "Word64Rep", null))
-    fun convention(name: String) = if (name in listOf("errno", "dup", "dup2", "strerror")) "ccall" else "capi"
+    fun convention(name: String) = if (name in listOf("errno", "dup", "dup2", "strerror", "unlink")) "ccall" else "capi"
     fun safety(name: String) = if (name == "safe_write" || name == "strerror") "safe" else "unsafe"
 
     fun scalar(rep: String?, evaluated: Boolean = true): MutableMap<String, Any?> = mutableMapOf(
@@ -44,7 +46,7 @@ internal object OriginalStdioFixtures {
         MutableList<Any?>(signatures.getValue(name).size) { false }, false, false,
         mutableMapOf("rep" to tuple(name), "foreignCall" to descriptor(name)))
 
-    fun module(names: Iterable<String> = signatures.keys - "strerror", mutate: (MutableList<Any?>) -> Unit = {}): Map<String, Any?> = mapOf(
+    fun module(names: Iterable<String> = signatures.keys - setOf("strerror", "unlink"), mutate: (MutableList<Any?>) -> Unit = {}): Map<String, Any?> = mapOf(
         "instrument" to true,
         "constructors" to listOf(mapOf("id" to "T2", "kind" to "unboxed-tuple", "arity" to 2, "tag" to 1)),
         "bindings" to names.map { name ->

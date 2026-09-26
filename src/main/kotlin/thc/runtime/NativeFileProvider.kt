@@ -199,6 +199,21 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
         return base + (if (base.last() == '/'.code.toByte()) byteArrayOf() else byteArrayOf('/'.code.toByte())) + path
     }
 
+    /** This provider exists only in the factory-owned full-host filesystem.
+     * Resolve its context CWD, preserving the guest's raw bytes and ./.. path
+     * components. No preliminary stat/access check races with the native unlink. */
+    @Synchronized fun unlinkRaw(path: ByteArray): Long {
+        current()
+        if (disposed) throw ClosedChannelException()
+        val anchor = java.nio.file.Path.of(env.getPublicTruffleFile(".").absoluteFile.toUri())
+        val bytes = absoluteRawPath(anchor, path)
+        return NativeLimbScope().use { scope ->
+            val name = scope.allocate((bytes.size.toLong() + 7) and -8L)
+            name.copyFrom(bytes, 0, bytes.size)
+            result("unlink", name)
+        }
+    }
+
     /** Explicit endpoint grants duplicate process endpoints into owned resources.
      * This does not associate them with arbitrary Env.in/out/err streams. */
     fun standard(endpoint: StandardEndpoint): OpenedNativeFile {

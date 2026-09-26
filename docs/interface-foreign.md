@@ -129,9 +129,10 @@ See the [managed export contract](site/embedding.md).
 For an ordinary full-Core installation lacking these annotations, project runs
 can explicitly supply `--installed-core required --ghc-source DIR`. This bounded
 producer accepts a matching configured GHC 9.14.1 native Linux stage1 tree with
-the original GMP, Haskell2010 and NoImplicitPrelude library configuration. It
-recompiles only `GHC.Internal.Conc.Bound` and
-`GHC.Internal.System.Posix.Internals`, and only when their required annotation
+the original GMP, Haskell2010 and NoImplicitPrelude ghc-internal configuration,
+and the configured Haskell2010 Unix library. It recompiles only
+`GHC.Internal.Conc.Bound`, `GHC.Internal.System.Posix.Internals`, and
+`System.Posix.Files.PosixString`, and only when their required annotation
 is absent. Cabal's saved configuration supplies CPP flags, language settings and
 the original dependency IDs. The selected compiler performs real code generation
 with `-fwrite-if-simplified-core`; the `-fno-code` interface path loses annotations
@@ -147,8 +148,11 @@ Regenerated input inventories must preserve these dependencies, allowing only
 the selected RTS version-header copy with the same fingerprint and additional
 libraries from the actual registered plugin dependency closure. Regenerated
 interfaces must retain the same complete raw
-foreign products. A private acquisition view changes only ghc-internal's
-interface search directory; native libraries, ABI fields and dependency IDs
+foreign products. For Unix, the source is the retained configured hsc2hs output,
+with its source fingerprint and original `.hsc` UsageFile checked; hsc2hs is not
+rerun with guessed configuration. Composed private acquisition views change
+only the selected units' interface search directories and retain both `.hi`
+and `.dyn_hi`; native libraries, ABI fields and dependency IDs
 remain unchanged. The project's native compiler and helper build continue to use
 the original selected compiler. No installed files, JSON modules or ZIP members
 are patched.
