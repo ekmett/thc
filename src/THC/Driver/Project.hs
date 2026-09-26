@@ -41,8 +41,9 @@ import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.ForeignBitcode (linkClockGetTime)
 import THC.Driver.GhcProxy (ghcProxyCommand)
-import THC.Driver.NativeRecipe (componentRoots, ensureNativeRecipes)
+import THC.Driver.NativeRecipe (componentRoots, ensureNativeRecipes, componentRuntimeShim)
 import THC.Driver.ScalarBitcode (ScalarBitcode, withScalarBitcode, scalarBuildInputs, linkScalarBitcode)
+import THC.Driver.RuntimeShim (RuntimeShim, withRuntimeShim, runtimeShimInputs, validateRuntimeShimModules)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign
 import THC.Driver.Run (RunOptions(..))
@@ -909,14 +910,20 @@ exportUnit :: ExportContext -> [FilePath] -> Map.Map String String -> Unit -> IO
 exportUnit context roots keys unit = do
   component <- readComponent unit context
   dist <- field (unitValue unit) "dist-dir"
-  withScalarBitcode (contextNative context) dist roots (componentCompiler component)
-    (maybe (takeDirectory (contextGhc context) </> "ghc-pkg") id (contextGhcPkg context))
-    (unitId unit) (componentValue component) $
-    exportConfiguredUnit context keys unit component
+  runtimeShim <- componentRuntimeShim (componentValue component)
+  if runtimeShim
+    then withRuntimeShim (contextNative context) dist roots (componentCompiler component)
+      (unitId unit) (componentValue component) $ \shim ->
+        exportConfiguredUnit context keys unit component Nothing (Just shim)
+    else withScalarBitcode (contextNative context) dist roots (componentCompiler component)
+      (maybe (takeDirectory (contextGhc context) </> "ghc-pkg") id (contextGhcPkg context))
+      (unitId unit) (componentValue component) $ \scalar ->
+        exportConfiguredUnit context keys unit component scalar Nothing
 
-exportConfiguredUnit :: ExportContext -> Map.Map String String -> Unit -> Component -> Maybe ScalarBitcode -> IO Bundle
-exportConfiguredUnit context keys unit component scalar = do
-  helper <- traverse (const (prepareInterfaceHelper context (contextRoot context))) scalar
+exportConfiguredUnit :: ExportContext -> Map.Map String String -> Unit -> Component -> Maybe ScalarBitcode -> Maybe RuntimeShim -> IO Bundle
+exportConfiguredUnit context keys unit component scalar runtimeShim = do
+  let retainedInterfaces = case (scalar, runtimeShim) of (Nothing, Nothing) -> Nothing; _ -> Just ()
+  helper <- traverse (const (prepareInterfaceHelper context (contextRoot context))) retainedInterfaces
   helperHash <- traverse (digestFile . installedHelper) helper
   dist <- field (unitValue unit) "dist-dir"
   let productFlags = ["-odir", "-hidir", "-hiedir", "-stubdir", "-outputdir"]
@@ -943,7 +950,8 @@ exportConfiguredUnit context keys unit component scalar = do
                                            | (path, digest) <- nativeInputs],
                      "dependencies" .= [object ["id" .= identifier, "buildKey" .= identity]
                                         | (identifier, identity) <- dependencies]] ++
-                    maybe [] (\recipe -> ["packageScalarRecipe" .= scalarBuildInputs recipe]) scalar
+                    maybe [] (\recipe -> ["packageScalarRecipe" .= scalarBuildInputs recipe]) scalar ++
+                    maybe [] (\recipe -> ["runtimeShimRecipe" .= runtimeShimInputs recipe]) runtimeShim
       buildKey = shaHex (BL.toStrict (encode (object inputFields)))
   pluginHash <- digestFile (contextPluginLibrary context)
   let exporter = object $ ["pluginUnit" .= contextPluginUnit context,
@@ -971,11 +979,11 @@ exportConfiguredUnit context keys unit component scalar = do
       Just bundle -> pure bundle
       Nothing -> do
         when cached (removeFile destination)
-        freshExport context component unit scalar helper buildKey exportKey buildInputs expected destination
+        freshExport context component unit scalar runtimeShim helper buildKey exportKey buildInputs expected destination
 
-freshExport :: ExportContext -> Component -> Unit -> Maybe ScalarBitcode -> Maybe InstalledContext -> String -> String -> Value ->
+freshExport :: ExportContext -> Component -> Unit -> Maybe ScalarBitcode -> Maybe RuntimeShim -> Maybe InstalledContext -> String -> String -> Value ->
                [String] -> FilePath -> IO Bundle
-freshExport context component unit scalar helper buildKey exportKey buildInputs expected destination = do
+freshExport context component unit scalar runtimeShim helper buildKey exportKey buildInputs expected destination = do
   let localRoot = contextNative context </> "cache/thc/staging"
   createDirectoryIfMissing True localRoot
   (staging, handle) <- openTempFile localRoot "export-"
@@ -997,7 +1005,7 @@ freshExport context component unit scalar helper buildKey exportKey buildInputs 
            "-fplugin-opt=THC.Plugin:source-notes",
            "-fplugin-opt=THC.Plugin:foreign-import-provenance",
            "-g", "-dynamic", "-fforce-recomp", "-dcore-lint"] ++
-          maybe [] (const ["-fwrite-if-simplified-core", "-hisuf", "hi"]) scalar ++
+          maybe [] (const ["-fwrite-if-simplified-core", "-hisuf", "hi"]) helper ++
           map snd (componentSources component)
     sourceDir <- field (componentValue component) "src-dir"
     runCommand True (componentCompiler component) arguments sourceDir
@@ -1014,11 +1022,14 @@ freshExport context component unit scalar helper buildKey exportKey buildInputs 
     let actual = sort (map fst checked)
     require (length actual == length (nub actual) && actual == expected)
       ("Core module inventory differs from Cabal build-info for " ++ unitId unit ++ ": " ++ show actual)
-    sorted <- case (scalar,helper) of
-      (Nothing,Nothing) -> pure (sortOn fst checked)
-      (Just recipe,Just selectedHelper) -> do
+    sorted <- case (scalar,runtimeShim,helper) of
+      (Nothing,Nothing,Nothing) -> pure (sortOn fst checked)
+      (Just recipe,Nothing,Just selectedHelper) -> do
         retained <- scalarInterfaceModules selectedHelper component unit objects expected
         linkScalarBitcode recipe buildKey retained
+      (Nothing,Just shim,Just selectedHelper) -> do
+        retained <- scalarInterfaceModules selectedHelper component unit objects expected
+        validateRuntimeShimModules shim retained
       _ -> fail "scalar cbits interface helper missing"
     let members = [("core/" ++ show index ++ ".json", bytes)
                   | (index, (_, bytes)) <- zip [0 :: Int ..] sorted]

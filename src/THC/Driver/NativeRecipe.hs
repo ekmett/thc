@@ -4,7 +4,8 @@
 -- Receipts of actual successful Cabal compiler calls, never setup-config data.
 module THC.Driver.NativeRecipe
   ( NativeRecipe(..), captureNativeRecipe, readNativeRecipe, recipePath
-  , componentRoots, componentNativeObjects, componentNativeDeclarations, ensureNativeRecipes, cRecipeOptions ) where
+  , componentRoots, componentNativeObjects, componentNativeDeclarations, componentRuntimeShim
+  , ensureNativeRecipes, cRecipeOptions ) where
 
 import Control.Monad (filterM, forM, unless, when)
 import qualified Crypto.Hash.SHA256 as SHA
@@ -18,7 +19,8 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text as Text
 import Distribution.Compiler (unknownCompilerInfo, AbiTag(NoAbiTag))
-import Distribution.PackageDescription (buildType, BuildType(Simple), cSources, cxxSources, asmSources, cmmSources, jsSources,
+import Distribution.PackageDescription (PackageDescription, BuildInfo, customFieldsBI,
+  buildType, BuildType(Simple), cSources, cxxSources, asmSources, cmmSources, jsSources,
   genPackageFlags, flagName, mkFlagAssignment, mkFlagName, unFlagName)
 import Distribution.PackageDescription.Parsec (parseGenericPackageDescriptionMaybe)
 import Distribution.PackageDescription.Configuration (finalizePD, flattenPackageDescription)
@@ -101,14 +103,16 @@ ensureNativeRecipes :: FilePath -> FilePath -> [FilePath] -> FilePath -> Value -
 ensureNativeRecipes native dist roots compiler component rebuild = do
   objects <- componentNativeObjects native dist roots component
   declarations <- componentNativeDeclarations component
+  runtimeShim <- componentRuntimeShim component
   -- The active declarations must satisfy the bounded profile before consulting
   -- warm objects. One surviving receipt cannot conceal a second missing TU.
-  unless (case declarations of
+  let relativeC source = takeExtension source == ".c" && not (isAbsolute source) &&
+        ".." `notElem` splitDirectories source
+  unless (if runtimeShim then not (null declarations) && all relativeC declarations else case declarations of
     [] -> True
-    [source] -> takeExtension source == ".c" && not (isAbsolute source) &&
-      ".." `notElem` splitDirectories source
+    [source] -> relativeC source
     _ -> False)
-    (fail "native scalar profile requires exactly one active relative C source")
+    (fail "native scalar profile requires exactly one active relative C source; runtime shims require only relative C sources")
   let receipts = native </> "cache/thc/native-recipes-v1"
   missing <- filterM (\path -> maybe True (const False) <$> readNativeRecipe receipts compiler path) objects
   unless (null missing && (null declarations || any ((== ".o") . takeExtension) objects)) $ do
@@ -128,6 +132,28 @@ ensureNativeRecipes native dist roots compiler component rebuild = do
 -- Callers without a resolved plan retain the conservative union behavior.
 componentNativeDeclarations :: Value -> IO [FilePath]
 componentNativeDeclarations component = do
+  (package, info) <- configuredBuildInfo component
+  let sources = map getSymbolicPath (cSources info) ++ map getSymbolicPath (cxxSources info) ++
+        map getSymbolicPath (asmSources info) ++ map getSymbolicPath (cmmSources info) ++ map getSymbolicPath (jsSources info)
+  unless (null sources || buildType package == Simple) (fail "native receipts require a Simple package")
+  pure (sort (nub sources))
+
+-- Explicit producer opt-in, not a package-name or module-name whitelist. The
+-- later retained-interface check still rejects every non-runtime foreign call.
+componentRuntimeShim :: Value -> IO Bool
+componentRuntimeShim component = do
+  (package, info) <- configuredBuildInfo component
+  case [value | (name, value) <- customFieldsBI info, name == "x-thc-runtime-shim"] of
+    [] -> pure False
+    [value] | words value == ["v1"] -> do
+      kind <- field component "type" :: IO String
+      unless (kind == "lib" && buildType package == Simple)
+        (fail "runtime shim profile requires a Simple library component")
+      pure True
+    _ -> fail "unsupported or ambiguous x-thc-runtime-shim profile"
+
+configuredBuildInfo :: Value -> IO (PackageDescription, BuildInfo)
+configuredBuildInfo component = do
   root <- field component "src-dir"
   cabalFile <- field component "cabal-file"
   name <- field component "name"
@@ -151,11 +177,7 @@ componentNativeDeclarations component = do
         Right (resolved, _) -> pure resolved
     _ -> pure (flattenPackageDescription generic)
   configured <- maybe (fail "Cabal component absent from public package declaration") pure (lookupComponent package selected)
-  let info = componentBuildInfo configured
-      sources = map getSymbolicPath (cSources info) ++ map getSymbolicPath (cxxSources info) ++
-        map getSymbolicPath (asmSources info) ++ map getSymbolicPath (cmmSources info) ++ map getSymbolicPath (jsSources info)
-  unless (null sources || buildType package == Simple) (fail "native receipts require a Simple package")
-  pure (sort (nub sources))
+  pure (package, componentBuildInfo configured)
 
 -- Assign nested build roots to their most-specific component. A library's
 -- output directory can otherwise accidentally include a sibling executable.
