@@ -1496,6 +1496,7 @@
         "thc.runtime.WordFloatingTest",
         "thc.runtime.OriginalStackFormatterTest",
         "thc.runtime.CoreContinuationNativeTest",
+        "thc.runtime.LargeLiteralCaseNativeTest",
         "thc.runtime.AsyncStrictEntryNativeTest",
         "thc.runtime.MaskFunctionNativeTest",
         "thc.runtime.InterfaceCoreNativeTest",
@@ -1580,7 +1581,7 @@
       "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": []
     },
     "test/haskell-fixtures/ContinuationFixtures.hs": {
-      "junit": ["thc.runtime.CoreContinuationNativeTest"],
+      "junit": ["thc.runtime.CoreContinuationNativeTest", "thc.runtime.LargeLiteralCaseNativeTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/PosixStat.kt": {
@@ -1664,6 +1665,10 @@
     },
     "compiler/test-fixtures/MutVarAudit.hs": {
       "junit": ["thc.runtime.MutVarTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/LargeLiteralCaseAudit.hs": {
+      "junit": ["thc.runtime.LargeLiteralCaseNativeTest"],
       "python": []
     },
     "compiler/test-fixtures/LazyIOCallbackAudit.hs": {
