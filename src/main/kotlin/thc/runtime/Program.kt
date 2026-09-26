@@ -1161,10 +1161,22 @@ private class Alternative(val kind: Int, val value: Any?,
             val scrutinee = frame.getObject(slot)
             (value as DataLayout).matches(scrutinee)
         } else false
-        LITERAL_ALTERNATIVE -> if (value is Long && frame.isLong(slot)) frame.getLong(slot) == value
-            else FrameAccess.read(frame, slot) == value
+        LITERAL_ALTERNATIVE -> matchesLiteral(frame, slot)
         else -> false
     })
+    private fun matchesLiteral(frame: VirtualFrame, slot: Int): Boolean {
+        val literal = value
+        if (literal is Long) {
+            val number = literal.toLong()
+            if (frame.isLong(slot)) return frame.getLong(slot) == number
+            val scrutinee = FrameAccess.read(frame, slot)
+            return scrutinee is Long && scrutinee.toLong() == number
+        }
+        // Lowering rejects floating/BigNat alternatives. The remaining literal
+        // carrier is ManagedAddress, whose Object.equals is identity, not the
+        // separate address-comparison primop. Never invoke a scrutinee's equals.
+        return FrameAccess.read(frame, slot) === literal
+    }
 }
 private open class Case(scrutinee: Expr, protected val binderSlot: Int,
                    @field:Children protected var alternatives: Array<Alternative>, metrics: Metrics,

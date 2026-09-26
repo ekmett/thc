@@ -241,6 +241,35 @@ class DelimitedContinuationsTest {
         assertSame(heap, image.getObject(reference))
     }
 
+    @Test fun scalarEntryRejectsTupleOnlyOperationsBeforeEvaluatingOperands() {
+        Context.newBuilder("thc").option("engine.WarnInterpreterOnly", "false").build().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
+                val value = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
+                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, primReps = value.primReps,
+                    components = listOf(state, value)), language)
+                val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameDescriptor.newBuilder().build())
+                fun operands(): Array<Expr> = Array(3) {
+                    object : Expr() {
+                        override fun execute(frame: VirtualFrame): Any? = error("scalar rejection evaluated an operand")
+                    }
+                }
+                for (name in listOf("newPromptTag#", "prompt#", "control0#")) {
+                    val node = DelimitedPrimitive(name, shape, operands(), language, Metrics(false))
+                    assertEquals("$name requires a tuple destination",
+                        assertThrows(RuntimeFault::class.java) { node.execute(frame) }.message)
+                }
+                for (name in listOf("catch#", "maskAsyncExceptions#", "maskUninterruptible#", "unmaskAsyncExceptions#")) {
+                    val node = DelimitedIOBoundary(name, shape, operands(), language, Metrics(false))
+                    assertEquals("$name requires a tuple destination",
+                        assertThrows(RuntimeFault::class.java) { node.execute(frame) }.message)
+                }
+            } finally { context.leave() }
+        }
+    }
+
     @Test fun continuationLoweringRejectsWrongCarrierAndTupleContracts() {
         val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
         val tag = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Unlifted)"))

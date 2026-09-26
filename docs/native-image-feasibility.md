@@ -164,6 +164,29 @@ reports any of the ten blocklist violations; it stops later at an unbacked image
 constant while preparing bytecode closure creation. Guest JIT in the native THC
 executable remains unverified. Compiler assertions and blocklist checks stay on.
 
+Further preparation exposed dynamic diagnostic formatting in the scalar entry
+overrides of `DelimitedPrimitive`, `DelimitedIOBoundary` and `GhcBCOExpression`.
+Those entries always reject tuple-only operations. They now leave compilation
+before formatting their messages; tuple execution is unchanged. It also exposed
+the AST generic case matcher invoking an arbitrary scrutinee's `equals` method.
+Literal matching now uses guarded primitive Long comparisons, including a Long
+in an object-widened slot, and identity for address literals. `ManagedAddress`
+does not override `Object.equals`; this preserves its previous literal comparison,
+not the different semantics of address-comparison primops. Floating and BigNat
+alternatives remain rejected during lowering.
+
+A new cold-object regression first failed against the old matcher with an
+arbitrary-host-equality exception. The corrected batch passes 20 focused tests
+across both handoff modes, including AST/bytecode and typed/generic case options,
+wrong numeric carriers, address literals, tuple-only rejection before operand
+evaluation, and frame/context isolation. Each newly compiled generic-case target's
+first call checks both its result and an increased installed-code entry count.
+Bytecode inspection confirms primitive `lcmp` and reference comparison, without
+an `equals` call in the literal matcher, and interpreter transitions preceding
+the three diagnostic concatenations. The next image analysis clears these four
+blocklist paths and advances to preparation of the empty handoff-argument array.
+These JVM checks do not establish guest JIT in the native executable.
+
 ## Execution models
 
 | Product | What is fixed when built | Guest execution |
