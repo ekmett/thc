@@ -116,6 +116,14 @@ zero/nonzero counts and signed/unsigned boundaries, interpreted and on their
 first installed calls in both handoff modes. Writes affect the original managed
 storage directly, without copying or pinning it.
 
+Three small Core entry points call the original public `setByteArray` and
+`readByteArray` APIs for Int16, Word16 and Int64. Their strict reachable audit
+passes; 18 boundary observations match the actual native memory bytes in
+interpreted and first-installed compiled AST/bytecode execution, with async
+capture enabled and all installed targets retained, in both handoff modes.
+This adds genuine public-API Core execution to the common-adapter checks above;
+it does not claim whole-package or Pandoc execution.
+
 The unchanged `erf-2.0.0.0` package has source-pure imports whose emitted
 State-threaded calls are `safe`. Its four Float/Double entries retain that safety
 through acquisition, ABI admission and call selection. A Linux native-libm
@@ -135,7 +143,7 @@ result resumption and exceptional cleanup in interpreted and compiled entries.
 This tranche does not claim interruptible native blocking calls, callbacks,
 bound OS threads or native errno behavior.
 
-Four primitive bit-pattern entrypoints using the original package's public API
+Four primitive bit-pattern entrypoints using the original erf package's public API
 pass the strict reachable audit and match 88 native observations, including
 signed zeros, subnormals, infinities and NaNs, in interpreted and first-installed
 compiled AST/bytecode execution in both handoff modes. Both backends run with

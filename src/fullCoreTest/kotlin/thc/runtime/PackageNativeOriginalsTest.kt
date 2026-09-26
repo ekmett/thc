@@ -18,6 +18,8 @@ import java.io.File
 import java.util.Collections
 import java.util.IdentityHashMap
 import java.util.HexFormat
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /** Original package source, typed retained imports, and an independent native
  * Haskell oracle. This checks common foreign adapters, not whole Pandoc Core. */
@@ -239,6 +241,79 @@ class PackageNativeOriginalsTest {
                         entries.values.forEach { assertEquals(true, it.javaClass.getMethod("isValidLastTier").invoke(it),
                             "original primitive first-installed adapter retains code") }
                     }
+                } finally { context.leave() }
+            }
+    }
+
+    @Test fun originalPrimitivePublicSettersRunThroughBothFirstInstalledBackends() {
+        val manifest = Json.parse(File(directory, "manifest.json").readText()) as Map<String, Any?>
+        val moduleFiles = File(directory, "linked/primitive-0.9.1.0-inplace").listFiles()!!.sortedBy { it.name }
+        val entryPath = "primitive-entry/units/u-original-primitive-entry/OriginalPrimitiveEntry.json"
+        OriginalStdioChecks.hashes(root, manifest["sourceHashes"], setOf(
+            "build/original-native/sources/primitive-0.9.1.0/Data/Primitive/ByteArray.hs",
+            "build/original-native/sources/primitive-0.9.1.0/Data/Primitive/Internal/Operations.hs"), "build/original-native/sources/")
+        OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf(
+            "compiler/test-fixtures/OriginalPrimitiveEntry.hs", "compiler/test-fixtures/OriginalPrimitiveNative.hs",
+            "test/haskell-fixtures/PackageNativeOriginalsFixtures.hs", "src/THC/Driver/PackageNative.hs"))
+        OriginalStdioChecks.hashes(root, manifest["artifactHashes"],
+            (moduleFiles.map { it.relativeTo(root).path } + listOf(entryPath, "primitive-audit.json", "primitive-native.tsv")
+                .map { "build/original-native/$it" }).toSet(), "build/original-native/")
+        val modules = moduleFiles.map { Json.parse(it.readText()) as Map<String, Any?> } +
+            (Json.parse(File(directory, entryPath).readText()) as Map<String, Any?>)
+        val audit = Json.parse(File(directory, "primitive-audit.json").readText()) as Map<*, *>
+        assertEquals(true, audit["accepted"])
+        val names = mapOf("Int16Rep" to "signed16", "Word16Rep" to "unsigned16", "Int64Rep" to "signed64")
+            .mapValues { "original-primitive-entry:OriginalPrimitiveEntry.${it.value}" }
+        val inputs = listOf(0L, 1L, -1L, -128L, 128L, 0x123456789abcdef0L)
+        val rows = File(directory, "primitive-native.tsv").readLines().map { it.split('\t') }
+            .filter { it[0] in names && it[1] == "MutableByteArray#" && it[2] == "2" && it[3] == "7" }
+        assertEquals(18, rows.size)
+        val cases = rows.groupBy { it[0] }.flatMap { (rep, values) ->
+            values.mapIndexed { index, row ->
+                val observed = ByteBuffer.wrap(HexFormat.of().parseHex(row[5])).order(ByteOrder.nativeOrder())
+                val expected = when (rep) {
+                    "Int16Rep" -> observed.getShort(3 * 2).toLong()
+                    "Word16Rep" -> observed.getShort(3 * 2).toLong() and 0xffffL
+                    "Int64Rep" -> observed.getLong(3 * 8)
+                    else -> error("Unexpected original primitive native carrier")
+                }
+                Triple(names.getValue(rep), inputs[index], expected)
+            } }
+        val merged = CoreModules.merge(modules)
+        val link = (merged["packageScalarLinks"] as List<PackageScalarLink>).single()
+        for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").allowNativeAccess(true)
+            .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build().use { context ->
+                context.initialize("thc"); context.enter()
+                try {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val owner = Language.currentState()
+                    owner.packageCbits.link(link)
+                    val source = CoreModules.reachable(merged, names.values.toList(), true) + ("instrument" to true)
+                    val program: ExecutableProgram = if (backend == "ast") Program(language, source, enableAsync = true)
+                        else BytecodeProgram(language, source, enableAsync = true)
+                    val entries = names.values.associateWith { program.entryTarget(it) }
+                    owner.threads.enterCurrent()
+                    try {
+                        fun check(case: Triple<String, Long, Long>) {
+                            assertEquals(case.third, Calls.target(entries.getValue(case.first), arrayOf(0L, case.second)),
+                                "$backend/$case")
+                            val handoff = language.handoffState.get()
+                            assertEquals(0, handoff.arguments.depth); assertEquals(0, handoff.results.depth)
+                            assertEquals(0, handoff.arguments.retainedReferences()); assertEquals(0, handoff.results.retainedReferences())
+                        }
+                        cases.forEach(::check)
+                        val installed = entries.values.flatMap(::targets).distinct()
+                        installed.forEach { target ->
+                            target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                            assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                        }
+                        cases.asReversed().forEach { case ->
+                            val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                            check(case)
+                            assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() > before)
+                            installed.forEach { assertEquals(true, it.javaClass.getMethod("isValidLastTier").invoke(it)) }
+                        }
+                    } finally { owner.threads.leaveCurrent() }
                 } finally { context.leave() }
             }
     }

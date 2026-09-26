@@ -148,6 +148,22 @@ preparePackageNativeOriginals root = do
   primitiveOracle <- execute "primitive-native-run" [] (output </> "primitive-oracle") []
   unless (length (BSC.lines (commandStdout primitiveOracle)) == 720) (fail "original primitive native row inventory differs")
   BS.writeFile (output </> "primitive-native.tsv") (commandStdout primitiveOracle)
+  let primitiveEntryOutput = output </> "primitive-entry"
+  createDirectoryIfMissing True primitiveEntryOutput
+  primitiveEntryCompiled <- execute "primitive-entry-export" [] ghc
+    ["-O1","-c","-fforce-recomp","-this-unit-id","original-primitive-entry",
+     "-package-db",native </> "packagedb/ghc-9.14.1","-package-id",primitiveUnit,
+     "-package-db",pluginDb,"-plugin-package-id",plugin,"-fplugin=THC.Plugin","-fplugin-trustworthy",
+     "-fplugin-opt=THC.Plugin:" ++ primitiveEntryOutput,"-fplugin-opt=THC.Plugin:post-tidy",
+     "-fplugin-opt=THC.Plugin:unit-qualified","-fplugin-opt=THC.Plugin:foreign-import-provenance",
+     "-fwrite-if-simplified-core","-dcore-lint","compiler/test-fixtures/OriginalPrimitiveEntry.hs",
+     "-outputdir",primitiveEntryOutput]
+  primitiveAudited <- execute "primitive-entry-audit" [] "python3"
+    (["scripts/audit-core.py","--output",output </> "primitive-audit.json"] ++
+     concatMap (\name -> ["--entry","original-primitive-entry:OriginalPrimitiveEntry." ++ name])
+       ["signed16","unsigned16","signed64"] ++
+     [primitiveEntryOutput </> "units/u-original-primitive-entry/OriginalPrimitiveEntry.json"] ++
+     [primitiveLinkedDirectory </> name | (name,_) <- primitiveLinked])
   let entryOutput = output </> "erf-entry"
   createDirectoryIfMissing True entryOutput
   entryCompiled <- execute "erf-entry-export" [] ghc
@@ -164,12 +180,14 @@ preparePackageNativeOriginals root = do
        ["erfDouble","erfcDouble","erfFloat","erfcFloat"] ++
      [erfLinkedDirectory </> "Data.Number.Erf.json",entryOutput </> "units/u-original-erf-entry/OriginalErfEntry.json"])
   inputs <- hashes root ["compiler/test-fixtures/OriginalDigestNative.hs","compiler/test-fixtures/OriginalPrimitiveNative.hs",
+    "compiler/test-fixtures/OriginalPrimitiveEntry.hs",
     "compiler/test-fixtures/OriginalErfNative.hs","compiler/test-fixtures/OriginalErfEntry.hs",
     "test/haskell-fixtures/PackageNativeOriginalsFixtures.hs","src/THC/Driver/PackageNative.hs",
     "src/THC/Driver/NativeLibrarySources.hs","src/THC/Driver/GhcProxy.hs",
     "scripts/audit-core.py","scripts/core_package_manifest.py","scripts/core-capabilities.json"]
   artifacts <- hashes root ([relative </> "digest-native.tsv",relative </> "erf-native.tsv",relative </> "primitive-native.tsv",
-    relative </> "erf-entry/units/u-original-erf-entry/OriginalErfEntry.json",relative </> "erf-audit.json"] ++
+    relative </> "erf-entry/units/u-original-erf-entry/OriginalErfEntry.json",relative </> "erf-audit.json",
+    relative </> "primitive-entry/units/u-original-primitive-entry/OriginalPrimitiveEntry.json",relative </> "primitive-audit.json"] ++
     [relative </> "linked" </> unit </> name | (name,_) <- linked] ++
     [relative </> "linked" </> erfUnit </> name | (name,_) <- erfLinked] ++
     [relative </> "linked" </> primitiveUnit </> name | (name,_) <- primitiveLinked])
@@ -205,7 +223,7 @@ preparePackageNativeOriginals root = do
      "sourceHashes" .= sourceHashes,"artifactHashes" .= artifacts,
      "rejectedChangedSource" .= True,"rejectedHeaderMismatch" .= True,
      "commands" .= map commandRecord [built,acquired,compiled,oracle,erfCompiled,erfOracle,
-       primitiveCompiled,primitiveOracle,entryCompiled,audited,badHeader]]
+       primitiveCompiled,primitiveOracle,primitiveEntryCompiled,primitiveAudited,entryCompiled,audited,badHeader]]
   putStrLn "package-native-originals: original digest, erf and primitive acquisition; 270 + 88 + 720 native observations"
   where
     line bytes = case BSC.lines bytes of [value] -> BSC.unpack value; _ -> error "expected exactly one tool result"
