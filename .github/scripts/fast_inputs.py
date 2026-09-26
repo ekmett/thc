@@ -36,7 +36,7 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
 MANIFEST_DIRS = """ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
-thread-status thread-label hint-trace closure-inspection thread-inventory boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
+thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
 narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
@@ -81,6 +81,11 @@ DELIMITED_OUTPUTS = frozenset("build/delimited-continuations/" + name for name i
 THREAD_INVENTORY_OUTPUTS = frozenset("build/thread-inventory/" + name for name in (
     "manifest.json", "oracle.txt", *(f"{stage}/{suffix}" for stage in ("pre", "post")
         for suffix in ("core/ThreadInventory.json", *(f"{entry}-audit.json" for entry in THREAD_INVENTORY_ENTRIES)))))
+THREAD_SCHEDULING_ENTRIES = ("emptySpark", "lazyPar", "lazySpark", "sparkValue", "currentCounter", "negativeCounter",
+                             "pinnedFork", "otherCounter", "timedDelay")
+THREAD_SCHEDULING_OUTPUTS = frozenset("build/thread-scheduling/" + name for name in (
+    "manifest.json", "oracle.txt", *(f"{stage}/{suffix}" for stage in ("pre", "post")
+        for suffix in ("core/ThreadScheduling.json", *(f"{entry}-audit.json" for entry in THREAD_SCHEDULING_ENTRIES)))))
 SIMD_FLOAT_FMA_OUTPUTS = frozenset("build/simd-floatx4-fma/" + name for name in (
     "manifest.json", "oracle.txt", "pre-core/SimdFloatFma.json", "post-core/SimdFloatFma.json",
     "pre-audit.json", "post-audit.json", "pre-double-audit.json", "post-double-audit.json"))
@@ -1282,6 +1287,20 @@ def thread_inventory_artifact_hashes(manifest):
     return artifacts
 
 
+def thread_scheduling_artifact_hashes(manifest):
+    require(type(manifest.get("schema")) is int and manifest["schema"] == 1 and manifest.get("ghc") == "9.14.1",
+            "Invalid thread scheduling manifest")
+    require(manifest.get("entries") == list(THREAD_SCHEDULING_ENTRIES) and manifest.get("stages") == ["pre", "post"] and
+            manifest.get("nativeRTS") == "non-threaded: direct delay# uses the POSIX I/O manager",
+            "Invalid thread scheduling provenance")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) == THREAD_SCHEDULING_OUTPUTS - {"build/thread-scheduling/manifest.json"},
+            "Incomplete thread scheduling artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid thread scheduling artifact hash")
+    return artifacts
+
+
 def allowed_payload(name, pins):
     parts = PurePosixPath(relative(name)).parts
     if name in pins:
@@ -1305,6 +1324,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_STDIO_OUTPUTS
     if parts[1] == "thread-inventory":
         return name in THREAD_INVENTORY_OUTPUTS
+    if parts[1] == "thread-scheduling":
+        return name in THREAD_SCHEDULING_OUTPUTS
     if parts[1] == "hint-trace":
         return name in HINT_TRACE_OUTPUTS
     if parts[1] == "closure-inspection":
@@ -1503,6 +1524,8 @@ def inventory(root, current, read, core_files, verified=None):
             simd_bytearray_artifact_hashes(name.split("/")[1], doc)
         if name == "build/thread-inventory/manifest.json":
             thread_inventory_artifact_hashes(doc)
+        if name == "build/thread-scheduling/manifest.json":
+            thread_scheduling_artifact_hashes(doc)
         if name.startswith("build/") and name.endswith("/manifest.json") and name.split("/")[1] in BYTEARRAY_FAMILIES:
             bytearray_artifact_hashes(name.split("/")[1], doc)
         memory_directory = PurePosixPath(name).parent.name

@@ -148,6 +148,7 @@ tasks.withType<Test>().configureEach {
             "core-continuation/**/*.json", "core-continuation/native-output.txt",
             "thread-status/**/*.json", "thread-status/oracle.txt",
             "thread-inventory/**/*.json", "thread-inventory/oracle.txt",
+            "thread-scheduling/**/*.json", "thread-scheduling/oracle.txt",
             "scalar-memory-utilities/**/*.json", "scalar-memory-utilities/oracle.tsv",
             "scalar-memory-utilities/native/oracle", "scalar-memory-utilities/commands/*.stdout", "scalar-memory-utilities/commands/*.stderr",
             "delimited-continuations/**/*.json", "delimited-continuations/commands/**",

@@ -26,6 +26,9 @@ extra-source-files:
   compiler/test-fixtures/ScalarMemoryUtilitiesNative.hs
   docs/scalar-memory-utilities.md
   examples/ThreadInventory.hs
+  examples/ThreadScheduling.hs
+  compiler/test-fixtures/ThreadSchedulingNative.hs
+  docs/thread-scheduling.md
   compiler/test-fixtures/ThreadInventoryNative.hs
   docs/thread-inventory.md
   compiler/test-fixtures/SimdWideFloatFma.hs
@@ -581,6 +584,7 @@ executable thc-fixtures
     ThreadStatusFixtures
     CompactRegionsFixtures
     ThreadInventoryFixtures
+    ThreadSchedulingFixtures
     ScalarMemoryUtilitiesFixtures
     ThreadAsyncFixtures
     UncaughtSelfFixtures

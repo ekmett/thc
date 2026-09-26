@@ -116,8 +116,9 @@ class GuestThreadInventoryTest {
         assertThrows(RuntimeFault::class.java) {
             ArrayOp.INDEX.validate(listOf(objectRep, integer), listOf(false, false), tuple(integer))
         }
+        ArrayOp.NEW.validate(listOf(integer, objectRep, state), listOf(false, false, false), tuple(state, objectRep))
         assertThrows(RuntimeFault::class.java) {
-            ArrayOp.NEW.validate(listOf(integer, objectRep, state), listOf(false, false, false), tuple(state, objectRep))
+            ArrayOp.NEW.validate(listOf(integer, integer, state), listOf(false, false, false), tuple(state, objectRep))
         }
     }
 }

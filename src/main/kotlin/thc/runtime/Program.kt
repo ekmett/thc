@@ -2158,6 +2158,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val boundThreadForeign = CoreBoundThreadForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val allocationCounterForeign = CoreBoundThreadForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"), true)
             val stringRts = CoreStringRtsForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val environment = CoreEnvironmentForeign.validate(foreignMetadata,
@@ -2183,7 +2185,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (!allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
@@ -2260,13 +2262,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     }
                 }
                 RtsDiagnosticExpression(rtsDiagnostic, operands.toTypedArray(), tupleProof)
-            } else if (boundThreadForeign) {
+            } else if (boundThreadForeign || allocationCounterForeign) {
                 CoreBoundThreadForeign.validateHead(fn, defined)
                 val argument = args.single()
                 val state = compile(argument, scope, false)
                 CoreBoundThreadForeign.validateOperand(state.representation, if (argument[0] == "var")
                     scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
-                BoundThreadSupport(state).proven(tupleProof.copy(evaluated = true))
+                BoundThreadSupport(state, allocationCounterForeign).proven(tupleProof.copy(evaluated = true))
             } else if (environment != null) {
                 CoreEnvironmentForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
@@ -2457,6 +2459,22 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (fn[0] == "prim" && fn[1] == "noDuplicate#") {
                 CoreNoDuplicate.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 NoDuplicate(argument(args[0], scope, false), tupleProof)
+            } else if (fn[0] == "prim" && CoreThreadScheduling.named(fn[1] as String)) {
+                val name = fn[1] as String
+                CoreThreadScheduling.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                CoreThreadScheduling.validate(name, operands.map { it.representation }, flags, tupleProof)
+                when (name) {
+                    "par#" -> Literal(1L).also { it.representation = tupleProof.copy(evaluated = true) }
+                    "delay#" -> DelayThread(operands[0], operands[1], enableAsync, tupleProof)
+                    "setThreadAllocationCounter#" -> SetThreadAllocationCounter(operands[0], null, operands[1], tupleProof)
+                    "setOtherThreadAllocationCounter#" -> SetThreadAllocationCounter(operands[0], operands[1], operands[2], tupleProof)
+                    else -> SparkResult(name, operands.last(), if (name == "spark#") operands[0] else null,
+                        if (name == "getSpark#") dataLayouts.getOrPut(CoreThreadScheduling.FALSE) {
+                            DataLayout(language ?: fault("Spark constructor requires a guest language"),
+                                CoreThreadScheduling.FALSE, "False", emptyArray())
+                        }.allocate() else null, tupleProof)
+                }
             } else if (fn[0] == "prim" && CoreThreadObservation.named(fn[1] as String)) {
                 val name = fn[1] as String
                 CoreThreadObservation.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -2474,13 +2492,14 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val payload = globals[CoreFileWait.badFd]
                     ?: throw UnsupportedCore("$name requires original blockedOnBadFD payload")
                 WaitFileDescriptor(operands[0], operands[1], payload, name == "waitWrite#", enableAsync, tupleProof)
-            } else if (fn[0] == "prim" && fn[1] in listOf("fork#", "myThreadId#", "threadStatus#", "killThread#", "labelThread#", "threadLabel#")) {
+            } else if (fn[0] == "prim" && fn[1] in listOf("fork#", "forkOn#", "myThreadId#", "threadStatus#", "killThread#", "labelThread#", "threadLabel#")) {
                 val name = fn[1] as String
                 CoreGuestThreads.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
                 CoreGuestThreads.validate(name, operands.map { it.representation }, flags, tupleProof)
                 when (name) {
                     "fork#" -> ForkThread(operands[0], operands[1], tupleProof)
+                    "forkOn#" -> ForkThread(operands[1], operands[2], tupleProof, operands[0])
                     "myThreadId#" -> MyThreadId(operands[0], tupleProof)
                     "threadStatus#" -> ThreadStatus(operands[0], operands[1], tupleProof)
                     "threadLabel#" -> ThreadLabel(operands[0], operands[1], tupleProof)

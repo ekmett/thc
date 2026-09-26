@@ -1447,6 +1447,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val boundThreadForeign = CoreBoundThreadForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val allocationCounterForeign = CoreBoundThreadForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"), true)
             val stringRts = CoreStringRtsForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val environment = CoreEnvironmentForeign.validate(foreignMetadata,
@@ -1472,7 +1474,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (!allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
@@ -1739,14 +1741,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     operands.last().emit(e)
                     e.builder.endRtsDiagnostic()
                 }
-            } else if (boundThreadForeign) {
+            } else if (boundThreadForeign || allocationCounterForeign) {
                 CoreBoundThreadForeign.validateHead(fn, defined)
                 val argument = args.single()
                 val state = compile(argument, scope, false)
                 CoreBoundThreadForeign.validateOperand(state.proof, if (argument[0] == "var")
                     scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
                 tupleExpression(tupleProof) { e, destination ->
-                    e.builder.beginBoundThreadSupport(destination.single())
+                    e.builder.beginBoundThreadSupport(destination.single(), allocationCounterForeign)
                     state.emit(e)
                     e.builder.endBoundThreadSupport()
                 }
@@ -2307,6 +2309,62 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.endBlock()
                     }
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && CoreThreadScheduling.named(fn[1] as String)) {
+                val name = fn[1] as String
+                CoreThreadScheduling.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                CoreThreadScheduling.validate(name, operands.map { it.proof }, flags, tupleProof)
+                when (name) {
+                    "par#" -> ProvenExpression(Expression { it.builder.emitLoadConstant(1L) }, tupleProof.copy(evaluated = true))
+                    "delay#" -> ProvenExpression(Expression { e ->
+                        val b = e.builder
+                        val token = Expression { target ->
+                            target.builder.beginPrepareThreadDelay()
+                            operands.forEach { it.emit(target) }
+                            target.builder.endPrepareThreadDelay()
+                        }
+                        if (enableAsync) emitBlockingRequest(e, listOf(token), true) { values ->
+                            b.beginAwaitThreadDelay(true); b.emitLoadLocal(values.single()); b.endAwaitThreadDelay()
+                        } else {
+                            b.beginBlock()
+                            b.beginAwaitThreadDelay(false); token.emit(e); b.endAwaitThreadDelay()
+                            b.emitLoadConstant(Unit)
+                            b.endBlock()
+                        }
+                    }, tupleProof.copy(evaluated = true))
+                    "setThreadAllocationCounter#", "setOtherThreadAllocationCounter#" -> ProvenExpression(Expression { e ->
+                        val b = e.builder
+                        val other = name == "setOtherThreadAllocationCounter#"
+                        b.beginBlock()
+                        b.beginSetThreadAllocationCounter(other)
+                        operands[0].emit(e)
+                        if (other) operands[1].emit(e) else b.emitLoadConstant(Unit)
+                        operands.last().emit(e)
+                        b.endSetThreadAllocationCounter()
+                        b.emitLoadConstant(Unit)
+                        b.endBlock()
+                    }, tupleProof.copy(evaluated = true))
+                    else -> {
+                        val empty = if (name == "getSpark#") dataLayouts.getOrPut(CoreThreadScheduling.FALSE) {
+                            DataLayout(language, CoreThreadScheduling.FALSE, "False", emptyArray())
+                        }.allocate() else null
+                        tupleExpression(tupleProof) { e, destination ->
+                            val b = e.builder
+                            b.beginBlock()
+                            if (name == "spark#") {
+                                b.beginStoreLocal(destination[0]); operands[0].emit(e); b.endStoreLocal()
+                            }
+                            b.beginDiscardVoid(); operands.last().emit(e); b.endDiscardVoid()
+                            if (name != "spark#") {
+                                b.beginStoreLocal(destination[0]); b.emitLoadConstant(0L); b.endStoreLocal()
+                                if (empty != null) {
+                                    b.beginStoreLocal(destination[1]); b.emitLoadConstant(empty); b.endStoreLocal()
+                                }
+                            }
+                            b.endBlock()
+                        }
+                    }
+                }
             } else if (fn[0] == "prim" && CoreThreadObservation.named(fn[1] as String)) {
                 val name = fn[1] as String
                 CoreThreadObservation.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -2429,7 +2487,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     operands.forEach { it.emit(e) }
                     e.builder.endThreadStatus()
                 }
-            } else if (fn[0] == "prim" && fn[1] in listOf("fork#", "myThreadId#", "killThread#")) {
+            } else if (fn[0] == "prim" && fn[1] in listOf("fork#", "forkOn#", "myThreadId#", "killThread#")) {
                 val name = fn[1] as String
                 CoreGuestThreads.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
@@ -2493,11 +2551,17 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 } else tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
                     b.beginStoreLocal(destination[0])
-                    b.beginThreadPrimitive(if (name == "fork#") BytecodeRoot.ThreadPrimitiveKind.FORK
-                        else BytecodeRoot.ThreadPrimitiveKind.MY)
-                    if (name == "fork#") operands[0].emit(e) else b.emitLoadConstant(Unit)
-                    operands.last().emit(e)
-                    b.emitLoadConstant(Unit)
+                    b.beginThreadPrimitive(when (name) {
+                        "fork#" -> BytecodeRoot.ThreadPrimitiveKind.FORK
+                        "forkOn#" -> BytecodeRoot.ThreadPrimitiveKind.FORK_ON
+                        else -> BytecodeRoot.ThreadPrimitiveKind.MY
+                    })
+                    if (name == "forkOn#") operands.forEach { it.emit(e) }
+                    else {
+                        if (name == "fork#") operands[0].emit(e) else b.emitLoadConstant(Unit)
+                        operands.last().emit(e)
+                        b.emitLoadConstant(Unit)
+                    }
                     b.endThreadPrimitive()
                     b.endStoreLocal()
                 }

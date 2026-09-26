@@ -51,6 +51,9 @@ internal object CoreGuestThreads {
         val valid = when (name) {
             "fork#" -> arguments.size == 2 && action(arguments[0]) && state(arguments[1]) &&
                 flags == listOf(true, false) && threadResult(result)
+            "forkOn#" -> arguments.size == 3 && arguments[0].kind == CoreKind.LONG &&
+                !arguments[0].isAggregate && !arguments[0].isVector && action(arguments[1]) && state(arguments[2]) &&
+                flags == listOf(false, true, false) && threadResult(result)
             "myThreadId#" -> arguments.size == 1 && state(arguments[0]) &&
                 flags == listOf(false) && threadResult(result)
             "threadStatus#" -> arguments.size == 2 && thread(arguments[0]) && state(arguments[1]) &&
@@ -70,13 +73,14 @@ internal object CoreGuestThreads {
 internal data class GuestThreadSnapshot(val status: Long, val capability: Long, val locked: Long)
 
 internal class ForkThread(@field:Child private var action: Expr, @field:Child private var state: Expr,
-                          proof: CoreRepresentation) : Expr() {
+                          proof: CoreRepresentation, @field:Child private var capability: Expr? = null) : Expr() {
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("fork# requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val requested = capability?.executeRequiredLong(frame)
         val child = action.execute(frame) // Do not force the lifted action on its parent.
         requireVoidCarrier(state.execute(frame))
-        FrameAccess.write(frame, slots[offset], GuestThreadOps.fork(this, child, false))
+        FrameAccess.write(frame, slots[offset], GuestThreadOps.fork(this, child, false, requested))
         return null
     }
 }
@@ -273,8 +277,7 @@ internal object GuestThreadOps {
     @JvmStatic @TruffleBoundary fun threadStatus(node: Node, id: Any?): GuestThreadSnapshot {
         val threads = Language.currentState(node).threads
         val target = id as? GuestThreadId ?: fault("threadStatus# requires a ThreadId#")
-        // No forkOn# or affinity operation is admitted, so no thread has TSO_LOCKED.
-        return GuestThreadSnapshot(threads.status(target).code, target.capability, 0L)
+        return GuestThreadSnapshot(threads.status(target).code, target.capability, if (target.capabilityLocked) 1L else 0L)
     }
 
     @JvmStatic @TruffleBoundary fun labelThread(node: Node, id: Any?, bytes: Any?) {
@@ -288,7 +291,8 @@ internal object GuestThreadOps {
     }
 
     /** Start a real Truffle thread and wait only until its guest registration is visible. */
-    @JvmStatic @TruffleBoundary fun fork(node: Node, action: Any?, asyncEnabled: Boolean): GuestThreadId {
+    @JvmStatic @JvmOverloads @TruffleBoundary fun fork(node: Node, action: Any?, asyncEnabled: Boolean,
+                                                      capability: Long? = null): GuestThreadId {
         val state = Language.currentState(node)
         val threads = state.threads
         // A known closure retains immediate contract validation. A lazy action
@@ -308,7 +312,7 @@ internal object GuestThreadOps {
             var registered = false
             var outcome = GuestThreadStatus.FINISHED
             try {
-                threads.enterCurrent(inheritedMask, forked = true, externalAsync = asyncEnabled)
+                threads.enterCurrent(inheritedMask, forked = true, externalAsync = asyncEnabled, capability = capability)
                 registered = true
                 identity.set(threads.currentIdentity())
                 ready.countDown()

@@ -143,6 +143,14 @@
         "test/haskell-fixtures/DelimitedContinuationsFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
+    "thread-scheduling": {
+      "junit": ["thc.runtime.ThreadSchedulingTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-scheduling"]}],
+      "outputs": ["build/thread-scheduling"],
+      "sources": ["examples/ThreadScheduling.hs", "compiler/test-fixtures/ThreadSchedulingNative.hs",
+        "test/haskell-fixtures/ThreadSchedulingFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "thread-inventory": {
       "junit": ["thc.runtime.ThreadInventoryNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-inventory"]}],
