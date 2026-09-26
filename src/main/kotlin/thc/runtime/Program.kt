@@ -1529,7 +1529,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                             inputLayout: ArgumentLayout? = null,
                             internal val enableAsync: Boolean = false,
                             @field:CompilationFinal(dimensions = 2) private val environmentVectorSlots: Array<IntArray?> = emptyArray(),
-                            private val enableDelimited: Boolean = false) : GuestRoot(language, descriptor) {
+                            internal val enableDelimited: Boolean = false) : GuestRoot(language, descriptor) {
     init { configureEntry(entryStrict, captureLayout != null); configureInput(inputLayout); configureTupleResult(tuple) }
     @field:CompilationFinal(dimensions = 1)
     private val argumentReferences = argumentProofs.map { it.referenceCarrier() }.toTypedArray()
@@ -1855,6 +1855,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         CoreMainThreadForeign.validateHeads(bindings)
         CoreBoundThreadForeign.validateHeads(bindings)
         CoreStringRtsForeign.validateHeads(bindings)
+        CoreEnvironmentForeign.validateHeads(bindings)
         CoreRtsDiagnosticForeign.validateHeads(bindings)
         CoreRtsArgumentsForeign.validateHeads(bindings)
         CoreManagedFiles.validateHeads(bindings)
@@ -2159,6 +2160,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val stringRts = CoreStringRtsForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val environment = CoreEnvironmentForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val rtsDiagnostic = CoreRtsDiagnosticForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val rtsArguments = CoreRtsArgumentsForeign.validate(foreignMetadata,
@@ -2180,7 +2183,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
@@ -2264,6 +2267,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 CoreBoundThreadForeign.validateOperand(state.representation, if (argument[0] == "var")
                     scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
                 BoundThreadSupport(state).proven(tupleProof.copy(evaluated = true))
+            } else if (environment != null) {
+                CoreEnvironmentForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreEnvironmentForeign.validateOperand(environment, index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                EnvironmentExpression(environment, operands.toTypedArray(), tupleProof)
             } else if (stringRts != null) {
                 CoreStringRtsForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->

@@ -1,0 +1,8 @@
+packages: pandoc-3.11 pandoc-cli-3.11
+jobs: 4
+tests: False
+benchmarks: False
+index-state: 2026-09-24T12:38:18Z
+
+package pandoc-cli
+  flags: -lua -server -repl

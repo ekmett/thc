@@ -51,6 +51,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @CompilerDirectives.CompilationFinal private boolean asyncEnabled;
     public final void configureAsync(boolean enabled) { asyncEnabled = enabled; }
     public final boolean isAsyncEnabled() { return asyncEnabled; }
+    @CompilerDirectives.CompilationFinal private boolean delimitedEnabled;
+    public final void configureDelimited(boolean enabled) { delimitedEnabled = enabled; }
+    public final boolean isDelimitedEnabled() { return delimitedEnabled; }
     @CompilerDirectives.CompilationFinal private LocalAccessor typedBloom;
     public final void configureTypedBloom(LocalAccessor bloom) { typedBloom = bloom; }
 
@@ -1204,6 +1207,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 long size, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             ManagedAddress result = ManagedNativeAllocations.current(node).malloc(size);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class NativeRealloc {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress address, long size, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedAddress result = ManagedNativeAllocations.current(node).realloc(address, size);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
@@ -3085,6 +3099,38 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Fallback public static void invalid(VirtualFrame frame, LocalAccessor destination,
                 Object address, Object state) {
             throw fail("Expected owned Addr#/State# for original strlen");
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class EnvironmentGet {
+        @Specialization public static void get(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress name, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    GuestEnvironment.current(node).get(name));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = EnvironmentOp.class, name = "operation")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class EnvironmentChange {
+        @Specialization public static void change(VirtualFrame frame, EnvironmentOp operation,
+                LocalAccessor destination, ManagedAddress name, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            GuestEnvironment environment = GuestEnvironment.current(node);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    operation == EnvironmentOp.PUT ? environment.put(name) : environment.unset(name));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class EnvironmentEnumerate {
+        @Specialization public static void get(VirtualFrame frame, LocalAccessor destination,
+                Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    GuestEnvironment.current(node).environ());
         }
     }
     /** The admitted FD scheduler follows the non-threaded GHC RTS branch. */

@@ -75,10 +75,15 @@ OPERATIONS = {
         ('capi', 'unsafe', ('Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),
 
     'malloc': ('ccall', 'unsafe', ('Word64Rep', None), (None, 'AddrRep')),
+    'realloc': ('ccall', 'unsafe', ('AddrRep', 'Word64Rep', None), (None, 'AddrRep')),
     'free': ('ccall', 'unsafe', ('AddrRep', None), (None,)),
     'memmove': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', 'Word64Rep', None), (None, 'AddrRep')),
     'memcpy': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', 'Word64Rep', None), (None, 'AddrRep')),
     'strlen': ('ccall', 'unsafe', ('AddrRep', None), (None, 'IntRep')),
+    'getenv': ('ccall', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
+    'putenv': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Int32Rep')),
+    '__hsbase_unsetenv': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Int32Rep')),
+    '__hscore_environ': ('ccall', 'unsafe', (None,), (None, 'AddrRep')),
     **{symbol: ('capi', 'unsafe', arguments, output)
        for symbol, (arguments, output) in SIGSET_OPERATIONS.items()},
     'rtsSupportsBoundThreads': ('ccall', 'unsafe', (None,), (None, 'IntRep')),

@@ -1,0 +1,26 @@
+--- a/hscolour.cabal
++++ b/hscolour.cabal
+@@ -51,6 +51,23 @@ Executable HsColour
+   Build-depends: base < 10, containers
+   Default-Language: Haskell98
+   Main-is: HsColour.hs
++  Other-modules:
++    Language.Haskell.HsColour
++    Language.Haskell.HsColour.ANSI
++    Language.Haskell.HsColour.Anchors
++    Language.Haskell.HsColour.ACSS
++    Language.Haskell.HsColour.CSS
++    Language.Haskell.HsColour.Classify
++    Language.Haskell.HsColour.ColourHighlight
++    Language.Haskell.HsColour.Colourise
++    Language.Haskell.HsColour.General
++    Language.Haskell.HsColour.HTML
++    Language.Haskell.HsColour.InlineCSS
++    Language.Haskell.HsColour.LaTeX
++    Language.Haskell.HsColour.MIRC
++    Language.Haskell.HsColour.Options
++    Language.Haskell.HsColour.Output
++    Language.Haskell.HsColour.TTY
+   --ghc-options: -O -W
+   Default-Extensions: CPP
+   cpp-options: -DMAJOR=1 -DMINOR=25

@@ -10,4 +10,5 @@ main = mapM_ row [-2, 0, 7]
     row (I# n) = mapM_ print
       [I# (promptPure n), I# (abortSuffix n), I# (resumeTwice n), I# (nestedPrompts n),
        I# (sameTagNearest n), I# (capturedCatch n), I# (capturedMask n), I# (escapedResume n), I# (ambientMask n),
-       I# (resumedTail n), I# (resumedJoin n), I# (resumedScalar n), I# (recapturedMask n)]
+       I# (resumedTail n), I# (resumedJoin n), I# (resumedScalar n), I# (recapturedMask n), I# (resumedApplication n),
+       I# (resumedScalarApplication n), I# (polymorphicApplications n), I# (polymorphicScalarApplications n)]

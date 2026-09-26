@@ -14,6 +14,11 @@ internal class NativeAllocationExpression(private val operation: NativeAllocatio
             val size = operands[0].executeRequiredLong(frame)
             requireVoidCarrier(operands[1].execute(frame))
             FrameAccess.writeObject(frame, slots[offset], Language.currentState(this).nativeAllocations.malloc(size))
+        } else if (operation == NativeAllocationOp.REALLOC) {
+            val address = operands[0].executeRequiredAddress(frame)
+            val size = operands[1].executeRequiredLong(frame)
+            requireVoidCarrier(operands[2].execute(frame))
+            FrameAccess.writeObject(frame, slots[offset], Language.currentState(this).nativeAllocations.realloc(address, size))
         } else {
             val address = operands[0].executeRequiredAddress(frame)
             requireVoidCarrier(operands[1].execute(frame))
