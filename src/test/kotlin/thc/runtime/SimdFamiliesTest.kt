@@ -64,7 +64,7 @@ class SimdFamiliesTest {
     }
 
     @Test fun rawVectorBoundariesRejectWrongSpeciesAndElementTypes() {
-        val shorts = ShortVector.broadcast(ShortVector.SPECIES_128, 0).withLane(1, 1).withLane(2, -1).withLane(3, Short.MIN_VALUE).withLane(4, Short.MAX_VALUE).withLane(5, 5).withLane(6, 6).withLane(7, 7)
+        val shorts = ShortVector.broadcast(ShortVector.SPECIES_128, 0.toShort()).withLane(1, 1).withLane(2, -1).withLane(3, Short.MIN_VALUE).withLane(4, Short.MAX_VALUE).withLane(5, 5).withLane(6, 6).withLane(7, 7)
         assertEquals(ShortVector.SPECIES_128, shorts.species())
         assertEquals(listOf(0, 1, -1, -32768, 32767, 5, 6, 7), (0 until 8).map { shorts.lane(it).toInt() })
         assertEquals(shorts, CoreVectors.requireShort(shorts, ShortVector.SPECIES_128))
@@ -154,7 +154,7 @@ class SimdFamiliesTest {
             assertThrows(RuntimeFault::class.java) { BytecodeRoot.GeneratedDoubleX2Insert.apply(DoubleVector.broadcast(DoubleVector.SPECIES_128, 1.0), 2.0, index) }
         }
         for (index in listOf(-1L, 16L, Long.MAX_VALUE, 0x1_0000_0000L)) {
-            assertThrows(RuntimeFault::class.java) { BytecodeRoot.GeneratedInt8X16Insert.apply(ByteVector.broadcast(ByteVector.SPECIES_128, 1), 2, index) }
+            assertThrows(RuntimeFault::class.java) { BytecodeRoot.GeneratedInt8X16Insert.apply(ByteVector.broadcast(ByteVector.SPECIES_128, 1.toByte()), 2, index) }
         }
     }
 

@@ -7,7 +7,6 @@ import jdk.incubator.vector.DoubleVector
 
 import java.math.BigInteger
 import java.nio.ByteOrder
-import jdk.incubator.vector.DoubleVector
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
