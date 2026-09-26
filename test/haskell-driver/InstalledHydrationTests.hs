@@ -8,13 +8,14 @@ import Control.Concurrent.MVar (newEmptyMVar, putMVar, readMVar)
 import Control.Exception (IOException, bracket, finally, try)
 import Control.Monad (forM_, unless)
 import Data.Aeson (Value(Null), encode, object, (.=))
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.List (isInfixOf)
 import System.Directory (createDirectory, doesFileExist, getTemporaryDirectory, removeFile, removePathForcibly)
 import System.Environment (getExecutablePath)
 import System.Exit (ExitCode(..), exitWith)
 import System.FilePath ((</>))
-import System.IO (hClose, openTempFile)
+import System.IO (hClose, openTempFile, stderr, stdout)
 import System.Timeout (timeout)
 import Test.HUnit (Test(..), assertBool, assertEqual, assertFailure)
 import THC.Driver.Installed
@@ -38,13 +39,20 @@ helperMode arguments = case arguments of
       "error-after-B" -> awaitFile (directory </> "B.finished")
       _ -> pure ()
     writeFile (mark ".finished") ""
+    if mode == "noisy" then do
+      input <- getContents
+      unless (null input) (fail "The helper expected empty stdin")
+      BS.hPut stderr (BS.replicate (1024 * 1024) 120)
+    else if mode == "invalid-stderr" then BS.hPut stderr (BS.singleton 255)
+    else pure ()
     let missing = object ["schema" .= (1 :: Int), "status" .= ("unavailable" :: String),
           "capability" .= ("complete-interface-core" :: String), "unit" .= identifier,
           "module" .= name, "interface" .= option "--interface", "way" .= ("dynamic" :: String)]
         core = object ["schema" .= (1 :: Int), "unit" .= identifier, "module" .= name,
           "ghc" .= ("9.14.1" :: String), "boundary" .= ("optimized-Core-after-Tidy-before-CorePrep" :: String),
-          "payload" .= replicate 200 name]
-    if mode == "missing-after-B" then BL.putStrLn (encode missing) >> exitWith (ExitFailure 3)
+          "payload" .= replicate 200 (name ++ "\x03bb\x1f642")]
+    if mode == "invalid-stdout" then BS.hPut stdout (BS.singleton 255)
+    else if mode == "missing-after-B" then BL.putStrLn (encode missing) >> exitWith (ExitFailure 3)
     else if mode `elem` ["error", "error-after-B"] then do
       BL.putStrLn (encode (object ["schema" .= (1 :: Int), "status" .= ("error" :: String)]))
       exitWith (ExitFailure 1)
@@ -164,4 +172,16 @@ tests = TestLabel "bounded installed-interface hydration" $ TestList
   , TestCase $ fixture [] $ \_ context unit -> do
       result <- acquireInstalledWithJobs 2 context unit
       assertEqual "Empty registered inventory retains its owner" (Right (InstalledCore identifier [])) result
+  , TestCase $ fixture ["A", "B"] $ \directory context unit -> do
+      serial <- acquireInstalledWithJobs 1 context unit
+      forM_ ["A", "B"] $ \name -> writeFile (directory </> name ++ ".mode") "noisy"
+      parallel <- timeout 5000000 (acquireInstalledWithJobs 2 context unit)
+      assertEqual "Concurrent large stderr drains preserve UTF-8 Core and EOF stdin" (Just serial) parallel
+  , TestCase $ fixture ["A"] $ \directory context unit ->
+      forM_ ["invalid-stdout", "invalid-stderr"] $ \mode -> do
+        writeFile (directory </> "A.mode") mode
+        result <- try (acquireInstalledWithJobs 2 context unit)
+          :: IO (Either IOException (Either MissingCore InstalledCore))
+        assertBool "Invalid UTF-8 must remain a protocol failure, never missing Core"
+          (case result of Left _ -> True; _ -> False)
   ]
