@@ -12,6 +12,7 @@ import qualified StoreProjectTests
 import qualified EmptyStoreProjectTests
 import qualified ScalarBitcodeTests
 import qualified PackageNativeTests
+import qualified NativeCacheTests
 import qualified NativeRecipeTests
 import qualified RuntimeShimTests
 import qualified InstalledForeignTests
@@ -25,6 +26,7 @@ main = do
     [ InstalledForeignTests.tests
     , ScalarBitcodeTests.tests
     , PackageNativeTests.tests
+    , NativeCacheTests.tests
     , NativeRecipeTests.tests
     , RuntimeShimTests.tests
     , InstalledForeignTests.viewTests env

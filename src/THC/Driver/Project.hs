@@ -46,6 +46,7 @@ import THC.Driver.NativeRecipe (NativeRecipe(..), componentRoots, componentNativ
 import THC.Driver.ScalarBitcode (ScalarBitcode, scalarBuildInputs, linkScalarBitcode)
 import THC.Driver.RuntimeShim (RuntimeShim, withRuntimeShim, runtimeShimInputs, validateRuntimeShimModules)
 import THC.Driver.PackageNative (captureNativeObject, capturePackageNative, finishPackageNative)
+import THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign
 import THC.Driver.Run (RunOptions(..))
@@ -84,7 +85,8 @@ data ExportContext = ExportContext
   , contextPluginLibrary :: FilePath, contextNative :: FilePath
   , contextCache :: FilePath, contextDriverHash :: String
   , contextGhc :: FilePath, contextGhcPkg :: Maybe FilePath
-  , contextDriver :: FilePath, contextRoot :: FilePath }
+  , contextDriver :: FilePath, contextRoot :: FilePath
+  , contextNativeTools :: Value }
 
 boundary :: String
 boundary = "optimized-Core-after-Tidy-before-CorePrep"
@@ -209,8 +211,9 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   arch <- field plan "arch"
   cacheRoot <- coreCacheDirectory
   driverHash <- digestFile driver
+  nativeTools <- nativeToolIdentity
   let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
-                              pluginLibrary native cacheRoot driverHash ghc ghcPkg driver thcRoot
+                              pluginLibrary native cacheRoot driverHash ghc ghcPkg driver thcRoot nativeTools
   records <- field plan "install-plan" :: IO [Value]
   units <- mapM readUnit records
   let byId = Map.fromList [(unitId unit, unit) | unit <- units]
@@ -725,7 +728,7 @@ globalLocation context unit = do
   let buildKey = shaHex (BL.toStrict (encode
         ("thc-core-store-build-v1" :: String, contextCompiler context,
          contextAbi context, contextPlatform context, unitId unit,
-         sourceHash, unitDepends unit)))
+         sourceHash, unitDepends unit, contextNativeTools context)))
   exporter <- exporterIdentity context
   let exportKey = shaHex (BL.toStrict (encode
         ("thc-core-export-v1" :: String, buildKey, exporter)))
@@ -952,6 +955,8 @@ exportConfiguredUnit context keys unit component scalar runtimeShim nativeObject
   nativeInputs <- forM products $ \path -> do
     digest <- digestFile path
     pure (makeRelative (contextNative context) path, digest)
+  nativePieces <- traverse
+    (nativePieceIdentity (contextNative context </> "cache/thc/native-pieces-v1")) nativeObjects
   let dependencies = [(identifier, Map.findWithDefault identifier identifier keys)
                      | identifier <- unitDepends unit]
       normalized = normalizePaths (contextNative context)
@@ -961,10 +966,12 @@ exportConfiguredUnit context keys unit component scalar runtimeShim nativeObject
                                            "abi" .= contextAbi context,
                                            "platform" .= contextPlatform context],
                      "component" .= normalized (componentValue component),
+                     "nativeTools" .= contextNativeTools context,
                      "nativeArtifacts" .= [object ["path" .= path, "sha256" .= digest]
                                            | (path, digest) <- nativeInputs],
                      "dependencies" .= [object ["id" .= identifier, "buildKey" .= identity]
                                         | (identifier, identity) <- dependencies]] ++
+                    maybe [] (\recipe -> ["packageNativeRecipe" .= normalized recipe]) nativePieces ++
                     maybe [] (\recipe -> ["packageScalarRecipe" .= scalarBuildInputs recipe]) scalar ++
                     maybe [] (\recipe -> ["runtimeShimRecipe" .= runtimeShimInputs recipe]) runtimeShim
       buildKey = shaHex (BL.toStrict (encode (object inputFields)))

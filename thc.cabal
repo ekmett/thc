@@ -385,6 +385,7 @@ executable thc
     THC.Driver.Cabal
     THC.Driver.Cache
     THC.Driver.ForeignBitcode
+    THC.Driver.NativeCache
     THC.Driver.NativeRecipe
     THC.Driver.PackageNative
     THC.Driver.ScalarBitcode
@@ -431,6 +432,7 @@ test-suite driver-tests
     EmptyStoreProjectTests
     ScalarBitcodeTests
     PackageNativeTests
+    NativeCacheTests
     NativeRecipeTests
     RuntimeShimTests
     InstalledForeignTests
@@ -438,6 +440,7 @@ test-suite driver-tests
     THC.Driver.Installed
     THC.Driver.InstalledForeign
     THC.Driver.Lock
+    THC.Driver.NativeCache
     THC.Driver.NativeRecipe
     THC.Driver.PackageNative
     THC.Driver.ScalarBitcode
@@ -735,6 +738,7 @@ executable thc-fixtures
     THC.Driver.Cabal
     THC.Driver.Cache
     THC.Driver.ForeignBitcode
+    THC.Driver.NativeCache
     THC.Driver.NativeRecipe
     THC.Driver.PackageNative
     THC.Driver.ScalarBitcode
