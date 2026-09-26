@@ -19,6 +19,36 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_recent_native_producers_remain_fail_closed_full_preparation_inputs(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        plan = (project / 'scripts/prepare-tests.sh').read_text().splitlines()
+        for family, junit, count, native in (
+                ('sum-join', 'thc.runtime.SumJoinResultTest', 28, 'oracle.tsv'),
+                ('record-fields', 'thc.runtime.RecordFieldNativeTest', 60, 'logs/post-native.stdout')):
+            with self.subTest(family=family):
+                self.assertIn('"$fixture_bin" ' + family, plan)
+                self.assertNotIn(junit, owners)
+                self.assertNotIn(junit, manifest['fixtureFreeJunit'])
+                output = 'build/' + family
+                self.assertIn(output, fast_fixtures.FULL_OUTPUT_ROOTS)
+                required = {p for p in fast_fixtures.FULL_REQUIRED if p.startswith(output + '/')}
+                self.assertEqual(count, len(required))
+                for name in required:
+                    path = self.root / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text('native producer evidence\n')
+                # Isolate this family while retaining the actual full-output
+                # validator, including mandatory native evidence and hashes.
+                with mock.patch.object(fast_fixtures, 'FULL_REQUIRED', required), \
+                     mock.patch.object(fast_fixtures, 'FULL_OUTPUT_ROOTS', {output}), \
+                     mock.patch.object(fast_fixtures, 'NON_FIXTURE_BUILD_ROOTS', {'sum-join', 'record-fields'}):
+                    self.assertEqual(required, set(fast_fixtures._full_output_hashes(self.root)))
+                    (self.root / output / native).unlink()
+                    with self.assertRaises(FileNotFoundError):
+                        fast_fixtures._full_output_hashes(self.root)
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+
     def test_stable_names_keep_native_values_and_closed_artifacts(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
@@ -79,7 +109,8 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertNotIn('build/stm/manifest.json', fast_fixtures.FULL_REQUIRED)
         self.assertTrue((project / 'src/fullCoreTest/kotlin/thc/runtime/STMFullCoreTest.kt').is_file())
         build = (project / 'build.gradle.kts').read_text()
-        self.assertIn('tasks.register<Test>("stmFullCoreTest")', build)
+        self.assertIn('for ((taskName, dense) in listOf("stmFullCoreTest" to false, "stmDenseFullCoreTest" to true)) tasks.register<Test>(taskName)', build)
+        self.assertIn('systemProperty("thc.handoffSlabs", dense.toString())', build)
         self.assertIn('includeTestsMatching("thc.runtime.STMFullCoreTest")', build)
         self.assertIn('check(file("build/stm/manifest.json").isFile)', build)
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
@@ -1180,7 +1211,7 @@ class FixturePreparationTest(unittest.TestCase):
 
     def fake_run(self, name, argv, stdout=None):
         self.calls.append((name, argv, stdout))
-        if argv == ["python3", "scripts/generate-scalar-signatures.py"] and self.mutate_scalar_on_generator:
+        if argv == ["cabal", "run", "exe:thc-primops", "--", "scalars"] and self.mutate_scalar_on_generator:
             resource = self.root / "src/main/resources/thc/scalar-primop-signatures.json"
             resource.write_text("updated signature table")
         if argv == ["make-alpha"]:
@@ -1206,7 +1237,7 @@ class FixturePreparationTest(unittest.TestCase):
         first = self.prepare("thc.AlphaTest", "thc.AlphaBackendTest")
         self.assertEqual(first, {"mode": "selected", "rebuilt": ["alpha"], "reused": []})
         self.assertEqual([argv for _, argv, _ in self.calls], [
-            ["python3", "scripts/generate-scalar-signatures.py"],
+            ["cabal", "run", "exe:thc-primops", "--", "scalars"],
             ["compiler/build.sh"], ["make-alpha"]])
         self.assertEqual(self.prepare("thc.AlphaBackendTest"),
                          {"mode": "selected", "rebuilt": [], "reused": ["alpha"]})
@@ -1220,7 +1251,7 @@ class FixturePreparationTest(unittest.TestCase):
         result = self.prepare("thc.AlphaTest", "thc.BetaTest")
         self.assertEqual(result, {"mode": "selected", "rebuilt": ["beta"], "reused": ["alpha"]})
         self.assertEqual([argv for _, argv, _ in self.calls], [
-            ["python3", "scripts/generate-scalar-signatures.py"],
+            ["cabal", "run", "exe:thc-primops", "--", "scalars"],
             ["compiler/build.sh"], ["make-beta"]])
 
     def test_missing_or_changed_output_rebuilds(self):

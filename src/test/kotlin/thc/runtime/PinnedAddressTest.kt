@@ -98,7 +98,7 @@ class PinnedAddressTest {
         val sources = listOf("compiler/test-fixtures/PinnedAddressAudit.hs", "compiler/test-fixtures/PinnedAddressAuditNative.hs",
             "test/haskell-fixtures/PinnedAddressFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs",
             "thc.cabal", "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py",
-            "scripts/audit-core.py", "scripts/core-capabilities.json", "scripts/generate-scalar-signatures.py",
+            "scripts/audit-core.py", "scripts/core-capabilities.json", "tools/primops/PrimopTools.hs",
             "src/main/resources/thc/scalar-primop-signatures.json") +
             File(root, "compiler/THC").listFiles()!!.filter { it.extension == "hs" }.map { it.relativeTo(root).path } +
             File(root, "scripts").listFiles()!!.filter { it.name.startsWith("core_") && it.extension == "py" }.map { it.relativeTo(root).path }

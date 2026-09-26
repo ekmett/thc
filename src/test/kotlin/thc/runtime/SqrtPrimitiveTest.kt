@@ -32,7 +32,7 @@ class SqrtPrimitiveTest {
             assertEquals(expected, hash, "Stale sqrt evidence: $path")
         }
         val required = listOf("scripts/audit-core.py", "scripts/core-capabilities.json",
-            "src/main/resources/thc/scalar-primop-signatures.json", "scripts/generate-scalar-signatures.py") +
+            "src/main/resources/thc/scalar-primop-signatures.json", "tools/primops/PrimopTools.hs") +
             File(root, "scripts").listFiles()!!.filter { it.name.startsWith("core_") && it.extension == "py" }
                 .map { it.relativeTo(root).path }
         assertTrue((evidence["inputHashes"] as Map<String, String>).keys.containsAll(required))

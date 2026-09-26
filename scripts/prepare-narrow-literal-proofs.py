@@ -125,7 +125,7 @@ def main():
     sources = [ROOT/p for p in ['scripts/prepare-narrow-literal-proofs.py', 'scripts/test-narrow-literal-proofs.py',
         'compiler/test-fixtures/NarrowLiteralProofAudit.hs', 'compiler/test-fixtures/NarrowLiteralProofAuditNative.hs',
         'compiler/build.sh', 'compiler/export.sh', 'compiler/toolchain.sh', 'scripts/audit-core.py',
-        'scripts/core-capabilities.json', 'scripts/generate-scalar-signatures.py', 'src/main/resources/thc/scalar-primop-signatures.json']]
+        'scripts/core-capabilities.json', 'tools/primops/PrimopTools.hs', 'thc.cabal', 'src/main/resources/thc/scalar-primop-signatures.json']]
     sources += sorted((ROOT/'compiler/THC').rglob('*.hs')) + sorted((ROOT/'scripts').glob('core_*.py'))
     artifacts = [OUT/'oracle.tsv', native/'narrow-literal-oracle'] + [OUT/f'{s}-core/NarrowLiteralProofAudit.json' for s in ('pre','post')] + [OUT/f'{s}-audit.json' for s in ('pre','post')]
     manifest = dict(schema=1, ghc='9.14.1', commands=commands, **evidence,

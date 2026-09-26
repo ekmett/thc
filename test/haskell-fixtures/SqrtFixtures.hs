@@ -133,7 +133,7 @@ prepareSqrt root = do
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/SqrtFixtures.hs",
         "compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py",
         "scripts/audit-core.py","scripts/core-capabilities.json",
-        "src/main/resources/thc/scalar-primop-signatures.json","scripts/generate-scalar-signatures.py"] ++
+        "src/main/resources/thc/scalar-primop-signatures.json","tools/primops/PrimopTools.hs"] ++
         ["compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
         ["scripts" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [directory </> name | name <- ["inputs.tsv","oracle.tsv","integer-oracle.tsv",

@@ -47,7 +47,7 @@ internal object ByteArrayFixtureEvidence {
             "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py") +
             File(root, "compiler/THC").listFiles()!!.filter { it.extension == "hs" }.map { it.relativeTo(root).path } +
             File(root, "scripts").listFiles()!!.filter { it.name.startsWith("core_") && it.extension == "py" }.map { it.relativeTo(root).path } +
-            (if (original) listOf("compiler/export-boot.py") + originalSources else listOf("scripts/primop-coverage.py")) +
+            (if (original) listOf("compiler/export-boot.py") + originalSources else listOf("tools/primops/PrimopTools.hs")) +
             (if (generated) emptyList() else listOf("compiler/test-fixtures/${module.removeSuffix("Audit")}Native.hs", "compiler/test-fixtures/ByteArrayFixtureInputs.hs"))
         val artifacts = listOf("$directory/requests.tsv", "$directory/oracle.tsv",
             "$directory/native/${if (group == "bytearray") "bytearray" else group}-oracle") +

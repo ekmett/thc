@@ -126,10 +126,10 @@ backends and the native checks pass. Then refresh the generated
 [primop checklist](primops.md):
 
 ```sh
-python3 scripts/generate-scalar-signatures.py --write
-python3 scripts/primop-coverage.py --write-checklist
-python3 scripts/primop-coverage.py --check
-python3 scripts/test-primop-coverage.py
+cabal run exe:thc-primops -- scalars --write
+cabal run exe:thc-primops -- coverage --write-checklist
+cabal run exe:thc-primops -- coverage --check
+cabal test primop-tools
 ```
 
 The scalar signature command needs the pinned GHC 9.14.1. The checklist is

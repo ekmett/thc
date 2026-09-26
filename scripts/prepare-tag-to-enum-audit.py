@@ -34,7 +34,7 @@ def walk(x):
 def audit_inputs():
     return [ROOT / 'scripts/audit-core.py', ROOT / 'scripts/core-capabilities.json',
             *sorted((ROOT / 'scripts').glob('core_*.py')), ROOT / 'src/main/resources/thc/scalar-primop-signatures.json',
-            ROOT / 'scripts/generate-scalar-signatures.py']
+            ROOT / 'tools/primops/PrimopTools.hs', ROOT / 'thc.cabal']
 
 def verify_native():
     rows = [line.split('\t') for line in (OUT / 'oracle.tsv').read_text().splitlines()]

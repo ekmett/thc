@@ -103,7 +103,7 @@ def main():
     (OUT/'checks.json').write_text(json.dumps(dict(nativeRows=110,independentPairRows=7,coverage=inventories),indent=2)+'\n')
     sources=[ROOT/'compiler/test-fixtures/SumResultAudit.hs',ROOT/'compiler/test-fixtures/SumResultAuditNative.hs',Path(__file__).resolve(),
              ROOT/'scripts/audit-core.py',ROOT/'scripts/core-capabilities.json',ROOT/'src/main/resources/thc/scalar-primop-signatures.json',
-             ROOT/'scripts/generate-scalar-signatures.py',*sorted((ROOT/'scripts').glob('core_*.py')),*sorted((ROOT/'compiler/THC').glob('*.hs')),
+             ROOT/'tools/primops/PrimopTools.hs',*sorted((ROOT/'scripts').glob('core_*.py')),*sorted((ROOT/'compiler/THC').glob('*.hs')),
              *[ROOT/'compiler'/name for name in ('build.sh','export.sh','toolchain.sh')],
              ROOT/'thc.cabal', ROOT/'cabal.project']
     plugin_manifest=ROOT/'build/compiler/plugin.json'

@@ -15,15 +15,15 @@ The canonical resource is
 `src/main/resources/thc/scalar-primop-signatures.json`, retained in the source tree
 for fixture generation and read directly by the Python auditor. It is excluded
 from runtime resources and the runtime jar. Generate it with
-`GHC=/path/to/ghc-9.14.1 python3 scripts/generate-scalar-signatures.py --write`.
+`GHC=/path/to/ghc-9.14.1 cabal run exe:thc-primops -- scalars --write`.
 Normal test preparation runs the generator without `--write` and requires an
 exact match. The generator queries `primOpSig` and `typePrimRep_maybe` through the
 GHC API, after structurally excluding quantified and non-primitive types; it does
 not parse pretty-printed type signatures. It checks the 64-bit target and retains
-compiler information, the complete query and input hashes in
+compiler information, the tool invocation/binary hash and Haskell source/input hashes in
 `build/scalar-signatures/provenance.json`.
 
-The table covers 333 monomorphic scalar operations with primitive arguments and
+The table covers 362 monomorphic scalar operations with primitive arguments and
 results. It is a tooling contract, not additional primitive support or a claim
 about undefined numeric inputs. Runtime tuple/vector transport, actual JVM
 carriers, bounds, ownership, lifetime and aliasing retain their own necessary

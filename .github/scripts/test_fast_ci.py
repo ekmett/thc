@@ -38,6 +38,10 @@ class FastRunnerTest(unittest.TestCase):
         self.assertEqual([], ci.haskell_suites(self.selection()))
         self.assertEqual(["driver-tests"], ci.haskell_suites(self.selection() |
                          {"haskell": {"suites": ["driver-tests"], "count": 1}}))
+        self.assertEqual(["primop-tools"], ci.haskell_suites(self.selection() |
+                         {"haskell": {"suites": ["primop-tools"], "count": 1}}))
+        with self.assertRaisesRegex(RuntimeError, "Haskell"):
+            ci.haskell_suites(self.selection() | {"haskell": {"suites": ["primop-tools", "primop-tools"], "count": 2}})
         with self.assertRaisesRegex(RuntimeError, "Haskell"):
             ci.haskell_suites(self.selection() | {"haskell": {"suites": ["other"], "count": 1}})
 
@@ -336,8 +340,8 @@ class FastRunnerTest(unittest.TestCase):
                 prepare.assert_called_once_with(self.root, selection, run, identity)
         self.assertEqual(run.call_args_list[0].args[1][2:4], ["--base", "b" * 40])
         self.assertEqual(run.call_args_list[1].args[0], "primop-checklist")
-        self.assertEqual(run.call_args_list[1].args[1][1:],
-                         ["scripts/primop-coverage.py", "--check", "--output",
+        self.assertEqual(run.call_args_list[1].args[1],
+                         ["cabal", "run", "exe:thc-primops", "--", "coverage", "--check", "--output",
                           str(recorder.directory / "primop-coverage.json")])
         self.assertEqual(run.call_count, 2)
         self.assertEqual(recorder.data["nativeInputs"]["reused"], ["smoke"])
@@ -361,6 +365,29 @@ class FastRunnerTest(unittest.TestCase):
         self.assertEqual(["cabal", "test", "driver-tests", "-fdevelopment", "--test-show-details=direct"],
                          commands.call_args_list[3].args[1])
 
+
+    def test_primop_suite_runs_itself_without_building_driver_plugin(self):
+        selection = self.selection() | {"reasons": [], "python": {"commands": []},
+                                        "haskell": {"suites": ["primop-tools"], "count": 1}}
+        identity_path = self.root / "identity.json"
+        identity_path.write_text(json.dumps({"platform": "linux", "toolchain": {}}))
+        for failed in (False, True):
+            with self.subTest(failed=failed), patch.object(ci, "git", return_value="a" * 40):
+                recorder = ci.Recorder(self.root, self.root / ("failed" if failed else "passed"))
+                outputs = [(0, json.dumps(selection)), (0, ""),
+                           RuntimeError("primop test failed") if failed else (0, "")]
+                with patch.object(recorder, "command", side_effect=outputs) as commands, \
+                        patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
+                        patch.object(ci, "run_modes", return_value=({}, [])) as smoke:
+                    if failed:
+                        with self.assertRaisesRegex(RuntimeError, "primop-tools"):
+                            ci.execute(recorder, "HEAD", "HEAD", identity_path)
+                    else:
+                        ci.execute(recorder, "HEAD", "HEAD", identity_path)
+                smoke.assert_called_once_with(recorder, selection, install_dist=False)
+                self.assertEqual(commands.call_args_list[2].args,
+                                 ("primop-tools", ["cabal", "test", "primop-tools", "-fdevelopment", "--test-show-details=direct"]))
+                self.assertEqual(3, commands.call_count)
 
     def test_opt_in_harness_compiles_without_executing_and_retains_jvm_smoke(self):
         selection = self.selection() | {"reasons": [], "python": {"commands": []},

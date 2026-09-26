@@ -324,7 +324,7 @@ sourcePaths root = do
   pure $ sort $ ["compiler/test-fixtures/PinnedAddressAudit.hs","compiler/test-fixtures/PinnedAddressAuditNative.hs",
     "test/haskell-fixtures/PinnedAddressFixtures.hs","test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/Main.hs",
     "thc.cabal","compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py",
-    "scripts/audit-core.py","scripts/core-capabilities.json","scripts/generate-scalar-signatures.py",
+    "scripts/audit-core.py","scripts/core-capabilities.json","tools/primops/PrimopTools.hs",
     "src/main/resources/thc/scalar-primop-signatures.json"] ++
     ["compiler/THC" </> name | name <- plugins, takeExtension name == ".hs"] ++
     ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
