@@ -12,6 +12,12 @@ properties. The 14 public-API checks also pass actual THC full startup/shutdown
 in both backends and handoff modes; the exact opt-in and remaining upstream
 guest-suite limits are recorded separately in that recipe.
 
+The [original containers benchmark recipe](containers/README.md) selects the
+upstream `containers-tests:bench:intmap-benchmarks` component and its unchanged
+`-DTESTING` library. It separates the native listing and single-case control
+from Core acquisition, strict admission and actual guest execution; this is
+not the THC-specific Map/Set microbenchmark suite.
+
 ## Recorded baseline
 
 On Linux x86-64 with GHC 9.14.1, all four pinned native `--version` commands
