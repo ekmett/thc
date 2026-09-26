@@ -10,6 +10,7 @@ import jdk.incubator.vector.LongVector;
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.DoubleVector;
 import jdk.incubator.vector.VectorOperators;
+import jdk.incubator.vector.VectorShape;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -3426,72 +3427,164 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class IndexVectorByteAddress {
-        @Specialization public static ByteVector index(boolean scalarOffset, ManagedAddress address, long index) {
-            return address.readVectorBytes(index, scalarOffset ? 1 : 16);
+        @Specialization public static ByteVector index(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index) {
+            return address.readVectorBytes(index, scalarOffset ? 1 : vectorBytes, vectorBytes);
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class ReadVectorByteAddress {
-        @Specialization public static ByteVector read(boolean scalarOffset, ManagedAddress address, long index, Object state) {
+        @Specialization public static ByteVector read(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, Object state) {
             ManagedByteArray.requireState(state);
-            return address.readVectorBytes(index, scalarOffset ? 1 : 16);
+            return address.readVectorBytes(index, scalarOffset ? 1 : vectorBytes, vectorBytes);
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorByteAddress {
-        @Specialization public static Object write(boolean scalarOffset, ManagedAddress address, long index, ByteVector vector, Object state) {
-            vector = CoreVectors.requireByte(vector, ByteVector.SPECIES_128);
+        @Specialization public static Object write(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, ByteVector vector, Object state) {
+            vector = CoreVectors.requireByte(vector, ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
-            address.writeVectorBytes(index, scalarOffset ? 1 : 16, vector);
+            address.writeVectorBytes(index, scalarOffset ? 1 : vectorBytes, vector, vectorBytes);
             return kotlin.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class IndexVectorShortAddress {
-        @Specialization public static ShortVector index(boolean scalarOffset, ManagedAddress address, long index) {
-            ShortVector vector = address.readVectorBytes(index, scalarOffset ? 2 : 16).reinterpretAsShorts();
-            return java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES);
+        @Specialization public static ShortVector index(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index) {
+            ShortVector vector = address.readVectorBytes(index, scalarOffset ? 2 : vectorBytes, vectorBytes).reinterpretAsShorts();
+            return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES));
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class ReadVectorShortAddress {
-        @Specialization public static ShortVector read(boolean scalarOffset, ManagedAddress address, long index, Object state) {
+        @Specialization public static ShortVector read(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, Object state) {
             ManagedByteArray.requireState(state);
-            ShortVector vector = address.readVectorBytes(index, scalarOffset ? 2 : 16).reinterpretAsShorts();
-            return java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES);
+            ShortVector vector = address.readVectorBytes(index, scalarOffset ? 2 : vectorBytes, vectorBytes).reinterpretAsShorts();
+            return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES));
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorShortAddress {
-        @Specialization public static Object write(boolean scalarOffset, ManagedAddress address, long index, ShortVector vector, Object state) {
-            vector = CoreVectors.requireShort(vector, ShortVector.SPECIES_128);
+        @Specialization public static Object write(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, ShortVector vector, Object state) {
+            vector = CoreVectors.requireShort(vector, ShortVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
-            address.writeVectorBytes(index, scalarOffset ? 2 : 16, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes());
+            address.writeVectorBytes(index, scalarOffset ? 2 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
             return kotlin.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
+    public static final class IndexVectorIntAddress {
+        @Specialization public static IntVector index(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index) {
+            IntVector vector = address.readVectorBytes(index, scalarOffset ? 4 : vectorBytes, vectorBytes).reinterpretAsInts();
+            return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES));
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
+    public static final class ReadVectorIntAddress {
+        @Specialization public static IntVector read(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, Object state) {
+            ManagedByteArray.requireState(state);
+            IntVector vector = address.readVectorBytes(index, scalarOffset ? 4 : vectorBytes, vectorBytes).reinterpretAsInts();
+            return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES));
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
+    public static final class WriteVectorIntAddress {
+        @Specialization public static Object write(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, IntVector vector, Object state) {
+            vector = CoreVectors.requireInt(vector, IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
+            ManagedByteArray.requireState(state);
+            address.writeVectorBytes(index, scalarOffset ? 4 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class IndexVectorLongAddress {
-        @Specialization public static LongVector index(boolean scalarOffset, ManagedAddress address, long index) {
-            LongVector vector = address.readVectorBytes(index, scalarOffset ? 8 : 16).reinterpretAsLongs();
-            return java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES);
+        @Specialization public static LongVector index(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index) {
+            LongVector vector = address.readVectorBytes(index, scalarOffset ? 8 : vectorBytes, vectorBytes).reinterpretAsLongs();
+            return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES));
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class ReadVectorLongAddress {
-        @Specialization public static LongVector read(boolean scalarOffset, ManagedAddress address, long index, Object state) {
+        @Specialization public static LongVector read(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, Object state) {
             ManagedByteArray.requireState(state);
-            LongVector vector = address.readVectorBytes(index, scalarOffset ? 8 : 16).reinterpretAsLongs();
-            return java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES);
+            LongVector vector = address.readVectorBytes(index, scalarOffset ? 8 : vectorBytes, vectorBytes).reinterpretAsLongs();
+            return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES));
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorLongAddress {
-        @Specialization public static Object write(boolean scalarOffset, ManagedAddress address, long index, LongVector vector, Object state) {
-            vector = CoreVectors.requireLong(vector, LongVector.SPECIES_128);
+        @Specialization public static Object write(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, LongVector vector, Object state) {
+            vector = CoreVectors.requireLong(vector, LongVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
-            address.writeVectorBytes(index, scalarOffset ? 8 : 16, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes());
+            address.writeVectorBytes(index, scalarOffset ? 8 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
+    public static final class IndexVectorFloatAddress {
+        @Specialization public static FloatVector index(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index) {
+            IntVector vector = address.readVectorBytes(index, scalarOffset ? 4 : vectorBytes, vectorBytes).reinterpretAsInts();
+            return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsFloats();
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
+    public static final class ReadVectorFloatAddress {
+        @Specialization public static FloatVector read(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, Object state) {
+            ManagedByteArray.requireState(state);
+            IntVector vector = address.readVectorBytes(index, scalarOffset ? 4 : vectorBytes, vectorBytes).reinterpretAsInts();
+            return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsFloats();
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
+    public static final class WriteVectorFloatAddress {
+        @Specialization public static Object write(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, FloatVector vector, Object state) {
+            vector = CoreVectors.requireFloat(vector, FloatVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
+            ManagedByteArray.requireState(state);
+            IntVector bits = vector.reinterpretAsInts();
+            address.writeVectorBytes(index, scalarOffset ? 4 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? bits : bits.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
+    public static final class IndexVectorDoubleAddress {
+        @Specialization public static DoubleVector index(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index) {
+            LongVector vector = address.readVectorBytes(index, scalarOffset ? 8 : vectorBytes, vectorBytes).reinterpretAsLongs();
+            return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsDoubles();
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
+    public static final class ReadVectorDoubleAddress {
+        @Specialization public static DoubleVector read(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, Object state) {
+            ManagedByteArray.requireState(state);
+            LongVector vector = address.readVectorBytes(index, scalarOffset ? 8 : vectorBytes, vectorBytes).reinterpretAsLongs();
+            return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsDoubles();
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
+    public static final class WriteVectorDoubleAddress {
+        @Specialization public static Object write(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, DoubleVector vector, Object state) {
+            vector = CoreVectors.requireDouble(vector, DoubleVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
+            ManagedByteArray.requireState(state);
+            LongVector bits = vector.reinterpretAsLongs();
+            address.writeVectorBytes(index, scalarOffset ? 8 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? bits : bits.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
             return kotlin.Unit.INSTANCE;
         }
     }

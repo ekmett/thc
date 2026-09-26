@@ -137,6 +137,34 @@ class FastInputTests(unittest.TestCase):
         for suffix in ('native/oracle', 'other.json', 'pre/core/Other.json', 'commands/extra.stdout'):
             self.assertFalse(cache.allowed_payload('build/delimited-continuations/' + suffix, {}))
 
+    def test_simd_address_archive_roundtrip_and_missing_native_binary(self):
+        self.assertEqual(43 if cache.SIMD_ADDRESS_NATIVE128 else 26, len(cache.SIMD_ADDRESS_OUTPUTS))
+        self.assertIn('build/simd-address-families/manifest.json', DECLARED_REQUIRED)
+        for path in cache.SIMD_ADDRESS_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+        for suffix in ('extra.json', 'source/Other.hs', 'scalar/other', 'pre-core/Other.json'):
+            self.assertFalse(cache.allowed_payload('build/simd-address-families/' + suffix, {}))
+        name = 'build/simd-address-families/manifest.json'
+        binary = 'build/simd-address-families/scalar/oracle'
+        artifacts = cache.SIMD_ADDRESS_OUTPUTS - {name}
+        for path in artifacts:
+            self.put(path, b'{}\n' if path.endswith('.json') else b'fixture\n')
+        (self.root / binary).chmod(0o755)
+        original = json.dumps(dict(schema=1, ghc='9.14.1', entries=list(cache.SIMD_ADDRESS_ENTRIES),
+            scalarRows=2592, nativeVector128Rows=576 if cache.SIMD_ADDRESS_NATIVE128 else 0,
+            stages={stage: {} for stage, _ in cache.SIMD_ADDRESS_STAGES}, inputHashes=self.manifest['inputHashes'],
+            artifactHashes={path: cache.digest(self.root / path) for path in artifacts}))
+        self.put(name, original)
+        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
+            packed = self.pack(); self.remove_payload(packed)
+            cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(original, (self.root / name).read_text())
+            self.assertEqual(0o755, (self.root / binary).stat().st_mode & 0o7777)
+            self.remove_payload(packed)
+            changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                if member.name != 'files/' + binary])
+            self.rejected_without_writes(changed)
+
     def test_thread_inventory_exact_closed_archive_roundtrip_and_missing_member(self):
         self.assertEqual(20, len(cache.THREAD_INVENTORY_OUTPUTS))
         self.assertIn('build/thread-inventory/manifest.json', DECLARED_REQUIRED)

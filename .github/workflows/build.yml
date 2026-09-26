@@ -358,6 +358,7 @@ jobs:
             build/boxed-arrays/
             build/boxed-array-extensions/
             build/simd128-addresses/
+            build/simd-address-families/
             build/simd128-arrays/
             build/simd-wide-arrays/
             build/original-stack-formatter/

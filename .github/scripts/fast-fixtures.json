@@ -163,6 +163,13 @@
       "sources": ["compiler/test-fixtures/Simd128AddressAudit.hs", "compiler/test-fixtures/Simd128AddressNative.hs",
         "test/haskell-fixtures/Simd128AddressFixtures.hs", "scripts/simd-families.json"]
     },
+    "simd-address-families": {
+      "junit": ["thc.runtime.SimdAddressFamiliesTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd-address-families"]}],
+      "outputs": ["build/simd-address-families"],
+      "sources": ["test/haskell-fixtures/SimdAddressFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal", "scripts/simd-families.json"]
+    },
     "simd128-arrays": {
       "junit": ["thc.runtime.Simd128ArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd128-arrays"]}],

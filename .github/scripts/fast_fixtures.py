@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "0a0b99c2c0cc610c6a6fa607853074c5dc7fa8b533eac8eb506057793a89e5af"
+FULL_PREPARATION_PLAN = "272c40361679f6e92e412d476b47b429bf6f7f0e456e46c9e4fa5cb1c7fc2782"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/address-array-copy", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -44,6 +44,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
       for suffix in ("core/HintTraceAudit.json", "hints.audit.json", "traces.audit.json",
                      "event.audit.json", "marker.audit.json", "binary.audit.json", "addressHints.audit.json")],
     *fast_inputs.SCALAR_MEMORY_OUTPUTS,
+    *fast_inputs.SIMD_ADDRESS_OUTPUTS,
     "build/native-malloc/oracle.txt",
     "build/simd-calls/manifest.json", "build/simd-calls/pre-core/SimdCallAudit.json",
     "build/simd-calls/pre-audit.json",
@@ -316,6 +317,10 @@ def cache_key(root, group_id, group, toolchain):
 
 
 def _output_hashes(root, group):
+    if group["outputs"] == ["build/simd-address-families"]:
+        name = "build/simd-address-families/manifest.json"
+        expected = fast_inputs.simd_address_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/scalar-memory-utilities"]:
         name = "build/scalar-memory-utilities/manifest.json"
         expected = fast_inputs.scalar_memory_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
