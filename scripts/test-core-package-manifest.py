@@ -87,6 +87,33 @@ class PackageNativeVariantsTest(unittest.TestCase):
             with self.subTest(reps=reps), self.assertRaises(ValueError):
                 core_package_manifest.package_scalar_link(self.module(reps))
 
+    def test_conflicting_original_abis_are_archive_only_without_poisoning_other_symbols(self):
+        import copy
+        module = self.module(['WordRep'])
+        proof = module['staticForeignImports']
+        narrow = copy.deepcopy(proof['imports'][0])
+        narrow['binder']['occurrence'] = 'narrow'
+        narrow['symbol'] = narrow['emitted']['symbol'] = 'width'
+        narrow['emitted']['result'] = ['void', 'Int32Rep']
+        wide = dict(narrow['emitted'], result=['void', 'Int64Rep'])
+        proof['imports'].append(narrow)
+        module['packageNativeArchive'] = dict(schema=1, profile='thc-package-native-archive-v1', execution='not-linked',
+            unit=module['unit'], module=module['module'], unsupportedImports=[narrow['emitted']],
+            unclassifiedReason=None, unresolvedSymbols=[], artifact=None, conflictingImports=[narrow['emitted'], wide])
+        link, proved = core_package_manifest.package_scalar_link(module)
+        self.assertEqual({link['abi'][0]['entry']}, proved)
+        archive = core_package_manifest.package_native_archive(module)
+        self.assertFalse(core_package_manifest.native_archive_blocks(module, {}, archive))
+        binding = dict(foreignCall=dict(target=dict(unit=module['unit'], symbol='width'), convention='ccall', safety='unsafe'))
+        self.assertTrue(core_package_manifest.native_archive_blocks(module, binding, archive))
+        for witnesses in ([], [narrow['emitted']], [wide], [narrow['emitted'], narrow['emitted']],
+                          [narrow['emitted'], dict(wide, unit='other')],
+                          [narrow['emitted'], dict(wide, result=['void', 'invented'])]):
+            bad = copy.deepcopy(module); bad['packageNativeArchive']['conflictingImports'] = witnesses
+            with self.subTest(witnesses=witnesses), self.assertRaises(ValueError): core_package_manifest.package_scalar_link(bad)
+        proof['imports'][-1]['normalizedType'] = {}
+        with self.assertRaises(ValueError): core_package_manifest.package_scalar_link(module)
+
     def test_safe_and_unsafe_declarations_share_c_abi_but_retain_both_adapters(self):
         module = self.module(['AddrRep', 'AddrRep'])
         module['packageNativeLink']['abi'][0]['safety'] = 'safe'

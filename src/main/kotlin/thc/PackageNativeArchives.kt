@@ -41,12 +41,33 @@ internal object PackageNativeArchives {
         "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep", "FloatRep", "DoubleRep", "AddrRep")
     private val inputs = scalar + setOf("ByteArray#", "MutableByteArray#")
 
+    private fun emitted(value: Any?, unit: String): Map<*, *> {
+        val emitted = record(value, "symbol unit convention safety arguments result")
+        check(text(emitted["symbol"]).matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) && emitted["unit"] == unit &&
+            emitted["convention"] in setOf("ccall", "capi") &&
+            emitted["safety"] in setOf("unsafe", "safe", "interruptible"), "emitted identity")
+        val args = list(emitted["arguments"]); val result = list(emitted["result"])
+        check(args.isNotEmpty() && args.last() == "void" && args.dropLast(1).all { it in inputs } &&
+            (result == listOf("void") || result.size == 2 && result[0] == "void" && result[1] in scalar), "emitted carriers")
+        return emitted
+    }
+
+    private fun cAbi(emitted: Map<*, *>): List<Any?> = listOf(emitted["convention"],
+        if (emitted["safety"] == "safe") "unsafe" else emitted["safety"],
+        list(emitted["arguments"]).map { when (it) {
+            "ByteArray#", "MutableByteArray#" -> "AddrRep"
+            "IntRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep" -> "Word" + (it as String).drop(3)
+            else -> it
+        } }, emitted["result"])
+
     fun excluded(module: Map<*, *>): List<*> = ((module["packageNativeArchive"] as? Map<*, *>)
         ?.get("unsupportedImports") as? List<*>) ?: emptyList<Any>()
 
     fun read(module: Map<*, *>): PackageNativeArchive? {
         val raw = module["packageNativeArchive"] ?: return null
-        val archive = record(raw, "schema profile execution unit module unsupportedImports unclassifiedReason unresolvedSymbols artifact")
+        val conflictField = raw is Map<*, *> && raw.containsKey("conflictingImports")
+        val archive = record(raw, "schema profile execution unit module unsupportedImports unclassifiedReason unresolvedSymbols artifact" +
+            if (conflictField) " conflictingImports" else "")
         val unit = text(module["unit"])
         check(version(archive["schema"], 1) && archive["profile"] == "thc-package-native-archive-v1" &&
             archive["execution"] == "not-linked" && archive["unit"] == unit && archive["module"] == module["module"], "profile/owner")
@@ -87,17 +108,22 @@ internal object PackageNativeArchives {
                     (entry["isFunction"] == true || entry["convention"] == "capi" && entry["isFunction"] == false) &&
                     entry["safety"] in setOf("unsafe", "safe", "interruptible") && entry["normalizationRole"] == "representational", "import metadata")
                 PackageScalarLinks.archiveType(entry["declaredType"]); PackageScalarLinks.archiveType(entry["normalizedType"])
-                val emitted = record(entry["emitted"], "symbol unit convention safety arguments result")
-                check(text(emitted["symbol"]).matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) && emitted["unit"] == unit &&
-                    emitted["convention"] == entry["convention"] && emitted["safety"] == entry["safety"], "emitted identity")
-                val args = list(emitted["arguments"]); val result = list(emitted["result"])
-                check(args.isNotEmpty() && args.last() == "void" && args.dropLast(1).all { it in inputs } &&
-                    (result == listOf("void") || result.size == 2 && result[0] == "void" && result[1] in scalar), "emitted carriers")
+                val emitted = emitted(entry["emitted"], unit)
+                check(emitted["convention"] == entry["convention"] && emitted["safety"] == entry["safety"], "emitted declaration")
                 emitted
             }
         }
         if (module.containsKey("staticForeignImportStubs")) check(module["staticForeignImportStubs"] == proof, "retained stub provenance differs")
-        val expected = imports.filter { it["safety"] == "interruptible" }
+        val conflicts = if (conflictField) list(archive["conflictingImports"]).map { emitted(it, unit) } else emptyList()
+        if (conflictField) check(conflicts.isNotEmpty() && conflicts.distinct() == conflicts && unknown == null,
+            "conflicting import inventory")
+        val conflictSymbols = conflicts.groupBy { it["symbol"] }.onEach { (symbol, variants) ->
+            check(variants.all { it["safety"] in setOf("unsafe", "safe") } &&
+                variants.map(::cAbi).distinct().size > 1, "imports do not have conflicting C ABIs")
+            val local = imports.filter { it["symbol"] == symbol && it["safety"] != "interruptible" }
+            check(local.isNotEmpty() && local.all { it in variants }, "conflict witnesses differ from local imports")
+        }.keys
+        val expected = imports.filter { it["safety"] == "interruptible" || it["symbol"] in conflictSymbols }
         check(list(archive["unsupportedImports"]) == expected, "unsupported import inventory differs")
         val unresolved = list(archive["unresolvedSymbols"]).map(::text)
         check(unresolved.distinct() == unresolved, "duplicate unresolved symbols")
@@ -112,7 +138,7 @@ internal object PackageNativeArchives {
             PackageScalarLinks.read((module as Map<String, Any?>) + ("packageNativeLink" to artifact), validateArchive = false)
         }
         return PackageNativeArchive("${unit}:${module["module"]} has archive-only native obligations" +
-            " (unsupported=${expected.size}, unclassified=$unknown, unresolved=$unresolved)",
+            " (unsupported=${expected.size}, conflicting=$conflictSymbols, unclassified=$unknown, unresolved=$unresolved)",
             unknown != null || unresolved.isNotEmpty(), unit, expected)
     }
 

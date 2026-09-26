@@ -7,7 +7,7 @@
 -- about native object layouts, into the immutable Core bundle.
 module THC.Driver.PackageNative
   ( captureNativeObject, captureNativeComponent, capturePackageNative, finishPackageNative
-  , nativeSignatures, archiveNativeModule, nativeWrapperSource, nativeCompilerArguments, validateNativeIR, nativeObjectOwned
+  , nativeSignatures, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeCompilerArguments, validateNativeIR, nativeObjectOwned
   ) where
 
 import Control.Monad (filterM, forM, forM_, unless, when)
@@ -40,9 +40,9 @@ nativeSignatures unit modules = do
   require (all supportedSignature signatures) "package native call has unsupported safety/carriers"
   let ordered = sort (nub signatures)
   forM_ (groupBy (\a b -> first a == first b) ordered) $ \variants -> do
-    require (length (nub (map (cAbi integerAbi) variants)) == 1)
+    require (length (nub (map (nativeCAbi nativeIntegerAbi) variants)) == 1)
       ("conflicting package native signatures: " ++ show variants)
-    when (length (nub (map (cAbi id) variants)) /= 1) $ do
+    when (length (nub (map (nativeCAbi id) variants)) /= 1) $ do
       let declarations = [entry | entry <- imports, Just emitted <- [member entry "emitted"],
             member emitted "symbol" `elem` map (Just . toJSON . first) variants]
           headers = [header | entry <- declarations, Just (String header) <- [member entry "header"]]
@@ -59,12 +59,6 @@ nativeSignatures unit modules = do
   pure ordered
   where
     first (symbol,_,_,_,_) = symbol
-    cAbi integer (_,convention,safety,arguments,result) =
-      (convention,if safety == "safe" then "unsafe" else safety,map (integer . pointerAbi) arguments,result)
-    pointerAbi value | value `elem` ["ByteArray#","MutableByteArray#"] = "AddrRep"
-                     | otherwise = value
-    integerAbi value | value `elem` ["IntRep","Int8Rep","Int16Rep","Int32Rep","Int64Rep"] = "Word" ++ drop 3 value
-                     | otherwise = value
     coreAbi (_,convention,safety,arguments,result) =
       (convention,safety,map (\value -> if value == "MutableByteArray#" then "ByteArray#" else value) arguments,result)
     moduleImports value = do
@@ -78,26 +72,59 @@ nativeSignatures unit modules = do
           excluded <- field archive "unsupportedImports" :: Either String [Value]
           pure [entry | entry <- imports, member entry "emitted" `notElem` map Just excluded]
 
+nativeCAbi :: (String -> String) -> Signature -> (String,String,[String],String)
+nativeCAbi integer (_,convention,safety,arguments,result) =
+  (convention,if safety == "safe" then "unsafe" else safety,map (integer . pointer) arguments,result)
+  where pointer value | value `elem` ["ByteArray#","MutableByteArray#"] = "AddrRep"
+                      | otherwise = value
+
+nativeIntegerAbi :: String -> String
+nativeIntegerAbi value | value `elem` ["IntRep","Int8Rep","Int16Rep","Int32Rep","Int64Rep"] = "Word" ++ drop 3 value
+                       | otherwise = value
+
 -- Classify only known semantic gaps. Invalid records, mismatched retained
 -- products and compiler/linker failures are never converted into archives.
 archiveNativeModule :: String -> Value -> Either String Value
 archiveNativeModule unit value = do
-  imports <- nativeImports unit value
-  signatures <- mapM (nativeSignature unit) imports
-  let excluded = [emitted | (entry,signature) <- zip imports signatures,
-        not (supportedSignature signature), Just emitted <- [member entry "emitted"]]
-      unknown = case member value "staticForeignImports" of
-        Just proof | member proof "status" == Just "unclassified" -> member proof "reason"
-        _ -> Nothing
-  pure $ if null excluded && unknown == Nothing then value else
-    setMember "packageNativeArchive" (archiveRecord value excluded unknown [] Nothing) value
+  archived <- archiveNativeModules unit [value]
+  case archived of
+    [single] -> Right single
+    _ -> Left "package native archive changed module count"
 
-archiveRecord :: Value -> [Value] -> Maybe Value -> [String] -> Maybe Value -> Value
-archiveRecord value excluded unknown unresolved artifact = object
+-- Different modules can genuinely declare one C symbol at incompatible widths.
+-- Keep their exact emitted witnesses; never choose one ABI or invent a cast.
+-- Only that symbol is excluded, so unrelated imports still get real adapters.
+archiveNativeModules :: String -> [Value] -> Either String [Value]
+archiveNativeModules unit values = do
+  imports <- mapM (nativeImports unit) values
+  signatures <- mapM (mapM (nativeSignature unit)) imports
+  let first (symbol,_,_,_,_) = symbol
+      supported = sort . nub . filter supportedSignature $ concat signatures
+      conflicting = [first variant |
+        variants@(variant:_) <- groupBy (\a b -> first a == first b) supported,
+        length (nub (map (nativeCAbi nativeIntegerAbi) variants)) > 1]
+      witnesses = nub [emitted | (entry,signature) <- zip (concat imports) (concat signatures),
+        first signature `elem` conflicting, supportedSignature signature,
+        Just emitted <- [member entry "emitted"]]
+  forM (zip3 values imports signatures) $ \(value,entries,typed) -> do
+    let names = nub [first signature | signature <- typed, first signature `elem` conflicting]
+        conflicts = [emitted | emitted <- witnesses, member emitted "symbol" `elem` map (Just . toJSON) names]
+        excluded = [emitted | (entry,signature) <- zip entries typed,
+          not (supportedSignature signature) || first signature `elem` conflicting,
+          Just emitted <- [member entry "emitted"]]
+        unknown = case member value "staticForeignImports" of
+          Just proof | member proof "status" == Just "unclassified" -> member proof "reason"
+          _ -> Nothing
+    pure $ if null excluded && unknown == Nothing then value else
+      setMember "packageNativeArchive" (archiveRecord value excluded unknown [] Nothing conflicts) value
+
+archiveRecord :: Value -> [Value] -> Maybe Value -> [String] -> Maybe Value -> [Value] -> Value
+archiveRecord value excluded unknown unresolved artifact conflicts = object $
   ["schema" .= (1::Int), "profile" .= ("thc-package-native-archive-v1"::String),
    "execution" .= ("not-linked"::String), "unit" .= member value "unit", "module" .= member value "module",
    "unsupportedImports" .= excluded, "unclassifiedReason" .= unknown,
-   "unresolvedSymbols" .= unresolved, "artifact" .= artifact]
+   "unresolvedSymbols" .= unresolved, "artifact" .= artifact] ++
+  ["conflictingImports" .= conflicts | not (null conflicts)]
 
 nativeImports :: String -> Value -> Either String [Value]
 nativeImports unit value = do
@@ -323,7 +350,7 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
   unless (null needed) $ do
     root <- getCurrentDirectory >>= canonicalizePath
     configured <- either fail pure (nativeCompilerArguments arguments)
-    retained <- forM needed $ \(path,source) -> do
+    hydrated <- forM needed $ \(_,source) -> do
       name <- get source "module"
       let interface = objects </> map (\c -> if c == '.' then pathSeparator else c) name <.> "hi"
           databases = [database | (flag,database) <- zip arguments (drop 1 arguments), flag == "-package-db"]
@@ -336,9 +363,9 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
       value <- get response "core"
       check (member value "unit" == Just (toJSON unit) && member value "module" == Just (toJSON (name::String)))
         "package native retained interface identity differs"
-      archived <- either fail pure (archiveNativeModule unit value)
-      writeJson path archived
-      pure archived
+      pure value
+    retained <- either fail pure (archiveNativeModules unit hydrated)
+    forM_ (zip needed retained) $ \((path,_),value) -> writeJson path value
     signatures <- either fail pure (nativeSignatures unit retained)
     when (null signatures) $ writeJson (directory </> "native.json")
       (object ["unit" .= unit,"archiveOnly" .= True])
@@ -570,8 +597,10 @@ finishPackageNative pieces directory unit currentObjects modules = do
             else if null unsupported then pure (Object (KM.insert "packageNativeLink" proof fields))
             else do
               excluded <- maybe (pure []) (\archive -> get archive "unsupportedImports") prior
+              conflicts <- maybe (pure []) (either fail pure . parseValue)
+                (prior >>= (`member` "conflictingImports"))
               pure (setMember "packageNativeArchive"
-                (archiveRecord value excluded Nothing unsupported (Just proof)) value)
+                (archiveRecord value excluded Nothing unsupported (Just proof) conflicts) value)
           pure (name, BL.toStrict (encode next))
         _ -> fail "package native Core module is not an object"
 

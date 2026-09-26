@@ -19,19 +19,23 @@ class PackageNativeArchiveFullCoreTest {
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf(
             "test/fixtures/run-native-archive/mixed/src/Mixed.hs", "test/fixtures/run-native-archive/mixed/native.c",
             "test/fixtures/run-native-archive/mixed/src/Unknown.hs", "test/fixtures/run-native-archive/unresolved/Unresolved.hs",
+            "test/fixtures/run-native-archive/mixed/src/Narrow.hs", "test/fixtures/run-native-archive/mixed/src/Wide.hs",
             "test/fixtures/run-native-archive/unresolved/native.c", "test/haskell-fixtures/PackageNativeArchiveFixtures.hs",
             "src/THC/Driver/PackageNative.hs", "scripts/core_package_manifest.py", "scripts/audit-core.py"))
         val paths = manifest["modules"] as List<String>
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], (paths + listOf(
             "build/native-archive/supported-audit.json", "build/native-archive/interruptible.json",
+            "build/native-archive/mixed-width-audit.json", "build/native-archive/narrow-conflict.json", "build/native-archive/wide-conflict.json",
             "build/native-archive/non-static.json", "build/native-archive/unresolved.json")).toSet(), "build/native-archive/")
         val modules = paths.map { Json.parse(File(root, it).readText()) as Map<String, Any?> }
         val mixed = "native-archive-mixed-0.1.0.0-inplace:Mixed."
+        val narrow = "native-archive-mixed-0.1.0.0-inplace:Narrow."
         val merged = CoreModules.merge(modules)
         val links = merged["packageScalarLinks"] as List<PackageScalarLink>
         assertEquals(1, links.size)
         assertEquals(setOf("archive_allowed", "archive_count"), links.single().abi.map { it.symbol }.toSet())
         val failures = listOf(mixed + "blocked", "native-archive-mixed-0.1.0.0-inplace:Unknown.other",
+            narrow + "narrow", "native-archive-mixed-0.1.0.0-inplace:Wide.wide",
             "native-archive-unresolved-0.1.0.0-inplace:Unresolved.process")
         for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").allowNativeAccess(true)
             .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build().use { context ->
@@ -40,7 +44,7 @@ class PackageNativeArchiveFullCoreTest {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                     val state = Language.currentState()
                     links.forEach(state.packageCbits::link)
-                    val source = CoreModules.reachable(merged, listOf(mixed + "allowed", mixed + "count"), true)
+                    val source = CoreModules.reachable(merged, listOf(mixed + "allowed", mixed + "count", narrow + "allowed"), true)
                     val program: ExecutableProgram = if (backend == "ast") Program(language, source, enableAsync = true)
                         else BytecodeProgram(language, source, enableAsync = true)
                     state.threads.enterCurrent()
@@ -49,6 +53,7 @@ class PackageNativeArchiveFullCoreTest {
                         val count = program.entryTarget(mixed + "count")
                         fun effectCount() = Calls.target(count, arrayOf(0L, 0L))
                         assertEquals(40L, Calls.target(allowed, arrayOf(0L, 3L)))
+                        assertEquals(42L, Calls.target(program.entryTarget(narrow + "allowed"), arrayOf(0L, 5L)))
                         assertEquals(0L, effectCount())
                         for (entry in failures) {
                             val rejected = assertThrows(IllegalArgumentException::class.java) {
